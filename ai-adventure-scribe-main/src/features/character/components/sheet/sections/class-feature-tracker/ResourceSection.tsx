@@ -82,7 +82,7 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({ characterResou
         )}
 
         {characterResources.kiPoints !== undefined && (
-          <div className="border-l-4 border-purple-500 pl-4">
+          <div className="border-l-4 border-infinite-purple pl-4">
             <div className="flex items-center gap-2 mb-2">
               <h4 className="font-semibold">Ki Points</h4>
               <Badge

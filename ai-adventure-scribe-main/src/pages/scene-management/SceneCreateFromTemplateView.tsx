@@ -41,25 +41,25 @@ export const SceneCreateFromTemplateView: React.FC<SceneCreateFromTemplateViewPr
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-4 bg-white/[0.05] rounded-lg">
+          <div className="text-center p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Dimensions</p>
             <p className="font-semibold">
               {selectedTemplate.width} × {selectedTemplate.height} squares
             </p>
           </div>
-          <div className="text-center p-4 bg-white/[0.05] rounded-lg">
+          <div className="text-center p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Grid Type</p>
             <p className="font-semibold capitalize">
               {selectedTemplate.gridType.replace('_', ' ')}
             </p>
           </div>
-          <div className="text-center p-4 bg-white/[0.05] rounded-lg">
+          <div className="text-center p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Lighting</p>
             <p className="font-semibold">
               {Math.round(parseFloat(selectedTemplate.suggestedSettings.ambientLightLevel) * 100)}%
             </p>
           </div>
-          <div className="text-center p-4 bg-white/[0.05] rounded-lg">
+          <div className="text-center p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Time of Day</p>
             <p className="font-semibold capitalize">
               {selectedTemplate.suggestedSettings.timeOfDay}

@@ -49,7 +49,7 @@ const CampaignParameterSection: React.FC<CampaignParameterSectionProps> = ({
           id={labelId}
           className="text-xl font-serif font-semibold flex items-center justify-center"
         >
-          <SectionIcon className="h-5 w-5 mr-2 text-blue-600" />
+          <SectionIcon className="h-5 w-5 mr-2 text-infinite-gold" />
           {title}
         </Label>
         <p className="text-sm text-muted-foreground mt-2">{description}</p>
@@ -108,7 +108,7 @@ const CampaignParameterSection: React.FC<CampaignParameterSectionProps> = ({
                         <RadioGroupItem
                           value={option.value}
                           id={`${id}-${option.value}`}
-                          className="text-blue-600"
+                          className="text-infinite-gold"
                         />
                         <div className={`flex items-center ${colorClass}`}>
                           {icon}

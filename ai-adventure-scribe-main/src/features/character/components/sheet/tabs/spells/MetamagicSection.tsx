@@ -33,7 +33,7 @@ const MetamagicSection: React.FC<MetamagicSectionProps> = ({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Star className="w-5 h-5 text-gold-500" aria-hidden="true" />
+            <Star className="w-5 h-5 text-infinite-gold" aria-hidden="true" />
             Sorcery Points
           </CardTitle>
         </CardHeader>

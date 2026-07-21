@@ -65,7 +65,7 @@ const EquipmentSelection: React.FC = () => {
     return (
       <div className="space-y-4">
         <h2 className="text-2xl font-bold text-center mb-4">Choose Your Equipment</h2>
-        <div className="text-center text-gray-500">
+        <div className="text-center text-muted-foreground">
           Please select a character class first to see available equipment options.
         </div>
       </div>
@@ -102,7 +102,7 @@ const EquipmentSelection: React.FC = () => {
           <h3 className="text-xl font-semibold mb-2">{characterClass.name} Equipment Package</h3>
           <ul className="list-disc list-inside space-y-1">
             {startingEquipment.map((equipment, itemIndex) => (
-              <li key={itemIndex} className="text-sm text-gray-600">
+              <li key={itemIndex} className="text-sm text-muted-foreground">
                 {equipment.name}
               </li>
             ))}
@@ -133,16 +133,16 @@ const EquipmentSelection: React.FC = () => {
             </div>
           )}
           <h3 className="text-xl font-semibold mb-2">Starting Gold</h3>
-          <p className="text-sm text-gray-600 mb-2">
+          <p className="text-sm text-muted-foreground mb-2">
             Roll for starting gold instead of taking the equipment package.
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             You can use the gold to buy equipment during character creation.
           </p>
         </Card>
       </div>
       {characterBackground && (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-muted-foreground">
           <strong>Note:</strong> Background equipment ({characterBackground.name}) will be
           automatically added to your inventory.
         </div>

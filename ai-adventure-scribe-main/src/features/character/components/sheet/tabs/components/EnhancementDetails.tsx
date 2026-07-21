@@ -93,7 +93,7 @@ const EnhancementDetails: React.FC<EnhancementDetailsProps> = ({ character }) =>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-500" />
+              <Sparkles className="w-5 h-5 text-infinite-purple" />
               Enhancement Selections
             </CardTitle>
           </CardHeader>

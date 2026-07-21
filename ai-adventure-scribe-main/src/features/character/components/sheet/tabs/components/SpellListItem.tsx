@@ -68,7 +68,7 @@ const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false 
             {spell.is_prepared ? (
               <Dot className="w-4 h-4 text-green-500" />
             ) : (
-              <Circle className="w-4 h-4 text-gray-400" />
+              <Circle className="w-4 h-4 text-muted-foreground" />
             )}
             <Badge variant="outline" className="text-xs px-1">
               {spell.level || '?'}
@@ -108,9 +108,9 @@ const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false 
   } catch (error) {
     logger.error(`[SpellListItem] Error rendering ${isCantrip ? 'cantrip' : 'spell'}:`, spell, error);
     return (
-      <div className="flex items-center justify-between p-3 border rounded-lg border-red-200">
+      <div className="flex items-center justify-between p-3 border rounded-lg border-destructive/30">
         <div className="flex-1">
-          <div className="font-medium text-red-600">
+          <div className="font-medium text-destructive">
             Error loading {isCantrip ? 'cantrip' : 'spell'}
           </div>
           <div className="text-sm text-muted-foreground">

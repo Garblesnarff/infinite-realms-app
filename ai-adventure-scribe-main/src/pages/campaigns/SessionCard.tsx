@@ -48,7 +48,7 @@ const statusStyles: Record<string, string> = {
   active: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   ending: 'bg-infinite-gold/15 text-infinite-gold border-infinite-gold/30',
   completed: 'bg-infinite-teal/15 text-infinite-teal border-infinite-teal/30',
-  expired: 'bg-white/10 text-muted-foreground border-white/10',
+  expired: 'bg-muted text-muted-foreground border-border',
 };
 
 const statusLabels: Record<string, string> = {
@@ -98,7 +98,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
   const helperText = isResumable ? 'Resume where you left off' : 'Create continuation session';
 
   return (
-    <Card className="p-4 md:p-5 shadow-sm border border-white/10">
+    <Card className="p-4 md:p-5 shadow-sm border border-border">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">

@@ -20,7 +20,7 @@ const difficultyLevels: ParameterOption[] = [
 
 const campaignLengths: ParameterOption[] = [
   { value: 'one-shot', label: 'One-Shot Adventure', colorClass: 'text-blue-600' },
-  { value: 'short', label: 'Short Campaign', colorClass: 'text-purple-600' },
+  { value: 'short', label: 'Short Campaign', colorClass: 'text-infinite-purple' },
   { value: 'full', label: 'Full Campaign', colorClass: 'text-infinite-purple' },
 ];
 
@@ -28,7 +28,7 @@ const tones: ParameterOption[] = [
   {
     value: 'serious',
     label: 'Serious',
-    colorClass: 'text-gray-700',
+    colorClass: 'text-foreground',
     icon: <Theater className="h-5 w-5" />,
   },
   {
@@ -74,7 +74,7 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
 
   if (isLoading) {
     return (
-      <div className="space-y-8 parchment animate-fade-in-up">
+      <div className="space-y-8 animate-fade-in-up">
         {[1, 2, 3].map((section) => (
           <div key={section}>
             <div className="text-center mb-4">
@@ -98,7 +98,7 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
     !searchQuery.trim() || label.toLowerCase().includes(searchQuery.toLowerCase());
 
   return (
-    <div className="space-y-10 parchment animate-fade-in-up">
+    <div className="space-y-10 animate-fade-in-up">
       {/* Controls */}
       <div className="space-y-4">
         <div className="relative">

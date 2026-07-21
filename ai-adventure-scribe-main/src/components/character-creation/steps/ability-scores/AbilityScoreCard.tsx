@@ -94,7 +94,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="bg-green-50 text-green-700 border-green-300 focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none cursor-help"
+                    className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none cursor-help"
                     aria-label={`+${racialBonus} racial bonus to ${ability}`}
                     tabIndex={0}
                   >

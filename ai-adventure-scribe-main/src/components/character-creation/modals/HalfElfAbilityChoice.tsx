@@ -81,13 +81,13 @@ export const HalfElfAbilityChoice: React.FC<HalfElfAbilityChoiceProps> = ({
 
         <div className="space-y-4 py-4">
           {/* Fixed Charisma Bonus Display */}
-          <Card className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+          <Card className="p-4 bg-gradient-to-r from-infinite-gold/10 to-infinite-purple/10 border-infinite-gold/30">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-semibold text-purple-900">Charisma</h4>
-                <p className="text-sm text-purple-700">Your natural charm and presence</p>
+                <h4 className="font-semibold text-foreground">Charisma</h4>
+                <p className="text-sm text-muted-foreground">Your natural charm and presence</p>
               </div>
-              <Badge className="bg-purple-600 text-white">+2 (Fixed)</Badge>
+              <Badge className="bg-infinite-gold text-infinite-dark">+2 (Fixed)</Badge>
             </div>
           </Card>
 
@@ -102,10 +102,10 @@ export const HalfElfAbilityChoice: React.FC<HalfElfAbilityChoiceProps> = ({
                   key={ability.name}
                   className={`p-4 cursor-pointer transition-all duration-200 ${
                     selected
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-infinite-gold bg-infinite-gold/10'
                       : disabled
                         ? 'opacity-50 cursor-not-allowed'
-                        : 'hover:border-blue-300 hover:bg-blue-50/50'
+                        : 'hover:border-infinite-gold/40 hover:bg-secondary/10'
                   }`}
                   onClick={() => !disabled && toggleAbility(ability.name)}
                 >
@@ -113,9 +113,9 @@ export const HalfElfAbilityChoice: React.FC<HalfElfAbilityChoiceProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
                         {selected ? (
-                          <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                          <CheckCircle2 className="w-5 h-5 text-infinite-gold" />
                         ) : (
-                          <Circle className="w-5 h-5 text-gray-400" />
+                          <Circle className="w-5 h-5 text-muted-foreground" />
                         )}
                         <h4 className="font-semibold capitalize">{ability.label}</h4>
                       </div>
@@ -124,7 +124,7 @@ export const HalfElfAbilityChoice: React.FC<HalfElfAbilityChoiceProps> = ({
                     {selected && (
                       <Badge
                         variant="outline"
-                        className="ml-2 bg-blue-100 text-blue-700 border-blue-300"
+                        className="ml-2 bg-infinite-gold/20 text-infinite-gold border-infinite-gold/40"
                       >
                         +1
                       </Badge>

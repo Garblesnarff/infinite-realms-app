@@ -38,7 +38,7 @@ export const MulticlassSummary: React.FC<MulticlassSummaryProps> = ({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-purple-500" />
+            <Users className="w-5 h-5 text-infinite-purple" />
             Multiclass Character
           </CardTitle>
         </CardHeader>
@@ -130,7 +130,7 @@ export const MulticlassSummary: React.FC<MulticlassSummaryProps> = ({
             </div>
 
             {validationResult && !validationResult.canMulticlass && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              <div className="mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded text-sm text-destructive">
                 <strong>Cannot Multiclass:</strong>{' '}
                 {validationResult.missingRequirements.join(', ')}
               </div>

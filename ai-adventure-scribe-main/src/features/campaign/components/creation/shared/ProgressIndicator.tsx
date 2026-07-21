@@ -11,13 +11,13 @@ interface ProgressIndicatorProps {
 }
 
 const campaignTheme = {
-  title: 'text-lg font-semibold text-blue-700',
-  badge: 'px-3 py-1 border-blue-500 text-blue-600',
-  progressBarGradient: 'from-blue-600 to-indigo-600',
-  stepPreviewCard: 'p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-blue-200',
-  currentStepText: 'font-medium text-blue-600',
-  currentStepDot: 'bg-blue-600',
-  currentStepLabel: 'text-blue-600 font-semibold',
+  title: 'text-lg font-semibold text-foreground',
+  badge: 'px-3 py-1 border-infinite-gold/40 text-infinite-gold',
+  progressBarGradient: 'from-infinite-gold to-infinite-purple',
+  stepPreviewCard: 'p-4 bg-card border border-border',
+  currentStepText: 'font-medium text-infinite-gold',
+  currentStepDot: 'bg-infinite-gold',
+  currentStepLabel: 'text-infinite-gold font-semibold',
 };
 
 const renderCampaignStepIcon = (stepIndex: number, isCompleted: boolean, isCurrent: boolean) => {
@@ -28,15 +28,15 @@ const renderCampaignStepIcon = (stepIndex: number, isCompleted: boolean, isCurre
     // Return the specific icon for the current step
     switch (stepIndex) {
       case 0:
-        return <Wand2 className="w-4 h-4 text-blue-600" />;
+        return <Wand2 className="w-4 h-4 text-infinite-gold" />;
       case 1:
-        return <Map className="w-4 h-4 text-blue-600" />;
+        return <Map className="w-4 h-4 text-infinite-gold" />;
       case 2:
-        return <Settings className="w-4 h-4 text-blue-600" />;
+        return <Settings className="w-4 h-4 text-infinite-gold" />;
       case 3:
-        return <Sparkles className="w-4 h-4 text-blue-600" />;
+        return <Sparkles className="w-4 h-4 text-infinite-gold" />;
       default:
-        return <Circle className="w-4 h-4 text-blue-600 fill-blue-600" />;
+        return <Circle className="w-4 h-4 text-infinite-gold fill-infinite-gold" />;
     }
   }
   // For upcoming steps, show a simple circle

@@ -29,7 +29,7 @@ export const ExperienceOverview: React.FC<ExperienceOverviewProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Trophy className="w-5 h-5 text-gold-500" aria-hidden="true" />
+          <Trophy className="w-5 h-5 text-infinite-gold" aria-hidden="true" />
           Experience Overview
         </CardTitle>
       </CardHeader>

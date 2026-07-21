@@ -43,7 +43,7 @@ const CharacterPreview: React.FC = () => {
       return 'bg-infinite-teal/15 text-infinite-teal border-infinite-teal/30';
     if (alignment?.includes('Chaotic'))
       return 'bg-infinite-purple/15 text-infinite-purple border-infinite-purple/30';
-    return 'bg-white/10 text-muted-foreground border-white/10';
+    return 'bg-muted text-muted-foreground border-border';
   };
 
   const totalLevel = character.level || 1;
@@ -55,7 +55,7 @@ const CharacterPreview: React.FC = () => {
         {/* Character Header */}
         <CharacterPreviewHeader character={character} totalLevel={totalLevel} />
 
-        <Separator className="bg-white/10" />
+        <Separator className="bg-border" />
 
         {/* Ability Scores */}
         <CharacterPreviewAbilityScores character={character} />
@@ -67,13 +67,13 @@ const CharacterPreview: React.FC = () => {
             Combat Stats
           </h4>
           <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 bg-white/[0.04] rounded-lg border border-white/10">
+            <div className="text-center p-2 bg-card rounded-lg border border-border">
               <div className="text-lg font-bold text-infinite-teal">
                 {character.class?.hitDie ? character.class.hitDie : 8}
               </div>
               <div className="text-xs text-muted-foreground">Hit Die</div>
             </div>
-            <div className="text-center p-2 bg-white/[0.04] rounded-lg border border-white/10">
+            <div className="text-center p-2 bg-card rounded-lg border border-border">
               <div className="text-lg font-bold text-emerald-400">+{proficiencyBonus}</div>
               <div className="text-xs text-muted-foreground">Proficiency</div>
             </div>
@@ -98,7 +98,7 @@ const CharacterPreview: React.FC = () => {
               {character.personalityTraits?.slice(0, 2).map((trait, index) => (
                 <div
                   key={index}
-                  className="text-xs p-2 bg-white/[0.04] rounded border border-white/10"
+                  className="text-xs p-2 bg-card rounded border border-border"
                 >
                   {trait}
                 </div>
@@ -137,7 +137,7 @@ const CharacterPreview: React.FC = () => {
         {character.description && (
           <div className="space-y-2">
             <h4 className="font-semibold text-sm text-muted-foreground">Description</h4>
-            <p className="text-xs text-muted-foreground line-clamp-3 bg-white/[0.04] p-2 rounded border border-white/10">
+            <p className="text-xs text-muted-foreground line-clamp-3 bg-card p-2 rounded border border-border">
               {character.description}
             </p>
           </div>

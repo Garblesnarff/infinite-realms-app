@@ -69,11 +69,11 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   return (
     <div className="mt-8 space-y-6">
       {/* Progress Overview */}
-      <Card className="p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-blue-200">
+      <Card className="p-4 ir-panel border border-infinite-purple/20">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
-            <div className="text-sm font-medium text-blue-700">Campaign Creation Progress</div>
-            <Badge variant="outline" className="px-2 py-1 border-blue-500 text-blue-600">
+            <div className="text-sm font-medium text-foreground">Campaign Creation Progress</div>
+            <Badge variant="outline" className="px-2 py-1 border-infinite-gold/40 text-infinite-gold">
               {currentStep + 1} / {totalSteps}
             </Badge>
           </div>
@@ -91,17 +91,17 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
                   index < currentStep
-                    ? 'bg-green-500 text-white'
+                    ? 'bg-emerald-500 text-white'
                     : index === currentStep
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-500'
+                      ? 'bg-infinite-gold text-infinite-dark'
+                      : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {index < currentStep ? <CheckCircle className="w-4 h-4" /> : getStepIcon(index)}
               </div>
               <span
                 className={`text-xs text-center transition-all duration-300 ${
-                  index === currentStep ? 'text-blue-600 font-medium' : 'text-muted-foreground'
+                  index === currentStep ? 'text-infinite-gold font-medium' : 'text-muted-foreground'
                 }`}
               >
                 {step.label}
@@ -117,25 +117,25 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
       </div>
 
       {/* Navigation Buttons */}
-      <Card className="p-4 parchment-panel">
+      <Card className="p-4 ir-panel">
         <div className="flex justify-between items-center gap-4">
           <Button
-            variant="fantasy"
+            variant="outline"
             size="sm"
             onClick={onPrevious}
             disabled={currentStep === 0 || isLoading}
-            className="flex-1 transition-all duration-200 hover:scale-105"
+            className="flex-1 transition-all duration-200 hover:scale-105 border-infinite-gold/40 text-infinite-gold hover:bg-infinite-gold/10"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Previous
           </Button>
 
           <Button
-            variant="fantasy"
+            variant="ir-gold"
             size="sm"
             onClick={onNext}
             disabled={isLoading}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 hover:scale-105"
+            className="flex-1 transition-all duration-200 hover:scale-105"
           >
             {isLoading ? (
               <>

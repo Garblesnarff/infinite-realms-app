@@ -39,7 +39,7 @@ export const CharacterPreviewAbilityScores: React.FC<CharacterPreviewAbilityScor
         {Object.entries(character.abilityScores || {}).map(([ability, data]) => (
           <div
             key={ability}
-            className="flex items-center justify-between p-2 bg-white/[0.04] rounded-lg border border-white/10"
+            className="flex items-center justify-between p-2 bg-card rounded-lg border border-border"
           >
             <div className="flex items-center space-x-2">
               {getAbilityIcon(ability)}

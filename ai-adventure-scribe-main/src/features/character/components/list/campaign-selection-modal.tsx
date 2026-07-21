@@ -82,7 +82,7 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg w-full max-h-[80vh] p-6 rounded-lg shadow-lg bg-white overflow-y-auto">
+      <DialogContent className="max-w-lg w-full max-h-[80vh] p-6 rounded-lg shadow-lg bg-card overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Choose a Campaign</DialogTitle>
           <DialogDescription>Select an active campaign to begin your adventure</DialogDescription>

@@ -48,7 +48,7 @@ export const CurrencyCard: React.FC<CurrencyCardProps> = ({ currency }) => {
               <div className="text-xs">GP</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-gray-600">{currency.ep}</div>
+              <div className="text-lg font-bold text-slate-300">{currency.ep}</div>
               <div className="text-xs">EP</div>
             </div>
             <div>

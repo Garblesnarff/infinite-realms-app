@@ -25,7 +25,7 @@ export const AttunementSection: React.FC<AttunementSectionProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Star className="w-5 h-5 text-purple-500" />
+          <Star className="w-5 h-5 text-infinite-purple" />
           Attunement
         </CardTitle>
       </CardHeader>
@@ -41,7 +41,7 @@ export const AttunementSection: React.FC<AttunementSectionProps> = ({
                 <div
                   key={slot}
                   className={`w-8 h-8 rounded border-2 flex items-center justify-center transition-colors ${
-                    isOccupied ? 'bg-purple-500 border-purple-600 text-white' : 'border-gray-300'
+                    isOccupied ? 'bg-infinite-purple border-infinite-purple text-white' : 'border-border'
                   }`}
                   aria-label={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}
                   title={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}

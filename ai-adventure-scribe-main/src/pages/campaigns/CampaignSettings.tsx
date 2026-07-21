@@ -36,7 +36,7 @@ const CampaignSettings: React.FC<CampaignSettingsProps> = ({ campaignId, rulesCo
 
         <div className="space-y-6">
           {/* Show NPC Rolls Toggle */}
-          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-white/10 bg-white/[0.03] hover:border-white/20 transition-colors">
+          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-border bg-card hover:border-infinite-gold/30 transition-colors">
             <div className="flex-1 space-y-2">
               <Label
                 htmlFor="show-npc-rolls"
@@ -55,7 +55,7 @@ const CampaignSettings: React.FC<CampaignSettingsProps> = ({ campaignId, rulesCo
               </p>
 
               {/* Info box */}
-              <div className="flex items-start gap-2 mt-3 p-3 rounded-md bg-white/[0.05] border border-white/10">
+              <div className="flex items-start gap-2 mt-3 p-3 rounded-md bg-card border border-border">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   <strong className="text-foreground">Tabletop Note:</strong> In traditional D&D,
@@ -88,7 +88,7 @@ const CampaignSettings: React.FC<CampaignSettingsProps> = ({ campaignId, rulesCo
             </div>
           </div>
 
-          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-white/10 bg-white/[0.03]">
+          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-border bg-card">
             <div className="space-y-2">
               <Label htmlFor="leveling-mode" className="text-base font-medium flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-infinite-gold" /> Level Advancement
@@ -104,7 +104,7 @@ const CampaignSettings: React.FC<CampaignSettingsProps> = ({ campaignId, rulesCo
           {/* Preview/Status */}
           {showNPCRolls && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground pl-4">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>NPC roll popups are enabled</span>
             </div>
           )}

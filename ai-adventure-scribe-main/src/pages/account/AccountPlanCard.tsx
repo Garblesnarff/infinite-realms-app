@@ -35,7 +35,7 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
               </>
             ) : (
               <>
-                <Shield className="h-6 w-6 text-slate-500" />
+                <Shield className="h-6 w-6 text-muted-foreground" />
                 Free Tier
               </>
             )}
@@ -93,7 +93,7 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
             <Button
               onClick={onUpgrade}
               disabled={loading}
-              className="px-8 py-6 text-lg font-bold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-gray-900 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
+              className="px-8 py-6 text-lg font-bold bg-infinite-gold hover:bg-infinite-purple text-infinite-dark shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
             >
               <Crown className="h-5 w-5 mr-2" />
               {loading ? 'Loading...' : `Upgrade to Legend - ${upgradePriceLabel}`}

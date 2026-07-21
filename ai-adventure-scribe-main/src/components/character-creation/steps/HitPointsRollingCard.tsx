@@ -49,7 +49,7 @@ export const HitPointsRollingCard: React.FC<HitPointsRollingCardProps> = ({
                   isRolled
                     ? 'border-primary bg-primary/10'
                     : isCurrentlyRolling
-                      ? 'border-amber-500 bg-amber-50 animate-pulse'
+                      ? 'border-infinite-gold bg-infinite-gold/10 animate-pulse'
                       : 'border-muted'
                 }`}
               >

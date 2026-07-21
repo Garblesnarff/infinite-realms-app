@@ -40,7 +40,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
       }}
       aria-label={cardTitle}
       title={cardTitle}
-      className="group cursor-pointer hover:shadow-2xl hover:shadow-infinite-purple/40 transition-all duration-500 overflow-hidden border-2 border-border/60 hover:border-infinite-gold/90 hover:scale-[1.02] relative bg-white focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:outline-none"
+      className="group cursor-pointer hover:shadow-2xl hover:shadow-infinite-purple/40 transition-all duration-500 overflow-hidden border-2 border-border/60 hover:border-infinite-gold/90 hover:scale-[1.02] relative focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:outline-none"
     >
       {/* Glow effect on hover */}
       <div
@@ -60,7 +60,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
         }}
         aria-hidden="true"
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/80 to-white/95" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/80 to-background" />
         {character.avatar_url && (
           <div className="absolute -bottom-8 left-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             <img
@@ -71,7 +71,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
           </div>
         )}
       </div>
-      <CardContent className="p-4 pt-10 bg-white">
+      <CardContent className="p-4 pt-10">
         <div className="space-y-3">
           <div>
             <h3 className="font-semibold text-lg text-foreground">{character.name}</h3>
@@ -84,7 +84,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
             <>
               {/* HP and AC */}
               <div
-                className="flex gap-4 text-sm bg-gray-100 p-2 rounded-md border border-gray-200"
+                className="flex gap-4 text-sm bg-accent/10 p-2 rounded-md border border-border"
                 aria-label="Quick stats"
               >
                 <div className="flex items-center gap-1">
@@ -104,7 +104,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
                 aria-label="Ability modifiers"
               >
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
+                  className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
                   aria-label={`Strength modifier: ${getModifier(stats.strength)}`}
                 >
                   <span className="font-semibold text-muted-foreground" aria-hidden="true">
@@ -115,7 +115,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
+                  className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
                   aria-label={`Dexterity modifier: ${getModifier(stats.dexterity)}`}
                 >
                   <span className="font-semibold text-muted-foreground" aria-hidden="true">
@@ -126,7 +126,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
+                  className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
                   aria-label={`Constitution modifier: ${getModifier(stats.constitution)}`}
                 >
                   <span className="font-semibold text-muted-foreground" aria-hidden="true">
@@ -137,7 +137,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
+                  className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
                   aria-label={`Intelligence modifier: ${getModifier(stats.intelligence)}`}
                 >
                   <span className="font-semibold text-muted-foreground" aria-hidden="true">
@@ -148,7 +148,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
+                  className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
                   aria-label={`Wisdom modifier: ${getModifier(stats.wisdom)}`}
                 >
                   <span className="font-semibold text-muted-foreground" aria-hidden="true">
@@ -159,7 +159,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
+                  className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
                   aria-label={`Charisma modifier: ${getModifier(stats.charisma)}`}
                 >
                   <span className="font-semibold text-muted-foreground" aria-hidden="true">
@@ -173,7 +173,11 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
             </>
           )}
 
-          <Button className="w-full" tabIndex={-1} aria-hidden="true">
+          <Button
+            className="w-full bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
+            tabIndex={-1}
+            aria-hidden="true"
+          >
             <Play className="h-4 w-4 mr-2" />
             Start Adventure
           </Button>

@@ -50,7 +50,7 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
   };
 
   return (
-    <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50' : ''}`}>
+    <Card className={`${hasInspiration ? 'border-infinite-gold bg-infinite-gold/10' : ''}`}>
       <CardContent className="p-4">
         {/* Screen reader announcement for inspiration state */}
         <div className="sr-only" role="status" aria-live="polite">
@@ -61,11 +61,11 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
           <div className="flex items-center gap-3">
             <div
               className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${
-                hasInspiration ? 'border-gold-500 bg-gold-100' : 'border-gray-300 bg-gray-100'
+                hasInspiration ? 'border-infinite-gold bg-infinite-gold/15' : 'border-border bg-muted'
               }`}
             >
               <Star
-                className={`w-6 h-6 ${hasInspiration ? 'text-gold-500 animate-pulse' : 'text-gray-400'}`}
+                className={`w-6 h-6 ${hasInspiration ? 'text-infinite-gold animate-pulse' : 'text-muted-foreground'}`}
               />
             </div>
             <div>
@@ -89,7 +89,9 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
                 variant={hasInspiration ? 'default' : 'outline'}
                 size="sm"
                 onClick={toggleInspiration}
-                className={hasInspiration ? 'bg-gold-600 hover:bg-gold-700' : ''}
+                className={
+                  hasInspiration ? 'bg-infinite-gold hover:bg-infinite-purple text-infinite-dark' : ''
+                }
                 aria-pressed={hasInspiration}
                 aria-label={hasInspiration ? 'Use inspiration' : 'Award inspiration'}
               >
@@ -110,7 +112,7 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
         </div>
 
         {hasInspiration && (
-          <div className="mt-3 p-2 bg-gold-100 rounded text-xs text-gold-700">
+          <div className="mt-3 p-2 bg-infinite-gold/15 rounded text-xs text-infinite-gold">
             <strong>Inspiration:</strong> Spend to gain advantage on one ability check, attack roll,
             or saving throw.
           </div>

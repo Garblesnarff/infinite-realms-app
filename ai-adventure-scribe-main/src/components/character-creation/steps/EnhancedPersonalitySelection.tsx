@@ -325,21 +325,21 @@ const EnhancedPersonalitySelection: React.FC = () => {
       </div>
 
       {/* Inspiration Info */}
-      <Card className="border-gold-200 bg-gold-50">
+      <Card className="border-infinite-gold/30 bg-infinite-gold/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-gold-700">
+          <CardTitle className="flex items-center gap-2 text-infinite-gold">
             <Sparkles className="w-5 h-5" />
             About Inspiration
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-gold-600">
+        <CardContent className="text-sm text-foreground/80">
           <p>
             <strong>Inspiration</strong> is a rule the DM can use to reward you for playing your
             character in a way that's true to their personality traits, ideals, bonds, and flaws.
             When you have inspiration, you can spend it to gain advantage on one ability check,
             attack roll, or saving throw.
           </p>
-          <Separator className="my-3 bg-gold-300" />
+          <Separator className="my-3 bg-infinite-gold/30" />
           <p className="text-xs">
             Your DM tells you how to earn inspiration in the game. Typically, you gain it when you
             play out your character's personality in a way that creates interesting complications or

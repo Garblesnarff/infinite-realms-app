@@ -21,11 +21,11 @@ export const AccountInfoCard: React.FC<AccountInfoCardProps> = ({
     </CardHeader>
     <CardContent>
       <dl className="space-y-4">
-        <div className="flex justify-between py-2 border-b border-white/10">
+        <div className="flex justify-between py-2 border-b border-border">
           <dt className="text-muted-foreground">Email</dt>
           <dd className="font-medium">{email}</dd>
         </div>
-        <div className="flex justify-between py-2 border-b border-white/10">
+        <div className="flex justify-between py-2 border-b border-border">
           <dt className="text-muted-foreground">Plan</dt>
           <dd className="font-medium capitalize">{userPlan || 'Free'}</dd>
         </div>

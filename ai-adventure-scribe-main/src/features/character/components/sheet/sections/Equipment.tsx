@@ -22,7 +22,7 @@ const Equipment = ({ character }: EquipmentProps) => {
       </div>
       <ul className="list-disc list-inside space-y-1">
         {character.equipment.map((item, index) => (
-          <li key={index} className="text-gray-700">
+          <li key={index} className="text-foreground">
             {item}
           </li>
         ))}

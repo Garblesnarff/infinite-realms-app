@@ -15,7 +15,7 @@ export const ExperienceTableReference: React.FC<ExperienceTableReferenceProps> =
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-gray-500" aria-hidden="true" />
+          <Calendar className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
           Experience Table
         </CardTitle>
       </CardHeader>

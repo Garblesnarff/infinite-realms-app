@@ -46,7 +46,7 @@ export const EquipmentShop: React.FC<EquipmentShopProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShoppingCart className="w-5 h-5 text-purple-500" />
+          <ShoppingCart className="w-5 h-5 text-infinite-purple" />
           Equipment Shop
         </CardTitle>
 

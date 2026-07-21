@@ -36,7 +36,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
         <div className="flex items-center space-x-2">
           <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out"
+              className="h-full bg-gradient-to-r from-infinite-purple to-infinite-gold transition-all duration-500 ease-out"
               style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
             />
           </div>
@@ -86,7 +86,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
           <Button
             onClick={onNext}
             disabled={isLoading}
-            className="transition-all duration-200 hover:scale-105 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            className="transition-all duration-200 hover:scale-105 bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
           >
             {isLoading ? (
               <>

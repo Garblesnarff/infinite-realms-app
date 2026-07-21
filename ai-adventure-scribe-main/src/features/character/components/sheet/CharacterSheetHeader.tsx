@@ -58,7 +58,7 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
             />
           ) : (
             <div
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-infinite-gold-light to-infinite-gold-dark text-infinite-dark flex items-center justify-center text-xl font-bold ir-display"
+              className="w-16 h-16 rounded-full bg-infinite-gold text-infinite-dark flex items-center justify-center text-xl font-bold ir-display"
               aria-hidden="true"
             >
               {character.name?.charAt(0).toUpperCase() || '?'}
@@ -93,14 +93,14 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
             <div className="text-xs text-muted-foreground">HP</div>
           </div>
           <div className="text-center">
-            <div className="flex items-center gap-1 text-blue-600">
+            <div className="flex items-center gap-1 text-infinite-teal">
               <Shield className="w-4 h-4" />
               <span className="font-bold">{calculateArmorClass(character)}</span>
             </div>
             <div className="text-xs text-muted-foreground">AC</div>
           </div>
           <div className="text-center">
-            <div className="flex items-center gap-1 text-green-600">
+            <div className="flex items-center gap-1 text-emerald-500">
               <Sword className="w-4 h-4" />
               <span className="font-bold">+{calculateProficiencyBonus(character.level || 1)}</span>
             </div>

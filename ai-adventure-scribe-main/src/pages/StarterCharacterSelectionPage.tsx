@@ -100,10 +100,10 @@ const StarterCharacterSelectionPage: React.FC = () => {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/30" />
-          <p className="text-gray-400">Loading characters...</p>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-infinite-gold/30" />
+          <p className="text-muted-foreground">Loading characters...</p>
         </div>
       </div>
     );
@@ -112,11 +112,14 @@ const StarterCharacterSelectionPage: React.FC = () => {
   // Error state
   if (!campaign || !campaignId) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center px-6">
-          <h1 className="text-4xl font-bold text-white mb-4">Something Went Wrong</h1>
-          <p className="text-gray-400 mb-8">Could not load character options.</p>
-          <Link to={`/explore/${slug}`} className="text-purple-400 hover:text-purple-300 underline">
+          <h1 className="text-4xl font-bold text-foreground mb-4">Something Went Wrong</h1>
+          <p className="text-muted-foreground mb-8">Could not load character options.</p>
+          <Link
+            to={`/explore/${slug}`}
+            className="text-infinite-gold hover:text-infinite-gold-light underline"
+          >
             Return to Campaign
           </Link>
         </div>
@@ -126,10 +129,12 @@ const StarterCharacterSelectionPage: React.FC = () => {
 
   if (templatesError) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center px-6" role="alert">
-          <h1 className="text-4xl font-bold text-white mb-4">Unable to Load Characters</h1>
-          <p className="text-gray-400 mb-8">Could not load character options. Please try again.</p>
+          <h1 className="text-4xl font-bold text-foreground mb-4">Unable to Load Characters</h1>
+          <p className="text-muted-foreground mb-8">
+            Could not load character options. Please try again.
+          </p>
           <Button onClick={retryTemplates}>Retry</Button>
         </div>
       </div>
@@ -142,10 +147,10 @@ const StarterCharacterSelectionPage: React.FC = () => {
         <title>Choose Your Character | {campaign.title} | Infinite Realms</title>
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900">
+      <div className="min-h-screen bg-background">
         {/* Header */}
         <div
-          className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0"
+          className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0"
           style={{ zIndex: Z_INDEX.STICKY }}
         >
           <div className="max-w-6xl mx-auto px-6 py-4">
@@ -153,7 +158,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
               <div>
                 <Link
                   to={`/explore/${slug}`}
-                  className="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-1"
+                  className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -165,12 +170,12 @@ const StarterCharacterSelectionPage: React.FC = () => {
                   </svg>
                   Back to {campaign.title}
                 </Link>
-                <h1 className="text-2xl font-bold text-white">Choose Your Character</h1>
+                <h1 className="text-2xl font-bold text-foreground">Choose Your Character</h1>
               </div>
               <Button
                 onClick={handleCreateCustom}
                 variant="outline"
-                className="border-gray-600 bg-transparent text-gray-300 hover:bg-gray-800"
+                className="border-border bg-transparent text-muted-foreground hover:bg-secondary/20"
               >
                 <Sparkles className="w-4 h-4 mr-2" />
                 Create Custom Character
@@ -184,15 +189,15 @@ const StarterCharacterSelectionPage: React.FC = () => {
           <div className="grid lg:grid-cols-[1fr,400px] gap-8">
             {/* Character Grid */}
             <div>
-              <p className="text-gray-400 mb-6">
+              <p className="text-muted-foreground mb-6">
                 Select a pre-built character tailored for {campaign.title}, or create your own
                 custom character.
               </p>
 
               {templates.length === 0 ? (
-                <div className="text-center py-12 bg-gray-800/30 rounded-xl border border-gray-700">
-                  <User className="w-12 h-12 mx-auto text-gray-500 mb-4" />
-                  <p className="text-gray-400 mb-4">No pre-built characters available yet.</p>
+                <div className="text-center py-12 bg-card/30 rounded-xl border border-border">
+                  <User className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-4">No pre-built characters available yet.</p>
                   <Button onClick={handleCreateCustom} variant="outline" className="bg-transparent">
                     Create Custom Character
                   </Button>
@@ -220,7 +225,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
                     <Button
                       onClick={handleStartWithCharacter}
                       disabled={isCreating}
-                      className="flex-1 bg-gradient-to-r from-purple-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 text-white py-6 text-lg font-semibold rounded-xl shadow-lg shadow-purple-500/30"
+                      className="flex-1 bg-infinite-gold text-infinite-dark hover:bg-infinite-purple py-6 text-lg font-semibold rounded-xl shadow-lg shadow-infinite-gold/30"
                     >
                       {isCreating ? (
                         'Creating...'
@@ -234,10 +239,10 @@ const StarterCharacterSelectionPage: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <div className="bg-gray-800/50 rounded-xl p-8 border border-gray-700 text-center">
-                  <User className="w-16 h-16 mx-auto text-gray-500 mb-4" />
-                  <h3 className="text-lg font-semibold text-white mb-2">Select a Character</h3>
-                  <p className="text-gray-400 text-sm">
+                <div className="bg-card/50 rounded-xl p-8 border border-border text-center">
+                  <User className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Select a Character</h3>
+                  <p className="text-muted-foreground text-sm">
                     Click on a character card to see their full details and backstory.
                   </p>
                 </div>

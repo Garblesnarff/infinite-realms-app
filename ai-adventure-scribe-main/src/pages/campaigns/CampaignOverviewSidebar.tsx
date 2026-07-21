@@ -24,13 +24,13 @@ export const CampaignOverviewSidebar: React.FC<CampaignOverviewSidebarProps> = (
           Campaign Details
         </h3>
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between items-center py-2 border-b border-white/10">
+          <div className="flex justify-between items-center py-2 border-b border-border">
             <span className="text-muted-foreground font-medium">Status</span>
             <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
               Active
             </Badge>
           </div>
-          <div className="flex justify-between items-center py-2 border-b border-white/10">
+          <div className="flex justify-between items-center py-2 border-b border-border">
             <span className="text-muted-foreground font-medium">Created</span>
             <span className="text-foreground font-semibold">Recently</span>
           </div>
@@ -53,14 +53,14 @@ export const CampaignOverviewSidebar: React.FC<CampaignOverviewSidebarProps> = (
             <button
               onClick={onResumeSession}
               disabled={isLoadingActiveSession}
-              className="w-full px-4 py-3 bg-gradient-to-r from-infinite-teal to-infinite-teal-dark text-white rounded-lg hover:from-infinite-teal-dark hover:to-infinite-teal transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 bg-infinite-teal text-white rounded-lg hover:bg-infinite-teal/90 transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Resume Session
             </button>
           )}
           <button
             onClick={() => onStartNewSession?.()}
-            className="w-full px-4 py-3 bg-gradient-to-r from-infinite-purple to-infinite-purple-dark text-white rounded-lg hover:from-infinite-purple-dark hover:to-infinite-purple transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-infinite-purple text-white rounded-lg hover:bg-infinite-purple/90 transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Start New Session
           </button>

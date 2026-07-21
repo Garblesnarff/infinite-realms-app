@@ -45,7 +45,7 @@ const CampaignPreview: React.FC = () => {
       case 'historical':
         return 'bg-infinite-gold/15 text-infinite-gold border-infinite-gold/30';
       default:
-        return 'bg-white/10 text-muted-foreground border-white/10';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -60,7 +60,7 @@ const CampaignPreview: React.FC = () => {
       case 'nightmare':
         return 'bg-infinite-purple/15 text-infinite-purple border-infinite-purple/30';
       default:
-        return 'bg-white/10 text-muted-foreground border-white/10';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -73,7 +73,7 @@ const CampaignPreview: React.FC = () => {
       case 'gritty':
         return 'bg-red-500/15 text-red-400 border-red-500/30';
       default:
-        return 'bg-white/10 text-muted-foreground border-white/10';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -87,7 +87,7 @@ const CampaignPreview: React.FC = () => {
               <Map className="w-10 h-10 text-white" />
             </div>
             {campaign.name && (
-              <Badge className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 bg-infinite-dark-lighter text-infinite-gold border-2 border-infinite-purple/30">
+              <Badge className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 bg-infinite-dark text-infinite-gold border-2 border-infinite-purple/30">
                 Campaign
               </Badge>
             )}
@@ -120,7 +120,7 @@ const CampaignPreview: React.FC = () => {
           </div>
         </div>
 
-        <Separator className="bg-white/10" />
+        <Separator className="bg-border" />
 
         {/* Campaign Details */}
         <div className="space-y-3">
@@ -130,7 +130,7 @@ const CampaignPreview: React.FC = () => {
           </h4>
           <div className="grid grid-cols-1 gap-2">
             {campaign.campaign_length && (
-              <div className="flex items-center justify-between p-2 bg-white/[0.04] rounded-lg border border-white/10">
+              <div className="flex items-center justify-between p-2 bg-card rounded-lg border border-border">
                 <div className="flex items-center space-x-2">
                   <Calendar className="w-4 h-4" />
                   <span className="text-xs font-medium">Campaign Length</span>
@@ -139,7 +139,7 @@ const CampaignPreview: React.FC = () => {
               </div>
             )}
             {campaign.setting?.location && (
-              <div className="flex items-center justify-between p-2 bg-white/[0.04] rounded-lg border border-white/10">
+              <div className="flex items-center justify-between p-2 bg-card rounded-lg border border-border">
                 <div className="flex items-center space-x-2">
                   <Map className="w-4 h-4" />
                   <span className="text-xs font-medium">Location</span>
@@ -157,7 +157,7 @@ const CampaignPreview: React.FC = () => {
               <BookOpen className="w-4 h-4 mr-2" />
               Description
             </h4>
-            <p className="text-xs text-muted-foreground line-clamp-3 bg-white/[0.04] p-2 rounded border border-white/10">
+            <p className="text-xs text-muted-foreground line-clamp-3 bg-card p-2 rounded border border-border">
               {campaign.description}
             </p>
           </div>
@@ -170,13 +170,13 @@ const CampaignPreview: React.FC = () => {
             Creation Progress
           </h4>
           <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 bg-white/[0.04] rounded-lg border border-white/10">
+            <div className="text-center p-2 bg-card rounded-lg border border-border">
               <div className="text-lg font-bold text-infinite-teal">
                 {campaign.genre ? '1' : '0'}/4
               </div>
               <div className="text-xs text-muted-foreground">Steps Complete</div>
             </div>
-            <div className="text-center p-2 bg-white/[0.04] rounded-lg border border-white/10">
+            <div className="text-center p-2 bg-card rounded-lg border border-border">
               <div className="text-lg font-bold text-emerald-400">{campaign.name ? '✓' : '○'}</div>
               <div className="text-xs text-muted-foreground">Ready to Play</div>
             </div>

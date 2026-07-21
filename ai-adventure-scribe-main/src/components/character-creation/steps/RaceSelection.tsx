@@ -214,7 +214,7 @@ const RaceSelection: React.FC = () => {
 
       {/* Comparison Mode */}
       {comparisonRaces.length > 0 && (
-        <Card className="p-4 bg-blue-50">
+        <Card className="p-4 bg-infinite-teal/10 border-infinite-teal/30">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">Race Comparison ({comparisonRaces.length}/3)</h3>
             <Button variant="outline" size="sm" onClick={() => setComparisonRaces([])}>

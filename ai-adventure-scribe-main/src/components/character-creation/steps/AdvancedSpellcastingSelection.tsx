@@ -185,12 +185,12 @@ const AdvancedSpellcastingSelection: React.FC = () => {
       {/* Completion Status and Manual Apply Button */}
       <div className="mt-6 space-y-4">
         {allSelectionsComplete && (
-          <div className="text-center p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center justify-center gap-2 text-green-700">
+          <div className="text-center p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+            <div className="flex items-center justify-center gap-2 text-emerald-400">
               <Shield className="w-5 h-5" />
               <span className="font-medium">All selections complete!</span>
             </div>
-            <p className="text-sm text-green-600 mt-1">
+            <p className="text-sm text-emerald-400/90 mt-1">
               Your advanced spellcasting features have been configured automatically.
             </p>
           </div>
@@ -198,8 +198,8 @@ const AdvancedSpellcastingSelection: React.FC = () => {
 
         {!allSelectionsComplete && (
           <div className="text-center">
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-700">
+            <div className="mb-4 p-3 bg-infinite-teal/10 border border-infinite-teal/30 rounded-lg">
+              <p className="text-sm text-infinite-teal">
                 Complete your selections above to continue to the next step.
               </p>
             </div>

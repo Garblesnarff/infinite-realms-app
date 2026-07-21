@@ -66,7 +66,7 @@ const PersonalitySelection: React.FC = () => {
           onClick={handleRandomizeAll}
           variant="outline"
           size="lg"
-          className="bg-gradient-to-r from-purple-500 to-amber-500 text-white hover:from-purple-600 hover:to-amber-600 border-0 shadow-lg"
+          className="bg-infinite-gold text-infinite-dark hover:bg-infinite-purple border-0 shadow-lg"
         >
           <Sparkles className="mr-2 h-5 w-5" />
           Randomize All Personality Fields
@@ -248,14 +248,14 @@ const PersonalitySelection: React.FC = () => {
       </div>
 
       {/* Help Text */}
-      <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+      <Card className="p-4 bg-infinite-gold/10 border-infinite-gold/30">
         <div className="flex items-start space-x-3">
-          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-amber-600 text-sm">💡</span>
+          <div className="w-6 h-6 rounded-full bg-infinite-gold/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-sm">💡</span>
           </div>
           <div className="space-y-1">
-            <h4 className="font-medium text-amber-900">Personality Tips</h4>
-            <p className="text-sm text-amber-700">
+            <h4 className="font-medium text-infinite-gold">Personality Tips</h4>
+            <p className="text-sm text-foreground/80">
               Use the randomize buttons to get inspiration from official D&D backgrounds, or write
               your own unique personality elements. These will shape how your character interacts
               with the world and other players.

@@ -36,7 +36,7 @@ const PactMagicSection: React.FC<PactMagicSectionProps> = ({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-purple-500" aria-hidden="true" />
+            <Zap className="w-5 h-5 text-infinite-purple" aria-hidden="true" />
             Pact Magic Slots
           </CardTitle>
           <Tooltip>
@@ -67,10 +67,10 @@ const PactMagicSection: React.FC<PactMagicSectionProps> = ({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                          className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2 outline-none ${
                             isExpended
-                              ? 'bg-gray-300 border-gray-400'
-                              : 'bg-purple-500 border-purple-600'
+                              ? 'bg-muted border-border'
+                              : 'bg-infinite-purple border-infinite-purple'
                           }`}
                           onClick={consumePactSlot}
                           aria-label={`Pact magic slot ${
@@ -102,7 +102,7 @@ const PactMagicSection: React.FC<PactMagicSectionProps> = ({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Crown className="w-5 h-5 text-purple-500" aria-hidden="true" />
+            <Crown className="w-5 h-5 text-infinite-purple" aria-hidden="true" />
             Pact Magic Spells
           </CardTitle>
         </CardHeader>

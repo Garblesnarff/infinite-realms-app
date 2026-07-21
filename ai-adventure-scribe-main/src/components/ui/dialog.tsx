@@ -32,29 +32,49 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        `fixed left-[50%] top-[50%] grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg`,
-        className,
-      )}
-      style={{ zIndex: Z_INDEX.MODAL }}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close
-        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-electricCyan focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-        title="Close (Esc)"
+>(({ className, children, ...props }, ref) => {
+  // The navy+gold theme's CSS custom properties (--background, --card,
+  // --c-infinite-*, etc. — see src/styles/ir-overhaul.css) are scoped to
+  // the `.ir-app` wrapper around the authenticated /app/* routes (see
+  // src/routes/ProtectedAppRoutes.tsx). Radix's Portal defaults to
+  // document.body, which sits OUTSIDE `.ir-app` in the DOM — so every
+  // themed dialog rendered from within the app fell back to the :root
+  // (light/marketing) token values, producing white cards/near-invisible
+  // text. Fix: portal into the nearest `.ir-app` element when one exists
+  // on the page, so the dialog inherits the scoped theme. Pages that
+  // never render `.ir-app` (marketing/launch pages, /explore/*,
+  // /admin/blog) get `undefined` here and fall back to Radix's normal
+  // document.body portal, so this is a no-op for them.
+  const [irAppContainer] = React.useState<HTMLElement | undefined>(() =>
+    typeof document !== 'undefined'
+      ? (document.querySelector<HTMLElement>('.ir-app') ?? undefined)
+      : undefined,
+  );
+
+  return (
+    <DialogPortal container={irAppContainer}>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          `fixed left-[50%] top-[50%] grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg`,
+          className,
+        )}
+        style={{ zIndex: Z_INDEX.MODAL }}
+        {...props}
       >
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close (Esc)</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+        {children}
+        <DialogPrimitive.Close
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-electricCyan focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+          title="Close (Esc)"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close (Esc)</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

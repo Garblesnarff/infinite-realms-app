@@ -36,7 +36,7 @@ export const CampaignHubHeader: React.FC<CampaignHubHeaderProps> = ({
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               asChild
-              className="bg-gradient-to-r from-infinite-purple to-infinite-purple-dark hover:from-infinite-purple-dark hover:to-infinite-purple text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              className="bg-infinite-purple hover:bg-infinite-purple/90 text-white shadow-lg hover:shadow-xl transition-all duration-300"
             >
               <Link to={`/app/campaigns/${campaignId}/characters`}>
                 <Users className="w-4 h-4 mr-2" />

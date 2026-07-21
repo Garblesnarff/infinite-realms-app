@@ -42,7 +42,7 @@ export const AccountUsageCard: React.FC<AccountUsageCardProps> = ({ quota }) => 
               <Progress
                 value={100}
                 className="h-2"
-                indicatorClassName="bg-gradient-to-r from-amber-400 to-amber-500"
+                indicatorClassName="bg-gradient-to-r from-infinite-gold to-infinite-purple"
                 aria-labelledby={quotaLabelId}
               />
             )}

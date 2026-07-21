@@ -21,13 +21,13 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
   const isPro = userPlan && userPlan !== 'free';
 
   return (
-    <div className="mt-3 pt-3 border-t border-white/10">
+    <div className="mt-3 pt-3 border-t border-border">
       {chronicle?.status === 'ready' ? (
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             size="sm"
             variant="ghost"
-            className="text-amber-600 hover:text-amber-700 h-7 px-2 text-xs"
+            className="text-infinite-gold hover:text-infinite-gold/80 h-7 px-2 text-xs"
             onClick={() => onViewChronicle?.(session.id)}
           >
             📖 Read Chronicle
@@ -48,7 +48,7 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
           )}
         </div>
       ) : chronicle?.status === 'generating' ? (
-        <p className="text-xs text-amber-500 animate-pulse">✨ Writing your chronicle...</p>
+        <p className="text-xs text-infinite-gold animate-pulse">✨ Writing your chronicle...</p>
       ) : (
         <Button
           size="sm"

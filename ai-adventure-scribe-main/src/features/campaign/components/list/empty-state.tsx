@@ -12,8 +12,10 @@ const EmptyState = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="text-center py-12 parchment-panel rounded-lg p-8">
-      <h3 className="text-2xl font-semibold mb-2 gradient-text">No Campaigns Found</h3>
+    <div className="text-center py-12 ir-panel rounded-lg p-8">
+      <h3 className="text-2xl font-semibold mb-2 ir-display text-infinite-gold">
+        No Campaigns Found
+      </h3>
       <p className="text-muted-foreground mb-6">
         You haven't created any campaigns yet. Your tales await.
       </p>

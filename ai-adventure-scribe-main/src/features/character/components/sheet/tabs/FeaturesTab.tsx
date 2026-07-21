@@ -45,11 +45,11 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
   const _getFeatureIcon = (source: string) => {
     switch (source) {
       case 'race':
-        return <Users className="w-4 h-4 text-green-600" />;
+        return <Users className="w-4 h-4 text-emerald-500" />;
       case 'class':
-        return <Star className="w-4 h-4 text-blue-600" />;
+        return <Star className="w-4 h-4 text-infinite-teal" />;
       case 'background':
-        return <BookOpen className="w-4 h-4 text-purple-600" />;
+        return <BookOpen className="w-4 h-4 text-infinite-purple" />;
       case 'feat':
         return <Zap className="w-4 h-4 text-orange-600" />;
       default:
@@ -68,7 +68,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       case 'feat':
         return 'bg-orange-500/15 text-orange-400 border border-orange-500/30';
       default:
-        return 'bg-white/10 text-muted-foreground border border-white/10';
+        return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
@@ -91,8 +91,8 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       {/* Racial Traits */}
       <FeatureCategoryCard
         title="Racial Traits"
-        icon={<Users className="w-5 h-5 text-green-600" />}
-        borderColorClass="border-green-500"
+        icon={<Users className="w-5 h-5 text-emerald-500" />}
+        borderColorClass="border-emerald-500"
         badgeColorClass={getSourceColor('race')}
         features={featuresBySource.race}
         badgeLabel={() => character.race?.name}
@@ -101,8 +101,8 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       {/* Class Features */}
       <FeatureCategoryCard
         title="Class Features"
-        icon={<Star className="w-5 h-5 text-blue-600" />}
-        borderColorClass="border-blue-500"
+        icon={<Star className="w-5 h-5 text-infinite-teal" />}
+        borderColorClass="border-infinite-teal"
         badgeColorClass={getSourceColor('class')}
         features={featuresBySource.class}
         badgeLabel={(feature) => (
@@ -116,8 +116,8 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       {/* Background Features */}
       <FeatureCategoryCard
         title="Background Features"
-        icon={<BookOpen className="w-5 h-5 text-purple-600" />}
-        borderColorClass="border-purple-500"
+        icon={<BookOpen className="w-5 h-5 text-infinite-purple" />}
+        borderColorClass="border-infinite-purple"
         badgeColorClass={getSourceColor('background')}
         features={featuresBySource.background}
         badgeLabel={() => character.background?.name}

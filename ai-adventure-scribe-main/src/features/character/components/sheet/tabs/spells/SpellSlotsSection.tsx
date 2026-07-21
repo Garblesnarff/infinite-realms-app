@@ -22,7 +22,7 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <Circle className="w-5 h-5 text-purple-500" aria-hidden="true" />
+          <Circle className="w-5 h-5 text-infinite-purple" aria-hidden="true" />
           Spell Slots
         </CardTitle>
         <Tooltip>
@@ -55,10 +55,10 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
                         <TooltipTrigger asChild>
                           <button
                             type="button"
-                            className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                            className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2 outline-none ${
                               isUsed
-                                ? 'bg-gray-300 border-gray-400'
-                                : 'bg-purple-500 border-purple-600'
+                                ? 'bg-muted border-border'
+                                : 'bg-infinite-purple border-infinite-purple'
                             }`}
                             onClick={() =>
                               isUsed

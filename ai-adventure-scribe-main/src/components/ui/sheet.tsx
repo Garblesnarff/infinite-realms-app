@@ -60,26 +60,41 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = 'right', className, children, overlayClassName, hideOverlay, ...props }, ref) => (
-  <SheetPortal>
-    {!hideOverlay && <SheetOverlay className={overlayClassName} />}
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), className)}
-      style={{ zIndex: Z_INDEX.MODAL }}
-      {...props}
-    >
-      {children}
-      <SheetPrimitive.Close
-        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-electricCyan focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
-        title="Close (Esc)"
+>(({ side = 'right', className, children, overlayClassName, hideOverlay, ...props }, ref) => {
+  // See dialog.tsx for the full rationale: the navy+gold theme tokens are
+  // scoped to `.ir-app` (the authenticated /app/* wrapper), but Radix's
+  // Portal defaults to document.body, which sits outside `.ir-app` — so
+  // sheets rendered from within the app fell back to the :root
+  // (light/marketing) token values. Portal into the nearest `.ir-app`
+  // element when one exists; pages without it (marketing, /explore/*,
+  // /admin/blog) get `undefined` and keep the normal document.body portal.
+  const [irAppContainer] = React.useState<HTMLElement | undefined>(() =>
+    typeof document !== 'undefined'
+      ? (document.querySelector<HTMLElement>('.ir-app') ?? undefined)
+      : undefined,
+  );
+
+  return (
+    <SheetPortal container={irAppContainer}>
+      {!hideOverlay && <SheetOverlay className={overlayClassName} />}
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        style={{ zIndex: Z_INDEX.MODAL }}
+        {...props}
       >
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close (Esc)</span>
-      </SheetPrimitive.Close>
-    </SheetPrimitive.Content>
-  </SheetPortal>
-));
+        {children}
+        <SheetPrimitive.Close
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-electricCyan focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
+          title="Close (Esc)"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close (Esc)</span>
+        </SheetPrimitive.Close>
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

@@ -121,7 +121,7 @@ const BasicDetails: React.FC<WizardStepProps> = ({ isLoading = false }) => {
   }
 
   return (
-    <div className="space-y-8 parchment animate-fade-in-up">
+    <div className="space-y-8 animate-fade-in-up">
       <div className="space-y-3">
         <Label htmlFor="name" className="flex items-center text-lg font-medium">
           <Wand2 className="h-4 w-4 mr-2 text-infinite-gold" />
@@ -134,7 +134,7 @@ const BasicDetails: React.FC<WizardStepProps> = ({ isLoading = false }) => {
           onChange={(e) => handleChange('name', e.target.value)}
           onBlur={() => handleBlur('name')}
           placeholder="Enter a legendary name for your campaign..."
-          className={`h-12 px-4 py-3 border-2 transition-all duration-200 ease-in-out focus:ring-2 focus:ring-infinite-gold/30 focus:border-infinite-gold bg-white/80 backdrop-blur-sm ${nameError ? 'border-destructive focus:border-destructive ring-destructive/30' : 'border-amber-200 hover:border-amber-300'}`}
+          className={`h-12 px-4 py-3 border-2 transition-all duration-200 ease-in-out focus:ring-2 focus:ring-infinite-gold/30 focus:border-infinite-gold bg-input backdrop-blur-sm ${nameError ? 'border-destructive focus:border-destructive ring-destructive/30' : 'border-border hover:border-infinite-gold/40'}`}
         />
         {nameError && (
           <p className="text-sm text-destructive mt-1 flex items-center">
@@ -176,7 +176,7 @@ const BasicDetails: React.FC<WizardStepProps> = ({ isLoading = false }) => {
           onChange={(e) => handleChange('description', e.target.value)}
           onBlur={() => handleBlur('description')}
           placeholder="Describe the epic tale of your campaign, its mysteries, and adventures..."
-          className="h-40 px-4 py-3 border-2 transition-all duration-200 ease-in-out focus:ring-2 focus:ring-infinite-purple/30 focus:border-infinite-purple bg-white/80 backdrop-blur-sm border-amber-200 hover:border-amber-300 resize-none font-serif text-base leading-relaxed"
+          className="h-40 px-4 py-3 border-2 transition-all duration-200 ease-in-out focus:ring-2 focus:ring-infinite-purple/30 focus:border-infinite-purple bg-input backdrop-blur-sm border-border hover:border-infinite-gold/40 resize-none font-serif text-base leading-relaxed"
           rows={5}
         />
       </div>

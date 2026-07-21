@@ -52,8 +52,8 @@ export const VariantHumanFeatTab: React.FC<VariantHumanFeatTabProps> = ({
               key={feat.id}
               className={`p-4 cursor-pointer transition-all duration-200 ${
                 selected
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'hover:border-purple-300 hover:bg-purple-50/50'
+                  ? 'border-infinite-gold bg-infinite-gold/10'
+                  : 'hover:border-infinite-gold/40 hover:bg-secondary/10'
               }`}
               onClick={() => onSelectFeat(feat.id)}
             >
@@ -61,9 +61,9 @@ export const VariantHumanFeatTab: React.FC<VariantHumanFeatTabProps> = ({
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-2">
                     {selected ? (
-                      <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                      <CheckCircle2 className="w-5 h-5 text-infinite-gold" />
                     ) : (
-                      <Circle className="w-5 h-5 text-gray-400" />
+                      <Circle className="w-5 h-5 text-muted-foreground" />
                     )}
                     <h4 className="font-semibold">{feat.name}</h4>
                     <Badge variant="outline" className="text-xs capitalize">

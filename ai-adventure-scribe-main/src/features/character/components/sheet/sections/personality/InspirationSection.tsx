@@ -38,12 +38,12 @@ export const InspirationSection: React.FC<InspirationSectionProps> = ({
   awardInspirationId,
 }) => {
   return (
-    <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50' : ''}`}>
+    <Card className={`${hasInspiration ? 'border-infinite-gold bg-infinite-gold/10' : ''}`}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Lightbulb
-              className={`w-5 h-5 ${hasInspiration ? 'text-gold-500' : 'text-gray-500'}`}
+              className={`w-5 h-5 ${hasInspiration ? 'text-infinite-gold' : 'text-muted-foreground'}`}
             />
             Inspiration
           </div>
@@ -68,11 +68,11 @@ export const InspirationSection: React.FC<InspirationSectionProps> = ({
           <div className="flex items-center gap-4">
             <div
               className={`w-16 h-16 rounded-full border-4 flex items-center justify-center ${
-                hasInspiration ? 'border-gold-500 bg-gold-100' : 'border-gray-300 bg-gray-100'
+                hasInspiration ? 'border-infinite-gold bg-infinite-gold/15' : 'border-border bg-muted'
               }`}
             >
               <Star
-                className={`w-8 h-8 ${hasInspiration ? 'text-gold-500 animate-pulse' : 'text-gray-400'}`}
+                className={`w-8 h-8 ${hasInspiration ? 'text-infinite-gold animate-pulse' : 'text-muted-foreground'}`}
               />
             </div>
             <div className="flex-1">

@@ -52,7 +52,7 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
 
   if (isLoading) {
     return (
-      <div className="space-y-8 parchment animate-fade-in-up">
+      <div className="space-y-8 animate-fade-in-up">
         <div className="text-center mb-6">
           <Skeleton className="h-8 w-48 mx-auto mb-2" />
           <Skeleton className="h-4 w-64 mx-auto" />
@@ -69,13 +69,13 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
   }
 
   return (
-    <div className="space-y-8 parchment animate-fade-in-up">
+    <div className="space-y-8 animate-fade-in-up">
       <div className="text-center mb-6">
         <Label
           id={genreHeaderId}
           className="text-xl font-serif font-semibold flex items-center justify-center"
         >
-          <BookOpen className="h-5 w-5 mr-2 text-blue-600" />
+          <BookOpen className="h-5 w-5 mr-2 text-infinite-gold" />
           Choose Your Campaign Genre
         </Label>
         <p className="text-sm text-muted-foreground mt-2">

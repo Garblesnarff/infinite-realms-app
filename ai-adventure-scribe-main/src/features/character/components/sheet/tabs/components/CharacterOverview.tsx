@@ -26,7 +26,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <User className="w-5 h-5 text-blue-500" />
+            <User className="w-5 h-5 text-infinite-teal" />
             Character Overview
           </CardTitle>
         </CardHeader>
@@ -120,7 +120,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
               Character Background Image
               <Badge
                 variant="outline"
-                className="text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700 ml-2"
+                className="text-xs bg-infinite-purple/15 border-infinite-purple/30 text-infinite-purple ml-2"
               >
                 <Sparkles className="w-3 h-3 mr-1" />
                 AI Generated
@@ -147,11 +147,11 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Palette className="w-5 h-5 text-purple-500" />
+              <Palette className="w-5 h-5 text-infinite-purple" />
               Character Themes
               <Badge
                 variant="outline"
-                className="text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700 ml-2"
+                className="text-xs bg-infinite-purple/15 border-infinite-purple/30 text-infinite-purple ml-2"
               >
                 <Sparkles className="w-3 h-3 mr-1" />
                 AI Generated
@@ -174,7 +174,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                     Appearance
                     <Badge
                       variant="outline"
-                      className="text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700"
+                      className="text-xs bg-infinite-purple/15 border-infinite-purple/30 text-infinite-purple"
                     >
                       <Sparkles className="w-3 h-3 mr-1" />
                       AI
@@ -194,7 +194,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                     Personality Traits
                     <Badge
                       variant="outline"
-                      className="text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700"
+                      className="text-xs bg-infinite-purple/15 border-infinite-purple/30 text-infinite-purple"
                     >
                       <Sparkles className="w-3 h-3 mr-1" />
                       AI
@@ -214,7 +214,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                     Backstory Elements
                     <Badge
                       variant="outline"
-                      className="text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700"
+                      className="text-xs bg-infinite-purple/15 border-infinite-purple/30 text-infinite-purple"
                     >
                       <Sparkles className="w-3 h-3 mr-1" />
                       AI
@@ -240,7 +240,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-green-500" />
+              <FileText className="w-5 h-5 text-emerald-500" />
               Character Traits Summary
             </CardTitle>
           </CardHeader>
@@ -269,7 +269,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                       <Badge
                         key={index}
                         variant="outline"
-                        className="text-xs bg-blue-50 border-blue-200"
+                        className="text-xs bg-infinite-teal/15 border-infinite-teal/30 text-infinite-teal"
                       >
                         {ideal}
                       </Badge>
@@ -286,7 +286,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                       <Badge
                         key={index}
                         variant="outline"
-                        className="text-xs bg-green-50 border-green-200"
+                        className="text-xs bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
                       >
                         {bond}
                       </Badge>
@@ -303,7 +303,7 @@ const CharacterOverview: React.FC<CharacterOverviewProps> = ({ character, onUpda
                       <Badge
                         key={index}
                         variant="outline"
-                        className="text-xs bg-red-50 border-red-200"
+                        className="text-xs bg-destructive/15 border-destructive/30 text-destructive"
                       >
                         {flaw}
                       </Badge>

@@ -55,7 +55,7 @@ export const GENRES: GenreMeta[] = [
     description: 'Industrial wonders, airships, and intrigue powered by gears and steam.',
     themes: ['Invention', 'Intrigue', 'Airships'],
     icon: <Anchor className="h-5 w-5" />,
-    colorClass: 'text-amber-600',
+    colorClass: 'text-infinite-gold',
     backgroundImage: '/images/campaign-styles/steampunk-campaign-style-card-background.png',
   },
   {
@@ -64,7 +64,7 @@ export const GENRES: GenreMeta[] = [
     description: 'Whispers in the dark, creeping dread, and the unknown beyond the veil.',
     themes: ['Supernatural', 'Mystery', 'Survival'],
     icon: <BookOpen className="h-5 w-5" />,
-    colorClass: 'text-gray-600',
+    colorClass: 'text-muted-foreground',
     backgroundImage: '/images/campaign-styles/horror-campaign-style-card-background.png',
   },
 ];

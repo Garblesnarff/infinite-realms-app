@@ -22,7 +22,7 @@ export const ExperienceQuickLevelSet: React.FC<ExperienceQuickLevelSetProps> = (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Target className="w-5 h-5 text-purple-500" aria-hidden="true" />
+          <Target className="w-5 h-5 text-infinite-purple" aria-hidden="true" />
           Quick Level Set
         </CardTitle>
       </CardHeader>

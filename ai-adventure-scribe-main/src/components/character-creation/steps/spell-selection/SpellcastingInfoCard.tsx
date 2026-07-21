@@ -69,10 +69,10 @@ const SpellcastingInfoCard: React.FC<SpellcastingInfoCardProps> = ({
 
         {/* Spellcasting Rules */}
         {currentClass && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+          <div className="mt-4 p-3 bg-infinite-teal/10 border border-infinite-teal/30 rounded-lg">
             <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-700 space-y-1">
+              <Info className="w-4 h-4 text-infinite-teal mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-foreground/80 space-y-1">
                 {getSpellValidationRules(currentClass).map((rule, index) => (
                   <p key={index}>{rule}</p>
                 ))}

@@ -170,7 +170,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Vision Types */}
             {character.visionTypes?.length > 0 && (
               <div className="flex items-start gap-2 mb-2">
-                <Target className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <Target className="w-4 h-4 text-infinite-purple mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Vision:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -178,7 +178,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                       <Badge
                         key={index}
                         variant="secondary"
-                        className="text-xs py-0.5 bg-purple-100 text-purple-800"
+                        className="text-xs py-0.5 bg-infinite-purple/15 text-infinite-purple"
                       >
                         {vision.type.charAt(0).toUpperCase() + vision.type.slice(1)} ({vision.range}{' '}
                         ft)
@@ -198,7 +198,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                   <div className="flex flex-wrap gap-1 mt-1">
                     <Badge
                       variant="outline"
-                      className="text-xs py-0.5 border-orange-300 text-orange-700"
+                      className="text-xs py-0.5 border-orange-500/40 text-orange-400"
                     >
                       {character.obscurement
                         .replace('_', ' ')
@@ -212,11 +212,11 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Hidden Status */}
             {character.isHidden && (
               <div className="flex items-start gap-2">
-                <Eye className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <Eye className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Stealth:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    <Badge variant="default" className="text-xs py-0.5 bg-gray-700">
+                    <Badge variant="default" className="text-xs py-0.5 bg-muted text-foreground">
                       Hidden
                     </Badge>
                   </div>
@@ -342,9 +342,12 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
         )}
 
         {isDead && (
-          <div className="text-center p-4 border border-red-200 bg-red-50 rounded" role="status">
-            <Skull className="w-8 h-8 text-red-600 mx-auto mb-2" aria-hidden="true" />
-            <p className="text-red-800 font-medium">Dead</p>
+          <div
+            className="text-center p-4 border border-destructive/30 bg-destructive/10 rounded"
+            role="status"
+          >
+            <Skull className="w-8 h-8 text-destructive mx-auto mb-2" aria-hidden="true" />
+            <p className="text-destructive font-medium">Dead</p>
           </div>
         )}
       </CardContent>

@@ -125,14 +125,14 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
       </Tabs>
 
       {/* Personality Integration Tips */}
-      <Card className="border-blue-200 bg-blue-50">
+      <Card className="border-infinite-teal/30 bg-infinite-teal/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-700">
+          <CardTitle className="flex items-center gap-2 text-infinite-teal">
             <Target className="w-5 h-5" />
             Roleplaying Tips
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-blue-600">
+        <CardContent className="text-sm text-foreground">
           <div className="space-y-2">
             <p>
               <strong>Traits:</strong> Describe how your character behaves in everyday situations.

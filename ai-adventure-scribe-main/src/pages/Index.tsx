@@ -77,7 +77,7 @@ const Index = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 id="campaign-search"
                 aria-label="Search campaigns"
-                className="w-full px-4 py-3 pl-12 pr-4 rounded-xl border border-white/10 bg-white/[0.04] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-infinite-gold focus:border-transparent transition-all duration-200"
+                className="w-full px-4 py-3 pl-12 pr-4 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-infinite-gold focus:border-transparent transition-all duration-200"
               />
               <Users className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
             </div>
@@ -87,7 +87,7 @@ const Index = () => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'name' | 'created_at')}
-              className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] text-foreground focus:outline-none focus:ring-2 focus:ring-infinite-gold focus:border-transparent transition-all duration-200"
+              className="px-4 py-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-infinite-gold focus:border-transparent transition-all duration-200"
             >
               <option value="created_at">Sort by: Recent</option>
               <option value="name">Sort by: Name</option>

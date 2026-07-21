@@ -72,7 +72,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
   return (
     <div className="space-y-6">
       {/* Immersive Hero Section - Integrated with Header */}
-      <div className="relative h-48 sm:h-64 rounded-2xl overflow-hidden bg-gradient-to-br from-infinite-dark-lighter via-infinite-purple/20 to-infinite-dark">
+      <div className="relative h-48 sm:h-64 rounded-2xl overflow-hidden bg-gradient-to-br from-infinite-dark via-infinite-purple/20 to-infinite-dark">
         {campaign.background_image && (
           <img
             src={campaign.background_image}
@@ -134,7 +134,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
             </div>
 
             {/* Campaign Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/10">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border">
               {campaign.genre && (
                 <div className="text-center p-3 rounded-lg bg-infinite-purple/10 border border-infinite-purple/20">
                   <div className="text-infinite-purple font-semibold text-sm">Genre</div>
@@ -142,7 +142,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
                 </div>
               )}
               {campaign.tone && (
-                <div className="text-center p-3 rounded-lg bg-white/10 border border-white/10">
+                <div className="text-center p-3 rounded-lg bg-muted border border-border">
                   <div className="text-muted-foreground font-semibold text-sm">Tone</div>
                   <div className="text-foreground font-medium text-sm">{campaign.tone}</div>
                 </div>

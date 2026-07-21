@@ -219,7 +219,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
             <CardTitle>
               Choose Skills ({selectedSkills.length}/{numSkillChoices})
             </CardTitle>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               Your {currentClass?.name} class allows you to choose {numSkillChoices} skill
               {numSkillChoices > 1 ? 's' : ''} from the following:
             </p>
@@ -270,7 +270,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
             <CardTitle>
               Choose Expertise ({selectedExpertise.length}/{expertiseChoices})
             </CardTitle>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               Expertise doubles your proficiency bonus for the selected skills.
             </p>
           </CardHeader>
@@ -306,7 +306,7 @@ const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effecti
             <CardTitle>
               Choose Languages ({selectedLanguages.length}/{numLanguageChoices})
             </CardTitle>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               Your background grants {numLanguageChoices} additional language
               {numLanguageChoices > 1 ? 's' : ''}:
             </p>

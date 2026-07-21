@@ -43,7 +43,7 @@ export const ClassSelectionCard: React.FC<ClassSelectionCardProps> = ({
       className={`group cursor-pointer transition-all duration-300 hover:shadow-2xl border-2 relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold ${
         isSelected
           ? 'border-infinite-gold ring-4 ring-infinite-gold/20 shadow-xl scale-[1.02]'
-          : 'border-white/10 hover:border-infinite-gold/50 hover:scale-[1.02]'
+          : 'border-border hover:border-infinite-gold/50 hover:scale-[1.02]'
       }`}
       onClick={() => onSelect(characterClass)}
       onMouseEnter={() => onHoverStart(characterClass.id)}
@@ -115,7 +115,7 @@ export const ClassSelectionCard: React.FC<ClassSelectionCardProps> = ({
 
         {/* Stats Section */}
         <div
-          className={`space-y-3 pt-3 border-t ${characterClass.backgroundImage ? 'border-white/20' : 'border-white/10'}`}
+          className={`space-y-3 pt-3 border-t ${characterClass.backgroundImage ? 'border-white/20' : 'border-border'}`}
         >
           <div className="flex items-center justify-between">
             <span

@@ -29,16 +29,16 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Star className="w-5 h-5 text-blue-600" />
+          <Star className="w-5 h-5 text-infinite-teal" />
           Class Features
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {classFeatures.map((feature, index) => (
-          <div key={index} className="border-l-4 border-blue-500 pl-4">
+          <div key={index} className="border-l-4 border-infinite-teal pl-4">
             <div className="flex items-center gap-2 mb-2">
               <h4 className="font-semibold">{feature.name}</h4>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+              <Badge variant="secondary" className="bg-infinite-teal/15 text-infinite-teal">
                 {character.class?.name} {feature.level}
               </Badge>
               {feature.maxUses !== undefined && feature.currentUses !== undefined && (

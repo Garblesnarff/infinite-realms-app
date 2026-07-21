@@ -57,20 +57,36 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <DropdownMenuPrimitive.Portal>
-    <DropdownMenuPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        'min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-        className,
-      )}
-      style={{ zIndex: Z_INDEX.DROPDOWN }}
-      {...props}
-    />
-  </DropdownMenuPrimitive.Portal>
-));
+>(({ className, sideOffset = 4, ...props }, ref) => {
+  // See dialog.tsx for the full rationale: the navy+gold theme tokens are
+  // scoped to `.ir-app` (the authenticated /app/* wrapper), but Radix's
+  // Portal defaults to document.body, which sits outside `.ir-app` — so
+  // dropdown menus rendered from within the app fell back to the :root
+  // (light/marketing) `--popover` value (white). Portal into the nearest
+  // `.ir-app` element when one exists; pages without it (marketing,
+  // /explore/*, /admin/blog) get `undefined` and keep the normal
+  // document.body portal.
+  const [irAppContainer] = React.useState<HTMLElement | undefined>(() =>
+    typeof document !== 'undefined'
+      ? (document.querySelector<HTMLElement>('.ir-app') ?? undefined)
+      : undefined,
+  );
+
+  return (
+    <DropdownMenuPrimitive.Portal container={irAppContainer}>
+      <DropdownMenuPrimitive.Content
+        ref={ref}
+        sideOffset={sideOffset}
+        className={cn(
+          'min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+          className,
+        )}
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+        {...props}
+      />
+    </DropdownMenuPrimitive.Portal>
+  );
+});
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<

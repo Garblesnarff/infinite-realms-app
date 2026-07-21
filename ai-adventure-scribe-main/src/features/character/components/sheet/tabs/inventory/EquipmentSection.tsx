@@ -30,7 +30,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
       case 'armor':
         return <Shield className="w-4 h-4" />;
       case 'magic':
-        return <Star className="w-4 h-4 text-purple-500" />;
+        return <Star className="w-4 h-4 text-infinite-purple" />;
       case 'trinket':
       case 'custom':
         return <Sparkles className="w-4 h-4" />;
@@ -72,7 +72,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                         {item.isAttuned && (
                           <Badge
                             variant="secondary"
-                            className="text-xs bg-purple-100 text-purple-800"
+                            className="text-xs bg-infinite-purple/15 text-infinite-purple"
                           >
                             Attuned
                           </Badge>
@@ -80,7 +80,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                         {item.isMagic && (
                           <Badge
                             variant="outline"
-                            className="text-xs bg-purple-50 text-purple-700 border-purple-300"
+                            className="text-xs bg-infinite-purple/15 text-infinite-purple border-infinite-purple/30"
                           >
                             Magic
                           </Badge>
@@ -97,7 +97,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                       {item.isMagic && (
                         <div className="mt-2 text-xs">
                           {item.magicBonus !== 0 && (
-                            <div className="text-purple-600 font-medium">
+                            <div className="text-infinite-purple font-medium">
                               Bonus: +{item.magicBonus}
                             </div>
                           )}
@@ -107,7 +107,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                                 <Badge
                                   key={i}
                                   variant="outline"
-                                  className="text-xs bg-purple-50 text-purple-700 border-purple-200"
+                                  className="text-xs bg-infinite-purple/15 text-infinite-purple border-infinite-purple/30"
                                 >
                                   {prop}
                                 </Badge>

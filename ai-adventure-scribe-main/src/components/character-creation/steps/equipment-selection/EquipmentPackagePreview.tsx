@@ -59,7 +59,7 @@ export const EquipmentPackagePreview: React.FC<EquipmentPackagePreviewProps> = (
                   <Shirt className="w-4 h-4 text-blue-500" aria-hidden="true" />
                 )}
                 {equipment.category === 'shield' && (
-                  <Shield className="w-4 h-4 text-gray-500" aria-hidden="true" />
+                  <Shield className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 )}
                 {!['weapon', 'armor', 'shield'].includes(equipment.category) && (
                   <Package className="w-4 h-4 text-green-500" aria-hidden="true" />

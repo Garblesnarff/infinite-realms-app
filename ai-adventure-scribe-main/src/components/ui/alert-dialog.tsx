@@ -30,20 +30,40 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, style, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <AlertDialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        'fixed left-[50%] top-[50%] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg',
-        className,
-      )}
-      style={{ zIndex: Z_INDEX.MODAL, ...style }}
-      {...props}
-    />
-  </AlertDialogPortal>
-));
+>(({ className, style, ...props }, ref) => {
+  // The navy+gold theme's CSS custom properties (--background, --card,
+  // --c-infinite-*, etc. — see src/styles/ir-overhaul.css) are scoped to
+  // the `.ir-app` wrapper around the authenticated /app/* routes (see
+  // src/routes/ProtectedAppRoutes.tsx). Radix's Portal defaults to
+  // document.body, which sits OUTSIDE `.ir-app` in the DOM — so every
+  // themed alert dialog rendered from within the app fell back to the
+  // :root (light/marketing) token values, producing white cards/near-invisible
+  // text. Fix: portal into the nearest `.ir-app` element when one exists
+  // on the page, so the alert dialog inherits the scoped theme. Pages that
+  // never render `.ir-app` (marketing/launch pages, /explore/*,
+  // /admin/blog) get `undefined` here and fall back to Radix's normal
+  // document.body portal, so this is a no-op for them.
+  const [irAppContainer] = React.useState<HTMLElement | undefined>(() =>
+    typeof document !== 'undefined'
+      ? (document.querySelector<HTMLElement>('.ir-app') ?? undefined)
+      : undefined,
+  );
+
+  return (
+    <AlertDialogPortal container={irAppContainer}>
+      <AlertDialogOverlay />
+      <AlertDialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          'fixed left-[50%] top-[50%] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg',
+          className,
+        )}
+        style={{ zIndex: Z_INDEX.MODAL, ...style }}
+        {...props}
+      />
+    </AlertDialogPortal>
+  );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

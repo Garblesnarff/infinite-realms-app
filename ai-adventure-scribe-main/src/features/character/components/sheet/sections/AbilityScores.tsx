@@ -123,7 +123,7 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
             <div key={ability} className="space-y-2">
               <label
                 htmlFor={`${baseId}-${ability}`}
-                className="block text-sm font-medium text-gray-700 capitalize"
+                className="block text-sm font-medium text-foreground capitalize"
               >
                 {ability}
               </label>
