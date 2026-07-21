@@ -36,7 +36,38 @@ export class MemoryService {
   }
 
   static async insert(records: NewMemory[], userId: string) {
-    for (const record of records) await this.verifyRecordOwnership(record, userId);
+    if (records.length === 0) return [];
+
+    // ⚡ Bolt: Batch ownership verification to avoid N+1 queries.
+    // Instead of querying ownership for each record sequentially, we gather unique session
+    // and campaign IDs and verify their ownership in parallel. Since records usually share
+    // the same sessionId, this reduces queries from O(N) to O(1).
+    const uniqueSessionIds = new Set<string>();
+    const uniqueCampaignIds = new Set<string>();
+
+    for (const record of records) {
+      if (record.sessionId) {
+        uniqueSessionIds.add(record.sessionId);
+      } else if (record.campaignId) {
+        uniqueCampaignIds.add(record.campaignId);
+      } else {
+        throw new NotFoundError('Memory parent', 'unknown');
+      }
+    }
+
+    // Run verification for all unique IDs in parallel
+    await Promise.all([
+      ...Array.from(uniqueSessionIds).map((sessionId) =>
+        SessionService.getSessionById(sessionId, userId),
+      ),
+      ...Array.from(uniqueCampaignIds).map(async (campaignId) => {
+        const campaign = await CampaignService.getById(campaignId, userId);
+        if (!campaign) {
+          throw new NotFoundError('Memory parent', campaignId);
+        }
+      }),
+    ]);
+
     return db.insert(memories).values(records).returning();
   }
 
