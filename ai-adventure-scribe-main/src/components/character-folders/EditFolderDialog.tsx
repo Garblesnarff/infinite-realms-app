@@ -135,7 +135,7 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        className={`h-10 rounded-md border-2 transition-all ${
+                        className={`h-10 rounded-md border-2 transition-all focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2 outline-none ${
                           color === colorOption.value
                             ? 'border-foreground scale-110'
                             : 'border-border hover:scale-105'

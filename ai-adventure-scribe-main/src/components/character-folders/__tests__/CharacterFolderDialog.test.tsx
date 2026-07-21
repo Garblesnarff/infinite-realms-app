@@ -3,6 +3,7 @@ import React from 'react';
 import { expect, test, vi } from 'vitest';
 
 import { CreateFolderDialog } from '../CreateFolderDialog';
+import { EditFolderDialog } from '../EditFolderDialog';
 
 // Mock TRPC and other hooks
 vi.mock('@/infrastructure/api/trpc-hooks', () => ({
@@ -10,6 +11,7 @@ vi.mock('@/infrastructure/api/trpc-hooks', () => ({
     characterFolders: {
       list: { useQuery: () => ({ data: [] }) },
       create: { useMutation: () => ({ isPending: false }) },
+      update: { useMutation: () => ({ isPending: false }) },
     },
   }),
   useTRPCUtils: () => ({
@@ -21,7 +23,7 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
-test('CreateFolderDialog has accessible color buttons', () => {
+test('CreateFolderDialog has accessible color buttons with keyboard focus rings', () => {
   render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
 
   // Find the color picker group
@@ -32,9 +34,42 @@ test('CreateFolderDialog has accessible color buttons', () => {
   const purpleButton = screen.getByLabelText('Purple');
   expect(purpleButton).toBeDefined();
   expect(purpleButton.getAttribute('aria-pressed')).toBe('true'); // Purple is default
+  expect(purpleButton.className).toContain('focus-visible:ring-2');
+  expect(purpleButton.className).toContain('focus-visible:ring-infinite-purple');
+  expect(purpleButton.className).toContain('outline-none');
 
   const goldButton = screen.getByLabelText('Gold');
   expect(goldButton.getAttribute('aria-pressed')).toBe('false');
+  expect(goldButton.className).toContain('focus-visible:ring-2');
+  expect(goldButton.className).toContain('focus-visible:ring-infinite-purple');
+  expect(goldButton.className).toContain('outline-none');
+});
+
+test('EditFolderDialog has accessible color buttons with keyboard focus rings', () => {
+  render(
+    <EditFolderDialog
+      open={true}
+      onOpenChange={() => {}}
+      folderId="test-folder-id"
+      currentName="My Folder"
+    />,
+  );
+
+  // Find the color picker group
+  const group = screen.getByRole('group', { name: /folder color/i });
+  expect(group).toBeDefined();
+
+  // Check that color buttons have focus visible rings
+  const purpleButton = screen.getByLabelText('Purple');
+  expect(purpleButton).toBeDefined();
+  expect(purpleButton.className).toContain('focus-visible:ring-2');
+  expect(purpleButton.className).toContain('focus-visible:ring-infinite-purple');
+  expect(purpleButton.className).toContain('outline-none');
+
+  const goldButton = screen.getByLabelText('Gold');
+  expect(goldButton.className).toContain('focus-visible:ring-2');
+  expect(goldButton.className).toContain('focus-visible:ring-infinite-purple');
+  expect(goldButton.className).toContain('outline-none');
 });
 
 test('CreateFolderDialog links parent folder label to select trigger', () => {

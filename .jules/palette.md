@@ -209,3 +209,7 @@
 ## 2026-08-16 - Character Import Preview Accessibility and Tooltip Standardization
 **Learning:** For preview components with static data (like character stats), adding tooltips to all fields ensures that keyboard users can discover the same information as mouse users. Standardizing `delayDuration={300}` across all tooltips in a single component creates a more predictable and smooth UX. Making non-interactive text focusable with `tabIndex={0}` and `focus-visible:ring-infinite-purple` allows the tooltip to be triggered via keyboard.
 **Action:** Always wrap informational fields in `Tooltip` with `tabIndex={0}` if they aren't already buttons. Use a consistent `delayDuration` and focus ring style across the component.
+
+## 2026-08-17 - Folder Color Picker Keyboard Outline Focus and UX
+**Learning:** Custom selection buttons (like color picker circles in Create and Edit Folder Dialogs) are often hard to navigate using keyboard Tab selection without clear focus styles. Adding `focus-visible` ring parameters ensures a delightful, highly-visible keyboard focus outline while keeping mouse click styles un-distracting.
+**Action:** Always apply `focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2 outline-none` to custom selection buttons and color picker grids.
