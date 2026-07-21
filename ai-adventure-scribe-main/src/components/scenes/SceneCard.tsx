@@ -74,7 +74,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           />
         ) : (
           <div className="flex items-center justify-center h-full text-6xl text-slate-400">
-            🗺️
+            <span role="img" aria-label="No thumbnail available">🗺️</span>
           </div>
         )}
         {scene.isActive && (

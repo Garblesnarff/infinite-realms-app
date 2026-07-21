@@ -69,7 +69,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
             />
           ) : (
             <div className="flex items-center justify-center h-full text-4xl text-slate-400">
-              🗺️
+              <span role="img" aria-label="No thumbnail available">🗺️</span>
             </div>
           )}
         </div>
