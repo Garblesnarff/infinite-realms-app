@@ -149,18 +149,25 @@ export function useLocalStorageString(
 
   const setValue = useCallback(
     (value: string | ((prev: string) => string)) => {
-      try {
-        const valueToStore = value instanceof Function ? value(storedValue) : value;
-        setStoredValue(valueToStore);
+      setStoredValue((previousValue) => {
+        const valueToStore = value instanceof Function ? value(previousValue) : value;
 
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(key, valueToStore);
+        if (previousValue === valueToStore) {
+          return previousValue;
         }
-      } catch (error) {
-        logger.error(`Error setting localStorage key "${key}":`, error);
-      }
+
+        try {
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(key, valueToStore);
+          }
+        } catch (error) {
+          logger.error(`Error setting localStorage key "${key}":`, error);
+        }
+
+        return valueToStore;
+      });
     },
-    [key, storedValue],
+    [key],
   );
 
   useEffect(() => {
