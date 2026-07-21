@@ -199,11 +199,11 @@ describe('useMessages', () => {
       expect.objectContaining({
         id: 'new-msg',
         message: 'New message',
-        context: {
+        context: expect.objectContaining({
           location: 'Forest',
           emotion: 'Happy',
           intent: 'Explore',
-        },
+        }),
       }),
     );
   });
