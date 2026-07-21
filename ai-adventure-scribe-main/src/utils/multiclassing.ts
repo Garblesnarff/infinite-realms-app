@@ -4,231 +4,28 @@
  * Functions for handling multiclassing rules, calculations, and validations
  */
 
+import { calculateMulticlassProficiencies } from './multiclass/proficiencies';
 import { calculateMulticlassSpellcasting } from './multiclass/spellcasting';
+import { validateMulticlass } from './multiclass/validation';
 
+import type { MulticlassProficiencyResult } from './multiclass/proficiencies';
 import type { MulticlassSpellcastingResult } from './multiclass/spellcasting';
-import type { AbilityScores, Character, CharacterClass, ClassFeature } from '@/types/character';
+import type { MulticlassValidationResult } from './multiclass/validation';
+import type { Character, CharacterClass, ClassFeature } from '@/types/character';
 
-import {
-  multiclassRequirements,
-  multiclassProficiencies,
-  getAllClassFeaturesUpToLevel,
-} from '@/data/levelProgression';
+import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
-// Re-export spellcasting types and functions for backward compatibility
-export type { MulticlassSpellcastingResult };
-export { calculateMulticlassSpellcasting };
-
-// ===========================
-// Multiclassing Data Models
-// ===========================
-
-export interface MulticlassValidationResult {
-  canMulticlass: boolean;
-  requirements: string[];
-  missingRequirements: string[];
-}
-
-export interface MulticlassProficiencyResult {
-  armor: string[];
-  weapons: string[];
-  tools: string[];
-  savingThrows: (keyof AbilityScores)[];
-  skillChoices: string[];
-  numSkillChoices: number;
-}
-
-// ===========================
-// Multiclassing Validation
-// ===========================
-
-/**
- * Validate if a character can multiclass into a new class
- */
-export function validateMulticlass(
-  character: Character,
-  newClass: CharacterClass,
-): MulticlassValidationResult {
-  const requirements: string[] = [];
-  const missingRequirements: string[] = [];
-  let canMulticlass = true;
-
-  if (!character.abilityScores) {
-    return { canMulticlass, requirements, missingRequirements };
-  }
-
-  const abilityScores = character.abilityScores;
-
-  // Helper to check requirements for a class
-  const checkClassReqs = (className: string): void => {
-    const nameLower = className.toLowerCase();
-    const classReq = multiclassRequirements[nameLower];
-
-    if (classReq) {
-      for (const requirement of classReq.allOf ?? []) {
-        const abilityScore = abilityScores[requirement.ability];
-        if (abilityScore.score >= requirement.minimum) continue;
-        const reqText = `${className}: ${requirement.ability.charAt(0).toUpperCase() + requirement.ability.slice(1)} ${requirement.minimum}+`;
-        requirements.push(reqText);
-        missingRequirements.push(reqText);
-        canMulticlass = false;
-      }
-
-      const alternatives = classReq.anyOf ?? [];
-      if (
-        alternatives.length > 0 &&
-        !alternatives.some((item) => abilityScores[item.ability].score >= item.minimum)
-      ) {
-        const reqText = `${className}: ${alternatives
-          .map(
-            (item) =>
-              `${item.ability.charAt(0).toUpperCase() + item.ability.slice(1)} ${item.minimum}+`,
-          )
-          .join(' or ')}`;
-        requirements.push(reqText);
-        missingRequirements.push(reqText);
-        canMulticlass = false;
-      }
-    }
-  };
-
-  // Check requirements for all EXISTING classes (multiclassing OUT)
-  if (character.classLevels && character.classLevels.length > 0) {
-    character.classLevels.forEach((cls) => {
-      checkClassReqs(cls.className);
-    });
-  } else if (character.class) {
-    checkClassReqs(character.class.name);
-  }
-
-  // Check requirements for NEW class (multiclassing INTO)
-  checkClassReqs(newClass.name);
-
-  // Remove duplicates from requirements/missingRequirements
-  return {
-    canMulticlass,
-    requirements: [...new Set(requirements)],
-    missingRequirements: [...new Set(missingRequirements)],
-  };
-}
-
-// ===========================
-// Proficiency Calculations
-// ===========================
-
-/**
- * Calculate combined proficiencies for a multiclass character
- */
-export function calculateMulticlassProficiencies(
-  character: Character,
-): MulticlassProficiencyResult {
-  const result: MulticlassProficiencyResult = {
-    armor: [],
-    weapons: [],
-    tools: [],
-    savingThrows: [],
-    skillChoices: [],
-    numSkillChoices: 0,
-  };
-
-  // Track what we've already added to avoid duplicates
-  const addedArmor = new Set<string>();
-  const addedWeapons = new Set<string>();
-  const addedTools = new Set<string>();
-  const addedSavingThrows = new Set<keyof AbilityScores>();
-
-  // Add proficiencies from first class
-  if (character.class) {
-    const firstClassProfs = multiclassProficiencies[character.class.name.toLowerCase()] || {};
-
-    // Add armor proficiencies
-    if (firstClassProfs.armor) {
-      firstClassProfs.armor.forEach((armor) => {
-        if (!addedArmor.has(armor)) {
-          result.armor.push(armor);
-          addedArmor.add(armor);
-        }
-      });
-    }
-
-    // Add weapon proficiencies
-    if (firstClassProfs.weapons) {
-      firstClassProfs.weapons.forEach((weapon) => {
-        if (!addedWeapons.has(weapon)) {
-          result.weapons.push(weapon);
-          addedWeapons.add(weapon);
-        }
-      });
-    }
-
-    // Add tool proficiencies
-    if (firstClassProfs.tools) {
-      firstClassProfs.tools.forEach((tool) => {
-        if (!addedTools.has(tool)) {
-          result.tools.push(tool);
-          addedTools.add(tool);
-        }
-      });
-    }
-
-    // Add saving throw proficiencies from first class
-    if (character.class.savingThrowProficiencies) {
-      character.class.savingThrowProficiencies.forEach((st) => {
-        if (!addedSavingThrows.has(st)) {
-          result.savingThrows.push(st);
-          addedSavingThrows.add(st);
-        }
-      });
-    }
-
-    // Add skill choices from first class
-    if (firstClassProfs.skillChoices) {
-      result.skillChoices = [...firstClassProfs.skillChoices];
-      result.numSkillChoices = firstClassProfs.numSkillChoices || 0;
-    }
-  }
-
-  // Add proficiencies from additional classes
-  if (character.classLevels && character.classLevels.length > 1) {
-    // Skip first class (already processed)
-    for (let i = 1; i < character.classLevels.length; i++) {
-      const classLevel = character.classLevels[i];
-      const classProfs = multiclassProficiencies[classLevel.className.toLowerCase()] || {};
-
-      // Add armor proficiencies
-      if (classProfs.armor) {
-        classProfs.armor.forEach((armor) => {
-          if (!addedArmor.has(armor)) {
-            result.armor.push(armor);
-            addedArmor.add(armor);
-          }
-        });
-      }
-
-      // Add weapon proficiencies
-      if (classProfs.weapons) {
-        classProfs.weapons.forEach((weapon) => {
-          if (!addedWeapons.has(weapon)) {
-            result.weapons.push(weapon);
-            addedWeapons.add(weapon);
-          }
-        });
-      }
-
-      // Add tool proficiencies
-      if (classProfs.tools) {
-        classProfs.tools.forEach((tool) => {
-          if (!addedTools.has(tool)) {
-            result.tools.push(tool);
-            addedTools.add(tool);
-          }
-        });
-      }
-    }
-  }
-
-  return result;
-}
+// Re-export spellcasting, proficiency, and validation types/functions for backward compatibility
+export type {
+  MulticlassSpellcastingResult,
+  MulticlassProficiencyResult,
+  MulticlassValidationResult,
+};
+export {
+  calculateMulticlassSpellcasting,
+  calculateMulticlassProficiencies,
+  validateMulticlass,
+};
 
 // ===========================
 // Hit Points Calculation
