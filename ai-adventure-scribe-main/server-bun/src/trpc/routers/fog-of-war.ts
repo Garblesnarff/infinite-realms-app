@@ -103,7 +103,7 @@ export const fogOfWarRouter = router({
     .input(z.object({
       sceneId: z.string().uuid(),
       polygon: revealAreaInputSchema,
-      targetUserId: z.string().uuid().optional(),
+      targetUserId: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -128,7 +128,7 @@ export const fogOfWarRouter = router({
     .input(z.object({
       sceneId: z.string().uuid(),
       polygons: z.array(revealAreaInputSchema),
-      targetUserId: z.string().uuid().optional(),
+      targetUserId: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -153,7 +153,7 @@ export const fogOfWarRouter = router({
     .input(z.object({
       sceneId: z.string().uuid(),
       areaId: z.string().uuid(),
-      targetUserId: z.string().uuid().optional(),
+      targetUserId: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -186,7 +186,7 @@ export const fogOfWarRouter = router({
     .input(z.object({
       sceneId: z.string().uuid(),
       areaIds: z.array(z.string().uuid()),
-      targetUserId: z.string().uuid().optional(),
+      targetUserId: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       try {
