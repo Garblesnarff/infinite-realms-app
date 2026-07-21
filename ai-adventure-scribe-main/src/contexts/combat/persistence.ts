@@ -11,8 +11,10 @@ import logger from '@/lib/logger';
 export const saveEncounterToDatabase = async (encounter: CombatEncounter): Promise<void> => {
   try {
     const env = (import.meta as unknown as { env: Record<string, string> }).env || {};
+    const processEnv = typeof process !== 'undefined' ? process.env : {};
+    // Bolt: Support both Vite's import.meta.env and Node/test process.env safely in both browser and test runner environments.
     const enableCombatDB = ['true', '1', 'yes', 'on'].includes(
-      String(env.VITE_ENABLE_COMBAT_DB || '').toLowerCase(),
+      String(env.VITE_ENABLE_COMBAT_DB || processEnv.VITE_ENABLE_COMBAT_DB || '').toLowerCase(),
     );
 
     if (!enableCombatDB) {
@@ -36,12 +38,19 @@ export const saveEncounterToDatabase = async (encounter: CombatEncounter): Promi
       updated_at: new Date().toISOString(),
     });
 
-    // Save participants and their status
+    // ⚡ Bolt: Batched database insertions to prevent sequential N+1 network requests.
+    // Instead of sequentially executing individual upsert queries for each participant
+    // and condition in a loop, we collect all entries into separate arrays and upsert
+    // them in a single batch request per table. This reduces maximum network round-trips from O(N) to O(1).
+    const participantsData = [];
+    const statusData = [];
+    const conditionsData = [];
+
     for (let i = 0; i < encounter.participants.length; i++) {
       const participant = encounter.participants[i];
 
-      // Save participant (static combat data)
-      await supabase.from('combat_participants').upsert({
+      // Prepare participant data
+      participantsData.push({
         id: participant.id,
         encounter_id: encounter.id,
         character_id: participant.characterId || null,
@@ -61,8 +70,8 @@ export const saveEncounterToDatabase = async (encounter: CombatEncounter): Promi
         updated_at: new Date().toISOString(),
       });
 
-      // Save participant status (HP, temp HP, death saves)
-      await supabase.from('combat_participant_status').upsert({
+      // Prepare status data
+      statusData.push({
         participant_id: participant.id,
         current_hp: participant.currentHitPoints,
         max_hp: participant.maxHitPoints,
@@ -73,10 +82,10 @@ export const saveEncounterToDatabase = async (encounter: CombatEncounter): Promi
         updated_at: new Date().toISOString(),
       });
 
-      // Save conditions if any
+      // Prepare conditions data if any
       if (participant.conditions && participant.conditions.length > 0) {
         for (const condition of participant.conditions) {
-          await supabase.from('combat_participant_conditions').upsert({
+          conditionsData.push({
             participant_id: participant.id,
             condition_name: condition.name,
             source: condition.source || 'unknown',
@@ -88,6 +97,23 @@ export const saveEncounterToDatabase = async (encounter: CombatEncounter): Promi
           });
         }
       }
+    }
+
+    // ⚡ Bolt: Fire all batch updates concurrently to minimize total waiting time.
+    const upsertPromises = [];
+
+    if (participantsData.length > 0) {
+      upsertPromises.push(supabase.from('combat_participants').upsert(participantsData));
+    }
+    if (statusData.length > 0) {
+      upsertPromises.push(supabase.from('combat_participant_status').upsert(statusData));
+    }
+    if (conditionsData.length > 0) {
+      upsertPromises.push(supabase.from('combat_participant_conditions').upsert(conditionsData));
+    }
+
+    if (upsertPromises.length > 0) {
+      await Promise.all(upsertPromises);
     }
   } catch (error) {
     logger.error('Error saving encounter to database:', error);

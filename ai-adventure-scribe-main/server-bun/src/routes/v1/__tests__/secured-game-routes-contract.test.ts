@@ -3,7 +3,9 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-const routeRoot = join(process.cwd(), 'server-bun/src/routes/v1');
+const routeRoot = process.cwd().endsWith('server-bun')
+  ? join(process.cwd(), 'src/routes/v1')
+  : join(process.cwd(), 'server-bun/src/routes/v1');
 const sessions = readFileSync(join(routeRoot, 'sessions.ts'), 'utf8');
 const securedData = readFileSync(join(routeRoot, 'secured-game-data.ts'), 'utf8');
 
