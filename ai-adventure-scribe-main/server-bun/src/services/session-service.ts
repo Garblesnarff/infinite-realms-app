@@ -25,6 +25,49 @@ import { NotFoundError } from '../lib/errors.js';
 
 export { type MessagePage };
 
+interface CreateSessionData {
+  campaignId?: string | null;
+  characterId?: string | null;
+  sessionNumber?: number;
+  status?: string;
+  summary?: string | null;
+  currentSceneDescription?: string | null;
+  sessionNotes?: string | null;
+  turnCount?: number;
+  starterCampaignId?: string | null;
+  campaignVersion?: number | null;
+}
+
+/**
+ * Build the SELECT list for the ownership-gated INSERT ... SELECT in createSession.
+ * Drizzle requires these keys to match the game_sessions table definition exactly
+ * (same columns, same order), so table defaults are re-stated here explicitly.
+ */
+export function buildSessionInsertSelection(
+  data: CreateSessionData,
+  ids: { campaignId: SQL; characterId: SQL },
+) {
+  return {
+    id: sql`gen_random_uuid()`,
+    campaignId: ids.campaignId,
+    characterId: ids.characterId,
+    sessionNumber: sql`${data.sessionNumber || 1}::integer`,
+    startTime: sql`NOW()`,
+    endTime: sql`NULL::timestamptz`,
+    status: sql`${data.status || 'active'}::text`,
+    currentSceneDescription: sql`${data.currentSceneDescription ?? null}::text`,
+    summary: sql`${data.summary ?? null}::text`,
+    sessionNotes: sql`${data.sessionNotes ?? null}::text`,
+    turnCount: sql`${data.turnCount ?? 0}::integer`,
+    sessionState: sql`'{}'::jsonb`,
+    starterCampaignId: sql`${data.starterCampaignId ?? null}::text`,
+    campaignVersion: sql`${data.campaignVersion ?? null}::integer`,
+    ruleset: sql`'5e'::text`,
+    createdAt: sql`NOW()`,
+    updatedAt: sql`NOW()`,
+  };
+}
+
 function mapSessionContextCore(session: GameSession) {
   return {
     id: session.id,
@@ -102,44 +145,41 @@ export class SessionService {
   /**
    * Create a new game session
    */
-  static async createSession(
-    data: {
-      campaignId?: string | null;
-      characterId?: string | null;
-      sessionNumber?: number;
-      status?: string;
-      summary?: string | null;
-      currentSceneDescription?: string | null;
-      sessionNotes?: string | null;
-      turnCount?: number;
-      starterCampaignId?: string | null;
-      campaignVersion?: number | null;
-    },
-    userId: string,
-  ): Promise<GameSession> {
+  static async createSession(data: CreateSessionData, userId: string): Promise<GameSession> {
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     // This ensures that sessions can only be created for campaigns or characters the user is authorized to access
     // while masking resource existence in a single atomic database round-trip.
     let session: GameSession | undefined;
 
     if (data.campaignId && data.characterId) {
+      // Only one active session may exist per campaign+character
+      // (idx_active_session_per_character partial unique index). Creating a new
+      // active session is an explicit "start fresh", so retire any lingering
+      // active session for this pair first — otherwise the INSERT fails.
+      if ((data.status || 'active') === 'active') {
+        await db
+          .update(gameSessions)
+          .set({ status: 'completed', endTime: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(gameSessions.campaignId, data.campaignId),
+              eq(gameSessions.characterId, data.characterId),
+              eq(gameSessions.status, 'active'),
+              getOwnershipCondition(userId),
+            ),
+          );
+      }
+
       [session] = await db
         .insert(gameSessions)
         .select(
           db
-            .select({
-              campaignId: sql`${data.campaignId}`,
-              characterId: sql`${data.characterId}`,
-              sessionNumber: sql`${data.sessionNumber || 1}`,
-              status: sql`${data.status || 'active'}`,
-              startTime: sql`NOW()`,
-              summary: sql`${data.summary ?? null}`,
-              currentSceneDescription: sql`${data.currentSceneDescription ?? null}`,
-              sessionNotes: sql`${data.sessionNotes ?? null}`,
-              turnCount: sql`${data.turnCount ?? 0}`,
-              starterCampaignId: sql`${data.starterCampaignId ?? null}`,
-              campaignVersion: sql`${data.campaignVersion ?? null}`,
-            })
+            .select(
+              buildSessionInsertSelection(data, {
+                campaignId: sql`${data.campaignId}::uuid`,
+                characterId: sql`${data.characterId}::uuid`,
+              }),
+            )
             .from(campaigns)
             .innerJoin(characters, eq(characters.id, data.characterId))
             .where(
@@ -156,19 +196,12 @@ export class SessionService {
         .insert(gameSessions)
         .select(
           db
-            .select({
-              campaignId: sql`${data.campaignId}`,
-              characterId: sql`NULL::uuid`,
-              sessionNumber: sql`${data.sessionNumber || 1}`,
-              status: sql`${data.status || 'active'}`,
-              startTime: sql`NOW()`,
-              summary: sql`${data.summary ?? null}`,
-              currentSceneDescription: sql`${data.currentSceneDescription ?? null}`,
-              sessionNotes: sql`${data.sessionNotes ?? null}`,
-              turnCount: sql`${data.turnCount ?? 0}`,
-              starterCampaignId: sql`${data.starterCampaignId ?? null}`,
-              campaignVersion: sql`${data.campaignVersion ?? null}`,
-            })
+            .select(
+              buildSessionInsertSelection(data, {
+                campaignId: sql`${data.campaignId}::uuid`,
+                characterId: sql`NULL::uuid`,
+              }),
+            )
             .from(campaigns)
             .where(and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))),
         )
@@ -178,19 +211,12 @@ export class SessionService {
         .insert(gameSessions)
         .select(
           db
-            .select({
-              campaignId: sql`NULL::uuid`,
-              characterId: sql`${data.characterId}`,
-              sessionNumber: sql`${data.sessionNumber || 1}`,
-              status: sql`${data.status || 'active'}`,
-              startTime: sql`NOW()`,
-              summary: sql`${data.summary ?? null}`,
-              currentSceneDescription: sql`${data.currentSceneDescription ?? null}`,
-              sessionNotes: sql`${data.sessionNotes ?? null}`,
-              turnCount: sql`${data.turnCount ?? 0}`,
-              starterCampaignId: sql`${data.starterCampaignId ?? null}`,
-              campaignVersion: sql`${data.campaignVersion ?? null}`,
-            })
+            .select(
+              buildSessionInsertSelection(data, {
+                campaignId: sql`NULL::uuid`,
+                characterId: sql`${data.characterId}::uuid`,
+              }),
+            )
             .from(characters)
             .where(
               and(

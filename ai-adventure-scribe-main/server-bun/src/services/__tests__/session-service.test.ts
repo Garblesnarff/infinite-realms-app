@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { getTableColumns, sql } from 'drizzle-orm';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { gameSessions } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
-import { SessionService } from '../session-service.js';
+import { SessionService, buildSessionInsertSelection } from '../session-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -261,6 +262,19 @@ describe('SessionService', () => {
       await expect(SessionService.completeSession(sessionId, userId)).rejects.toThrow(
         NotFoundError,
       );
+    });
+  });
+
+  describe('createSession insert-select contract', () => {
+    it('selects exactly the game_sessions columns in table-definition order', () => {
+      // Drizzle's insert().select() throws "selected fields are not the same or
+      // are in a different order compared to the table definition" at runtime
+      // if these ever drift — e.g. when a new column is added to game_sessions.
+      const selection = buildSessionInsertSelection(
+        {},
+        { campaignId: sql`NULL::uuid`, characterId: sql`NULL::uuid` },
+      );
+      expect(Object.keys(selection)).toEqual(Object.keys(getTableColumns(gameSessions)));
     });
   });
 
