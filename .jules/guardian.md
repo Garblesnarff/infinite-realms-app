@@ -279,3 +279,7 @@
 ## 2024-05-25 - [Damage Calculation Coverage & Order of Operations]
 **Learning:** Added 100% test coverage for `src/services/combat/damage-calculation.ts`. Verified the D&D 5e rule where resistance is applied (and rounded down) before vulnerability. For example, 11 damage with both resistance and vulnerability results in 10 damage: floor(11/2) = 5, then 5 * 2 = 10.
 **Action:** When testing combat mechanics, always verify the order of operations for stacking modifiers. Ensure new tests and source files are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
+
+## 2026-07-21 - [Combat Action Executor Coverage]
+**Learning:** `combat-action-executor.ts` coordinates intent synchronization between the frontend client and backend combat status APIs. Testing it revealed that when `expectedVersion` is undefined, the executor automatically does an initial query to retrieve the current combat state version, falling back to version `1` if the state contains no explicit version data.
+**Action:** When testing executors with automatic version-lookup and API intent wrapping, mock global `fetch` calls sequentially using `.mockResolvedValueOnce` to return both the status payload and subsequent wrapped intent payload. Always register the test file and module under test in BOTH `include` and `coverage.include` lists in `vitest.config.ts`.

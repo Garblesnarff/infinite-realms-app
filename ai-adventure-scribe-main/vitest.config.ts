@@ -37,6 +37,7 @@ export default defineConfig({
     // is meant to eliminate.
     include: [
       'src/services/ai/prompts/__tests__/combat-rules-prompts.test.ts',
+      'src/services/combat/__tests__/combat-action-executor.test.ts',
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}'
     ],
@@ -82,6 +83,7 @@ export default defineConfig({
       // files with zero tests, so the numbers reflect real coverage instead of theater.
       include: [
         'src/services/ai/prompts/combat-rules-prompts.ts',
+        'src/services/combat/combat-action-executor.ts',
         'src/**/*.{ts,tsx}'
       ],
       all: true,
