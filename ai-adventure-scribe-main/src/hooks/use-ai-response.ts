@@ -14,6 +14,7 @@ import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetectio
 import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';
+import { fetchGameContext, buildAIContext } from '@/hooks/ai/ai-utils';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
@@ -78,40 +79,6 @@ export interface EnhancedChatMessage extends ChatMessage {
 
 // Re-export RollRequest for backward compatibility
 export type { RollRequest } from '@/types/roll-request';
-
-/**
- * Fetches campaign and character details for the DM Agent context.
- *
- * ⚡ Bolt: Extracted from hook to stabilize identity and prevent redundant
- * re-creations during component re-renders.
- */
-const fetchGameContext = async (
-  sessionId: string,
-): Promise<{
-  campaign: Record<string, unknown>;
-  character: Record<string, unknown>;
-  starterCampaignId?: string;
-} | null> => {
-  try {
-    logger.info('Fetching game session details for:', sessionId);
-
-    const sessionData = await userDataApi.getSessionContext(sessionId);
-
-    if (!sessionData?.campaign_id || !sessionData?.character_id) {
-      logger.error('No campaign or character IDs found in session');
-      return null;
-    }
-
-    return {
-      campaign: sessionData.campaign || {},
-      character: sessionData.character || {},
-      starterCampaignId: sessionData.starter_campaign_id as string,
-    };
-  } catch (error) {
-    logger.error('Error in fetchGameContext:', error);
-    return null;
-  }
-};
 
 /**
  * useAIResponse Hook
@@ -205,34 +172,20 @@ export const useAIResponse = () => {
         }));
 
         // Create AI context with combat awareness
-        const campaignRecord = gameContext.campaign as Record<string, unknown>;
         const characterRecord = gameContext.character as Record<string, unknown>;
-        const aiContext = {
-          campaignId: (campaignRecord.id as string) || '',
-          characterId: (characterRecord.id as string) || '',
+        const aiContext = buildAIContext({
           sessionId,
           userId: user?.id,
           starterCampaignId: gameContext.starterCampaignId,
-          campaignDetails: gameContext.campaign,
-          characterDetails: gameContext.character,
-          gameState: {
-            currentPhase: gameState.currentPhase,
-            isInCombat: combatState.isInCombat,
-            currentTurnPlayerId: combatState.activeEncounter?.currentTurnParticipantId,
-            pendingRolls: gameState.diceRollQueue.pendingRolls.length,
-            round: combatState.activeEncounter?.currentRound,
-            participants:
-              (combatState.activeEncounter?.participants || []).map((participant) => ({
-                id: participant.id,
-                name: participant.name,
-                type: participant.participantType,
-                hp: participant.currentHitPoints,
-                maxHp: participant.maxHitPoints,
-                armorClass: participant.armorClass,
-                conditions: (participant.conditions || []).map((condition) => condition.name),
-              })) || [],
-          },
-        };
+          campaign: gameContext.campaign,
+          character: gameContext.character,
+          currentPhase: gameState.currentPhase,
+          isInCombat: combatState.isInCombat,
+          currentTurnParticipantId: combatState.activeEncounter?.currentTurnParticipantId,
+          pendingRollsCount: gameState.diceRollQueue.pendingRolls.length,
+          currentRound: combatState.activeEncounter?.currentRound,
+          participants: combatState.activeEncounter?.participants,
+        });
 
         // The tactical server computes geometry. The DM receives only its bounded
         // ASCII/digest context and never derives distances or line of sight itself.

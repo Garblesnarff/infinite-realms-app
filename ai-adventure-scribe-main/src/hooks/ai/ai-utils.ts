@@ -43,11 +43,11 @@ export function formatDMTask(messages: ChatMessage[], latestMessage: ChatMessage
  * Fetches campaign and character details for the DM Agent context.
  *
  * @param {string} sessionId - The session ID
- * @returns {Promise<{campaign: Partial<Campaign>, character: Partial<Character>} | null>} The game context or null if failed
+ * @returns {Promise<{campaign: Partial<Campaign>, character: Partial<Character>, starterCampaignId?: string} | null>} The game context or null if failed
  */
 export async function fetchGameContext(
   sessionId: string,
-): Promise<{ campaign: Partial<Campaign>; character: Partial<Character> } | null> {
+): Promise<{ campaign: Partial<Campaign>; character: Partial<Character>; starterCampaignId?: string } | null> {
   try {
     const sessionData = await userDataApi.getSessionContext(sessionId);
 
@@ -59,11 +59,70 @@ export async function fetchGameContext(
     return {
       campaign: (sessionData.campaign || {}) as Partial<Campaign>,
       character: (sessionData.character || {}) as Partial<Character>,
+      starterCampaignId: sessionData.starter_campaign_id as string,
     };
   } catch (error) {
     logger.error('Error in fetchGameContext:', error);
     return null;
   }
+}
+
+/**
+ * Builds the structured AI context object for AIService.chatWithDM.
+ *
+ * @param {object} params - Input parameters for context construction
+ * @returns {object} The formatted AI context
+ */
+export function buildAIContext(params: {
+  sessionId: string;
+  userId?: string;
+  starterCampaignId?: string;
+  campaign: Record<string, unknown> | Partial<Campaign>;
+  character: Record<string, unknown> | Partial<Character>;
+  currentPhase: string;
+  isInCombat: boolean;
+  currentTurnParticipantId?: string | null;
+  pendingRollsCount: number;
+  currentRound?: number | null;
+  participants?: Array<{
+    id: string;
+    name: string;
+    participantType: string;
+    currentHitPoints: number;
+    maxHitPoints: number;
+    armorClass: number;
+    conditions?: Array<{ name: string }>;
+  }>;
+}) {
+  const campaignRecord = params.campaign as Record<string, unknown>;
+  const characterRecord = params.character as Record<string, unknown>;
+
+  return {
+    campaignId: (campaignRecord.id as string) || '',
+    characterId: (characterRecord.id as string) || '',
+    sessionId: params.sessionId,
+    userId: params.userId,
+    starterCampaignId: params.starterCampaignId,
+    campaignDetails: params.campaign,
+    characterDetails: params.character,
+    gameState: {
+      currentPhase: params.currentPhase,
+      isInCombat: params.isInCombat,
+      currentTurnPlayerId: params.currentTurnParticipantId,
+      pendingRolls: params.pendingRollsCount,
+      round: params.currentRound,
+      participants:
+        (params.participants || []).map((participant) => ({
+          id: participant.id,
+          name: participant.name,
+          type: participant.participantType,
+          hp: participant.currentHitPoints,
+          maxHp: participant.maxHitPoints,
+          armorClass: participant.armorClass,
+          conditions: (participant.conditions || []).map((condition) => condition.name),
+        })),
+    },
+  };
 }
 
 /**

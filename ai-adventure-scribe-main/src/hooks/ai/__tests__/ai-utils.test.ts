@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { formatDMTask, fetchGameContext, fetchMemories } from '../ai-utils';
+import { formatDMTask, fetchGameContext, fetchMemories, buildAIContext } from '../ai-utils';
 
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -62,11 +62,12 @@ describe('ai-utils', () => {
   });
 
   describe('fetchGameContext', () => {
-    it('should fetch and return campaign and character details', async () => {
+    it('should fetch and return campaign, character details, and starterCampaignId', async () => {
       const mockSession = {
         id: 'session-123',
         campaign_id: 'campaign-456',
         character_id: 'char-789',
+        starter_campaign_id: 'starter-111',
         campaign: { id: 'campaign-456', name: 'Lost Mine' },
         character: { id: 'char-789', name: 'Gundren' },
       };
@@ -78,6 +79,7 @@ describe('ai-utils', () => {
       expect(result).toEqual({
         campaign: mockSession.campaign,
         character: mockSession.character,
+        starterCampaignId: 'starter-111',
       });
     });
 
@@ -101,6 +103,95 @@ describe('ai-utils', () => {
       expect(logger.error).toHaveBeenCalledWith('No campaign or character IDs found in session');
     });
 
+  });
+
+  describe('buildAIContext', () => {
+    it('should construct the correct AI context object', () => {
+      const params = {
+        sessionId: 'session-123',
+        userId: 'user-456',
+        starterCampaignId: 'starter-789',
+        campaign: { id: 'campaign-456', name: 'Lost Mine' },
+        character: { id: 'char-789', name: 'Gundren' },
+        currentPhase: 'exploration',
+        isInCombat: true,
+        currentTurnParticipantId: 'p1',
+        pendingRollsCount: 2,
+        currentRound: 3,
+        participants: [
+          {
+            id: 'p1',
+            name: 'Gundren',
+            participantType: 'player',
+            currentHitPoints: 20,
+            maxHitPoints: 30,
+            armorClass: 15,
+            conditions: [{ name: 'Poisoned' }],
+          },
+        ] as any[],
+      };
+
+      const result = buildAIContext(params);
+
+      expect(result).toEqual({
+        campaignId: 'campaign-456',
+        characterId: 'char-789',
+        sessionId: 'session-123',
+        userId: 'user-456',
+        starterCampaignId: 'starter-789',
+        campaignDetails: params.campaign,
+        characterDetails: params.character,
+        gameState: {
+          currentPhase: 'exploration',
+          isInCombat: true,
+          currentTurnPlayerId: 'p1',
+          pendingRolls: 2,
+          round: 3,
+          participants: [
+            {
+              id: 'p1',
+              name: 'Gundren',
+              type: 'player',
+              hp: 20,
+              maxHp: 30,
+              armorClass: 15,
+              conditions: ['Poisoned'],
+            },
+          ],
+        },
+      });
+    });
+
+    it('should handle missing optional fields and return defaults', () => {
+      const params = {
+        sessionId: 'session-123',
+        campaign: {},
+        character: {},
+        currentPhase: 'exploration',
+        isInCombat: false,
+        pendingRollsCount: 0,
+      };
+
+      const result = buildAIContext(params);
+
+      expect(result).toEqual({
+        campaignId: '',
+        characterId: '',
+        sessionId: 'session-123',
+        userId: undefined,
+        starterCampaignId: undefined,
+        campaignDetails: {},
+        characterDetails: {},
+        gameState: {
+          currentPhase: 'exploration',
+          isInCombat: false,
+          currentTurnPlayerId: undefined,
+          pendingRolls: 0,
+          round: undefined,
+          participants: [],
+        },
+      });
+    });
   });
 
   describe('fetchMemories', () => {
