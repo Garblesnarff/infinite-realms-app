@@ -28,6 +28,11 @@ export class MemoryService {
     }
     return db.query.memories.findMany({
       where: and(...conditions),
+      // ⚡ Bolt: Explicitly exclude the heavy embedding column to prevent over-fetching (~3KB per row)
+      // and reduce memory/network overhead for simple lists where similarity is not needed.
+      columns: {
+        embedding: false,
+      },
       orderBy: options.top
         ? [desc(memories.importance), desc(memories.createdAt)]
         : [options.minNarrativeWeight ? asc(memories.createdAt) : desc(memories.createdAt)],
@@ -72,7 +77,14 @@ export class MemoryService {
   }
 
   static async getById(memoryId: string, userId: string) {
-    const memory = await db.query.memories.findFirst({ where: eq(memories.id, memoryId) });
+    const memory = await db.query.memories.findFirst({
+      where: eq(memories.id, memoryId),
+      // ⚡ Bolt: Explicitly exclude the heavy embedding column to prevent over-fetching (~3KB per row)
+      // and reduce memory/network overhead when fetching details of a memory.
+      columns: {
+        embedding: false,
+      },
+    });
     if (!memory) throw new NotFoundError('Memory', memoryId);
     await this.verifyRecordOwnership(memory, userId);
     return memory;

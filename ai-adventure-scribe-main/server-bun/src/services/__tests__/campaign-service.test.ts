@@ -65,13 +65,21 @@ describe('CampaignService Security', () => {
   });
 
   describe('listPublicTemplates', () => {
-    it('queries only templates intended for public discovery', async () => {
+    it('queries only templates intended for public discovery and excludes heavy fields', async () => {
       (db.query.campaigns.findMany as any).mockResolvedValue([]);
 
       await CampaignService.listPublicTemplates();
 
       expect(db.query.campaigns.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.any(Object) }),
+        expect.objectContaining({
+          where: expect.any(Object),
+          columns: {
+            settingDetails: false,
+            thematicElements: false,
+            styleConfig: false,
+            rulesConfig: false,
+          },
+        }),
       );
     });
   });

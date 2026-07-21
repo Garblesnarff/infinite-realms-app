@@ -31,14 +31,34 @@ vi.mock('../campaign-service.js', () => ({
 describe('MemoryService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('authorizes the session owner before listing memories', async () => {
+  it('authorizes the session owner before listing memories and excludes the embedding column', async () => {
     vi.mocked(SessionService.getSessionById).mockResolvedValue({ id: 'session-1' } as never);
     vi.mocked(db.query.memories.findMany).mockResolvedValue([]);
 
     await MemoryService.list('session-1', 'user-1', { limit: 15 });
 
     expect(SessionService.getSessionById).toHaveBeenCalledWith('session-1', 'user-1');
-    expect(db.query.memories.findMany).toHaveBeenCalledOnce();
+    expect(db.query.memories.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columns: { embedding: false },
+      }),
+    );
+  });
+
+  it('authorizes the session owner before getting memory by ID and excludes the embedding column', async () => {
+    const mockMemory = { id: 'memory-1', sessionId: 'session-1' };
+    vi.mocked(db.query.memories.findFirst).mockResolvedValue(mockMemory as never);
+    vi.mocked(SessionService.getSessionById).mockResolvedValue({ id: 'session-1' } as never);
+
+    const result = await MemoryService.getById('memory-1', 'user-1');
+
+    expect(result).toEqual(mockMemory);
+    expect(db.query.memories.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columns: { embedding: false },
+      }),
+    );
+    expect(SessionService.getSessionById).toHaveBeenCalledWith('session-1', 'user-1');
   });
 
   it('does not query memories when session ownership is denied', async () => {

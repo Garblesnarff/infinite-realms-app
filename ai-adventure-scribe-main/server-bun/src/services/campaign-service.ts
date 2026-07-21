@@ -17,6 +17,13 @@ export class CampaignService {
   static async listPublicTemplates(): Promise<Campaign[]> {
     return db.query.campaigns.findMany({
       where: and(eq(campaigns.template, true), eq(campaigns.visibility, 'public')),
+      // ⚡ Bolt: Exclude heavy JSONB fields by default for discovery templates to reduce payload size and database overhead.
+      columns: {
+        settingDetails: false,
+        thematicElements: false,
+        styleConfig: false,
+        rulesConfig: false,
+      },
       orderBy: [desc(campaigns.publishedAt), desc(campaigns.templateVersion)],
     });
   }
