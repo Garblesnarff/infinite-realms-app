@@ -1,6 +1,7 @@
 import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
 import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactical/dispatch.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
+import { combatLogger } from '../../lib/logger.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
 import type { MapEntity } from '../../tactical/types.js';
@@ -102,11 +103,10 @@ export async function applyDmTacticalActions(
       appliedDeltas.push(deltaFor(result.action, result, current?.entities));
     }
     else {
-      console.warn('[tactical] dropped invalid DM map action', {
-        sessionId,
-        action,
-        refusal: result.refusal,
-      });
+      combatLogger.warn(
+        { sessionId, action, refusal: result.refusal },
+        '[tactical] dropped invalid DM map action',
+      );
       degraded.push(result.refusal);
     }
     results.push(result);
