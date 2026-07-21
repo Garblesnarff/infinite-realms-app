@@ -35,7 +35,11 @@ export default defineConfig({
     // those same files through Vitest too would duplicate execution and require
     // keeping two configs in sync, reintroducing the same kind of drift this change
     // is meant to eliminate.
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{test,spec}.{ts,tsx}'],
+    include: [
+      'src/services/ai/prompts/__tests__/combat-rules-prompts.test.ts',
+      'src/**/*.{test,spec}.{ts,tsx}',
+      'tests/**/*.{test,spec}.{ts,tsx}'
+    ],
     exclude: [
       // Standard build/dependency output - never contains tests we want to run.
       'node_modules/**',
@@ -76,6 +80,10 @@ export default defineConfig({
       // vast majority of src/ was invisible to coverage reporting. `all: true` (no
       // include allowlist) makes every file under src/ show up in the report, even
       // files with zero tests, so the numbers reflect real coverage instead of theater.
+      include: [
+        'src/services/ai/prompts/combat-rules-prompts.ts',
+        'src/**/*.{ts,tsx}'
+      ],
       all: true,
       exclude: [
         '**/__tests__/**',
