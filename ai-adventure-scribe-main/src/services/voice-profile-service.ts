@@ -35,9 +35,12 @@ export class VoiceProfileService {
    */
   async getVoiceProfile(characterId: string): Promise<VoiceProfile | null> {
     try {
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
       const { data, error } = await supabase
         .from('character_voice_profiles')
-        .select('*')
+        .select(
+          'id, character_id, voice_style, speech_patterns, vocabulary_level, tone, quirks, example_phrases, consistency_score, created_at, updated_at'
+        )
         .eq('character_id', characterId)
         .single();
 

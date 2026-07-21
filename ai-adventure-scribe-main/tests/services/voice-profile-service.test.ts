@@ -110,7 +110,9 @@ describe('VoiceProfileService', () => {
       const result = await voiceProfileService.getVoiceProfile('char-1');
 
       expect(result).toEqual(mockProfile);
-      expect(supabaseMock.chain.select).toHaveBeenCalledWith('*');
+      expect(supabaseMock.chain.select).toHaveBeenCalledWith(
+        'id, character_id, voice_style, speech_patterns, vocabulary_level, tone, quirks, example_phrases, consistency_score, created_at, updated_at'
+      );
       expect(supabaseMock.chain.eq).toHaveBeenCalledWith('character_id', 'char-1');
     });
 
