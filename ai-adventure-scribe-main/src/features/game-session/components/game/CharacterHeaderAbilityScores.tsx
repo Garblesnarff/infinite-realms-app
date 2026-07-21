@@ -19,7 +19,12 @@ interface CharacterHeaderAbilityScoresProps {
   abilityScores: Record<string, { score?: number }> | undefined;
 }
 
-export const CharacterHeaderAbilityScores: React.FC<CharacterHeaderAbilityScoresProps> = ({
+/**
+ * CharacterHeaderAbilityScores
+ * ⚡ Bolt: Wrapped in React.memo to avoid redundant DOM reconciliation and layout calculations
+ * when parent components (such as CompactCharacterHeader) re-render.
+ */
+export const CharacterHeaderAbilityScores: React.FC<CharacterHeaderAbilityScoresProps> = React.memo(({
   abilityScores,
 }) => (
   <div className="grid grid-cols-3 gap-2 text-xs" role="group" aria-label="Ability Scores">
@@ -41,4 +46,6 @@ export const CharacterHeaderAbilityScores: React.FC<CharacterHeaderAbilityScores
       );
     })}
   </div>
-);
+));
+
+CharacterHeaderAbilityScores.displayName = 'CharacterHeaderAbilityScores';

@@ -10,7 +10,12 @@ interface CharacterHeaderVitalsProps {
   proficiency: number;
 }
 
-export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = ({
+/**
+ * CharacterHeaderVitals
+ * ⚡ Bolt: Wrapped in React.memo to avoid redundant DOM reconciliation and layout calculations
+ * when parent components (such as CompactCharacterHeader) re-render.
+ */
+export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = React.memo(({
   combatHP,
   maxHp,
   armorClass,
@@ -93,4 +98,6 @@ export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = ({
       <span aria-hidden="true">+{proficiency}</span>
     </div>
   </div>
-);
+));
+
+CharacterHeaderVitals.displayName = 'CharacterHeaderVitals';
