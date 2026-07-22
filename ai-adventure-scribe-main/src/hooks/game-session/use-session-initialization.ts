@@ -19,6 +19,14 @@ interface UseSessionInitializationProps {
     (props: { title?: string; description?: string; variant?: 'default' | 'destructive' }): void;
   };
   mountedRef: React.MutableRefObject<boolean>;
+  /**
+   * Called once a brand-new session has been successfully created via the
+   * forceNew path. Intended for the caller to strip the `?new=true` (or
+   * equivalent) query param from the URL so a page refresh takes the resume
+   * path instead of creating another new session (see BUG: refresh creates a
+   * new session because `forceNew` stays true forever).
+   */
+  onForceNewSessionCreated?: () => void;
 }
 
 /**
@@ -37,6 +45,7 @@ export const useSessionInitialization = ({
   cleanupSession,
   toast,
   mountedRef,
+  onForceNewSessionCreated,
 }: UseSessionInitializationProps): void => {
   // Race condition prevention: track initialization status
   const initializingRef = useRef(false);
@@ -51,6 +60,14 @@ export const useSessionInitialization = ({
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
+
+  // Store the URL-cleanup callback in a ref too, for the same reason (avoid
+  // retriggering the init effect just because the caller passed a fresh
+  // function identity on every render).
+  const onForceNewSessionCreatedRef = useRef(onForceNewSessionCreated);
+  useEffect(() => {
+    onForceNewSessionCreatedRef.current = onForceNewSessionCreated;
+  }, [onForceNewSessionCreated]);
 
   useEffect(() => {
     // Guard: Only initialize if we have the required IDs
@@ -129,6 +146,11 @@ export const useSessionInitialization = ({
           const newSessionId = await createGameSession(campaignId, characterId);
           if (newSessionId && mountedRef.current) {
             sessionInitializedRef.current = true;
+            // Strip the forceNew URL param (e.g. `?new=true`) now that the new
+            // session exists. Without this, refreshing the page re-enters this
+            // same branch on mount and silently creates yet another session,
+            // abandoning the one just created (BUG: refresh creates new session).
+            onForceNewSessionCreatedRef.current?.();
           } else {
             handleSessionCreationFailure('forceNew path');
           }

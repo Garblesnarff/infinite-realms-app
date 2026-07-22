@@ -41,37 +41,39 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 
 <roll_request_format>
 <title>HOW TO REQUEST ROLLS</title>
-**When an action has uncertain outcome, include this code block at the END of your response:**
+**Your JSON response has a dedicated \`roll_requests\` array field (a sibling of \`text\`,
+\`narration_segments\`, etc.) - it is NOT a code block or text marker. When an action has an
+uncertain outcome, populate \`roll_requests\` with one entry per roll needed. Leave it as an
+empty array \`[]\` when no roll is needed.**
 
-\`\`\`ROLL_REQUESTS_V1
+Each entry in \`roll_requests\` looks like:
+\`\`\`json
 {
-  "rolls": [
-    {
-      "type": "skill_check",
-      "formula": "1d20+modifier",
-      "purpose": "Description of what this roll is for",
-      "dc": 14
-    }
-  ]
+  "type": "check",
+  "formula": "1d20+modifier",
+  "purpose": "Description of what this roll is for",
+  "dc": 14,
+  "advantage": false,
+  "disadvantage": false
 }
 \`\`\`
 
 <field_requirements>
-- **type**: "skill_check", "save", "attack", or "damage"
+- **type**: exactly one of "check", "save", "attack", "damage", "initiative" (ability/skill
+  checks are always "check" - do NOT invent other type strings like "skill_check")
 - **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
 - **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
-- **dc**: Difficulty Class for checks/saves (optional)
-- **ac**: Armor Class for attacks (optional)
-- **advantage/disadvantage**: true if applicable (optional)
+- **dc**: Difficulty Class for checks/saves, or \`null\` if not applicable
+- **advantage/disadvantage**: \`true\`/\`false\`
 </field_requirements>
 
 <examples>
-Stealth: \`{"type": "skill_check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14}\`
-Persuasion: \`{"type": "skill_check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15}\`
-Perception: \`{"type": "skill_check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12}\`
-Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "ac": 15}\`
-Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15}\`
-Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}\`
+Stealth: \`{"type": "check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14, "advantage": false, "disadvantage": false}\`
+Persuasion: \`{"type": "check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15, "advantage": false, "disadvantage": false}\`
+Perception: \`{"type": "check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12, "advantage": false, "disadvantage": false}\`
+Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "dc": null, "advantage": false, "disadvantage": false}\`
+Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15, "advantage": false, "disadvantage": false}\`
+Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "advantage": false, "disadvantage": false}\`
 </examples>
 </roll_request_format>
 
@@ -81,41 +83,34 @@ Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw
 
 ✅ CORRECT FLOW:
 1. Player says "I try to sneak past the guards"
-2. You respond with narrative setup + roll request at end
+2. You respond with narrative setup in \`text\` + the roll in \`roll_requests\`
 3. Player rolls
-4. THEN you narrate success/failure based on their roll
+4. THEN you narrate success/failure based on their roll (with \`roll_requests: []\`)
 
 ❌ WRONG: "You successfully sneak past the guards..." (before they rolled!)
 ❌ WRONG: "You try to sneak but the guard spots you..." (before they rolled!)
-✅ RIGHT: "The guards patrol the corridor ahead. Their torchlight flickers against the stone walls..." + roll request
+✅ RIGHT: \`text\`: "The guards patrol the corridor ahead. Their torchlight flickers against the stone walls..." + \`roll_requests: [{"type": "check", ...}]\`
 </roll_before_outcome>
 
 <critical_roll_stopping_rule>
-**CRITICAL: YOUR RESPONSE MUST END WITH THE ROLL REQUEST**
+**CRITICAL: WHEN YOU POPULATE \`roll_requests\`, YOUR TURN IS COMPLETE**
 
-When you request a roll, your turn is COMPLETE. You must STOP immediately after the roll request block.
+When \`roll_requests\` is non-empty, do not also resolve the action in \`text\`. You must STOP
+your narrative at the point of uncertainty - the roll result arrives in the player's NEXT
+message, and only then do you narrate the outcome (with \`roll_requests: []\` on that turn).
 
-DO NOT after requesting a roll:
+DO NOT, in the same turn you populate \`roll_requests\`:
 - Narrate what happens if they succeed or fail
 - Describe the outcome conditionally ("If you succeed...")
 - Assume any result and continue the story
-- Add any text after the ROLL_REQUESTS_V1 block
 
-✅ CORRECT (stop after roll request):
-"The ancient wall looms before you, its stones worn smooth by centuries of rain. You'll need to find handholds carefully.
+✅ CORRECT:
+\`text\`: "The ancient wall looms before you, its stones worn smooth by centuries of rain. You'll need to find handholds carefully."
+\`roll_requests\`: \`[{"type": "check", "formula": "1d20+athletics", "purpose": "Athletics check to climb the wall", "dc": 15, "advantage": false, "disadvantage": false}]\`
 
-\`\`\`ROLL_REQUESTS_V1
-{"rolls":[{"type": "skill_check", "formula": "1d20+athletics", "purpose": "Athletics check to climb the wall", "dc":15}]}
-\`\`\`"
-
-❌ WRONG (continues after roll request):
-"The ancient wall looms before you...
-
-\`\`\`ROLL_REQUESTS_V1
-{"rolls":[...]}
-\`\`\`
-
-You manage to find purchase on the weathered stone and pull yourself up..."
+❌ WRONG:
+\`text\`: "The ancient wall looms before you... You manage to find purchase on the weathered stone and pull yourself up..." (resolves the climb before any roll happened)
+\`roll_requests\`: \`[]\`
 
 The outcome narration happens in your NEXT response, AFTER you see the player's roll result.
 </critical_roll_stopping_rule>

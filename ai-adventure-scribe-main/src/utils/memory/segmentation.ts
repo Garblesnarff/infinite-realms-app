@@ -100,7 +100,27 @@ export const splitIntoSegments = (
     opts.maxLength,
   );
 
-  return optimizedSegments.map((s) => s.trim()).filter((s) => s.length > 0);
+  // SentenceSegmenter.splitLongSegmentAtClauses() (invoked internally by
+  // optimizeSegmentLengths for long sentences) splits at clause boundaries like
+  // ", and " / ", which " for audio-pacing purposes - that's fine for voice
+  // playback, but for memory extraction it can leave the tail of a sentence as
+  // its own "segment" (e.g. "and the way the Reservation Book changes when
+  // unobserved."), which then gets classified and saved as a standalone,
+  // out-of-context memory fragment. A segment starting with a lowercase letter
+  // is never a genuine new sentence, so merge it back into the previous one.
+  const mergedSegments: string[] = [];
+  for (const segment of optimizedSegments) {
+    const trimmed = segment.trim();
+    if (!trimmed) continue;
+    if (mergedSegments.length > 0 && /^[a-z]/.test(trimmed)) {
+      mergedSegments[mergedSegments.length - 1] =
+        `${mergedSegments[mergedSegments.length - 1]} ${trimmed}`;
+    } else {
+      mergedSegments.push(trimmed);
+    }
+  }
+
+  return mergedSegments.map((s) => s.trim()).filter((s) => s.length > 0);
 };
 
 /**

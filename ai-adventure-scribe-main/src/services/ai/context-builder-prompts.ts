@@ -61,21 +61,24 @@ C. **Survey the dining room**, get your bearings and spot tonight's first proble
 
   static buildResponseStructureSection(): string {
     const responseOrder = `1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
-2. **ROLL_REQUESTS_V1 block** (if dice roll needed): IMMEDIATELY after narrative, before anything else
+2. **roll_requests field** (if a dice roll is needed): populate it based on the narrative you just wrote - it is a JSON array field, not text in the narrative
 3. **Action Options**: 2-3 lettered choices (A/B/C format)
 4. **Memory/World tags**: XML extraction tags (parsed by engine, hidden from player)
 5. **VISUAL PROMPT** (optional): Single line for image generation`;
 
     const diceFormat = `<dice_roll_format>
 <title>MANDATORY: DICE ROLL FORMAT</title>
-When the player's action has an uncertain outcome (combat, skill checks, saves, ability checks), you MUST include a ROLL_REQUESTS_V1 code block IMMEDIATELY after your narrative text. DO NOT just say "roll for X" in prose - the game engine parses this structured block to show the dice UI.
+When the player's action has an uncertain outcome (combat, skill checks, saves, ability checks),
+you MUST add an entry to the \`roll_requests\` array field of your JSON response. This is a
+STRUCTURED FIELD, not text - DO NOT just say "roll for X" in prose, and do NOT write a code
+block or marker inside \`text\`. The game engine reads \`roll_requests\` directly to show the dice UI.
 
-\`\`\`ROLL_REQUESTS_V1
-{"rolls":[{"type":"skill_check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14}]}
-\`\`\`
+\`roll_requests\`: \`[{"type":"check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14,"advantage":false,"disadvantage":false}]\`
 
-Valid roll types: "attack", "save", "check", "skill_check", "damage", "initiative"
-**If you omit this block, the player CANNOT roll dice and the game stalls!**
+Valid roll types: "check", "save", "attack", "damage", "initiative" (use "check" for all
+ability/skill checks - do not invent other type strings)
+**If you leave \`roll_requests\` empty for an uncertain action, the player CANNOT roll dice and the game stalls!**
+**Do NOT narrate the outcome of an action in \`text\` while also populating \`roll_requests\` for that same action - request the roll and stop; narrate the result next turn.**
 </dice_roll_format>`;
 
     return `<response_structure>
@@ -157,11 +160,11 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
   }
 
   static buildFinalRemindersSection(): string {
-    const reminderBlock = `**RESPONSE ORDER: Narrative → ROLL_REQUESTS_V1 → Options → Memory tags**
+    const reminderBlock = `**RESPONSE ORDER: Narrative (text) → roll_requests field → Options → Memory tags**
 
 **DICE ROLLS ARE MANDATORY** for uncertain actions (attacks, skill checks, saves, ability checks).
-Place the \`\`\`ROLL_REQUESTS_V1 block RIGHT AFTER your narrative, BEFORE options.
-Without it, the dice UI breaks and the player cannot proceed!
+Populate the \`roll_requests\` JSON array field - it is a structured field, NOT a code block or
+text marker inside \`text\`. Without it, the dice UI breaks and the player cannot proceed!
 
 **OPTIONS**: Use A. **Bold Action**, description format for clickable buttons.`;
 

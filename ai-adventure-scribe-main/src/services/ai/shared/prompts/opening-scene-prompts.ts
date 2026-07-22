@@ -58,7 +58,7 @@ CRITICAL RULES:
 - Include at least one NPC with direct quoted dialogue
 - Use all senses (sight, sound, smell, touch) to create immersion
 - SHORT, LAZY OPENINGS ARE UNACCEPTABLE - make them memorable!
-- **DO NOT include a \`\`\`ROLL_REQUESTS_V1 block in the first message.** Establish the situation and end with 3-5 clickable options instead of an immediate roll prompt.
+- **Leave the \`roll_requests\` field empty (\`[]\`) for the first message.** Establish the situation and end with 3-5 clickable options instead of an immediate roll prompt.
 - **DO NOT include XML tags, <memories>, <world_updates>, VISUAL PROMPT, JSON, or code fences in the first message.**
 - **DO NOT end with a prose question before the options.** The final lines must be the option lines themselves.
 - **Every option MUST use this exact format:** A. **Action Name**, short description

@@ -605,4 +605,47 @@ describe('processDMResponse', () => {
       }));
     });
   });
+
+  // Regression coverage for the "dice rolls never trigger" bug: the structured
+  // response's roll_requests array must survive processDMResponse and reach the
+  // caller (ai-service.ts passes result.roll_requests straight into
+  // processRollRequests as existingRequests - see src/hooks/use-ai-response.ts).
+  describe('Structured roll_requests pass-through', () => {
+    it('should carry structured roll_requests from the parsed JSON response through to the result', async () => {
+      const rawResponse = JSON.stringify({
+        text: "You crouch low, scanning the dining room for anything out of place.",
+        narration_segments: [],
+        roll_requests: [
+          {
+            type: 'check',
+            formula: '1d20+wis',
+            purpose: "Perception check to survey the dining room with a ranger's instincts",
+            dc: 13,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+      });
+
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+
+      expect(result.roll_requests).toHaveLength(1);
+      expect(result.roll_requests?.[0]).toMatchObject({
+        type: 'check',
+        formula: '1d20+wis',
+        dc: 13,
+      });
+    });
+
+    it('should default roll_requests to an empty array when the structured response omits it', async () => {
+      const rawResponse = JSON.stringify({
+        text: 'You walk down the empty corridor.',
+        narration_segments: [],
+      });
+
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+
+      expect(result.roll_requests || []).toHaveLength(0);
+    });
+  });
 });

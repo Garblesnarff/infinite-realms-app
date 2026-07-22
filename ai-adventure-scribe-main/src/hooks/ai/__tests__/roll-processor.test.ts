@@ -119,6 +119,35 @@ describe('roll-processor', () => {
       expect(result[0].type).toBe('initiative');
     });
 
+    // Regression test for the "dice rolls never trigger" bug: when the DM's
+    // structured response already contains roll_requests (e.g. a Perception
+    // check attached by the model per the updated dm system prompt), those
+    // must be used directly and the legacy text-fence parser must NOT run -
+    // it previously only ever activated as a fallback for empty
+    // existingRequests, so this asserts that fallback path stays a fallback.
+    it('should use structured existingRequests as-is and skip legacy text parsing entirely', () => {
+      const responseText =
+        'You crouch low, scanning the dining room for anything out of place.';
+      const structuredRequest = {
+        type: 'check',
+        formula: '1d20+wis',
+        purpose: "Perception check to survey the dining room with a ranger's instincts",
+        dc: 13,
+        advantage: false,
+        disadvantage: false,
+      };
+
+      const result = parseAndAugmentRollRequests(responseText, [structuredRequest as any]);
+
+      expect(parseRollRequests).not.toHaveBeenCalled();
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        type: 'check',
+        formula: '1d20+wis',
+        dc: 13,
+      });
+    });
+
     it('should add automatic damage roll on successful attack if awaiting damage', () => {
       const responseText = 'Your longsword hits the goblin!';
       (detectsSuccessfulAttack as any).mockReturnValue(true);
@@ -188,6 +217,81 @@ describe('roll-processor', () => {
       const result = await processRollRequests(params);
 
       expect(result.playerRollRequests).toHaveLength(0);
+    });
+
+    // Regression test: a structured DM response carrying a roll_requests entry
+    // (the schema field, as opposed to a legacy ROLL_REQUESTS_V1 text fence)
+    // must reach the player roll flow end-to-end through processRollRequests.
+    it('should carry a structured roll_requests entry through to playerRollRequests', async () => {
+      const structuredRequest = {
+        type: 'check',
+        formula: '1d20+wis',
+        purpose: 'Perception check to survey the dining room',
+        dc: 13,
+        advantage: false,
+        disadvantage: false,
+      };
+      const params = {
+        responseText: 'You crouch low, scanning the dining room for anything out of place.',
+        existingRequests: [structuredRequest as any],
+        isDiceRollMessage: false,
+        processedSet: new Set<string>(),
+        aiContext: {},
+        sessionId: 'session-123',
+        characterId: 'player-1',
+      };
+
+      (npcAutoRoller.executeAllNPCRolls as any).mockResolvedValue({
+        npcRolls: [],
+        playerRolls: params.existingRequests,
+      });
+
+      const result = await processRollRequests(params);
+
+      expect(parseRollRequests).not.toHaveBeenCalled();
+      expect(result.playerRollRequests).toHaveLength(1);
+      expect(result.playerRollRequests[0]).toMatchObject({
+        type: 'check',
+        purpose: 'Perception check to survey the dining room',
+        dc: 13,
+      });
+    });
+
+    // Regression test: legacy ROLL_REQUESTS_V1 text-fence responses (from
+    // providers/paths that don't populate the structured field) must still
+    // parse via the fallback text parser.
+    it('should still fall back to legacy text-fence parsing when existingRequests is empty', async () => {
+      const legacyParsedRequest = {
+        type: 'check',
+        formula: '1d20+dex',
+        purpose: 'Stealth check to avoid detection',
+        dc: 14,
+      };
+      (parseRollRequests as any).mockReturnValue([legacyParsedRequest]);
+      (npcAutoRoller.executeAllNPCRolls as any).mockResolvedValue({
+        npcRolls: [],
+        playerRolls: [legacyParsedRequest],
+      });
+
+      const params = {
+        responseText:
+          'The shadows deepen.\n```ROLL_REQUESTS_V1\n{"rolls":[{"type":"check","formula":"1d20+dex","purpose":"Stealth check to avoid detection","dc":14}]}\n```',
+        existingRequests: [],
+        isDiceRollMessage: false,
+        processedSet: new Set<string>(),
+        aiContext: {},
+        sessionId: 'session-123',
+        characterId: 'player-1',
+      };
+
+      const result = await processRollRequests(params);
+
+      expect(parseRollRequests).toHaveBeenCalledWith(params.responseText);
+      expect(result.playerRollRequests).toHaveLength(1);
+      expect(result.playerRollRequests[0]).toMatchObject({
+        type: 'check',
+        purpose: 'Stealth check to avoid detection',
+      });
     });
 
     it('should track player attacks in rollStateManager', async () => {

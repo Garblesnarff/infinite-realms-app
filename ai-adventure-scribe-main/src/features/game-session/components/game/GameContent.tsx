@@ -35,7 +35,7 @@ interface GameAIResponse extends ChatMessage {
  */
 const GameContent: React.FC = () => {
   const { id: campaignIdFromParams } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const characterIdFromParams = searchParams.get('character');
   const forceNew = searchParams.get('new') === 'true';
   const specificSessionId = searchParams.get('session') || undefined;
@@ -44,6 +44,25 @@ const GameContent: React.FC = () => {
   const { state: characterState } = useCharacter();
   const { state: campaignState } = useCampaign();
 
+  // BUG FIX: page refresh was creating a new session instead of resuming.
+  // `?new=true` is added to the URL by the campaign hub/character-selection
+  // flow to force creation of a fresh session on first navigation, but it was
+  // never removed afterward - so refreshing the page (URL unchanged) re-ran
+  // the forceNew path on mount and silently abandoned the in-progress
+  // session for a brand-new one. Once useSessionInitialization confirms the
+  // new session was created, strip the param via replace so a refresh takes
+  // the normal resume path instead.
+  const clearForceNewParam = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('new');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
   // Initialize game session
   const { sessionData, sessionId, sessionState, updateGameSessionState } = useGameSession(
     campaignIdFromParams,
@@ -51,6 +70,7 @@ const GameContent: React.FC = () => {
     forceNew,
     specificSessionId,
     starterCampaignIdFromParams,
+    clearForceNewParam,
   );
 
   // Load character and campaign data

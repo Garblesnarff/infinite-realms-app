@@ -73,6 +73,12 @@ export type { ExtendedGameSession, SessionStateUpdater, SessionState };
  *
  * @param {string | undefined} campaignId - Campaign ID for session
  * @param {string | undefined} characterId - Character ID for session
+ * @param {boolean | undefined} forceNew - Force creation of a brand new session, skipping resume checks
+ * @param {string | undefined} specificSessionId - Load this exact session id (IDOR-checked against campaign/character)
+ * @param {string | undefined} starterCampaignId - Starter campaign reference for continuation sessions
+ * @param {(() => void) | undefined} onForceNewSessionCreated - Called once the forceNew path successfully
+ *   creates a session; callers should use this to strip the URL param (e.g. `?new=true`) that triggered
+ *   forceNew so a page refresh resumes the session instead of creating another one.
  * @returns {{
  *   sessionData: ExtendedGameSession | null,
  *   setSessionData: (data: ExtendedGameSession | null) => void,
@@ -89,6 +95,7 @@ export const useGameSession = (
   forceNew?: boolean,
   specificSessionId?: string,
   starterCampaignId?: string,
+  onForceNewSessionCreated?: () => void,
 ) => {
   const [sessionData, setSessionData] = useState<ExtendedGameSession | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>('idle');
@@ -177,6 +184,7 @@ export const useGameSession = (
     cleanupSession,
     toast,
     mountedRef,
+    onForceNewSessionCreated,
   });
 
   // Periodic cleanup check with stable references

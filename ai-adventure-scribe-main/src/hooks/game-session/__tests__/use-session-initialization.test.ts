@@ -96,6 +96,71 @@ describe('useSessionInitialization', () => {
     });
   });
 
+  // Regression test for: refreshing the page (URL still has ?new=true) created a
+  // second session instead of resuming the one just created, because nothing ever
+  // told the caller to strip the forceNew param from the URL. See
+  // onForceNewSessionCreated in use-session-initialization.ts.
+  it('should invoke onForceNewSessionCreated after a forceNew session is created, so the caller can strip the URL param', async () => {
+    mockCreateGameSession.mockResolvedValue('new-sess-id');
+    const mockOnForceNewSessionCreated = vi.fn();
+
+    renderHook(() =>
+      useSessionInitialization({
+        ...defaultProps,
+        forceNew: true,
+        onForceNewSessionCreated: mockOnForceNewSessionCreated,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockOnForceNewSessionCreated).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('should NOT invoke onForceNewSessionCreated when session creation fails in the forceNew path', async () => {
+    mockCreateGameSession.mockResolvedValue(null);
+    const mockOnForceNewSessionCreated = vi.fn();
+
+    renderHook(() =>
+      useSessionInitialization({
+        ...defaultProps,
+        forceNew: true,
+        onForceNewSessionCreated: mockOnForceNewSessionCreated,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockSetSessionState).toHaveBeenCalledWith('error');
+    });
+    expect(mockOnForceNewSessionCreated).not.toHaveBeenCalled();
+  });
+
+  // Regression test: with forceNew absent (i.e. the param was stripped after refresh)
+  // and an active session already on record, the hook must take the resume path
+  // rather than creating a new session.
+  it('should resume the active session when forceNew is absent, even though a session was just force-created', async () => {
+    const mockSessions = [
+      { id: 'sess-1', status: 'active', start_time: new Date().toISOString() },
+    ] as any;
+    vi.mocked(userDataApi.listSessions).mockResolvedValue(mockSessions);
+    const mockOnForceNewSessionCreated = vi.fn();
+
+    renderHook(() =>
+      useSessionInitialization({
+        ...defaultProps,
+        forceNew: false,
+        onForceNewSessionCreated: mockOnForceNewSessionCreated,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockSetSessionData).toHaveBeenCalledWith(mockSessions[0]);
+      expect(mockSetSessionState).toHaveBeenCalledWith('active');
+    });
+    expect(mockCreateGameSession).not.toHaveBeenCalled();
+    expect(mockOnForceNewSessionCreated).not.toHaveBeenCalled();
+  });
+
   it('should load a specific session if specificSessionId is provided', async () => {
     // Source verifies campaign_id/character_id match in-app (IDOR guard), so the
     // mocked session must include the matching ids for the fetch to be trusted.

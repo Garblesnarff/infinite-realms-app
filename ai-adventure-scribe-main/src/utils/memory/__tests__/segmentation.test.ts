@@ -318,4 +318,24 @@ describe('splitIntoSegments — scaffolding never becomes a segment', () => {
       expect(seg.trim()).not.toBe('---');
     }
   });
+
+  // Regression: memory extraction was saving a lowercase-conjunction fragment
+  // ("and the way the Reservation Book changes when unobserved.") as its own
+  // standalone item memory. The fragment is the tail of a long sentence that
+  // SentenceSegmenter's clause-boundary splitter (used for audio pacing) split
+  // off at a ", and " boundary. No segment should start with a lowercase
+  // letter - that's never a real new sentence, always a continuation.
+  it('never produces a segment starting with a lowercase conjunction fragment', () => {
+    const input =
+      'You approach the reservation podium. Something about the leather-bound Reservation Book unsettles you, and the way the pages seem to shift the moment you look away when unobserved makes your skin crawl.';
+
+    const segments = splitIntoSegments(input, { minLength: 20, maxLength: 100 });
+
+    for (const seg of segments) {
+      expect(seg.trim()).not.toMatch(/^[a-z]/);
+    }
+    // The clause fragment must survive by being merged into its parent segment,
+    // not dropped or orphaned.
+    expect(segments.some((seg) => seg.includes('and the way the pages'))).toBe(true);
+  });
 });
