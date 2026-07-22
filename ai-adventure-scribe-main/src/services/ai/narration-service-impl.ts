@@ -104,7 +104,7 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
     { "type": "character", "text": "Complete character dialogue without quotes", "character": "simple character name", "voice_category": "hero_male|villain_female|merchant|guard|elder|creature|etc" }
   ],
   "roll_requests": [
-    { "type": "check|save|attack|damage|initiative", "formula": "1d20+5", "purpose": "Arcana check to understand the magical mechanism", "dc": 15, "advantage": false, "disadvantage": false }
+    { "type": "check|save|attack|damage|initiative", "formula": "1d20+5", "purpose": "Arcana check to understand the magical mechanism", "dc": 15, "ac": null, "advantage": false, "disadvantage": false }
   ]
 }
 </json_format>
@@ -112,7 +112,7 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
 <roll_request_requirements>
 - ALWAYS include "roll_requests" array when requesting dice rolls from players.
 - Include roll_requests for: player combat actions, skill checks, saving throws, initiative.
-- Each roll_request must have: type, formula, purpose, and target (DC/AC) if applicable.
+- Each roll_request must have: type, formula, purpose, dc, ac, advantage, and disadvantage. Use null for a non-applicable DC or AC.
 - Show roll requests in the "text" field: "Please roll 1d20+5 for your Arcana check (DC 15)"
 </roll_request_requirements>
 

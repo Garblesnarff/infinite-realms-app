@@ -622,6 +622,7 @@ describe('processDMResponse', () => {
             formula: '1d20+wis',
             purpose: "Perception check to survey the dining room with a ranger's instincts",
             dc: 13,
+            ac: null,
             advantage: false,
             disadvantage: false,
           },
@@ -635,6 +636,7 @@ describe('processDMResponse', () => {
         type: 'check',
         formula: '1d20+wis',
         dc: 13,
+        ac: null,
       });
     });
 

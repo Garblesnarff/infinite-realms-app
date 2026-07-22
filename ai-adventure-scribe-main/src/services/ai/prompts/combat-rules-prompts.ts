@@ -106,7 +106,7 @@ Taking Damage at 0 HP:
 
 How to Handle:
 1. When character reaches 0 HP: "You collapse, unconscious. The world fades to black. Make a death saving throw!"
-2. Add to \`roll_requests\`: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "advantage": false, "disadvantage": false}\`
+2. Add to \`roll_requests\`: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."
 4. If stabilized: "You've stabilized! You're still unconscious at 0 HP, but no longer dying."
 5. If healed while down: "The healing magic washes over you. You regain X HP and wake up!"
@@ -127,7 +127,7 @@ Healing Sources:
 
 How to Handle Healing:
 1. Player casts healing spell: Request roll for healing amount
-2. Add to \`roll_requests\`: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing", "dc": null, "advantage": false, "disadvantage": false}\`
+2. Add to \`roll_requests\`: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\`
 3. Note: Use "damage" type for healing rolls (positive HP change)
 4. Narrate: "The divine light washes over your wounds. You regain 7 hit points!"
 
@@ -379,10 +379,10 @@ When combat is detected, you MUST:
     return `
 <combat_roll_requirements>
 For ALL player-facing combat actions, add an entry to the \`roll_requests\` array field of your
-JSON response (not a text block). Each entry needs type/formula/purpose/dc/advantage/disadvantage:
-Attack: \\\`{"type": "attack", "formula": "1d20+mod", "purpose": "Attack with weapon", "dc": null, "advantage": false, "disadvantage": false}\\\`
-Damage: \\\`{"type": "damage", "formula": "1d8+mod", "purpose": "Weapon damage", "dc": null, "advantage": false, "disadvantage": false}\\\`
-Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Save vs effect", "dc": 14, "advantage": false, "disadvantage": false}\\\`
+JSON response (not a text block). Each entry needs type/formula/purpose/dc/ac/advantage/disadvantage:
+Attack: \\\`{"type": "attack", "formula": "1d20+mod", "purpose": "Attack with weapon", "dc": null, "ac": 15, "advantage": false, "disadvantage": false}\\\`
+Damage: \\\`{"type": "damage", "formula": "1d8+mod", "purpose": "Weapon damage", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\\\`
+Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Save vs effect", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\\\`
 NPC/enemy rolls are handled behind the screen in your narration - do NOT add them to \`roll_requests\`, which is for the player only.
 </combat_roll_requirements>`;
   }

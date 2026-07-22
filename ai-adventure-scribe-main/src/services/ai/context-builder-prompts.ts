@@ -73,7 +73,7 @@ you MUST add an entry to the \`roll_requests\` array field of your JSON response
 STRUCTURED FIELD, not text - DO NOT just say "roll for X" in prose, and do NOT write a code
 block or marker inside \`text\`. The game engine reads \`roll_requests\` directly to show the dice UI.
 
-\`roll_requests\`: \`[{"type":"check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14,"advantage":false,"disadvantage":false}]\`
+\`roll_requests\`: \`[{"type":"check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14,"ac":null,"advantage":false,"disadvantage":false}]\`
 
 Valid roll types: "check", "save", "attack", "damage", "initiative" (use "check" for all
 ability/skill checks - do not invent other type strings)

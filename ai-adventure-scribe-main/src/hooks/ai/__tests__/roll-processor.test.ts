@@ -133,6 +133,7 @@ describe('roll-processor', () => {
         formula: '1d20+wis',
         purpose: "Perception check to survey the dining room with a ranger's instincts",
         dc: 13,
+        ac: null,
         advantage: false,
         disadvantage: false,
       };
@@ -145,6 +146,7 @@ describe('roll-processor', () => {
         type: 'check',
         formula: '1d20+wis',
         dc: 13,
+        ac: null,
       });
     });
 
@@ -228,6 +230,7 @@ describe('roll-processor', () => {
         formula: '1d20+wis',
         purpose: 'Perception check to survey the dining room',
         dc: 13,
+        ac: null,
         advantage: false,
         disadvantage: false,
       };
@@ -254,7 +257,26 @@ describe('roll-processor', () => {
         type: 'check',
         purpose: 'Perception check to survey the dining room',
         dc: 13,
+        ac: null,
       });
+    });
+
+    it('should preserve target AC from a structured attack request', () => {
+      const structuredAttack = {
+        type: 'attack',
+        formula: '1d20+5',
+        purpose: 'Longsword attack against the goblin',
+        dc: null,
+        ac: 15,
+        advantage: false,
+        disadvantage: false,
+      };
+
+      const result = parseAndAugmentRollRequests('You raise your longsword.', [
+        structuredAttack as any,
+      ]);
+
+      expect(result[0].ac).toBe(15);
     });
 
     // Regression test: legacy ROLL_REQUESTS_V1 text-fence responses (from

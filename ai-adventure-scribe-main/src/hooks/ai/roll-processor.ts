@@ -56,7 +56,12 @@ export function parseAndAugmentRollRequests(
   responseText: string,
   existingRequests: RollRequest[],
 ): RollRequest[] {
-  let rollRequests = [...existingRequests];
+  let rollRequests = existingRequests.map((request) => ({
+    ...request,
+    // Keep target AC from the structured response just as the legacy parser
+    // mapping below does. Attack resolution reads this value downstream.
+    ac: request.ac,
+  }));
 
   if (rollRequests.length === 0) {
     const parsedRequests = parseRollRequests(responseText);

@@ -53,6 +53,7 @@ Each entry in \`roll_requests\` looks like:
   "formula": "1d20+modifier",
   "purpose": "Description of what this roll is for",
   "dc": 14,
+  "ac": null,
   "advantage": false,
   "disadvantage": false
 }
@@ -64,16 +65,17 @@ Each entry in \`roll_requests\` looks like:
 - **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
 - **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
 - **dc**: Difficulty Class for checks/saves, or \`null\` if not applicable
+- **ac**: Target Armor Class for attacks, or \`null\` if not applicable
 - **advantage/disadvantage**: \`true\`/\`false\`
 </field_requirements>
 
 <examples>
-Stealth: \`{"type": "check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14, "advantage": false, "disadvantage": false}\`
-Persuasion: \`{"type": "check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15, "advantage": false, "disadvantage": false}\`
-Perception: \`{"type": "check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12, "advantage": false, "disadvantage": false}\`
-Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "dc": null, "advantage": false, "disadvantage": false}\`
-Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15, "advantage": false, "disadvantage": false}\`
-Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "advantage": false, "disadvantage": false}\`
+Stealth: \`{"type": "check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\`
+Persuasion: \`{"type": "check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
+Perception: \`{"type": "check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\`
+Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "dc": null, "ac": 15, "advantage": false, "disadvantage": false}\`
+Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
+Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 </examples>
 </roll_request_format>
 
@@ -106,7 +108,7 @@ DO NOT, in the same turn you populate \`roll_requests\`:
 
 ✅ CORRECT:
 \`text\`: "The ancient wall looms before you, its stones worn smooth by centuries of rain. You'll need to find handholds carefully."
-\`roll_requests\`: \`[{"type": "check", "formula": "1d20+athletics", "purpose": "Athletics check to climb the wall", "dc": 15, "advantage": false, "disadvantage": false}]\`
+\`roll_requests\`: \`[{"type": "check", "formula": "1d20+athletics", "purpose": "Athletics check to climb the wall", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}]\`
 
 ❌ WRONG:
 \`text\`: "The ancient wall looms before you... You manage to find purchase on the weathered stone and pull yourself up..." (resolves the climb before any roll happened)

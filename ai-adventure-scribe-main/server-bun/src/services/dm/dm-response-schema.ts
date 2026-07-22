@@ -89,6 +89,7 @@ export type DMResponse = {
     formula: string;
     purpose: string;
     dc: number | null;
+    ac: number | null;
     advantage: boolean;
     disadvantage: boolean;
   }>;
@@ -249,10 +250,11 @@ const baseProperties = {
         formula: { type: 'string' },
         purpose: { type: 'string' },
         dc: nullable({ type: 'number' }),
+        ac: nullable({ type: 'number' }),
         advantage: { type: 'boolean' },
         disadvantage: { type: 'boolean' },
       },
-      required: ['type', 'formula', 'purpose', 'dc', 'advantage', 'disadvantage'],
+      required: ['type', 'formula', 'purpose', 'dc', 'ac', 'advantage', 'disadvantage'],
     },
   },
   combat_transition: { type: 'string', enum: ['none', 'start', 'end'] },
