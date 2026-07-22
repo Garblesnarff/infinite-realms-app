@@ -283,3 +283,7 @@
 ## 2026-07-21 - [Combat Action Executor Coverage]
 **Learning:** `combat-action-executor.ts` coordinates intent synchronization between the frontend client and backend combat status APIs. Testing it revealed that when `expectedVersion` is undefined, the executor automatically does an initial query to retrieve the current combat state version, falling back to version `1` if the state contains no explicit version data.
 **Action:** When testing executors with automatic version-lookup and API intent wrapping, mock global `fetch` calls sequentially using `.mockResolvedValueOnce` to return both the status payload and subsequent wrapped intent payload. Always register the test file and module under test in BOTH `include` and `coverage.include` lists in `vitest.config.ts`.
+
+## 2026-07-22 - [React Query Hook Refresh Event & ASI Coverage]
+**Learning:** Custom hooks that consume React Query and utilize custom window events for query invalidation (like `useCampaignJournal`) can be beautifully tested using `@testing-library/react`'s `renderHook` and `waitFor`. Window-dispatched custom events can be verified by mocking or spying on global `window.removeEventListener` and dispatching actual events on `window`.
+**Action:** When testing event-driven query invalidations, render within a standard `QueryClientProvider` per test, trigger the event with `window.dispatchEvent(new Event('event-name'))`, and assert against spied `queryClient.invalidateQueries` calls. Always register both the test and source paths explicitly in `vitest.config.ts`.
