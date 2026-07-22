@@ -72,6 +72,7 @@ describe('processDMResponse', () => {
     sessionId: 'session-123',
     campaignId: 'campaign-456',
     characterId: 'character-789',
+    userId: 'user-012',
   };
 
   const defaultParams = {
