@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     exclude: ['@langchain/langgraph', '@langchain/core', 'langsmith'],
-    include: ['camelcase', 'decamelize', 'p-queue', 'p-retry', 'sanitize-html', 'howler', 'uuid'],
+    include: ['camelcase', 'decamelize', 'sanitize-html', 'howler', 'uuid'],
     esbuildOptions: {
       mainFields: ['module', 'main'],
     },
