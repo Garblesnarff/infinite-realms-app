@@ -4,9 +4,7 @@
  * Creates Drizzle ORM instance using postgres.js driver.
  * Imports unified schema from /db/schema for type-safe queries.
  *
- * Pattern based on:
- * - /db/client.ts (postgres.js with Drizzle)
- * - /src/infrastructure/database/drizzle-client.ts (schema import)
+ * Pattern based on /db/client.ts (postgres.js with Drizzle).
  */
 
 import { drizzle } from 'drizzle-orm/postgres-js';

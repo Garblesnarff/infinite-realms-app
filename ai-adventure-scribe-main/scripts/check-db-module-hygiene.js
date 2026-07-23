@@ -6,7 +6,6 @@ const repoRoot = process.cwd();
 
 const forbiddenDuplicateFileGlobs = [
   path.join('db'),
-  path.join('src', 'infrastructure', 'database'),
 ];
 
 const codeRoots = ['db', 'src', 'server-bun', 'tests', 'scripts'];
@@ -15,7 +14,6 @@ const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 const forbiddenImportFragments = [
   'db/client.js',
   'db/schema/index.js',
-  'src/infrastructure/database/index.js',
 ];
 
 const scopedTsLocalJsImportChecks = [
@@ -24,12 +22,6 @@ const scopedTsLocalJsImportChecks = [
     ext: '.ts',
     pattern: /from\s+['"]\.\/[^'"]+\.js['"]/,
     message: 'TS schema files must not import local .js files',
-  },
-  {
-    root: path.join('src', 'infrastructure', 'database'),
-    ext: '.ts',
-    pattern: /from\s+['"]\.\/[^'"]+\.js['"]/,
-    message: 'TS infrastructure DB files must not import local .js files',
   },
 ];
 

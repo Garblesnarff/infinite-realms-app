@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
 import { BlogImageGenerator } from './blog-image-generator.js';
 import { BlogScreenshotService } from './blog-screenshot-service.js';
-import { supabase } from '../../../src/infrastructure/database/index';
 import { logger } from '../lib/logger.js';
+import { supabase } from '../lib/supabase.js';
 
 /**
  * Blog Digest Service

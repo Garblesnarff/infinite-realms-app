@@ -81,15 +81,18 @@ Base URL: ${siteUrl}
 - POST /v1/llm/chat - Send message to AI game master (streaming response)
 
 ### Combat
-- POST /v1/combat/initiative - Roll initiative
-- POST /v1/combat/attack - Make attack roll
-- POST /v1/combat/damage - Apply damage
+- POST /v1/combat/sessions/:sessionId/start - Start encounter
+- POST /v1/combat/:encounterId/roll-initiative - Roll initiative
+- POST /v1/combat/:encounterId/attack - Make attack roll
+- POST /v1/combat/:encounterId/intent - Submit combat intent (damage/healing applied server-side)
+- GET /v1/combat/:encounterId/status - Encounter status
 
 ### D&D Mechanics
 - GET /v1/spells - List available spells
-- POST /v1/spell-slots/use - Use a spell slot
-- POST /v1/rest/short - Take short rest
-- POST /v1/rest/long - Take long rest
+- GET /v1/spell-slots/calculate - Calculate spell slots for a class/level
+- POST /v1/spell-slots/calculate-multiclass - Calculate multiclass spell slots
+- POST /v1/rest/characters/:id/short - Take short rest
+- POST /v1/rest/characters/:id/long - Take long rest
 
 ## Notes for AI Agents
 

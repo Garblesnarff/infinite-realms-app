@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
 
-import { supabase } from '../../../src/infrastructure/database/index';
 import { logger } from '../lib/logger.js';
+import { supabase } from '../lib/supabase.js';
 
 import type { Browser, Page } from 'puppeteer';
 
