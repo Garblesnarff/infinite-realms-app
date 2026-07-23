@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// @deprecated Hit-dice/history extras have no frontend callers as of 2026-07-08.
+// Hit-dice/history extras (GET hit-dice, POST hit-dice/spend, GET
+// rest-history, POST hit-dice/initialize) were removed in the 2026-07-22
+// dead-code sweep — zero frontend/e2e/test callers. Short/long rest remain
+// live (called from src/services/rest-api.ts).
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
@@ -18,14 +21,6 @@ const shortRestSchema = t.Object({
 const longRestSchema = t.Object({
   sessionId: t.Optional(t.String()),
   notes: t.Optional(t.String()),
-});
-const spendHitDiceSchema = t.Object({
-  count: t.Number({ minimum: 1 }),
-  roll: t.Optional(t.Number({ minimum: 1, maximum: 12 })),
-});
-const initializeHitDiceSchema = t.Object({
-  className: t.String({ minLength: 1 }),
-  level: t.Number({ minimum: 1, maximum: 20 }),
 });
 
 function mapRestError(
@@ -146,118 +141,5 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
     },
     {
       body: longRestSchema,
-    },
-  )
-
-  /**
-   * GET /v1/rest/characters/:id/hit-dice
-   * Get all hit dice for a character
-   */
-  .get('/characters/:id/hit-dice', async ({ params, set, user }) => {
-    try {
-      const hitDice = await RestService.getHitDice(params.id, (user as { userId: string }).userId);
-      return { hitDice };
-    } catch (error) {
-      logger.error({ msg: 'REST_HITDICE_GET error', error });
-      return mapRestError(set, error, 'Failed to get hit dice');
-    }
-  })
-
-  /**
-   * POST /v1/rest/characters/:id/hit-dice/spend
-   * Spend hit dice to recover HP
-   */
-  .post(
-    '/characters/:id/hit-dice/spend',
-    async ({ params, body, set, user }) => {
-      try {
-        const { count, roll } = body;
-        const userId = (user as AuthUser).userId;
-
-        const result = await RestService.spendHitDice(
-          params.id,
-          userId,
-          count,
-          roll ? [roll] : undefined,
-        );
-
-        return {
-          hpRestored: result.hpRestored,
-          hitDiceSpent: result.hitDiceSpent,
-          rolls: result.rolls,
-          remaining: result.hitDiceRemaining,
-        };
-      } catch (error) {
-        logger.error({ msg: 'REST_HITDICE_SPEND error', error });
-        return mapRestError(set, error, 'Failed to spend hit dice');
-      }
-    },
-    {
-      body: spendHitDiceSchema,
-    },
-  )
-
-  /**
-   * GET /v1/rest/characters/:id/rest-history
-   * Get rest history for a character
-   */
-  .get(
-    '/characters/:id/rest-history',
-    async ({ params, query, set, user }) => {
-      try {
-        const { sessionId, limit } = query;
-        const userId = (user as AuthUser).userId;
-
-        if (sessionId) {
-          const verification = await verifySessionOwnership(sessionId, userId);
-          if (!verification.success) {
-            set.status = verification.error?.status || 404;
-            return { error: verification.error?.message || 'Session not found' };
-          }
-        }
-
-        const rests = await RestService.getRestHistory(
-          params.id,
-          userId,
-          sessionId,
-          limit ? parseInt(limit) : undefined,
-        );
-
-        return { rests };
-      } catch (error) {
-        logger.error({ msg: 'REST_HISTORY error', error });
-        return mapRestError(set, error, 'Failed to get rest history');
-      }
-    },
-    {
-      query: t.Object({
-        sessionId: t.Optional(t.String()),
-        limit: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  /**
-   * POST /v1/rest/characters/:id/hit-dice/initialize
-   * Initialize hit dice for a character (used when creating/leveling character)
-   */
-  .post(
-    '/characters/:id/hit-dice/initialize',
-    async ({ params, body, set, user }) => {
-      try {
-        const { className, level } = body;
-        const userId = (user as AuthUser).userId;
-
-        const hitDice = await RestService.initializeHitDice(params.id, userId, className, level);
-
-        set.status = 201;
-        return { hitDice };
-      } catch (error) {
-        logger.error({ msg: 'REST_HITDICE_INIT error', error });
-        return mapRestError(set, error, 'Failed to initialize hit dice');
-      }
-    },
-    {
-      body: initializeHitDiceSchema,
     },
   );

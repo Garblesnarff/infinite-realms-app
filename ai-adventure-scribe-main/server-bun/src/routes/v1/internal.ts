@@ -3,18 +3,19 @@
  *
  * Provides internal/automation endpoints:
  * - POST /v1/internal/release-post - Create release blog post (GitHub Actions)
- * - POST /v1/internal/generate-api-key - Generate new API key (admin setup)
  *
  * Ported from /server/src/routes/v1/internal.ts
  *
- * @deprecated /v1/internal/generate-api-key has no frontend callers as of 2026-07-08.
+ * POST /v1/internal/generate-api-key was removed in the 2026-07-22 dead-code
+ * sweep (zero callers anywhere in the repo for generateApiKey/BLOG_SETUP_SECRET
+ * beyond this file and .env.example).
  */
 
 import { Elysia, t } from 'elysia';
 
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
-import { requireApiKey, hasPermission, generateApiKey } from '../../middleware/api-key.js';
+import { requireApiKey, hasPermission } from '../../middleware/api-key.js';
 
 const RELEASE_NOTES_CATEGORY_SLUG = 'release-notes';
 const SYSTEM_AUTHOR_ID = process.env.BLOG_SYSTEM_AUTHOR_ID || null;
@@ -227,80 +228,5 @@ export const internalRoutes = new Elysia({ prefix: '/v1/internal' })
       version: t.String({ minLength: 1, maxLength: 50, pattern: '^[0-9A-Za-z.\\-]+$' }),
       changelog: t.String({ minLength: 1, maxLength: 100_000 }),
       commitHash: t.Optional(t.String({ maxLength: 64, pattern: '^[0-9a-fA-F]+$' })),
-    }),
-  })
-
-  /**
-   * POST /v1/internal/generate-api-key
-   * Generate a new API key (admin only endpoint - protected by setup secret)
-   */
-  .post('/generate-api-key', async ({ request, body, set }) => {
-    // This endpoint should be protected in production!
-    // Require a setup secret
-    const expectedSetupSecret = process.env.BLOG_SETUP_SECRET;
-    if (!expectedSetupSecret) {
-      set.status = 401;
-      return { error: 'Unauthorized' };
-    }
-
-    const setupSecret = request.headers.get('x-setup-secret');
-    if (setupSecret !== expectedSetupSecret) {
-      set.status = 401;
-      return { error: 'Unauthorized' };
-    }
-
-    const { name, permissions, expiresInDays } = body as {
-      name?: string;
-      permissions?: string[];
-      expiresInDays?: number;
-    };
-
-    if (!name || typeof name !== 'string') {
-      set.status = 400;
-      return { error: 'name is required' };
-    }
-
-    if (!permissions || !Array.isArray(permissions)) {
-      set.status = 400;
-      return { error: 'permissions array is required' };
-    }
-
-    const { key, hash } = generateApiKey();
-
-    const expiresAt = expiresInDays
-      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
-      : null;
-
-    const { data, error } = await supabaseService
-      .from('blog_api_keys')
-      .insert({
-        name,
-        key_hash: hash,
-        permissions,
-        expires_at: expiresAt,
-      })
-      .select('id, name, permissions, expires_at')
-      .single();
-
-    if (error) {
-      logger.error({ msg: 'Failed to create API key', error });
-      set.status = 500;
-      return { error: 'Failed to create API key' };
-    }
-
-    set.status = 201;
-    return {
-      message: 'API key created. Store this key securely - it cannot be retrieved again!',
-      key, // Only returned once!
-      id: data.id,
-      name: data.name,
-      permissions: data.permissions,
-      expiresAt: data.expires_at,
-    };
-  }, {
-    body: t.Object({
-      name: t.String({ minLength: 1, maxLength: 200 }),
-      permissions: t.Array(t.String({ minLength: 1, maxLength: 100 }), { maxItems: 50 }),
-      expiresInDays: t.Optional(t.Number({ minimum: 1, maximum: 3650 })),
     }),
   });

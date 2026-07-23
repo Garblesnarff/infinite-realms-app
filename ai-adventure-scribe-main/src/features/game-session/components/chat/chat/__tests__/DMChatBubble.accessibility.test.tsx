@@ -3,7 +3,6 @@ import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 
-import { SimpleMessageProvider } from '../../../../../../contexts/SimpleMessageContext';
 import { DMChatBubble } from '../DMChatBubble';
 
 
@@ -41,14 +40,7 @@ describe('DMChatBubble Accessibility', () => {
   it('has accessible attributes for voice controls', () => {
     render(
       <BrowserRouter>
-        <SimpleMessageProvider
-          messages={[]}
-          isLoading={false}
-          sendMessage={vi.fn()}
-          queueStatus="idle"
-        >
-          <DMChatBubble message={mockMessage} />
-        </SimpleMessageProvider>
+        <DMChatBubble message={mockMessage} />
       </BrowserRouter>,
     );
 

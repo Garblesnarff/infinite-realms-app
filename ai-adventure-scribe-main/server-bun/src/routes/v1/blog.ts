@@ -6,12 +6,12 @@
  *
  * All route logic now lives in the blog/ subdirectory modules:
  * - blog/posts.ts          - Post CRUD
- * - blog/posts-workflow.ts - Publish, schedule, review, archive, preview, slug check
  * - blog/categories.ts     - Category CRUD
- * - blog/tags.ts           - Tag CRUD
- * - blog/admin.ts          - Admin dashboard routes
  * - blog/media.ts          - Image upload / media management
  * - blog/index.ts          - Composed router
+ *
+ * blog/posts-workflow.ts, blog/tags.ts, and blog/admin.ts were removed in the
+ * 2026-07-22 dead-code sweep (zero frontend/e2e/test callers).
  */
 
 export { blogApiRoutes } from './blog/index.js';
