@@ -121,3 +121,8 @@ _PROJECT_PLANS/
 # Beads SQLite runtime artifacts
 .beads/*.db-shm
 .beads/*.db-wal
+
+# Phantom gitlink leftovers (were mode-160000 without usable submodules)
+infinite-realms/
+supabase-docker/
+infiniterealms-character-image-hotreload/
