@@ -7,6 +7,7 @@
  * Ported from /server/src/services/ai-usage-service.ts
  */
 
+import { getModelPricing } from './model-pricing.js';
 import { sql } from '../lib/db.js';
 import { logger } from '../lib/logger.js';
 
@@ -14,15 +15,6 @@ export type UsageType = 'llm' | 'llm_system' | 'image' | 'voice';
 
 export type QuotaConfig = {
   daily: Record<UsageType, number>;
-};
-
-const PRICE_PER_MILLION_USD: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
-  'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
-  'deepseek/deepseek-chat': { input: 0.2002, output: 0.8001 },
-  'google/gemini-2.5-flash-image': { input: 0.30, output: 2.50 },
-  'bytedance/seed-1.6-flash': { input: 0.075, output: 0.30 },
-  'moonshotai/kimi-k2-0905': { input: 0.60, output: 2.50 },
 };
 
 export class AIUsageService {
@@ -37,7 +29,7 @@ export class AIUsageService {
     outputTokens: number;
   }): Promise<void> {
     const model = opts.model || 'unknown';
-    const pricing = PRICE_PER_MILLION_USD[model];
+    const pricing = getModelPricing(model);
     if (!pricing) {
       logger.warn({
         msg: 'AI_USAGE_UNKNOWN_MODEL_PRICING',
@@ -67,7 +59,12 @@ export class AIUsageService {
         SELECT COALESCE(SUM(cost_usd), 0) AS cost_usd
         FROM ai_usage WHERE user_id = ${opts.userId} AND period_start = ${period}
       `;
-      logger.info({ msg: 'AI_USAGE_DAILY_COST', userId: opts.userId, period, costUsd: Number(totals[0]?.cost_usd || 0) });
+      logger.info({
+        msg: 'AI_USAGE_DAILY_COST',
+        userId: opts.userId,
+        period,
+        costUsd: Number(totals[0]?.cost_usd || 0),
+      });
     } catch (error) {
       // Was previously swallowed with no severity guarantee: if this insert fails
       // (e.g. the ai_usage table is missing the provider/model/token/cost columns
@@ -167,7 +164,9 @@ export class AIUsageService {
    */
   private static getResetAt(): string {
     const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0)).toISOString();
+    return new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0),
+    ).toISOString();
   }
 
   /**
@@ -270,7 +269,13 @@ export class AIUsageService {
     userId: string;
     plan: string;
     type: UsageType;
-  }): Promise<{ plan: string; limits: { daily: Record<UsageType, number> }; usage: number; remaining: number; resetAt: string }> {
+  }): Promise<{
+    plan: string;
+    limits: { daily: Record<UsageType, number> };
+    usage: number;
+    remaining: number;
+    resetAt: string;
+  }> {
     const { userId, orgId, plan, type } = opts;
     const quota = AIUsageService.getPlanQuota(plan);
     const limit = quota.daily[type];

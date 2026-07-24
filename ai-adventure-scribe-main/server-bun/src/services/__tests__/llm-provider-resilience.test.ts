@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createUpstreamModelErrorBody, toUpstreamModelError } from '../llm-errors.js';
 import { getConfiguredOpenRouterModels } from '../llm-model-config.js';
 import { LLMProviderService } from '../llm-provider-service.js';
+import { getModelPricing, setFetchedModelPricing } from '../model-pricing.js';
 import { getCircuitBreaker, resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import {
   getModelHealthStatus,
@@ -18,6 +19,7 @@ afterEach(() => {
   process.env = { ...originalEnv };
   resetCircuitBreakersForTests();
   resetModelHealthForTests();
+  setFetchedModelPricing([]);
 });
 
 describe('LLM provider resilience', () => {
@@ -72,7 +74,9 @@ describe('LLM provider resilience', () => {
         return new Response('not json soup', { status: 200 });
       }
       return new Response(
-        JSON.stringify({ choices: [{ message: { content: JSON.stringify({ text: 'valid response' }) } }] }),
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ text: 'valid response' }) } }],
+        }),
         { status: 200 },
       );
     }) as unknown as typeof fetch;
@@ -82,8 +86,15 @@ describe('LLM provider resilience', () => {
       responseSchema: { type: 'object', properties: { text: { type: 'string' } } },
     });
 
-    expect(requests).toEqual(['broken/structured-model', 'broken/structured-model', 'fallback/structured-model']);
-    expect(result).toMatchObject({ text: JSON.stringify({ text: 'valid response' }), model: 'fallback/structured-model' });
+    expect(requests).toEqual([
+      'broken/structured-model',
+      'broken/structured-model',
+      'fallback/structured-model',
+    ]);
+    expect(result).toMatchObject({
+      text: JSON.stringify({ text: 'valid response' }),
+      model: 'fallback/structured-model',
+    });
   });
 
   it('trips the circuit breaker only after the complete fallback chain fails', async () => {
@@ -148,5 +159,28 @@ describe('LLM provider resilience', () => {
 
     expect(health.status).toBe('degraded');
     expect(health.openrouter.structuredOutputUnsupportedModels).toEqual(['listed/but-plain']);
+  });
+
+  it('captures OpenRouter model pricing from the health listing in per-million units', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    delete process.env.GOOGLE_GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    const configured = getConfiguredOpenRouterModels();
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: configured.map((id) => ({
+            id,
+            supported_parameters: ['response_format', 'structured_outputs'],
+            pricing: { prompt: '0.0000002', completion: '0.0000008' },
+          })),
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch;
+
+    await validateConfiguredModels();
+
+    expect(getModelPricing(configured[0])?.input).toBeCloseTo(0.2);
+    expect(getModelPricing(configured[0])?.output).toBeCloseTo(0.8);
   });
 });

@@ -1,5 +1,6 @@
-import { logger } from '../lib/logger.js';
 import { getConfiguredGeminiModels, getConfiguredOpenRouterModels } from './llm-model-config.js';
+import { setFetchedModelPricing } from './model-pricing.js';
+import { logger } from '../lib/logger.js';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models?output_modalities=text';
 const MODEL_HEALTH_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -34,22 +35,51 @@ let modelHealth: ModelHealthStatus = {
   gemini: initialProviderHealth(),
 };
 
-type OpenRouterModel = { id?: unknown; supported_parameters?: unknown };
+type OpenRouterModel = {
+  id?: unknown;
+  supported_parameters?: unknown;
+  pricing?: { prompt?: unknown; completion?: unknown };
+};
 
-const parseOpenRouterModels = (data: unknown): Map<string, Set<string>> => {
+const parseOpenRouterModels = (
+  data: unknown,
+): {
+  parameters: Map<string, Set<string>>;
+  pricing: Map<string, { input: number; output: number }>;
+} => {
   const records = (data as { data?: OpenRouterModel[] })?.data;
-  return new Map(
-    (records || [])
-      .filter((model): model is { id: string; supported_parameters?: unknown } => typeof model.id === 'string')
-      .map((model) => [
-        model.id,
-        new Set(
-          Array.isArray(model.supported_parameters)
-            ? model.supported_parameters.filter((parameter): parameter is string => typeof parameter === 'string')
-            : [],
-        ),
-      ]),
+  const models = (records || []).filter(
+    (model): model is OpenRouterModel & { id: string } => typeof model.id === 'string',
   );
+  const parameters = new Map(
+    models.map((model) => [
+      model.id,
+      new Set(
+        Array.isArray(model.supported_parameters)
+          ? model.supported_parameters.filter(
+              (parameter): parameter is string => typeof parameter === 'string',
+            )
+          : [],
+      ),
+    ]),
+  );
+  const pricing = new Map<string, { input: number; output: number }>();
+  for (const model of models) {
+    const inputPerToken = Number(model.pricing?.prompt);
+    const outputPerToken = Number(model.pricing?.completion);
+    if (
+      Number.isFinite(inputPerToken) &&
+      inputPerToken >= 0 &&
+      Number.isFinite(outputPerToken) &&
+      outputPerToken >= 0
+    ) {
+      pricing.set(model.id, {
+        input: inputPerToken * 1_000_000,
+        output: outputPerToken * 1_000_000,
+      });
+    }
+  }
+  return { parameters, pricing };
 };
 
 const fetchOpenRouterModels = async (apiKey: string): Promise<Map<string, Set<string>>> => {
@@ -58,7 +88,9 @@ const fetchOpenRouterModels = async (apiKey: string): Promise<Map<string, Set<st
     signal: AbortSignal.timeout(MODEL_HEALTH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`OpenRouter model list failed (${response.status})`);
-  return parseOpenRouterModels(await response.json());
+  const parsed = parseOpenRouterModels(await response.json());
+  setFetchedModelPricing(parsed.pricing);
+  return parsed.parameters;
 };
 
 const parseGeminiModelIds = (data: unknown): Set<string> => {
@@ -155,7 +187,12 @@ const checkProvider = async (
         model,
       });
     }
-    return { configured: true, checked: true, unlistedModels, structuredOutputUnsupportedModels: [] };
+    return {
+      configured: true,
+      checked: true,
+      unlistedModels,
+      structuredOutputUnsupportedModels: [],
+    };
   } catch (error) {
     logger.error({ msg: 'LLM_MODEL_HEALTH_CHECK_FAILED', provider, error });
     return {
