@@ -20,6 +20,7 @@ import { CampaignDetailHero } from '@/features/campaign/components/view/sections
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
+import { resolveOrCreateStarterCampaign } from '@/services/starter-campaign-bootstrap';
 import { userDataApi } from '@/services/user-data-api';
 
 const CampaignDetailPage: React.FC = () => {
@@ -56,33 +57,9 @@ const CampaignDetailPage: React.FC = () => {
     setIsStarting(true);
 
     try {
-      // Check if user already has a campaign linked to this starter
-      const existingCampaign = (await userDataApi.listCampaigns()).find(
-        (candidate) => candidate.name === campaign.title,
+      const campaignId = await resolveOrCreateStarterCampaign(campaign, userDataApi, (message) =>
+        logger.info(message),
       );
-
-      let campaignId: string;
-
-      if (existingCampaign) {
-        // Use existing campaign
-        campaignId = existingCampaign.id;
-        logger.info(`Using existing campaign ${campaignId} for starter ${campaign.id}`);
-      } else {
-        // Create a new campaign linked to this starter
-        const newCampaign = await userDataApi.createCampaign({
-          name: campaign.title,
-          description: campaign.premise,
-          genre: campaign.genre[0] || 'fantasy',
-          tone: campaign.tone[0] || 'epic',
-          difficulty_level: campaign.difficulty,
-          campaign_length: 'full',
-          status: 'active',
-          background_image: campaign.coverImageUrl,
-        });
-
-        campaignId = newCampaign.id;
-        logger.info(`Created new campaign ${campaignId} for starter ${campaign.id}`);
-      }
 
       toast({
         title: 'Adventure Awaits!',

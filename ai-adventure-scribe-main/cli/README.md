@@ -12,11 +12,25 @@ Run with Bun from the app root:
 
 ```sh
 bun run cli/src/index.ts sessions list
+bun run cli/src/index.ts templates list --campaign the-eternal-feast
 bun run cli/src/index.ts play --campaign the-eternal-feast
 bun run cli/src/index.ts play --campaign the-eternal-feast --new --auto --turns 20 --transcript /tmp/feast.ndjson
 ```
 
-`--new` uses the browser's existing session creation payload and requires an active session for the selected campaign so it can retain that campaign and character. `--template <key>` uses the browser's `seedStarterCharacter` service to create that starter character in the selected campaign before creating the session.
+## Fresh account quickstart
+
+Fresh agent accounts can bootstrap a complete starter playthrough without first visiting the browser:
+
+```sh
+bun run cli/src/index.ts templates list --campaign the-eternal-feast
+bun run cli/src/index.ts play --campaign the-eternal-feast --new --template the-seeker --auto --turns 20
+```
+
+On its first run, `--new` resolves or creates the user's campaign row using the same rule as the browser, seeds the chosen template with its portrait, equipment, and spells, then creates a live session with `starter_campaign_id`. In `--auto` mode, omitting `--template` picks a starter template at random and logs the pick; interactive mode prints the choices and prompts for its key.
+
+Without `--new`, an active matching session resumes. With `--new` and an existing matching session, the CLI creates another session in that campaign. It reuses the current character by default; pass `--template <key>` (or `--character <template-key>`) to seed a new starter, or `--character <id>` to reuse a specific existing character in that campaign.
+
+`ir templates list --campaign <slug>` prints each starter's key, name, and class for agents to enumerate selections.
 
 Interactive commands are free text, `roll` for a pending request, `move <entityId> <x> <y>`, and `exit`. A pending roll blocks further play until it is resolved. Tactical turns show the server map through `mapToAscii` plus its tactical digest.
 

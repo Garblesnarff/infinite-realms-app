@@ -5,20 +5,24 @@ import { stdin as input, stdout as output } from 'node:process';
 
 import { loginWithPassword } from '../../shared/auth/headless-auth';
 import { runAutoTurns } from './auto';
+import { selectPlaySession, templateListRows, type StarterTemplate } from './play-session';
 
 import type { HeadlessEvent } from '@/services/headless-game-client';
 
-type Args = { command?: string; campaign?: string; template?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; transcript?: string };
+type Args = { command?: string; campaign?: string; template?: string; character?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; transcript?: string };
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { fresh: false, json: false, auto: false, turns: 20 };
   const [command, subcommand, ...rest] = argv;
-  args.command = command === 'sessions' ? `${command} ${subcommand || ''}`.trim() : command;
-  const flags = command === 'sessions' ? rest : [subcommand, ...rest].filter(Boolean);
+  args.command = command === 'sessions' || command === 'templates'
+    ? `${command} ${subcommand || ''}`.trim()
+    : command;
+  const flags = command === 'sessions' || command === 'templates' ? rest : [subcommand, ...rest].filter(Boolean);
   for (let i = 0; i < flags.length; i += 1) {
     const flag = flags[i];
     if (flag === '--campaign') args.campaign = flags[++i];
     else if (flag === '--template') args.template = flags[++i];
+    else if (flag === '--character') args.character = flags[++i];
     else if (flag === '--new') args.fresh = true;
     else if (flag === '--json') args.json = true;
     else if (flag === '--auto') args.auto = true;
@@ -42,31 +46,54 @@ async function authenticate(): Promise<void> {
   markAuthReady();
 }
 
+async function getStarterCampaign(slug: string) {
+  const { supabase } = await import('@/integrations/supabase/client');
+  const { data, error } = await supabase
+    .from('starter_campaigns')
+    .select('id, title, premise, genre, tone, difficulty, cover_image_url')
+    .eq('slug', slug)
+    .eq('is_published', true)
+    .eq('is_complete', true)
+    .single();
+  if (error?.code === 'PGRST116') return null;
+  if (error) throw new Error(`Failed to load starter campaign ${slug}: ${error.message}`);
+  if (!data) return null;
+  return {
+    id: data.id,
+    title: data.title,
+    premise: data.premise,
+    genre: data.genre || [],
+    tone: data.tone || [],
+    difficulty: data.difficulty,
+    coverImageUrl: data.cover_image_url,
+  };
+}
+
+async function chooseStarterTemplate(args: Args, templates: StarterTemplate[]): Promise<StarterTemplate> {
+  if (args.auto) {
+    const template = templates[Math.floor(Math.random() * templates.length)];
+    console.log(`Auto-selected starter template ${template.template_key} (${template.name}, ${template.class}).`);
+    return template;
+  }
+  console.table(templates.map((template) => ({ key: template.template_key, name: template.name, class: template.class })));
+  const readline = createInterface({ input, output });
+  try {
+    const key = (await readline.question('Starter template key: ')).trim();
+    const template = templates.find((entry) => entry.template_key === key);
+    if (!template) throw new Error(`Starter template not found: ${key}`);
+    return template;
+  } finally {
+    readline.close();
+  }
+}
+
 async function selectSession(args: Args): Promise<string> {
   const { userDataApi } = await import('@/services/user-data-api');
-  const sessions = await userDataApi.listSessions({ status: 'active', starterOnly: Boolean(args.campaign), limit: 100 });
-  const matching = sessions.filter((session) => !args.campaign || session.starter_campaign_id === args.campaign);
-  const current = matching[0];
-  if (!args.fresh && !args.template && current) return current.id;
-  if (!current) throw new Error(`No active session for ${args.campaign || 'this account'}; create one in the browser first.`);
-  const context = await userDataApi.getSessionContext(current.id);
-  let characterId = context.character_id;
-  if (args.template) {
-    if (!args.campaign) throw new Error('--template requires --campaign');
-    const templates = await userDataApi.listStarterCharacterTemplates(args.campaign);
-    const template = templates.find((entry: Record<string, unknown>) => entry.template_key === args.template);
-    if (!template) throw new Error(`Starter template not found: ${args.template}`);
-    const { seedStarterCharacter } = await import('@/services/character/starter-character-seeding');
-    const character = await seedStarterCharacter(template as never, String(context.campaign_id), userDataApi.createCharacter);
-    characterId = character.id;
-  }
-  const created = await userDataApi.createSession({
-    session_number: Number(current.session_number || 0) + 1,
-    status: 'active', campaign_id: context.campaign_id, character_id: characterId,
-    turn_count: 0, current_scene_description: 'The adventure begins...', session_notes: '',
-    starter_campaign_id: args.campaign || context.starter_campaign_id || null,
+  return selectPlaySession(args, userDataApi, {
+    getStarterCampaign,
+    chooseTemplate: (templates) => chooseStarterTemplate(args, templates),
+    log: (message) => console.log(message),
   });
-  return String(created.id);
 }
 
 function printEvent(event: HeadlessEvent, json: boolean, write: (line: string) => void): void {
@@ -125,8 +152,14 @@ try {
     const { userDataApi } = await import('@/services/user-data-api');
     console.table(await userDataApi.listSessions({ status: 'active' }));
   }
+  else if (args.command === 'templates list') {
+    if (!args.campaign) throw new Error('Usage: ir templates list --campaign <slug>');
+    const { userDataApi } = await import('@/services/user-data-api');
+    const templates = await userDataApi.listStarterCharacterTemplates(args.campaign);
+    console.table(templateListRows(templates));
+  }
   else if (args.command === 'play') await runPlay(args);
-  else throw new Error('Usage: ir play --campaign the-eternal-feast [--new] [--json] [--auto --turns 20] | ir sessions list');
+  else throw new Error('Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20] | ir sessions list');
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
