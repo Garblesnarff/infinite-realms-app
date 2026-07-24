@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
 import type { SpellFilters } from '@/components/spells/SpellFilterPanel';
 import type { Spell, Character } from '@/types/character';
@@ -128,7 +128,8 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   }, [character?.race?.name, character?.subrace]);
 
   // Selection actions
-  const toggleCantrip = (cantripId: string): void => {
+  // ⚡ Bolt: Wrapped toggleCantrip in useCallback to ensure reference stability and prevent redundant child re-renders
+  const toggleCantrip = useCallback((cantripId: string): void => {
     setSelectedCantrips((prev) => {
       if (prev.includes(cantripId)) {
         return prev.filter((id) => id !== cantripId);
@@ -144,9 +145,10 @@ export function useSpellSelection(): UseSpellSelectionReturn {
         return [...prev, cantripId];
       }
     });
-  };
+  }, [spellcastingInfo, racialSpells]);
 
-  const toggleSpell = (spellId: string): void => {
+  // ⚡ Bolt: Wrapped toggleSpell in useCallback to ensure reference stability and prevent redundant child re-renders
+  const toggleSpell = useCallback((spellId: string): void => {
     logger.debug('🪄 [useSpellSelection] toggleSpell called:', spellId);
     setSelectedSpells((prev) => {
       const isRemoving = prev.includes(spellId);
@@ -174,12 +176,13 @@ export function useSpellSelection(): UseSpellSelectionReturn {
 
       return newSelection;
     });
-  };
+  }, [spellcastingInfo]);
 
-  const clearSelections = (): void => {
+  // ⚡ Bolt: Wrapped clearSelections in useCallback to ensure reference stability and prevent redundant child re-renders
+  const clearSelections = useCallback((): void => {
     setSelectedCantrips([]);
     setSelectedSpells([]);
-  };
+  }, []);
 
   // Validation
   const [validation, setValidation] = useState<ReturnType<typeof validateSpellSelection>>({
@@ -239,7 +242,8 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   const canProceed = validation.valid && !isValidating;
 
   // Save to character and database
-  const updateCharacterSpells = async (): Promise<void> => {
+  // ⚡ Bolt: Wrapped updateCharacterSpells in useCallback to ensure reference stability and prevent redundant child re-renders
+  const updateCharacterSpells = useCallback(async (): Promise<void> => {
     if (!character || !character.id) {
       return;
     }
@@ -275,7 +279,7 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     } finally {
       setIsSavingSpells(false);
     }
-  };
+  }, [character, validation.valid, selectedCantrips, selectedSpells, dispatch, setSpellsError]);
 
   // Auto-save selections to character immediately when they change
   useEffect(() => {

@@ -1060,4 +1060,43 @@ describe('useSpellSelection Hook', () => {
       expect(mockCharacterContext.dispatch).not.toHaveBeenCalled();
     });
   });
+
+  describe('Callback Stability', () => {
+    it('should maintain stable callback references across renders when dependencies do not change', () => {
+      const wizardCharacter: Character = {
+        id: '1',
+        name: 'Test Wizard',
+        level: 1,
+        class: mockWizard,
+        race: mockRace,
+        cantrips: ['mage-hand'],
+        knownSpells: ['magic-missile'],
+        abilityScores: {
+          strength: { score: 10, modifier: 0, savingThrow: false },
+          dexterity: { score: 14, modifier: 2, savingThrow: false },
+          constitution: { score: 13, modifier: 1, savingThrow: false },
+          intelligence: { score: 15, modifier: 2, savingThrow: true },
+          wisdom: { score: 12, modifier: 1, savingThrow: true },
+          charisma: { score: 8, modifier: -1, savingThrow: false },
+        },
+      };
+
+      const { result, rerender } = renderHook(() => useSpellSelection(), {
+        wrapper: createWrapper(wizardCharacter),
+      });
+
+      const initialToggleCantrip = result.current.toggleCantrip;
+      const initialToggleSpell = result.current.toggleSpell;
+      const initialClearSelections = result.current.clearSelections;
+      const initialUpdateCharacterSpells = result.current.updateCharacterSpells;
+
+      // Force a re-render
+      rerender();
+
+      expect(result.current.toggleCantrip).toBe(initialToggleCantrip);
+      expect(result.current.toggleSpell).toBe(initialToggleSpell);
+      expect(result.current.clearSelections).toBe(initialClearSelections);
+      expect(result.current.updateCharacterSpells).toBe(initialUpdateCharacterSpells);
+    });
+  });
 });
