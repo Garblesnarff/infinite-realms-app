@@ -38,6 +38,14 @@ vi.mock('@/features/game-session/hooks/use-panel-resize', () => ({
   })),
 }));
 
+// Mock useCampaignJournal hook
+vi.mock('@/hooks/use-campaign-journal', () => ({
+  useCampaignJournal: vi.fn(() => ({
+    data: { entries: [] },
+    isLoading: false,
+  })),
+}));
+
 // Mock child components to focus on MemoryPanel logic
 vi.mock('../CombatSummary', () => ({
   CombatSummary: () => <div data-testid="combat-summary">Combat Summary</div>,

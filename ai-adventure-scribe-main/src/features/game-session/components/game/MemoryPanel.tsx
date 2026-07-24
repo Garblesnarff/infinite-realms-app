@@ -14,8 +14,7 @@ import { useParams } from 'react-router-dom';
 
 import { CombatSummary } from './CombatSummary';
 import { GameSidePanelContent } from './GameSidePanelContent';
-import { MemoryCard } from './memory/MemoryCard';
-import { MemoryFilter } from './memory/MemoryFilter';
+import { DesktopMemoryTab } from './memory/DesktopMemoryTab';
 import { RightSheetLive } from './overhaul/RightSheetLive';
 import { HandoutCard } from '../handouts/HandoutCard';
 
@@ -24,11 +23,9 @@ import type { ExtendedGameSession } from '@/hooks/use-game-session';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -384,50 +381,16 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   value="memory"
                   className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent"
                 >
-                  {/* Compact Session Notes Section */}
-                  <section className="border-b border-white/5 p-4">
-                    <Label
-                      htmlFor={sessionNotesId}
-                      className="ir-display mb-2 block text-[11px] font-semibold uppercase tracking-[1.6px] text-infinite-gold"
-                    >
-                      Session Notes
-                    </Label>
-                    <Textarea
-                      id={sessionNotesId}
-                      value={localSessionNotes}
-                      onChange={(e) => setLocalSessionNotes(e.target.value)}
-                      placeholder="Type your session notes here..."
-                      rows={4}
-                      className="mb-3 resize-none rounded-lg border-white/10 bg-white/[0.03] text-sm focus:border-infinite-teal/50 focus:ring-2 focus:ring-infinite-teal/20"
-                    />
-                    <Button
-                      onClick={handleSaveNotes}
-                      size="sm"
-                      variant="ir-gold"
-                      className="px-4 py-2"
-                    >
-                      Save Notes
-                    </Button>
-                  </section>
-
-                  {/* Memories Section */}
-                  <div className="flex-shrink-0 border-b border-white/5 p-4">
-                    <MemoryFilter selectedType={selectedType} onTypeSelect={setSelectedType} />
-                  </div>
-
-                  <ScrollArea className="flex-1 bg-black/10 p-4" style={{ maxHeight: '56vh' }}>
-                    {memoriesLoading && (
-                      <p className="text-xs text-muted-foreground">Loading memories...</p>
-                    )}
-                    {!memoriesLoading && sortedMemories.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No memories logged yet.</p>
-                    )}
-                    <div className="space-y-2">
-                      {sortedMemories.map((memory) => (
-                        <MemoryCard key={memory.id} memory={memory} />
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <DesktopMemoryTab
+                    sessionNotesId={sessionNotesId}
+                    localSessionNotes={localSessionNotes}
+                    setLocalSessionNotes={setLocalSessionNotes}
+                    handleSaveNotes={handleSaveNotes}
+                    selectedType={selectedType}
+                    setSelectedType={setSelectedType}
+                    memoriesLoading={memoriesLoading}
+                    sortedMemories={sortedMemories}
+                  />
                 </TabsContent>
 
                 {isInCombat && (
