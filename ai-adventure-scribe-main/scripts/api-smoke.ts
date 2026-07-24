@@ -1,4 +1,5 @@
 /* eslint-disable max-lines, no-console */
+import { loginWithPassword } from '../shared/auth/headless-auth';
 const DEFAULT_BASE_URL = 'http://localhost:8888';
 const REQUEST_TIMEOUT_MS = 75_000;
 const SESSIONLESS_ID = '00000000-0000-4000-8000-000000000000';
@@ -88,7 +89,7 @@ export async function runApiSmoke(options: SmokeOptions = {}): Promise<SmokeResu
     /\/$/,
     '',
   );
-  const token = env.LLM_SMOKE_BEARER_TOKEN;
+  let token = env.LLM_SMOKE_BEARER_TOKEN;
   const requireAuth = env.API_SMOKE_REQUIRE_AUTH === '1' || env.API_SMOKE_REQUIRE_AUTH === 'true';
   const allowInfraSkips =
     env.API_SMOKE_ALLOW_INFRA_SKIPS === '1' || env.API_SMOKE_ALLOW_INFRA_SKIPS === 'true';
@@ -106,6 +107,15 @@ export async function runApiSmoke(options: SmokeOptions = {}): Promise<SmokeResu
       ...init,
       signal: init?.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+
+  if (!token && env.SMOKE_EMAIL && env.SMOKE_PASSWORD) {
+    try {
+      token = (await loginWithPassword({ baseUrl, email: env.SMOKE_EMAIL, password: env.SMOKE_PASSWORD, fetchImpl })).accessToken;
+      record('password-login', 'PASS', 'received WorkOS access token');
+    } catch (error) {
+      record('password-login', 'FAIL', error instanceof Error ? error.message : String(error));
+    }
+  }
 
   try {
     const response = await request('/health');

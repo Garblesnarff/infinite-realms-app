@@ -13,14 +13,16 @@
 import crypto from 'crypto';
 
 import { eq } from 'drizzle-orm';
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 import jwt from 'jsonwebtoken';
 
 import { users } from '../../../../db/schema/index';
 import { db } from '../../lib/drizzle';
 import { logger } from '../../lib/logger';
+import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
 import { authTokenExchangeRoutes } from './auth-token-exchange.js';
 import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
+import { authenticatePassword } from '../../services/password-login.js';
 import { workos, authConfig } from '../../services/workos';
 
 // Test auth configuration
@@ -67,6 +69,23 @@ function createFrontendTokenExchangeRedirect(accessToken: string, refreshToken: 
 
 export const authRoutes = new Elysia({ prefix: '/v1/auth' })
   .use(authTokenExchangeRoutes)
+  .use(
+    new Elysia({ name: 'auth-password-login' })
+      .use(createSimpleRateLimit({ windowMs: 60_000, max: 5, key: 'auth-password-login' }))
+      .post(
+        '/password-login',
+        async ({ body, set }) => {
+          try {
+            return await authenticatePassword(body.email, body.password, authConfig.clientId, workos);
+          } catch (error) {
+            logger.warn({ msg: 'Password login failed', error: error instanceof Error ? error.message : String(error) });
+            set.status = 401;
+            return { error: 'Invalid email or password' };
+          }
+        },
+        { body: t.Object({ email: t.String({ format: 'email', maxLength: 320 }), password: t.String({ minLength: 1, maxLength: 1024 }) }) },
+      ),
+  )
   /**
    * Start OAuth flow - redirect to WorkOS hosted login
    * GET /v1/auth/login
