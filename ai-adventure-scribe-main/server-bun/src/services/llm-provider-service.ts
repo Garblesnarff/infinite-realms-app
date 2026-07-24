@@ -51,6 +51,13 @@ const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
 
+const retryAfterSeconds = (response: Response): number | undefined => {
+  const value = response.headers.get('retry-after');
+  if (!value) return undefined;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined;
+};
+
 export const validateStructuredResponseText = (
   text: string,
   responseSchema?: Record<string, unknown>,
@@ -388,8 +395,7 @@ export class LLMProviderService {
       usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
     const attempts: string[] = [];
-    let lastFailure: { status: number; details: string } | null = null;
-    let timedOut = false;
+    let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
@@ -459,11 +465,10 @@ export class LLMProviderService {
           }
 
           const errText = await response.text();
-          lastFailure = { status: response.status, details: errText };
+          lastFailure = { status: response.status, details: errText, retryAfter: retryAfterSeconds(response) };
         } catch (error) {
           const details = error instanceof Error ? error.message : String(error);
-          if (error instanceof DOMException && error.name === 'TimeoutError') timedOut = true;
-          lastFailure = { status: 503, details };
+          lastFailure = { status: 503, details, retryAfter: 1 };
         }
         if (retry === 0 && responseSchema) continue;
         const nextCandidate = candidateModels[index + 1];
@@ -500,7 +505,7 @@ export class LLMProviderService {
       retryable,
       details: process.env.NODE_ENV !== 'production' ? lastFailure?.details : undefined,
       attempts: process.env.NODE_ENV !== 'production' ? attempts : undefined,
-      retryAfter: timedOut && upstreamStatus === 503 ? 1 : undefined,
+      retryAfter: lastFailure?.retryAfter ?? (retryable ? 2 : undefined),
       text: '',
     };
   }
@@ -559,7 +564,7 @@ export class LLMProviderService {
     const attempts: string[] = [];
     let successPayload: any = null;
     let successModel: string | null = null;
-    let lastFailure: { status: number; details: string } | null = null;
+    let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
     let availableModels: Set<string> | null = null;
 
     for (const candidate of candidateModels) {
@@ -578,7 +583,7 @@ export class LLMProviderService {
             },
           );
         } catch (error) {
-          lastFailure = { status: 503, details: error instanceof Error ? error.message : String(error) };
+          lastFailure = { status: 503, details: error instanceof Error ? error.message : String(error), retryAfter: 1 };
           break;
         }
 
@@ -611,7 +616,7 @@ export class LLMProviderService {
         }
 
         const errText = await response.text();
-        lastFailure = { status: response.status, details: errText };
+        lastFailure = { status: response.status, details: errText, retryAfter: retryAfterSeconds(response) };
 
         if (isModelUnavailableError(response.status, errText)) {
           if (!availableModels) {
@@ -663,6 +668,7 @@ export class LLMProviderService {
         retryable,
         details: process.env.NODE_ENV !== 'production' ? details : undefined,
         attempts: process.env.NODE_ENV !== 'production' ? attempts : undefined,
+        retryAfter: lastFailure?.retryAfter ?? (retryable ? 2 : undefined),
         text: '',
       };
     }

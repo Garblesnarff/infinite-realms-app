@@ -124,6 +124,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const upstreamError = toUpstreamModelError(result);
         if (upstreamError) {
           set.status = 502;
+          if (upstreamError.retry_after) set.headers['Retry-After'] = String(upstreamError.retry_after);
           logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
           return upstreamError;
         }
@@ -150,7 +151,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         });
       }
 
-      return { text: result.text };
+      return { text: result.text, provider: result.provider, model: result.model };
     },
     {
       body: t.Object({

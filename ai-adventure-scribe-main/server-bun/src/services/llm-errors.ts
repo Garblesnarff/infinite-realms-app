@@ -25,6 +25,7 @@ export interface UpstreamModelErrorBody {
   model: string;
   upstreamStatus: number;
   retryable: boolean;
+  retry_after?: number;
 }
 
 export const createUpstreamModelErrorBody = (
@@ -32,12 +33,14 @@ export const createUpstreamModelErrorBody = (
   model: string,
   upstreamStatus: number,
   retryable = isRetryableUpstreamStatus(upstreamStatus),
+  retryAfter?: number,
 ): UpstreamModelErrorBody => ({
   error: 'upstream_model_error',
   provider,
   model,
   upstreamStatus,
   retryable,
+  ...(retryable ? { retry_after: Math.max(1, Math.ceil(retryAfter ?? 2)) } : {}),
 });
 
 export const toUpstreamModelError = (result: LLMResponse): UpstreamModelErrorBody | null => {
@@ -47,5 +50,6 @@ export const toUpstreamModelError = (result: LLMResponse): UpstreamModelErrorBod
     result.model,
     result.upstreamStatus,
     result.retryable,
+    result.retryAfter,
   );
 };

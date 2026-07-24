@@ -121,6 +121,26 @@ describe('LlmApiClient', () => {
       expect(secondCallBody.provider).toBe('gemini');
     });
 
+    it('falls back to Gemini when OpenRouter is rate limited', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        headers: { get: () => '3' },
+        text: () => Promise.resolve(JSON.stringify({ error: 'upstream_model_error', retryable: true, retry_after: 3 })),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ text: 'Gemini response', provider: 'gemini', model: 'gemini-2.5-flash-lite' }),
+      });
+      const onResponseMetadata = vi.fn();
+
+      await expect(llmApiClient.generateText({ prompt: 'Hello', provider: 'openrouter', onResponseMetadata })).resolves.toBe('Gemini response');
+
+      expect(JSON.parse(mockFetch.mock.calls[1][1].body).provider).toBe('gemini');
+      expect(onResponseMetadata).toHaveBeenCalledWith({ provider: 'gemini', model: 'gemini-2.5-flash-lite' });
+    });
+
     it('should fallback to openrouter if gemini is not configured', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

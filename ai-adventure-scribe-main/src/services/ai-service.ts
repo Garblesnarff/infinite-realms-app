@@ -71,6 +71,7 @@ export class AIService {
     userPlan?: 'free' | 'pro' | 'enterprise';
     turnCount?: number;
     relevantMemories?: Memory[];
+    onProviderResponse?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -176,6 +177,7 @@ export class AIService {
           maxTokens: 8192,
           responseSchema: dmResponseSchema,
           onStream: params.onStream,
+          onResponseMetadata: params.onProviderResponse,
         });
 
         return processDMResponse({
@@ -189,9 +191,9 @@ export class AIService {
           isFirstMessage,
           combatDetection,
         });
-      } catch (geminiError) {
-        logger.error('Local Gemini API failed:', geminiError);
-        throw new Error('Failed to get DM response - AI service unavailable');
+      } catch (providerError) {
+        logger.error('LLM API failed:', providerError);
+        throw providerError;
       }
     })(); // End of the async promise wrapper
 

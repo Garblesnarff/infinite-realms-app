@@ -1,4 +1,6 @@
-// Verified against https://openrouter.ai/api/v1/models on 2026-07-12.
+// OpenRouter defaults were verified against https://openrouter.ai/api/v1/models on 2026-07-12.
+// Gemini defaults are covered by the recorded Generative Language model-list fixture in
+// llm-model-config.test.ts. Keep these ids in the same form returned by /v1/models.
 // Structured DM responses require both response_format and structured_outputs.
 export const DEFAULT_OPENROUTER_TEXT_MODEL = 'google/gemini-3.1-flash-lite';
 export const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
@@ -46,10 +48,7 @@ export const getGeminiModelCandidates = (preferred?: string): string[] => {
     preferred?.trim() || process.env.GEMINI_TEXT_MODEL?.trim() || DEFAULT_GEMINI_TEXT_MODEL;
   const fallback = process.env.GEMINI_TEXT_FALLBACK?.trim() || DEFAULT_GEMINI_FALLBACK_MODEL;
   const variants = envList('GEMINI_MODEL_VARIANTS');
-  const extras = /^gemini-2\.5-flash-lite$/i.test(primary)
-    ? ['gemini-2.5-flash-lite-001', 'gemini-2.5-flash-lite-preview']
-    : [];
-  return dedupe([primary, ...variants, ...extras, fallback]);
+  return dedupe([primary, ...variants, fallback]);
 };
 
 export const getConfiguredGeminiModels = (): string[] => getGeminiModelCandidates();

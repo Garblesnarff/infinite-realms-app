@@ -7,12 +7,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 export class ApiClientError extends Error {
   readonly status: number;
   readonly retryable: boolean;
+  readonly retryAfterMs?: number;
 
-  constructor(message: string, status: number, retryable: boolean) {
+  constructor(message: string, status: number, retryable: boolean, retryAfterMs?: number) {
     super(message);
     this.name = 'ApiClientError';
     this.status = status;
     this.retryable = retryable;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -31,6 +33,7 @@ export interface GenerateTextParams {
   responseSchema?: Record<string, unknown>;
   onStream?: (chunk: string) => void;
   requestType?: 'user' | 'system';
+  onResponseMetadata?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
 }
 
 export interface GenerateImageParams {
@@ -79,7 +82,7 @@ class LlmApiClient {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        let body: { error?: string; message?: string; retryable?: boolean } | null = null;
+        let body: { error?: string; message?: string; retryable?: boolean; retry_after?: number } | null = null;
         try {
           body = text ? (JSON.parse(text) as typeof body) : null;
         } catch {
@@ -87,7 +90,14 @@ class LlmApiClient {
         }
         const retryable = body?.retryable ?? (res.status === 429 || res.status >= 500);
         const message = body?.error || body?.message || text || res.statusText;
-        throw new ApiClientError(`API ${res.status}: ${message}`, res.status, retryable);
+        const headerRetryAfter = Number(res.headers?.get('retry-after'));
+        const retryAfterSeconds = body?.retry_after ?? (Number.isFinite(headerRetryAfter) ? headerRetryAfter : undefined);
+        throw new ApiClientError(
+          `API ${res.status}: ${message}`,
+          res.status,
+          retryable,
+          retryAfterSeconds && retryAfterSeconds > 0 ? Math.ceil(retryAfterSeconds * 1000) : undefined,
+        );
       }
       return res;
     } catch (err: any) {
@@ -159,21 +169,25 @@ class LlmApiClient {
         }
         return raw;
       }
-      const data = await res.json();
+      const data = await res.json() as { text?: string; provider?: 'openrouter' | 'gemini'; model?: string };
+      params.onResponseMetadata?.({ provider: data.provider, model: data.model });
       return data?.text ?? '';
     } catch (err: any) {
       const msg = String(err?.message || '');
       const isConfigErr = /Server not configured for OpenRouter/i.test(msg);
       const isGeminiConfigErr = /Server not configured for Gemini/i.test(msg);
+      const retryableProviderFailure = err instanceof ApiClientError && err.retryable;
 
-      if (preferredProvider === 'openrouter' && isConfigErr) {
+      if (preferredProvider === 'openrouter' && (isConfigErr || retryableProviderFailure)) {
         const res = await makeReq('gemini');
-        const data = await res.json();
+        const data = await res.json() as { text?: string; provider?: 'openrouter' | 'gemini'; model?: string };
+        params.onResponseMetadata?.({ provider: data.provider, model: data.model });
         return data?.text ?? '';
       }
-      if (preferredProvider === 'gemini' && isGeminiConfigErr) {
+      if (preferredProvider === 'gemini' && (isGeminiConfigErr || retryableProviderFailure)) {
         const res = await makeReq('openrouter');
-        const data = await res.json();
+        const data = await res.json() as { text?: string; provider?: 'openrouter' | 'gemini'; model?: string };
+        params.onResponseMetadata?.({ provider: data.provider, model: data.model });
         return data?.text ?? '';
       }
       throw err;

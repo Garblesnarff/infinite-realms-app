@@ -14,7 +14,7 @@ Run with Bun from the app root:
 bun run cli/src/index.ts sessions list
 bun run cli/src/index.ts templates list --campaign the-eternal-feast
 bun run cli/src/index.ts play --campaign the-eternal-feast
-bun run cli/src/index.ts play --campaign the-eternal-feast --new --auto --turns 20 --transcript /tmp/feast.ndjson
+bun run cli/src/index.ts play --campaign the-eternal-feast --new --auto --turns 20 --delay 2000 --transcript /tmp/feast.ndjson
 ```
 
 ## Fresh account quickstart
@@ -36,4 +36,4 @@ Interactive commands are free text, `roll` for a pending request, `move <entityI
 
 ## For agents: NDJSON
 
-Use `--json`. Every output line is a JSON object with a `type` of `narration`, `options`, `roll_request`, `roll_result`, `map_state`, or `error`. Send one input line at a time on stdin: option/free text, `roll`, or `move <entityId> <x> <y>`. `--auto --turns N` picks safe generic actions and resolves numeric rolls, then emits a `summary` event with `turnsCompleted`, `rollsMade`, and `contractViolations`.
+Use `--json`. Every output line is a JSON object with a `type` of `narration`, `options`, `roll_request`, `roll_result`, `map_state`, or `error`. Send one input line at a time on stdin: option/free text, `roll`, or `move <entityId> <x> <y>`. `--auto --turns N` picks safe generic actions, respects server retry hints, and retries a retryable turn at most twice. `--delay <ms>` sets its initial backoff (default `2000`). The final `summary` reports `turnsCompleted`, `rollsMade`, `contractViolations`, and provider/model counts for completed turns.

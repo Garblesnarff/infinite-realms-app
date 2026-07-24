@@ -9,10 +9,10 @@ import { selectPlaySession, templateListRows, type StarterTemplate } from './pla
 
 import type { HeadlessEvent } from '@/services/headless-game-client';
 
-type Args = { command?: string; campaign?: string; template?: string; character?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; transcript?: string };
+type Args = { command?: string; campaign?: string; template?: string; character?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; delay: number; transcript?: string };
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { fresh: false, json: false, auto: false, turns: 20 };
+  const args: Args = { fresh: false, json: false, auto: false, turns: 20, delay: 2_000 };
   const [command, subcommand, ...rest] = argv;
   args.command = command === 'sessions' || command === 'templates'
     ? `${command} ${subcommand || ''}`.trim()
@@ -27,6 +27,7 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--json') args.json = true;
     else if (flag === '--auto') args.auto = true;
     else if (flag === '--turns') args.turns = Number(flags[++i] || 20);
+    else if (flag === '--delay') args.delay = Number(flags[++i] || 2_000);
     else if (flag === '--transcript') args.transcript = flags[++i];
   }
   return args;
@@ -122,6 +123,10 @@ async function runPlay(args: Args): Promise<void> {
       events.forEach((event) => printEvent(event, args.json, write));
       if (roll) { rolls += 1; printEvent({ type: 'roll_result', request: roll.request, result: roll.result }, args.json, write); }
       completed += 1;
+      const narration = events.find((event) => event.type === 'narration');
+      return narration && narration.type === 'narration'
+        ? { provider: narration.provider, model: narration.model }
+        : {};
     } catch (error) { violations += 1; printEvent({ type: 'error', message: error instanceof Error ? error.message : String(error) }, args.json, write); }
   };
   if (args.auto) {
@@ -129,8 +134,8 @@ async function runPlay(args: Args): Promise<void> {
       get pendingRolls() { return client.pendingRolls; },
       roll: () => client.roll(),
       play: async (message, roll) => run(message, roll as ReturnType<typeof client.roll>),
-    }, args.turns, (error) => printEvent({ type: 'error', message: String(error) }, args.json, write));
-    write(JSON.stringify({ type: 'summary', turnsCompleted: summary.turnsCompleted, rollsMade: summary.rollsMade, contractViolations: summary.contractViolations + violations }));
+    }, args.turns, (error) => printEvent({ type: 'error', message: String(error) }, args.json, write), { delayMs: args.delay });
+    write(JSON.stringify({ type: 'summary', turnsCompleted: summary.turnsCompleted, rollsMade: summary.rollsMade, contractViolations: summary.contractViolations + violations, providerCounts: summary.providerCounts, providerModelCounts: summary.providerModelCounts }));
   } else {
     const readline = createInterface({ input, output });
     for await (const line of readline) {
@@ -159,7 +164,7 @@ try {
     console.table(templateListRows(templates));
   }
   else if (args.command === 'play') await runPlay(args);
-  else throw new Error('Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20] | ir sessions list');
+  else throw new Error('Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000] | ir sessions list');
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;

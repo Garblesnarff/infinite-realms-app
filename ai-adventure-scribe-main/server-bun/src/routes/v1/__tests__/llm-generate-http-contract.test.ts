@@ -2,6 +2,11 @@ import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
 let generatedInput: Record<string, unknown> | undefined;
+let generatedResult: Record<string, unknown> = {
+  text: 'The frozen guests smell faintly of winter roses. What do you do?',
+  provider: 'openrouter',
+  model: 'test/model',
+};
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -30,11 +35,7 @@ mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: {
     generate: async (input: Record<string, unknown>) => {
       generatedInput = input;
-      return {
-        text: 'The frozen guests smell faintly of winter roses. What do you do?',
-        provider: 'openrouter',
-        model: 'test/model',
-      };
+      return generatedResult;
     },
   },
 }));
@@ -61,12 +62,50 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       }),
     );
     const raw = await response.text();
-    const body = JSON.parse(raw) as { text?: unknown };
+    const body = JSON.parse(raw) as { text?: unknown; provider?: unknown; model?: unknown };
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('application/json');
     expect(typeof body.text).toBe('string');
+    expect(body.provider).toBe('openrouter');
+    expect(body.model).toBe('test/model');
     expect(String(body.text).trim().length).toBeGreaterThan(0);
     expect(generatedInput?.prompt).toBe(prompt);
+  });
+
+  it('returns a retryable Gemini failure as a structured 502 with a retry hint', async () => {
+    generatedResult = {
+      text: '',
+      error: 'LLM request failed',
+      provider: 'gemini',
+      model: 'gemini-2.5-flash-lite',
+      upstreamStatus: 429,
+      retryable: true,
+      retryAfter: 3,
+    };
+    try {
+      const response = await app.handle(new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: 'hello' }),
+      }));
+      const body = await response.json() as Record<string, unknown>;
+
+      expect(response.status).toBe(502);
+      expect(response.headers.get('retry-after')).toBe('3');
+      expect(body).toMatchObject({
+        error: 'upstream_model_error',
+        provider: 'gemini',
+        model: 'gemini-2.5-flash-lite',
+        retryable: true,
+        retry_after: 3,
+      });
+    } finally {
+      generatedResult = {
+        text: 'The frozen guests smell faintly of winter roses. What do you do?',
+        provider: 'openrouter',
+        model: 'test/model',
+      };
+    }
   });
 });

@@ -9,7 +9,7 @@ import { buildTacticalDigest } from '../../server-bun/src/tactical/tactical-cont
 import type { RollRequest } from '@/types/roll-request';
 
 export type HeadlessEvent =
-  | { type: 'narration'; text: string }
+  | { type: 'narration'; text: string; provider?: 'openrouter' | 'gemini'; model?: string }
   | { type: 'options'; options: string[] }
   | { type: 'roll_request'; requests: RollRequest[] }
   | { type: 'roll_result'; request: RollRequest; result: DiceRollResult }
@@ -64,11 +64,6 @@ export class HeadlessGameClient {
     const context = diceRoll
       ? { intent: 'dice_roll', diceRoll: { formula: diceRoll.result.expression, total: diceRoll.result.total, naturalRoll: diceRoll.result.naturalRoll, results: diceRoll.result.rolls.map((roll) => roll.value), advantage: !!diceRoll.result.advantage, disadvantage: !!diceRoll.result.disadvantage } }
       : { intent: this.turnCount === 0 ? 'first_action' : 'query' };
-    await userDataApi.saveSessionMessages(this.sessionId, { speaker_type: 'player', message: input, context, timestamp: new Date().toISOString() });
-    this.history.push({ id: crypto.randomUUID(), role: 'user', content: input, timestamp: new Date() });
-    this.turnCount += 1;
-    await userDataApi.updateSession(this.sessionId, { turn_count: this.turnCount });
-
     const game = await userDataApi.getSessionContext(this.sessionId);
     const aiContext = buildAIContext({
       sessionId: this.sessionId,
@@ -79,7 +74,16 @@ export class HeadlessGameClient {
       isInCombat: false,
       pendingRollsCount: this.pending.length,
     });
-    const response = await AIService.chatWithDM({ message: input, context: aiContext, conversationHistory: this.history, turnCount: this.turnCount });
+    let provider: 'openrouter' | 'gemini' | undefined;
+    let model: string | undefined;
+    const nextTurnCount = this.turnCount + 1;
+    const response = await AIService.chatWithDM({
+      message: input,
+      context: aiContext,
+      conversationHistory: this.history,
+      turnCount: nextTurnCount,
+      onProviderResponse: (metadata) => { provider = metadata.provider; model = metadata.model; },
+    });
     const processed = await processRollRequests({
       responseText: response.text,
       existingRequests: (response.roll_requests || []) as RollRequest[],
@@ -91,9 +95,13 @@ export class HeadlessGameClient {
     });
     this.pending = processed.playerRollRequests;
     const text = stripAssetTags(response.text);
+    await userDataApi.saveSessionMessages(this.sessionId, { speaker_type: 'player', message: input, context, timestamp: new Date().toISOString() });
     await userDataApi.saveSessionMessages(this.sessionId, { speaker_type: 'dm', message: text, context: { roll_requests: this.pending }, timestamp: new Date().toISOString() });
+    this.history.push({ id: crypto.randomUUID(), role: 'user', content: input, timestamp: new Date() });
     this.history.push({ id: crypto.randomUUID(), role: 'assistant', content: text, timestamp: new Date() });
-    const events: HeadlessEvent[] = [{ type: 'narration', text }];
+    this.turnCount = nextTurnCount;
+    await userDataApi.updateSession(this.sessionId, { turn_count: this.turnCount });
+    const events: HeadlessEvent[] = [{ type: 'narration', text, provider, model }];
     const options = extractOptions(text);
     if (options.length) events.push({ type: 'options', options });
     if (this.pending.length) events.push({ type: 'roll_request', requests: this.pending });
