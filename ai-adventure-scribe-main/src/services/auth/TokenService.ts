@@ -9,6 +9,12 @@ export interface WorkOSSession {
 export const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
 export const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 1 minute before expiry
 let refreshInFlight: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
+let headlessSession: WorkOSSession | null = null;
+
+/** Configure the browser API clients for a Bun/CLI host without a DOM. */
+export const configureHeadlessSession = (session: WorkOSSession | null): void => {
+  headlessSession = session;
+};
 
 /**
  * Read the current WorkOS access token from browser storage.
@@ -17,6 +23,7 @@ let refreshInFlight: Promise<{ accessToken: string; refreshToken: string } | nul
  * storage key or on browser globals directly.
  */
 export const getAccessToken = (): string | null => {
+  if (headlessSession) return headlessSession.access_token;
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem('workos_access_token');
 };
@@ -98,6 +105,7 @@ export const refreshAccessTokenOnce = (refreshToken: string) => {
 };
 
 export const loadCachedSession = (): WorkOSSession | null => {
+  if (headlessSession) return headlessSession;
   if (typeof window === 'undefined') return null;
 
   // Check for tokens in localStorage (set by CallbackPage)
@@ -125,7 +133,10 @@ export const loadCachedSession = (): WorkOSSession | null => {
 };
 
 export const persistSession = (session: WorkOSSession | null) => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    headlessSession = session;
+    return;
+  }
   if (session) {
     window.localStorage.setItem('workos_access_token', session.access_token);
     if (session.refresh_token) {
