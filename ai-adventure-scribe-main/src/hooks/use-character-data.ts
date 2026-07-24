@@ -103,10 +103,15 @@ export const useCharacterData = (characterId: string | undefined) => {
 
       // ⚡ Bolt: Fetch character data with stats and equipment in a single query.
       // This reduces database round-trips from 2 to 1 and improves loading performance.
-      // Explicit column selection avoids over-fetching data.
+      // Explicit column selection avoids over-fetching metadata.
       const [characterData, equipmentResult] = await Promise.all([
         userDataApi.getCharacter(characterId!),
-        supabase.from('character_equipment').select('*').eq('character_id', characterId!),
+        supabase
+          .from('character_equipment')
+          .select(
+            'id, item_name, item_type, description, quantity, equipped, is_magic, magic_bonus, magic_properties, requires_attunement, is_attuned, attunement_requirements, magic_item_type, magic_item_rarity, magic_effects',
+          )
+          .eq('character_id', characterId!),
       ]);
       if (equipmentResult.error) throw equipmentResult.error;
 
