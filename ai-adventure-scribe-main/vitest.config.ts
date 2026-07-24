@@ -40,6 +40,7 @@ export default defineConfig({
       'src/services/combat/__tests__/combat-action-executor.test.ts',
       'src/utils/__tests__/asi-levels.test.ts',
       'src/hooks/__tests__/use-campaign-journal.test.tsx',
+      'src/services/__tests__/voice-profile-service.test.ts',
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}'
     ],
@@ -88,6 +89,7 @@ export default defineConfig({
         'src/services/combat/combat-action-executor.ts',
         'src/utils/asi-levels.ts',
         'src/hooks/use-campaign-journal.ts',
+        'src/services/voice-profile-service.ts',
         'src/**/*.{ts,tsx}'
       ],
       all: true,

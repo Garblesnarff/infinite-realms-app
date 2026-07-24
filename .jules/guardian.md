@@ -287,3 +287,7 @@
 ## 2026-07-22 - [React Query Hook Refresh Event & ASI Coverage]
 **Learning:** Custom hooks that consume React Query and utilize custom window events for query invalidation (like `useCampaignJournal`) can be beautifully tested using `@testing-library/react`'s `renderHook` and `waitFor`. Window-dispatched custom events can be verified by mocking or spying on global `window.removeEventListener` and dispatching actual events on `window`.
 **Action:** When testing event-driven query invalidations, render within a standard `QueryClientProvider` per test, trigger the event with `window.dispatchEvent(new Event('event-name'))`, and assert against spied `queryClient.invalidateQueries` calls. Always register both the test and source paths explicitly in `vitest.config.ts`.
+
+## 2026-07-23 - [Vitest Hoisting & Voice Profile Service]
+**Learning:** Any shared mock variables referred to inside hoisted `vi.mock` modules must be declared inside a `vi.hoisted()` block, otherwise early reference errors occur during execution. Additionally, discovered that `voiceProfileService.upsertVoiceProfile` catches its own thrown database/payload exceptions internally and logs them, returning a `null` value to the caller rather than propagating/rejecting.
+**Action:** When writing test suites in Vitest with hoisted mocks, always leverage `vi.hoisted` to declare spies or mock handlers cleanly. Ensure test assertions for upsert errors match the true codebase behavior of returning a `null` resolution.
