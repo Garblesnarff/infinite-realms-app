@@ -10,17 +10,33 @@ import { selectPlaySession, templateListRows, type StarterTemplate } from './pla
 import { loginWithPassword } from '../../shared/auth/headless-auth';
 
 import type { Persona } from './auto';
-import type { HeadlessEvent } from '@/services/headless-game-client';
+import type { CompletedHeadlessRoll, HeadlessEvent } from '@/services/headless-game-client';
 
-type Args = { command?: string; campaign?: string; template?: string; character?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; delay: number; transcript?: string; persona?: Persona };
+type Args = {
+  command?: string;
+  campaign?: string;
+  template?: string;
+  character?: string;
+  fresh: boolean;
+  json: boolean;
+  auto: boolean;
+  turns: number;
+  delay: number;
+  transcript?: string;
+  persona?: Persona;
+};
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { fresh: false, json: false, auto: false, turns: 20, delay: 2_000 };
   const [command, subcommand, ...rest] = argv;
-  args.command = command === 'sessions' || command === 'templates'
-    ? `${command} ${subcommand || ''}`.trim()
-    : command;
-  const flags = command === 'sessions' || command === 'templates' ? rest : [subcommand, ...rest].filter(Boolean);
+  args.command =
+    command === 'sessions' || command === 'templates'
+      ? `${command} ${subcommand || ''}`.trim()
+      : command;
+  const flags =
+    command === 'sessions' || command === 'templates'
+      ? rest
+      : [subcommand, ...rest].filter(Boolean);
   for (let i = 0; i < flags.length; i += 1) {
     const flag = flags[i];
     if (flag === '--campaign') args.campaign = flags[++i];
@@ -48,14 +64,20 @@ async function authenticate(): Promise<void> {
   const { apiUrl: baseUrl, supabaseUrl, supabaseAnonKey } = applyCliEnvironment();
   const email = process.env.SMOKE_EMAIL;
   const password = process.env.SMOKE_PASSWORD;
-  if (!email || !password) throw new Error('SMOKE_EMAIL and SMOKE_PASSWORD are required (see cli/.env.cli.example)');
+  if (!email || !password)
+    throw new Error('SMOKE_EMAIL and SMOKE_PASSWORD are required (see cli/.env.cli.example)');
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('CLI_SUPABASE_URL and CLI_SUPABASE_ANON_KEY are required (see cli/.env.cli.example)');
+    throw new Error(
+      'CLI_SUPABASE_URL and CLI_SUPABASE_ANON_KEY are required (see cli/.env.cli.example)',
+    );
   }
   const tokens = await loginWithPassword({ baseUrl, email, password });
   const { configureHeadlessSession } = await import('@/services/auth/TokenService');
   const { markAuthReady } = await import('@/lib/auth-gate');
-  configureHeadlessSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+  configureHeadlessSession({
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+  });
   markAuthReady();
 }
 
@@ -82,13 +104,24 @@ async function getStarterCampaign(slug: string) {
   };
 }
 
-async function chooseStarterTemplate(args: Args, templates: StarterTemplate[]): Promise<StarterTemplate> {
+async function chooseStarterTemplate(
+  args: Args,
+  templates: StarterTemplate[],
+): Promise<StarterTemplate> {
   if (args.auto) {
     const template = templates[Math.floor(Math.random() * templates.length)];
-    console.log(`Auto-selected starter template ${template.template_key} (${template.name}, ${template.class}).`);
+    console.log(
+      `Auto-selected starter template ${template.template_key} (${template.name}, ${template.class}).`,
+    );
     return template;
   }
-  console.table(templates.map((template) => ({ key: template.template_key, name: template.name, class: template.class })));
+  console.table(
+    templates.map((template) => ({
+      key: template.template_key,
+      name: template.name,
+      class: template.class,
+    })),
+  );
   const readline = createInterface({ input, output });
   try {
     const key = (await readline.question('Starter template key: ')).trim();
@@ -112,9 +145,14 @@ async function selectSession(args: Args): Promise<string> {
 function printEvent(event: HeadlessEvent, json: boolean, write: (line: string) => void): void {
   if (json) return write(JSON.stringify(event));
   if (event.type === 'narration') write(`\n${event.text}\n`);
-  else if (event.type === 'options') event.options.forEach((option: string, i: number) => write(`${i + 1}. ${option}`));
-  else if (event.type === 'roll_request') event.requests.forEach((request, i: number) => write(`Roll ${i + 1}: ${request.formula} — ${request.purpose}`));
-  else if (event.type === 'roll_result') write(`Rolled ${event.result.expression}: ${event.result.total}`);
+  else if (event.type === 'options')
+    event.options.forEach((option: string, i: number) => write(`${i + 1}. ${option}`));
+  else if (event.type === 'roll_request')
+    event.requests.forEach((request, i: number) =>
+      write(`Roll ${i + 1}: ${request.formula} — ${request.purpose}`),
+    );
+  else if (event.type === 'roll_result')
+    write(`Rolled ${event.result.expression}: ${event.result.total}`);
   else if (event.type === 'map_state') write(`${event.ascii}\nTACTICAL DIGEST\n${event.digest}`);
   else write(`Error: ${event.message}`);
 }
@@ -125,41 +163,84 @@ async function runPlay(args: Args): Promise<void> {
   const client = new HeadlessGameClient(sessionId);
   await client.load();
   const lines: string[] = [];
-  const write = (line: string) => { lines.push(line); console.log(line); };
-  const run = async (message: string, rolls?: readonly ReturnType<typeof client.roll>[]) => {
+  const write = (line: string) => {
+    lines.push(line);
+    console.log(line);
+  };
+  const run = async (message: string, rolls?: readonly CompletedHeadlessRoll[]) => {
     const events = await client.play(message, rolls);
     events.forEach((event) => printEvent(event, args.json, write));
-    rolls?.forEach((roll) => printEvent({ type: 'roll_result', request: roll.request, result: roll.result }, args.json, write));
+    rolls?.forEach((roll) =>
+      printEvent(
+        { type: 'roll_result', request: roll.request, result: roll.result },
+        args.json,
+        write,
+      ),
+    );
     const narration = events.find((event) => event.type === 'narration');
     return narration && narration.type === 'narration'
       ? { provider: narration.provider, model: narration.model }
       : {};
   };
   if (args.auto) {
-    const summary = await runAutoTurns({
-      get pendingRolls() { return client.pendingRolls; },
-      get availableOptions() { return client.availableOptions; },
-      roll: () => client.roll(),
-      play: async (message, rolls) => run(message, rolls as readonly ReturnType<typeof client.roll>[] | undefined),
-    }, args.turns, (error) => printEvent({ type: 'error', message: String(error) }, args.json, write), {
-      delayMs: args.delay,
-      persona: args.persona,
-    });
+    const summary = await runAutoTurns(
+      {
+        get pendingRolls() {
+          return client.pendingRolls;
+        },
+        get availableOptions() {
+          return client.availableOptions;
+        },
+        roll: () => client.roll(),
+        play: async (message, rolls) =>
+          run(message, rolls as readonly CompletedHeadlessRoll[] | undefined),
+      },
+      args.turns,
+      (error) => printEvent({ type: 'error', message: String(error) }, args.json, write),
+      {
+        delayMs: args.delay,
+        persona: args.persona,
+      },
+    );
     write(JSON.stringify({ type: 'summary', ...summary }));
   } else {
     const readline = createInterface({ input, output });
     for await (const line of readline) {
       if (line === 'quit' || line === 'exit') break;
       const move = /^move\s+(\S+)\s+(\d+)\s+(\d+)$/i.exec(line);
-      if (move) { try { write(JSON.stringify(await client.move(move[1], Number(move[2]), Number(move[3])), null, 2)); } catch (error) { printEvent({ type: 'error', message: String(error) }, args.json, write); } continue; }
-      if (line === 'roll') {
-        const roll = client.roll();
-        try { await run(`I rolled ${roll.result.total}.`, [roll]); }
-        catch (error) { printEvent({ type: 'error', message: String(error) }, args.json, write); }
+      if (move) {
+        try {
+          write(
+            JSON.stringify(await client.move(move[1], Number(move[2]), Number(move[3])), null, 2),
+          );
+        } catch (error) {
+          printEvent({ type: 'error', message: String(error) }, args.json, write);
+        }
         continue;
       }
-      try { await run(line); }
-      catch (error) { printEvent({ type: 'error', message: String(error) }, args.json, write); }
+      if (line === 'roll') {
+        const roll = client.roll();
+        if (roll.skipped) {
+          printEvent({ type: 'error', message: roll.error.message }, args.json, write);
+          try {
+            await run('I attempt it.');
+          } catch (error) {
+            printEvent({ type: 'error', message: String(error) }, args.json, write);
+          }
+          continue;
+        }
+        try {
+          await run(`I rolled ${roll.result.total}.`, [roll]);
+        } catch (error) {
+          printEvent({ type: 'error', message: String(error) }, args.json, write);
+        }
+        continue;
+      }
+      try {
+        await run(line);
+      } catch (error) {
+        printEvent({ type: 'error', message: String(error) }, args.json, write);
+      }
     }
     readline.close();
   }
@@ -172,15 +253,16 @@ try {
   if (args.command === 'sessions list') {
     const { userDataApi } = await import('@/services/user-data-api');
     console.table(await userDataApi.listSessions({ status: 'active' }));
-  }
-  else if (args.command === 'templates list') {
+  } else if (args.command === 'templates list') {
     if (!args.campaign) throw new Error('Usage: ir templates list --campaign <slug>');
     const { userDataApi } = await import('@/services/user-data-api');
     const templates = await userDataApi.listStarterCharacterTemplates(args.campaign);
     console.table(templateListRows(templates));
-  }
-  else if (args.command === 'play') await runPlay(args);
-  else throw new Error('Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] | ir sessions list');
+  } else if (args.command === 'play') await runPlay(args);
+  else
+    throw new Error(
+      'Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] | ir sessions list',
+    );
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;

@@ -25,6 +25,7 @@ import {
   executeStructuredCombatAction,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { MemoryManager } from '@/services/memory-manager';
 import {
   userDataApi,
@@ -235,25 +236,12 @@ export const useAIResponse = () => {
         // A structured start is server-authoritative: the same transaction creates
         // combat participants (whose IDs become tactical entity IDs) and the map.
         if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
-          const enemies = result.combatDetection?.enemies || [];
-          const participants = [
-            {
-              encounterId: '',
-              characterId: (characterRecord.id as string) || null,
-              name: String(characterRecord.name || 'Player'),
-              initiativeModifier: 0,
-            },
-            ...enemies.map((enemy) => ({
-              encounterId: '',
-              name: enemy.name,
-              initiativeModifier: 0,
-            })),
-          ];
-          const startResponse = await userDataApi.startStructuredCombat(sessionId, {
-            participants,
-            sceneSpec: result.scene_spec,
-          });
-          if (!startResponse.ok)
+          const startResponse = await startStructuredCombatTransition(
+            sessionId,
+            characterRecord,
+            result as Parameters<typeof startStructuredCombatTransition>[2],
+          );
+          if (startResponse && !startResponse.ok)
             logger.warn('Server refused structured combat start', await startResponse.json());
         }
         if (sessionId && result.combat_transition === 'end') {

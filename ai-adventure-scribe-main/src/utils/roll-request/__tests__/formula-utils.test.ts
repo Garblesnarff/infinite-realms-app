@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { normalizeFormula } from '../formula-utils';
+import { normalizeFormula, resolveFormulaForCharacter } from '../formula-utils';
 
 describe('normalizeFormula', () => {
   it('should return 1d20 for empty or null input', () => {
@@ -50,7 +50,7 @@ describe('normalizeFormula', () => {
   it('should be idempotent', () => {
     const inputs = ['1d20+5', 'dex', '1d20+cha', '+3', 'd20'];
 
-    inputs.forEach(input => {
+    inputs.forEach((input) => {
       const firstPass = normalizeFormula(input);
       const secondPass = normalizeFormula(firstPass);
       expect(secondPass).toBe(firstPass, `Failed idempotency for input: ${input}`);
@@ -76,5 +76,30 @@ describe('normalizeFormula', () => {
   it('covers the symbolic ability formula branch', () => {
     expect(normalizeFormula('1d8+str')).toBe('1d8+str');
     expect(normalizeFormula('2d10-dex')).toBe('2d10-dex');
+  });
+});
+
+describe('resolveFormulaForCharacter', () => {
+  const character = {
+    abilityScores: {
+      dexterity: { score: 16, modifier: 3 },
+      wisdom: { score: 12, modifier: 1 },
+    },
+  };
+
+  it('resolves symbolic ability tokens with the loaded character modifier', () => {
+    expect(resolveFormulaForCharacter('1d20+dex', character, 'Initiative', 'initiative')).toBe(
+      '1d20+3',
+    );
+    expect(resolveFormulaForCharacter('1d20+wisdom', character, 'Wisdom save', 'save')).toBe(
+      '1d20+1',
+    );
+  });
+
+  it('returns null for symbolic formulas that the sheet cannot resolve', () => {
+    expect(resolveFormulaForCharacter('1d20+cha', character, 'Persuasion', 'check')).toBeNull();
+    expect(
+      resolveFormulaForCharacter('1d20+athletics', character, 'Athletics', 'check'),
+    ).toBeNull();
   });
 });

@@ -1,0 +1,129 @@
+{
+  "response": {
+    "text": "The goblin captain draws steel. Roll initiative!",
+    "roll_requests": [
+      {
+        "type": "initiative",
+        "formula": "1d20+dex",
+        "purpose": "Initiative",
+        "dc": null,
+        "ac": null,
+        "advantage": false,
+        "disadvantage": false
+      }
+    ],
+    "combat_transition": "start",
+    "scene_spec": {
+      "id": null,
+      "sessionId": null,
+      "environment": "road",
+      "size": "small",
+      "sceneDescription": "A muddy road beside a ruined wagon.",
+      "seed": 17,
+      "enemyPlacement": "ambush"
+    },
+    "combatants": [{ "monster_id": "srd:goblin", "name": "Goblin", "count": 2 }],
+    "map_actions": []
+  },
+  "map": {
+    "id": "fixture-map",
+    "sessionId": "fixture-session",
+    "width": 3,
+    "height": 3,
+    "round": 1,
+    "sceneDescription": "A muddy road beside a ruined wagon.",
+    "cells": [
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ]
+    ],
+    "entities": [
+      {
+        "id": "pc-1",
+        "name": "Rook",
+        "x": 0,
+        "y": 0,
+        "size": "medium",
+        "type": "pc",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      },
+      {
+        "id": "goblin-1",
+        "name": "Goblin",
+        "x": 2,
+        "y": 2,
+        "size": "small",
+        "type": "monster",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      }
+    ]
+  }
+}

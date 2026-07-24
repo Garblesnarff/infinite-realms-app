@@ -1,8 +1,11 @@
 export interface AutoPlayable {
   pendingRolls: readonly unknown[];
   availableOptions: readonly string[];
-  roll(): { result: { total: number } };
-  play(input: string, rolls?: readonly unknown[]): Promise<{ provider?: string; model?: string } | unknown>;
+  roll(): unknown;
+  play(
+    input: string,
+    rolls?: readonly unknown[],
+  ): Promise<{ provider?: string; model?: string } | unknown>;
 }
 
 export type Persona = 'careful' | 'aggressive' | 'chaotic';
@@ -26,15 +29,29 @@ export interface AutoTurnSummary {
 }
 
 const isRetryable = (error: unknown): error is { retryable: boolean; retryAfterMs?: number } =>
-  typeof error === 'object' && error !== null && (error as { retryable?: unknown }).retryable === true;
+  typeof error === 'object' &&
+  error !== null &&
+  (error as { retryable?: unknown }).retryable === true;
 
 const telemetryFrom = (result: unknown): { provider?: string; model?: string } =>
-  typeof result === 'object' && result !== null ? result as { provider?: string; model?: string } : {};
+  typeof result === 'object' && result !== null
+    ? (result as { provider?: string; model?: string })
+    : {};
+
+const skippedRollFrom = (result: unknown): { skipped: true; error: unknown } | null =>
+  typeof result === 'object' &&
+  result !== null &&
+  (result as { skipped?: unknown }).skipped === true
+    ? (result as { skipped: true; error: unknown })
+    : null;
 
 const PERSONA_TERMS: Record<Persona, RegExp> = {
-  careful: /\b(?:careful|cautious|quiet|observe|inspect|investigate|listen|ask|negotiate|prepare|stealth|survey|study|wait)\b/i,
-  aggressive: /\b(?:attack|charge|fight|strike|threaten|confront|challenge|force|break|kick|weapon|combat|ambush|intimidat|pursue)\w*/i,
-  chaotic: /\b(?:wild|strange|unexpected|unconventional|improvise|gamble|chaos|random|reckless|steal|disguise|trick|magic|fire|leap)\w*/i,
+  careful:
+    /\b(?:careful|cautious|quiet|observe|inspect|investigate|listen|ask|negotiate|prepare|stealth|survey|study|wait)\b/i,
+  aggressive:
+    /\b(?:attack|charge|fight|strike|threaten|confront|challenge|force|break|kick|weapon|combat|ambush|intimidat|pursue)\w*/i,
+  chaotic:
+    /\b(?:wild|strange|unexpected|unconventional|improvise|gamble|chaos|random|reckless|steal|disguise|trick|magic|fire|leap)\w*/i,
 };
 
 const FREE_TEXT: Record<Persona, readonly string[]> = {
@@ -74,22 +91,29 @@ export function selectAutoAction(
 }
 
 function isContractViolation(error: unknown): boolean {
-  return typeof error === 'object'
-    && error !== null
-    && ((error as { category?: unknown }).category === 'contract'
-      || (error as { name?: unknown }).name === 'ContractViolationError');
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ((error as { category?: unknown }).category === 'contract' ||
+      (error as { name?: unknown }).name === 'ContractViolationError')
+  );
 }
 
 function isTransportError(error: unknown): boolean {
   if (error instanceof TypeError && /\bfetch\b/i.test(error.message)) return true;
-  if (error instanceof Error && /\b(?:API|HTTP|status|failed)\D{0,20}[45]\d\d\b/i.test(error.message)) {
+  if (
+    error instanceof Error &&
+    /\b(?:API|HTTP|status|failed)\D{0,20}[45]\d\d\b/i.test(error.message)
+  ) {
     return true;
   }
-  return typeof error === 'object'
-    && error !== null
-    && ((error as { category?: unknown }).category === 'transport'
-      || (error as { name?: unknown }).name === 'ApiClientError'
-      || typeof (error as { status?: unknown }).status === 'number');
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ((error as { category?: unknown }).category === 'transport' ||
+      (error as { name?: unknown }).name === 'ApiClientError' ||
+      typeof (error as { status?: unknown }).status === 'number')
+  );
 }
 
 export async function runAutoTurns(
@@ -110,17 +134,32 @@ export async function runAutoTurns(
   const providerModelCounts: Record<string, number> = {};
   for (let turn = 0; turn < turns; turn += 1) {
     const rolls: unknown[] = [];
+    let skippedUnresolvableRoll = false;
     try {
       const pendingRollCount = client.pendingRolls.length;
-      for (let index = 0; index < pendingRollCount; index += 1) rolls.push(client.roll());
+      for (let index = 0; index < pendingRollCount; index += 1) {
+        const roll = client.roll();
+        const skipped = skippedRollFrom(roll);
+        if (skipped) {
+          skippedUnresolvableRoll = true;
+          contractViolations += 1;
+          onError(skipped.error);
+        } else {
+          rolls.push(roll);
+        }
+      }
       rollsMade += rolls.length;
-      const input = rolls.length
-        ? `I completed all ${rolls.length} pending roll${rolls.length === 1 ? '' : 's'}.`
-        : selectAutoAction(client.availableOptions, options.persona, options.random);
+      const input = skippedUnresolvableRoll
+        ? 'I attempt it.'
+        : rolls.length
+          ? `I completed all ${rolls.length} pending roll${rolls.length === 1 ? '' : 's'}.`
+          : selectAutoAction(client.availableOptions, options.persona, options.random);
       let attempt = 0;
       while (true) {
         try {
-          const telemetry = telemetryFrom(await client.play(input, rolls.length ? rolls : undefined));
+          const telemetry = telemetryFrom(
+            await client.play(input, rolls.length ? rolls : undefined),
+          );
           if (telemetry.provider) {
             providerCounts[telemetry.provider] = (providerCounts[telemetry.provider] || 0) + 1;
             const providerModel = `${telemetry.provider}/${telemetry.model || 'unknown'}`;

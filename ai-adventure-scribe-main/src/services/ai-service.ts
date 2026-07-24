@@ -121,7 +121,7 @@ export class AIService {
           combatActions: [],
         } as CombatDetectionResult;
         logger.info(
-          `⚔️ Combat detection: ${combatDetection.isCombat ? 'YES' : 'NO'} (confidence: ${Math.round(combatDetection.confidence * 100)}%)`,
+          `⚔️ Authoritative combat state: ${combatDetection.isCombat ? 'ACTIVE' : 'INACTIVE'}`,
         );
 
         if (combatDetection.isCombat) {

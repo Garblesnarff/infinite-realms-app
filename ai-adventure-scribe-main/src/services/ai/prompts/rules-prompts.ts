@@ -79,6 +79,17 @@ Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with l
 Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
 Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 </examples>
+
+<combat_transition_link>
+When combat is not already active, requesting initiative, an attack against a creature, or a
+save caused by a creature's attack REQUIRES \`combat_transition: "start"\` with a non-null
+\`scene_spec\` and populated \`combatants\`. Combat narrated only in \`text\` is a contract violation.
+
+✅ GOOD: Goblins attack; request initiative with \`combat_transition: "start"\`, a forest
+\`scene_spec\`, and the goblins in \`combatants\`.
+❌ BAD: Narrate the goblin swordfight and request attack/save rolls while returning
+\`combat_transition: "none"\`.
+</combat_transition_link>
 </roll_request_format>
 
 <roll_before_outcome>

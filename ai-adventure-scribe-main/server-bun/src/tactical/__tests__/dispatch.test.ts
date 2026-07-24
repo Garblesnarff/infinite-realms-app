@@ -2,7 +2,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { parseDmResponse } from '../../services/dm/dm-response-schema.js';
-import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../dispatch.js';
+import {
+  dispatchMapAction,
+  dispatchWithOneCorrectiveRetry,
+  validateCombatTransitionContract,
+} from '../dispatch.js';
 import { getAoETargets } from '../engine.js';
 import { tacticalSizeForParticipant } from '../participant-size.js';
 import { buildTacticalPrompt } from '../prompt.js';
@@ -96,12 +100,94 @@ describe('CM-2 tactical dispatch', () => {
     };
     const apply = async () => refusal;
     let prompts = 0;
-    const result = await dispatchWithOneCorrectiveRetry({ action: 'move', entityId: null, x: null, y: null, changes: null }, apply, async () => {
-      prompts++;
-      return { action: 'move', entityId: null, x: null, y: null, changes: null };
-    });
+    const result = await dispatchWithOneCorrectiveRetry(
+      { action: 'move', entityId: null, x: null, y: null, changes: null },
+      apply,
+      async () => {
+        prompts++;
+        return { action: 'move', entityId: null, x: null, y: null, changes: null };
+      },
+    );
     expect(result.applied).toBe(false);
     expect(prompts).toBe(1);
+  });
+  test('requires a structured start for combat-signaling roll requests only when inactive', () => {
+    const response = {
+      text: 'The goblin lunges with its blade.',
+      roll_requests: [
+        {
+          type: 'save' as const,
+          formula: '1d20+dex',
+          purpose: "Dexterity save against the goblin's attack",
+          dc: 13,
+          ac: null,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+      combat_transition: 'none' as const,
+      scene_spec: null,
+      combatants: [],
+    };
+    expect(validateCombatTransitionContract(response, false)?.rollTypes).toEqual(['save']);
+    expect(validateCombatTransitionContract(response, true)).toBeNull();
+    expect(
+      validateCombatTransitionContract(
+        {
+          ...response,
+          combat_transition: 'start',
+          scene_spec: { environment: 'road' },
+          combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
+        },
+        false,
+      ),
+    ).toBeNull();
+  });
+  test('does not treat death saves or environmental saves as combat starts', () => {
+    const base = {
+      text: 'The ledge crumbles beneath you.',
+      combat_transition: 'none' as const,
+      scene_spec: null,
+      combatants: [],
+    };
+    expect(
+      validateCombatTransitionContract(
+        {
+          ...base,
+          roll_requests: [
+            {
+              type: 'save' as const,
+              formula: '1d20',
+              purpose: 'Death saving throw',
+              dc: 10,
+              ac: null,
+              advantage: false,
+              disadvantage: false,
+            },
+          ],
+        },
+        false,
+      ),
+    ).toBeNull();
+    expect(
+      validateCombatTransitionContract(
+        {
+          ...base,
+          roll_requests: [
+            {
+              type: 'save' as const,
+              formula: '1d20+dex',
+              purpose: 'Dexterity save to avoid falling',
+              dc: 12,
+              ac: null,
+              advantage: false,
+              disadvantage: false,
+            },
+          ],
+        },
+        false,
+      ),
+    ).toBeNull();
   });
   test('moves a target with a shove without consuming its normal movement', () => {
     const state = map();
@@ -191,7 +277,13 @@ describe('CM-2 tactical dispatch', () => {
       movementRemaining: 30,
     });
     expect(
-      dispatchMapAction(state, { action: 'move', entityId: 'pc-participant', x: 1, y: 0, changes: null }).applied,
+      dispatchMapAction(state, {
+        action: 'move',
+        entityId: 'pc-participant',
+        x: 1,
+        y: 0,
+        changes: null,
+      }).applied,
     ).toBe(true);
     const targets = getAoETargets(
       state,

@@ -8,16 +8,22 @@ describe('fixture auto play', () => {
     const inputs: string[] = [];
     const batches: unknown[][] = [];
     let rollIndex = 0;
-    const result = await runAutoTurns({
-      get pendingRolls() { return pending.slice(rollIndex); },
-      availableOptions: [],
-      roll: () => ({ result: { total: [17, 12][rollIndex++] } }),
-      play: async (input, rolls) => {
-        inputs.push(input);
-        batches.push([...(rolls || [])]);
-        return [];
+    const result = await runAutoTurns(
+      {
+        get pendingRolls() {
+          return pending.slice(rollIndex);
+        },
+        availableOptions: [],
+        roll: () => ({ result: { total: [17, 12][rollIndex++] } }),
+        play: async (input, rolls) => {
+          inputs.push(input);
+          batches.push([...(rolls || [])]);
+          return [];
+        },
       },
-    }, 1, () => undefined);
+      1,
+      () => undefined,
+    );
 
     expect(inputs).toEqual(['I completed all 2 pending rolls.']);
     expect(batches[0]).toHaveLength(2);
@@ -46,18 +52,28 @@ describe('fixture auto play', () => {
   it('backs off twice at most, honors the retry hint, and reports serving providers', async () => {
     let attempts = 0;
     const delays: number[] = [];
-    const result = await runAutoTurns({
-      pendingRolls: [],
-      availableOptions: ['Open the door.'],
-      roll: () => ({ result: { total: 1 } }),
-      play: async () => {
-        attempts += 1;
-        if (attempts < 3) {
-          throw Object.assign(new Error('retry later'), { retryable: true, retryAfterMs: 3_000 });
-        }
-        return { provider: 'gemini', model: 'gemini-2.5-flash-lite' };
+    const result = await runAutoTurns(
+      {
+        pendingRolls: [],
+        availableOptions: ['Open the door.'],
+        roll: () => ({ result: { total: 1 } }),
+        play: async () => {
+          attempts += 1;
+          if (attempts < 3) {
+            throw Object.assign(new Error('retry later'), { retryable: true, retryAfterMs: 3_000 });
+          }
+          return { provider: 'gemini', model: 'gemini-2.5-flash-lite' };
+        },
       },
-    }, 1, () => undefined, { delayMs: 2_000, sleep: async (delay) => { delays.push(delay); } });
+      1,
+      () => undefined,
+      {
+        delayMs: 2_000,
+        sleep: async (delay) => {
+          delays.push(delay);
+        },
+      },
+    );
 
     expect(attempts).toBe(3);
     expect(delays).toEqual([3_000, 4_000]);
@@ -72,22 +88,68 @@ describe('fixture auto play', () => {
       { category: 'transport', status: 502, message: 'upstream failed' },
     ];
     let turn = 0;
-    const result = await runAutoTurns({
-      pendingRolls: [],
-      availableOptions: ['Continue.'],
-      roll: () => ({ result: { total: 1 } }),
-      play: async () => {
-        const failure = failures[turn++];
-        if (failure) throw failure;
-        return {};
+    const result = await runAutoTurns(
+      {
+        pendingRolls: [],
+        availableOptions: ['Continue.'],
+        roll: () => ({ result: { total: 1 } }),
+        play: async () => {
+          const failure = failures[turn++];
+          if (failure) throw failure;
+          return {};
+        },
       },
-    }, 3, () => undefined, { maxRetries: 0 });
+      3,
+      () => undefined,
+      { maxRetries: 0 },
+    );
 
     expect(result).toMatchObject({
       turnsCompleted: 1,
       turnsFailed: 2,
       contractViolations: 1,
       transportErrors: 1,
+    });
+  });
+
+  it('does not deadlock a 25-turn run on one unresolvable symbolic roll', async () => {
+    let pending = true;
+    let rollCalls = 0;
+    const inputs: string[] = [];
+    const errors: unknown[] = [];
+    const result = await runAutoTurns(
+      {
+        get pendingRolls() {
+          return pending ? [{ formula: '1d20+mystery' }] : [];
+        },
+        availableOptions: ['Continue.'],
+        roll: () => {
+          rollCalls += 1;
+          pending = false;
+          return {
+            skipped: true,
+            error: { category: 'contract', message: 'Unresolvable formula: 1d20+mystery' },
+          };
+        },
+        play: async (input) => {
+          inputs.push(input);
+          return {};
+        },
+      },
+      25,
+      (error) => errors.push(error),
+      { maxRetries: 0 },
+    );
+
+    expect(rollCalls).toBe(1);
+    expect(inputs).toHaveLength(25);
+    expect(inputs[0]).toBe('I attempt it.');
+    expect(errors).toHaveLength(1);
+    expect(result).toMatchObject({
+      turnsCompleted: 25,
+      turnsFailed: 0,
+      rollsMade: 0,
+      contractViolations: 1,
     });
   });
 });

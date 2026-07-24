@@ -2,6 +2,8 @@ import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
 let generatedInput: Record<string, unknown> | undefined;
+let generatedInputs: Record<string, unknown>[] = [];
+let generatedQueue: Record<string, unknown>[] = [];
 let generatedResult: Record<string, unknown> = {
   text: 'The frozen guests smell faintly of winter roses. What do you do?',
   provider: 'openrouter',
@@ -35,7 +37,8 @@ mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: {
     generate: async (input: Record<string, unknown>) => {
       generatedInput = input;
-      return generatedResult;
+      generatedInputs.push(input);
+      return generatedQueue.shift() || generatedResult;
     },
   },
 }));
@@ -84,12 +87,14 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       retryAfter: 3,
     };
     try {
-      const response = await app.handle(new Request('http://localhost/v1/llm/generate', {
-        method: 'POST',
-        headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: 'hello' }),
-      }));
-      const body = await response.json() as Record<string, unknown>;
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'hello' }),
+        }),
+      );
+      const body = (await response.json()) as Record<string, unknown>;
 
       expect(response.status).toBe(502);
       expect(response.headers.get('retry-after')).toBe('3');
@@ -107,5 +112,113 @@ describe('POST /v1/llm/generate HTTP contract', () => {
         model: 'test/model',
       };
     }
+  });
+
+  it('issues exactly one corrective re-prompt for an inactive combat-signaling roll', async () => {
+    generatedInputs = [];
+    const base = {
+      text: 'The goblin attacks. Roll initiative.',
+      narration_segments: [],
+      roll_requests: [
+        {
+          type: 'initiative',
+          formula: '1d20+dex',
+          purpose: 'Initiative',
+          dc: null,
+          ac: null,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+      scene_spec: null,
+      map_actions: [],
+      handout_actions: [],
+      combatants: [],
+      combat_actions: [],
+    };
+    generatedQueue = [
+      {
+        text: JSON.stringify({ ...base, combat_transition: 'none' }),
+        provider: 'openrouter',
+        model: 'test/model',
+      },
+      {
+        text: JSON.stringify({
+          ...base,
+          combat_transition: 'start',
+          scene_spec: { environment: 'road' },
+          combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
+        }),
+        provider: 'openrouter',
+        model: 'test/model',
+      },
+    ];
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          prompt: '<immutable_game_state>{"isInCombat":false}</immutable_game_state>',
+          responseSchema: {
+            type: 'object',
+            properties: { combat_transition: {}, roll_requests: {} },
+          },
+        }),
+      }),
+    );
+    const body = (await response.json()) as { text: string };
+
+    expect(response.status).toBe(200);
+    expect(generatedInputs).toHaveLength(2);
+    expect(generatedInputs[1]?.prompt).toContain('Combat contract violation');
+    expect(JSON.parse(body.text).combat_transition).toBe('start');
+  });
+
+  it('passes through a second violation after one correction without looping', async () => {
+    generatedInputs = [];
+    const violatingText = JSON.stringify({
+      text: 'The goblin attacks. Roll initiative.',
+      narration_segments: [],
+      roll_requests: [
+        {
+          type: 'initiative',
+          formula: '1d20+dex',
+          purpose: 'Initiative',
+          dc: null,
+          ac: null,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+      combat_transition: 'none',
+      scene_spec: null,
+      map_actions: [],
+      handout_actions: [],
+      combatants: [],
+      combat_actions: [],
+    });
+    generatedQueue = [
+      { text: violatingText, provider: 'openrouter', model: 'test/model' },
+      { text: violatingText, provider: 'openrouter', model: 'test/model' },
+    ];
+
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          prompt: '<immutable_game_state>{"isInCombat":false}</immutable_game_state>',
+          responseSchema: {
+            type: 'object',
+            properties: { combat_transition: {}, roll_requests: {} },
+          },
+        }),
+      }),
+    );
+    const body = (await response.json()) as { text: string };
+
+    expect(response.status).toBe(200);
+    expect(generatedInputs).toHaveLength(2);
+    expect(JSON.parse(body.text).combat_transition).toBe('none');
   });
 });

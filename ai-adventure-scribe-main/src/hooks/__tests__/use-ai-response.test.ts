@@ -67,7 +67,10 @@ vi.mock('@/services/voice-consistency-service', () => ({
 
 vi.mock('@/hooks/ai/game-phase-updater', () => ({
   updateGamePhase: vi.fn(),
-  clampCombatIntentFlags: vi.fn((start, end) => ({ shouldStartCombat: start, shouldEndCombat: end })),
+  clampCombatIntentFlags: vi.fn((start, end) => ({
+    shouldStartCombat: start,
+    shouldEndCombat: end,
+  })),
 }));
 
 vi.mock('@/hooks/ai/roll-processor', () => ({
@@ -105,9 +108,7 @@ vi.mock('@/lib/logger', () => ({
 
 describe('useAIResponse', () => {
   const mockSessionId = 'session-123';
-  const mockMessages = [
-    { text: 'Hello', sender: 'player', timestamp: new Date().toISOString() },
-  ];
+  const mockMessages = [{ text: 'Hello', sender: 'player', timestamp: new Date().toISOString() }];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -145,7 +146,8 @@ describe('useAIResponse', () => {
   it('should handle structured responses with narration segments and dice rolls', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { voiceConsistencyService } = await import('@/services/voice-consistency-service');
-    const { updateGamePhase, clampCombatIntentFlags } = await import('@/hooks/ai/game-phase-updater');
+    const { updateGamePhase, clampCombatIntentFlags } =
+      await import('@/hooks/ai/game-phase-updater');
     const { detectCombatFromText } = await import('@/utils/combatDetection');
 
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
@@ -247,8 +249,9 @@ describe('useAIResponse', () => {
 
     const { result } = renderHook(() => useAIResponse());
 
-    await expect(result.current.getAIResponse(mockMessages as any, mockSessionId))
-      .rejects.toThrow('Failed to fetch game context');
+    await expect(result.current.getAIResponse(mockMessages as any, mockSessionId)).rejects.toThrow(
+      'Failed to fetch game context',
+    );
   });
 
   it('should handle AI service failures', async () => {
@@ -266,8 +269,9 @@ describe('useAIResponse', () => {
 
     const { result } = renderHook(() => useAIResponse());
 
-    await expect(result.current.getAIResponse(mockMessages as any, mockSessionId))
-      .rejects.toThrow('AI Offline');
+    await expect(result.current.getAIResponse(mockMessages as any, mockSessionId)).rejects.toThrow(
+      'AI Offline',
+    );
   });
 
   it('loads tactical context through userDataApi without interrupting the AI turn', async () => {
@@ -321,7 +325,7 @@ describe('useAIResponse', () => {
       text: 'A goblin ambushes!',
       combat_transition: 'start',
       scene_spec: { width: 10, height: 10 },
-      combatDetection: { enemies: [{ name: 'Goblin' }] },
+      combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
     });
 
     const { result } = renderHook(() => useAIResponse());

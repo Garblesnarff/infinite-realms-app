@@ -15,6 +15,12 @@ import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
+import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
+import {
+  createUpstreamModelErrorBody,
+  LLMUpstreamError,
+  toUpstreamModelError,
+} from '../../services/llm-errors.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 
 const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
@@ -22,11 +28,6 @@ const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
   if (status === 503) return 503;
   return 500;
 };
-import {
-  createUpstreamModelErrorBody,
-  LLMUpstreamError,
-  toUpstreamModelError,
-} from '../../services/llm-errors.js';
 
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
   .use(planRateLimit('llm'))
@@ -110,7 +111,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
 
-      const result = await LLMProviderService.generate({
+      let result = await LLMProviderService.generate({
+        prompt,
+        model,
+        maxTokens,
+        temperature,
+        history,
+        provider,
+        responseSchema,
+      });
+      result = await enforceCombatTransitionContract({
+        result,
         prompt,
         model,
         maxTokens,
@@ -124,7 +135,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const upstreamError = toUpstreamModelError(result);
         if (upstreamError) {
           set.status = 502;
-          if (upstreamError.retry_after) set.headers['Retry-After'] = String(upstreamError.retry_after);
+          if (upstreamError.retry_after)
+            set.headers['Retry-After'] = String(upstreamError.retry_after);
           logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
           return upstreamError;
         }
