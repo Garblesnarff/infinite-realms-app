@@ -1,15 +1,18 @@
 #!/usr/bin/env bun
-import { config } from 'dotenv';
-import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { createInterface } from 'node:readline/promises';
 
-import { loginWithPassword } from '../../shared/auth/headless-auth';
+import { config } from 'dotenv';
+
 import { runAutoTurns } from './auto';
+import { applyCliEnvironment } from './env';
 import { selectPlaySession, templateListRows, type StarterTemplate } from './play-session';
+import { loginWithPassword } from '../../shared/auth/headless-auth';
 
+import type { Persona } from './auto';
 import type { HeadlessEvent } from '@/services/headless-game-client';
 
-type Args = { command?: string; campaign?: string; template?: string; character?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; delay: number; transcript?: string };
+type Args = { command?: string; campaign?: string; template?: string; character?: string; fresh: boolean; json: boolean; auto: boolean; turns: number; delay: number; transcript?: string; persona?: Persona };
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { fresh: false, json: false, auto: false, turns: 20, delay: 2_000 };
@@ -29,17 +32,26 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--turns') args.turns = Number(flags[++i] || 20);
     else if (flag === '--delay') args.delay = Number(flags[++i] || 2_000);
     else if (flag === '--transcript') args.transcript = flags[++i];
+    else if (flag === '--persona') {
+      const persona = flags[++i];
+      if (!['careful', 'aggressive', 'chaotic'].includes(persona)) {
+        throw new Error('--persona must be careful, aggressive, or chaotic');
+      }
+      args.persona = persona as Persona;
+    }
   }
   return args;
 }
 
 async function authenticate(): Promise<void> {
   config({ path: new URL('../.env.cli', import.meta.url).pathname, override: false });
-  const baseUrl = process.env.CLI_API_URL || process.env.VITE_API_URL || 'http://localhost:8888';
-  process.env.VITE_API_URL = baseUrl;
+  const { apiUrl: baseUrl, supabaseUrl, supabaseAnonKey } = applyCliEnvironment();
   const email = process.env.SMOKE_EMAIL;
   const password = process.env.SMOKE_PASSWORD;
   if (!email || !password) throw new Error('SMOKE_EMAIL and SMOKE_PASSWORD are required (see cli/.env.cli.example)');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('CLI_SUPABASE_URL and CLI_SUPABASE_ANON_KEY are required (see cli/.env.cli.example)');
+  }
   const tokens = await loginWithPassword({ baseUrl, email, password });
   const { configureHeadlessSession } = await import('@/services/auth/TokenService');
   const { markAuthReady } = await import('@/lib/auth-gate');
@@ -114,36 +126,40 @@ async function runPlay(args: Args): Promise<void> {
   await client.load();
   const lines: string[] = [];
   const write = (line: string) => { lines.push(line); console.log(line); };
-  let completed = 0;
-  let rolls = 0;
-  let violations = 0;
-  const run = async (message: string, roll?: ReturnType<typeof client.roll>) => {
-    try {
-      const events = await client.play(message, roll);
-      events.forEach((event) => printEvent(event, args.json, write));
-      if (roll) { rolls += 1; printEvent({ type: 'roll_result', request: roll.request, result: roll.result }, args.json, write); }
-      completed += 1;
-      const narration = events.find((event) => event.type === 'narration');
-      return narration && narration.type === 'narration'
-        ? { provider: narration.provider, model: narration.model }
-        : {};
-    } catch (error) { violations += 1; printEvent({ type: 'error', message: error instanceof Error ? error.message : String(error) }, args.json, write); }
+  const run = async (message: string, rolls?: readonly ReturnType<typeof client.roll>[]) => {
+    const events = await client.play(message, rolls);
+    events.forEach((event) => printEvent(event, args.json, write));
+    rolls?.forEach((roll) => printEvent({ type: 'roll_result', request: roll.request, result: roll.result }, args.json, write));
+    const narration = events.find((event) => event.type === 'narration');
+    return narration && narration.type === 'narration'
+      ? { provider: narration.provider, model: narration.model }
+      : {};
   };
   if (args.auto) {
     const summary = await runAutoTurns({
       get pendingRolls() { return client.pendingRolls; },
+      get availableOptions() { return client.availableOptions; },
       roll: () => client.roll(),
-      play: async (message, roll) => run(message, roll as ReturnType<typeof client.roll>),
-    }, args.turns, (error) => printEvent({ type: 'error', message: String(error) }, args.json, write), { delayMs: args.delay });
-    write(JSON.stringify({ type: 'summary', turnsCompleted: summary.turnsCompleted, rollsMade: summary.rollsMade, contractViolations: summary.contractViolations + violations, providerCounts: summary.providerCounts, providerModelCounts: summary.providerModelCounts }));
+      play: async (message, rolls) => run(message, rolls as readonly ReturnType<typeof client.roll>[] | undefined),
+    }, args.turns, (error) => printEvent({ type: 'error', message: String(error) }, args.json, write), {
+      delayMs: args.delay,
+      persona: args.persona,
+    });
+    write(JSON.stringify({ type: 'summary', ...summary }));
   } else {
     const readline = createInterface({ input, output });
     for await (const line of readline) {
       if (line === 'quit' || line === 'exit') break;
       const move = /^move\s+(\S+)\s+(\d+)\s+(\d+)$/i.exec(line);
       if (move) { try { write(JSON.stringify(await client.move(move[1], Number(move[2]), Number(move[3])), null, 2)); } catch (error) { printEvent({ type: 'error', message: String(error) }, args.json, write); } continue; }
-      if (line === 'roll') { const roll = client.roll(); await run(`I rolled ${roll.result.total}.`, roll); continue; }
-      await run(line);
+      if (line === 'roll') {
+        const roll = client.roll();
+        try { await run(`I rolled ${roll.result.total}.`, [roll]); }
+        catch (error) { printEvent({ type: 'error', message: String(error) }, args.json, write); }
+        continue;
+      }
+      try { await run(line); }
+      catch (error) { printEvent({ type: 'error', message: String(error) }, args.json, write); }
     }
     readline.close();
   }
@@ -164,7 +180,7 @@ try {
     console.table(templateListRows(templates));
   }
   else if (args.command === 'play') await runPlay(args);
-  else throw new Error('Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000] | ir sessions list');
+  else throw new Error('Usage: ir templates list --campaign the-eternal-feast | ir play --campaign the-eternal-feast [--new] [--template <key>] [--character <id|template-key>] [--json] [--auto --turns 20 --delay 2000 --persona <careful|aggressive|chaotic>] | ir sessions list');
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;

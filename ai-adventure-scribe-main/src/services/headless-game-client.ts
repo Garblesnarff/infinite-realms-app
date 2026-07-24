@@ -1,12 +1,15 @@
-import { buildAIContext } from '@/hooks/ai/ai-utils';
-import { processRollRequests } from '@/hooks/ai/roll-processor';
-import { AIService } from '@/services/ai-service';
-import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
-import { userDataApi } from '@/services/user-data-api';
 import { mapToAscii } from '../../server-bun/src/tactical/serialize';
 import { buildTacticalDigest } from '../../server-bun/src/tactical/tactical-context';
 
 import type { RollRequest } from '@/types/roll-request';
+
+import { buildAIContext } from '@/hooks/ai/ai-utils';
+import { processRollRequests } from '@/hooks/ai/roll-processor';
+import { AIService } from '@/services/ai-service';
+import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
+import { extractHeadlessOptions } from '@/services/headless-game-options';
+import { userDataApi } from '@/services/user-data-api';
+
 
 export type HeadlessEvent =
   | { type: 'narration'; text: string; provider?: 'openrouter' | 'gemini'; model?: string }
@@ -20,11 +23,13 @@ export function stripAssetTags(text: string): string {
   return text.replace(/\[ASSET:[^\]]+\]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-export function extractOptions(text: string): string[] {
-  return text
-    .split('\n')
-    .map((line) => line.trim().replace(/^(?:\d+[.)]|[-*])\s+/, ''))
-    .filter((line) => /^(?:\d+[.)]|[-*])\s+/.test(line));
+export class ContractViolationError extends Error {
+  readonly category = 'contract';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ContractViolationError';
+  }
 }
 
 /**
@@ -34,6 +39,7 @@ export function extractOptions(text: string): string[] {
 export class HeadlessGameClient {
   private readonly processedRolls = new Set<string>();
   private pending: RollRequest[] = [];
+  private options: string[] = [];
   private history: Array<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: Date }> = [];
   private turnCount = 0;
 
@@ -57,12 +63,29 @@ export class HeadlessGameClient {
     return this.pending;
   }
 
-  async play(input: string, diceRoll?: { request: RollRequest; result: DiceRollResult }): Promise<HeadlessEvent[]> {
-    if (this.pending.length && !diceRoll) {
+  get availableOptions(): readonly string[] {
+    return this.options;
+  }
+
+  async play(
+    input: string,
+    diceRollBatch?: readonly { request: RollRequest; result: DiceRollResult }[],
+  ): Promise<HeadlessEvent[]> {
+    const diceRolls = diceRollBatch || [];
+    const diceRoll = diceRolls.at(-1);
+    if (this.pending.length && !diceRolls.length) {
       throw new Error('Resolve the pending roll before sending another action');
     }
+    const rollMessages = diceRolls.map((roll) => this.formatRoll(roll));
+    const effectiveInput = rollMessages.at(-1) || input;
+    const priorRollHistory = rollMessages.slice(0, -1).map((content, index) => ({
+      id: `roll-${crypto.randomUUID()}-${index}`,
+      role: 'user' as const,
+      content,
+      timestamp: new Date(),
+    }));
     const context = diceRoll
-      ? { intent: 'dice_roll', diceRoll: { formula: diceRoll.result.expression, total: diceRoll.result.total, naturalRoll: diceRoll.result.naturalRoll, results: diceRoll.result.rolls.map((roll) => roll.value), advantage: !!diceRoll.result.advantage, disadvantage: !!diceRoll.result.disadvantage } }
+      ? { intent: 'dice_roll', diceRoll: this.rollContext(diceRoll) }
       : { intent: this.turnCount === 0 ? 'first_action' : 'query' };
     const game = await userDataApi.getSessionContext(this.sessionId);
     const aiContext = buildAIContext({
@@ -78,12 +101,18 @@ export class HeadlessGameClient {
     let model: string | undefined;
     const nextTurnCount = this.turnCount + 1;
     const response = await AIService.chatWithDM({
-      message: input,
+      message: effectiveInput,
       context: aiContext,
-      conversationHistory: this.history,
+      conversationHistory: [...this.history, ...priorRollHistory],
       turnCount: nextTurnCount,
       onProviderResponse: (metadata) => { provider = metadata.provider; model = metadata.model; },
     });
+    if (!response || typeof response.text !== 'string' || !response.text.trim()) {
+      throw new ContractViolationError('DM response is missing a non-empty text field');
+    }
+    if (response.roll_requests !== undefined && !Array.isArray(response.roll_requests)) {
+      throw new ContractViolationError('DM response roll_requests field is not an array');
+    }
     const processed = await processRollRequests({
       responseText: response.text,
       existingRequests: (response.roll_requests || []) as RollRequest[],
@@ -95,15 +124,24 @@ export class HeadlessGameClient {
     });
     this.pending = processed.playerRollRequests;
     const text = stripAssetTags(response.text);
-    await userDataApi.saveSessionMessages(this.sessionId, { speaker_type: 'player', message: input, context, timestamp: new Date().toISOString() });
+    for (let index = 0; index < rollMessages.length - 1; index += 1) {
+      await userDataApi.saveSessionMessages(this.sessionId, {
+        speaker_type: 'player',
+        message: rollMessages[index],
+        context: { intent: 'dice_roll', diceRoll: this.rollContext(diceRolls[index]) },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    await userDataApi.saveSessionMessages(this.sessionId, { speaker_type: 'player', message: effectiveInput, context, timestamp: new Date().toISOString() });
     await userDataApi.saveSessionMessages(this.sessionId, { speaker_type: 'dm', message: text, context: { roll_requests: this.pending }, timestamp: new Date().toISOString() });
-    this.history.push({ id: crypto.randomUUID(), role: 'user', content: input, timestamp: new Date() });
+    this.history.push(...priorRollHistory);
+    this.history.push({ id: crypto.randomUUID(), role: 'user', content: effectiveInput, timestamp: new Date() });
     this.history.push({ id: crypto.randomUUID(), role: 'assistant', content: text, timestamp: new Date() });
     this.turnCount = nextTurnCount;
     await userDataApi.updateSession(this.sessionId, { turn_count: this.turnCount });
     const events: HeadlessEvent[] = [{ type: 'narration', text, provider, model }];
-    const options = extractOptions(text);
-    if (options.length) events.push({ type: 'options', options });
+    this.options = extractHeadlessOptions(text, response.options);
+    if (this.options.length) events.push({ type: 'options', options: this.options });
     if (this.pending.length) events.push({ type: 'roll_request', requests: this.pending });
     const map = await this.getMap();
     if (map) {
@@ -121,6 +159,31 @@ export class HeadlessGameClient {
     const result = DiceEngine.roll(request.formula, { advantage: request.advantage, disadvantage: request.disadvantage, purpose: request.purpose });
     this.pending = this.pending.filter((entry) => entry !== request);
     return { request, result };
+  }
+
+  private rollContext(diceRoll: { request: RollRequest; result: DiceRollResult }) {
+    return {
+      formula: diceRoll.result.expression,
+      total: diceRoll.result.total,
+      naturalRoll: diceRoll.result.naturalRoll,
+      results: diceRoll.result.rolls.map((roll) => roll.value),
+      advantage: !!diceRoll.result.advantage,
+      disadvantage: !!diceRoll.result.disadvantage,
+    };
+  }
+
+  private formatRoll({ request, result }: { request: RollRequest; result: DiceRollResult }): string {
+    let formatted = `${request.purpose}: ${result.total}`;
+    if (result.naturalRoll !== undefined && (result.modifiers !== 0 || result.naturalRoll !== result.total)) {
+      formatted += ` (nat ${result.naturalRoll}${result.modifiers >= 0 ? '+' : ''}${result.modifiers})`;
+    }
+    if (result.advantage) formatted += ' [ADV]';
+    if (result.disadvantage) formatted += ' [DIS]';
+    const target = request.type === 'attack' ? request.ac : request.dc;
+    if (target !== undefined && target !== null) formatted += result.total >= target ? ' ✓' : ' ✗';
+    if (request.type === 'attack' && result.naturalRoll === 20) formatted += ' CRITICAL HIT!';
+    if (request.type === 'attack' && result.naturalRoll === 1) formatted += ' Critical Miss';
+    return formatted;
   }
 
   async move(entityId: string, x: number, y: number): Promise<unknown> {

@@ -45,6 +45,8 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 \`narration_segments\`, etc.) - it is NOT a code block or text marker. When an action has an
 uncertain outcome, populate \`roll_requests\` with one entry per roll needed. Leave it as an
 empty array \`[]\` when no roll is needed.**
+Once a check is resolved, its outcome is settled; never request the same check again for the same information.
+Every turn must advance the situation rather than restate the same scene or tableau.
 
 Each entry in \`roll_requests\` looks like:
 \`\`\`json

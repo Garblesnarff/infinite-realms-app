@@ -4,7 +4,7 @@
 
 ## Setup
 
-Copy `cli/.env.cli.example` to `cli/.env.cli` and set `SMOKE_EMAIL` and `SMOKE_PASSWORD`. The real file is gitignored. `CLI_API_URL` defaults to `http://localhost:8888`.
+Copy `cli/.env.cli.example` to `cli/.env.cli` and set `SMOKE_EMAIL`, `SMOKE_PASSWORD`, `CLI_SUPABASE_URL`, and `CLI_SUPABASE_ANON_KEY`. The real file is gitignored. `CLI_API_URL` defaults to `http://localhost:8888`. CLI-specific values take precedence over matching `VITE_*` values, and the headless client maps them into the browser-compatible environment before importing shared services, so `cli/.env.cli` is the only required client environment file.
 
 The server must have WorkOS password authentication enabled for the chosen account. The CLI sends credentials only to `POST /v1/auth/password-login`; that rate-limited endpoint makes the WorkOS password grant server-side and returns the same short-lived access/refresh pair consumed by the browser API clients.
 
@@ -14,7 +14,7 @@ Run with Bun from the app root:
 bun run cli/src/index.ts sessions list
 bun run cli/src/index.ts templates list --campaign the-eternal-feast
 bun run cli/src/index.ts play --campaign the-eternal-feast
-bun run cli/src/index.ts play --campaign the-eternal-feast --new --auto --turns 20 --delay 2000 --transcript /tmp/feast.ndjson
+bun run cli/src/index.ts play --campaign the-eternal-feast --new --auto --turns 20 --delay 2000 --persona aggressive --transcript /tmp/feast.ndjson
 ```
 
 ## Fresh account quickstart
@@ -36,4 +36,4 @@ Interactive commands are free text, `roll` for a pending request, `move <entityI
 
 ## For agents: NDJSON
 
-Use `--json`. Every output line is a JSON object with a `type` of `narration`, `options`, `roll_request`, `roll_result`, `map_state`, or `error`. Send one input line at a time on stdin: option/free text, `roll`, or `move <entityId> <x> <y>`. `--auto --turns N` picks safe generic actions, respects server retry hints, and retries a retryable turn at most twice. `--delay <ms>` sets its initial backoff (default `2000`). The final `summary` reports `turnsCompleted`, `rollsMade`, `contractViolations`, and provider/model counts for completed turns.
+Use `--json`. Every output line is a JSON object with a `type` of `narration`, `options`, `roll_request`, `roll_result`, `map_state`, or `error`. Send one input line at a time on stdin: option/free text, `roll`, or `move <entityId> <x> <y>`. `--auto --turns N` selects the real text of a structured or lettered DM option at random and resolves every pending roll before continuing. `--persona careful|aggressive|chaotic` biases option selection and free-text actions; aggressive deliberately escalates toward confrontation. Auto mode respects server retry hints and retries a retryable turn at most twice. `--delay <ms>` sets its initial backoff (default `2000`). The final `summary` reports clean `turnsCompleted`, `turnsFailed`, `rollsMade`, genuine `contractViolations`, separate `transportErrors`, and provider/model counts for completed turns.

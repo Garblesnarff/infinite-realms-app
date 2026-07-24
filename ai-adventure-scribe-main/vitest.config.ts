@@ -41,6 +41,7 @@ export default defineConfig({
       'src/utils/__tests__/asi-levels.test.ts',
       'src/hooks/__tests__/use-campaign-journal.test.tsx',
       'src/services/__tests__/voice-profile-service.test.ts',
+      'cli/src/**/*.{test,spec}.{ts,tsx}',
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}'
     ],

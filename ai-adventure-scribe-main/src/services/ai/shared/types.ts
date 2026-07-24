@@ -67,6 +67,7 @@ export interface ClassEquipment {
  */
 export interface AIResponse {
   text: string;
+  options?: unknown[];
   narrationSegments?: NarrationSegment[];
   roll_requests?: unknown[];
   dice_rolls?: unknown[];

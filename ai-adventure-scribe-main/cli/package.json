@@ -3,5 +3,5 @@
   "private": true,
   "type": "module",
   "bin": { "ir": "src/index.ts" },
-  "scripts": { "test": "bun test", "start": "bun src/index.ts", "type-check": "tsc --noEmit" }
+  "scripts": { "test": "vitest run --root .. cli/src", "start": "bun src/index.ts", "type-check": "tsc --noEmit" }
 }
