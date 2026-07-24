@@ -1,0 +1,5 @@
+{
+  "text": "The iron gate groans open.\n1. Slip through\n2. Search the hinges",
+  "roll_requests": [{ "type": "check", "formula": "1d20+4", "purpose": "Dexterity check", "dc": 13, "advantage": false, "disadvantage": false }],
+  "map_actions": [{ "action": "move", "entityId": "goblin-1", "x": 4, "y": 2 }]
+}

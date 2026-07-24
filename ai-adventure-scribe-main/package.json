@@ -2,7 +2,8 @@
   "name": "infinite-realms",
   "private": true,
   "workspaces": [
-    "server-bun"
+    "server-bun",
+    "cli"
   ],
   "version": "0.10.4",
   "type": "module",
