@@ -16,6 +16,8 @@
  * @author AI Dungeon Master Team
  */
 
+import { useMemo } from 'react';
+
 // Project Hooks
 import { useMemoryCreation } from './memory/useMemoryCreation';
 import { useMemoryRetrieval } from './memory/useMemoryRetrieval';
@@ -28,10 +30,10 @@ export const useMemories = (sessionId: string | null) => {
   const { data: memories = [], isLoading } = useMemoryRetrieval(sessionId);
   const { createMemory, extractMemories } = useMemoryCreation(sessionId);
 
-  return {
+  return useMemo(() => ({
     memories,
     isLoading,
     createMemory,
     extractMemories,
-  };
+  }), [memories, isLoading, createMemory, extractMemories]);
 };

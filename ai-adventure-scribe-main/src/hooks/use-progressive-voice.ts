@@ -228,7 +228,7 @@ export const useProgressiveVoice = () => {
     };
   }, [stopPlayback, abortController]);
 
-  return {
+  return React.useMemo(() => ({
     // State
     segments: state.segments,
     currentSegmentIndex: state.currentSegmentIndex,
@@ -261,5 +261,27 @@ export const useProgressiveVoice = () => {
     // Audio cache management
     clearAudioCache: VoiceDirector.clearAudioCache,
     getAudioCacheStats: VoiceDirector.getAudioCacheStats,
-  };
+  }), [
+    state.segments,
+    state.currentSegmentIndex,
+    state.isPlaying,
+    state.isPaused,
+    state.isProcessing,
+    state.volume,
+    state.isMuted,
+    state.isVoiceEnabled,
+    state.error,
+    apiKeyError,
+    apiKey,
+    speakAISegments,
+    speakPlainText,
+    pausePlayback,
+    resumePlayback,
+    stopPlayback,
+    handleSetVolume,
+    toggleMute,
+    toggleVoiceEnabled,
+    handleRetryApiKeyFetch,
+    initializeAudioContext,
+  ]);
 };

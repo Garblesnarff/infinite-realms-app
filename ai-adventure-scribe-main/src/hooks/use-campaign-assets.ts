@@ -230,12 +230,12 @@ export function useCampaignAssets(
     return lines.join('\n');
   }, [assets]);
 
-  return {
+  return useMemo(() => ({
     getAsset,
     getAssetImageUrl,
     assets,
     assetListForPrompt,
     isLoading,
     error,
-  };
+  }), [getAsset, getAssetImageUrl, assets, assetListForPrompt, isLoading, error]);
 }

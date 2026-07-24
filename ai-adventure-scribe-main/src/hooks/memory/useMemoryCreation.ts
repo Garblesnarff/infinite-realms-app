@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 
 import type { Memory } from '@/types/memory';
 
@@ -136,7 +137,9 @@ export const useMemoryCreation = (sessionId: string | null) => {
     },
   });
 
-  const extractMemories = async (content: string) => {
+  const { mutateAsync } = createMemory;
+
+  const extractMemories = useCallback(async (content: string) => {
     try {
       if (!sessionId) throw new Error('No active session');
 
@@ -176,7 +179,7 @@ export const useMemoryCreation = (sessionId: string | null) => {
           continue;
         }
 
-        await createMemory.mutateAsync({
+        await mutateAsync({
           session_id: sessionId,
           type: segment.type,
           content: segment.content,
@@ -190,10 +193,10 @@ export const useMemoryCreation = (sessionId: string | null) => {
       logger.error('[Memory Creation] Error extracting memories:', error);
       throw error;
     }
-  };
+  }, [sessionId, mutateAsync]);
 
-  return {
+  return useMemo(() => ({
     createMemory: createMemory.mutate,
     extractMemories,
-  };
+  }), [createMemory.mutate, extractMemories]);
 };
