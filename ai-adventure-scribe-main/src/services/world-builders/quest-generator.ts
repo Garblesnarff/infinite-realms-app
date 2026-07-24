@@ -178,21 +178,20 @@ export class QuestGenerator {
       }
 
       // Get campaign and memories in parallel
-      const [campaignResult, memories] = await Promise.all([
-        supabase
-          .from('campaigns')
-          .select('genre')
-          .eq('id', campaignId)
-          .eq('user_id', userId)
-          .single(),
+      const [campaign, memories] = await Promise.all([
+        userDataApi.getCampaign(campaignId),
         MemoryManager.getRelevantMemories(sessionId, 'quest opportunities', 5),
       ]);
 
-      if (campaignResult.error || !campaignResult.data) {
+      if (!campaign) {
         throw new Error('Campaign not found or access denied');
       }
 
-      const campaign = campaignResult.data;
+      // Implement double-ownership checks
+      const campaignUserId = campaign.user_id || campaign.userId;
+      if (campaignUserId !== userId) {
+        throw new Error('Campaign not found or access denied');
+      }
 
       const request: QuestRequest = {
         type: questType,

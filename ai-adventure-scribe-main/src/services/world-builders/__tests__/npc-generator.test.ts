@@ -36,6 +36,14 @@ vi.mock('@/utils/character-level-utils', () => ({
   getAveragePartyLevel: vi.fn(),
 }));
 
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCampaign: vi.fn(),
+  },
+}));
+
+import { userDataApi } from '@/services/user-data-api';
+
 describe('NPCGenerator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -180,31 +188,27 @@ describe('NPCGenerator', () => {
       await expect(
         NPCGenerator.generateContextualNPC('c1', 's1', 'The party goes to a shop', undefined, undefined as any),
       ).rejects.toThrow('User ID is required for NPC generation');
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.getCampaign).not.toHaveBeenCalled();
     });
 
-    it('should include userId in query', async () => {
-      const mockFrom = vi.mocked(supabase.from);
-      const mockEq = vi.fn().mockReturnThis();
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: mockEq,
-        single: vi.fn().mockResolvedValue({ data: { id: 'c1' }, error: null }),
-      } as any);
+    it('should query secure API and verify campaign ownership', async () => {
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'user-456', genre: 'fantasy' } as any);
 
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ name: 'Barnaby', personality: { traits: [] } }));
 
       await NPCGenerator.generateContextualNPC('c1', 's1', 'action', undefined, 'user-456');
 
-      expect(mockEq).toHaveBeenCalledWith('user_id', 'user-456');
+      expect(userDataApi.getCampaign).toHaveBeenCalledWith('c1');
     });
 
     it('should throw error if campaign is not owned by the user', async () => {
-       vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      } as any);
+       vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
+
+       await expect(NPCGenerator.generateContextualNPC('c1', 's1', 'action', undefined, 'user-456')).rejects.toThrow('Campaign not found or access denied');
+    });
+
+    it('should throw error if campaign owner does not match user context', async () => {
+       vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'different-user', genre: 'fantasy' } as any);
 
        await expect(NPCGenerator.generateContextualNPC('c1', 's1', 'action', undefined, 'user-456')).rejects.toThrow('Campaign not found or access denied');
     });

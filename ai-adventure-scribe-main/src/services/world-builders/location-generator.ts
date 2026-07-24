@@ -6,6 +6,7 @@ import type { LocationRequest, GeneratedLocation } from './location-types';
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 export class LocationGenerator {
@@ -132,14 +133,15 @@ export class LocationGenerator {
         throw new Error('User ID is required for location generation');
       }
 
-      const { data: campaign, error } = await supabase
-        .from('campaigns')
-        .select('genre')
-        .eq('id', campaignId)
-        .eq('user_id', userId)
-        .single();
+      const campaign = await userDataApi.getCampaign(campaignId);
 
-      if (error || !campaign) {
+      if (!campaign) {
+        throw new Error('Campaign not found or access denied');
+      }
+
+      // Implement double-ownership checks
+      const campaignUserId = campaign.user_id || campaign.userId;
+      if (campaignUserId !== userId) {
         throw new Error('Campaign not found or access denied');
       }
 

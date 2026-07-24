@@ -21,18 +21,21 @@ export class WorldBuilderRepository {
         return false;
       }
 
-      // RLS cannot scope this WorkOS-authenticated Supabase client, so the
-      // ownership predicate is required on every direct campaign lookup.
-      const { data: campaign, error } = await supabase
-        .from('campaigns')
-        .select('id')
-        .eq('id', campaignId)
-        .eq('user_id', userId)
-        .single();
+      // Query campaign data via the secure, server-routed API
+      const campaign = await userDataApi.getCampaign(campaignId);
 
-      if (error || !campaign) {
+      if (!campaign) {
         logger.warn(
           `[WorldBuilder] Campaign ${campaignId} not found or user ${userId} does not have access`,
+        );
+        return false;
+      }
+
+      // Implement double-ownership defense-in-depth checks
+      const campaignUserId = campaign.user_id || campaign.userId;
+      if (campaignUserId !== userId) {
+        logger.warn(
+          `[WorldBuilder] Campaign ownership mismatch: Campaign owner ${campaignUserId} does not match caller user context ${userId}`,
         );
         return false;
       }

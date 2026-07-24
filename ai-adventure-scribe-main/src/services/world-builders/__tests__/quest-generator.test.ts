@@ -55,6 +55,7 @@ vi.mock('@/utils/character-level-utils', () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     createQuest: vi.fn(),
+    getCampaign: vi.fn(),
   },
 }));
 
@@ -274,13 +275,7 @@ describe('QuestGenerator', () => {
 
   describe('generateMemoryBasedQuest', () => {
     it('should verify campaign ownership and generate quest', async () => {
-      const mockFrom = vi.mocked(supabase.from);
-      const mockEq = vi.fn().mockReturnThis();
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: mockEq,
-        single: vi.fn().mockResolvedValue({ data: { id: 'c1', genre: 'cyberpunk' }, error: null }),
-      } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'u1', genre: 'cyberpunk' } as any);
 
       vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([{ content: 'Memory 1' }] as any);
       vi.mocked(getAveragePartyLevel).mockResolvedValue(3);
@@ -290,8 +285,7 @@ describe('QuestGenerator', () => {
 
       await QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'main', 'u1');
 
-      expect(mockEq).toHaveBeenCalledWith('id', 'c1');
-      expect(mockEq).toHaveBeenCalledWith('user_id', 'u1');
+      expect(userDataApi.getCampaign).toHaveBeenCalledWith('c1');
       expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith('s1', 'quest opportunities', 5);
     });
 
@@ -299,21 +293,23 @@ describe('QuestGenerator', () => {
       await expect(
         QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', undefined as any),
       ).rejects.toThrow('User ID is required for quest generation');
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.getCampaign).not.toHaveBeenCalled();
     });
 
     it('should throw if campaign is not owned by the user', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
+
+      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Campaign not found or access denied');
+    });
+
+    it('should throw if campaign owner does not match user context', async () => {
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'different-user', genre: 'cyberpunk' } as any);
 
       await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Campaign not found or access denied');
     });
 
     it('should handle campaign lookup errors during memory-based quest generation', async () => {
-      vi.mocked(supabase.from).mockImplementation(() => {
+      vi.mocked(userDataApi.getCampaign).mockImplementation(() => {
         throw new Error('Network error');
       });
 

@@ -40,6 +40,14 @@ vi.mock('@/utils/character-level-utils', () => ({
   getAveragePartyLevel: vi.fn(),
 }));
 
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCampaign: vi.fn(),
+  },
+}));
+
+import { userDataApi } from '@/services/user-data-api';
+
 describe('LocationGenerator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -206,21 +214,14 @@ describe('LocationGenerator', () => {
 
   describe('generateContextualLocation', () => {
     it('should verify campaign ownership and generate location', async () => {
-      const mockFrom = vi.mocked(supabase.from);
-      const mockEq = vi.fn().mockReturnThis();
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: mockEq,
-        single: vi.fn().mockResolvedValue({ data: { id: 'c1', genre: 'horror' }, error: null }),
-      } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'u1', genre: 'horror' } as any);
 
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ name: 'Spooky House' }));
       vi.mocked(getAveragePartyLevel).mockResolvedValue(5);
 
       await LocationGenerator.generateContextualLocation('c1', 's1', 'Enter building', undefined, 'u1');
 
-      expect(mockEq).toHaveBeenCalledWith('id', 'c1');
-      expect(mockEq).toHaveBeenCalledWith('user_id', 'u1');
+      expect(userDataApi.getCampaign).toHaveBeenCalledWith('c1');
       expect(getAveragePartyLevel).toHaveBeenCalledWith('c1', 's1');
     });
 
@@ -228,15 +229,17 @@ describe('LocationGenerator', () => {
       await expect(
         LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, undefined as any),
       ).rejects.toThrow('User ID is required for location generation');
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.getCampaign).not.toHaveBeenCalled();
     });
 
     it('should throw if campaign is not owned by the user', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
+
+      await expect(LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1')).rejects.toThrow('Campaign not found or access denied');
+    });
+
+    it('should throw if campaign owner does not match user context', async () => {
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'different-user', genre: 'horror' } as any);
 
       await expect(LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1')).rejects.toThrow('Campaign not found or access denied');
     });
