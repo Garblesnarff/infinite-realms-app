@@ -1,23 +1,22 @@
-import { Play, AlertTriangle, Flame, Zap } from 'lucide-react';
+import { Play, AlertTriangle } from 'lucide-react';
 import React from 'react';
 
-import DeathSaveManager from './DeathSaveManager';
+import { ClassFeaturesSection } from './ClassFeaturesSection';
+import { ParticipantStatusSection } from './ParticipantStatusSection';
+import { RacialTraitsSection } from './RacialTraitsSection';
+import { SpecialActionsSection } from './SpecialActionsSection';
+import { StandardActionsSection } from './StandardActionsSection';
 
 import type { ActionType, Encounter } from '@/types/combat';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import DiceRoller from '@/components/ui/dice-roller';
 import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { canUseClassFeature } from '@/utils/classFeatures';
-import { needsDeathSaves } from '@/utils/combat/deathSaves';
-import { canUseRacialTrait } from '@/utils/racialTraits';
 
 interface ActionPanelProps {
   activeEncounter: Encounter;
@@ -79,12 +78,6 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
     if (!currentParticipant) {
       return null;
     }
-
-    const isDying = needsDeathSaves(currentParticipant);
-    const isDead = currentParticipant.isDead || false;
-    const hasConditions =
-      currentParticipant.conditions && currentParticipant.conditions.length > 0;
-    const hasConcentration = currentParticipant.activeConcentration;
 
     return (
       <Card>
@@ -155,97 +148,19 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
           )}
 
           <div className="space-y-3">
-            <div className="flex gap-2 flex-wrap">
-              <DiceRoller
-                dice="1d20"
-                label="Initiative"
-                modifier={0}
-                onRoll={() => onRollInitiative(currentParticipant.id)}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  onCombatAction('grapple', currentParticipant.id, selectedEnemyId || undefined)
-                }
-              >
-                Grapple
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  onCombatAction('shove', currentParticipant.id, selectedEnemyId || undefined)
-                }
-              >
-                Shove
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)
-                }
-              >
-                Two-Weapon Attack
-              </Button>
-              {currentParticipant.characterClass === 'paladin' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    onEnhancedAttack(
-                      currentParticipant.id,
-                      selectedEnemyId || undefined,
-                      'divine_smite',
-                      false,
-                      false,
-                      1,
-                    )
-                  }
-                >
-                  Divine Smite (1st)
-                </Button>
-              )}
-            </div>
+            <SpecialActionsSection
+              currentParticipant={currentParticipant}
+              selectedEnemyId={selectedEnemyId}
+              onCombatAction={onCombatAction}
+              onRollInitiative={onRollInitiative}
+              onTwoWeaponAttack={onTwoWeaponAttack}
+              onEnhancedAttack={onEnhancedAttack}
+            />
 
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onCombatAction('dash', currentParticipant.id)}
-              >
-                Dash
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onCombatAction('dodge', currentParticipant.id)}
-              >
-                Dodge
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onCombatAction('help', currentParticipant.id)}
-              >
-                Help
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onCombatAction('hide', currentParticipant.id)}
-              >
-                Hide
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onCombatAction('ready', currentParticipant.id)}
-              >
-                Ready Action
-              </Button>
-            </div>
+            <StandardActionsSection
+              currentParticipant={currentParticipant}
+              onCombatAction={onCombatAction}
+            />
 
             <div className="flex gap-2 flex-wrap">
               <Button
@@ -257,107 +172,20 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
               </Button>
             </div>
 
-            {currentParticipant.classFeatures && (
-              <div className="flex gap-2 flex-wrap">
-                {currentParticipant.classFeatures
-                  .filter((feature) => feature.type !== 'passive')
-                  .map((feature) => {
-                    const canUse = canUseClassFeature(
-                      feature,
-                    (currentParticipant.resources || {}) as unknown as Record<string, number>,
-                    );
-                    return (
-                      <Button
-                        key={feature.name}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onClassFeatureUse(currentParticipant.id, feature.name)}
-                        disabled={!canUse}
-                        className={
-                          currentParticipant.isRaging && feature.name === 'rage'
-                            ? 'bg-red-500 text-white'
-                            : ''
-                        }
-                      >
-                        {feature.name === 'rage' && currentParticipant.isRaging ? (
-                          <>
-                            <Flame className="w-4 h-4 mr-1" />
-                            Stop Raging
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="w-4 h-4 mr-1" />
-                            {feature.name.replace('_', ' ')}
-                          </>
-                        )}
-                        {feature.maxUses && (
-                          <span className="ml-1 text-xs">
-                            ({feature.currentUses || 0}/{feature.maxUses})
-                          </span>
-                        )}
-                      </Button>
-                    );
-                  })}
-              </div>
-            )}
+            <ClassFeaturesSection
+              currentParticipant={currentParticipant}
+              onClassFeatureUse={onClassFeatureUse}
+            />
 
-            {currentParticipant.racialTraits &&
-              (() => {
-                const activeTraits = currentParticipant.racialTraits.filter(
-                  (trait) => trait.type === 'active' && canUseRacialTrait(trait),
-                );
-                if (activeTraits.length === 0) return null;
-                return (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Racial Traits:</div>
-                    <div className="flex gap-2 flex-wrap">
-                      {activeTraits.map((trait) => (
-                        <Button
-                          key={trait.name}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onRacialTraitUse(currentParticipant.id, trait.name)}
-                          className="bg-green-50 hover:bg-green-100 border-green-200"
-                        >
-                          {trait.name.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                          {trait.currentUses !== undefined && (
-                            <span className="ml-1 text-xs">
-                              ({trait.currentUses}/{trait.maxUses})
-                            </span>
-                          )}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+            <RacialTraitsSection
+              currentParticipant={currentParticipant}
+              onRacialTraitUse={onRacialTraitUse}
+            />
 
-            {(hasConditions || isDying || isDead || hasConcentration) && (
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">Status:</div>
-                <div className="flex gap-2 flex-wrap items-center">
-                  {hasConcentration && (
-                    <Badge variant="outline" className="border-blue-500 text-blue-700">
-                      Concentrating
-                    </Badge>
-                  )}
-                  {isDying && (
-                    <DeathSaveManager participant={currentParticipant} onDeathSave={onDeathSave} />
-                  )}
-                  {isDead && <Badge variant="destructive">Dead</Badge>}
-                  {hasConditions &&
-                    currentParticipant.conditions.map((condition) => (
-                      <Badge
-                        key={condition.name}
-                        variant="outline"
-                        className="border-orange-500 text-orange-700"
-                      >
-                        {condition.name.charAt(0).toUpperCase() + condition.name.slice(1)}
-                      </Badge>
-                    ))}
-                </div>
-              </div>
-            )}
+            <ParticipantStatusSection
+              currentParticipant={currentParticipant}
+              onDeathSave={onDeathSave}
+            />
           </div>
         </CardContent>
       </Card>
