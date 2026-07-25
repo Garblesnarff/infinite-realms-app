@@ -50,6 +50,12 @@
 --          starter_campaign_id, campaign_version, ruleset};
 --          memories.emotional_tone
 -- ============================================================================
+--
+-- replay:requires-no-pgvector
+--   Marker read by scripts/test-migrations.sh: this file mentions vector(768)
+--   but guards it, so the runner must NOT skip the file when pgvector is
+--   absent.
+-- ============================================================================
 
 DO $$ BEGIN
   CREATE TYPE "public"."chunk_type" AS ENUM('creative_brief', 'world_building', 'faction', 'npc_tier1', 'npc_tier2', 'npc_tier3', 'location', 'quest_main', 'quest_side', 'mechanic', 'item', 'handout', 'monster', 'encounter', 'session_outline');
@@ -146,7 +152,6 @@ CREATE TABLE IF NOT EXISTS "campaign_chunks" (
 	"parent_entity" text,
 	"content" text NOT NULL,
 	"summary" text,
-	"embedding" vector(768),
 	"metadata" jsonb DEFAULT '{}'::jsonb,
 	"source_file" text,
 	"source_section" text,
@@ -154,6 +159,23 @@ CREATE TABLE IF NOT EXISTS "campaign_chunks" (
 	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
+--> statement-breakpoint
+-- campaign_chunks.embedding is added separately, and only where pgvector is
+-- installed. Inlining `vector(768)` in the CREATE TABLE above would make this
+-- entire file unrunnable on a stock PostgreSQL -- and because this file
+-- creates character_equipment, ai_usage and seven other tables that later
+-- migrations depend on, skipping it cascades into eight further replay
+-- failures. Production and CI (pgvector/pgvector:pg16) both have the
+-- extension and get the column; a developer on a stock server gets everything
+-- except this one column, which is far more useful than getting nothing.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+    EXECUTE 'ALTER TABLE "campaign_chunks" ADD COLUMN IF NOT EXISTS "embedding" vector(768)';
+  ELSE
+    RAISE WARNING 'pgvector not installed: skipping campaign_chunks.embedding';
+  END IF;
+END $$;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "campaign_parties" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

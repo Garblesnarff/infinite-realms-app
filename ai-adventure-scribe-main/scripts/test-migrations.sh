@@ -82,6 +82,10 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 MIGRATIONS_APPLIED=0
 MIGRATIONS_SKIPPED=0
+# Skips forced by a missing pgvector extension, counted separately: they make
+# some columns unreachable, so schema-completeness findings become advisory
+# rather than failures caused by the developer's environment.
+MIGRATIONS_SKIPPED_PGVECTOR=0
 
 log_info()    { echo "${CYAN}ℹ${NC} $1"; }
 log_success() { echo "${GREEN}✓${NC} $1"; TESTS_PASSED=$((TESTS_PASSED + 1)); }
@@ -261,9 +265,16 @@ run_migrations() {
     base="$(basename "$migration")"
     rel="${migration#"$PROJECT_ROOT"/}"
 
-    if [ "$HAS_PGVECTOR" -eq 0 ] && grep -qiE 'vector\(|USING (ivfflat|hnsw)' "$migration"; then
+    # A migration may declare that it handles a missing pgvector itself (by
+    # guarding the vector DDL on pg_extension), in which case it must still be
+    # applied -- skipping a file that also creates unrelated tables cascades
+    # into failures for every later migration that depends on them.
+    if [ "$HAS_PGVECTOR" -eq 0 ] \
+       && ! grep -q 'replay:requires-no-pgvector' "$migration" \
+       && grep -qiE 'vector\(|\bvector\b *[,)]|USING (ivfflat|hnsw)' "$migration"; then
       log_warning "SKIP (needs pgvector): $rel"
       MIGRATIONS_SKIPPED=$((MIGRATIONS_SKIPPED + 1))
+      MIGRATIONS_SKIPPED_PGVECTOR=$((MIGRATIONS_SKIPPED_PGVECTOR + 1))
       continue
     fi
 
@@ -391,18 +402,33 @@ validate_schema_matches_drizzle() {
   missing_t="$(echo "$result" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).missingTables.join(" ")))')"
   missing_c="$(echo "$result" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).missingColumns.join(" ")))')"
 
+  # Migrations skipped for want of pgvector cannot create their objects, so a
+  # "missing" finding then says nothing about the migration history -- it says
+  # the developer's PostgreSQL lacks an extension. Report it, but do not fail.
+  # CI runs on the pgvector image, where nothing is skipped and this is strict.
+  local report=log_error
+  if [ "$MIGRATIONS_SKIPPED_PGVECTOR" -gt 0 ]; then
+    report=log_warning
+  fi
+
   if [ -z "$missing_t" ]; then
     log_success "all $n_tables tables in $(basename "$snapshot") exist after replay"
   else
-    log_error "tables in db/schema/*.ts that no migration creates:"
+    $report "tables in db/schema/*.ts that no migration creates:"
     for t in $missing_t; do echo "      $t"; done
   fi
 
   if [ -z "$missing_c" ]; then
     log_success "all columns in $(basename "$snapshot") exist after replay"
   else
-    log_error "columns in db/schema/*.ts that no migration creates:"
+    $report "columns in db/schema/*.ts that no migration creates:"
     for c in $missing_c; do echo "      $c"; done
+  fi
+
+  if [ "$report" = "log_warning" ] && { [ -n "$missing_t" ] || [ -n "$missing_c" ]; }; then
+    log_warning "^ warnings, not failures: $MIGRATIONS_SKIPPED_PGVECTOR migration(s) were skipped"
+    log_warning "  because pgvector is not installed. Install it, or run against a"
+    log_warning "  pgvector-capable server, for a conclusive result."
   fi
 }
 
