@@ -325,7 +325,7 @@ export default tseslint.config(
       'src/components/ui/sidebar-menu.tsx', // 264 lines
       'src/components/ui/option-selector/OptionInput.tsx',
       'src/services/ai/prompts/game-context-prompts.ts',
-      'src/services/ai/prompts/combat-rules-prompts.ts',
+      'src/services/ai/prompts/combat-rules-templates.ts',
       'src/services/ai/prompts/character-description-prompts.ts',
       'src/utils/character-calculations.ts',
       'src/utils/template-calculations.ts',
