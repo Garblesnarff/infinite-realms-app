@@ -5,6 +5,12 @@ import type { CombatParticipant } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface DeathSaveManagerProps {
   participant: CombatParticipant;
@@ -23,7 +29,12 @@ const DeathSaveManager: React.FC<DeathSaveManagerProps> = ({ participant, onDeat
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex justify-around items-center">
+        <div
+          className="flex justify-around items-center"
+          role="status"
+          aria-live="polite"
+          aria-label={`Death saving throws for ${participant.name}: ${successes} successes, ${failures} failures`}
+        >
           <div className="text-center">
             <p className="font-bold text-lg text-green-400">{successes}</p>
             <p className="text-xs text-muted-foreground">Successes</p>
@@ -33,13 +44,24 @@ const DeathSaveManager: React.FC<DeathSaveManagerProps> = ({ participant, onDeat
             <p className="text-xs text-muted-foreground">Failures</p>
           </div>
         </div>
-        <Button
-          onClick={() => onDeathSave(participant.id)}
-          className="w-full bg-red-600 hover:bg-red-700 text-white"
-        >
-          <Shield className="w-4 h-4 mr-2" />
-          Roll Death Save
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                onClick={() => onDeathSave(participant.id)}
+                className="w-full bg-red-600 hover:bg-red-700 text-white"
+                aria-label={`Roll a d20 death saving throw for ${participant.name}`}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Roll Death Save
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Roll a d20 death saving throw</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </CardContent>
     </Card>
   );

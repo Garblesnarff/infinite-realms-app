@@ -213,3 +213,7 @@
 ## 2026-08-17 - Folder Color Picker Keyboard Outline Focus and UX
 **Learning:** Custom selection buttons (like color picker circles in Create and Edit Folder Dialogs) are often hard to navigate using keyboard Tab selection without clear focus styles. Adding `focus-visible` ring parameters ensures a delightful, highly-visible keyboard focus outline while keeping mouse click styles un-distracting.
 **Action:** Always apply `focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2 outline-none` to custom selection buttons and color picker grids.
+
+## 2026-08-18 - High-Stakes Combat Status Live Region and Tooltips
+**Learning:** High-stakes, interactive combat status panels (like `DeathSaveManager`) contain critical numeric states that change dynamically during gameplay. Wrapping these numeric grids in an `aria-live="polite"` container with an explicit status-summarizing template-literal `aria-label` ensures screen readers announce immediate, clear context. Additionally, standardizing critical action triggers (like "Roll Death Save") with explicit button types, template-literal `aria-label`s, and custom Tooltips dramatically enhances accessibility and desktop visual feedback.
+**Action:** For dynamic status panels, wrap state values in a status/aria-live container with a fully descriptive, template-literal `aria-label`. Always provide standard `type="button"` and Shadcn Tooltip triggers for high-stakes action triggers.
