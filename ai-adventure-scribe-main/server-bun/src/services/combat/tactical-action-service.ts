@@ -130,6 +130,27 @@ export async function applyDmTacticalActions(
   return { results, appliedDeltas, degraded };
 }
 
+/**
+ * Record something the engine resolved that the DM has not been told about yet. These are
+ * facts, not corrections: the DM did nothing wrong, the board simply had the final say.
+ */
+export async function recordDmTacticalFact(sessionId: string, fact: string): Promise<void> {
+  const map = await loadActiveTacticalMap(sessionId);
+  if (!map) return;
+  map.pendingDmFacts = [...(map.pendingDmFacts ?? []), fact];
+  await saveTacticalMap(map);
+}
+
+/** Return the engine-resolved facts with the next tactical digest, then clear them. */
+export async function consumeDmTacticalFacts(sessionId: string): Promise<string[]> {
+  const map = await loadActiveTacticalMap(sessionId);
+  if (!map?.pendingDmFacts?.length) return [];
+  const facts = map.pendingDmFacts;
+  delete map.pendingDmFacts;
+  await saveTacticalMap(map);
+  return facts;
+}
+
 /** Return the one-shot correction fact with the next tactical digest, then clear it. */
 export async function consumeDmTacticalCorrection(sessionId: string): Promise<string | null> {
   const map = await loadActiveTacticalMap(sessionId);

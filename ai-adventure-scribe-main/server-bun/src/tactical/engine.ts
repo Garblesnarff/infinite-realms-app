@@ -346,7 +346,15 @@ export function forceMoveEntity(
   entity.y = final.y;
   return { success: true, path, remainingFeet: entity.movementRemaining };
 }
-export function getValidMoves(map: TacticalMap, entityId: string): Point[] {
+/**
+ * Every cell the entity can stand in this turn, with what reaching it costs. One Dijkstra
+ * pass answers both "where may I go" and "which of those is closest to my target", which is
+ * what auto-approach needs; running `findPath` per candidate cell would re-walk the same map.
+ */
+export function getReachableMoves(
+  map: TacticalMap,
+  entityId: string,
+): Array<Point & { costFeet: number }> {
   const entity = getEntity(map, entityId);
   if (!entity) return [];
   const start = { x: entity.x, y: entity.y },
@@ -364,10 +372,14 @@ export function getValidMoves(map: TacticalMap, entityId: string): Point[] {
       }
     }
   }
-  return [...costs.keys()].map((k) => {
+  return [...costs.entries()].map(([k, costFeet]) => {
     const [x, y] = k.split(',').map(Number);
-    return { x, y };
+    return { x, y, costFeet };
   });
+}
+
+export function getValidMoves(map: TacticalMap, entityId: string): Point[] {
+  return getReachableMoves(map, entityId).map(({ x, y }) => ({ x, y }));
 }
 export function resetMovement(map: TacticalMap, entityId: string): boolean {
   const entity = getEntity(map, entityId);

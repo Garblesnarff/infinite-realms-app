@@ -49,6 +49,11 @@ export interface TacticalMap {
   sceneDescription: string;
   /** One-shot correction fact consumed by the next DM tactical-context request. */
   pendingDmCorrection?: string;
+  /**
+   * Things the engine did on the DM's behalf that it must narrate accurately — an attacker
+   * that walked but could not reach, most of all. Consumed by the next context request.
+   */
+  pendingDmFacts?: string[];
 }
 
 export type Point = { x: number; y: number };

@@ -38,35 +38,51 @@ describe('CombatRulesPrompts', () => {
   });
 
   describe('buildCombatRollRequirementsSection', () => {
-    it('should return dice roll formats and examples', () => {
+    it('reserves roll_requests for saves and checks during combat', () => {
       const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
 
       expect(section).toContain('<combat_roll_requirements>');
-      // The section now teaches the structured `roll_requests` array; the old
-      // ROLL_REQUESTS_V1 text marker was removed from the prompt itself.
-      expect(section).toContain('`roll_requests` array field');
-      expect(section).toContain('"type": "attack"');
+      expect(section).toContain('`roll_requests` array');
+      expect(section).toContain('"type": "save"');
+      expect(section).toContain('"type": "check"');
+      // Attacks moved to combat_actions; teaching an attack example here is what produced the
+      // prose attack rolls that never reached the engine at all.
+      expect(section).not.toContain('"type": "attack"');
+      expect(section).toContain('resolved by the engine');
       expect(section).toContain('</combat_roll_requirements>');
     });
   });
 
   describe('buildSpatialTurnContractSection', () => {
-    it('states the reach rule and shows a move-and-attack turn', () => {
+    it('tells the DM to declare attacks and let the engine handle approach', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
       expect(section).toContain('<spatial_turn_contract>');
-      expect(section).toContain('within\n5ft of its target');
-      expect(section).toContain('movementRemaining');
-      expect(section).toContain('line of sight');
-      // The worked example must show both halves of one turn.
-      expect(section).toContain('"action":"move","entityId":"shadow-roach-1"');
-      expect(section).toContain('"action_type":"attack","target_ids":["the-seeker"]');
+      expect(section).toContain('declared in `combat_actions`');
+      expect(section).toContain('walks the attacker');
+      // The old instruction — emit a move yourself before attacking — is what the model
+      // ignored for thirty turns. It must not survive anywhere in this section.
+      expect(section).not.toContain('you MUST emit a `map_actions` move');
+      expect(section).toContain('Approach before a strike is the engine');
       expect(section).toContain('</spatial_turn_contract>');
-      // Every id in the example is a token the digest actually renders, and the rule that
-      // makes that matter is stated outright.
-      expect(section).toContain('copied verbatim from the tactical digest');
-      expect(section).toContain('shadow-roach-1|Shadow Roach@12,10');
-      expect(section).toContain('the-seeker|The Seeker@1,1');
+    });
+
+    it('works the three-roach example through both outcomes', () => {
+      const section = CombatRulesPrompts.buildSpatialTurnContractSection();
+
+      // Two monster attacks declared in one turn, against digest-real ids.
+      expect(section).toContain('"actor_id":"shadow-roach-1","action_type":"attack"');
+      expect(section).toContain('"actor_id":"shadow-roach-2","action_type":"attack"');
+      expect(section).toContain('shadow-roach-1|Shadow Roach@6,5');
+      expect(section).toContain('shadow-roach-2|Shadow Roach@10,9');
+      // One auto-approach outcome and one out-of-reach-becomes-move outcome.
+      expect(section).toContain('it closes to 5ft and its bite is rolled');
+      expect(section).toContain('its action becomes');
+      expect(section).toContain('could not\n  reach it');
+      expect(section).toContain('NOT a bite that never happened');
+      // Ambiguity is called out with the exact shape that misfired in run 7.
+      expect(section).toContain('"the Shadow Roach" names none of them');
+      expect(section).toContain('<engine_resolved_outcomes>');
       expect(section).not.toMatch(/entityId":"[0-9a-f]{8}-/);
     });
   });

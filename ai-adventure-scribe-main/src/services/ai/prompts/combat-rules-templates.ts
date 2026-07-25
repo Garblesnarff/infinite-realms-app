@@ -328,11 +328,13 @@ Character Level 9+ (60+ HP):
 
 export const COMBAT_ROLL_REQUIREMENTS_TEMPLATE = `
 <combat_roll_requirements>
-For ALL player-facing combat actions, add an entry to the \`roll_requests\` array field of your
-JSON response (not a text block). Each entry needs type/formula/purpose/dc/ac/advantage/disadvantage:
-Attack: \\\`{"type": "attack", "formula": "1d20+mod", "purpose": "Attack with weapon", "dc": null, "ac": 15, "advantage": false, "disadvantage": false}\\\`
-Damage: \\\`{"type": "damage", "formula": "1d8+mod", "purpose": "Weapon damage", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\\\`
-Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Save vs effect", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\\\`
-NPC/enemy rolls are handled behind the screen in your narration - do NOT add them to \`roll_requests\`, which is for the player only.
+While combat is active, \`roll_requests\` is for saving throws and ability checks ONLY. Attacks and
+damage are resolved by the engine from \`combat_actions\` - it knows every weapon, every armour class,
+and every distance on the board, so an attack you put here is an attack nobody rolls.
+Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Dexterity save vs the collapsing floor", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\\\`
+Check: \\\`{"type": "check", "formula": "1d20+mod", "purpose": "Athletics to shove the brazier aside", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\\\`
+Each entry needs type/formula/purpose/dc/ac/advantage/disadvantage, in the \`roll_requests\` array
+field of your JSON response - never a text block. NPC/enemy saves are handled behind the screen in
+your narration; \`roll_requests\` is for the player only.
 (This replaces the legacy ROLL_REQUESTS_V1 block format).
 </combat_roll_requirements>`;

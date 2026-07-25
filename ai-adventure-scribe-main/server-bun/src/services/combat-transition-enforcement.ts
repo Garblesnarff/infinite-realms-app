@@ -1,7 +1,9 @@
 import { LLMProviderService, type LLMResponse } from './llm-provider-service.js';
 import { logger } from '../lib/logger.js';
 import {
+  buildCombatActionChannelCorrectivePrompt,
   buildCombatTransitionCorrectivePrompt,
+  validateCombatActionChannel,
   validateCombatTransitionContract,
 } from '../tactical/dispatch.js';
 import {
@@ -48,7 +50,7 @@ const combineUsage = (first: LLMResponse, second: LLMResponse): LLMResponse['usa
 };
 
 type ContractBreach = {
-  contract: 'combat_transition' | 'spatial';
+  contract: 'combat_transition' | 'combat_action_channel' | 'spatial';
   correctivePrompt: string;
   detail: Record<string, unknown>;
 };
@@ -65,6 +67,17 @@ function findBreach(response: DMResponse, prompt: string): ContractBreach | null
       contract: 'combat_transition',
       correctivePrompt: buildCombatTransitionCorrectivePrompt(transition),
       detail: { rollTypes: transition.rollTypes },
+    };
+  }
+  // The channel check comes before the spatial one: an attack moved into combat_actions is an
+  // attack the engine will path and reach-check itself, which dissolves most spatial breaches
+  // rather than arguing about them.
+  const channel = validateCombatActionChannel(response, combatActive);
+  if (channel) {
+    return {
+      contract: 'combat_action_channel',
+      correctivePrompt: buildCombatActionChannelCorrectivePrompt(channel),
+      detail: { purposes: channel.purposes, reason: channel.message },
     };
   }
   const spatial = validateSpatialCombatContract(response, prompt, combatActive);

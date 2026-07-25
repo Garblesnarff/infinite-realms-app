@@ -23,6 +23,7 @@ vi.mock('../prompts/combat-rules-prompts', () => ({
   CombatRulesPrompts: {
     formatCombatContext: vi.fn((cd: any) => `<combat_context_${cd.isCombat}>`),
     buildCombatRollRequirementsSection: vi.fn(() => '<combat_roll_requirements_section>'),
+    buildSpatialTurnContractSection: vi.fn(() => '<spatial_turn_contract_section>'),
   },
 }));
 

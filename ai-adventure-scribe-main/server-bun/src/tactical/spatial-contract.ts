@@ -5,9 +5,11 @@
  * the engine: distances and line of sight are read out of the tactical digest, and a
  * proposed corrective move is re-measured with the engine's own `getDistance`.
  */
-import { parseTacticalDigest, resolveDigestEntity, resolvePairFromText } from './digest-parse.js';
+import { resolvePairFromText } from './attack-pair.js';
+import { parseTacticalDigest, resolveDigestEntity } from './digest-parse.js';
 import { getDistance } from './engine.js';
 import { resolveEntityRef } from './identity.js';
+import { combatLogger } from '../lib/logger.js';
 
 import type { DigestEntity, TacticalDigest } from './digest-parse.js';
 import type { MapEntity } from './types.js';
@@ -114,13 +116,31 @@ function collectAttackIntents(
     if (request.type !== 'attack') continue;
     const pair = resolvePairFromText(digest, request.purpose);
     if (!pair || pair.actor.id === pair.target.id) continue;
+    if (pair.fallbacks.length)
+      // The purpose did not name both sides, so this attack is being checked against an
+      // assumption. Checking on an assumption beats the silence it replaces, but the
+      // assumption itself is evidence about how the model actually writes purposes.
+      combatLogger.info(
+        {
+          fallbacks: pair.fallbacks,
+          purpose: request.purpose,
+          actorId: pair.actor.id,
+          targetId: pair.target.id,
+          activeId: digest.activeId,
+        },
+        '[tactical] spatial validation inferred an attack pair the purpose did not name',
+      );
     if (
       intents.some(
         (intent) => intent.actor.id === pair.actor.id && intent.target.id === pair.target.id,
       )
     )
       continue;
-    intents.push({ ...pair, ranged: isRangedDescriptor(request.purpose) });
+    intents.push({
+      actor: pair.actor,
+      target: pair.target,
+      ranged: isRangedDescriptor(request.purpose),
+    });
   }
   return intents;
 }

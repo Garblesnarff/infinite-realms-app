@@ -65,28 +65,40 @@ When combat is detected, you MUST:
   }
 
   /**
-   * Combat-only. The tactical digest is the single source of geometry, and the server
-   * rejects an attack the board does not allow, so this section states the same contract
-   * the validator enforces.
+   * Combat-only. Attacks are declared, not choreographed: the engine paths the attacker into
+   * reach and resolves the result. Asking the model to volunteer the geometry is what this
+   * section used to do, and across a thirty-turn encounter it produced zero moves.
    */
   static buildSpatialTurnContractSection(): string {
     return `
 <spatial_turn_contract>
-<title>MANDATORY: SPATIAL COHERENCE ON EVERY COMBAT TURN</title>
-Every combatant's turn must match the tactical digest: a melee attack requires the attacker within
-5ft of its target, so when the digest shows more distance you MUST emit a \`map_actions\` move that
-closes the gap (never more than that entity's movementRemaining) before or instead of attacking.
-Ranged attacks and spells require line of sight in the digest and take the listed cover into account,
-and monsters move on their own turns through \`map_actions\` too - prose movement changes nothing.
+<title>MANDATORY: DECLARE COMBAT ACTIONS, DO NOT CHOREOGRAPH THEM</title>
+While combat is active, every attack and every deliberate move is declared in \`combat_actions\` as
+an intent: who acts, what they do, and whom they do it to. You do NOT need to work out whether the
+attacker can reach its target. The engine reads the tactical digest, walks the attacker as far
+toward its target as its movement allows, and resolves the attack from where it ends up.
 
-Every \`entityId\`, \`actor_id\`, and \`target_ids\` value must be copied verbatim from the tactical digest:
-the digest's leading token for each line is that entity's id, and no other spelling of it exists.
+- \`roll_requests\` during combat is ONLY for saving throws and ability checks the fiction demands.
+  Do NOT put attacks in \`roll_requests\`; an attack there has no actor, no target, and no authority.
+- \`map_actions\` moves are for repositioning that is not part of an attack: retreating, taking cover,
+  circling to a better angle. Approach before a strike is the engine's job, not yours.
+- Every \`actor_id\` and \`target_ids\` value must be copied verbatim from the tactical digest. The
+  digest's leading token on each line is that entity's id, and no other spelling of it exists. With
+  three roaches on the board, "the Shadow Roach" names none of them: write \`shadow-roach-2\`.
+- The engine reports back what actually happened in \`<engine_resolved_outcomes>\`. Narrate that,
+  never the strike you hoped for.
 
-Worked example - digest lines \`the-seeker|The Seeker@1,1 mv30/30 vs[shadow-roach-1:55ft/LoS/c0/range]\`
-and \`shadow-roach-1|Shadow Roach@12,10 mv30/30 vs[the-seeker:55ft/LoS/c0/range]\`, Shadow Roach's turn
-(move 25ft to close, then attack in the same turn):
-\`map_actions\`: \`[{"action":"move","entityId":"shadow-roach-1","x":7,"y":6,"changes":null}]\`
-\`combat_actions\`: \`[{"actor_id":"shadow-roach-1","action_type":"attack","target_ids":["the-seeker"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":25}]\`
+Worked example - three roaches converge on the party's front line. Digest:
+\`the-seeker|The Seeker@1,1 mv30/30 vs[shadow-roach-1:25ft/LoS/c0/range,shadow-roach-2:45ft/LoS/c0/range]\`
+\`shadow-roach-1|Shadow Roach@6,5 mv30/30 vs[the-seeker:25ft/LoS/c0/range]\`
+\`shadow-roach-2|Shadow Roach@10,9 mv30/30 vs[the-seeker:45ft/LoS/c0/range]\`
+On the roaches' turns you declare both attacks and nothing else:
+\`combat_actions\`: \`[{"actor_id":"shadow-roach-1","action_type":"attack","target_ids":["the-seeker"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":0},{"actor_id":"shadow-roach-2","action_type":"attack","target_ids":["the-seeker"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":0}]\`
+The engine resolves them differently, and tells you so next turn:
+- shadow-roach-1 was 25ft away with 30ft of movement: it closes to 5ft and its bite is rolled.
+- shadow-roach-2 was 45ft away: it moves its full 30ft, ends 15ft short, and its action becomes
+  movement. You will be told "Shadow Roach moved 30ft, is now 15ft from The Seeker, and could not
+  reach it". Narrate a roach still scrabbling closer - NOT a bite that never happened.
 </spatial_turn_contract>`;
   }
 

@@ -10,6 +10,7 @@ import {
   applyDmTacticalActions,
   applyTacticalMapAction,
   consumeDmTacticalCorrection,
+  consumeDmTacticalFacts,
 } from '../../services/combat/tactical-action-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
@@ -95,9 +96,21 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       set.status = 404;
       return { error: 'No active tactical map' };
     }
-    const correction = await consumeDmTacticalCorrection(params.id);
+    const [correction, facts] = await Promise.all([
+      consumeDmTacticalCorrection(params.id),
+      consumeDmTacticalFacts(params.id),
+    ]);
     return {
-      tacticalContext: `${buildTacticalPrompt(map, params.entityId)}${correction ? `\n\n<previous_tactical_failure>${correction}</previous_tactical_failure>` : ''}`,
+      tacticalContext:
+        buildTacticalPrompt(map, params.entityId) +
+        // Engine-resolved outcomes come before failures: they are what actually happened last
+        // turn, and the DM must narrate them rather than the strike it originally declared.
+        (facts.length
+          ? `\n\n<engine_resolved_outcomes>\n${facts.join('\n')}\n</engine_resolved_outcomes>`
+          : '') +
+        (correction
+          ? `\n\n<previous_tactical_failure>${correction}</previous_tactical_failure>`
+          : ''),
     };
   })
   .post(
