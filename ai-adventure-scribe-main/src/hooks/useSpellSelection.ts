@@ -6,13 +6,12 @@ import type { SpellValidationResult } from '@/utils/spell-validation';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAvailableSpells } from '@/hooks/useAvailableSpells';
+import { useSpellSelectionValidation } from '@/hooks/useSpellSelectionValidation';
 import logger from '@/lib/logger';
 import { characterSpellService } from '@/services/characterSpellApi';
 import {
-  validateSpellSelection,
   getSpellcastingInfo,
   getRacialSpells,
-  validateSpellSelectionAsync,
 } from '@/utils/spell-validation';
 
 interface UseSpellSelectionReturn {
@@ -184,62 +183,14 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     setSelectedSpells([]);
   }, []);
 
-  // Validation
-  const [validation, setValidation] = useState<ReturnType<typeof validateSpellSelection>>({
-    valid: false,
-    errors: [],
-    warnings: [],
+  // Validation delegated to useSpellSelectionValidation hook
+  const { validation, canProceed } = useSpellSelectionValidation({
+    character,
+    selectedCantrips,
+    selectedSpells,
+    availableCantrips,
+    availableSpells,
   });
-  const [isValidating, setIsValidating] = useState(false);
-
-  // Perform async validation when character, selections, or available spells change
-  useEffect(() => {
-    let mounted = true;
-
-    const runValidation = async (): Promise<void> => {
-      if (!character) {
-        setValidation({ valid: false, errors: [], warnings: [] });
-        return;
-      }
-
-      setIsValidating(true);
-
-      const availableCantripIds = availableCantrips.map((c) => c.id);
-      const availableSpellIds = availableSpells.map((s) => s.id);
-
-      try {
-        const result = await validateSpellSelectionAsync(
-          character,
-          selectedCantrips,
-          selectedSpells,
-          availableCantripIds,
-          availableSpellIds,
-        );
-        if (mounted) setValidation(result);
-      } catch (error) {
-        logger.error('Async spell validation failed:', error);
-        // Fall back to synchronous validation
-        const result = validateSpellSelection(
-          character,
-          selectedCantrips,
-          selectedSpells,
-          availableCantripIds,
-          availableSpellIds,
-        );
-        if (mounted) setValidation(result);
-      } finally {
-        if (mounted) setIsValidating(false);
-      }
-    };
-
-    runValidation();
-
-    return () => {
-      mounted = false;
-    };
-  }, [character, selectedCantrips, selectedSpells, availableCantrips, availableSpells]);
-
-  const canProceed = validation.valid && !isValidating;
 
   // Save to character and database
   // ⚡ Bolt: Wrapped updateCharacterSpells in useCallback to ensure reference stability and prevent redundant child re-renders
