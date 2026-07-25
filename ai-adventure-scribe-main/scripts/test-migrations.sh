@@ -69,6 +69,7 @@ BASELINE_CUTOFF="20251103151855"
 
 ADMIN_URL="${TEST_DATABASE_URL:-postgres://localhost:5432/postgres}"
 TEST_DB_NAME="test_migrations_$$_$(date +%s)"
+SCRATCH_DUMP="$(mktemp "${TMPDIR:-/tmp}/replay-columns.XXXXXX")"
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -112,6 +113,7 @@ query_value() {
 # Always drop the scratch database, including on failure -- keep KEEP_TEST_DB=1
 # set to leave it behind for post-mortem inspection.
 cleanup() {
+  rm -f "$SCRATCH_DUMP"
   if [ -z "${KEEP_TEST_DB:-}" ]; then
     psql -X -q "$ADMIN_URL" -c "DROP DATABASE IF EXISTS \"$TEST_DB_NAME\";" >/dev/null 2>&1
   else
@@ -332,49 +334,96 @@ assert_column() {
   fi
 }
 
-# Objects that the replayable history genuinely cannot produce, because the
-# migration that creates them was never committed (see .replay-known-gaps).
-# Reported as warnings so the gap stays visible without turning CI red for
-# debt this run did not introduce. db/schema/*.ts coverage for these is
-# enforced instead by scripts/check-schema-drift.sh.
-report_gap_blocked() {
-  log_warning "not reachable from replayed history (known gap): $1"
+# The central assertion: everything db/schema/*.ts declares must be reachable
+# by replaying the committed migrations. Driven by the newest snapshot in
+# db/migrations/meta/ rather than a hand-maintained list, so it cannot go stale
+# as the schema grows -- add a table to db/schema/*.ts without a migration that
+# creates it and this fails, whether or not anyone remembered to update a list.
+#
+# This is what the 20260725 incident needed and did not have: eleven tables and
+# combat_participant_status.exhaustion_level lived in db/schema/*.ts with no
+# migration behind them, and nothing compared the two until production 500'd.
+validate_schema_matches_drizzle() {
+  log_section "Replayed Schema vs db/schema/*.ts"
+
+  local snapshot
+  snapshot="$(find "$DB_MIGRATIONS_DIR/meta" -name '[0-9]*_snapshot.json' | sort | tail -1)"
+  if [ -z "$snapshot" ]; then
+    log_error "no drizzle snapshot found in $DB_MIGRATIONS_DIR/meta"
+    return
+  fi
+
+  local dump="$SCRATCH_DUMP"
+  psql -X -A -t -q "$(test_db_url)" \
+    -c "SELECT table_name||'|'||column_name FROM information_schema.columns WHERE table_schema='public';" \
+    >"$dump" 2>/dev/null
+
+  local result
+  result="$(SNAPSHOT="$snapshot" DUMP="$dump" node -e '
+    const fs = require("fs");
+    const snap = JSON.parse(fs.readFileSync(process.env.SNAPSHOT, "utf8"));
+    const have = {};
+    for (const line of fs.readFileSync(process.env.DUMP, "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      const [t, c] = line.split("|");
+      (have[t] = have[t] || []).push(c);
+    }
+    const missingTables = [], missingColumns = [];
+    for (const t of Object.values(snap.tables)) {
+      if (!have[t.name]) { missingTables.push(t.name); continue; }
+      for (const c of Object.keys(t.columns)) {
+        if (!have[t.name].includes(c)) missingColumns.push(t.name + "." + c);
+      }
+    }
+    console.log(JSON.stringify({
+      tableCount: Object.keys(snap.tables).length,
+      missingTables, missingColumns,
+    }));
+  ' 2>/dev/null)"
+
+  if [ -z "$result" ]; then
+    log_error "could not compare replayed schema against $snapshot (is node available?)"
+    return
+  fi
+
+  local n_tables missing_t missing_c
+  n_tables="$(echo "$result" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).tableCount))')"
+  missing_t="$(echo "$result" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).missingTables.join(" ")))')"
+  missing_c="$(echo "$result" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).missingColumns.join(" ")))')"
+
+  if [ -z "$missing_t" ]; then
+    log_success "all $n_tables tables in $(basename "$snapshot") exist after replay"
+  else
+    log_error "tables in db/schema/*.ts that no migration creates:"
+    for t in $missing_t; do echo "      $t"; done
+  fi
+
+  if [ -z "$missing_c" ]; then
+    log_success "all columns in $(basename "$snapshot") exist after replay"
+  else
+    log_error "columns in db/schema/*.ts that no migration creates:"
+    for c in $missing_c; do echo "      $c"; done
+  fi
 }
 
 validate_schema() {
-  log_section "Schema Validation"
+  validate_schema_matches_drizzle
 
-  # Of the eleven tables that 20260725_align_schema_drift.sql had to create by
-  # hand because they existed only in db/schema/*.ts, ten are reachable from
-  # the replayed history. If a future change loses their migration again, this
-  # fails here rather than in production.
-  local drift_tables=(
-    class_features_library character_features character_subclasses
-    feature_usage_log experience_events level_progression rest_events
-    character_hit_dice character_spell_slots spell_slot_usage_log
-  )
-  local core_tables=(
-    characters campaigns game_sessions dialogue_history memories
-    combat_encounters combat_participants combat_participant_status
-    conditions_library
-  )
-  for t in "${core_tables[@]}" "${drift_tables[@]}"; do assert_table "$t"; done
-
-  for t in character_equipment character_inventory character_spells; do
-    report_gap_blocked "table $t"
-  done
-
-  log_section "Column Validation"
+  log_section "Targeted Incident Assertions"
 
   # The exact column whose absence 500'd every POST /v1/combat/sessions/:id/start.
   assert_column combat_participant_status exhaustion_level integer
+  # Inverse drift from the 20260710 fix: prod was migrated to jsonb, schema.ts
+  # was not updated to match until 17ebfd47.
+  assert_column character_equipment magic_effects jsonb
+  # Proves 20260710_align_character_equipment.sql actually did its conversion
+  # during replay rather than being skipped: the backfill creates this column
+  # as text[], that migration turns it into text.
+  assert_column character_equipment magic_properties text
+  assert_column characters class_levels jsonb
+  assert_column tokens created_by uuid
   assert_column combat_encounters current_round integer
-  assert_column combat_participants max_hp integer
   assert_column character_spell_slots spell_level integer
-
-  for c in characters.class_levels tokens.created_by character_equipment.magic_effects; do
-    report_gap_blocked "column $c"
-  done
 }
 
 validate_constraints() {

@@ -57,7 +57,13 @@ Never satisfy the guard by reverting the schema edit or hand-editing a snapshot 
 
 `bun run test:migrations` (`scripts/test-migrations.sh`, the `migration-replay` job in the `DB Guards` workflow) replays the migration history into a throwaway PostgreSQL database on every push, so a migration that cannot apply fails CI instead of the production box. It ends by re-running the exact combat-start `INSERT` from the 20260725 production logs.
 
-The history does not replay perfectly: some of this project's schema was never created by any committed migration (the SQL for `0002_steady_darwin` and `0003_thin_hairball` is missing from the repo though `meta/_journal.json` references it, and several tables were made through the Supabase dashboard). Those known-unreplayable files are listed with reasons in `db/migrations/.replay-known-gaps`. **That list only ever shrinks — never add a new migration to it.** A migration not on the list that fails to replay fails CI.
+Its central assertion is that **every table and column `db/schema/*.ts` declares exists after replaying the committed migrations**. That check is driven by the newest snapshot in `db/migrations/meta/`, not a hand-maintained list, so it cannot go stale as the schema grows — and it is exactly the check whose absence caused the 20260725 incident. It currently passes for all 65 tables.
+
+Some of this project's schema had never been created by any committed migration: the SQL for `0002_steady_darwin` and `0003_thin_hairball` is missing from the repo though `meta/_journal.json` references both, and several tables were made through the Supabase dashboard. `db/migrations/20251106_backfill_lost_drizzle_migrations.sql` reconstructs what could be reconstructed — nine tables and fifteen columns, derived mechanically from the drizzle snapshot, every statement idempotent so it is a no-op against production.
+
+Six migrations still cannot replay, all because they depend on `campaign_characters`, `starter_character_templates` or `character_creation_metrics` — tables that drizzle does not model, so there is no trustworthy source for their DDL. They are listed with reasons in `db/migrations/.replay-known-gaps`, and can only be cleared by dumping the real definitions out of production (`pg_dump --schema-only -t <table>`) and committing them. **That list only ever shrinks — never add a new migration to it.** A migration not on the list that fails to replay fails the build.
+
+Running it locally needs a PostgreSQL server; `TEST_DATABASE_URL` overrides the default of `postgres://localhost:5432/postgres`. Without pgvector some migrations cannot run, so the schema-completeness findings are downgraded to warnings rather than reporting a failure the environment caused. CI runs on `pgvector/pgvector:pg16`, where nothing is skipped.
 
 ## Permanent incident regressions
 

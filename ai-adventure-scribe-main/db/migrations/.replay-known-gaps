@@ -1,74 +1,58 @@
 # Known replay gaps -- scripts/test-migrations.sh
 # ============================================================================
 # Migrations listed here are ALLOWED to fail during a from-scratch replay.
-# Every one fails for the same structural reason, established by replaying the
-# full history into a scratch PostgreSQL 14 database on 2026-07-25:
+# A migration NOT listed here that fails to replay fails the build.
 #
-#   Some of this project's schema was never created by a committed migration.
-#   Two drizzle migrations are referenced by db/migrations/meta/_journal.json
-#   but their SQL files are absent from the repo entirely --
-#   0002_steady_darwin.sql and 0003_thin_hairball.sql. Their snapshots survive
-#   (meta/0002_snapshot.json, meta/0003_snapshot.json) but the DDL does not.
-#   Other objects were created directly through the Supabase dashboard and were
-#   never captured as migrations at all.
+# History
+# ============================================================================
+# This file started with 14 entries. Some of this project's schema had never
+# been created by any committed migration: db/migrations/meta/_journal.json
+# references two drizzle migrations, 0002_steady_darwin and
+# 0003_thin_hairball, whose .sql files are absent from the repo entirely (only
+# their snapshots survive), and further objects were made directly through the
+# Supabase dashboard and never captured as migrations at all.
 #
-#   So the objects below exist in production and in db/schema/*.ts, but nothing
-#   in supabase/migrations/ or db/migrations/ creates them, and any migration
-#   that references one cannot replay from scratch:
+# db/migrations/20251106_backfill_lost_drizzle_migrations.sql reconstructed
+# what could be reconstructed: nine tables and fifteen columns, taken from
+# db/migrations/meta/0004_snapshot.json, which 17ebfd47 verified equals
+# production exactly. That cleared 8 of the 14 entries, and the replay now
+# produces every table and column that db/schema/*.ts declares.
 #
-#     character_equipment, campaign_characters, starter_character_templates,
-#     ai_usage, the chunk_type enum, characters.class_levels,
-#     characters.skill_proficiencies
+# What is left
+# ============================================================================
+# The six below all depend on one of three tables that are NOT modeled in
+# db/schema/*.ts at all:
 #
-# This file is a record of that debt, not an excuse for it. Its purpose is to
-# let the replay test be enforcing TODAY for everything that is not already
-# broken: a migration NOT listed here that fails to replay fails CI.
+#     campaign_characters, starter_character_templates,
+#     character_creation_metrics
+#
+# There is no trustworthy source for their DDL. drizzle does not model them,
+# so 0004_snapshot.json cannot supply their shape, and inventing column
+# definitions from the SQL that happens to reference them would produce a
+# replayed schema that silently disagrees with production -- which would make
+# this whole test a liar. They can only be cleared by someone dumping the real
+# definitions out of production (pg_dump --schema-only -t <table>) and
+# committing them as a migration.
 #
 # ============================================================================
 # RULES
 # ============================================================================
 # * NEVER add a newly written migration to this file. If a migration you are
-#   adding cannot replay, the migration is wrong, or it depends on an object
-#   that also needs a migration -- write that one too.
-# * Entries may only be REMOVED. When the missing DDL above is finally
-#   backfilled as a real migration, delete the entries it unblocks. The test
-#   reports any listed migration that has started passing.
+#   adding cannot replay, either the migration is wrong or it depends on an
+#   object that also needs a migration -- write that one too.
+# * Entries may only be REMOVED. The test reports any listed migration that
+#   has started passing, so this file cannot silently rot.
 #
 # Format: one repo-relative path per line, '#' starts a comment.
 # ============================================================================
 
-# --- Reference characters.skill_proficiencies (never migrated) -------------
-supabase/migrations/20251114_add_passive_skills.sql
-
-# --- Reference character_equipment (never migrated) ------------------------
-supabase/migrations/20251126_fix_character_equipment_permissions.sql
-db/migrations/20260710_align_character_equipment.sql
-db/migrations/20260711_recategorize_custom_equipment.sql
-
-# --- Reference campaign_characters (never migrated) ------------------------
+# --- Reference campaign_characters (not modeled in db/schema/*.ts) ----------
 supabase/migrations/20251126_fix_remaining_table_permissions.sql
 db/migrations/20260713_revoke_remaining_anon_access.sql
 
-# --- Reference character_creation_metrics / starter_character_templates ----
+# --- Reference character_creation_metrics / starter_character_templates -----
+# (neither is modeled in db/schema/*.ts)
 db/migrations/20251214_add_missing_fk_indexes.sql
 supabase/migrations/20260103_seed_starter_character_templates.sql
 supabase/migrations/20260117_update_eternal_feast_characters.sql
 db/migrations/20260710_create_inventory_tables.sql
-
-# --- Reference ai_usage (never migrated) -----------------------------------
-db/migrations/20260708_add_ai_usage_cost_tracking.sql
-
-# --- Reference the chunk_type enum (never migrated) ------------------------
-supabase/migrations/20260717_add_handout_chunks_and_journal_entries.sql
-
-# --- Reference memories.embedding, i.e. the vector type --------------------
-# Created by supabase/migrations/20250920_add_memory_embeddings.sql, which is
-# pre-baseline and therefore not replayed; the column is also absent from the
-# 0001 introspection baseline.
-supabase/migrations/20260706_secure_memories.sql
-
-# --- References characters.class_levels (never migrated) -------------------
-# The 20260725 drift-alignment migration itself. It ran fine against
-# production, where class_levels exists; it cannot replay from scratch because
-# the migration that added class_levels was never committed.
-db/migrations/20260725_align_schema_drift.sql
