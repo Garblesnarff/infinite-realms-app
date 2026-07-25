@@ -1,7 +1,7 @@
 import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
+import { combatLogger } from '../../lib/logger.js';
 import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactical/dispatch.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
-import { combatLogger } from '../../lib/logger.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
 import type { MapEntity } from '../../tactical/types.js';
@@ -101,11 +101,16 @@ export async function applyDmTacticalActions(
     if (result.applied) {
       const current = await loadActiveTacticalMap(sessionId);
       appliedDeltas.push(deltaFor(result.action, result, current?.entities));
-    }
-    else {
-      combatLogger.warn(
-        { sessionId, action, refusal: result.refusal },
-        '[tactical] dropped invalid DM map action',
+    } else {
+      // An unresolvable entity means the DM and the board disagree about who exists; that is
+      // the failure that silently froze an entire encounter, so it is logged at error level
+      // with the roster attached rather than warned about and forgotten.
+      const unknownEntity = (result.refusal as { reason?: string }).reason === 'unknown_entity';
+      combatLogger[unknownEntity ? 'error' : 'warn'](
+        { sessionId, action, refusal: result.refusal, alert: unknownEntity },
+        unknownEntity
+          ? '[tactical] DM map action named an entity that is not on the board'
+          : '[tactical] dropped invalid DM map action',
       );
       degraded.push(result.refusal);
     }

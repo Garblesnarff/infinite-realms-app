@@ -7,6 +7,7 @@
  */
 import { parseTacticalDigest, resolveDigestEntity, resolvePairFromText } from './digest-parse.js';
 import { getDistance } from './engine.js';
+import { resolveEntityRef } from './identity.js';
 
 import type { DigestEntity, TacticalDigest } from './digest-parse.js';
 import type { MapEntity } from './types.js';
@@ -44,31 +45,47 @@ const asPoint = (x: number, y: number): MapEntity => ({
   movementRemaining: 0,
 });
 
+/**
+ * Map actions are model-authored, so their entity references drift in case and separators
+ * exactly like every other DM-supplied id. They are matched through the shared resolver
+ * against the digest, never by string equality.
+ */
+const actionTargets = (
+  digest: TacticalDigest,
+  reference: string | null | undefined,
+  actorId: string,
+): boolean => resolveEntityRef([...digest.entities.values()], reference ?? '')?.id === actorId;
+
 /** A move whose destination the engine measures as within reach cures a melee violation. */
 function moveFixesReach(
   response: Pick<DMResponse, 'map_actions'>,
+  digest: TacticalDigest,
   actorId: string,
   target: DigestEntity,
 ): boolean {
   return (response.map_actions ?? []).some((action) => {
     if (action.action === 'move')
       return (
-        action.entityId === actorId &&
+        actionTargets(digest, action.entityId, actorId) &&
         action.x != null &&
         action.y != null &&
         getDistance(asPoint(action.x, action.y), asPoint(target.x, target.y)) <= MELEE_REACH_FEET
       );
     // Forced movement and teleports relocate the actor by rules the digest cannot replay;
     // their presence is accepted rather than second-guessed.
-    return action.action === 'forced_move' && action.target === actorId;
+    return action.action === 'forced_move' && actionTargets(digest, action.target, actorId);
   });
 }
 
-const movesActor = (response: Pick<DMResponse, 'map_actions'>, actorId: string): boolean =>
+const movesActor = (
+  response: Pick<DMResponse, 'map_actions'>,
+  digest: TacticalDigest,
+  actorId: string,
+): boolean =>
   (response.map_actions ?? []).some(
     (action) =>
-      (action.action === 'move' && action.entityId === actorId) ||
-      (action.action === 'forced_move' && action.target === actorId),
+      (action.action === 'move' && actionTargets(digest, action.entityId, actorId)) ||
+      (action.action === 'forced_move' && actionTargets(digest, action.target, actorId)),
   );
 
 type AttackIntent = { actor: DigestEntity; target: DigestEntity; ranged: boolean };
@@ -124,7 +141,7 @@ export function validateSpatialCombatContract(
     const relation = actor.relations.get(target.id);
     if (!relation) continue;
     if (!ranged && relation.distanceFeet > MELEE_REACH_FEET) {
-      if (moveFixesReach(response, actor.id, target)) continue;
+      if (moveFixesReach(response, digest, actor.id, target)) continue;
       return {
         kind: 'melee_out_of_reach',
         actorId: actor.id,
@@ -136,7 +153,7 @@ export function validateSpatialCombatContract(
           `melee requires ${MELEE_REACH_FEET}ft; you have ${actor.movementRemaining}ft movement.`,
       };
     }
-    if (ranged && !relation.hasLineOfSight && !movesActor(response, actor.id)) {
+    if (ranged && !relation.hasLineOfSight && !movesActor(response, digest, actor.id)) {
       return {
         kind: 'ranged_without_line_of_sight',
         actorId: actor.id,

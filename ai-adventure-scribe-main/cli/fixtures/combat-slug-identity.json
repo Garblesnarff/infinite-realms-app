@@ -1,0 +1,559 @@
+{
+  "turns": [
+    {
+      "input": "I hold the line by the wagon.",
+      "response": {
+        "text": "Shadow Roach is thirty feet off. It skitters closer, mandibles wide.",
+        "roll_requests": [],
+        "combat_transition": "none",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [
+          {
+            "action": "move",
+            "entityId": "shadow-roach-1",
+            "x": 3,
+            "y": 3,
+            "changes": null
+          }
+        ],
+        "combat_actions": []
+      }
+    },
+    {
+      "input": "I brace for the charge.",
+      "response": {
+        "text": "Shadow Roach closes the last stride and bites.",
+        "roll_requests": [],
+        "combat_transition": "none",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [
+          {
+            "action": "move",
+            "entityId": "shadow_roach_1",
+            "x": 2,
+            "y": 2,
+            "changes": null
+          },
+          {
+            "action": "move",
+            "entityId": "seeker",
+            "x": 1,
+            "y": 2,
+            "changes": null
+          }
+        ],
+        "combat_actions": [
+          {
+            "actor_id": "shadow-roach-1",
+            "action_type": "attack",
+            "target_ids": ["the-seeker"],
+            "weapon_id": null,
+            "spell_id": null,
+            "slot_level": null,
+            "movement_feet": 10
+          }
+        ]
+      }
+    }
+  ],
+  "map": {
+    "id": "fixture-slug-map",
+    "sessionId": "fixture-session",
+    "width": 8,
+    "height": 8,
+    "round": 1,
+    "sceneDescription": "A collapsed shrine floor.",
+    "cells": [
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ]
+    ],
+    "entities": [
+      {
+        "id": "3f1c9a72-8d4b-4c21-9e77-2b6f0a5d1e33",
+        "slug": "the-seeker",
+        "name": "The Seeker",
+        "x": 1,
+        "y": 1,
+        "size": "medium",
+        "type": "pc",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      },
+      {
+        "id": "a71e4d05-6c92-4f18-b3aa-90e7c2418d64",
+        "slug": "shadow-roach-1",
+        "name": "Shadow Roach",
+        "x": 7,
+        "y": 7,
+        "size": "medium",
+        "type": "monster",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      }
+    ]
+  }
+}

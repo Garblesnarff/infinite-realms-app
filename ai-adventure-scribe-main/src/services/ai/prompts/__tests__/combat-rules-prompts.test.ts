@@ -59,9 +59,15 @@ describe('CombatRulesPrompts', () => {
       expect(section).toContain('movementRemaining');
       expect(section).toContain('line of sight');
       // The worked example must show both halves of one turn.
-      expect(section).toContain('"action":"move","entityId":"void-maw"');
-      expect(section).toContain('"action_type":"attack","target_ids":["seeker"]');
+      expect(section).toContain('"action":"move","entityId":"shadow-roach-1"');
+      expect(section).toContain('"action_type":"attack","target_ids":["the-seeker"]');
       expect(section).toContain('</spatial_turn_contract>');
+      // Every id in the example is a token the digest actually renders, and the rule that
+      // makes that matter is stated outright.
+      expect(section).toContain('copied verbatim from the tactical digest');
+      expect(section).toContain('shadow-roach-1|Shadow Roach@12,10');
+      expect(section).toContain('the-seeker|The Seeker@1,1');
+      expect(section).not.toMatch(/entityId":"[0-9a-f]{8}-/);
     });
   });
 

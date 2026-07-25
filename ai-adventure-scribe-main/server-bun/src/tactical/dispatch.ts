@@ -6,6 +6,7 @@ import {
   updateCell,
   getValidMoves,
 } from './engine.js';
+import { entitySlug, resolveEntityRef, unknownEntityMessage } from './identity.js';
 
 import type { Cell, MapEntity, TacticalMap } from './types.js';
 import type { DMMapAction, DMResponse } from '../services/dm/dm-response-schema.js';
@@ -15,37 +16,76 @@ export type DispatchResult =
   | { applied: true; action: MapAction; path?: { x: number; y: number }[] }
   | { applied: false; action: MapAction; refusal: Record<string, unknown> };
 
+/**
+ * The DM addresses the board in digest slugs, and spells them inconsistently. Every entity
+ * reference in a map action is therefore resolved here before it reaches the engine, and a
+ * reference that resolves to nothing becomes a correctable refusal carrying the live roster
+ * — never a silent drop, which is what froze the board for a whole encounter in run 6.
+ */
+function unknownEntity(map: TacticalMap, action: MapAction, token: string): DispatchResult {
+  return {
+    applied: false,
+    action,
+    refusal: {
+      reason: 'unknown_entity',
+      entityId: token,
+      message: unknownEntityMessage(map.entities, token),
+      entities: map.entities.map((entity) => ({
+        entityId: entitySlug(entity),
+        x: entity.x,
+        y: entity.y,
+      })),
+    },
+  };
+}
+
 /** The only mutation gateway used by both player requests and DM structured output. */
 export function dispatchMapAction(map: TacticalMap, action: MapAction): DispatchResult {
   if (action.action === 'move') {
     if (!action.entityId || action.x == null || action.y == null)
       return { applied: false, action, refusal: { reason: 'invalid_action' } };
-    const result = moveEntity(map, action.entityId, action.x, action.y);
+    const entity = resolveEntityRef(map.entities, action.entityId);
+    if (!entity) return unknownEntity(map, action, action.entityId);
+    // Downstream deltas and the frontend board key on the internal id, so the resolved
+    // action — not the model's spelling — is what the result reports.
+    const resolved: MapAction = { ...action, entityId: entity.id };
+    const result = moveEntity(map, entity.id, action.x, action.y);
     return result.success
-      ? { applied: true, action, path: result.path }
+      ? { applied: true, action: resolved, path: result.path }
       : {
           applied: false,
-          action,
-          refusal: { ...result, validMoves: getValidMoves(map, action.entityId) },
+          action: resolved,
+          refusal: { ...result, validMoves: getValidMoves(map, entity.id) },
         };
   }
   if (action.action === 'forced_move') {
+    const entity = resolveEntityRef(map.entities, action.target);
+    if (!entity) return unknownEntity(map, action, action.target);
+    const resolved: MapAction = { ...action, target: entity.id };
     const result = forceMoveEntity(
       map,
-      action.target,
+      entity.id,
       action.mode,
       action.origin,
       action.distance,
       action.destination,
     );
     return result.success
-      ? { applied: true, action, path: result.path }
-      : { applied: false, action, refusal: { ...result, reason: 'illegal_forced_movement' } };
+      ? { applied: true, action: resolved, path: result.path }
+      : {
+          applied: false,
+          action: resolved,
+          refusal: { ...result, reason: 'illegal_forced_movement' },
+        };
   }
-  if (action.action === 'remove')
-    return action.entityId && removeEntity(map, action.entityId)
-      ? { applied: true, action }
+  if (action.action === 'remove') {
+    if (!action.entityId) return { applied: false, action, refusal: { reason: 'invalid_entity' } };
+    const entity = resolveEntityRef(map.entities, action.entityId);
+    if (!entity) return unknownEntity(map, action, action.entityId);
+    return removeEntity(map, entity.id)
+      ? { applied: true, action: { ...action, entityId: entity.id } }
       : { applied: false, action, refusal: { reason: 'invalid_entity' } };
+  }
   if (action.action === 'place')
     return action.changes && placeEntity(map, action.changes as MapEntity)
       ? { applied: true, action }

@@ -390,10 +390,14 @@ closes the gap (never more than that entity's movementRemaining) before or inste
 Ranged attacks and spells require line of sight in the digest and take the listed cover into account,
 and monsters move on their own turns through \`map_actions\` too - prose movement changes nothing.
 
-Worked example - digest line \`void-maw|Void-Maw@2,3 mv30/30 vs[seeker:30ft/LoS/c0/range]\`, Void-Maw's turn
+Every \`entityId\`, \`actor_id\`, and \`target_ids\` value must be copied verbatim from the tactical digest:
+the digest's leading token for each line is that entity's id, and no other spelling of it exists.
+
+Worked example - digest lines \`the-seeker|The Seeker@1,1 mv30/30 vs[shadow-roach-1:55ft/LoS/c0/range]\`
+and \`shadow-roach-1|Shadow Roach@12,10 mv30/30 vs[the-seeker:55ft/LoS/c0/range]\`, Shadow Roach's turn
 (move 25ft to close, then attack in the same turn):
-\`map_actions\`: \`[{"action":"move","entityId":"void-maw","x":5,"y":6,"changes":null}]\`
-\`combat_actions\`: \`[{"actor_id":"void-maw","action_type":"attack","target_ids":["seeker"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":25}]\`
+\`map_actions\`: \`[{"action":"move","entityId":"shadow-roach-1","x":7,"y":6,"changes":null}]\`
+\`combat_actions\`: \`[{"actor_id":"shadow-roach-1","action_type":"attack","target_ids":["the-seeker"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":25}]\`
 </spatial_turn_contract>`;
   }
 

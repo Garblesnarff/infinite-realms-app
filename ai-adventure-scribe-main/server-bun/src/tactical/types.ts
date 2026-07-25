@@ -20,9 +20,14 @@ export interface Cell {
   decoration?: string;
 }
 
-/** `id` deliberately remains a string: it is a CombatParticipant.id in CM-2. */
+/**
+ * `id` deliberately remains a string: it is a CombatParticipant.id in CM-2, and it never
+ * leaves the server. `slug` is the stable LLM-facing name assigned at placement; it is what
+ * the ASCII map legend, the tactical digest, and every DM map action speak in.
+ */
 export interface MapEntity {
   id: string;
+  slug?: string;
   x: number;
   y: number;
   size: EntitySize;

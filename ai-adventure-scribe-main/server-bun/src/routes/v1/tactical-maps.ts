@@ -16,9 +16,20 @@ import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
+import { resolveEntityRef } from '../../tactical/identity.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
+
+/**
+ * Clients and the CLI address entities by whatever the board handed them — a slug from the
+ * digest or the internal id. Both are normalised here so the combat intent layer, which keys
+ * strictly on participant ids, always receives the canonical one.
+ */
+async function resolveSessionEntityId(sessionId: string, token: string): Promise<string> {
+  const map = await loadActiveTacticalMap(sessionId);
+  return (map && resolveEntityRef(map.entities, token)?.id) || token;
+}
 
 /** Session-scoped tactical API; all writes delegate to the shared engine dispatcher. */
 export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
@@ -47,7 +58,8 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       set.status = 404;
       return { error: 'No active tactical map' };
     }
-    return { entityId: params.entityId, moves: getValidMoves(map, params.entityId) };
+    const entity = resolveEntityRef(map.entities, params.entityId);
+    return { entityId: params.entityId, moves: entity ? getValidMoves(map, entity.id) : [] };
   })
   .get('/:id/tactical-map/check/:fromId/:toId', async ({ params, user, set }) => {
     const access = await verifySessionOwnership(params.id, user.userId);
@@ -60,8 +72,8 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       set.status = 404;
       return { error: 'No active tactical map' };
     }
-    const from = map.entities.find((entity) => entity.id === params.fromId);
-    const to = map.entities.find((entity) => entity.id === params.toId);
+    const from = resolveEntityRef(map.entities, params.fromId);
+    const to = resolveEntityRef(map.entities, params.toId);
     if (!from || !to) {
       set.status = 404;
       return { error: 'Map entity not found' };
@@ -102,9 +114,10 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         return { error: 'No active combat encounter' };
       }
       try {
+        const actorId = await resolveSessionEntityId(params.id, body.entityId);
         const result = await executeCombatIntent(
           encounter.id,
-          { type: 'move', actorId: body.entityId, x: body.x, y: body.y },
+          { type: 'move', actorId, x: body.x, y: body.y },
           user.userId,
           'player',
         );
@@ -131,9 +144,10 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
           return { error: 'No active combat encounter' };
         }
         try {
+          const actorId = await resolveSessionEntityId(params.id, body.entityId);
           const result = await executeCombatIntent(
             encounter.id,
-            { type: 'move', actorId: body.entityId, x: body.x, y: body.y },
+            { type: 'move', actorId, x: body.x, y: body.y },
             user.userId,
             'player',
           );
@@ -198,7 +212,7 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         params.id,
         parsed.data.map_actions,
         async (refusal) => {
-          const prompt = `You are correcting one rejected tactical map action. Return a complete DM structured response with ONLY one legal replacement in map_actions and all other arrays empty. Do not write prose.\n\n<rejection>${JSON.stringify(refusal)}</rejection>`;
+          const prompt = `You are correcting one rejected tactical map action. Return a complete DM structured response with ONLY one legal replacement in map_actions and all other arrays empty. Do not write prose. If the rejection lists current entities, copy one of those entityId values verbatim.\n\n<rejection>${JSON.stringify(refusal)}</rejection>`;
           const response = await LLMProviderService.generate({
             prompt,
             maxTokens: 700,

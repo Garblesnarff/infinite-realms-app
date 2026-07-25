@@ -1,6 +1,8 @@
 /* eslint-disable max-lines */
 import ROT from 'rot-js';
 
+import { nextEntitySlug } from './identity';
+
 import type {
   AoEParams,
   AoEShape,
@@ -373,8 +375,10 @@ export function resetMovement(map: TacticalMap, entityId: string): boolean {
   entity.movementRemaining = entity.speedFeet;
   return true;
 }
+/** Placement is the one point where an entity joins the board, so slugs are minted here. */
 export function placeEntity(map: TacticalMap, entity: MapEntity): boolean {
   if (getEntity(map, entity.id) || !canOccupy(map, entity, entity.x, entity.y)) return false;
+  if (!entity.slug) entity.slug = nextEntitySlug(map.entities, entity);
   map.entities.push(entity);
   return true;
 }
