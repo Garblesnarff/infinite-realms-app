@@ -29,6 +29,13 @@
       "when": 1762393701581,
       "tag": "0003_thin_hairball",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784989385245,
+      "tag": "0004_schema_baseline",
+      "breakpoints": true
     }
   ]
 }

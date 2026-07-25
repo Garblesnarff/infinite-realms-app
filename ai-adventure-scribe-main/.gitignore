@@ -74,3 +74,6 @@ knip-output.txt
 *.sql.backup
 logs/
 ecosystem.config.cjs
+
+# Scratch dir used by scripts/check-schema-drift.sh
+.drizzle-drift-check/

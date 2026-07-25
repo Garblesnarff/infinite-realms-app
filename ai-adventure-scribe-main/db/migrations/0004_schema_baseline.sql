@@ -1,0 +1,26 @@
+-- 0004_schema_baseline -- NO-OP BASELINE MIGRATION. Deliberately contains no DDL.
+--
+-- Why this file exists
+-- --------------------
+-- drizzle-kit's snapshot chain (db/migrations/meta/*.json) had gone stale by
+-- eight months: the newest snapshot was 0003 (2025-11-06) while db/schema/*.ts
+-- had grown to 65 tables. Because nothing in CI ever ran drizzle-kit, that
+-- staleness was invisible -- and it is the same blind spot that let
+-- combat_participant_status.exhaustion_level and eleven whole tables live in
+-- db/schema/*.ts with no migration behind them (see 17ebfd47).
+--
+-- meta/0004_snapshot.json re-baselines the snapshot chain onto db/schema/*.ts
+-- as of 17ebfd47, which is the point at which production was verified to match
+-- db/schema/*.ts exactly. From here on, `bun run db:check-drift`
+-- (scripts/check-schema-drift.sh, wired into the `schema-drift` CI job) fails
+-- any commit that edits db/schema/*.ts without a matching migration.
+--
+-- The DDL drizzle-kit generated alongside this snapshot is intentionally NOT
+-- kept here: every statement in it was already applied to production (by the
+-- historical supabase/migrations + db/migrations files, finishing with
+-- 20260725_align_schema_drift.sql), so replaying it would fail on
+-- "already exists". Running it would be wrong in both worlds -- against
+-- production and against a from-scratch replay. Only the snapshot matters.
+--
+-- To regenerate the equivalent DDL for inspection:
+--   git stash -- db/migrations/meta/0004_snapshot.json && bunx drizzle-kit generate

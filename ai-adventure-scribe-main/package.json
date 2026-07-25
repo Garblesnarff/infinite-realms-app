@@ -48,7 +48,9 @@
     "check-dead": "bun run check-deps && bun run check-unused-exports && bun run check-case",
     "security-lint": "node scripts/security-lint.js",
     "smoke:api": "bun run scripts/api-smoke.ts",
-    "docs:serve": "bun run dev"
+    "docs:serve": "bun run dev",
+    "db:check-drift": "bash scripts/check-schema-drift.sh",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@dice-roller/rpg-dice-roller": "^5.5.1",

@@ -8,10 +8,50 @@ Production regressions must be reproduced at the boundary where they escaped. A 
 - Database mocks reproduce the real client's return type. In particular, a `postgres.js` query mock must return a `RowList`-shaped `Array` subclass with query metadata, not a plain array. Values crossing an Elysia boundary must be normalized to plain arrays.
 - LLM changes include at least one realistic prompt and request payload through `/v1/llm/generate`; `hello` and exact-word probes may supplement that path but cannot replace it.
 - Every production incident adds its full real-HTTP reproduction to `scripts/api-smoke.ts`. That check is permanent unless the product endpoint itself is retired.
+- **A `db/schema/*.ts` edit ships with its migration in the same commit.** See below.
+
+## The schema rule
+
+> **Editing `db/schema/*.ts` requires a matching migration in `db/migrations/` in the same commit.**
+
+This is enforced. `bun run db:check-drift` (`scripts/check-schema-drift.sh`, wired into the `schema-drift` job in `.github/workflows/ci.yml`) runs `drizzle-kit generate` against a scratch copy of the migrations directory and fails if any DDL is emitted — because emitted DDL means `db/schema/*.ts` needs something no migration provides.
+
+**Why the rule exists.** Drizzle schema files are TypeScript. Adding a column there makes the code compile, the types check, and the tests pass — while the column does not exist in any database. Nothing fails until a real query hits real PostgreSQL. Three separate production incidents came from exactly this:
+
+- **20260710** — `character_equipment` drifted from `db/schema/inventory.ts`.
+- **20260725** — `combat_participant_status.exhaustion_level` was added to `db/schema/combat.ts` in `e10115f0` with no migration. Every `POST /v1/combat/sessions/:id/start` had 500'd since that feature shipped.
+- **20260725, same investigation** — a full table-by-table diff found **eleven tables** present in `db/schema/*.ts` and absent from production: spellcasting, resting, levelling/XP and class-features writes had been silently failing since each shipped. See `17ebfd47` for the writeup.
+
+Type-checking and unit tests cannot catch this class of bug, which is why it needs a CI gate of its own.
+
+**Workflow.** From `ai-adventure-scribe-main/`:
+
+```bash
+# 1. edit db/schema/<file>.ts
+# 2. generate the migration
+bunx drizzle-kit generate --name describe_your_change
+# 3. review and edit db/migrations/<n>_describe_your_change.sql by hand --
+#    drizzle's DDL is a starting point. Add backfills and get NOT NULL /
+#    DEFAULT ordering right for a table that already has rows.
+# 4. verify
+bun run db:check-drift
+# 5. commit the schema edit, the .sql and the refreshed db/migrations/meta/ snapshot together
+```
+
+Hand-written migrations are fine — the guard compares against `db/migrations/meta/`, so write the SQL by hand and still run `drizzle-kit generate` to refresh the snapshot.
+
+Never satisfy the guard by reverting the schema edit or hand-editing a snapshot to match. The snapshot is the record of what migrations have actually been written.
+
+## Migration replay
+
+`bun run test:migrations` (`scripts/test-migrations.sh`, the `migration-replay` CI job) replays the migration history into a throwaway PostgreSQL database on every push, so a migration that cannot apply fails CI instead of the production box. It ends by re-running the exact combat-start `INSERT` from the 20260725 production logs.
+
+The history does not replay perfectly: some of this project's schema was never created by any committed migration (the SQL for `0002_steady_darwin` and `0003_thin_hairball` is missing from the repo though `meta/_journal.json` references it, and several tables were made through the Supabase dashboard). Those known-unreplayable files are listed with reasons in `db/migrations/.replay-known-gaps`. **That list only ever shrinks — never add a new migration to it.** A migration not on the list that fails to replay fails CI.
 
 ## Permanent incident regressions
 
 1. **postgres.js `RowList` serialization:** `GET /v1/starter-character-templates?campaign_id=the-eternal-feast` must return `200 application/json`, at least five rows, and more than 5 KB. The HTTP test supplies a `RowList`-shaped subclass and proves it cannot become `[object Object]` with `text/plain`.
 2. **Realistic LLM generation:** `POST /v1/llm/generate` sends a small gameplay prompt, requires `200 application/json`, and requires non-empty `text`. This traverses the configured provider/model chain and catches delisted models or upstream passthrough failures.
+3. **Schema drift (`exhaustion_level`):** `combat_participant_status.exhaustion_level` must exist after a migration replay, and the combat-start `INSERT` that names it must succeed. Both are asserted by `scripts/test-migrations.sh`; the drift that caused it is prevented going forward by `scripts/check-schema-drift.sh`.
 
-Add the next incident as item 3 and add its check to the same smoke journey in the fixing change.
+Add the next incident as item 4 and add its check to the same smoke journey in the fixing change.
