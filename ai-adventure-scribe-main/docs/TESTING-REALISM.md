@@ -16,8 +16,9 @@ Production regressions must be reproduced at the boundary where they escaped. A 
 
 This is enforced in two places. Both run `scripts/check-schema-drift.sh`, which runs `drizzle-kit generate` against a scratch copy of the migrations directory and fails if any DDL is emitted — because emitted DDL means `db/schema/*.ts` needs something no migration provides.
 
-1. **The `.husky/pre-commit` hook**, which blocks the commit. It only fires when `db/schema/*.ts` is actually staged, needs no database, and takes a few seconds — so it costs nothing on a normal commit. This is the primary enforcement point.
-2. **The `DB Guards` workflow** (`.github/workflows/db-guards.yml`), which cannot be skipped with `--no-verify`. It is a separate workflow from `ci.yml` with `paths:` filters, so it only consumes Actions minutes on pushes that touch the database layer.
+1. **The `.husky/pre-commit` hook**, which blocks the commit. It only fires when `db/schema/*.ts` is actually staged, needs no database, and takes about half a second — so it costs nothing on a normal commit. This is the primary enforcement point.
+2. **The `.husky/pre-push` hook**, which blocks the push. It runs the same check over the whole tree on every push, so it catches drift committed with `--no-verify` — and drift introduced by any commit, not just the one being made. If the push also changes `db/migrations/` or `supabase/migrations/`, it runs the migration replay too, provided a PostgreSQL server is reachable (`TEST_DATABASE_URL`, else `postgres://localhost:5432/postgres`); it warns and skips rather than failing when there is none.
+3. **The `DB Guards` workflow** (`.github/workflows/db-guards.yml`), which cannot be skipped locally at all. It is a separate workflow from `ci.yml` with `paths:` filters, so it only consumes Actions minutes on pushes that touch the database layer.
 
 Verify the hook is active — a fresh clone does not set this up, and without it none of the `.husky/` hooks run, including the secret-detection one:
 
