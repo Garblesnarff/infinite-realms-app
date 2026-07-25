@@ -334,7 +334,8 @@ describe('useAIResponse', () => {
     expect(userDataApi.startStructuredCombat).toHaveBeenCalledWith(mockSessionId, {
       participants: [
         { encounterId: '', characterId: 'ch', name: 'Rook', initiativeModifier: 0 },
-        { encounterId: '', name: 'Goblin', initiativeModifier: 0 },
+        // monsterId is what lets the server resolve a real SRD stat block.
+        { encounterId: '', name: 'Goblin', initiativeModifier: 0, monsterId: 'srd:goblin' },
       ],
       sceneSpec: { width: 10, height: 10 },
     });

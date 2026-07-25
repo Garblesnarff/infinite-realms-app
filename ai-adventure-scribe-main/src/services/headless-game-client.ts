@@ -6,6 +6,7 @@ import type { RollRequest } from '@/types/roll-request';
 import { buildAIContext } from '@/hooks/ai/ai-utils';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { AIService } from '@/services/ai-service';
+import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
 import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 import { extractHeadlessOptions } from '@/services/headless-game-options';
@@ -86,9 +87,26 @@ export class HeadlessGameClient {
     return this.options;
   }
 
+  /**
+   * One turn. Any failure after the LLM has answered is re-thrown with the provider/model
+   * that served it attached, so a failed turn still lands in provider telemetry.
+   */
   async play(
     input: string,
     diceRollBatch?: readonly CompletedHeadlessRoll[],
+  ): Promise<HeadlessEvent[]> {
+    const telemetry: { provider?: 'openrouter' | 'gemini'; model?: string } = {};
+    try {
+      return await this.runTurn(input, diceRollBatch, telemetry);
+    } catch (error) {
+      throw this.withTelemetry(error as object, telemetry.provider, telemetry.model);
+    }
+  }
+
+  private async runTurn(
+    input: string,
+    diceRollBatch: readonly CompletedHeadlessRoll[] | undefined,
+    telemetry: { provider?: 'openrouter' | 'gemini'; model?: string },
   ): Promise<HeadlessEvent[]> {
     const diceRolls = diceRollBatch || [];
     const diceRoll = diceRolls.at(-1);
@@ -119,8 +137,6 @@ export class HeadlessGameClient {
       isInCombat: this.combatActive,
       pendingRollsCount: this.pending.length,
     });
-    let provider: 'openrouter' | 'gemini' | undefined;
-    let model: string | undefined;
     const nextTurnCount = this.turnCount + 1;
     const response = await AIService.chatWithDM({
       message: effectiveInput,
@@ -128,8 +144,8 @@ export class HeadlessGameClient {
       conversationHistory: [...this.history, ...priorRollHistory],
       turnCount: nextTurnCount,
       onProviderResponse: (metadata) => {
-        provider = metadata.provider;
-        model = metadata.model;
+        telemetry.provider = metadata.provider;
+        telemetry.model = metadata.model;
       },
     });
     if (!response || typeof response.text !== 'string' || !response.text.trim()) {
@@ -145,9 +161,9 @@ export class HeadlessGameClient {
         response as Parameters<typeof startStructuredCombatTransition>[2],
       );
       if (!startResponse?.ok) {
-        throw new Error(
-          `Structured combat start failed (${startResponse?.status || 'no response'})`,
-        );
+        // Carries the DM envelope and the server's body so the transcript records what was
+        // actually attempted, not just a status code.
+        throw await combatStartErrorFromResponse(startResponse, response);
       }
       this.combatActive = true;
     } else if (response.combat_transition === 'end') {
@@ -209,7 +225,9 @@ export class HeadlessGameClient {
     });
     this.turnCount = nextTurnCount;
     await userDataApi.updateSession(this.sessionId, { turn_count: this.turnCount });
-    const events: HeadlessEvent[] = [{ type: 'narration', text, provider, model }];
+    const events: HeadlessEvent[] = [
+      { type: 'narration', text, provider: telemetry.provider, model: telemetry.model },
+    ];
     this.options = extractHeadlessOptions(text, response.options);
     if (this.options.length) events.push({ type: 'options', options: this.options });
     if (this.pending.length) events.push({ type: 'roll_request', requests: this.pending });
@@ -250,6 +268,15 @@ export class HeadlessGameClient {
       purpose: request.purpose,
     });
     return { skipped: false, request, result };
+  }
+
+  /**
+   * A turn that fails *after* the LLM answered still consumed a provider call. Attaching the
+   * telemetry to the error is what lets the auto-play loop attribute failed turns to a
+   * provider/model instead of losing them from the totals entirely.
+   */
+  private withTelemetry<T extends object>(error: T, provider?: string, model?: string): T {
+    return Object.assign(error, provider ? { provider, model } : {});
   }
 
   private rollContext(diceRoll: { request: RollRequest; result: DiceRollResult }) {

@@ -4,6 +4,8 @@
  * Type-safe interfaces for D&D 5E combat initiative and turn order system
  */
 
+import type { EntitySize } from '../tactical/types.js';
+
 /**
  * @openapi
  * components:
@@ -326,6 +328,12 @@ export interface CreateParticipantInput {
   encounterId: string;
   characterId?: string | null;
   npcId?: string | null;
+  /**
+   * SRD catalog id (e.g. `srd:bandit`) from a structured DM combat start. Input-only:
+   * it resolves a stat block server-side and is never persisted or used as a database
+   * key, so a hallucinated value degrades to generic NPC stats instead of corrupting data.
+   */
+  monsterId?: string | null;
   name: string;
   initiativeModifier: number;
   hpCurrent?: number | null;
@@ -359,6 +367,12 @@ export interface CombatState {
   participants: CombatParticipant[];
   turnOrder: TurnOrderEntry[];
   currentParticipant: CombatParticipant | null;
+  /**
+   * Tactical size per participant id, resolved from the SRD stat block at start time.
+   * `combat_participants` stores no monster reference, so this is the only way the size
+   * survives from stat-block resolution to tactical map generation.
+   */
+  participantSizes?: Record<string, EntitySize>;
 }
 
 /**

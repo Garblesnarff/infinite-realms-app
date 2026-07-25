@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AIService } from '../../src/services/ai-service';
+import { CombatStartError } from '../../src/services/combat/combat-start-failure';
 import { HeadlessGameClient } from '../../src/services/headless-game-client';
 import { userDataApi } from '../../src/services/user-data-api';
 import fixture from '../fixtures/combat-start.json';
@@ -71,8 +72,8 @@ describe('fixture headless structured combat bridge', () => {
       expect.objectContaining({
         participants: [
           expect.objectContaining({ characterId: 'pc-1', name: 'Rook', initiativeModifier: 3 }),
-          expect.objectContaining({ name: 'Goblin 1' }),
-          expect.objectContaining({ name: 'Goblin 2' }),
+          expect.objectContaining({ name: 'Goblin 1', monsterId: 'srd:goblin' }),
+          expect.objectContaining({ name: 'Goblin 2', monsterId: 'srd:goblin' }),
         ],
         sceneSpec: fixture.response.scene_spec,
       }),
@@ -86,5 +87,50 @@ describe('fixture headless structured combat bridge', () => {
     const roll = client.roll();
     expect(roll.skipped).toBe(false);
     if (!roll.skipped) expect(roll.result.expression).toContain('1d20+3');
+  });
+
+  it('reports a refused combat start with the DM envelope, response body, and telemetry', async () => {
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: 'fixture-session',
+      campaign_id: 'campaign-1',
+      character_id: 'pc-1',
+      campaign: {},
+      character: { id: 'pc-1', name: 'Rook' },
+    } as never);
+    vi.mocked(userDataApi.startStructuredCombat).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'Failed to start combat encounter',
+          stage: 'map_generation',
+          detail: 'tactical map write failed',
+        }),
+        { status: 500 },
+      ),
+    );
+    vi.mocked(AIService.chatWithDM).mockImplementation((async (request: {
+      onProviderResponse?: (metadata: { provider: string; model: string }) => void;
+    }) => {
+      request.onProviderResponse?.({ provider: 'openrouter', model: 'mistral-small-creative' });
+      return fixture.response;
+    }) as never);
+
+    const client = new HeadlessGameClient('fixture-session');
+    const failure = await client.play('I draw my sword.').then(
+      () => null,
+      (error: CombatStartError & { provider?: string; model?: string }) => error,
+    );
+
+    expect(failure).toBeInstanceOf(CombatStartError);
+    expect(failure).toMatchObject({
+      status: 500,
+      stage: 'map_generation',
+      detail: 'tactical map write failed',
+      category: 'transport',
+      provider: 'openrouter',
+      model: 'mistral-small-creative',
+    });
+    // The full DM envelope travels with the failure so a transcript can record what was tried.
+    expect(failure!.envelope).toEqual(fixture.response);
+    expect(failure!.responseBody).toContain('tactical map write failed');
   });
 });

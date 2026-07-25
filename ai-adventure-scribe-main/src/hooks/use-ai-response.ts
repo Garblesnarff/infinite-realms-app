@@ -25,6 +25,8 @@ import {
   executeStructuredCombatAction,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
+import { notifyRetryableCombatStartFailure } from '@/services/combat/combat-start-toast';
 import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { MemoryManager } from '@/services/memory-manager';
 import {
@@ -236,13 +238,21 @@ export const useAIResponse = () => {
         // A structured start is server-authoritative: the same transaction creates
         // combat participants (whose IDs become tactical entity IDs) and the map.
         if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
-          const startResponse = await startStructuredCombatTransition(
-            sessionId,
-            characterRecord,
-            result as Parameters<typeof startStructuredCombatTransition>[2],
-          );
-          if (startResponse && !startResponse.ok)
-            logger.warn('Server refused structured combat start', await startResponse.json());
+          const envelope = result as Parameters<typeof startStructuredCombatTransition>[2];
+          const attemptStart = async (): Promise<void> => {
+            const startResponse = await startStructuredCombatTransition(
+              sessionId,
+              characterRecord,
+              envelope,
+            );
+            if (startResponse?.ok) return;
+            // The failure is recoverable: the map simply was not created, so let the player
+            // retry the same start instead of stranding the scene mid-transition.
+            const failure = await combatStartErrorFromResponse(startResponse ?? null, envelope);
+            logger.warn('Server refused structured combat start', failure.toTranscriptDetail());
+            notifyRetryableCombatStartFailure(failure, attemptStart);
+          };
+          await attemptStart();
         }
         if (sessionId && result.combat_transition === 'end') {
           const endResponse = await userDataApi.endTacticalMap(sessionId);

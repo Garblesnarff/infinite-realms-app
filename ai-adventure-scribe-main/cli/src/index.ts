@@ -142,6 +142,22 @@ async function selectSession(args: Args): Promise<string> {
   });
 }
 
+/**
+ * A failed combat start must leave a full record in the transcript: the DM envelope that
+ * produced it and the server's response body. Without those, a broken run reads as a bare
+ * "Error: ... 500" with nothing to diagnose.
+ */
+function errorDetail(error: unknown): Record<string, unknown> | null {
+  const candidate = error as { toTranscriptDetail?: () => Record<string, unknown> };
+  return typeof candidate?.toTranscriptDetail === 'function' ? candidate.toTranscriptDetail() : null;
+}
+
+function printError(error: unknown, json: boolean, write: (line: string) => void): void {
+  printEvent({ type: 'error', message: String(error) }, json, write);
+  const detail = errorDetail(error);
+  if (detail) write(JSON.stringify(detail));
+}
+
 function printEvent(event: HeadlessEvent, json: boolean, write: (line: string) => void): void {
   if (json) return write(JSON.stringify(event));
   if (event.type === 'narration') write(`\n${event.text}\n`);
@@ -196,13 +212,14 @@ async function runPlay(args: Args): Promise<void> {
           run(message, rolls as readonly CompletedHeadlessRoll[] | undefined),
       },
       args.turns,
-      (error) => printEvent({ type: 'error', message: String(error) }, args.json, write),
+      (error) => printError(error, args.json, write),
       {
         delayMs: args.delay,
         persona: args.persona,
       },
     );
     write(JSON.stringify({ type: 'summary', ...summary }));
+    if (summary.verdict) write(`VERDICT: ${summary.verdict}`);
   } else {
     const readline = createInterface({ input, output });
     for await (const line of readline) {
@@ -214,7 +231,7 @@ async function runPlay(args: Args): Promise<void> {
             JSON.stringify(await client.move(move[1], Number(move[2]), Number(move[3])), null, 2),
           );
         } catch (error) {
-          printEvent({ type: 'error', message: String(error) }, args.json, write);
+          printError(error, args.json, write);
         }
         continue;
       }
@@ -225,21 +242,21 @@ async function runPlay(args: Args): Promise<void> {
           try {
             await run('I attempt it.');
           } catch (error) {
-            printEvent({ type: 'error', message: String(error) }, args.json, write);
+            printError(error, args.json, write);
           }
           continue;
         }
         try {
           await run(`I rolled ${roll.result.total}.`, [roll]);
         } catch (error) {
-          printEvent({ type: 'error', message: String(error) }, args.json, write);
+          printError(error, args.json, write);
         }
         continue;
       }
       try {
         await run(line);
       } catch (error) {
-        printEvent({ type: 'error', message: String(error) }, args.json, write);
+        printError(error, args.json, write);
       }
     }
     readline.close();

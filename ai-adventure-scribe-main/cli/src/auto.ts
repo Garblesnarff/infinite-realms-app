@@ -1,3 +1,7 @@
+import { FailureStreak } from './failure-streak';
+
+export { IDENTICAL_FAILURE_LIMIT, failureFingerprint } from './failure-streak';
+
 export interface AutoPlayable {
   pendingRolls: readonly unknown[];
   availableOptions: readonly string[];
@@ -26,6 +30,10 @@ export interface AutoTurnSummary {
   transportErrors: number;
   providerCounts: Record<string, number>;
   providerModelCounts: Record<string, number>;
+  /** Turns not attempted because the run was stopped early. */
+  turnsSkipped: number;
+  /** Set when the run stopped early; a plain-language statement of what went wrong. */
+  verdict?: string;
 }
 
 const isRetryable = (error: unknown): error is { retryable: boolean; retryAfterMs?: number } =>
@@ -130,8 +138,17 @@ export async function runAutoTurns(
   let rollsMade = 0;
   let contractViolations = 0;
   let transportErrors = 0;
+  let turnsSkipped = 0;
+  let verdict: string | undefined;
+  const failureStreak = new FailureStreak();
   const providerCounts: Record<string, number> = {};
   const providerModelCounts: Record<string, number> = {};
+  const countTelemetry = (telemetry: { provider?: string; model?: string }): void => {
+    if (!telemetry.provider) return;
+    providerCounts[telemetry.provider] = (providerCounts[telemetry.provider] || 0) + 1;
+    const providerModel = `${telemetry.provider}/${telemetry.model || 'unknown'}`;
+    providerModelCounts[providerModel] = (providerModelCounts[providerModel] || 0) + 1;
+  };
   for (let turn = 0; turn < turns; turn += 1) {
     const rolls: unknown[] = [];
     let skippedUnresolvableRoll = false;
@@ -157,14 +174,7 @@ export async function runAutoTurns(
       let attempt = 0;
       while (true) {
         try {
-          const telemetry = telemetryFrom(
-            await client.play(input, rolls.length ? rolls : undefined),
-          );
-          if (telemetry.provider) {
-            providerCounts[telemetry.provider] = (providerCounts[telemetry.provider] || 0) + 1;
-            const providerModel = `${telemetry.provider}/${telemetry.model || 'unknown'}`;
-            providerModelCounts[providerModel] = (providerModelCounts[providerModel] || 0) + 1;
-          }
+          countTelemetry(telemetryFrom(await client.play(input, rolls.length ? rolls : undefined)));
           turnsCompleted += 1;
           break;
         } catch (error) {
@@ -178,8 +188,20 @@ export async function runAutoTurns(
       turnsFailed += 1;
       if (isContractViolation(error)) contractViolations += 1;
       if (isTransportError(error)) transportErrors += 1;
+      // A turn that failed after the DM answered still spent a provider call; the client
+      // attaches the telemetry to the error so failed turns are not lost from the totals.
+      countTelemetry(telemetryFrom(error));
       onError(error);
+
+      const streak = failureStreak.record(error);
+      if (streak.exhausted) {
+        turnsSkipped = turns - turn - 1;
+        verdict = streak.verdict;
+        break;
+      }
+      continue;
     }
+    failureStreak.reset();
   }
   return {
     turnsCompleted,
@@ -189,5 +211,7 @@ export async function runAutoTurns(
     transportErrors,
     providerCounts,
     providerModelCounts,
+    turnsSkipped,
+    ...(verdict ? { verdict } : {}),
   };
 }

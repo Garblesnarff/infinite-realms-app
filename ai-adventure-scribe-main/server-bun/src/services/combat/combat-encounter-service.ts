@@ -14,6 +14,7 @@ import {
   verifyNPCsAccessBatch,
 } from './combat-authorization.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
+import { GENERIC_NPC_STATS, resolveSrdMonsterStats } from './srd-monster-resolution.js';
 import { db } from '../../../../db/client';
 import {
   combatEncounters,
@@ -29,6 +30,7 @@ import {
 } from '../../../../db/schema/index';
 import { NotFoundError, InternalServerError } from '../../lib/errors.js';
 
+import type { EntitySize } from '../../tactical/types.js';
 import type {
   CombatState,
   CreateParticipantInput,
@@ -74,15 +76,30 @@ export class CombatEncounterService {
     // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for session ownership verification.
     // This ensures combat encounters can only be started for authorized sessions in a single round-trip,
     // while masking resource existence and preventing race conditions.
+    //
+    // ⚠️ Every column of `combat_encounters` must be projected here, in table-definition
+    // order. Drizzle's insert-select validates the projection against the table and throws
+    // synchronously ("selected fields are not the same or are in a different order compared
+    // to the table definition") otherwise — which is exactly how this endpoint 500'd on
+    // every single call. Adding a column to the table means adding it here too.
     const [encounter] = await db
       .insert(combatEncounters)
       .select(
         db
           .select({
-            sessionId: sql`${sessionId}`,
+            id: sql`gen_random_uuid()`,
+            sessionId: gameSessions.id,
             status: sql`${'active'}`,
             currentRound: sql`${surpriseRound ? 0 : 1}`,
             currentTurnOrder: sql`0`,
+            version: sql`1`,
+            location: sql`null::text`,
+            difficulty: sql`null::text`,
+            experienceAwarded: sql`null::integer`,
+            startedAt: sql`now()`,
+            endedAt: sql`null::timestamptz`,
+            createdAt: sql`now()`,
+            updatedAt: sql`now()`,
           })
           .from(gameSessions)
           .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
@@ -109,6 +126,7 @@ export class CombatEncounterService {
     }
 
     let participants: CombatParticipant[] = [];
+    const participantSizes: Record<string, EntitySize> = {};
 
     // Batch insert all participants (single query instead of N queries)
     if (participantInputs.length > 0) {
@@ -128,14 +146,37 @@ export class CombatEncounterService {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
         const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;
+        // Structured DM combatants carry an SRD id instead of a database row. Resolving it
+        // gives real stat blocks; a missing/unknown id falls back to generic NPC numbers,
+        // and an unresolved *supplied* id is logged rather than silently swallowed.
+        const monster =
+          !input.characterId && !input.npcId
+            ? resolveSrdMonsterStats(input.monsterId, input.name, { sessionId })
+            : null;
+        // Characters and NPCs keep their historical 10/10/30 defaults. Only a combatant with
+        // no database row at all falls through to SRD or generic-NPC numbers.
+        const fallback =
+          input.characterId || input.npcId
+            ? { armorClass: 10, maxHp: 10, speed: 30 }
+            : (monster ?? GENERIC_NPC_STATS);
         const dexterity = Number(character?.stats?.dexterity ?? npcStats.dexterity ?? npcStats.dex ?? 10);
         const initiativeModifier = Number(
-          character?.stats?.initiativeBonus ?? npcStats.initiativeModifier ?? Math.floor((dexterity - 10) / 2),
+          character?.stats?.initiativeBonus ?? npcStats.initiativeModifier ??
+            monster?.initiativeModifier ??
+            // The client already computed the PC's DEX modifier; honour it rather than
+            // silently zeroing initiative when no character_stats row exists.
+            (Number.isFinite(input.initiativeModifier) ? input.initiativeModifier : undefined) ??
+            Math.floor((dexterity - 10) / 2),
         );
-        const armorClass = Number(character?.stats?.armorClass ?? npcStats.armorClass ?? npcStats.ac ?? 10);
-        const maxHp = Number(character?.stats?.maxHitPoints ?? npcStats.maxHp ?? npcStats.hitPoints ?? input.hpMax ?? 10);
+        const armorClass = Number(
+          character?.stats?.armorClass ?? npcStats.armorClass ?? npcStats.ac ?? fallback.armorClass,
+        );
+        const maxHp = Number(
+          character?.stats?.maxHitPoints ?? npcStats.maxHp ?? npcStats.hitPoints ?? input.hpMax ??
+            fallback.maxHp,
+        );
         const currentHp = Number(character?.stats?.currentHitPoints ?? npcStats.currentHp ?? npcStats.hitPoints ?? input.hpCurrent ?? maxHp);
-        const speed = Number(character?.stats?.speed ?? npcStats.speed ?? 30);
+        const speed = Number(character?.stats?.speed ?? npcStats.speed ?? fallback.speed);
         const roll = rollD20();
         const initiative = InitiativeMechanics.calculateInitiative(roll, initiativeModifier);
         return {
@@ -149,21 +190,44 @@ export class CombatEncounterService {
           maxHp,
           speed,
           currentHp,
-          participantType: input.characterId ? 'player' as const : input.npcId ? 'npc' as const : 'other' as const,
+          damageResistances: monster?.damageResistances ?? [],
+          damageImmunities: monster?.damageImmunities ?? [],
+          damageVulnerabilities: monster?.damageVulnerabilities ?? [],
+          participantType: input.characterId
+            ? 'player' as const
+            : input.npcId
+              ? 'npc' as const
+              // 'monster' (not 'other') is what the combat UI filters on for enemies.
+              : input.monsterId
+                ? 'monster' as const
+                : 'other' as const,
+          tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
       });
 
       // Sort by initiative (desc), then by modifier (desc) for ties to match calculateTurnOrder logic
       const sortedValues = InitiativeMechanics.sortParticipants(participantsWithInitiative);
 
-      const participantValues = sortedValues.map(({ currentHp: _currentHp, ...p }, index) => ({
-        ...p,
-        turnOrder: index,
-        isActive: true,
-        resourcesRound: surpriseRound ? 0 : 1,
-      }));
+      const participantValues = sortedValues.map(
+        ({ currentHp: _currentHp, tacticalSize: _tacticalSize, ...p }, index) => ({
+          ...p,
+          turnOrder: index,
+          isActive: true,
+          resourcesRound: surpriseRound ? 0 : 1,
+        }),
+      );
 
       const insertedParticipants = await db.insert(combatParticipants).values(participantValues).returning();
+      // combat_participants has no monster column, so the SRD size resolved above cannot be
+      // re-derived from the row. Carry it out by participant id for tactical map generation.
+      // Keyed on turnOrder rather than array position so it never depends on RETURNING order.
+      const sizeByTurnOrder = new Map(
+        sortedValues.map((participant, index) => [index, participant.tacticalSize]),
+      );
+      for (const inserted of insertedParticipants) {
+        participantSizes[inserted.id] =
+          sizeByTurnOrder.get(inserted.turnOrder) ?? GENERIC_NPC_STATS.size;
+      }
       const currentHpByEntity = new Map(sortedValues.map((participant) => [
         participant.characterId ?? participant.npcId ?? participant.name,
         participant.currentHp,
@@ -193,6 +257,7 @@ export class CombatEncounterService {
       participants,
       turnOrder,
       currentParticipant,
+      participantSizes,
     };
   }
 

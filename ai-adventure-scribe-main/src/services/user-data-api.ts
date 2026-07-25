@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
 import type { SessionListApiRow } from '../../shared/session-list-contract';
+import type { StructuredCombatStartPayload } from '@/services/combat/structured-combat-payload';
 
 export type {
   CampaignPayload,
@@ -61,18 +62,8 @@ export type TacticalMapActionPayload = {
   changes?: Record<string, unknown> | null;
 };
 
-export type StructuredCombatStartPayload = {
-  participants: Array<{
-    encounterId: string;
-    characterId?: string | null;
-    npcId?: string | null;
-    name: string;
-    initiativeModifier: number;
-    hpCurrent?: number | null;
-    hpMax?: number | null;
-  }>;
-  sceneSpec: unknown;
-};
+// Defined next to the builder that produces it so server-side tests can share both.
+export type { StructuredCombatStartPayload };
 
 export type AoECastPayload = {
   phase: 'propose' | 'resolve';
