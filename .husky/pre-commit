@@ -40,6 +40,27 @@ fi
 # Move to the main project directory for lint-staged
 cd ai-adventure-scribe-main || exit 1
 
+# === Schema Drift Guard ===
+# A db/schema/*.ts edit must ship with its migration in the same commit.
+# Three production incidents came from that omission -- most recently
+# 20260725, where combat_participant_status.exhaustion_level and eleven whole
+# tables lived in schema.ts with no migration behind them, 500ing every combat
+# start for months (see 17ebfd47 and docs/TESTING-REALISM.md).
+#
+# Only runs when db/schema/*.ts is actually staged, so it costs nothing on a
+# normal commit. Offline -- no database needed. Takes a few seconds.
+if git diff --cached --name-only --diff-filter=d | grep -qE '^ai-adventure-scribe-main/db/schema/.*\.ts$'; then
+    echo "db/schema/*.ts changed -- checking for a matching migration..."
+    bash scripts/check-schema-drift.sh || {
+        echo ""
+        echo "Commit blocked by the schema drift guard."
+        echo "Fix it properly (see the instructions above), or use --no-verify if you"
+        echo "genuinely know the migration is landing separately -- but the DB Guards"
+        echo "workflow will fail the push either way."
+        exit 1
+    }
+fi
+
 # === TypeScript Check (disabled - pre-existing errors, relying on CI) ===
 # Uncomment to enable strict TypeScript checking:
 # if git diff --cached --name-only | grep -qE 'ai-adventure-scribe-main/.*\.(ts|tsx)$'; then

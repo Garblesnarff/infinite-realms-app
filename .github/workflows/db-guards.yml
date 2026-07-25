@@ -1,0 +1,86 @@
+# Database schema guards.
+#
+# Deliberately a separate workflow from ci.yml, with `paths:` filters, so it
+# burns Actions minutes only on pushes that actually touch the database layer
+# -- a handful of pushes a month rather than every one. (This repo is private,
+# so Actions minutes are metered; ci.yml was disabled after exhausting the
+# monthly allowance.)
+#
+# The same two checks also run locally: check-schema-drift.sh from the husky
+# pre-commit hook whenever db/schema/*.ts is staged, and test-migrations.sh
+# via `bun run test:migrations`. The hook is the primary enforcement point;
+# this workflow is the backstop that cannot be skipped with --no-verify.
+
+name: DB Guards
+
+on:
+  push:
+    paths:
+      - 'ai-adventure-scribe-main/db/schema/**'
+      - 'ai-adventure-scribe-main/db/migrations/**'
+      - 'ai-adventure-scribe-main/drizzle.config.ts'
+      - 'ai-adventure-scribe-main/scripts/check-schema-drift.sh'
+      - 'ai-adventure-scribe-main/scripts/test-migrations.sh'
+      - '.github/workflows/db-guards.yml'
+  pull_request:
+    paths:
+      - 'ai-adventure-scribe-main/db/schema/**'
+      - 'ai-adventure-scribe-main/db/migrations/**'
+      - 'ai-adventure-scribe-main/drizzle.config.ts'
+      - 'ai-adventure-scribe-main/scripts/check-schema-drift.sh'
+      - 'ai-adventure-scribe-main/scripts/test-migrations.sh'
+      - '.github/workflows/db-guards.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: ai-adventure-scribe-main
+
+jobs:
+  # Fails any commit that edits db/schema/*.ts without a matching migration in
+  # db/migrations/. Three production incidents (20260710, and 20260725 twice
+  # over) all came from that exact omission going unnoticed until a 500 in
+  # production -- see 17ebfd47. Offline: no database, ~1 minute.
+  schema-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Check schema.ts against migrations
+        run: bash scripts/check-schema-drift.sh
+
+  # Replays the migration history into a throwaway PostgreSQL database, so a
+  # migration that cannot apply is caught here and not on the production box.
+  migration-replay:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # pgvector image so the embedding migrations are exercised rather than
+        # skipped (plain postgres has no vector type).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure psql is available
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+      - name: Replay migrations
+        run: bash scripts/test-migrations.sh
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres

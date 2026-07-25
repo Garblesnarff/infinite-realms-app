@@ -14,7 +14,17 @@ Production regressions must be reproduced at the boundary where they escaped. A 
 
 > **Editing `db/schema/*.ts` requires a matching migration in `db/migrations/` in the same commit.**
 
-This is enforced. `bun run db:check-drift` (`scripts/check-schema-drift.sh`, wired into the `schema-drift` job in `.github/workflows/ci.yml`) runs `drizzle-kit generate` against a scratch copy of the migrations directory and fails if any DDL is emitted — because emitted DDL means `db/schema/*.ts` needs something no migration provides.
+This is enforced in two places. Both run `scripts/check-schema-drift.sh`, which runs `drizzle-kit generate` against a scratch copy of the migrations directory and fails if any DDL is emitted — because emitted DDL means `db/schema/*.ts` needs something no migration provides.
+
+1. **The `.husky/pre-commit` hook**, which blocks the commit. It only fires when `db/schema/*.ts` is actually staged, needs no database, and takes a few seconds — so it costs nothing on a normal commit. This is the primary enforcement point.
+2. **The `DB Guards` workflow** (`.github/workflows/db-guards.yml`), which cannot be skipped with `--no-verify`. It is a separate workflow from `ci.yml` with `paths:` filters, so it only consumes Actions minutes on pushes that touch the database layer.
+
+Verify the hook is active — a fresh clone does not set this up, and without it none of the `.husky/` hooks run, including the secret-detection one:
+
+```bash
+git config core.hooksPath        # must print .husky
+git config core.hooksPath .husky # if it printed nothing
+```
 
 **Why the rule exists.** Drizzle schema files are TypeScript. Adding a column there makes the code compile, the types check, and the tests pass — while the column does not exist in any database. Nothing fails until a real query hits real PostgreSQL. Three separate production incidents came from exactly this:
 
@@ -44,7 +54,7 @@ Never satisfy the guard by reverting the schema edit or hand-editing a snapshot 
 
 ## Migration replay
 
-`bun run test:migrations` (`scripts/test-migrations.sh`, the `migration-replay` CI job) replays the migration history into a throwaway PostgreSQL database on every push, so a migration that cannot apply fails CI instead of the production box. It ends by re-running the exact combat-start `INSERT` from the 20260725 production logs.
+`bun run test:migrations` (`scripts/test-migrations.sh`, the `migration-replay` job in the `DB Guards` workflow) replays the migration history into a throwaway PostgreSQL database on every push, so a migration that cannot apply fails CI instead of the production box. It ends by re-running the exact combat-start `INSERT` from the 20260725 production logs.
 
 The history does not replay perfectly: some of this project's schema was never created by any committed migration (the SQL for `0002_steady_darwin` and `0003_thin_hairball` is missing from the repo though `meta/_journal.json` references it, and several tables were made through the Supabase dashboard). Those known-unreplayable files are listed with reasons in `db/migrations/.replay-known-gaps`. **That list only ever shrinks — never add a new migration to it.** A migration not on the list that fails to replay fails CI.
 

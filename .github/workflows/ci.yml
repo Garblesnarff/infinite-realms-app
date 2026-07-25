@@ -33,52 +33,6 @@ jobs:
         working-directory: ai-adventure-scribe-main/server-bun
       - run: bunx vitest run server-bun/src
 
-  # Fails any commit that edits db/schema/*.ts without a matching migration in
-  # db/migrations/. Three production incidents (20260710, 20260725 twice over)
-  # all came from that exact omission going unnoticed until a 500 in prod --
-  # see 17ebfd47. Offline check: no database required.
-  schema-drift:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - name: Check schema.ts against migrations
-        run: bash scripts/check-schema-drift.sh
-
-  # Replays the migration history into a throwaway PostgreSQL database, so a
-  # migration that cannot apply is caught here and not on the production box.
-  migration-replay:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        # pgvector image so the embedding migrations are exercised rather than
-        # skipped (plain postgres has no vector type).
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Ensure psql is available
-        run: |
-          if ! command -v psql >/dev/null 2>&1; then
-            sudo apt-get update && sudo apt-get install -y postgresql-client
-          fi
-          psql --version
-      - name: Replay migrations
-        run: bash scripts/test-migrations.sh
-        env:
-          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
-
   security-lint:
     runs-on: ubuntu-latest
     steps:
