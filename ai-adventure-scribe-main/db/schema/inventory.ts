@@ -15,6 +15,7 @@ import {
   boolean,
   numeric,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 import { characters, gameSessions } from './game';
@@ -70,7 +71,13 @@ export const characterEquipment = pgTable(
     attunementRequirements: text('attunement_requirements'),
     magicItemType: text('magic_item_type'),
     magicItemRarity: text('magic_item_rarity').default('common'),
-    magicEffects: text('magic_effects'),
+    // jsonb in prod since 20260710_align_character_equipment.sql; this file was
+    // never updated to match, so `magic_effects` was typed as text here for
+    // over two weeks (drizzle would've read the driver's parsed JS object back
+    // as a "string" per the old type). Corrected 2026-07-25.
+    magicEffects: jsonb('magic_effects'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   },
   (table) => ({
     characterItemIdx: index('idx_character_equipment_character_item').on(
