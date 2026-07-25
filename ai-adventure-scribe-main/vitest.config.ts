@@ -38,6 +38,8 @@ export default defineConfig({
     include: [
       'src/services/ai/prompts/__tests__/combat-rules-prompts.test.ts',
       'src/services/combat/__tests__/combat-action-executor.test.ts',
+      'src/services/combat/__tests__/structured-combat-transition.test.ts',
+      'src/services/combat/__tests__/combat-start-failure.test.ts',
       'src/utils/__tests__/asi-levels.test.ts',
       'src/hooks/__tests__/use-campaign-journal.test.tsx',
       'src/services/__tests__/voice-profile-service.test.ts',
@@ -88,6 +90,9 @@ export default defineConfig({
       include: [
         'src/services/ai/prompts/combat-rules-prompts.ts',
         'src/services/combat/combat-action-executor.ts',
+        'src/services/combat/structured-combat-transition.ts',
+        'src/services/combat/structured-combat-payload.ts',
+        'src/services/combat/combat-start-failure.ts',
         'src/utils/asi-levels.ts',
         'src/hooks/use-campaign-journal.ts',
         'src/services/voice-profile-service.ts',
