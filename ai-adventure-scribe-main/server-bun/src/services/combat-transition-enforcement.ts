@@ -4,6 +4,10 @@ import {
   buildCombatTransitionCorrectivePrompt,
   validateCombatTransitionContract,
 } from '../tactical/dispatch.js';
+import {
+  buildSpatialCorrectivePrompt,
+  validateSpatialCombatContract,
+} from '../tactical/spatial-contract.js';
 
 import type { DMResponse } from './dm/dm-response-schema.js';
 
@@ -43,6 +47,44 @@ const combineUsage = (first: LLMResponse, second: LLMResponse): LLMResponse['usa
   return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
 };
 
+type ContractBreach = {
+  contract: 'combat_transition' | 'spatial';
+  correctivePrompt: string;
+  detail: Record<string, unknown>;
+};
+
+/**
+ * Both combat contracts are checked against the same response. The transition contract runs
+ * first because a response that has not legally entered combat has no board to be coherent with.
+ */
+function findBreach(response: DMResponse, prompt: string): ContractBreach | null {
+  const combatActive = combatIsActiveInPrompt(prompt);
+  const transition = validateCombatTransitionContract(response, combatActive);
+  if (transition) {
+    return {
+      contract: 'combat_transition',
+      correctivePrompt: buildCombatTransitionCorrectivePrompt(transition),
+      detail: { rollTypes: transition.rollTypes },
+    };
+  }
+  const spatial = validateSpatialCombatContract(response, prompt, combatActive);
+  if (spatial) {
+    return {
+      contract: 'spatial',
+      correctivePrompt: buildSpatialCorrectivePrompt(spatial),
+      detail: {
+        kind: spatial.kind,
+        actorId: spatial.actorId,
+        targetId: spatial.targetId,
+        distanceFeet: spatial.distanceFeet,
+        movementRemaining: spatial.movementRemaining,
+        reason: spatial.message,
+      },
+    };
+  }
+  return null;
+}
+
 export async function enforceCombatTransitionContract(params: {
   result: LLMResponse;
   prompt: string;
@@ -57,16 +99,17 @@ export async function enforceCombatTransitionContract(params: {
   if (result.error || !isDmResponseSchema(responseSchema)) return result;
   const parsed = parseDmResponse(result.text);
   if (!parsed) return result;
-  const violation = validateCombatTransitionContract(parsed, combatIsActiveInPrompt(prompt));
-  if (!violation) return result;
+  const breach = findBreach(parsed, prompt);
+  if (!breach) return result;
 
   logger.warn({
-    msg: 'DM_COMBAT_TRANSITION_CONTRACT_CORRECTIVE_REPROMPT',
+    msg: 'DM_COMBAT_CONTRACT_CORRECTIVE_REPROMPT',
     alert: true,
-    rollTypes: violation.rollTypes,
+    contract: breach.contract,
+    ...breach.detail,
   });
   const retry = await LLMProviderService.generate({
-    prompt: buildCombatTransitionCorrectivePrompt(violation),
+    prompt: breach.correctivePrompt,
     model: params.model,
     maxTokens: params.maxTokens,
     temperature: params.temperature,
@@ -80,23 +123,25 @@ export async function enforceCombatTransitionContract(params: {
   });
   if (retry.error) {
     logger.error({
-      msg: '!!!!!!!!!!!!!!!! DM_COMBAT_TRANSITION_CORRECTION_FAILED !!!!!!!!!!!!!!!!',
+      msg: '!!!!!!!!!!!!!!!! DM_COMBAT_CONTRACT_CORRECTION_FAILED !!!!!!!!!!!!!!!!',
       alert: true,
       error: retry.error,
-      rollTypes: violation.rollTypes,
+      contract: breach.contract,
+      ...breach.detail,
     });
     return result;
   }
 
   const retryParsed = parseDmResponse(retry.text);
-  const retryViolation = retryParsed
-    ? validateCombatTransitionContract(retryParsed, combatIsActiveInPrompt(prompt))
-    : null;
-  if (retryViolation) {
+  const retryBreach = retryParsed ? findBreach(retryParsed, prompt) : null;
+  if (retryBreach) {
+    // Telemetry over deadlock: one correction is the whole budget, so a second violation is
+    // logged loudly and the turn is allowed through rather than stalling the table.
     logger.error({
-      msg: '!!!!!!!!!!!!!!!! DM_COMBAT_TRANSITION_CONTRACT_VIOLATION_PASSTHROUGH !!!!!!!!!!!!!!!!',
+      msg: '!!!!!!!!!!!!!!!! DM_COMBAT_CONTRACT_VIOLATION_PASSTHROUGH !!!!!!!!!!!!!!!!',
       alert: true,
-      rollTypes: retryViolation.rollTypes,
+      contract: retryBreach.contract,
+      ...retryBreach.detail,
       provider: retry.provider,
       model: retry.model,
     });

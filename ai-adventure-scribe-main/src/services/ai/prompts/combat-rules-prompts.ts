@@ -375,6 +375,28 @@ When combat is detected, you MUST:
     return combatText;
   }
 
+  /**
+   * Combat-only. The tactical digest is the single source of geometry, and the server
+   * rejects an attack the board does not allow, so this section states the same contract
+   * the validator enforces.
+   */
+  static buildSpatialTurnContractSection(): string {
+    return `
+<spatial_turn_contract>
+<title>MANDATORY: SPATIAL COHERENCE ON EVERY COMBAT TURN</title>
+Every combatant's turn must match the tactical digest: a melee attack requires the attacker within
+5ft of its target, so when the digest shows more distance you MUST emit a \`map_actions\` move that
+closes the gap (never more than that entity's movementRemaining) before or instead of attacking.
+Ranged attacks and spells require line of sight in the digest and take the listed cover into account,
+and monsters move on their own turns through \`map_actions\` too - prose movement changes nothing.
+
+Worked example - digest line \`void-maw|Void-Maw@2,3 mv30/30 vs[seeker:30ft/LoS/c0/range]\`, Void-Maw's turn
+(move 25ft to close, then attack in the same turn):
+\`map_actions\`: \`[{"action":"move","entityId":"void-maw","x":5,"y":6,"changes":null}]\`
+\`combat_actions\`: \`[{"actor_id":"void-maw","action_type":"attack","target_ids":["seeker"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":25}]\`
+</spatial_turn_contract>`;
+  }
+
   static buildCombatRollRequirementsSection(): string {
     return `
 <combat_roll_requirements>

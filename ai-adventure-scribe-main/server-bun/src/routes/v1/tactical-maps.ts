@@ -177,6 +177,8 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         set.status = access.error!.status;
         return { error: access.error!.message };
       }
+      // Every array the canonical parser validates must be present: a missing one (this
+      // endpoint omitted `handout_actions`) rejected every DM map-action batch with a 422.
       const parsed = parseDmResponse({
         text: '',
         map_actions: body.actions,
@@ -186,6 +188,7 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         scene_spec: null,
         combatants: [],
         combat_actions: [],
+        handout_actions: [],
       });
       if (!parsed.success) {
         set.status = 422;
@@ -231,9 +234,11 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         slotLevel: body.slotLevel,
       };
       try {
-        if (body.phase === 'resolve') return { delta: await resolveAoECast(params.id, request, user.userId) };
+        if (body.phase === 'resolve')
+          return { delta: await resolveAoECast(params.id, request, user.userId) };
         const proposal = await proposeAoECast(params.id, request);
-        if (proposal.autoConfirm) return { delta: await resolveAoECast(params.id, request, user.userId) };
+        if (proposal.autoConfirm)
+          return { delta: await resolveAoECast(params.id, request, user.userId) };
         if (proposal.hostile) {
           await Bun.sleep(1500);
           return { delta: await resolveAoECast(params.id, request, user.userId) };

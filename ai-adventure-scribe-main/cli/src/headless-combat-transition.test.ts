@@ -29,6 +29,9 @@ vi.mock('@/services/user-data-api', () => ({
     startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
+    getActiveCombat: vi.fn(
+      async () => new Response(JSON.stringify({ initiativeOrder: [] }), { status: 200 }),
+    ),
   },
 }));
 

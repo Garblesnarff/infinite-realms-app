@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+/* eslint-disable max-lines -- single CLI entrypoint: arg parsing, prompts, and rendering. */
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 
@@ -149,7 +150,9 @@ async function selectSession(args: Args): Promise<string> {
  */
 function errorDetail(error: unknown): Record<string, unknown> | null {
   const candidate = error as { toTranscriptDetail?: () => Record<string, unknown> };
-  return typeof candidate?.toTranscriptDetail === 'function' ? candidate.toTranscriptDetail() : null;
+  return typeof candidate?.toTranscriptDetail === 'function'
+    ? candidate.toTranscriptDetail()
+    : null;
 }
 
 function printError(error: unknown, json: boolean, write: (line: string) => void): void {
@@ -169,8 +172,14 @@ function printEvent(event: HeadlessEvent, json: boolean, write: (line: string) =
     );
   else if (event.type === 'roll_result')
     write(`Rolled ${event.result.expression}: ${event.result.total}`);
-  else if (event.type === 'map_state') write(`${event.ascii}\nTACTICAL DIGEST\n${event.digest}`);
-  else write(`Error: ${event.message}`);
+  else if (event.type === 'map_state') {
+    const order = event.initiative
+      .map((entry) => `${entry.isCurrent ? '▶ ' : ''}${entry.name} ${entry.initiative}`)
+      .join(' | ');
+    write(
+      `${event.ascii}\nTACTICAL DIGEST\n${event.digest}${order ? `\nINITIATIVE\n${order}` : ''}`,
+    );
+  } else write(`Error: ${event.message}`);
 }
 
 async function runPlay(args: Args): Promise<void> {

@@ -57,8 +57,7 @@ const CHARACTER = {
   maxHitPoints: 24,
 };
 
-const columnNames = (table: unknown): string[] =>
-  Object.keys(getTableColumns(table as never));
+const columnNames = (table: unknown): string[] => Object.keys(getTableColumns(table as never));
 
 const encounterRow = {
   id: ENCOUNTER_ID,
@@ -170,6 +169,9 @@ mock.module('../../../../lib/logger.js', () => ({
     error: (entry: Record<string, unknown>) => errorLogs.push(entry),
     child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
   },
+  // Module mocks are process-wide: sibling suites import `combatLogger` from this same
+  // module, so the stub has to export everything the real one does.
+  combatLogger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
 }));
 mock.module('../../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
@@ -219,9 +221,8 @@ mock.module('../../../../services/combat/combat-authorization.js', () => ({
 
 const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');
 const { initiativeRoutes } = await import('../initiative.js');
-const { buildStructuredCombatStartPayload } = await import(
-  '../../../../../../src/services/combat/structured-combat-payload'
-);
+const { buildStructuredCombatStartPayload } =
+  await import('../../../../../../src/services/combat/structured-combat-payload');
 
 const app = createRequestPipelineApp().use(initiativeRoutes);
 
@@ -266,6 +267,27 @@ describe('structured combat start — verbatim production envelope', () => {
     expect(broadcasts.some((event) => (event as { type?: string }).type === 'map_created')).toBe(
       true,
     );
+  });
+
+  it('returns the whole initiative order, monsters included, not just the PC', async () => {
+    const response = await startCombat(bridgePayload());
+    const body = (await response.json()) as {
+      initiativeOrder: Array<{
+        name: string;
+        initiative: number;
+        participantType: string;
+        isCurrent: boolean;
+      }>;
+    };
+
+    expect(response.status).toBe(201);
+    expect(body.initiativeOrder.map((entry) => entry.name).sort()).toEqual([
+      'Aggressive Patron',
+      'Rook',
+    ]);
+    expect(body.initiativeOrder.every((entry) => typeof entry.initiative === 'number')).toBe(true);
+    expect(body.initiativeOrder.filter((entry) => entry.isCurrent)).toHaveLength(1);
+    expect(body.initiativeOrder.some((entry) => entry.participantType === 'monster')).toBe(true);
   });
 
   it('threads monster_id through the bridge so the server resolves the SRD stat block', async () => {
@@ -375,7 +397,10 @@ describe('structured combat start — honest error bodies', () => {
   it('returns 422 with stage "ownership" for a non-uuid session id', async () => {
     const response = await startCombat(bridgePayload(), 'eternal_feast_01');
     expect(response.status).toBe(422);
-    expect(await response.json()).toMatchObject({ stage: 'ownership', detail: 'sessionId must be a uuid' });
+    expect(await response.json()).toMatchObject({
+      stage: 'ownership',
+      detail: 'sessionId must be a uuid',
+    });
   });
 
   it('returns 404 with stage "ownership" for a session the caller does not own', async () => {
@@ -400,7 +425,10 @@ describe('structured combat start — honest error bodies', () => {
     const body = (await response.json()) as { error: string; stage: string; detail: string };
 
     expect(response.status).toBe(500);
-    expect(body).toMatchObject({ error: 'Failed to start combat encounter', stage: 'participants' });
+    expect(body).toMatchObject({
+      error: 'Failed to start combat encounter',
+      stage: 'participants',
+    });
     // Drizzle wraps driver errors; the reported detail carries the cause sentence through.
     expect(body.detail).toContain('does not exist');
 

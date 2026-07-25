@@ -1,6 +1,8 @@
+/* eslint-disable max-lines -- one turn pipeline shared by the CLI and the browser. */
 import { mapToAscii } from '../../server-bun/src/tactical/serialize';
 import { buildTacticalDigest } from '../../server-bun/src/tactical/tactical-context';
 
+import type { InitiativeOrderEntry } from '../../server-bun/src/services/combat/initiative-order';
 import type { RollRequest } from '@/types/roll-request';
 
 import { buildAIContext } from '@/hooks/ai/ai-utils';
@@ -18,7 +20,13 @@ export type HeadlessEvent =
   | { type: 'options'; options: string[] }
   | { type: 'roll_request'; requests: RollRequest[] }
   | { type: 'roll_result'; request: RollRequest; result: DiceRollResult }
-  | { type: 'map_state'; map: unknown; ascii: string; digest: string }
+  | {
+      type: 'map_state';
+      map: unknown;
+      ascii: string;
+      digest: string;
+      initiative: InitiativeOrderEntry[];
+    }
   | { type: 'error'; message: string };
 
 export function stripAssetTags(text: string): string {
@@ -239,6 +247,7 @@ export class HeadlessGameClient {
         map,
         ascii: mapToAscii(tacticalMap),
         digest: buildTacticalDigest(tacticalMap),
+        initiative: await this.getInitiativeOrder(),
       });
     }
     return events;
@@ -327,6 +336,19 @@ export class HeadlessGameClient {
     );
     if (!response.ok) throw new Error(`Move failed (${response.status})`);
     return response.json();
+  }
+
+  /** The whole order, monsters included; an unavailable encounter degrades to an empty list. */
+  async getInitiativeOrder(): Promise<InitiativeOrderEntry[]> {
+    try {
+      const response = await userDataApi.getActiveCombat(this.sessionId);
+      if (!response.ok) return [];
+      const payload = (await response.json()) as { initiativeOrder?: InitiativeOrderEntry[] };
+      return payload.initiativeOrder ?? [];
+    } catch {
+      // Turn order is reporting, never gameplay: a lookup failure must not lose the turn.
+      return [];
+    }
   }
 
   async getMap(): Promise<unknown | null> {

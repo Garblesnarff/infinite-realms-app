@@ -35,6 +35,7 @@ export class ContextBuilder {
       contextPrompt += CombatRulesPrompts.formatCombatContext(combatDetection);
       if (combatDetection.isCombat) {
         contextPrompt += CombatRulesPrompts.buildCombatRollRequirementsSection();
+        contextPrompt += CombatRulesPrompts.buildSpatialTurnContractSection();
       }
     }
 

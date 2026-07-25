@@ -1,0 +1,557 @@
+{
+  "turns": [
+    {
+      "input": "I hold the line by the wagon.",
+      "response": {
+        "text": "Void-Maw is thirty feet off. It stalks closer, jaws wide.",
+        "roll_requests": [],
+        "combat_transition": "none",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [
+          {
+            "action": "move",
+            "entityId": "void-maw",
+            "x": 3,
+            "y": 3,
+            "changes": null
+          }
+        ],
+        "combat_actions": []
+      }
+    },
+    {
+      "input": "I brace for the charge.",
+      "response": {
+        "text": "Void-Maw closes the last stride and bites.",
+        "roll_requests": [],
+        "combat_transition": "none",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [
+          {
+            "action": "move",
+            "entityId": "void-maw",
+            "x": 2,
+            "y": 2,
+            "changes": null
+          },
+          {
+            "action": "move",
+            "entityId": "seeker",
+            "x": 1,
+            "y": 2,
+            "changes": null
+          }
+        ],
+        "combat_actions": [
+          {
+            "actor_id": "void-maw",
+            "action_type": "attack",
+            "target_ids": ["seeker"],
+            "weapon_id": null,
+            "spell_id": null,
+            "slot_level": null,
+            "movement_feet": 10
+          }
+        ]
+      }
+    }
+  ],
+  "map": {
+    "id": "fixture-map",
+    "sessionId": "fixture-session",
+    "width": 8,
+    "height": 8,
+    "round": 1,
+    "sceneDescription": "A collapsed shrine floor.",
+    "cells": [
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ],
+      [
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        },
+        {
+          "terrain": "floor",
+          "blocksMovement": false,
+          "blocksSight": false,
+          "cover": 0,
+          "elevation": 0
+        }
+      ]
+    ],
+    "entities": [
+      {
+        "id": "seeker",
+        "name": "The Seeker",
+        "x": 1,
+        "y": 1,
+        "size": "medium",
+        "type": "pc",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      },
+      {
+        "id": "void-maw",
+        "name": "Void-Maw",
+        "x": 7,
+        "y": 7,
+        "size": "medium",
+        "type": "monster",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      }
+    ]
+  }
+}

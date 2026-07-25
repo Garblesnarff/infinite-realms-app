@@ -201,6 +201,8 @@ export const userDataApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
+  getActiveCombat: (sessionId: string): Promise<Response> =>
+    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`),
   endTacticalMap: (sessionId: string): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
       method: 'POST',

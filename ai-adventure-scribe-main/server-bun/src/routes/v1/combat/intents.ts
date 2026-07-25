@@ -4,7 +4,11 @@ import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
-import { executeCombatIntent, getLegalCombatActions } from '../../../services/combat/combat-intent-service.js';
+import {
+  executeCombatIntent,
+  getLegalCombatActions,
+} from '../../../services/combat/combat-intent-service.js';
+import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { loadActiveTacticalMap } from '../../../services/combat/tactical-map-store.js';
 
 const encounterIdParams = t.Object({
@@ -70,43 +74,87 @@ function mapIntentError(set: any, error: unknown) {
 }
 
 export const intentRoutes = new Elysia()
-  .get('/:encounterId/legal-actions', async ({ request, params, set }) => {
-    const { user, error } = await authenticateRequest(request);
-    if (error || !user) { set.status = 401; return { error: error || 'Unauthorized' }; }
-    const access = await verifyEncounterOwnership(params.encounterId, user.userId);
-    if (!access.success) { set.status = access.error!.status; return { error: access.error!.message }; }
-    try { return await getLegalCombatActions(params.encounterId, user.userId); }
-    catch (cause) { return mapIntentError(set, cause); }
-  }, { params: encounterIdParams })
-  .post('/:encounterId/intent', async ({ request, params, body, set }) => {
-    const { user, error } = await authenticateRequest(request);
-    if (error || !user) { set.status = 401; return { error: error || 'Unauthorized' }; }
-    const access = await verifyEncounterOwnership(params.encounterId, user.userId);
-    if (!access.success) { set.status = access.error!.status; return { error: access.error!.message }; }
-    const payload = body;
-    if (!payload.intent?.type || !payload.intent.actorId) {
-      set.status = 400;
-      return { error: 'A typed combat intent with actorId is required' };
-    }
-    try {
-      const result = await executeCombatIntent(
-        params.encounterId, payload.intent, user.userId,
-        payload.source === 'dm' ? 'dm' : 'player', payload.dmStartedAt,
+  .get(
+    '/:encounterId/legal-actions',
+    async ({ request, params, set }) => {
+      const { user, error } = await authenticateRequest(request);
+      if (error || !user) {
+        set.status = 401;
+        return { error: error || 'Unauthorized' };
+      }
+      const access = await verifyEncounterOwnership(params.encounterId, user.userId);
+      if (!access.success) {
+        set.status = access.error!.status;
+        return { error: access.error!.message };
+      }
+      try {
+        return await getLegalCombatActions(params.encounterId, user.userId);
+      } catch (cause) {
+        return mapIntentError(set, cause);
+      }
+    },
+    { params: encounterIdParams },
+  )
+  .post(
+    '/:encounterId/intent',
+    async ({ request, params, body, set }) => {
+      const { user, error } = await authenticateRequest(request);
+      if (error || !user) {
+        set.status = 401;
+        return { error: error || 'Unauthorized' };
+      }
+      const access = await verifyEncounterOwnership(params.encounterId, user.userId);
+      if (!access.success) {
+        set.status = access.error!.status;
+        return { error: access.error!.message };
+      }
+      const payload = body;
+      if (!payload.intent?.type || !payload.intent.actorId) {
+        set.status = 400;
+        return { error: 'A typed combat intent with actorId is required' };
+      }
+      try {
+        const result = await executeCombatIntent(
+          params.encounterId,
+          payload.intent,
+          user.userId,
+          payload.source === 'dm' ? 'dm' : 'player',
+          payload.dmStartedAt,
+        );
+        return { accepted: true, result };
+      } catch (cause) {
+        return mapIntentError(set, cause);
+      }
+    },
+    { params: encounterIdParams, body: combatIntentRequestSchema },
+  )
+  .get(
+    '/sessions/:sessionId/active',
+    async ({ request, params, set }) => {
+      const { user, error } = await authenticateRequest(request);
+      if (error || !user) {
+        set.status = 401;
+        return { error: error || 'Unauthorized' };
+      }
+      const access = await verifySessionOwnership(params.sessionId, user.userId);
+      if (!access.success) {
+        set.status = access.error!.status;
+        return { error: access.error!.message };
+      }
+      const encounter = await CombatEncounterService.getActiveEncounter(
+        params.sessionId,
+        user.userId,
       );
-      return { accepted: true, result };
-    } catch (cause) {
-      return mapIntentError(set, cause);
-    }
-  }, { params: encounterIdParams, body: combatIntentRequestSchema })
-  .get('/sessions/:sessionId/active', async ({ request, params, set }) => {
-    const { user, error } = await authenticateRequest(request);
-    if (error || !user) { set.status = 401; return { error: error || 'Unauthorized' }; }
-    const access = await verifySessionOwnership(params.sessionId, user.userId);
-    if (!access.success) { set.status = access.error!.status; return { error: access.error!.message }; }
-    const encounter = await CombatEncounterService.getActiveEncounter(params.sessionId, user.userId);
-    if (!encounter) { set.status = 404; return { error: 'No active combat encounter' }; }
-    return {
-      combat: await CombatEncounterService.getCombatState(encounter.id, user.userId),
-      tacticalMap: await loadActiveTacticalMap(params.sessionId),
-    };
-  }, { params: sessionIdParams });
+      if (!encounter) {
+        set.status = 404;
+        return { error: 'No active combat encounter' };
+      }
+      const combat = await CombatEncounterService.getCombatState(encounter.id, user.userId);
+      return {
+        combat,
+        initiativeOrder: buildInitiativeOrder(combat),
+        tacticalMap: await loadActiveTacticalMap(params.sessionId),
+      };
+    },
+    { params: sessionIdParams },
+  );

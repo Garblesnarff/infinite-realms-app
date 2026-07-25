@@ -42,8 +42,26 @@ describe('CombatRulesPrompts', () => {
       const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
 
       expect(section).toContain('<combat_roll_requirements>');
-      expect(section).toContain('ROLL_REQUESTS_V1');
+      // The section now teaches the structured `roll_requests` array; the old
+      // ROLL_REQUESTS_V1 text marker was removed from the prompt itself.
+      expect(section).toContain('`roll_requests` array field');
+      expect(section).toContain('"type": "attack"');
       expect(section).toContain('</combat_roll_requirements>');
+    });
+  });
+
+  describe('buildSpatialTurnContractSection', () => {
+    it('states the reach rule and shows a move-and-attack turn', () => {
+      const section = CombatRulesPrompts.buildSpatialTurnContractSection();
+
+      expect(section).toContain('<spatial_turn_contract>');
+      expect(section).toContain('within\n5ft of its target');
+      expect(section).toContain('movementRemaining');
+      expect(section).toContain('line of sight');
+      // The worked example must show both halves of one turn.
+      expect(section).toContain('"action":"move","entityId":"void-maw"');
+      expect(section).toContain('"action_type":"attack","target_ids":["seeker"]');
+      expect(section).toContain('</spatial_turn_contract>');
     });
   });
 

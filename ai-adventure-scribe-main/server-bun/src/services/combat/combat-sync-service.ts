@@ -1,6 +1,7 @@
-import { broadcastToRoom } from '../collaboration/room-manager.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
+import { buildInitiativeOrder } from './initiative-order.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { broadcastToRoom } from '../collaboration/room-manager.js';
 
 export async function publishCombatState(
   encounterId: string,
@@ -13,6 +14,7 @@ export async function publishCombatState(
     type: 'combat_state_updated',
     reason,
     combat,
+    initiativeOrder: buildInitiativeOrder(combat),
     tacticalMap,
     timestamp: Date.now(),
   });
