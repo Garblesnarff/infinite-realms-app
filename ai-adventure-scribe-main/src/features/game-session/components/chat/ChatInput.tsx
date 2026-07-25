@@ -207,6 +207,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
               className="min-h-[20px] max-h-28 resize-none border-0 shadow-none focus:ring-0 focus:border-0 p-0 text-sm leading-relaxed placeholder:text-gray-600 bg-transparent"
               disabled={isDisabled}
               rows={1}
+              aria-label="Describe what your character would like to do"
               aria-autocomplete="list"
               aria-controls={showDiceSuggestions ? listboxId : undefined}
               aria-activedescendant={

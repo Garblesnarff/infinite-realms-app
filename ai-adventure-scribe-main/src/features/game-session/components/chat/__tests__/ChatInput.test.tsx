@@ -47,6 +47,7 @@ describe('ChatInput', () => {
     render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
 
     expect(screen.getByPlaceholderText(/describe what your character would like to do/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/describe what your character would like to do/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send message/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/quick dice roll/i)).toBeInTheDocument();
   });
