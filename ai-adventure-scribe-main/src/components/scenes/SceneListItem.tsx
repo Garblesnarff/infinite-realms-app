@@ -10,19 +10,28 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+interface SceneData {
+  id: string;
+  name: string;
+  description?: string | null;
+  width: number;
+  height: number;
+  gridSize: number;
+  gridType: string;
+  gridColor?: string | null;
+  backgroundImageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  isActive?: boolean;
+}
+
 interface SceneListItemProps {
-  scene: any;
+  scene: SceneData;
   onViewScene?: (sceneId: string) => void;
   onEditScene?: (sceneId: string) => void;
   onSetActive: (sceneId: string) => void;
-  onDuplicate: (scene: any) => void;
+  onDuplicate: (scene: SceneData) => void;
   onDelete: (sceneId: string) => void;
 }
 
@@ -39,25 +48,24 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
   onDelete,
 }) => {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Card
-          variant="parchment"
-          role="button"
-          tabIndex={0}
-          className={cn(
-            'overflow-hidden transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
-            scene.isActive && 'ring-2 ring-electricCyan',
-          )}
-          onClick={() => onViewScene?.(scene.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onViewScene?.(scene.id);
-            }
-          }}
-          aria-label={`View scene: ${scene.name}`}
-        >
+    <Card
+      variant="parchment"
+      role="button"
+      tabIndex={0}
+      className={cn(
+        'overflow-hidden transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
+        scene.isActive && 'ring-2 ring-electricCyan',
+      )}
+      onClick={() => onViewScene?.(scene.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewScene?.(scene.id);
+        }
+      }}
+      aria-label={`View scene: ${scene.name}`}
+      title={`View scene: ${scene.name}`}
+    >
       <div className="flex items-center gap-4 p-4">
         {/* Thumbnail */}
         <div className="relative w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded overflow-hidden flex-shrink-0">
@@ -77,19 +85,9 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         {/* Details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <h3
-                  className="text-lg font-semibold truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
-                  tabIndex={0}
-                >
-                  {scene.name}
-                </h3>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{scene.name}</p>
-              </TooltipContent>
-            </Tooltip>
+            <h3 className="text-lg font-semibold truncate cursor-default">
+              {scene.name}
+            </h3>
             {scene.isActive && (
               <Badge className="bg-electricCyan text-white">
                 <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -109,23 +107,17 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
 
         {/* Actions */}
         <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Open menu for ${scene.name}`}
-                >
-                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Open menu for {scene.name}</p>
-            </TooltipContent>
-          </Tooltip>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Open menu for ${scene.name}`}
+              title={`Open menu for ${scene.name}`}
+            >
+              <MoreVertical className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onClick={(e) => {
@@ -179,10 +171,5 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         </DropdownMenu>
       </div>
     </Card>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>View scene: {scene.name}</p>
-      </TooltipContent>
-    </Tooltip>
   );
 };
