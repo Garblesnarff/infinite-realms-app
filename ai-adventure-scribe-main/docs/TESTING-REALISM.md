@@ -20,11 +20,11 @@ This is enforced in two places. Both run `scripts/check-schema-drift.sh`, which 
 2. **The `.husky/pre-push` hook**, which blocks the push. It runs the same check over the whole tree on every push, so it catches drift committed with `--no-verify` — and drift introduced by any commit, not just the one being made. If the push also changes `db/migrations/` or `supabase/migrations/`, it runs the migration replay too, provided a PostgreSQL server is reachable (`TEST_DATABASE_URL`, else `postgres://localhost:5432/postgres`); it warns and skips rather than failing when there is none.
 3. **The `DB Guards` workflow** (`.github/workflows/db-guards.yml`), which cannot be skipped locally at all. It is a separate workflow from `ci.yml` with `paths:` filters, so it only consumes Actions minutes on pushes that touch the database layer.
 
-Verify the hook is active — a fresh clone does not set this up, and without it none of the `.husky/` hooks run, including the secret-detection one:
+Hooks are wired up by `bun install`, in the repo root or in `ai-adventure-scribe-main` — both `prepare` scripts run `scripts/setup-git-hooks.sh`, which points `core.hooksPath` at `.husky/` and makes the hooks executable. To check or repair by hand:
 
 ```bash
-git config core.hooksPath        # must print .husky
-git config core.hooksPath .husky # if it printed nothing
+git config core.hooksPath        # must print <repo>/.husky
+bash scripts/setup-git-hooks.sh  # if it printed nothing
 ```
 
 **Why the rule exists.** Drizzle schema files are TypeScript. Adding a column there makes the code compile, the types check, and the tests pass — while the column does not exist in any database. Nothing fails until a real query hits real PostgreSQL. Three separate production incidents came from exactly this:
