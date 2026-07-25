@@ -18,21 +18,44 @@
 # production exactly. That cleared 8 of the 14 entries, and the replay now
 # produces every table and column that db/schema/*.ts declares.
 #
-# What is left
-# ============================================================================
-# The six below all depend on one of three tables that are NOT modeled in
-# db/schema/*.ts at all:
+# db/migrations/20251113_backfill_campaign_characters_and_metrics.sql and
+# db/migrations/20251210_backfill_starter_character_templates.sql backfilled
+# the remaining three tables (campaign_characters, character_creation_metrics,
+# starter_character_templates -- none modeled in db/schema/*.ts, so neither
+# drizzle nor 0004_snapshot.json could supply their shape) via
+# `pg_dump --schema-only -t <table>` run directly against production on
+# 2026-07-25, the only trustworthy source for objects created through the
+# dashboard. That closed 4 of the 6 entries outright
+# (db/migrations/20260713_revoke_remaining_anon_access.sql,
+# db/migrations/20251214_add_missing_fk_indexes.sql,
+# supabase/migrations/20260117_update_eternal_feast_characters.sql,
+# db/migrations/20260710_create_inventory_tables.sql) and surfaced what the
+# other two actually need, previously unreachable because the tables couldn't
+# replay at all:
 #
-#     campaign_characters, starter_character_templates,
-#     character_creation_metrics
+#   * supabase/migrations/20251126_fix_remaining_table_permissions.sql also
+#     grants on character_voice_mappings and character_voice_profiles --
+#     different dashboard-created tables, not modeled in db/schema/*.ts,
+#     out of scope for this pass. Same fix shape: pg_dump --schema-only
+#     those two and backfill them the same way.
+#   * supabase/migrations/20260103_seed_starter_character_templates.sql seeds
+#     rows with starter_campaign_id values that must already exist, but no
+#     migration ever inserts into starter_campaigns (production's 3 rows are
+#     dashboard-created data, not schema). This needs a data backfill
+#     (pg_dump --data-only -t starter_campaigns), not a schema migration.
 #
-# There is no trustworthy source for their DDL. drizzle does not model them,
-# so 0004_snapshot.json cannot supply their shape, and inventing column
-# definitions from the SQL that happens to reference them would produce a
-# replayed schema that silently disagrees with production -- which would make
-# this whole test a liar. They can only be cleared by someone dumping the real
-# definitions out of production (pg_dump --schema-only -t <table>) and
-# committing them as a migration.
+# Closing the three tables also surfaced a schema conflict nothing had hit
+# before: supabase/migrations/20251114_add_character_flow_metrics.sql
+# independently creates character_creation_metrics too, but with a
+# completely different, obsolete schema (flow/timestamp/campaign_id columns)
+# that has nothing to do with the character_id/creation_method shape pg_dump
+# captured from production. That table was clearly redesigned through the
+# dashboard at some point and the transformation was never migrated. This was
+# unreachable before today: the table could not replay at all, so the
+# incompatibility never had a chance to surface. Production is ground truth,
+# so the backfill runs first and wins; 20251114's own
+# CREATE TABLE IF NOT EXISTS then no-ops, but its CREATE INDEX/COMMENT
+# statements referencing flow/timestamp fail against the real schema.
 #
 # ============================================================================
 # RULES
@@ -46,13 +69,13 @@
 # Format: one repo-relative path per line, '#' starts a comment.
 # ============================================================================
 
-# --- Reference campaign_characters (not modeled in db/schema/*.ts) ----------
+# --- References character_voice_mappings/character_voice_profiles, which -----
+# are not modeled in db/schema/*.ts and have no migration of their own
 supabase/migrations/20251126_fix_remaining_table_permissions.sql
-db/migrations/20260713_revoke_remaining_anon_access.sql
 
-# --- Reference character_creation_metrics / starter_character_templates -----
-# (neither is modeled in db/schema/*.ts)
-db/migrations/20251214_add_missing_fk_indexes.sql
+# --- Seeds rows referencing starter_campaigns, whose data was never migrated -
 supabase/migrations/20260103_seed_starter_character_templates.sql
-supabase/migrations/20260117_update_eternal_feast_characters.sql
-db/migrations/20260710_create_inventory_tables.sql
+
+# --- References an obsolete pre-redesign character_creation_metrics shape ----
+# (flow/timestamp/campaign_id columns that no longer exist; see History above)
+supabase/migrations/20251114_add_character_flow_metrics.sql
