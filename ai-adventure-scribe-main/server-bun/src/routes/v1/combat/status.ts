@@ -1,6 +1,7 @@
 /* eslint-disable max-lines, @typescript-eslint/no-explicit-any */
 import { Elysia } from 'elysia';
 
+import { verifyEncounterOwnership } from './helpers.js';
 import { db } from '../../../../../db/client';
 import {
   gameSessions,
