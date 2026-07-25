@@ -182,7 +182,7 @@ mock.module('../../../../lib/auth.js', () => ({
       ? { user: { userId: 'user_owner', email: 'owner@example.test', plan: 'free' }, error: null }
       : { user: null, error: 'Unauthorized' },
 }));
-mock.module('../helpers.js', () => ({
+mock.module(import.meta.resolve('../helpers.js'), () => ({
   verifySessionOwnership: async (sessionId: string) =>
     sessionId === SESSION_ID
       ? { success: true, session: { id: SESSION_ID } }

@@ -13,6 +13,9 @@ import * as AnalyticsModule from '@/services/analytics';
 vi.mock('@/contexts/MemoryContext', () => ({
   useMemoryContext: () => ({ memories: [], isLoading: false }),
 }));
+vi.mock('@/hooks/use-campaign-journal', () => ({
+  useCampaignJournal: () => ({ journal: [], isLoading: false, mutate: () => {} }),
+}));
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: { theme: 'fantasy' } } }),
 }));

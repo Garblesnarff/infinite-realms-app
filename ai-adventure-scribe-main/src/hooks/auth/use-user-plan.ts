@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 import logger from '@/lib/logger';
 import { getAccessToken } from '@/services/auth/TokenService';
@@ -84,9 +84,12 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
     fetchUserPlan();
   }, [user, loading, fetchUserPlan]);
 
-  return {
-    userPlan,
-    userPlanLoading,
-    refreshUserPlan: fetchUserPlan,
-  };
+  return useMemo(
+    () => ({
+      userPlan,
+      userPlanLoading,
+      refreshUserPlan: fetchUserPlan,
+    }),
+    [userPlan, userPlanLoading, fetchUserPlan],
+  );
 }

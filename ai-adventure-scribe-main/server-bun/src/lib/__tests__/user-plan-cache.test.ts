@@ -1,15 +1,20 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { UserPlanCache } from '../user-plan-cache.js';
 
 describe('UserPlanCache', () => {
+  let originalDateNow: () => number;
+  let mockTime = 1000000;
+
   beforeEach(() => {
     UserPlanCache.clear();
-    vi.useFakeTimers();
+    originalDateNow = Date.now;
+    mockTime = 1000000;
+    Date.now = () => mockTime;
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    Date.now = originalDateNow;
   });
 
   it('should store and retrieve a plan', () => {
@@ -32,7 +37,7 @@ describe('UserPlanCache', () => {
     expect(UserPlanCache.get(userId)).toBe(plan);
 
     // Advance time by 5 minutes + 1 second
-    vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
+    mockTime += 5 * 60 * 1000 + 1000;
 
     expect(UserPlanCache.get(userId)).toBe(null);
   });

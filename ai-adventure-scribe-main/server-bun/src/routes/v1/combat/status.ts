@@ -12,6 +12,7 @@ import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { ConditionQueryService } from '../../../services/conditions/condition-query-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
+import { verifyEncounterOwnership } from './helpers.js';
 
 
 import type {

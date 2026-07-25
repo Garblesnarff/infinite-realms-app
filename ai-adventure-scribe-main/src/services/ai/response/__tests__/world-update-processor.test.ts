@@ -51,6 +51,7 @@ describe('processWorldAndMemories', () => {
     sessionId: 'session-123',
     campaignId: 'campaign-456',
     characterId: 'character-789',
+    userId: 'user-123',
   } as any;
 
   const defaultParams = {
