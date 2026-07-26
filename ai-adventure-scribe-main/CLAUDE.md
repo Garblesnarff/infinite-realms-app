@@ -278,7 +278,32 @@ bd close bead-id --reason "Fixed: description"
 - Publishes posts where `status='scheduled'` AND `scheduled_for <= now()`
 - Started automatically in `server-bun/src/index.ts`
 
-### 5. Static Files & Cloudflare Caching
+### 5. Rebases Fail on exFAT ("local changes would be overwritten")
+
+**Symptom**: `git rebase` / `git pull --rebase` aborts with *"Your local changes to
+the following files would be overwritten by merge"* — listing every file the commit
+modifies — while `git status` reports a clean tree. `git rebase --continue`
+immediately afterwards then succeeds.
+
+**Cause**: this checkout lives on an external exFAT volume (`/Volumes/T7`). exFAT
+supplies no inode numbers, ctime, uid/gid, or permission bits, so the stat data git
+caches in the index is unreliable. `git status` re-hashes file contents and refreshes
+the index, which is why it looks clean; `git merge`/`git rebase` trust the cached
+stat data without refreshing and bail out.
+
+**Fix** (per-clone, already applied here — re-run after a fresh clone onto exFAT):
+```bash
+git config core.checkStat minimal   # compare only mtime + size
+git config core.trustctime false    # ignore ctime, which exFAT does not keep
+```
+Deliberately **local config, not committed**: a clone on APFS/ext4 wants git's normal
+full stat checks. `core.fileMode false` is set for the same underlying reason.
+
+Not to be confused with hook problems — this reproduces with hooks fully disabled
+(`git -c core.hooksPath=/some/empty/dir rebase ...`), which is the quickest way to
+tell the two apart.
+
+### 6. Static Files & Cloudflare Caching
 **Problem**: Adding new images/assets that return 404.
 
 **Root cause**:
@@ -311,7 +336,7 @@ curl -I -k -H "Host: infiniterealms.app" https://127.0.0.1/images/path/file.png
 # Add ?v=1 to URL to bypass
 ```
 
-### 6. Live vs Dead Code Paths (AI Service)
+### 7. Live vs Dead Code Paths (AI Service)
 **Many files are duplicated between `src/components/` and `src/features/`**. The live paths are:
 
 | Component | LIVE path | DEAD path |
@@ -333,7 +358,7 @@ AIService.chatWithDM() [ai-service.ts]
 
 **AI Model**: Mistral Small Creative via OpenRouter (`OPENROUTER_TEXT_MODEL` in `server-bun/.env`). Log messages may still reference "Gemini" in some places — these are outdated.
 
-### 7. useCallback Declaration Order (TDZ Bug Pattern)
+### 8. useCallback Declaration Order (TDZ Bug Pattern)
 When `useCallback` hooks reference other `useCallback` variables in their dependency arrays, **the referenced callbacks MUST be declared before the consumer**. `const`/`let` are in the Temporal Dead Zone until their declaration line runs.
 
 ```typescript
@@ -348,7 +373,7 @@ const speakFn = React.useCallback(() => { stopFn(); }, [stopFn]);
 
 This bug can be latent and only appear when Vite changes chunk splitting (e.g., after editing a seemingly unrelated file).
 
-### 8. AI Education Pattern
+### 9. AI Education Pattern
 When AI does something wrong, **educate via prompts** (fastest fix):
 
 1. Add section to `promptBuilder.ts` with XML tags: `<rule_name>`
