@@ -8,6 +8,7 @@ import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-s
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import { publishCombatState } from '../../services/combat/combat-sync-service.js';
+import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
   applyTacticalMapAction,
@@ -20,21 +21,11 @@ import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
-import { resolveEntityRef } from '../../tactical/identity.js';
+import { entitySlug, resolveEntityRef } from '../../tactical/identity.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { buildStallDirective, shouldBreakStall } from '../../tactical/stall-breaker.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
-
-/**
- * Clients and the CLI address entities by whatever the board handed them — a slug from the
- * digest or the internal id. Both are normalised here so the combat intent layer, which keys
- * strictly on participant ids, always receives the canonical one.
- */
-async function resolveSessionEntityId(sessionId: string, token: string): Promise<string> {
-  const map = await loadActiveTacticalMap(sessionId);
-  return (map && resolveEntityRef(map.entities, token)?.id) || token;
-}
 
 /** Session-scoped tactical API; all writes delegate to the shared engine dispatcher. */
 export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
@@ -108,14 +99,19 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
     // turns on which the DM was handed nothing the engine had done.
     const silentTurns = await noteEngineResolutions(params.id, facts.length > 0);
     const stalled = shouldBreakStall(silentTurns);
-    if (stalled)
+    if (stalled) {
+      // The id and the slug are both recorded: the log is read against DM transcripts, which
+      // only ever contain slugs, so an id-only line cannot be matched to the turn it describes.
+      const active = resolveEntityRef(map.entities, params.entityId);
       logger.warn({
         msg: 'DM_COMBAT_STALL_DIRECTIVE',
         alert: true,
         sessionId: params.id,
         silentTurns,
         activeEntityId: params.entityId,
+        activeEntitySlug: active ? entitySlug(active) : null,
       });
+    }
     return {
       tacticalContext:
         buildTacticalPrompt(map, params.entityId) +

@@ -14,6 +14,7 @@ import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { claimTurnAction, setDefensiveAction } from './combat-turn-resources.js';
+import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import {
   destroyTacticalCombatMap,
@@ -23,6 +24,7 @@ import {
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 
 import type { AttackRollInput, SpellAttackInput } from '../../types/combat.js';
 
@@ -125,13 +127,57 @@ async function participantLabel(
   );
 }
 
-async function assertActorTurn(encounterId: string, actorId: string, userId: string) {
-  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+type CombatState = Awaited<ReturnType<typeof CombatEncounterService.getCombatState>>;
+
+/**
+ * Two failures used to be reported as one, and the wrong one is what production kept seeing.
+ *
+ * "Actor is not the current-turn participant" is a *sequencing* answer: it says the caller is
+ * early, so wait its turn. When the actorId names nobody in the encounter at all — a slug the
+ * board never resolved, a stale id from a previous encounter — that answer is a lie, and it
+ * sent three separate investigations looking at initiative order for a reference bug. An
+ * unresolvable actor is a 404 naming the reference; only a real participant acting out of
+ * sequence is a 422 about turns.
+ */
+function assertActorTurn(state: CombatState, actorId: string, index: SessionEntityIndex) {
   const current = state.currentParticipant;
+  const known = state.participants.some((participant) => participant.id === actorId);
+  // The current participant is logged on every refusal because the refusal alone never said
+  // whose turn it actually was, and the slug is logged beside the id because the slug is the
+  // only form the DM ever sees.
+  const currentContext = {
+    encounterId: state.encounter.id,
+    sessionId: state.encounter.sessionId,
+    actorId,
+    currentParticipantId: current?.id ?? null,
+    currentParticipantSlug: index.slugFor(current?.id) ?? null,
+  };
+  if (!known) {
+    logger.warn({ msg: 'COMBAT_INTENT_UNKNOWN_ACTOR', ...currentContext, roster: index.roster() });
+    throw new NotFoundError('Combat participant', actorId);
+  }
   if (!current || current.id !== actorId) {
-    throw new BusinessLogicError('Actor is not the current-turn participant', { actorId });
+    logger.warn({ msg: 'COMBAT_INTENT_OUT_OF_TURN', ...currentContext });
+    throw new BusinessLogicError('Actor is not the current-turn participant', currentContext);
   }
   return { actor: current, encounter: state.encounter };
+}
+
+/**
+ * Every entity reference on the way in, normalised against the live board in one read. Targets
+ * matter as much as the actor: an attack whose `targetId` is still a slug reaches the engine
+ * and fails a uuid lookup two layers down, where the error no longer mentions references.
+ */
+function resolveIntentRefs(
+  submitted: SubmittedCombatIntent,
+  index: SessionEntityIndex,
+): SubmittedCombatIntent {
+  const actorId = index.resolve(submitted.actorId);
+  if (submitted.type === 'attack')
+    return { ...submitted, actorId, targetId: index.resolve(submitted.targetId) };
+  if (submitted.type === 'spell')
+    return { ...submitted, actorId, targetIds: submitted.targetIds.map((id) => index.resolve(id)) };
+  return { ...submitted, actorId };
 }
 
 /** The single mutation gateway for player and AI-DM combat intents. */
@@ -143,8 +189,13 @@ export async function executeCombatIntent(
   dmStartedAt?: number,
 ): Promise<unknown> {
   try {
-    const { actor, encounter } = await assertActorTurn(encounterId, submitted.actorId, userId);
-    const intent = resolveExpectedVersion(submitted, source, encounter.version);
+    // Reference resolution happens before authorization, not after: the turn check keys on
+    // participant ids, so asking it about a slug is asking the wrong question.
+    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    const index = await loadSessionEntityIndex(state.encounter.sessionId);
+    const resolved = resolveIntentRefs(submitted, index);
+    const { actor, encounter } = assertActorTurn(state, resolved.actorId, index);
+    const intent = resolveExpectedVersion(resolved, source, encounter.version);
     let result: unknown;
     if (intent.type === 'move') {
       result = await applyTacticalMapAction(encounter.sessionId, {

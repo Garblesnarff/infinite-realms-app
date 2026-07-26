@@ -85,6 +85,39 @@ describe('the directive carries live ids, not placeholders', () => {
     expect(roster).toBe('the-seeker, shadow-roach-1');
   });
 
+  /**
+   * On a real board the ids are uuids and the DM has never been shown one: the digest, the
+   * roster, and every corrective message speak slugs. A directive ordering it to copy uuids
+   * into `roll_requests` was handing it strings with no referent, so the one turn meant to
+   * break the stall emitted references nothing downstream could resolve — the stall survived
+   * the stall-breaker. The assertion is the absence of a uuid, not the presence of a slug.
+   */
+  test('a uuid-keyed board is described entirely in slugs', () => {
+    const uuidBoard = board();
+    const ids = ['3f7a1b2c-4d5e-4f60-8a91-b2c3d4e5f607', '8c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f'];
+    uuidBoard.entities[0].id = ids[0];
+    uuidBoard.entities[1].id = ids[1];
+
+    const directive = buildStallDirective(uuidBoard, ids[0], 3);
+
+    expect(directive).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    expect(directive).toContain('"purpose":"the-seeker attacks shadow-roach-1"');
+    expect(/copying ids from this exact list: (.+)/.exec(directive)![1]).toBe(
+      'the-seeker, shadow-roach-1',
+    );
+  });
+
+  test('the caller may address the active entity by slug or by id', () => {
+    const uuidBoard = board();
+    uuidBoard.entities[1].id = '8c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f';
+    // The turn loop holds whichever form its own layer stores; both name the same creature.
+    for (const token of ['shadow-roach-1', '8c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f']) {
+      expect(buildStallDirective(uuidBoard, token, 3)).toContain(
+        '"purpose":"shadow-roach-1 attacks the-seeker"',
+      );
+    }
+  });
+
   test('it forbids exactly the two things run 9 did every turn', () => {
     const directive = buildStallDirective(board(), 'the-seeker', 5);
     expect(directive).toMatch(/Do not narrate a hit, a miss, or any damage number/);

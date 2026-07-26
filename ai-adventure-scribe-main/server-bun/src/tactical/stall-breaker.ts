@@ -11,6 +11,8 @@
  * because a directive that appears once during an ongoing stall is a directive the next turn's
  * context has already forgotten.
  */
+import { entitySlug, resolveEntityRef } from './identity.js';
+
 import type { TacticalMap } from './types.js';
 
 /** Three turns of nothing is a stall; one or two is a scene with talking in it. */
@@ -21,9 +23,15 @@ export function shouldBreakStall(silentTurns: number): boolean {
 }
 
 /**
- * The directive, carrying this turn's live ids rather than placeholders — the same reasoning
+ * The directive, carrying this turn's live tokens rather than placeholders — the same reasoning
  * that made the legacy hint quote real slugs. A model told to write `<actor_id>` has to decode
  * the instruction before it can obey it; one shown `shadow-roach-1` can copy it.
+ *
+ * Every token here is `entitySlug`, never the raw id. On a slugged board the ids are uuids, and
+ * a directive that ordered the DM to copy uuids into `roll_requests` was handing it strings it
+ * had never been shown — the surrounding digest speaks only slugs — so the one turn meant to
+ * break the stall emitted references nothing downstream could resolve. The lookup goes through
+ * `resolveEntityRef` for the same reason: the caller passes whichever form the turn loop holds.
  */
 export function buildStallDirective(
   map: TacticalMap,
@@ -31,17 +39,18 @@ export function buildStallDirective(
   silentTurns: number,
 ): string {
   const active =
-    map.entities.find((entity) => entity.id === activeEntityId) ??
+    (activeEntityId ? resolveEntityRef(map.entities, activeEntityId) : null) ??
     map.entities.find((entity) => entity.type === 'pc');
-  const actorId = active?.id ?? activeEntityId ?? 'unknown';
+  const actorId = active ? entitySlug(active) : (activeEntityId ?? 'unknown');
   // Objects are on the board too; only the other side of the fight is a legal target.
   const opposing = (active?.type ?? 'pc') === 'pc' ? 'monster' : 'pc';
-  const targetId =
-    map.entities.find((entity) => entity.id !== actorId && entity.type === opposing)?.id ??
-    'unknown';
+  const target = map.entities.find(
+    (entity) => entity.id !== active?.id && entity.type === opposing,
+  );
+  const targetId = target ? entitySlug(target) : 'unknown';
   const roster = map.entities
     .filter((entity) => entity.type !== 'object')
-    .map((entity) => entity.id)
+    .map((entity) => entitySlug(entity))
     .join(', ');
   return `<combat_directive>
 The engine has resolved NOTHING for ${silentTurns} consecutive turns. No attack you narrated in that
