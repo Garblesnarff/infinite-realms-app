@@ -8,8 +8,10 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, or } from 'drizzle-orm';
 
+import { ClassFeaturesService } from './class-features-service.js';
+import { ExhaustionService } from './exhaustion-service.js';
 import { db } from '../../../db/client';
 import {
   characters,
@@ -24,8 +26,6 @@ import {
 import { NotFoundError } from '../lib/errors.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
-import { ExhaustionService } from './exhaustion-service.js';
-import { ClassFeaturesService } from './class-features-service.js';
 
 import type {
   HitDieType,
@@ -207,7 +207,10 @@ export class RestService {
     const updatedPactSlots = pactSlots
       ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
       : pactSlots;
-    const updatedClassFeatures = RestMechanics.restoreClassFeatures(character.classFeatures, 'short');
+    const updatedClassFeatures = RestMechanics.restoreClassFeatures(
+      character.classFeatures,
+      'short',
+    );
     await db
       .update(characters)
       .set({
@@ -218,32 +221,26 @@ export class RestService {
       .where(eq(characters.id, characterId));
     await ClassFeaturesService.restoreFeatures({ characterId, restType: 'short', userId });
 
-    // Create rest event
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // Create rest event.
+    // The insert-select re-ran, verbatim, the ownership filter the character lookup
+    // at the top of this method already applied -- and since its projection covered
+    // 10 of rest_events' 13 columns, Drizzle threw before sending anything, so no
+    // short rest was ever recorded. Reaching this line already proves ownership.
+    const now = new Date();
     const [restEvent] = await db
       .insert(restEvents)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            sessionId: sql`${sessionId || null}`,
-            restType: sql`'short'`,
-            startedAt: sql`NOW()`,
-            completedAt: sql`NOW()`,
-            hpRestored: sql`${hpRestored}`,
-            hitDiceSpent: sql`${hitDiceSpent}`,
-            resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
-            interrupted: sql`false`,
-            notes: sql`${notes || null}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-            ),
-          ),
-      )
+      .values({
+        characterId,
+        sessionId: sessionId || null,
+        restType: 'short',
+        startedAt: now,
+        completedAt: now,
+        hpRestored,
+        hitDiceSpent,
+        resourcesRestored: JSON.stringify(resourcesRestored),
+        interrupted: false,
+        notes: notes || null,
+      })
       .returning();
 
     if (!restEvent) {
@@ -327,7 +324,10 @@ export class RestService {
     const updatedPactSlots = pactSlots
       ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
       : pactSlots;
-    const updatedClassFeatures = RestMechanics.restoreClassFeatures(character.classFeatures, 'long');
+    const updatedClassFeatures = RestMechanics.restoreClassFeatures(
+      character.classFeatures,
+      'long',
+    );
     await db
       .update(characters)
       .set({
@@ -349,32 +349,23 @@ export class RestService {
       ),
     );
 
-    // Create rest event
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // Create rest event. Same conversion as takeShortRest above: ownership is
+    // established by the character lookup at the top of this method.
+    const now = new Date();
     const [restEvent] = await db
       .insert(restEvents)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            sessionId: sql`${sessionId || null}`,
-            restType: sql`'long'`,
-            startedAt: sql`NOW()`,
-            completedAt: sql`NOW()`,
-            hpRestored: sql`${hpRestored}`,
-            hitDiceSpent: sql`0`,
-            resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
-            interrupted: sql`false`,
-            notes: sql`${notes || null}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-            ),
-          ),
-      )
+      .values({
+        characterId,
+        sessionId: sessionId || null,
+        restType: 'long',
+        startedAt: now,
+        completedAt: now,
+        hpRestored,
+        hitDiceSpent: 0,
+        resourcesRestored: JSON.stringify(resourcesRestored),
+        interrupted: false,
+        notes: notes || null,
+      })
       .returning();
 
     if (!restEvent) {

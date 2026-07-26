@@ -10,11 +10,7 @@
 import { eq, and, desc, or, exists, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
-import {
-  experienceEvents,
-  levelProgression,
-  characters,
-} from '../../../db/schema/index';
+import { experienceEvents, levelProgression, characters } from '../../../db/schema/index';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { LevelUpService } from './progression/level-up-service.js';
 import { ProgressionMechanics } from './progression/progression-mechanics.js';
@@ -93,19 +89,25 @@ export class ProgressionService {
   /**
    * Initialize progression for a new character
    */
-  static async initializeProgression(characterId: string, userId: string): Promise<LevelProgression> {
+  static async initializeProgression(
+    characterId: string,
+    userId: string,
+  ): Promise<LevelProgression> {
     // Check if progression already exists
     const existing = await db.query.levelProgression.findFirst({
       where: and(
         eq(levelProgression.characterId, characterId),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
       ),
     });
 
@@ -113,24 +115,33 @@ export class ProgressionService {
       return existing;
     }
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    // This ensures that progression can only be initialized for characters the user is authorized to access.
+    // Ownership check split out of the insert. As an insert-select this projected 5
+    // of level_progression's 7 columns and Drizzle refused to build it, so
+    // progression was never initialized for anyone.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (owned.length === 0) {
+      throw new NotFoundError('Character', characterId);
+    }
+
     const [progression] = await db
       .insert(levelProgression)
-      .select(
-        db.select({
-          characterId: sql`${characterId}`,
-          currentLevel: sql`1`,
-          currentXp: sql`0`,
-          xpToNextLevel: sql`${ProgressionMechanics.getXPForLevel(2) || 300}`,
-          totalXp: sql`0`,
-        })
-        .from(characters)
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
-      )
+      .values({
+        characterId,
+        currentLevel: 1,
+        currentXp: 0,
+        xpToNextLevel: ProgressionMechanics.getXPForLevel(2) || 300,
+        totalXp: 0,
+      })
       .returning();
 
     if (!progression) {
@@ -149,10 +160,12 @@ export class ProgressionService {
       .select({ progression: levelProgression })
       .from(levelProgression)
       .innerJoin(characters, eq(levelProgression.characterId, characters.id))
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(levelProgression.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     let progression = results[0]?.progression;
@@ -162,9 +175,10 @@ export class ProgressionService {
       progression = await this.initializeProgression(characterId, userId);
     }
 
-    const percentToNext = progression.currentLevel >= 20
-      ? 100
-      : (progression.currentXp / (progression.currentXp + progression.xpToNextLevel)) * 100;
+    const percentToNext =
+      progression.currentLevel >= 20
+        ? 100
+        : (progression.currentXp / (progression.currentXp + progression.xpToNextLevel)) * 100;
 
     return {
       level: progression.currentLevel,
@@ -184,10 +198,12 @@ export class ProgressionService {
       .select({ progression: levelProgression })
       .from(levelProgression)
       .innerJoin(characters, eq(levelProgression.characterId, characters.id))
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(levelProgression.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     const progression = results[0]?.progression;
@@ -208,7 +224,7 @@ export class ProgressionService {
     source: XPSource,
     userId: string,
     description?: string,
-    sessionId?: string
+    sessionId?: string,
   ): Promise<AwardXPResult> {
     if (xp < 0) {
       throw new ValidationError('Cannot award negative XP', { xp });
@@ -219,10 +235,12 @@ export class ProgressionService {
       .select({ progression: levelProgression })
       .from(levelProgression)
       .innerJoin(characters, eq(levelProgression.characterId, characters.id))
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(levelProgression.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     let progression = results[0]?.progression;
@@ -248,54 +266,62 @@ export class ProgressionService {
         lastLevelUp: levelsGained > 0 ? new Date() : progression.lastLevelUp,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ))
+      .where(
+        and(
+          eq(levelProgression.characterId, characterId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
       .returning();
 
-    const charUpdate = levelsGained > 0
-      ? db
-          .update(characters)
-          .set({
-            level: newLevel,
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      : Promise.resolve();
+    const charUpdate =
+      levelsGained > 0
+        ? db
+            .update(characters)
+            .set({
+              level: newLevel,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            )
+        : Promise.resolve();
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    const eventLog = db.insert(experienceEvents).select(
-      db.select({
-        characterId: sql`${characterId}`,
-        sessionId: sql`${sessionId || null}`,
-        xpGained: sql`${xp}`,
-        source: sql`${source}`,
-        description: sql`${description || null}`,
-      })
-      .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-    );
-
-    const [updatedRows] = await Promise.all([progressionUpdate, charUpdate, eventLog]);
+    // The XP event log used to be an insert-select carrying the ownership check.
+    // Its projection listed 5 of experience_events' 7 columns, so Drizzle threw
+    // before issuing anything and no XP event has ever been recorded on this path.
+    // The progression UPDATE below runs under the same ownership filter, so once it
+    // reports a matching row, ownership is established and a plain insert is safe.
+    const updatedRows = await progressionUpdate;
     const updatedProgression = (updatedRows as LevelProgression[])[0];
 
     if (!updatedProgression) {
       throw new Error('Failed to update progression');
     }
+
+    await Promise.all([
+      charUpdate,
+      db.insert(experienceEvents).values({
+        characterId,
+        sessionId: sessionId || null,
+        xpGained: xp,
+        source,
+        description: description || null,
+      }),
+    ]);
 
     return {
       newXp: updatedProgression.currentXp,
@@ -314,21 +340,23 @@ export class ProgressionService {
     characterId: string,
     userId: string,
     sessionId?: string,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<ExperienceEvent[]> {
     const history = await db
       .select({ event: experienceEvents })
       .from(experienceEvents)
       .innerJoin(characters, eq(experienceEvents.characterId, characters.id))
-      .where(and(
-        eq(experienceEvents.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        sessionId ? eq(experienceEvents.sessionId, sessionId) : undefined
-      ))
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          sessionId ? eq(experienceEvents.sessionId, sessionId) : undefined,
+        ),
+      )
       .orderBy(desc(experienceEvents.timestamp))
       .limit(limit);
 
-    return history.map(h => h.event);
+    return history.map((h) => h.event);
   }
 
   /**
@@ -337,7 +365,7 @@ export class ProgressionService {
   static async getLevelUpOptions(
     characterId: string,
     newLevel: number,
-    userId: string
+    userId: string,
   ): Promise<LevelUpOptions> {
     return LevelUpService.getLevelUpOptions(characterId, newLevel, userId);
   }
@@ -356,7 +384,7 @@ export class ProgressionService {
     characterId: string,
     level: number,
     userId: string,
-    reason?: string
+    reason?: string,
   ): Promise<{ oldLevel: number; newLevel: number }> {
     return LevelUpService.setLevel(characterId, level, userId, reason);
   }

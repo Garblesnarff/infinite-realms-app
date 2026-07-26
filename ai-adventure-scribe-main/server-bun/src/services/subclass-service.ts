@@ -8,16 +8,17 @@
  * @module server/services/subclass-service
  */
 
-import { eq, and, sql, exists, or } from 'drizzle-orm';
+import { eq, and, exists, or } from 'drizzle-orm';
 
 import { ClassFeaturesService } from './class-features-service.js';
 import { db } from '../../../db/client';
+import { classFeaturesLibrary, characterSubclasses, characters } from '../../../db/schema/index';
 import {
-  classFeaturesLibrary,
-  characterSubclasses,
-  characters,
-} from '../../../db/schema/index';
-import { NotFoundError, ConflictError, ValidationError, BusinessLogicError } from '../lib/errors.js';
+  NotFoundError,
+  ConflictError,
+  ValidationError,
+  BusinessLogicError,
+} from '../lib/errors.js';
 import { SUBCLASS_CHOICE_LEVELS, AVAILABLE_SUBCLASSES } from '../types/class-features.js';
 
 import type {
@@ -38,7 +39,9 @@ export class SubclassService {
   /**
    * Set a character's subclass
    */
-  static async setSubclass(input: SetSubclassInput & { userId: string }): Promise<SetSubclassResult> {
+  static async setSubclass(
+    input: SetSubclassInput & { userId: string },
+  ): Promise<SetSubclassResult> {
     const { characterId, className, subclassName, level, userId } = input;
 
     // Verify character exists and verify ownership
@@ -58,14 +61,14 @@ export class SubclassService {
     const existing = await db.query.characterSubclasses.findFirst({
       where: and(
         eq(characterSubclasses.characterId, characterId),
-        eq(characterSubclasses.className, className)
+        eq(characterSubclasses.className, className),
       ),
     });
 
     if (existing) {
       throw new ConflictError(
         `Character already has subclass ${existing.subclassName} for ${className}. Subclass choices are permanent.`,
-        { existingSubclass: existing.subclassName, className }
+        { existingSubclass: existing.subclassName, className },
       );
     }
 
@@ -74,44 +77,34 @@ export class SubclassService {
     if (level < requiredLevel) {
       throw new BusinessLogicError(
         `${className} chooses subclass at level ${requiredLevel}. Character is level ${level}.`,
-        { className, requiredLevel, characterLevel: level }
+        { className, requiredLevel, characterLevel: level },
       );
     }
 
-    // Set the subclass
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    await db
-      .insert(characterSubclasses)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            className: sql`${className}`,
-            subclassName: sql`${subclassName}`,
-            chosenAtLevel: sql`${level}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      );
+    // Set the subclass.
+    // The insert-select projected 4 of character_subclasses' 6 columns and Drizzle
+    // rejected it, so choosing a subclass never persisted. verifyCharacterOwnership
+    // at the top of this method is the authorization; this is just the write.
+    await db.insert(characterSubclasses).values({
+      characterId,
+      className,
+      subclassName,
+      chosenAtLevel: level,
+    });
 
     // Get subclass features acquired at the choice level
     const subclassFeatures = await db.query.classFeaturesLibrary.findMany({
       where: and(
         eq(classFeaturesLibrary.className, className),
         eq(classFeaturesLibrary.subclassName, subclassName),
-        eq(classFeaturesLibrary.levelAcquired, requiredLevel)
+        eq(classFeaturesLibrary.levelAcquired, requiredLevel),
       ),
     });
 
     // Grant subclass features
     // ⚡ Bolt: Optimized to grant all subclass features in a single batch operation.
     // This reduces database round-trips from O(N) to O(1).
-    const featureIds = subclassFeatures.map(f => f.id);
+    const featureIds = subclassFeatures.map((f) => f.id);
     await ClassFeaturesService.grantFeaturesBatch(characterId, featureIds, level, userId);
 
     const newFeatures = subclassFeatures;
@@ -129,7 +122,7 @@ export class SubclassService {
   static async getCharacterSubclass(
     characterId: string,
     className: string,
-    userId: string
+    userId: string,
   ): Promise<CharacterSubclass | null> {
     if (userId) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -140,13 +133,16 @@ export class SubclassService {
         eq(characterSubclasses.characterId, characterId),
         eq(characterSubclasses.className, className),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
       ),
     });
 
@@ -169,11 +165,14 @@ export class SubclassService {
    * Verify user owns the character (direct owner or shared owner field).
    * Throws NOT_FOUND to avoid disclosing character existence.
    */
-  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+  private static async verifyCharacterOwnership(
+    characterId: string,
+    userId: string,
+  ): Promise<void> {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       columns: { id: true },
     });

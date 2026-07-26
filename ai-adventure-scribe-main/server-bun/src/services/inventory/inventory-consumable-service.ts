@@ -33,7 +33,7 @@ export class InventoryConsumableService {
   static async useConsumable(
     input: UseConsumableInput,
     userId: string,
-    preFetchedItem?: InventoryItem
+    preFetchedItem?: InventoryItem,
   ): Promise<UseConsumableResult> {
     // Get item if not pre-fetched
     let item = preFetchedItem;
@@ -42,11 +42,13 @@ export class InventoryConsumableService {
         .select({ item: inventoryItems })
         .from(inventoryItems)
         .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-        .where(and(
-          eq(inventoryItems.id, input.itemId),
-          eq(inventoryItems.characterId, input.characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
+        .where(
+          and(
+            eq(inventoryItems.id, input.itemId),
+            eq(inventoryItems.characterId, input.characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        )
         .limit(1);
       item = result?.item || undefined;
     }
@@ -60,32 +62,39 @@ export class InventoryConsumableService {
     if (item.quantity < quantityToUse) {
       throw new BusinessLogicError(
         `Insufficient quantity. Available: ${item.quantity}, Requested: ${quantityToUse}`,
-        { available: item.quantity, requested: quantityToUse, itemId: input.itemId }
+        { available: item.quantity, requested: quantityToUse, itemId: input.itemId },
       );
     }
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // Ownership check split out of the insert. As an insert-select this projected
+    // 5 of consumable_usage_log's 7 columns and Drizzle rejected it, so using a
+    // consumable always failed with "Failed to log consumable usage".
+    const authorized = await db
+      .select({ one: sql`1` })
+      .from(inventoryItems)
+      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
+      .where(
+        and(
+          eq(inventoryItems.id, input.itemId),
+          eq(inventoryItems.characterId, input.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (authorized.length === 0) {
+      throw new NotFoundError('Inventory item', input.itemId);
+    }
+
     const [usageLog] = await db
       .insert(consumableUsageLog)
-      .select(
-        db
-          .select({
-            characterId: sql`${input.characterId}`,
-            itemId: sql`${input.itemId}`,
-            quantityUsed: sql`${quantityToUse}`,
-            sessionId: sql`${input.sessionId ?? null}`,
-            context: sql`${input.context ?? null}`,
-          })
-          .from(inventoryItems)
-          .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-          .where(
-            and(
-              eq(inventoryItems.id, input.itemId),
-              eq(inventoryItems.characterId, input.characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      )
+      .values({
+        characterId: input.characterId,
+        itemId: input.itemId,
+        quantityUsed: quantityToUse,
+        sessionId: input.sessionId ?? null,
+        context: input.context ?? null,
+      })
       .returning();
 
     if (!usageLog) {
@@ -97,20 +106,23 @@ export class InventoryConsumableService {
 
     // Update or delete item based on remaining quantity
     if (newQuantity <= 0) {
-      await db
-        .delete(inventoryItems)
-        .where(and(
+      await db.delete(inventoryItems).where(
+        and(
           eq(inventoryItems.id, input.itemId),
           eq(inventoryItems.characterId, input.characterId),
           exists(
-            db.select()
+            db
+              .select()
               .from(characters)
-              .where(and(
-                eq(characters.id, inventoryItems.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        ));
+              .where(
+                and(
+                  eq(characters.id, inventoryItems.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      );
       itemDeleted = true;
     } else {
       await db
@@ -119,18 +131,23 @@ export class InventoryConsumableService {
           quantity: newQuantity,
           updatedAt: new Date(),
         })
-        .where(and(
-          eq(inventoryItems.id, input.itemId),
-          eq(inventoryItems.characterId, input.characterId),
-          exists(
-            db.select()
-              .from(characters)
-              .where(and(
-                eq(characters.id, inventoryItems.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        ));
+        .where(
+          and(
+            eq(inventoryItems.id, input.itemId),
+            eq(inventoryItems.characterId, input.characterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, inventoryItems.characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        );
     }
 
     return {
@@ -148,19 +165,21 @@ export class InventoryConsumableService {
     characterId: string,
     userId: string,
     ammoType: string,
-    count: number = 1
+    count: number = 1,
   ): Promise<UseConsumableResult> {
     // Find ammunition by name
     const results = await db
       .select({ item: inventoryItems })
       .from(inventoryItems)
       .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ));
+      .where(
+        and(
+          eq(inventoryItems.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          eq(inventoryItems.itemType, 'ammunition'),
+          eq(inventoryItems.name, ammoType),
+        ),
+      );
 
     if (results.length === 0) {
       throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
@@ -171,12 +190,16 @@ export class InventoryConsumableService {
       throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
     }
 
-    return this.useConsumable({
-      characterId,
-      itemId: item.id,
-      quantity: count,
-      context: 'Ranged attack',
-    }, userId, item);
+    return this.useConsumable(
+      {
+        characterId,
+        itemId: item.id,
+        quantity: count,
+        context: 'Ranged attack',
+      },
+      userId,
+      item,
+    );
   }
 
   /**
@@ -186,19 +209,21 @@ export class InventoryConsumableService {
     characterId: string,
     userId: string,
     ammoType: string,
-    count: number
+    count: number,
   ): Promise<InventoryItem> {
     // Find or create ammunition
     const results = await db
       .select({ item: inventoryItems })
       .from(inventoryItems)
       .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ));
+      .where(
+        and(
+          eq(inventoryItems.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          eq(inventoryItems.itemType, 'ammunition'),
+          eq(inventoryItems.name, ammoType),
+        ),
+      );
 
     if (results.length > 0) {
       // Add to existing
@@ -213,48 +238,61 @@ export class InventoryConsumableService {
           quantity: item.quantity + count,
           updatedAt: new Date(),
         })
-        .where(and(
-          eq(inventoryItems.id, item.id),
-          eq(inventoryItems.characterId, characterId),
-          exists(
-            db.select()
-              .from(characters)
-              .where(and(
-                eq(characters.id, inventoryItems.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        ))
+        .where(
+          and(
+            eq(inventoryItems.id, item.id),
+            eq(inventoryItems.characterId, characterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, inventoryItems.characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        )
         .returning();
 
       if (!updated) throw new InternalServerError('Failed to update ammunition');
       return updated;
     } else {
-      // Create new ammunition entry
+      // Create new ammunition entry.
+      // Ownership check split out of the insert: as an insert-select this projected
+      // 10 of inventory_items' 13 columns and Drizzle rejected it, so a character
+      // could never acquire a new ammunition type.
+      const owned = await db
+        .select({ one: sql`1` })
+        .from(characters)
+        .where(
+          and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        )
+        .limit(1);
+
+      if (owned.length === 0) {
+        throw new NotFoundError('Character', characterId);
+      }
+
       const [item] = await db
         .insert(inventoryItems)
-        .select(
-          db
-            .select({
-              characterId: sql`${characterId}`,
-              name: sql`${ammoType}`,
-              itemType: sql`'ammunition'::"item_type"`,
-              quantity: sql`${count}`,
-              weight: sql`'0.05'`,
-              description: sql`NULL`,
-              properties: sql`NULL`,
-              isEquipped: sql`false`,
-              isAttuned: sql`false`,
-              requiresAttunement: sql`false`,
-            })
-            .from(characters)
-            .where(
-              and(
-                eq(characters.id, characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              )
-            )
-        )
+        .values({
+          characterId,
+          name: ammoType,
+          itemType: 'ammunition',
+          quantity: count,
+          weight: '0.05',
+          description: null,
+          properties: null,
+          isEquipped: false,
+          isAttuned: false,
+          requiresAttunement: false,
+        })
         .returning();
 
       if (!item) {
@@ -268,20 +306,25 @@ export class InventoryConsumableService {
   /**
    * Get consumable usage history
    */
-  static async getUsageHistory(input: GetUsageHistoryInput, userId: string): Promise<ConsumableUsageLog[]> {
+  static async getUsageHistory(
+    input: GetUsageHistoryInput,
+    userId: string,
+  ): Promise<ConsumableUsageLog[]> {
     const results = await db
       .select({ log: consumableUsageLog })
       .from(consumableUsageLog)
       .innerJoin(characters, eq(consumableUsageLog.characterId, characters.id))
-      .where(and(
-        eq(consumableUsageLog.characterId, input.characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        input.itemId ? eq(consumableUsageLog.itemId, input.itemId) : undefined,
-        input.sessionId ? eq(consumableUsageLog.sessionId, input.sessionId) : undefined
-      ))
+      .where(
+        and(
+          eq(consumableUsageLog.characterId, input.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          input.itemId ? eq(consumableUsageLog.itemId, input.itemId) : undefined,
+          input.sessionId ? eq(consumableUsageLog.sessionId, input.sessionId) : undefined,
+        ),
+      )
       .orderBy(desc(consumableUsageLog.timestamp))
       .limit(input.limit ?? 100);
 
-    return results.map(r => r.log);
+    return results.map((r) => r.log);
   }
 }

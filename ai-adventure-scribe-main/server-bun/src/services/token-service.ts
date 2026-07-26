@@ -145,56 +145,62 @@ export class TokenService {
    * Create a new token
    */
   static async createToken(sceneId: string, userId: string, data: CreateTokenData): Promise<Token> {
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    // This ensures that tokens can only be added to scenes the user is authorized to access,
-    // and if an actorId is provided, that the user owns that character.
+    // Scene (and optional actor) ownership split out of the insert. As an
+    // insert-select this projected 16 of tokens' 42 columns, so Drizzle rejected the
+    // statement and no token was ever created. The WHERE clause is preserved
+    // verbatim as a standalone authorization query.
+    const authorized = await db
+      .select({ one: sql`1` })
+      .from(scenes)
+      .where(
+        and(
+          eq(scenes.id, sceneId),
+          eq(scenes.userId, userId),
+          data.actorId
+            ? exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(characters)
+                  .where(
+                    and(
+                      eq(characters.id, data.actorId),
+                      or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
+      )
+      .limit(1);
+
+    if (authorized.length === 0) {
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access to mask resource existence.
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene or character not found' });
+    }
+
     const [token] = await db
       .insert(tokens)
-      .select(
-        db
-          .select({
-            sceneId: sql`${sceneId}`,
-            actorId: sql`${data.actorId || null}`,
-            createdBy: sql`${userId}`,
-            name: sql`${data.name}`,
-            tokenType: sql`${data.tokenType}`,
-            positionX: sql`${String(data.positionX)}`,
-            positionY: sql`${String(data.positionY)}`,
-            imageUrl: sql`${data.imageUrl || null}`,
-            sizeWidth: sql`${data.sizeWidth ? String(data.sizeWidth) : '1.0'}`,
-            sizeHeight: sql`${data.sizeHeight ? String(data.sizeHeight) : '1.0'}`,
-            gridSize: sql`${data.gridSize || 'medium'}`,
-            visionEnabled: sql`${data.visionEnabled || false}`,
-            visionRange: sql`${data.visionRange ? String(data.visionRange) : null}`,
-            emitsLight: sql`${data.emitsLight || false}`,
-            lightRange: sql`${data.lightRange ? String(data.lightRange) : null}`,
-            lightColor: sql`${data.lightColor || null}`,
-          })
-          .from(scenes)
-          .where(
-            and(
-              eq(scenes.id, sceneId),
-              eq(scenes.userId, userId),
-              data.actorId
-                ? exists(
-                    db
-                      .select({ one: sql`1` })
-                      .from(characters)
-                      .where(
-                        and(
-                          eq(characters.id, data.actorId),
-                          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                        )
-                      )
-                  )
-                : sql`true`
-            )
-          )
-      )
+      .values({
+        sceneId,
+        actorId: data.actorId || null,
+        createdBy: userId,
+        name: data.name,
+        tokenType: data.tokenType,
+        positionX: String(data.positionX),
+        positionY: String(data.positionY),
+        imageUrl: data.imageUrl || null,
+        sizeWidth: data.sizeWidth ? String(data.sizeWidth) : '1.0',
+        sizeHeight: data.sizeHeight ? String(data.sizeHeight) : '1.0',
+        gridSize: data.gridSize || 'medium',
+        visionEnabled: data.visionEnabled || false,
+        visionRange: data.visionRange ? String(data.visionRange) : null,
+        emitsLight: data.emitsLight || false,
+        lightRange: data.lightRange ? String(data.lightRange) : null,
+        lightColor: data.lightColor || null,
+      })
       .returning();
 
     if (!token) {
-      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access to mask resource existence.
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene or character not found' });
     }
 

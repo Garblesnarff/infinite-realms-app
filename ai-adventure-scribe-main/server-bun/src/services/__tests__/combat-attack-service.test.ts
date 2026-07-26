@@ -35,14 +35,14 @@ vi.mock('../../../../db/client', () => ({
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-            limit: vi.fn(),
-            innerJoin: vi.fn(() => ({
-                where: vi.fn()
-            }))
+          limit: vi.fn(),
+          innerJoin: vi.fn(() => ({
+            where: vi.fn(),
+          })),
         })),
         innerJoin: vi.fn(() => ({
-            where: vi.fn()
-        }))
+          where: vi.fn(),
+        })),
       })),
     })),
     insert: vi.fn(() => ({
@@ -68,7 +68,7 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     and: vi.fn((...args) => ({ type: 'and', args })),
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
@@ -106,46 +106,59 @@ describe('CombatAttackService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             type: 'and',
-          })
-        })
+          }),
+        }),
       );
     });
   });
 
   describe('Security: createWeaponAttack', () => {
-    it('should throw NotFoundError if character is not owned (atomic check)', async () => {
-      // Mock db.insert().select().returning() returning empty array
-      (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([])
-        })
+    /**
+     * The ownership check used to ride inside an insert-select. Projecting 8 of
+     * weapon_attacks' 10 columns, Drizzle rejected the statement while building it,
+     * so adding a custom weapon never worked. It is now an ownership SELECT followed
+     * by a plain insert.
+     */
+    // Once, not mockReturnValue: createWeaponAttack makes exactly one db.select call,
+    // and a persistent implementation would leak into the sibling suites below
+    // (vi.clearAllMocks clears recorded calls, not implementations).
+    const mockOwnershipCheck = (rows: unknown[]) => {
+      (db.select as any).mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue(rows),
       });
+    };
 
-      await expect(service.createWeaponAttack({
-        characterId: mockCharacterId,
-        name: 'Sword',
-        attackBonus: 5,
-        damageDice: '1d8',
-        damageBonus: 2,
-        damageType: 'slashing'
-      }, mockUserId)).rejects.toThrow(NotFoundError);
+    const input = {
+      characterId: mockCharacterId,
+      name: 'Sword',
+      attackBonus: 5,
+      damageDice: '1d8',
+      damageBonus: 2,
+      damageType: 'slashing',
+    };
+
+    it('should throw NotFoundError if character is not owned (atomic check)', async () => {
+      mockOwnershipCheck([]);
+      const mockValues = vi.fn();
+      (db.insert as any).mockReturnValue({ values: mockValues });
+
+      await expect(service.createWeaponAttack(input, mockUserId)).rejects.toThrow(NotFoundError);
+
+      // An unowned character must not reach the write.
+      expect(mockValues).not.toHaveBeenCalled();
     });
 
     it('should succeed if character is owned (atomic check)', async () => {
+      mockOwnershipCheck([{ one: 1 }]);
       (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: mockWeaponId }])
-        })
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: mockWeaponId }]),
+        }),
       });
 
-      const result = await service.createWeaponAttack({
-        characterId: mockCharacterId,
-        name: 'Sword',
-        attackBonus: 5,
-        damageDice: '1d8',
-        damageBonus: 2,
-        damageType: 'slashing'
-      }, mockUserId);
+      const result = await service.createWeaponAttack(input, mockUserId);
 
       expect(result.id).toBe(mockWeaponId);
       expect(db.insert).toHaveBeenCalled();
@@ -161,9 +174,9 @@ describe('CombatAttackService', () => {
       expect(db.query.creatureStats.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            type: 'and'
-          })
-        })
+            type: 'and',
+          }),
+        }),
       );
     });
   });
@@ -174,25 +187,42 @@ describe('CombatAttackService', () => {
       const mockTargetId = 'target-123';
       const mockAttackerId = 'attacker-123';
 
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([
-          { participant: { id: mockTargetId, armorClass: 15 }, stats: { armorClass: 15 }, status: null, encounter: {} },
-          { participant: { id: mockAttackerId, armorClass: 10 }, stats: null, status: null, encounter: {} },
-        ]),
-      }).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(), innerJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([]),
-      });
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: { id: mockTargetId, armorClass: 15 },
+              stats: { armorClass: 15 },
+              status: null,
+              encounter: {},
+            },
+            {
+              participant: { id: mockAttackerId, armorClass: 10 },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        });
 
-      const result = await service.resolveAttack(mockEncounterId, {
-        attackerId: mockAttackerId,
-        expectedVersion: 1,
-        targetId: mockTargetId,
-        attackType: 'melee'
-      }, mockUserId);
+      const result = await service.resolveAttack(
+        mockEncounterId,
+        {
+          attackerId: mockAttackerId,
+          expectedVersion: 1,
+          targetId: mockTargetId,
+          attackType: 'melee',
+        },
+        mockUserId,
+      );
 
       expect(result.hit).toBe(true);
       expect(result.isCritical).toBe(true);
@@ -209,16 +239,27 @@ describe('CombatAttackService', () => {
         leftJoin: vi.fn().mockReturnThis(),
         innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([
-          { participant: { id: mockTargetId, armorClass: 15 }, stats: { armorClass: 15 }, status: null, encounter: {} },
+          {
+            participant: { id: mockTargetId, armorClass: 15 },
+            stats: { armorClass: 15 },
+            status: null,
+            encounter: {},
+          },
         ]),
       });
 
-      await expect(service.resolveAttack(mockEncounterId, {
-        attackerId: mockAttackerId,
-        expectedVersion: 1,
-        targetId: mockTargetId,
-        attackType: 'melee'
-      }, mockUserId)).rejects.toThrow(NotFoundError);
+      await expect(
+        service.resolveAttack(
+          mockEncounterId,
+          {
+            attackerId: mockAttackerId,
+            expectedVersion: 1,
+            targetId: mockTargetId,
+            attackType: 'melee',
+          },
+          mockUserId,
+        ),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -226,19 +267,29 @@ describe('CombatAttackService', () => {
     it('should throw NotFoundError if caster is not owned', async () => {
       const mockEncounterId = 'enc-123';
       const mockCasterId = 'caster-123';
-      vi.mocked(CombatInitiativeService.getCurrentTurn).mockResolvedValue({ id: mockCasterId } as any);
+      vi.mocked(CombatInitiativeService.getCurrentTurn).mockResolvedValue({
+        id: mockCasterId,
+      } as any);
 
       (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(), leftJoin: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(), where: vi.fn().mockResolvedValue([]),
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
       });
 
-      await expect(service.resolveSpellAttack(mockEncounterId, {
-        casterId: mockCasterId,
-        expectedVersion: 1,
-        targetIds: ['target-1'],
-        spellName: 'Fireball'
-      }, mockUserId)).rejects.toThrow(NotFoundError);
+      await expect(
+        service.resolveSpellAttack(
+          mockEncounterId,
+          {
+            casterId: mockCasterId,
+            expectedVersion: 1,
+            targetIds: ['target-1'],
+            spellName: 'Fireball',
+          },
+          mockUserId,
+        ),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 });

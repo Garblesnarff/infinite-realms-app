@@ -37,7 +37,7 @@ export class InventoryDataAccess {
   static async getInventory(
     characterId: string,
     userId: string,
-    options: GetInventoryOptions = {}
+    options: GetInventoryOptions = {},
   ): Promise<InventorySummary> {
     const results = await db
       .select({
@@ -50,15 +50,17 @@ export class InventoryDataAccess {
         and(
           eq(inventoryItems.characterId, characters.id),
           options.itemType ? eq(inventoryItems.itemType, options.itemType) : undefined,
-          options.equipped !== undefined ? eq(inventoryItems.isEquipped, options.equipped) : undefined,
-          options.attuned !== undefined ? eq(inventoryItems.isAttuned, options.attuned) : undefined
-        )
+          options.equipped !== undefined
+            ? eq(inventoryItems.isEquipped, options.equipped)
+            : undefined,
+          options.attuned !== undefined ? eq(inventoryItems.isAttuned, options.attuned) : undefined,
+        ),
       )
       .where(
         and(
           eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        )
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
       )
       .orderBy(desc(inventoryItems.createdAt));
 
@@ -66,9 +68,7 @@ export class InventoryDataAccess {
       throw new NotFoundError('Character', characterId);
     }
 
-    const items = results
-      .map((r) => r.item)
-      .filter((item): item is InventoryItem => item !== null);
+    const items = results.map((r) => r.item).filter((item): item is InventoryItem => item !== null);
 
     const totalWeight = items.reduce((sum, item) => {
       const weight = parseFloat(item.weight || '0');
@@ -86,30 +86,38 @@ export class InventoryDataAccess {
    * Add item to character inventory
    */
   static async addItem(input: CreateInventoryItemInput, userId: string): Promise<InventoryItem> {
+    // Character-ownership check split out of the insert. As an insert-select this
+    // projected 10 of inventory_items' 13 columns, so Drizzle rejected it and no
+    // item was ever added to an inventory on this path.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, input.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (owned.length === 0) {
+      throw new NotFoundError('Character', input.characterId);
+    }
+
     const [item] = await db
       .insert(inventoryItems)
-      .select(
-        db
-          .select({
-            characterId: sql`${input.characterId}`,
-            name: sql`${input.name}`,
-            itemType: sql`${input.itemType}`,
-            quantity: sql`${input.quantity ?? 1}`,
-            weight: sql`${input.weight?.toString() ?? '0'}`,
-            description: sql`${input.description ?? null}`,
-            properties: sql`${input.properties ? JSON.stringify(input.properties) : null}`,
-            isEquipped: sql`${input.isEquipped ?? false}`,
-            isAttuned: sql`${input.isAttuned ?? false}`,
-            requiresAttunement: sql`${input.requiresAttunement ?? false}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, input.characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      )
+      .values({
+        characterId: input.characterId,
+        name: input.name,
+        itemType: input.itemType,
+        quantity: input.quantity ?? 1,
+        weight: input.weight?.toString() ?? '0',
+        description: input.description ?? null,
+        properties: input.properties ? JSON.stringify(input.properties) : null,
+        isEquipped: input.isEquipped ?? false,
+        isAttuned: input.isAttuned ?? false,
+        requiresAttunement: input.requiresAttunement ?? false,
+      })
       .returning();
 
     if (!item) {
@@ -126,7 +134,7 @@ export class InventoryDataAccess {
     itemId: string,
     characterId: string,
     userId: string,
-    updates: UpdateInventoryItemInput
+    updates: UpdateInventoryItemInput,
   ): Promise<InventoryItem | null> {
     const updateData: Partial<NewInventoryItem> = {};
 
@@ -146,18 +154,23 @@ export class InventoryDataAccess {
         ...updateData,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(inventoryItems.id, itemId),
-        eq(inventoryItems.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, inventoryItems.characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ))
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, inventoryItems.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
       .returning();
 
     return updated || null;
@@ -169,18 +182,23 @@ export class InventoryDataAccess {
   static async removeItem(itemId: string, characterId: string, userId: string): Promise<boolean> {
     const result = await db
       .delete(inventoryItems)
-      .where(and(
-        eq(inventoryItems.id, itemId),
-        eq(inventoryItems.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, inventoryItems.characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ))
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, inventoryItems.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
       .returning({ id: inventoryItems.id });
 
     return result.length > 0;
@@ -189,16 +207,22 @@ export class InventoryDataAccess {
   /**
    * Get a single inventory item by ID
    */
-  static async getItemById(itemId: string, characterId: string, userId: string): Promise<InventoryItem | null> {
+  static async getItemById(
+    itemId: string,
+    characterId: string,
+    userId: string,
+  ): Promise<InventoryItem | null> {
     const [result] = await db
       .select({ item: inventoryItems })
       .from(inventoryItems)
       .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.id, itemId),
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     return result?.item || null;
@@ -207,7 +231,11 @@ export class InventoryDataAccess {
   /**
    * Equip weapon or armor
    */
-  static async equipItem(characterId: string, itemId: string, userId: string): Promise<EquipResult> {
+  static async equipItem(
+    characterId: string,
+    itemId: string,
+    userId: string,
+  ): Promise<EquipResult> {
     const [updated] = await db
       .update(inventoryItems)
       .set({ isEquipped: true, updatedAt: new Date() })
@@ -237,11 +265,13 @@ export class InventoryDataAccess {
         .select({ item: inventoryItems })
         .from(inventoryItems)
         .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-        .where(and(
-          eq(inventoryItems.id, itemId),
-          eq(inventoryItems.characterId, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
+        .where(
+          and(
+            eq(inventoryItems.id, itemId),
+            eq(inventoryItems.characterId, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        )
         .limit(1);
 
       const item = itemResult?.item;
@@ -264,14 +294,16 @@ export class InventoryDataAccess {
   static async calculateTotalWeight(characterId: string, userId: string): Promise<number> {
     const [result] = await db
       .select({
-        totalWeight: sql<string>`COALESCE(SUM(${inventoryItems.weight} * ${inventoryItems.quantity}), 0)`
+        totalWeight: sql<string>`COALESCE(SUM(${inventoryItems.weight} * ${inventoryItems.quantity}), 0)`,
       })
       .from(inventoryItems)
       .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
+      .where(
+        and(
+          eq(inventoryItems.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      );
 
     return parseFloat(result?.totalWeight || '0');
   }
@@ -284,10 +316,12 @@ export class InventoryDataAccess {
       .select({ stats: characterStats })
       .from(characterStats)
       .innerJoin(characters, eq(characterStats.characterId, characters.id))
-      .where(and(
-        eq(characterStats.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(characterStats.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     if (!statsResult || statsResult.length === 0) {
@@ -309,15 +343,17 @@ export class InventoryDataAccess {
     const [result] = await db
       .select({
         strength: characterStats.strength,
-        totalWeight: sql<string>`COALESCE(SUM(${inventoryItems.weight} * ${inventoryItems.quantity}), 0)`
+        totalWeight: sql<string>`COALESCE(SUM(${inventoryItems.weight} * ${inventoryItems.quantity}), 0)`,
       })
       .from(characters)
       .innerJoin(characterStats, eq(characters.id, characterStats.characterId))
       .leftJoin(inventoryItems, eq(characters.id, inventoryItems.characterId))
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .groupBy(characterStats.strength, characters.id);
 
     if (!result) {

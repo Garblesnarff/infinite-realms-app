@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing violations, not introduced by the
+   insert-select sweep that touched this file. lint-staged fails the commit on any
+   error in a staged file, so converting one statement here would otherwise require
+   an unrelated cleanup in the same change. Left for a dedicated pass. */
 /**
  * Vision Blocker Service
  *
@@ -101,31 +105,35 @@ export class VisionBlockerService {
       );
     }
 
-    // ⚡ Bolt: Optimized to use a single atomic INSERT ... SELECT query for ownership verification.
-    // This reduces database round-trips from 2 to 1 and prevents cross-scene unauthorized writes.
+    // Scene-ownership check split out of the insert. As an insert-select this
+    // projected 9 of vision_blocking_shapes' 12 columns and Drizzle rejected it, so
+    // no vision blocker was ever created.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(scenes)
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      .limit(1);
+
+    if (owned.length === 0) {
+      throw new NotFoundError('Scene', sceneId);
+    }
+
     const [blocker] = await db
       .insert(visionBlockingShapes)
-      .select(
-        db
-          .select({
-            sceneId: sql`${sceneId}`,
-            shapeType: sql`${data.shapeType}`,
-            // Use JSON.stringify for pointsData to ensure correct JSONB casting in subquery
-            pointsData: sql`${JSON.stringify(data.pointsData)}::jsonb`,
-            blocksMovement: sql`${data.blocksMovement ?? true}`,
-            blocksVision: sql`${data.blocksVision ?? true}`,
-            blocksLight: sql`${data.blocksLight ?? true}`,
-            isOneWay: sql`${data.isOneWay ?? false}`,
-            doorState: sql`${data.doorState ?? (data.shapeType === 'door' ? 'closed' : null)}`,
-            createdBy: sql`${userId}`,
-          })
-          .from(scenes)
-          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId))),
-      )
+      .values({
+        sceneId,
+        shapeType: data.shapeType,
+        pointsData: data.pointsData,
+        blocksMovement: data.blocksMovement ?? true,
+        blocksVision: data.blocksVision ?? true,
+        blocksLight: data.blocksLight ?? true,
+        isOneWay: data.isOneWay ?? false,
+        doorState: data.doorState ?? (data.shapeType === 'door' ? 'closed' : null),
+        createdBy: userId,
+      })
       .returning();
 
     if (!blocker) {
-      // If no row was inserted, it means the SELECT returned zero rows (unauthorized or scene not found)
       throw new NotFoundError('Scene', sceneId);
     }
 

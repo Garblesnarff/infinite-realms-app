@@ -27,10 +27,7 @@ import type { Context } from '../context.js';
  * If authorId is provided (admin override), validates it exists
  * Otherwise, fetches author profile for current user
  */
-export async function resolveAuthorId(
-  ctx: Context,
-  explicitAuthorId?: string
-): Promise<string> {
+export async function resolveAuthorId(ctx: Context, explicitAuthorId?: string): Promise<string> {
   // If explicit author ID provided, validate it exists
   if (explicitAuthorId) {
     if (!ctx.user) {
@@ -106,7 +103,7 @@ export async function resolveAuthorId(
 export function normalizeStatusFields(
   status: 'draft' | 'review' | 'scheduled' | 'published' | 'archived',
   scheduledFor?: string | null,
-  publishedAt?: string | null
+  publishedAt?: string | null,
 ): {
   status: 'draft' | 'review' | 'scheduled' | 'published' | 'archived';
   publishedAt: Date | null;
@@ -193,28 +190,36 @@ export async function syncPostCategories(
     ),
   );
 
-  // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+  // The non-admin branch used to be an insert-select. blog_post_categories has
+  // three columns (postId, categoryId, assignedAt) and the projection listed two,
+  // so Drizzle threw and a non-admin author could never categorise their own post.
+  // Split into the two things the subquery was doing: prove authorship, then
+  // resolve the category ids that actually exist.
   if (categoryIds.length > 0) {
     if (userAuthorId && !isAdmin) {
-      await ctx.db.insert(blogPostCategories).select(
-        ctx.db
-          .select({
-            postId: sql`${postId}`,
-            categoryId: blogCategories.id,
-          })
+      const owned = await ctx.db
+        .select({ one: sql`1` })
+        .from(blogPosts)
+        .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId)))
+        .limit(1);
+
+      // Silently a no-op for a post the caller does not own -- matching the old
+      // subquery, which simply selected zero rows to insert.
+      if (owned.length > 0) {
+        const valid = await ctx.db
+          .select({ id: blogCategories.id })
           .from(blogCategories)
-          .where(
-            and(
-              inArray(blogCategories.id, categoryIds),
-              exists(
-                ctx.db
-                  .select()
-                  .from(blogPosts)
-                  .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId))),
-              ),
-            ),
-          ),
-      );
+          .where(inArray(blogCategories.id, categoryIds));
+
+        if (valid.length > 0) {
+          await ctx.db.insert(blogPostCategories).values(
+            valid.map((category) => ({
+              postId,
+              categoryId: category.id,
+            })),
+          );
+        }
+      }
     } else {
       await ctx.db.insert(blogPostCategories).values(
         categoryIds.map((categoryId) => ({
@@ -252,28 +257,30 @@ export async function syncPostTags(
     ),
   );
 
-  // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+  // Same conversion as syncPostCategories above, for the same reason.
   if (tagIds.length > 0) {
     if (userAuthorId && !isAdmin) {
-      await ctx.db.insert(blogPostTags).select(
-        ctx.db
-          .select({
-            postId: sql`${postId}`,
-            tagId: blogTags.id,
-          })
+      const owned = await ctx.db
+        .select({ one: sql`1` })
+        .from(blogPosts)
+        .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId)))
+        .limit(1);
+
+      if (owned.length > 0) {
+        const valid = await ctx.db
+          .select({ id: blogTags.id })
           .from(blogTags)
-          .where(
-            and(
-              inArray(blogTags.id, tagIds),
-              exists(
-                ctx.db
-                  .select()
-                  .from(blogPosts)
-                  .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId))),
-              ),
-            ),
-          ),
-      );
+          .where(inArray(blogTags.id, tagIds));
+
+        if (valid.length > 0) {
+          await ctx.db.insert(blogPostTags).values(
+            valid.map((tag) => ({
+              postId,
+              tagId: tag.id,
+            })),
+          );
+        }
+      }
     } else {
       await ctx.db.insert(blogPostTags).values(
         tagIds.map((tagId) => ({

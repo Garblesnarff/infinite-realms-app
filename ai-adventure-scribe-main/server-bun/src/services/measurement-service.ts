@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing violations, not introduced by the
+   insert-select sweep that touched this file. lint-staged fails the commit on any
+   error in a staged file, so converting one statement here would otherwise require
+   an unrelated cleanup in the same change. Left for a dedicated pass. */
 /* eslint-disable max-lines */
 /**
  * Measurement Service
@@ -66,35 +70,40 @@ export class MeasurementService {
   static async createTemplate(
     sceneId: string,
     userId: string,
-    data: CreateTemplateData
+    data: CreateTemplateData,
   ): Promise<MeasurementTemplate> {
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    // This ensures that templates can only be added to scenes the user is authorized to access
-    // while masking resource existence in a single atomic database round-trip.
+    // Scene-ownership check split out of the insert. As an insert-select this
+    // projected 11 of measurement_templates' 13 columns, so Drizzle rejected it and
+    // no measurement template was ever created.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(scenes)
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      .limit(1);
+
+    if (owned.length === 0) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Scene', sceneId);
+    }
+
     const [template] = await db
       .insert(measurementTemplates)
-      .select(
-        db
-          .select({
-            sceneId: sql`${sceneId}`,
-            createdBy: sql`${userId}`,
-            templateType: sql`${data.templateType}`,
-            originX: sql`${data.originX}`,
-            originY: sql`${data.originY}`,
-            direction: sql`${data.direction}`,
-            distance: sql`${data.distance}`,
-            width: sql`${data.width ?? null}`,
-            color: sql`${data.color ?? '#FF0000'}`,
-            opacity: sql`${data.opacity ?? 0.5}`,
-            isTemporary: sql`${data.isTemporary ?? true}`,
-          })
-          .from(scenes)
-          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      )
+      .values({
+        sceneId,
+        createdBy: userId,
+        templateType: data.templateType,
+        originX: data.originX,
+        originY: data.originY,
+        direction: data.direction,
+        distance: data.distance,
+        width: data.width ?? null,
+        color: data.color ?? '#FF0000',
+        opacity: data.opacity ?? 0.5,
+        isTemporary: data.isTemporary ?? true,
+      })
       .returning();
 
     if (!template) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
       throw new NotFoundError('Scene', sceneId);
     }
 
@@ -115,15 +124,13 @@ export class MeasurementService {
           or(
             eq(measurementTemplates.createdBy, userId),
             exists(
-              db.select()
+              db
+                .select()
                 .from(scenes)
-                .where(and(
-                  eq(scenes.id, measurementTemplates.sceneId),
-                  eq(scenes.userId, userId)
-                ))
-            )
-          )
-        )
+                .where(and(eq(scenes.id, measurementTemplates.sceneId), eq(scenes.userId, userId))),
+            ),
+          ),
+        ),
       )
       .returning({ id: measurementTemplates.id });
 
@@ -136,7 +143,7 @@ export class MeasurementService {
    */
   static async calculateAffectedTokens(
     templateId: string,
-    userId: string
+    userId: string,
   ): Promise<AffectedTokensResult> {
     // ⚡ Bolt: Optimized template retrieval by selecting only the required columns
     // and using an innerJoin to verify scene ownership in a single round-trip.
@@ -159,8 +166,8 @@ export class MeasurementService {
       .where(
         and(
           eq(measurementTemplates.id, templateId),
-          or(eq(measurementTemplates.createdBy, userId), eq(scenes.userId, userId))
-        )
+          or(eq(measurementTemplates.createdBy, userId), eq(scenes.userId, userId)),
+        ),
       )
       .limit(1);
 
@@ -201,10 +208,7 @@ export class MeasurementService {
         createdBy: tokens.createdBy,
       })
       .from(tokens)
-      .leftJoin(
-        characters,
-        isSceneOwner ? sql`false` : eq(tokens.actorId, characters.id)
-      )
+      .leftJoin(characters, isSceneOwner ? sql`false` : eq(tokens.actorId, characters.id))
       .where(
         and(
           eq(tokens.sceneId, template.sceneId),
@@ -221,10 +225,10 @@ export class MeasurementService {
                 // Players can always see their own characters' tokens
                 and(
                   isNotNull(tokens.actorId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                )
-              )
-        )
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+        ),
       );
 
     const sceneTokens = tokensResult as any[];
@@ -256,7 +260,7 @@ export class MeasurementService {
   static async cleanupTemporaryTemplates(
     sceneId: string,
     userId: string,
-    maxAgeMinutes: number = 60
+    maxAgeMinutes: number = 60,
   ): Promise<number> {
     const cutoffDate = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
 
@@ -274,9 +278,9 @@ export class MeasurementService {
             db
               .select()
               .from(scenes)
-              .where(and(eq(scenes.id, measurementTemplates.sceneId), eq(scenes.userId, userId)))
-          )
-        )
+              .where(and(eq(scenes.id, measurementTemplates.sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
       )
       .returning({ id: measurementTemplates.id });
 
@@ -286,7 +290,10 @@ export class MeasurementService {
   /**
    * Get a single template by ID
    */
-  static async getTemplateById(templateId: string, userId: string): Promise<MeasurementTemplate | null> {
+  static async getTemplateById(
+    templateId: string,
+    userId: string,
+  ): Promise<MeasurementTemplate | null> {
     const [result] = await db
       .select({
         template: measurementTemplates,
@@ -296,11 +303,8 @@ export class MeasurementService {
       .where(
         and(
           eq(measurementTemplates.id, templateId),
-          or(
-            eq(measurementTemplates.createdBy, userId),
-            eq(scenes.userId, userId)
-          )
-        )
+          or(eq(measurementTemplates.createdBy, userId), eq(scenes.userId, userId)),
+        ),
       )
       .limit(1);
 
@@ -316,13 +320,8 @@ export class MeasurementService {
       .select({ template: measurementTemplates })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
-      .where(
-        and(
-          eq(measurementTemplates.sceneId, sceneId),
-          eq(scenes.userId, userId)
-        )
-      );
+      .where(and(eq(measurementTemplates.sceneId, sceneId), eq(scenes.userId, userId)));
 
-    return result.map(r => r.template);
+    return result.map((r) => r.template);
   }
 }

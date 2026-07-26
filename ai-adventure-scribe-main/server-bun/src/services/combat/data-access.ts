@@ -631,34 +631,40 @@ export async function createWeaponAttack(
     description,
   } = input;
 
-  // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-  // This ensures that weapons can only be added to characters the user is authorized to access.
+  // Character-ownership check split out of the insert. As an insert-select this
+  // projected 8 of weapon_attacks' 10 columns and Drizzle rejected it, so a custom
+  // weapon could never be added to a character.
+  const owned = await db
+    .select({ one: sql`1` })
+    .from(characters)
+    .where(
+      and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+      ),
+    )
+    .limit(1);
+
+  if (owned.length === 0) {
+    // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+    throw new NotFoundError('Character', characterId);
+  }
+
   const [weapon] = await db
     .insert(weaponAttacks)
-    .select(
-      db
-        .select({
-          characterId: sql`${characterId}`,
-          name: sql`${name}`,
-          attackBonus: sql`${attackBonus}`,
-          damageDice: sql`${damageDice}`,
-          damageBonus: sql`${damageBonus}`,
-          damageType: sql`${damageType}`,
-          properties: sql`${JSON.stringify(properties)}::text[]`,
-          description: sql`${description || null}`,
-        })
-        .from(characters)
-        .where(
-          and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-          ),
-        ),
-    )
+    .values({
+      characterId,
+      name,
+      attackBonus,
+      damageDice,
+      damageBonus,
+      damageType,
+      properties,
+      description: description || null,
+    })
     .returning();
 
   if (!weapon) {
-    // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
     throw new NotFoundError('Character', characterId);
   }
 

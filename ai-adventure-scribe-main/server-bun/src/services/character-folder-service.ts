@@ -42,7 +42,7 @@ export class CharacterFolderService {
    * Preservation of database sorting (sortOrder) is maintained by Map insertion order.
    */
   private static buildFolderTree(
-    folders: (CharacterFolder & { characterCount?: number })[]
+    folders: (CharacterFolder & { characterCount?: number })[],
   ): FolderWithChildren[] {
     const folderMap = new Map<string | null, FolderWithChildren[]>();
     const allFolders: FolderWithChildren[] = folders.map((f) => ({ ...f, children: [] }));
@@ -110,15 +110,18 @@ export class CharacterFolderService {
             eq(characters.userId, userId),
             eq(characters.ownerId, userId),
             exists(
-              db.select()
+              db
+                .select()
                 .from(characterPermissions)
-                .where(and(
-                  eq(characterPermissions.characterId, characters.id),
-                  eq(characterPermissions.userId, userId)
-                ))
-            )
-          )
-        )
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                  ),
+                ),
+            ),
+          ),
+        ),
       )
       .where(eq(characterFolders.userId, userId))
       .groupBy(characterFolders.id)
@@ -151,50 +154,46 @@ export class CharacterFolderService {
             eq(characterFolders.userId, userId),
             data.parentFolderId
               ? eq(characterFolders.parentFolderId, data.parentFolderId)
-              : isNull(characterFolders.parentFolderId)
-          )
+              : isNull(characterFolders.parentFolderId),
+          ),
         );
 
       sortOrder = (maxResult?.maxSortOrder ?? -1) + 1;
     }
 
-    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT when a parent folder is provided.
-    // This ensures that the parent folder belongs to the user in a single atomic operation
-    // while masking resource existence.
-    let folder: CharacterFolder | undefined;
-
+    // The parent-folder ownership check used to ride inside an insert-select whose
+    // projection covered 6 of character_folders' 9 columns -- Drizzle rejected it,
+    // so creating a folder inside another folder always 500'd. Checking the parent
+    // separately collapses both branches into the same plain insert.
     if (data.parentFolderId) {
-      [folder] = await db
-        .insert(characterFolders)
-        .select(
-          db.select({
-            userId: sql`${userId}`,
-            name: sql`${data.name}`,
-            parentFolderId: characterFolders.id,
-            color: sql`${data.color || null}`,
-            icon: sql`${data.icon || null}`,
-            sortOrder: sql`${sortOrder}`,
-          })
-          .from(characterFolders)
-          .where(and(
-            eq(characterFolders.id, data.parentFolderId),
-            eq(characterFolders.userId, userId)
-          ))
+      const parent = await db
+        .select({ one: sql`1` })
+        .from(characterFolders)
+        .where(
+          and(eq(characterFolders.id, data.parentFolderId), eq(characterFolders.userId, userId)),
         )
-        .returning();
-    } else {
-      [folder] = await db
-        .insert(characterFolders)
-        .values({
-          userId,
-          name: data.name,
-          parentFolderId: null,
-          color: data.color || null,
-          icon: data.icon || null,
-          sortOrder,
-        })
-        .returning();
+        .limit(1);
+
+      if (parent.length === 0) {
+        // Masks existence: an unowned parent is indistinguishable from a missing one.
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Parent folder not found',
+        });
+      }
     }
+
+    const [folder] = await db
+      .insert(characterFolders)
+      .values({
+        userId,
+        name: data.name,
+        parentFolderId: data.parentFolderId || null,
+        color: data.color || null,
+        icon: data.icon || null,
+        sortOrder,
+      })
+      .returning();
 
     if (!folder) {
       // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access or missing parent to mask existence.
@@ -213,14 +212,11 @@ export class CharacterFolderService {
   static async updateFolder(
     folderId: string,
     userId: string,
-    updates: Partial<CharacterFolder>
+    updates: Partial<CharacterFolder>,
   ): Promise<CharacterFolder> {
     // Verify ownership
     const existingFolder = await db.query.characterFolders.findFirst({
-      where: and(
-        eq(characterFolders.id, folderId),
-        eq(characterFolders.userId, userId)
-      ),
+      where: and(eq(characterFolders.id, folderId), eq(characterFolders.userId, userId)),
     });
 
     if (!existingFolder) {
@@ -260,11 +256,7 @@ export class CharacterFolderService {
     }
 
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
-    const {
-      id: _id,
-      userId: _userId,
-      ...safeUpdates
-    } = updates as Partial<CharacterFolder>;
+    const { id: _id, userId: _userId, ...safeUpdates } = updates as Partial<CharacterFolder>;
 
     const [updated] = await db
       .update(characterFolders)
@@ -272,10 +264,7 @@ export class CharacterFolderService {
         ...safeUpdates,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(characterFolders.id, folderId),
-        eq(characterFolders.userId, userId)
-      ))
+      .where(and(eq(characterFolders.id, folderId), eq(characterFolders.userId, userId)))
       .returning();
 
     if (!updated) {
@@ -291,10 +280,7 @@ export class CharacterFolderService {
   static async deleteFolder(folderId: string, userId: string): Promise<boolean> {
     // Verify ownership
     const folder = await db.query.characterFolders.findFirst({
-      where: and(
-        eq(characterFolders.id, folderId),
-        eq(characterFolders.userId, userId)
-      ),
+      where: and(eq(characterFolders.id, folderId), eq(characterFolders.userId, userId)),
     });
 
     if (!folder) {
@@ -321,16 +307,15 @@ export class CharacterFolderService {
       db
         .update(characterFolders)
         .set({ parentFolderId: folder.parentFolderId })
-        .where(and(eq(characterFolders.parentFolderId, folderId), eq(characterFolders.userId, userId))),
+        .where(
+          and(eq(characterFolders.parentFolderId, folderId), eq(characterFolders.userId, userId)),
+        ),
     ]);
 
     // Delete the folder
     const result = await db
       .delete(characterFolders)
-      .where(and(
-        eq(characterFolders.id, folderId),
-        eq(characterFolders.userId, userId)
-      ))
+      .where(and(eq(characterFolders.id, folderId), eq(characterFolders.userId, userId)))
       .returning({ id: characterFolders.id });
 
     return result.length > 0;
@@ -342,7 +327,7 @@ export class CharacterFolderService {
   static async moveCharacterToFolder(
     characterId: string,
     folderId: string | null,
-    userId: string
+    userId: string,
   ): Promise<boolean> {
     // 🛡️ Sentinel: Refactored to use a single atomic UPDATE statement with inline ownership verification.
     // This eliminates multiple pre-flight queries and prevents IDOR while masking resource existence.
@@ -352,20 +337,22 @@ export class CharacterFolderService {
         folderId: folderId,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        folderId
-          ? exists(
-              db.select()
-                .from(characterFolders)
-                .where(and(
-                  eq(characterFolders.id, folderId),
-                  eq(characterFolders.userId, userId)
-                ))
-            )
-          : sql`true`
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          folderId
+            ? exists(
+                db
+                  .select()
+                  .from(characterFolders)
+                  .where(
+                    and(eq(characterFolders.id, folderId), eq(characterFolders.userId, userId)),
+                  ),
+              )
+            : sql`true`,
+        ),
+      )
       .returning({ id: characters.id });
 
     if (!updated) {

@@ -22,6 +22,7 @@ import {
   characters,
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 import {
   getParticipantWithFullContext,
   getParticipantStatusScoped,
@@ -30,12 +31,8 @@ import {
   initializeParticipantStatus,
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
-import { CombatInitiativeService } from './combat-initiative-service.js';
 
-import type {
-  CombatParticipantStatus,
-  CombatDamageLog,
-} from '../../../db/schema/index';
+import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
 import type {
   DamageResult,
   HealingResult,
@@ -90,14 +87,9 @@ export class CombatHPService {
     encounterId: string,
     options: ApplyDamageOptions,
     userId?: string,
-    preFetchedParticipant?: any
+    preFetchedParticipant?: any,
   ): Promise<DamageResult> {
-    const {
-      damageAmount,
-      damageType,
-      sourceParticipantId,
-      sourceDescription,
-    } = options;
+    const { damageAmount, damageType, sourceParticipantId, sourceDescription } = options;
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query if not pre-fetched.
     const { participant, status, currentRound } = preFetchedParticipant
@@ -121,12 +113,32 @@ export class CombatHPService {
         damageResistances: participant.damageResistances,
         damageVulnerabilities: participant.damageVulnerabilities,
       },
-      options
+      options,
     );
 
     // 🛡️ Sentinel: Refactored to use atomic updates with existence checks for defense-in-depth.
-    // ⚡ Bolt: Parallelize status update and damage logging to reduce sequential database round-trips.
-    const updatePromise = db
+    //
+    // The HP write and the damage-log write used to be issued concurrently via
+    // Promise.all and un-transacted. Two things were wrong with that:
+    //
+    //   1. The log write was an insert-select whose projection covered 7 of
+    //      combat_damage_log's 9 columns, so Drizzle threw
+    //      "Insert select error: selected fields are not the same..." on every
+    //      single call. The rejection surfaced from Promise.all as a failed
+    //      attack ("Attack succeeded but damage application failed"), which is
+    //      how a pure telemetry write came to kill live attacks.
+    //   2. Because the two ran concurrently, the HP update had usually already
+    //      committed by the time the log rejected -- damage applied, attack
+    //      reported as failed, and (since resolveAttack claims the actor's
+    //      action first) the actor stranded with a spent action forever.
+    //
+    // The HP update is now awaited on its own, and the log is a plain insert
+    // issued afterwards under a catch. Ordering matters: the log is deliberately
+    // NOT inside a transaction with the HP update, because a failed INSERT
+    // aborts the enclosing Postgres transaction, and a "best-effort" write that
+    // can still roll back the gameplay state it is describing is not
+    // best-effort at all.
+    const updateResult = await db
       .update(combatParticipantStatus)
       .set({
         currentHp: result.newCurrentHp,
@@ -140,46 +152,41 @@ export class CombatHPService {
           eq(combatParticipantStatus.participantId, participantId),
           userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
         ),
-      );
-
-    let logPromise = Promise.resolve() as any;
-    if (damageAmount > 0) {
-      logPromise = db.insert(combatDamageLog).select(
-        db
-          .select({
-            encounterId: sql`${encounterId}`,
-            participantId: sql`${participantId}`,
-            damageAmount: sql`${result.modifiedDamage}`,
-            damageType: sql`${damageType || 'untyped'}`,
-            sourceParticipantId: sql`${sourceParticipantId || null}`,
-            sourceDescription: sql`${sourceDescription || null}`,
-            roundNumber: sql`${currentRound}`,
-          })
-          .from(combatParticipants)
-          .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
-          .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-          .where(
-            and(
-              eq(combatParticipants.id, participantId),
-              eq(combatParticipants.encounterId, encounterId),
-              userId
-                ? or(
-                    eq(campaigns.userId, userId),
-                    eq(characters.userId, userId),
-                    eq(characters.ownerId, userId),
-                  )
-                : sql`true`,
-            ),
-          ),
-      );
-    }
-
-    const [updateResult] = await Promise.all([updatePromise.returning(), logPromise]);
+      )
+      .returning();
 
     if (userId && (!updateResult || updateResult.length === 0)) {
       throw new NotFoundError('Participant', participantId);
+    }
+
+    // Telemetry only. The ownership check the old insert-select carried in its
+    // WHERE clause is redundant here: the UPDATE above ran under the same
+    // ownership filter and we threw NotFoundError just now if it matched no row,
+    // so reaching this line already proves the caller owns this participant.
+    if (damageAmount > 0) {
+      try {
+        await db.insert(combatDamageLog).values({
+          encounterId,
+          participantId,
+          damageAmount: result.modifiedDamage,
+          damageType: damageType || 'untyped',
+          sourceParticipantId: sourceParticipantId || null,
+          sourceDescription: sourceDescription || null,
+          roundNumber: currentRound,
+        });
+      } catch (error) {
+        // A damage log is a record of what happened, not part of what happened.
+        // Losing one costs a row in a history table; failing the attack costs the
+        // player their turn, permanently (see the comment above).
+        logger.warn({
+          msg: 'COMBAT_DAMAGE_LOG_FAILED',
+          error,
+          encounterId,
+          participantId,
+          damageAmount: result.modifiedDamage,
+          roundNumber: currentRound,
+        });
+      }
     }
 
     return result;
@@ -195,7 +202,7 @@ export class CombatHPService {
     encounterId: string,
     healingAmount: number,
     _sourceDescription?: string,
-    userId?: string
+    userId?: string,
   ): Promise<HealingResult> {
     if (healingAmount < 0) {
       throw new ValidationError('Healing amount must be non-negative', { healingAmount });
@@ -205,11 +212,7 @@ export class CombatHPService {
     const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
     // Delegate to HPMechanics
-    const result = HPMechanics.calculateHealingResult(
-      participantId,
-      status,
-      healingAmount
-    );
+    const result = HPMechanics.calculateHealingResult(participantId, status, healingAmount);
 
     // Clear death saves if revived
     const deathSavesSuccesses = result.wasRevived ? 0 : status.deathSavesSuccesses;
@@ -249,7 +252,7 @@ export class CombatHPService {
     participantId: string,
     encounterId: string,
     tempHpAmount: number,
-    userId?: string
+    userId?: string,
   ): Promise<{ participantId: string; oldTempHp: number; newTempHp: number }> {
     if (tempHpAmount < 0) {
       throw new ValidationError('Temporary HP amount must be non-negative', { tempHpAmount });
@@ -301,7 +304,7 @@ export class CombatHPService {
   static async rollDeathSave(
     participantId: string,
     encounterId: string,
-    userId?: string
+    userId?: string,
   ): Promise<DeathSaveResult> {
     const roll = Math.floor(Math.random() * 20) + 1;
 
@@ -309,7 +312,9 @@ export class CombatHPService {
     const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
     if (status.isConscious) {
-      throw new BusinessLogicError('Cannot roll death save for conscious participant', { participantId });
+      throw new BusinessLogicError('Cannot roll death save for conscious participant', {
+        participantId,
+      });
     }
 
     // Delegate logic to HPMechanics
@@ -360,7 +365,7 @@ export class CombatHPService {
     encounterId: string,
     participantId?: string,
     round?: number,
-    userId?: string
+    userId?: string,
   ): Promise<CombatDamageLog[]> {
     return getDamageLog(encounterId, participantId, round, userId);
   }
@@ -370,7 +375,7 @@ export class CombatHPService {
    */
   static async getParticipantStatus(
     participantId: string,
-    userId?: string
+    userId?: string,
   ): Promise<CombatParticipantStatus | null> {
     return getParticipantStatus(participantId, userId);
   }
@@ -381,7 +386,7 @@ export class CombatHPService {
   static async initializeParticipantStatus(
     participantId: string,
     maxHp: number,
-    currentHp?: number
+    currentHp?: number,
   ): Promise<CombatParticipantStatus> {
     return initializeParticipantStatus(participantId, maxHp, currentHp);
   }
@@ -401,7 +406,7 @@ export class CombatHPService {
     encounterId: string,
     roll: number,
     modifier: number,
-    userId?: string
+    userId?: string,
   ): Promise<StabilizationResult> {
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
     const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
@@ -434,7 +439,9 @@ export class CombatHPService {
         .where(
           and(
             eq(combatParticipantStatus.participantId, participantId),
-            userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+            userId
+              ? this.getEncounterOwnershipFilter(participantId, encounterId, userId)
+              : sql`true`,
           ),
         )
         .returning();

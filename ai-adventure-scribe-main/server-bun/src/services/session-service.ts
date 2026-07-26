@@ -39,32 +39,34 @@ interface CreateSessionData {
 }
 
 /**
- * Build the SELECT list for the ownership-gated INSERT ... SELECT in createSession.
- * Drizzle requires these keys to match the game_sessions table definition exactly
- * (same columns, same order), so table defaults are re-stated here explicitly.
+ * Build the row inserted by createSession.
+ *
+ * This used to build the SELECT list for an ownership-gated INSERT ... SELECT, and
+ * had to restate every game_sessions column -- including the ones the table already
+ * defaults -- in table-definition order, because that is what Drizzle's insert-select
+ * validates against. Adding a column to game_sessions without adding it here broke
+ * session creation entirely, at runtime only. Now that the ownership check is a
+ * separate query, this is a plain values object and column defaults do their job.
  */
-export function buildSessionInsertSelection(
+export function buildSessionInsertValues(
   data: CreateSessionData,
-  ids: { campaignId: SQL; characterId: SQL },
+  ids: { campaignId: string | null; characterId: string | null },
 ) {
   return {
-    id: sql`gen_random_uuid()`,
     campaignId: ids.campaignId,
     characterId: ids.characterId,
-    sessionNumber: sql`${data.sessionNumber || 1}::integer`,
-    startTime: sql`NOW()`,
-    endTime: sql`NULL::timestamptz`,
-    status: sql`${data.status || 'active'}::text`,
-    currentSceneDescription: sql`${data.currentSceneDescription ?? null}::text`,
-    summary: sql`${data.summary ?? null}::text`,
-    sessionNotes: sql`${data.sessionNotes ?? null}::text`,
-    turnCount: sql`${data.turnCount ?? 0}::integer`,
-    sessionState: sql`'{}'::jsonb`,
-    starterCampaignId: sql`${data.starterCampaignId ?? null}::text`,
-    campaignVersion: sql`${data.campaignVersion ?? null}::integer`,
-    ruleset: sql`'5e'::text`,
-    createdAt: sql`NOW()`,
-    updatedAt: sql`NOW()`,
+    sessionNumber: data.sessionNumber || 1,
+    startTime: new Date(),
+    endTime: null,
+    status: data.status || 'active',
+    currentSceneDescription: data.currentSceneDescription ?? null,
+    summary: data.summary ?? null,
+    sessionNotes: data.sessionNotes ?? null,
+    turnCount: data.turnCount ?? 0,
+    sessionState: {},
+    starterCampaignId: data.starterCampaignId ?? null,
+    campaignVersion: data.campaignVersion ?? null,
+    ruleset: '5e',
   };
 }
 
@@ -170,62 +172,73 @@ export class SessionService {
           );
       }
 
-      [session] = await db
-        .insert(gameSessions)
-        .select(
-          db
-            .select(
-              buildSessionInsertSelection(data, {
-                campaignId: sql`${data.campaignId}::uuid`,
-                characterId: sql`${data.characterId}::uuid`,
-              }),
-            )
-            .from(campaigns)
-            .innerJoin(characters, eq(characters.id, data.characterId))
-            .where(
-              and(
-                eq(campaigns.id, data.campaignId),
-                eq(campaigns.userId, userId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-              ),
-            ),
+      // Each branch is now: run the branch's ownership query, then insert. The WHERE
+      // clauses are carried over unchanged -- only the insert-select wrapper is gone.
+      const owned = await db
+        .select({ one: sql`1` })
+        .from(campaigns)
+        .innerJoin(characters, eq(characters.id, data.characterId))
+        .where(
+          and(
+            eq(campaigns.id, data.campaignId),
+            eq(campaigns.userId, userId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
         )
-        .returning();
+        .limit(1);
+
+      if (owned.length > 0) {
+        [session] = await db
+          .insert(gameSessions)
+          .values(
+            buildSessionInsertValues(data, {
+              campaignId: data.campaignId,
+              characterId: data.characterId,
+            }),
+          )
+          .returning();
+      }
     } else if (data.campaignId) {
-      [session] = await db
-        .insert(gameSessions)
-        .select(
-          db
-            .select(
-              buildSessionInsertSelection(data, {
-                campaignId: sql`${data.campaignId}::uuid`,
-                characterId: sql`NULL::uuid`,
-              }),
-            )
-            .from(campaigns)
-            .where(and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))),
-        )
-        .returning();
+      const owned = await db
+        .select({ one: sql`1` })
+        .from(campaigns)
+        .where(and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId)))
+        .limit(1);
+
+      if (owned.length > 0) {
+        [session] = await db
+          .insert(gameSessions)
+          .values(
+            buildSessionInsertValues(data, {
+              campaignId: data.campaignId,
+              characterId: null,
+            }),
+          )
+          .returning();
+      }
     } else if (data.characterId) {
-      [session] = await db
-        .insert(gameSessions)
-        .select(
-          db
-            .select(
-              buildSessionInsertSelection(data, {
-                campaignId: sql`NULL::uuid`,
-                characterId: sql`${data.characterId}::uuid`,
-              }),
-            )
-            .from(characters)
-            .where(
-              and(
-                eq(characters.id, data.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-              ),
-            ),
+      const owned = await db
+        .select({ one: sql`1` })
+        .from(characters)
+        .where(
+          and(
+            eq(characters.id, data.characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
         )
-        .returning();
+        .limit(1);
+
+      if (owned.length > 0) {
+        [session] = await db
+          .insert(gameSessions)
+          .values(
+            buildSessionInsertValues(data, {
+              campaignId: null,
+              characterId: data.characterId,
+            }),
+          )
+          .returning();
+      }
     } else {
       // No linked resource, allow session creation for any authenticated user
       [session] = await db

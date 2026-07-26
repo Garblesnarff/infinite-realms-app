@@ -8,7 +8,7 @@
  * @module server/services/class-features-service
  */
 
-import { eq, and, sql, exists, or, isNull, inArray } from 'drizzle-orm';
+import { eq, and, exists, or, isNull, inArray } from 'drizzle-orm';
 
 import { ClassFeatureUsageService } from './progression/class-feature-usage-service.js';
 import { SubclassService } from './subclass-service.js';
@@ -51,7 +51,7 @@ export class ClassFeaturesService {
    * Can filter by class name, subclass, and/or level
    */
   static async getFeaturesLibrary(
-    params?: GetFeaturesLibraryParams
+    params?: GetFeaturesLibraryParams,
   ): Promise<ClassFeatureLibrary[]> {
     const conditions = [];
 
@@ -91,12 +91,12 @@ export class ClassFeaturesService {
    */
   static async getFeaturesByLevel(
     className: string,
-    level: number
+    level: number,
   ): Promise<ClassFeatureLibrary[]> {
     const features = await db.query.classFeaturesLibrary.findMany({
       where: and(
         eq(classFeaturesLibrary.className, className),
-        eq(classFeaturesLibrary.levelAcquired, level)
+        eq(classFeaturesLibrary.levelAcquired, level),
       ),
     });
 
@@ -114,11 +114,14 @@ export class ClassFeaturesService {
    * Verify user owns the character (direct owner or shared owner field).
    * Throws NOT_FOUND to avoid disclosing character existence.
    */
-  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+  private static async verifyCharacterOwnership(
+    characterId: string,
+    userId: string,
+  ): Promise<void> {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       columns: { id: true },
     });
@@ -136,53 +139,49 @@ export class ClassFeaturesService {
    * Grant a feature to a character
    * ⚡ Bolt: Optimized to use a single atomic query for existence and ownership verification.
    */
-  static async grantFeature(input: GrantFeatureInput & { userId: string }): Promise<CharacterFeature> {
+  static async grantFeature(
+    input: GrantFeatureInput & { userId: string },
+  ): Promise<CharacterFeature> {
     const { characterId, featureId, acquiredAtLevel, userId } = input;
 
-    // ⚡ Bolt: Combined check for existing feature, character ownership, and library feature data.
-    // This reduces database round-trips from 4 down to 1.
-    const [granted] = await db
-      .insert(characterFeatures)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            featureId: classFeaturesLibrary.id,
-            usesRemaining: classFeaturesLibrary.usesCount,
-            isActive: sql`true`,
-            acquiredAtLevel: sql`${acquiredAtLevel}`,
-          })
-          .from(classFeaturesLibrary)
-          .innerJoin(characters, and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-          .leftJoin(characterFeatures, and(
-            eq(characterFeatures.characterId, characterId),
-            eq(characterFeatures.featureId, classFeaturesLibrary.id)
-          ))
-          .where(and(
-            eq(classFeaturesLibrary.id, featureId),
-            isNull(characterFeatures.id)
-          ))
-      )
-      .returning();
+    // Was a single insert-select projecting 5 of character_features' 7 columns,
+    // which Drizzle rejects at build time -- no feature has ever been granted on
+    // this path. Ownership is now checked first, then the library row is read,
+    // then a plain insert.
+    //
+    // Checking ownership up front also fixes a disclosure bug in the old fallback:
+    // it looked up the existing feature row *unscoped*, so a non-owner probing a
+    // character they cannot see got ConflictError ("already granted") instead of
+    // NotFoundError, confirming both the character and the feature.
+    await this.verifyCharacterOwnership(characterId, userId);
 
-    if (!granted) {
-      // If insertion failed, it could be because the feature is already granted,
-      // the character doesn't exist/isn't owned, or the feature ID is invalid.
-      // We perform one fallback check to throw the correct error.
+    const [pending] = await this.pendingLibraryFeatures(characterId, [featureId]);
+
+    if (!pending) {
       const existing = await db.query.characterFeatures.findFirst({
-        where: and(eq(characterFeatures.characterId, characterId), eq(characterFeatures.featureId, featureId))
+        where: and(
+          eq(characterFeatures.characterId, characterId),
+          eq(characterFeatures.featureId, featureId),
+        ),
       });
 
       if (existing) {
         throw new ConflictError('Feature already granted to character', { featureId, characterId });
       }
 
-      await this.verifyCharacterOwnership(characterId, userId);
       throw new NotFoundError('Feature', featureId);
     }
+
+    const [granted] = await db
+      .insert(characterFeatures)
+      .values({
+        characterId,
+        featureId: pending.id,
+        usesRemaining: pending.usesCount,
+        isActive: true,
+        acquiredAtLevel,
+      })
+      .returning();
 
     return granted;
   }
@@ -196,57 +195,82 @@ export class ClassFeaturesService {
     characterId: string,
     featureIds: string[],
     acquiredAtLevel: number,
-    userId: string
+    userId: string,
   ): Promise<CharacterFeature[]> {
     if (featureIds.length === 0) return [];
 
-    // 🛡️ Sentinel: Incorporate ownership check and "not already granted" check into a single atomic query.
-    // This reduces O(N) database round-trips to O(1).
-    const granted = await db
+    // Same conversion as grantFeature. Still O(1) round-trips in the number of
+    // features: one ownership check, one library read, one multi-row insert.
+    await this.verifyCharacterOwnership(characterId, userId);
+
+    const pending = await this.pendingLibraryFeatures(characterId, featureIds);
+
+    if (pending.length === 0) return [];
+
+    return db
       .insert(characterFeatures)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            featureId: classFeaturesLibrary.id,
-            usesRemaining: classFeaturesLibrary.usesCount,
-            isActive: sql`true`,
-            acquiredAtLevel: sql`${acquiredAtLevel}`,
-          })
-          .from(classFeaturesLibrary)
-          .innerJoin(characters, and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-          .leftJoin(characterFeatures, and(
-            eq(characterFeatures.characterId, characterId),
-            eq(characterFeatures.featureId, classFeaturesLibrary.id)
-          ))
-          .where(and(
-            inArray(classFeaturesLibrary.id, featureIds),
-            isNull(characterFeatures.id) // Only insert if not already granted
-          ))
+      .values(
+        pending.map((feature) => ({
+          characterId,
+          featureId: feature.id,
+          usesRemaining: feature.usesCount,
+          isActive: true,
+          acquiredAtLevel,
+        })),
       )
       .returning();
+  }
 
-    return granted;
+  /**
+   * Library rows for `featureIds` that `characterId` has not already been granted.
+   *
+   * This is the LEFT JOIN / IS NULL half of the insert-selects that used to live in
+   * grantFeature and grantFeaturesBatch, lifted out into a query of its own. It
+   * deliberately does no authorization: both callers verify ownership first, and a
+   * check that only runs as a side effect of a write is the thing that let the
+   * broken insert-selects look safe while never executing at all.
+   */
+  private static async pendingLibraryFeatures(
+    characterId: string,
+    featureIds: string[],
+  ): Promise<Array<{ id: string; usesCount: number | null }>> {
+    return db
+      .select({
+        id: classFeaturesLibrary.id,
+        usesCount: classFeaturesLibrary.usesCount,
+      })
+      .from(classFeaturesLibrary)
+      .leftJoin(
+        characterFeatures,
+        and(
+          eq(characterFeatures.characterId, characterId),
+          eq(characterFeatures.featureId, classFeaturesLibrary.id),
+        ),
+      )
+      .where(and(inArray(classFeaturesLibrary.id, featureIds), isNull(characterFeatures.id)));
   }
 
   /**
    * Get all features for a character
    */
-  static async getCharacterFeatures(characterId: string, userId: string): Promise<CharacterFeature[]> {
+  static async getCharacterFeatures(
+    characterId: string,
+    userId: string,
+  ): Promise<CharacterFeature[]> {
     const features = await db.query.characterFeatures.findMany({
       where: and(
         eq(characterFeatures.characterId, characterId),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
       ),
       with: {
         feature: true,
@@ -263,7 +287,7 @@ export class ClassFeaturesService {
   static async getFeatureUsage(
     characterId: string,
     featureId: string,
-    userId: string
+    userId: string,
   ): Promise<number | null> {
     return ClassFeatureUsageService.getFeatureUsage(characterId, featureId, userId);
   }
@@ -280,7 +304,7 @@ export class ClassFeaturesService {
    * Restore features after rest
    */
   static async restoreFeatures(
-    input: RestoreFeaturesInput & { userId: string }
+    input: RestoreFeaturesInput & { userId: string },
   ): Promise<RestoreFeaturesResult> {
     return ClassFeatureUsageService.restoreFeatures(input);
   }
@@ -292,7 +316,9 @@ export class ClassFeaturesService {
   /**
    * Set a character's subclass
    */
-  static async setSubclass(input: SetSubclassInput & { userId: string }): Promise<SetSubclassResult> {
+  static async setSubclass(
+    input: SetSubclassInput & { userId: string },
+  ): Promise<SetSubclassResult> {
     return SubclassService.setSubclass(input);
   }
 
@@ -302,7 +328,7 @@ export class ClassFeaturesService {
   static async getCharacterSubclass(
     characterId: string,
     className: string,
-    userId: string
+    userId: string,
   ): Promise<CharacterSubclass | null> {
     return SubclassService.getCharacterSubclass(characterId, className, userId);
   }
@@ -326,14 +352,14 @@ export class ClassFeaturesService {
     featureId: string,
     userId: string,
     context?: string,
-    sessionId?: string
+    sessionId?: string,
   ): Promise<FeatureUsageLog> {
     return ClassFeatureUsageService.logFeatureUsage(
       characterId,
       featureId,
       userId,
       context,
-      sessionId
+      sessionId,
     );
   }
 
@@ -341,7 +367,7 @@ export class ClassFeaturesService {
    * Get feature usage history
    */
   static async getFeatureUsageHistory(
-    params: FeatureUsageHistoryParams & { userId: string }
+    params: FeatureUsageHistoryParams & { userId: string },
   ): Promise<FeatureUsageLog[]> {
     return ClassFeatureUsageService.getFeatureUsageHistory(params);
   }
@@ -351,12 +377,12 @@ export class ClassFeaturesService {
    */
   static async getCharacterFeaturesWithUsage(
     characterId: string,
-    userId: string
+    userId: string,
   ): Promise<CharacterFeaturesWithUsage> {
     return ClassFeatureUsageService.getCharacterFeaturesWithUsage(
       characterId,
       userId,
-      this.getCharacterFeatures.bind(this)
+      this.getCharacterFeatures.bind(this),
     );
   }
 
@@ -368,13 +394,13 @@ export class ClassFeaturesService {
     characterId: string,
     className: string,
     level: number,
-    userId: string
+    userId: string,
   ): Promise<ClassFeatureLibrary[]> {
     // Get character to check for subclass and verify ownership
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
     });
 
@@ -395,19 +421,21 @@ export class ClassFeaturesService {
         where: and(
           eq(classFeaturesLibrary.className, className),
           eq(classFeaturesLibrary.subclassName, subclass.subclassName),
-          eq(classFeaturesLibrary.levelAcquired, level)
+          eq(classFeaturesLibrary.levelAcquired, level),
         ),
       });
     }
 
-    const allFeatures = [...classFeatures, ...subclassFeatures]
-      .filter(f => !f.featureName.includes('Archetype') &&
-                   !f.featureName.includes('Tradition') &&
-                   !f.featureName.includes('Domain'));
+    const allFeatures = [...classFeatures, ...subclassFeatures].filter(
+      (f) =>
+        !f.featureName.includes('Archetype') &&
+        !f.featureName.includes('Tradition') &&
+        !f.featureName.includes('Domain'),
+    );
 
     // ⚡ Bolt: Optimized to grant all features for the level in a single batch operation.
     // This reduces database round-trips from O(N) to O(1).
-    const featureIds = allFeatures.map(f => f.id);
+    const featureIds = allFeatures.map((f) => f.id);
     await this.grantFeaturesBatch(characterId, featureIds, level, userId);
 
     return allFeatures;

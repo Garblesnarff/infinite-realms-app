@@ -206,6 +206,65 @@ export default tseslint.config(
       'no-restricted-syntax': 'off',
     },
   },
+  // =========================================================================
+  // Drizzle insert-select ban
+  // =========================================================================
+  // `db.insert(table).select(subquery)` requires the subquery's projection to
+  // list every column of the target table, in table-definition order. Drizzle
+  // checks this when it *builds* the statement and throws synchronously:
+  //
+  //   Insert select error: selected fields are not the same or are in a
+  //   different order compared to the table definition
+  //
+  // Nothing catches a violation earlier. The projection is written once, the
+  // table grows a column later, and the write starts throwing 100% of the time
+  // in production while every unit test that mocks `db` keeps passing.
+  //
+  // This was not hypothetical. 33537a67 fixed one such call site in
+  // CombatEncounterService -- a projection covering 4 of combat_encounters' 13
+  // columns, meaning structured combat had never worked for any client since it
+  // shipped. Only that site was repaired. A sweep afterwards found the pattern at
+  // 34 call sites, 30 of which were broken in exactly the same way: spells, XP,
+  // class features, spell slots, hit dice, inventory, tokens, scenes, drawings,
+  // fog of war, vision blockers, measurement templates, subclasses, folders,
+  // permissions, blog categories/tags and the combat damage log had all never
+  // written a row. They are now plain `insert().values()` calls preceded by an
+  // explicit authorization query, and this rule stops the pattern returning.
+  //
+  // Scoped to server-bun/ and db/ because that is where Drizzle lives; the
+  // separate `files` glob also keeps it from colliding with the WorkOS
+  // `no-restricted-syntax` entry above (flat config replaces rather than merges
+  // per rule name, see that comment).
+  //
+  // The `:not(...'from')` clause is what distinguishes this from the Supabase
+  // client's unrelated `.from(t).insert(payload).select(cols)`, which is a
+  // different API and is perfectly fine. Keying on the `.from()` in the chain
+  // rather than on the argument type matters: Supabase call sites here pass a
+  // named constant (`.select(CATEGORY_COLS)`), not a string literal.
+  {
+    files: ['server-bun/src/**/*.{ts,tsx}', 'db/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name='select'][callee.object.type='CallExpression'][callee.object.callee.property.name='insert']:not([callee.object.callee.object.callee.property.name='from'])",
+          message:
+            'Drizzle insert-select is banned: the projection must list every column of the target table in order, and Drizzle only checks that at statement-build time, so a mismatch reaches production as a 100% failure rate. Run the authorization check as its own query and use insert().values() instead.',
+        },
+      ],
+    },
+  },
+  // The insert-select guard test is the one place that builds these statements on
+  // purpose -- it asserts that Drizzle rejects them, which is the whole argument for
+  // the ban above. Exempting a single known file is preferable to inline disables
+  // that would also mask a real regression sneaking into the same file.
+  {
+    files: ['server-bun/src/services/combat/__tests__/combat-encounter-insert-select.test.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
   // Shared layer restrictions - cannot depend on features
   {
     files: ['src/shared/**/*'],

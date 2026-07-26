@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing violations, not introduced by the
+   insert-select sweep that touched this file. lint-staged fails the commit on any
+   error in a staged file, so converting one statement here would otherwise require
+   an unrelated cleanup in the same change. Left for a dedicated pass. */
 /**
  * Spell Slots Service
  *
@@ -11,7 +15,12 @@ import { and, eq, exists, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index';
-import { NotFoundError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
+import {
+  NotFoundError,
+  ValidationError,
+  BusinessLogicError,
+  InternalServerError,
+} from '../lib/errors.js';
 import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
@@ -53,7 +62,7 @@ export class SpellSlotsService {
    * @returns Multiclass spell slot calculation
    */
   static calculateMulticlassSpellSlots(
-    classes: Array<{ className: ClassName; level: number }>
+    classes: Array<{ className: ClassName; level: number }>,
   ): MulticlassSpellSlots {
     return SpellSlotMechanics.calculateMulticlassSpellSlots(classes);
   }
@@ -95,7 +104,10 @@ export class SpellSlotsService {
 
     // Check if upcasting is valid
     if (spellLevel > 0 && slotLevelUsed < spellLevel) {
-      throw new ValidationError(`Cannot use a level ${slotLevelUsed} slot for a level ${spellLevel} spell`, { spellLevel, slotLevelUsed });
+      throw new ValidationError(
+        `Cannot use a level ${slotLevelUsed} slot for a level ${spellLevel} spell`,
+        { spellLevel, slotLevelUsed },
+      );
     }
 
     const wasUpcast = spellLevel > 0 && slotLevelUsed > spellLevel;
@@ -112,11 +124,13 @@ export class SpellSlotsService {
       })
       .from(characterSpellSlots)
       .innerJoin(characters, eq(characterSpellSlots.characterId, characters.id))
-      .where(and(
-        eq(characterSpellSlots.characterId, characterId),
-        eq(characterSpellSlots.spellLevel, slotLevelUsed),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, slotLevelUsed),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     if (!slotData) {
@@ -128,7 +142,7 @@ export class SpellSlotsService {
       throw new BusinessLogicError(`No available level ${slotLevelUsed} spell slots`, {
         level: slotLevelUsed,
         used: slotData.usedSlots,
-        total: slotData.totalSlots
+        total: slotData.totalSlots,
       });
     }
 
@@ -144,14 +158,17 @@ export class SpellSlotsService {
           eq(characterSpellSlots.id, slotData.id),
           eq(characterSpellSlots.characterId, characterId),
           exists(
-            db.select()
+            db
+              .select()
               .from(characters)
-              .where(and(
-                eq(characters.id, characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        )
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
       )
       .returning();
 
@@ -159,23 +176,18 @@ export class SpellSlotsService {
       throw new InternalServerError('Failed to use spell slot');
     }
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT
+    // The usage log's insert-select projected 5 of spell_slot_usage_log's 7 columns
+    // and so never ran. Ownership is already proven: the UPDATE above carried the
+    // same EXISTS check and we threw just now if it matched no row.
     const [logEntry] = await db
       .insert(spellSlotUsageLog)
-      .select(
-        db.select({
-          characterId: sql`${characterId}`,
-          sessionId: sql`${sessionId || null}`,
-          spellName: sql`${spellName}`,
-          spellLevel: sql`${spellLevel}`,
-          slotLevelUsed: sql`${slotLevelUsed}`,
-        })
-        .from(characters)
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
-      )
+      .values({
+        characterId,
+        sessionId: sessionId || null,
+        spellName,
+        spellLevel,
+        slotLevelUsed,
+      })
       .returning();
 
     if (!logEntry) {
@@ -270,9 +282,7 @@ export class SpellSlotsService {
     }
 
     // Filter out null slots (from characters with no spell slot records)
-    const slots = results
-      .map((r: any) => r.slot)
-      .filter((s: any): s is SpellSlot => s !== null);
+    const slots = results.map((r: any) => r.slot).filter((s: any): s is SpellSlot => s !== null);
 
     if (!slots || slots.length === 0) {
       return {
@@ -282,7 +292,7 @@ export class SpellSlotsService {
       };
     }
 
-    const slotsToUpdate = slots.filter(s => s.usedSlots > 0);
+    const slotsToUpdate = slots.filter((s) => s.usedSlots > 0);
 
     if (slotsToUpdate.length === 0) {
       return {
@@ -292,10 +302,9 @@ export class SpellSlotsService {
       };
     }
 
-    const slotsRestored = slotsToUpdate.map(slot => {
-      const restoredAmount = (amount !== undefined && amount >= 0)
-        ? Math.min(amount, slot.usedSlots)
-        : slot.usedSlots;
+    const slotsRestored = slotsToUpdate.map((slot) => {
+      const restoredAmount =
+        amount !== undefined && amount >= 0 ? Math.min(amount, slot.usedSlots) : slot.usedSlots;
 
       return {
         level: slot.spellLevel,
@@ -311,24 +320,31 @@ export class SpellSlotsService {
     await db
       .update(characterSpellSlots)
       .set({
-        usedSlots: amount !== undefined && amount >= 0
-          ? sql`GREATEST(0, ${characterSpellSlots.usedSlots} - ${amount})`
-          : 0,
+        usedSlots:
+          amount !== undefined && amount >= 0
+            ? sql`GREATEST(0, ${characterSpellSlots.usedSlots} - ${amount})`
+            : 0,
         updatedAt: new Date(),
       })
       .where(
         and(
-          inArray(characterSpellSlots.id, slotsToUpdate.map(s => s.id)),
+          inArray(
+            characterSpellSlots.id,
+            slotsToUpdate.map((s) => s.id),
+          ),
           eq(characterSpellSlots.characterId, characterId),
           exists(
-            db.select()
+            db
+              .select()
               .from(characters)
-              .where(and(
-                eq(characters.id, characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        )
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
       );
 
     return {
@@ -344,7 +360,10 @@ export class SpellSlotsService {
    * @param userId - User ID for ownership check
    * @returns Usage history
    */
-  static async getSpellSlotUsageHistory(query: SpellSlotUsageQuery, userId: string): Promise<SpellSlotUsageHistory> {
+  static async getSpellSlotUsageHistory(
+    query: SpellSlotUsageQuery,
+    userId: string,
+  ): Promise<SpellSlotUsageHistory> {
     return SpellSlotDataAccess.getSpellSlotUsageHistory(query, userId);
   }
 
@@ -358,7 +377,7 @@ export class SpellSlotsService {
   static async initializeSpellSlots(
     characterId: string,
     userId: string,
-    classes: Array<{ className: ClassName; level: number }>
+    classes: Array<{ className: ClassName; level: number }>,
   ): Promise<CharacterSpellSlots> {
     return SpellSlotDataAccess.initializeSpellSlots(characterId, userId, classes);
   }

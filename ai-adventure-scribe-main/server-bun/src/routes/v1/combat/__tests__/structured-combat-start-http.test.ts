@@ -143,6 +143,15 @@ const handlers = (): FakeQueryHandler[] => [
     rows: () => [],
   },
   {
+    // startCombat used to prove session ownership inside an INSERT ... SELECT. That
+    // is now a standalone SELECT run before the insert (the insert-select pattern is
+    // banned -- see eslint.config.js), so the fake has to answer it or every start
+    // returns 404 "Session not found".
+    match: /^select .* from "game_sessions"/i,
+    columns: ['id'],
+    rows: () => [{ id: encounterRow.sessionId }],
+  },
+  {
     match: /^select .* from "characters"/i,
     columns: [...columnNames(schema.characters), ...columnNames(schema.characterStats)],
     rows: () => [],

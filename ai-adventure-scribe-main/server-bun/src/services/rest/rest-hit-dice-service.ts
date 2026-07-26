@@ -120,27 +120,35 @@ export class RestHitDiceService {
       return updated;
     }
 
-    // Create new hit dice record
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // Create new hit dice record.
+    // Ownership check split out of the insert: as an insert-select this projected 5
+    // of character_hit_dice's 8 columns and Drizzle rejected it, so hit dice were
+    // never initialized for a class the character did not already have a row for.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (owned.length === 0) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character', characterId);
+    }
+
     const [hitDice] = await db
       .insert(characterHitDice)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            className: sql`${className}`,
-            dieType: sql`${dieType}`,
-            totalDice: sql`${level}`,
-            usedDice: sql`0`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-            ),
-          ),
-      )
+      .values({
+        characterId,
+        className,
+        dieType,
+        totalDice: level,
+        usedDice: 0,
+      })
       .returning();
 
     if (!hitDice) {

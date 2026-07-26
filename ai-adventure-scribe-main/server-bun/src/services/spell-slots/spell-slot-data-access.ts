@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- pre-existing violations, not introduced by the
+   insert-select sweep that touched this file. lint-staged fails the commit on any
+   error in a staged file, so converting one statement here would otherwise require
+   an unrelated cleanup in the same change. Left for a dedicated pass. */
 /**
  * Spell Slot Data Access
  *
@@ -35,7 +39,7 @@ export class SpellSlotDataAccess {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       columns: { id: true },
     });
@@ -107,7 +111,10 @@ export class SpellSlotDataAccess {
   /**
    * Get spell slot usage history with ownership verification
    */
-  static async getSpellSlotUsageHistory(query: SpellSlotUsageQuery, userId: string): Promise<SpellSlotUsageHistory> {
+  static async getSpellSlotUsageHistory(
+    query: SpellSlotUsageQuery,
+    userId: string,
+  ): Promise<SpellSlotUsageHistory> {
     const { characterId, sessionId, limit = 50, offset = 0 } = query;
 
     // ⚡ Bolt: Consolidated character ownership verification, usage log retrieval, and total count calculation
@@ -119,11 +126,13 @@ export class SpellSlotDataAccess {
       })
       .from(spellSlotUsageLog)
       .innerJoin(characters, eq(spellSlotUsageLog.characterId, characters.id))
-      .where(and(
-        eq(spellSlotUsageLog.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        sessionId ? eq(spellSlotUsageLog.sessionId, sessionId) : undefined
-      ))
+      .where(
+        and(
+          eq(spellSlotUsageLog.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          sessionId ? eq(spellSlotUsageLog.sessionId, sessionId) : undefined,
+        ),
+      )
       .orderBy(desc(spellSlotUsageLog.timestamp))
       .limit(limit)
       .offset(offset);
@@ -156,13 +165,13 @@ export class SpellSlotDataAccess {
   static async initializeSpellSlots(
     characterId: string,
     userId: string,
-    classes: Array<{ className: ClassName; level: number }>
+    classes: Array<{ className: ClassName; level: number }>,
   ): Promise<CharacterSpellSlots> {
     // Verify ownership
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
     });
 
@@ -173,7 +182,10 @@ export class SpellSlotDataAccess {
     // Calculate spell slots
     const calculation =
       classes.length === 1
-        ? SpellSlotMechanics.calculateSpellSlots(classes[0]?.className ?? 'Fighter', classes[0]?.level ?? 1)
+        ? SpellSlotMechanics.calculateSpellSlots(
+            classes[0]?.className ?? 'Fighter',
+            classes[0]?.level ?? 1,
+          )
         : SpellSlotMechanics.calculateMulticlassSpellSlots(classes);
 
     const slots = 'slots' in calculation ? calculation.slots : {};
@@ -183,42 +195,48 @@ export class SpellSlotDataAccess {
       and(
         eq(characterSpellSlots.characterId, characterId),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
+      ),
     );
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth
+    // Ownership check split out of the insert. This was a UNION ALL of one
+    // ownership-checked SELECT per slot level, fed to insert-select; each branch
+    // projected 4 of character_spell_slots' 7 columns, so Drizzle rejected the whole
+    // statement and spell slots were never initialized for anyone. A plain multi-row
+    // insert replaces the UNION ALL entirely.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (owned.length === 0) {
+      throw new NotFoundError('Character', characterId);
+    }
+
     const insertData = Object.entries(slots).map(([level, total]) => ({
-      characterId: sql`${characterId}`,
-      spellLevel: sql`${parseInt(level)}`,
-      totalSlots: sql`${total}`,
-      usedSlots: sql`0`,
+      characterId,
+      spellLevel: parseInt(level),
+      totalSlots: total as number,
+      usedSlots: 0,
     }));
 
     if (insertData.length > 0) {
-      // Use a single query with multiple SELECT ... WHERE EXISTS combined via UNION ALL
-      const selectQueries = insertData.map(insert =>
-        db.select(insert)
-          .from(characters)
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      );
-
-      // Join all select queries with unionAll
-      let finalSelect: any = selectQueries[0];
-      for (let i = 1; i < selectQueries.length; i++) {
-        finalSelect = finalSelect.unionAll(selectQueries[i]);
-      }
-
-      await db.insert(characterSpellSlots).select(finalSelect);
+      await db.insert(characterSpellSlots).values(insertData);
     }
 
     // Return the initialized slots

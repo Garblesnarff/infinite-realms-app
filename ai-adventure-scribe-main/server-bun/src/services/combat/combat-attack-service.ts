@@ -16,7 +16,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { resolveAttackRules } from './combat-rules.js';
-import { claimTurnAction, claimTurnBonusAction } from './combat-turn-resources.js';
+import {
+  claimTurnActionAndResolve,
+  claimTurnBonusActionAndResolve,
+} from './combat-turn-resources.js';
 import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
 import {
   getParticipantWithStats,
@@ -238,97 +241,100 @@ export class CombatAttackService {
     }
 
     // Version and action claims happen only after all legal-action checks pass.
-    await claimTurnAction(attackerId, encounterId, expectedVersion);
-    const attackRoll = this.rollD20(rules.advantage, rules.disadvantage);
+    // Wrapped so that anything throwing below -- damage application above all --
+    // releases the claim instead of stranding the actor mid-turn.
+    return claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, async () => {
+      const attackRoll = this.rollD20(rules.advantage, rules.disadvantage);
 
-    const targetAC = rules.targetAc;
+      const targetAC = rules.targetAc;
 
-    // Check if attack hits
-    const hitCheck = checkHit({
-      attackRoll,
-      attackBonus: rules.attackBonus,
-      targetAC,
-      advantage: rules.advantage,
-      disadvantage: rules.disadvantage,
-    });
-
-    if (!hitCheck.hit) {
-      // Miss - no damage
-      return {
-        hit: false,
+      // Check if attack hits
+      const hitCheck = checkHit({
+        attackRoll,
+        attackBonus: rules.attackBonus,
         targetAC,
-        totalAttackRoll: hitCheck.totalAttackRoll,
-        effectiveResistance: false,
-        effectiveVulnerability: false,
-        effectiveImmunity: false,
-        finalDamage: 0,
-        isCritical: false,
-        isNaturalOne: hitCheck.isNaturalOne,
-        isNaturalTwenty: hitCheck.isNaturalTwenty,
-      };
-    }
+        advantage: rules.advantage,
+        disadvantage: rules.disadvantage,
+      });
 
-    // Hit - calculate damage
-    // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
-    const autoCrit = checkAutoCrit(
-      targetConditions,
-      !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : undefined,
-    );
-    const isCrit = hitCheck.isCritical || autoCrit;
+      if (!hitCheck.hit) {
+        // Miss - no damage
+        return {
+          hit: false,
+          targetAC,
+          totalAttackRoll: hitCheck.totalAttackRoll,
+          effectiveResistance: false,
+          effectiveVulnerability: false,
+          effectiveImmunity: false,
+          finalDamage: 0,
+          isCritical: false,
+          isNaturalOne: hitCheck.isNaturalOne,
+          isNaturalTwenty: hitCheck.isNaturalTwenty,
+        };
+      }
 
-    // Aggregate resistances using the extracted module
-    const defenses = aggregateResistances(targetParticipant, targetStats);
-
-    const damageCalc = calculateDamage({
-      damageDice: weapon.damageDice,
-      damageBonus: rules.damageBonus,
-      damageType: weapon.damageType as DamageType,
-      isCritical: isCrit,
-      resistances: defenses.resistances,
-      vulnerabilities: defenses.vulnerabilities,
-      immunities: defenses.immunities,
-    });
-
-    // Apply damage to target HP
-    try {
-      // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
-      const hpResult = await CombatHPService.applyDamage(
-        targetId,
-        encounterId,
-        {
-          damageAmount: damageCalc.finalDamage,
-          damageType: weapon.damageType as DamageType,
-          sourceParticipantId: attackerId,
-          sourceDescription: weapon.name || 'attack',
-          ignoreResistances: true, // Already applied in damage calculation
-          ignoreImmunities: true, // Already applied in damage calculation
-        },
-        userId,
-        targetParticipant,
+      // Hit - calculate damage
+      // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
+      const autoCrit = checkAutoCrit(
+        targetConditions,
+        !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : undefined,
       );
+      const isCrit = hitCheck.isCritical || autoCrit;
 
-      return {
-        hit: true,
-        targetAC,
-        totalAttackRoll: hitCheck.totalAttackRoll,
-        damage: damageCalc.baseDamage,
+      // Aggregate resistances using the extracted module
+      const defenses = aggregateResistances(targetParticipant, targetStats);
+
+      const damageCalc = calculateDamage({
+        damageDice: weapon.damageDice,
+        damageBonus: rules.damageBonus,
         damageType: weapon.damageType as DamageType,
-        damageBeforeResistances: damageCalc.damageBeforeResistances,
-        effectiveResistance: damageCalc.effectiveResistance,
-        effectiveVulnerability: damageCalc.effectiveVulnerability,
-        effectiveImmunity: damageCalc.effectiveImmunity,
-        finalDamage: damageCalc.finalDamage,
-        targetNewHp: hpResult.newCurrentHp,
-        targetIsConscious: hpResult.isConscious,
-        targetIsDead: hpResult.isDead,
         isCritical: isCrit,
-        isNaturalOne: hitCheck.isNaturalOne,
-        isNaturalTwenty: hitCheck.isNaturalTwenty,
-      };
-    } catch (error) {
-      logger.error({ msg: 'Failed to apply damage to HP', error });
-      throw new InternalServerError('Attack succeeded but damage application failed', { error });
-    }
+        resistances: defenses.resistances,
+        vulnerabilities: defenses.vulnerabilities,
+        immunities: defenses.immunities,
+      });
+
+      // Apply damage to target HP
+      try {
+        // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
+        const hpResult = await CombatHPService.applyDamage(
+          targetId,
+          encounterId,
+          {
+            damageAmount: damageCalc.finalDamage,
+            damageType: weapon.damageType as DamageType,
+            sourceParticipantId: attackerId,
+            sourceDescription: weapon.name || 'attack',
+            ignoreResistances: true, // Already applied in damage calculation
+            ignoreImmunities: true, // Already applied in damage calculation
+          },
+          userId,
+          targetParticipant,
+        );
+
+        return {
+          hit: true,
+          targetAC,
+          totalAttackRoll: hitCheck.totalAttackRoll,
+          damage: damageCalc.baseDamage,
+          damageType: weapon.damageType as DamageType,
+          damageBeforeResistances: damageCalc.damageBeforeResistances,
+          effectiveResistance: damageCalc.effectiveResistance,
+          effectiveVulnerability: damageCalc.effectiveVulnerability,
+          effectiveImmunity: damageCalc.effectiveImmunity,
+          finalDamage: damageCalc.finalDamage,
+          targetNewHp: hpResult.newCurrentHp,
+          targetIsConscious: hpResult.isConscious,
+          targetIsDead: hpResult.isDead,
+          isCritical: isCrit,
+          isNaturalOne: hitCheck.isNaturalOne,
+          isNaturalTwenty: hitCheck.isNaturalTwenty,
+        };
+      } catch (error) {
+        logger.error({ msg: 'Failed to apply damage to HP', error });
+        throw new InternalServerError('Attack succeeded but damage application failed', { error });
+      }
+    });
   }
 
   /**
@@ -421,279 +427,286 @@ export class CombatAttackService {
       spellRules.set(targetId, rules);
     }
     const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
-    await (usesBonusAction ? claimTurnBonusAction : claimTurnAction)(
-      casterId,
-      encounterId,
-      expectedVersion,
-    );
-    if (casterData.participant.characterId && spell.level > 0) {
-      // Not a React hook: a static service method on a Bun server that happens to start with
-      // "use". The rule matches on the name alone, and this file has no React in it at all.
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      await SpellSlotsService.useSpellSlot(
-        {
-          characterId: casterData.participant.characterId,
-          spellName: spell.name,
-          spellLevel: spell.level,
-          slotLevelUsed: Math.max(spell.level, slotLevel || spell.level),
-          sessionId: casterData.participant.encounter?.sessionId,
-        },
-        userId,
-      );
-    }
-    const spellAbility = this.spellcastingAbility(casterProfile.className);
-    const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
-    const proficiencyBonus = this.proficiencyBonus(casterProfile.level);
-    const spellAttackBonus = spellModifier + proficiencyBonus;
-    const saveDC = 8 + spellAttackBonus;
-    const damageDice = this.damageDiceForLevel(
-      spell.damageByLevel,
-      spell.level,
-      slotLevel,
-      casterProfile.level,
-    );
-    const damageType = spell.damageType as DamageType | undefined;
-    const effectiveSlotLevel = Math.max(spell.level, slotLevel || spell.level);
-    const healing = this.healingDice(spell.id, effectiveSlotLevel);
+    // Same release-on-throw wrapper as resolveAttack. It matters more here: the
+    // claim is made once and then damage is applied to every target in turn, so
+    // a throw on target three would otherwise strand the caster after two
+    // targets had already taken damage.
+    const claimAndResolve = usesBonusAction
+      ? claimTurnBonusActionAndResolve
+      : claimTurnActionAndResolve;
+    return claimAndResolve(casterId, encounterId, expectedVersion, async () => {
+      if (casterData.participant.characterId && spell.level > 0) {
+        // Not a React hook: a static service method on a Bun server that happens to start with
+        // "use". The rule matches on the name alone, and this file has no React in it at all.
 
-    const results: AttackResult[] = [];
-
-    // Parallelize spell resolution for all targets using the pre-fetched data map.
-    const resolutionPromises = targetIds.map(async (targetId) => {
-      const targetData = allParticipantDataMap.get(targetId);
-      if (!targetData) {
-        return null;
-      }
-
-      const { participant: targetParticipant, stats: targetStats } = targetData;
-
-      if (healing) {
-        const rolledHealing =
-          healing.fixed ??
-          Array.from(
-            { length: healing.count },
-            () => Math.floor(Math.random() * healing.die) + 1,
-          ).reduce((total, roll) => total + roll, 0) + spellModifier;
-        const hpResult = await CombatHPService.healDamage(
-          targetId,
-          encounterId,
-          Math.max(1, rolledHealing),
-          spell.name,
+        await SpellSlotsService.useSpellSlot(
+          {
+            characterId: casterData.participant.characterId,
+            spellName: spell.name,
+            spellLevel: spell.level,
+            slotLevelUsed: Math.max(spell.level, slotLevel || spell.level),
+            sessionId: casterData.participant.encounter?.sessionId,
+          },
           userId,
         );
-        return {
-          hit: true,
-          targetAC: 0,
-          totalAttackRoll: 0,
-          finalDamage: 0,
-          targetNewHp: hpResult.newCurrentHp,
-          targetIsConscious: true,
-          targetIsDead: false,
-          effectiveResistance: false,
-          effectiveVulnerability: false,
-          effectiveImmunity: false,
-          isCritical: false,
-          isNaturalOne: false,
-          isNaturalTwenty: false,
-        };
       }
+      const spellAbility = this.spellcastingAbility(casterProfile.className);
+      const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
+      const proficiencyBonus = this.proficiencyBonus(casterProfile.level);
+      const spellAttackBonus = spellModifier + proficiencyBonus;
+      const saveDC = 8 + spellAttackBonus;
+      const damageDice = this.damageDiceForLevel(
+        spell.damageByLevel,
+        spell.level,
+        slotLevel,
+        casterProfile.level,
+      );
+      const damageType = spell.damageType as DamageType | undefined;
+      const effectiveSlotLevel = Math.max(spell.level, slotLevel || spell.level);
+      const healing = this.healingDice(spell.id, effectiveSlotLevel);
 
-      // Determine target AC: Use combat participant AC (allows for temporary modifications)
-      // with fallback to base creature stats if participant AC is the default 10.
-      const targetAC =
-        spellRules.get(targetId)?.targetAc ??
-        (targetParticipant.armorClass !== 10
-          ? targetParticipant.armorClass
-          : targetStats?.armorClass || 10);
+      const results: AttackResult[] = [];
 
-      // Aggregate resistances using the extracted module
-      const defenses = aggregateResistances(targetParticipant, targetStats);
+      // Parallelize spell resolution for all targets using the pre-fetched data map.
+      const resolutionPromises = targetIds.map(async (targetId) => {
+        const targetData = allParticipantDataMap.get(targetId);
+        if (!targetData) {
+          return null;
+        }
 
-      if (spell.attackType) {
-        // Spell attack roll
-        const attackRules = spellRules.get(targetId);
-        const attackRoll = this.rollD20(attackRules?.advantage, attackRules?.disadvantage);
-        const hitCheckResult = checkHit({
-          attackRoll,
-          attackBonus: spellAttackBonus,
-          targetAC,
-        });
+        const { participant: targetParticipant, stats: targetStats } = targetData;
 
-        if (!hitCheckResult.hit) {
+        if (healing) {
+          const rolledHealing =
+            healing.fixed ??
+            Array.from(
+              { length: healing.count },
+              () => Math.floor(Math.random() * healing.die) + 1,
+            ).reduce((total, roll) => total + roll, 0) + spellModifier;
+          const hpResult = await CombatHPService.healDamage(
+            targetId,
+            encounterId,
+            Math.max(1, rolledHealing),
+            spell.name,
+            userId,
+          );
           return {
-            hit: false,
-            targetAC,
-            totalAttackRoll: hitCheckResult.totalAttackRoll,
+            hit: true,
+            targetAC: 0,
+            totalAttackRoll: 0,
+            finalDamage: 0,
+            targetNewHp: hpResult.newCurrentHp,
+            targetIsConscious: true,
+            targetIsDead: false,
             effectiveResistance: false,
             effectiveVulnerability: false,
             effectiveImmunity: false,
-            finalDamage: 0,
             isCritical: false,
-            isNaturalOne: hitCheckResult.isNaturalOne,
-            isNaturalTwenty: hitCheckResult.isNaturalTwenty,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
           };
         }
 
-        // Hit - calculate damage
-        if (damageDice && damageType) {
-          // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
-          const targetConditionsForTarget = await getActiveConditionNames(targetId);
-          const autoCrit = checkAutoCrit(
-            targetConditionsForTarget,
-            spell.attackType === 'melee' ? 5 : undefined,
-          );
-          const spellIsCrit = hitCheckResult.isCritical || autoCrit;
+        // Determine target AC: Use combat participant AC (allows for temporary modifications)
+        // with fallback to base creature stats if participant AC is the default 10.
+        const targetAC =
+          spellRules.get(targetId)?.targetAc ??
+          (targetParticipant.armorClass !== 10
+            ? targetParticipant.armorClass
+            : targetStats?.armorClass || 10);
 
-          const damageCalc = calculateDamage({
-            damageDice,
-            damageBonus: 0,
-            damageType,
-            isCritical: spellIsCrit,
-            resistances: defenses.resistances,
-            vulnerabilities: defenses.vulnerabilities,
-            immunities: defenses.immunities,
+        // Aggregate resistances using the extracted module
+        const defenses = aggregateResistances(targetParticipant, targetStats);
+
+        if (spell.attackType) {
+          // Spell attack roll
+          const attackRules = spellRules.get(targetId);
+          const attackRoll = this.rollD20(attackRules?.advantage, attackRules?.disadvantage);
+          const hitCheckResult = checkHit({
+            attackRoll,
+            attackBonus: spellAttackBonus,
+            targetAC,
           });
 
-          // Apply damage to target HP
-          try {
-            // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
-            const hpResult = await CombatHPService.applyDamage(
-              targetId,
-              encounterId,
-              {
-                damageAmount: damageCalc.finalDamage,
-                damageType,
-                sourceParticipantId: casterId,
-                sourceDescription: spellName,
-                ignoreResistances: true, // Already applied in damage calculation
-                ignoreImmunities: true, // Already applied in damage calculation
-              },
-              userId,
-              targetParticipant,
-            );
-
+          if (!hitCheckResult.hit) {
             return {
-              hit: true,
+              hit: false,
               targetAC,
               totalAttackRoll: hitCheckResult.totalAttackRoll,
-              damage: damageCalc.baseDamage,
-              damageType,
-              damageBeforeResistances: damageCalc.damageBeforeResistances,
-              effectiveResistance: damageCalc.effectiveResistance,
-              effectiveVulnerability: damageCalc.effectiveVulnerability,
-              effectiveImmunity: damageCalc.effectiveImmunity,
-              finalDamage: damageCalc.finalDamage,
-              targetNewHp: hpResult.newCurrentHp,
-              targetIsConscious: hpResult.isConscious,
-              targetIsDead: hpResult.isDead,
-              isCritical: spellIsCrit,
+              effectiveResistance: false,
+              effectiveVulnerability: false,
+              effectiveImmunity: false,
+              finalDamage: 0,
+              isCritical: false,
               isNaturalOne: hitCheckResult.isNaturalOne,
               isNaturalTwenty: hitCheckResult.isNaturalTwenty,
             };
-          } catch (error) {
-            logger.error({ msg: 'Failed to apply spell attack damage to HP', error });
-            throw new InternalServerError('Spell attack succeeded but damage application failed', {
-              error,
-            });
           }
-        }
-      } else if (spell.saveAbility) {
-        // Saving throw spell
-        const targetProfile = await getParticipantAbilityProfile(targetParticipant);
-        const ability = spell.saveAbility.toLowerCase();
-        const namedAbility = (
-          {
-            str: 'strength',
-            dex: 'dexterity',
-            con: 'constitution',
-            int: 'intelligence',
-            wis: 'wisdom',
-            cha: 'charisma',
-          } as Record<string, string>
-        )[ability];
-        const explicitBonus =
-          targetProfile.saveBonuses[ability] ?? targetProfile.saveBonuses[namedAbility];
-        const proficient =
-          targetProfile.savingThrowProficiencies.includes(ability) ||
-          targetProfile.savingThrowProficiencies.includes(namedAbility);
-        const saveBonus =
-          explicitBonus ??
-          this.abilityModifier(targetProfile.scores[ability]) +
-            (proficient ? this.proficiencyBonus(targetProfile.level) : 0);
-        const saveRoll = this.rollD20() + saveBonus;
-        const savedSuccessfully = saveRoll >= saveDC;
 
-        if (damageDice && damageType) {
-          const damageCalc = calculateDamage({
-            damageDice,
-            damageBonus: 0,
-            damageType,
-            isCritical: false, // Spells with saves don't crit
-            resistances: defenses.resistances,
-            vulnerabilities: defenses.vulnerabilities,
-            immunities: defenses.immunities,
-          });
-
-          // Half damage on successful save
-          const finalDamage = savedSuccessfully
-            ? spell.saveSuccess === 'half'
-              ? Math.floor(damageCalc.finalDamage / 2)
-              : 0
-            : damageCalc.finalDamage;
-
-          // Apply damage to target HP
-          try {
-            // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
-            const hpResult = await CombatHPService.applyDamage(
-              targetId,
-              encounterId,
-              {
-                damageAmount: finalDamage,
-                damageType,
-                sourceParticipantId: casterId,
-                sourceDescription: spellName,
-                ignoreResistances: true, // Already applied in damage calculation
-                ignoreImmunities: true, // Already applied in damage calculation
-              },
-              userId,
-              targetParticipant,
+          // Hit - calculate damage
+          if (damageDice && damageType) {
+            // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
+            const targetConditionsForTarget = await getActiveConditionNames(targetId);
+            const autoCrit = checkAutoCrit(
+              targetConditionsForTarget,
+              spell.attackType === 'melee' ? 5 : undefined,
             );
+            const spellIsCrit = hitCheckResult.isCritical || autoCrit;
 
-            return {
-              hit: !savedSuccessfully,
-              targetAC: 0, // Not applicable for saves
-              totalAttackRoll: saveRoll ?? 0,
-              damage: damageCalc.baseDamage,
+            const damageCalc = calculateDamage({
+              damageDice,
+              damageBonus: 0,
               damageType,
-              damageBeforeResistances: damageCalc.damageBeforeResistances,
-              effectiveResistance: damageCalc.effectiveResistance,
-              effectiveVulnerability: damageCalc.effectiveVulnerability,
-              effectiveImmunity: damageCalc.effectiveImmunity,
-              finalDamage,
-              targetNewHp: hpResult.newCurrentHp,
-              targetIsConscious: hpResult.isConscious,
-              targetIsDead: hpResult.isDead,
-              isCritical: false,
-              isNaturalOne: false,
-              isNaturalTwenty: false,
-            };
-          } catch (error) {
-            logger.error({ msg: 'Failed to apply spell save damage to HP', error });
-            throw new InternalServerError('Spell save resolved but damage application failed', {
-              error,
+              isCritical: spellIsCrit,
+              resistances: defenses.resistances,
+              vulnerabilities: defenses.vulnerabilities,
+              immunities: defenses.immunities,
             });
+
+            // Apply damage to target HP
+            try {
+              // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
+              const hpResult = await CombatHPService.applyDamage(
+                targetId,
+                encounterId,
+                {
+                  damageAmount: damageCalc.finalDamage,
+                  damageType,
+                  sourceParticipantId: casterId,
+                  sourceDescription: spellName,
+                  ignoreResistances: true, // Already applied in damage calculation
+                  ignoreImmunities: true, // Already applied in damage calculation
+                },
+                userId,
+                targetParticipant,
+              );
+
+              return {
+                hit: true,
+                targetAC,
+                totalAttackRoll: hitCheckResult.totalAttackRoll,
+                damage: damageCalc.baseDamage,
+                damageType,
+                damageBeforeResistances: damageCalc.damageBeforeResistances,
+                effectiveResistance: damageCalc.effectiveResistance,
+                effectiveVulnerability: damageCalc.effectiveVulnerability,
+                effectiveImmunity: damageCalc.effectiveImmunity,
+                finalDamage: damageCalc.finalDamage,
+                targetNewHp: hpResult.newCurrentHp,
+                targetIsConscious: hpResult.isConscious,
+                targetIsDead: hpResult.isDead,
+                isCritical: spellIsCrit,
+                isNaturalOne: hitCheckResult.isNaturalOne,
+                isNaturalTwenty: hitCheckResult.isNaturalTwenty,
+              };
+            } catch (error) {
+              logger.error({ msg: 'Failed to apply spell attack damage to HP', error });
+              throw new InternalServerError(
+                'Spell attack succeeded but damage application failed',
+                {
+                  error,
+                },
+              );
+            }
+          }
+        } else if (spell.saveAbility) {
+          // Saving throw spell
+          const targetProfile = await getParticipantAbilityProfile(targetParticipant);
+          const ability = spell.saveAbility.toLowerCase();
+          const namedAbility = (
+            {
+              str: 'strength',
+              dex: 'dexterity',
+              con: 'constitution',
+              int: 'intelligence',
+              wis: 'wisdom',
+              cha: 'charisma',
+            } as Record<string, string>
+          )[ability];
+          const explicitBonus =
+            targetProfile.saveBonuses[ability] ?? targetProfile.saveBonuses[namedAbility];
+          const proficient =
+            targetProfile.savingThrowProficiencies.includes(ability) ||
+            targetProfile.savingThrowProficiencies.includes(namedAbility);
+          const saveBonus =
+            explicitBonus ??
+            this.abilityModifier(targetProfile.scores[ability]) +
+              (proficient ? this.proficiencyBonus(targetProfile.level) : 0);
+          const saveRoll = this.rollD20() + saveBonus;
+          const savedSuccessfully = saveRoll >= saveDC;
+
+          if (damageDice && damageType) {
+            const damageCalc = calculateDamage({
+              damageDice,
+              damageBonus: 0,
+              damageType,
+              isCritical: false, // Spells with saves don't crit
+              resistances: defenses.resistances,
+              vulnerabilities: defenses.vulnerabilities,
+              immunities: defenses.immunities,
+            });
+
+            // Half damage on successful save
+            const finalDamage = savedSuccessfully
+              ? spell.saveSuccess === 'half'
+                ? Math.floor(damageCalc.finalDamage / 2)
+                : 0
+              : damageCalc.finalDamage;
+
+            // Apply damage to target HP
+            try {
+              // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
+              const hpResult = await CombatHPService.applyDamage(
+                targetId,
+                encounterId,
+                {
+                  damageAmount: finalDamage,
+                  damageType,
+                  sourceParticipantId: casterId,
+                  sourceDescription: spellName,
+                  ignoreResistances: true, // Already applied in damage calculation
+                  ignoreImmunities: true, // Already applied in damage calculation
+                },
+                userId,
+                targetParticipant,
+              );
+
+              return {
+                hit: !savedSuccessfully,
+                targetAC: 0, // Not applicable for saves
+                totalAttackRoll: saveRoll ?? 0,
+                damage: damageCalc.baseDamage,
+                damageType,
+                damageBeforeResistances: damageCalc.damageBeforeResistances,
+                effectiveResistance: damageCalc.effectiveResistance,
+                effectiveVulnerability: damageCalc.effectiveVulnerability,
+                effectiveImmunity: damageCalc.effectiveImmunity,
+                finalDamage,
+                targetNewHp: hpResult.newCurrentHp,
+                targetIsConscious: hpResult.isConscious,
+                targetIsDead: hpResult.isDead,
+                isCritical: false,
+                isNaturalOne: false,
+                isNaturalTwenty: false,
+              };
+            } catch (error) {
+              logger.error({ msg: 'Failed to apply spell save damage to HP', error });
+              throw new InternalServerError('Spell save resolved but damage application failed', {
+                error,
+              });
+            }
           }
         }
-      }
-      return null;
-    });
+        return null;
+      });
 
-    const resolutionResults = await Promise.all(resolutionPromises);
-    resolutionResults.forEach((res) => {
-      if (res) results.push(res);
-    });
+      const resolutionResults = await Promise.all(resolutionPromises);
+      resolutionResults.forEach((res) => {
+        if (res) results.push(res);
+      });
 
-    return { results };
+      return { results };
+    });
   }
 
   /**

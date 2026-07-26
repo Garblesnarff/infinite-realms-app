@@ -36,7 +36,7 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     sql: vi.fn((strings) => strings[0]),
   };
 });
@@ -81,8 +81,8 @@ describe('CharacterFolderService Optimization', () => {
 
       // Verify character counts are correctly mapped
       expect(result).toHaveLength(2);
-      expect(result.find(f => f.id === 'folder-1')?.characterCount).toBe(5);
-      expect(result.find(f => f.id === 'folder-2')?.characterCount).toBe(3);
+      expect(result.find((f) => f.id === 'folder-1')?.characterCount).toBe(5);
+      expect(result.find((f) => f.id === 'folder-2')?.characterCount).toBe(3);
     });
 
     it('should return nested folder structure', async () => {
@@ -116,18 +116,23 @@ describe('CharacterFolderService Optimization', () => {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([{ maxSortOrder: 0 }]),
       };
-      (db.select as any).mockReturnValueOnce(mockSelectMax);
+      // The parent-ownership check used to live inside an insert-select (which,
+      // projecting 6 of character_folders' 9 columns, Drizzle always rejected -- so
+      // creating a folder inside another folder simply 500'd). It is now its own
+      // query, and finding no row means we never reach the insert at all.
+      const mockSelectParent = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+      };
+      (db.select as any).mockReturnValueOnce(mockSelectMax).mockReturnValueOnce(mockSelectParent);
 
-      // Mock atomic insert with selection
-      const mockReturning = vi.fn().mockResolvedValue([]);
-      const mockSelectInsert = vi.fn().mockReturnValue({ returning: mockReturning });
-      (db.insert as any).mockReturnValue({ select: mockSelectInsert });
+      const mockValues = vi.fn();
+      (db.insert as any).mockReturnValue({ values: mockValues });
 
-      await expect(CharacterFolderService.createFolder(mockUserId, data))
-        .rejects.toThrow();
+      await expect(CharacterFolderService.createFolder(mockUserId, data)).rejects.toThrow();
 
-      expect(db.insert).toHaveBeenCalled();
-      expect(mockSelectInsert).toHaveBeenCalled();
+      expect(mockValues).not.toHaveBeenCalled();
     });
 
     it('should create folder successfully when no parent is provided', async () => {
@@ -164,8 +169,9 @@ describe('CharacterFolderService Optimization', () => {
       const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
       vi.mocked(db.update).mockReturnValue({ set: mockSet } as any);
 
-      await expect(CharacterFolderService.moveCharacterToFolder(characterId, folderId, mockUserId))
-        .rejects.toThrow();
+      await expect(
+        CharacterFolderService.moveCharacterToFolder(characterId, folderId, mockUserId),
+      ).rejects.toThrow();
 
       expect(db.update).toHaveBeenCalled();
     });

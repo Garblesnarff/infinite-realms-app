@@ -25,10 +25,7 @@ import {
 } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 
-import type {
-  Character,
-  NewCharacter,
-} from '../../../../db/schema/index';
+import type { Character, NewCharacter } from '../../../../db/schema/index';
 
 export class CharacterSpellService {
   /**
@@ -42,7 +39,7 @@ export class CharacterSpellService {
       knownSpells?: string[];
       preparedSpells?: string[];
       ritualSpells?: string[];
-    }
+    },
   ): Promise<Character | null> {
     const updates: Partial<NewCharacter> = {};
 
@@ -66,22 +63,27 @@ export class CharacterSpellService {
         ...updates,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(characters.id, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId),
-          exists(
-            db.select({ one: sql`1` })
-              .from(characterPermissions)
-              .where(and(
-                eq(characterPermissions.characterId, characters.id),
-                eq(characterPermissions.userId, userId),
-                inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
-              ))
-          )
-        )
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(characterPermissions)
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                    inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      )
       .returning();
 
     return (updated as Character) || null;
@@ -92,7 +94,10 @@ export class CharacterSpellService {
    */
   static parseSpells(spellString: string | null): string[] {
     if (!spellString || spellString.trim() === '') return [];
-    return spellString.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    return spellString
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
   }
 
   /**
@@ -103,7 +108,7 @@ export class CharacterSpellService {
     characterId: string,
     userId: string,
     spellIds: string[],
-    className: string
+    className: string,
   ): Promise<{ success: boolean; message: string }> {
     // Get class ID
     const [classData] = await db
@@ -125,13 +130,10 @@ export class CharacterSpellService {
         })
         .from(classSpells)
         .innerJoin(spells, eq(classSpells.spellId, spells.id))
-        .where(and(
-          eq(classSpells.classId, classData.id),
-          inArray(classSpells.spellId, spellIds)
-        ));
+        .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
 
       const validSpellIds = new Set(validClassSpells.map((s: { spellId: string }) => s.spellId));
-      const invalidSpellIds = spellIds.filter(id => !validSpellIds.has(id));
+      const invalidSpellIds = spellIds.filter((id) => !validSpellIds.has(id));
 
       if (invalidSpellIds.length > 0) {
         // Get names for invalid spells for better error reporting
@@ -149,71 +151,104 @@ export class CharacterSpellService {
     }
 
     // Clear existing spells with ownership check in WHERE clause for defense-in-depth
-    const deleted = await db.delete(characterSpells).where(
-      and(
-        eq(characterSpells.characterId, characterId),
-        eq(characterSpells.sourceClassId, classData.id),
-        exists(
-          db.select({ one: sql`1` })
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(
-                eq(characters.userId, userId),
-                eq(characters.ownerId, userId),
-                exists(
-                  db.select({ one: sql`1` })
-                    .from(characterPermissions)
-                    .where(and(
-                      eq(characterPermissions.characterId, characters.id),
-                      eq(characterPermissions.userId, userId),
-                      inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
-                    ))
-                )
-              )
-            ))
-        )
+    const deleted = await db
+      .delete(characterSpells)
+      .where(
+        and(
+          eq(characterSpells.characterId, characterId),
+          eq(characterSpells.sourceClassId, classData.id),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(
+                    eq(characters.userId, userId),
+                    eq(characters.ownerId, userId),
+                    exists(
+                      db
+                        .select({ one: sql`1` })
+                        .from(characterPermissions)
+                        .where(
+                          and(
+                            eq(characterPermissions.characterId, characters.id),
+                            eq(characterPermissions.userId, userId),
+                            inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                          ),
+                        ),
+                    ),
+                  ),
+                ),
+              ),
+          ),
+        ),
       )
-    ).returning({ id: characterSpells.id });
+      .returning({ id: characterSpells.id });
 
     let insertedCount = 0;
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth
+    // The ownership check used to ride along inside an insert-select. Its projection
+    // covered 5 of character_spells' 10 columns, so Drizzle rejected the statement
+    // before it was ever sent -- every spell write on this path had been failing
+    // since it shipped. Split into an explicit authorization query plus a plain
+    // insert. The pattern is now banned outright by the insert-select rule in
+    // eslint.config.js.
     if (spellIds.length > 0) {
-      // ⚡ Bolt: Optimized N+1 query pattern by replacing O(N) UNION ALL loop with a single O(1) joined SELECT.
-      // This maintains atomic ownership verification while significantly reducing SQL complexity.
-      const inserted = await db.insert(characterSpells).select(
-        db.select({
-          characterId: sql`${characterId}`,
-          spellId: classSpells.spellId,
-          sourceClassId: sql`${classData.id}`,
-          isPrepared: sql`true`,
-          sourceFeature: sql`'base'`,
-        })
-        .from(classSpells)
-        .innerJoin(characters, and(
-          eq(characters.id, characterId),
-          or(
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId),
-            exists(
-              db.select({ one: sql`1` })
-                .from(characterPermissions)
-                .where(and(
-                  eq(characterPermissions.characterId, characters.id),
-                  eq(characterPermissions.userId, userId),
-                  inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
-                ))
-            )
-          )
-        ))
-        .where(and(
-          eq(classSpells.classId, classData.id),
-          inArray(classSpells.spellId, spellIds)
-        ))
-      ).returning({ id: characterSpells.id });
+      const editable = await db
+        .select({ one: sql`1` })
+        .from(characters)
+        .where(
+          and(
+            eq(characters.id, characterId),
+            or(
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+              exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(characterPermissions)
+                  .where(
+                    and(
+                      eq(characterPermissions.characterId, characters.id),
+                      eq(characterPermissions.userId, userId),
+                      inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                    ),
+                  ),
+              ),
+            ),
+          ),
+        )
+        .limit(1);
 
-      insertedCount = inserted.length;
+      if (editable.length === 0) {
+        throw new NotFoundError('Character', characterId);
+      }
+
+      // Still one query for the spell list rather than N: the insert-select was
+      // reading rows out of class_spells, not just proving ownership.
+      const grantable = await db
+        .select({ spellId: classSpells.spellId })
+        .from(classSpells)
+        .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
+
+      if (grantable.length > 0) {
+        const inserted = await db
+          .insert(characterSpells)
+          .values(
+            grantable.map((row) => ({
+              characterId,
+              spellId: row.spellId,
+              sourceClassId: classData.id,
+              isPrepared: true,
+              sourceFeature: 'base',
+            })),
+          )
+          .returning({ id: characterSpells.id });
+
+        insertedCount = inserted.length;
+      }
     }
 
     // ⚡ Bolt: Verify character existence/ownership only if no rows were affected by DELETE or INSERT.
@@ -226,15 +261,18 @@ export class CharacterSpellService {
             eq(characters.userId, userId),
             eq(characters.ownerId, userId),
             exists(
-              db.select({ one: sql`1` })
+              db
+                .select({ one: sql`1` })
                 .from(characterPermissions)
-                .where(and(
-                  eq(characterPermissions.characterId, characters.id),
-                  eq(characterPermissions.userId, userId),
-                  inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
-                ))
-            )
-          )
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                    inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                  ),
+                ),
+            ),
+          ),
         ),
         columns: { id: true },
       });
@@ -255,21 +293,26 @@ export class CharacterSpellService {
       .from(characterSpells)
       .innerJoin(spells, eq(characterSpells.spellId, spells.id))
       .innerJoin(characters, eq(characterSpells.characterId, characters.id))
-      .where(and(
-        eq(characterSpells.characterId, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId),
-          exists(
-            db.select({ one: sql`1` })
-              .from(characterPermissions)
-              .where(and(
-                eq(characterPermissions.characterId, characters.id),
-                eq(characterPermissions.userId, userId)
-              ))
-          )
-        )
-      ));
+      .where(
+        and(
+          eq(characterSpells.characterId, characterId),
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(characterPermissions)
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      );
 
     // Update the character table columns directly with aggregated results
     await this.updateSpells(characterId, userId, {

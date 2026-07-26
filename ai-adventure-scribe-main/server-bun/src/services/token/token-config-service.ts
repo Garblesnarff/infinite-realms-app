@@ -186,7 +186,7 @@ export class TokenConfigService {
                   ),
                 ),
             ),
-          )
+          ),
         )
         .returning();
 
@@ -199,50 +199,61 @@ export class TokenConfigService {
 
       return updated;
     } else {
-      // Create new config
-      // 🛡️ Sentinel: Atomic insert with ownership check (characterId ownership)
+      // Create new config.
+      // Character-ownership check split out of the insert: as an insert-select this
+      // projected 28 of token_configurations' 32 columns (missing id, monsterId,
+      // createdAt, updatedAt), so Drizzle rejected it and a token configuration
+      // could only ever be updated, never created.
+      const owned = await db
+        .select({ one: sql`1` })
+        .from(characters)
+        .where(
+          and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        )
+        .limit(1);
+
+      if (owned.length === 0) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Character not found',
+        });
+      }
+
       const [created] = await db
         .insert(tokenConfigurations)
-        .select(
-          db
-            .select({
-              characterId: characters.id,
-              imageUrl: sql`${config.imageUrl ?? null}`,
-              avatarUrl: sql`${config.avatarUrl ?? null}`,
-              sizeWidth: sql`${config.sizeWidth ?? '1.0'}`,
-              sizeHeight: sql`${config.sizeHeight ?? '1.0'}`,
-              gridSize: sql`${config.gridSize ?? 'medium'}`,
-              tintColor: sql`${config.tintColor ?? null}`,
-              scale: sql`${config.scale ?? '1.0'}`,
-              opacity: sql`${config.opacity ?? '1.0'}`,
-              borderColor: sql`${config.borderColor ?? null}`,
-              borderWidth: sql`${config.borderWidth ?? 2}`,
-              showNameplate: sql`${config.showNameplate ?? true}`,
-              nameplatePosition: sql`${config.nameplatePosition ?? 'bottom'}`,
-              visionEnabled: sql`${config.visionEnabled ?? false}`,
-              visionRange: sql`${config.visionRange ?? null}`,
-              visionAngle: sql`${config.visionAngle ?? null}`,
-              nightVision: sql`${config.nightVision ?? false}`,
-              darkvisionRange: sql`${config.darkvisionRange ?? null}`,
-              emitsLight: sql`${config.emitsLight ?? false}`,
-              lightRange: sql`${config.lightRange ?? null}`,
-              lightAngle: sql`${config.lightAngle ?? null}`,
-              lightColor: sql`${config.lightColor ?? null}`,
-              lightIntensity: sql`${config.lightIntensity ?? null}`,
-              dimLightRange: sql`${config.dimLightRange ?? null}`,
-              brightLightRange: sql`${config.brightLightRange ?? null}`,
-              movementSpeed: sql`${config.movementSpeed ?? null}`,
-              hasFlying: sql`${config.hasFlying ?? false}`,
-              hasSwimming: sql`${config.hasSwimming ?? false}`,
-            })
-            .from(characters)
-            .where(
-              and(
-                eq(characters.id, characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-              ),
-            ),
-        )
+        .values({
+          characterId,
+          imageUrl: config.imageUrl ?? null,
+          avatarUrl: config.avatarUrl ?? null,
+          sizeWidth: config.sizeWidth ?? '1.0',
+          sizeHeight: config.sizeHeight ?? '1.0',
+          gridSize: config.gridSize ?? 'medium',
+          tintColor: config.tintColor ?? null,
+          scale: config.scale ?? '1.0',
+          opacity: config.opacity ?? '1.0',
+          borderColor: config.borderColor ?? null,
+          borderWidth: config.borderWidth ?? 2,
+          showNameplate: config.showNameplate ?? true,
+          nameplatePosition: config.nameplatePosition ?? 'bottom',
+          visionEnabled: config.visionEnabled ?? false,
+          visionRange: config.visionRange ?? null,
+          visionAngle: config.visionAngle ?? null,
+          nightVision: config.nightVision ?? false,
+          darkvisionRange: config.darkvisionRange ?? null,
+          emitsLight: config.emitsLight ?? false,
+          lightRange: config.lightRange ?? null,
+          lightAngle: config.lightAngle ?? null,
+          lightColor: config.lightColor ?? null,
+          lightIntensity: config.lightIntensity ?? null,
+          dimLightRange: config.dimLightRange ?? null,
+          brightLightRange: config.brightLightRange ?? null,
+          movementSpeed: config.movementSpeed ?? null,
+          hasFlying: config.hasFlying ?? false,
+          hasSwimming: config.hasSwimming ?? false,
+        })
         .returning();
 
       if (!created) {

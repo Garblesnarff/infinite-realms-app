@@ -37,11 +37,14 @@ export class ClassFeatureUsageService {
    * Verify user owns the character.
    * Throws NOT_FOUND to avoid disclosing character existence.
    */
-  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+  private static async verifyCharacterOwnership(
+    characterId: string,
+    userId: string,
+  ): Promise<void> {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       columns: { id: true },
     });
@@ -57,7 +60,7 @@ export class ClassFeatureUsageService {
   static async getFeatureUsage(
     characterId: string,
     featureId: string,
-    userId: string
+    userId: string,
   ): Promise<number | null> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [characterFeature] = await (db as any)
@@ -66,11 +69,13 @@ export class ClassFeatureUsageService {
       })
       .from(characterFeatures)
       .innerJoin(characters, eq(characterFeatures.characterId, characters.id))
-      .where(and(
-        eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(characterFeatures.characterId, characterId),
+          eq(characterFeatures.featureId, featureId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     if (!characterFeature) {
@@ -92,13 +97,16 @@ export class ClassFeatureUsageService {
         eq(characterFeatures.characterId, characterId),
         eq(characterFeatures.featureId, featureId),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
       ),
       with: {
         feature: true,
@@ -145,19 +153,24 @@ export class ClassFeatureUsageService {
     await db
       .update(characterFeatures)
       .set({ usesRemaining: newUsesRemaining })
-      .where(and(
-        eq(characterFeatures.id, characterFeature.id),
-        eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ));
+      .where(
+        and(
+          eq(characterFeatures.id, characterFeature.id),
+          eq(characterFeatures.characterId, characterId),
+          eq(characterFeatures.featureId, featureId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      );
 
     // Log the usage
     await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
@@ -174,7 +187,7 @@ export class ClassFeatureUsageService {
    * Restore features after rest
    */
   static async restoreFeatures(
-    input: RestoreFeaturesInput & { userId: string }
+    input: RestoreFeaturesInput & { userId: string },
   ): Promise<RestoreFeaturesResult> {
     const { characterId, restType, userId } = input;
 
@@ -202,7 +215,7 @@ export class ClassFeatureUsageService {
       RETURNING cfl.feature_name
     `);
 
-    const featuresRestored = restoredRows.map(row => row.feature_name);
+    const featuresRestored = restoredRows.map((row) => row.feature_name);
 
     return {
       featuresRestored,
@@ -218,41 +231,35 @@ export class ClassFeatureUsageService {
     featureId: string,
     userId: string,
     context?: string,
-    sessionId?: string
+    sessionId?: string,
   ): Promise<FeatureUsageLog> {
     // Verify ownership before logging
     const [character] = await db
       .select({ id: characters.id })
       .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
       .limit(1);
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
     }
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // The insert-select repeated the ownership query immediately above it, and its
+    // projection covered 4 of feature_usage_log's 7 columns, so Drizzle threw and no
+    // feature use was ever logged. The check above is the authorization.
     const [log] = await db
       .insert(featureUsageLog)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            featureId: sql`${featureId}`,
-            sessionId: sql`${sessionId || null}`,
-            context: sql`${context || null}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      )
+      .values({
+        characterId,
+        featureId,
+        sessionId: sessionId || null,
+        context: context || null,
+      })
       .returning();
 
     if (!log) {
@@ -266,20 +273,23 @@ export class ClassFeatureUsageService {
    * Get feature usage history
    */
   static async getFeatureUsageHistory(
-    params: FeatureUsageHistoryParams & { userId: string }
+    params: FeatureUsageHistoryParams & { userId: string },
   ): Promise<FeatureUsageLog[]> {
     const { characterId, featureId, sessionId, limit = 50, userId } = params;
 
     const conditions = [
       eq(featureUsageLog.characterId, characterId),
       exists(
-        db.select()
+        db
+          .select()
           .from(characters)
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      )
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          ),
+      ),
     ];
 
     if (featureId) {
@@ -308,7 +318,7 @@ export class ClassFeatureUsageService {
   static async getCharacterFeaturesWithUsage(
     characterId: string,
     userId: string,
-    getCharacterFeatures: (characterId: string, userId: string) => Promise<CharacterFeature[]>
+    getCharacterFeatures: (characterId: string, userId: string) => Promise<CharacterFeature[]>,
   ): Promise<CharacterFeaturesWithUsage> {
     const features = await getCharacterFeatures(characterId, userId);
 

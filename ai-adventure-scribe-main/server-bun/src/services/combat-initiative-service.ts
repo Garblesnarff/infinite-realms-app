@@ -27,11 +27,7 @@ import {
 import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
 import { resetTurnResources } from './combat/combat-turn-resources.js';
 
-import type {
-  CreateParticipantInput,
-  InitiativeRoll,
-  AdvanceTurnResult,
-} from '../types/combat.js';
+import type { CreateParticipantInput, InitiativeRoll, AdvanceTurnResult } from '../types/combat.js';
 
 /**
  * Combat Initiative Service
@@ -44,7 +40,7 @@ export class CombatInitiativeService {
   static async addParticipant(
     encounterId: string,
     input: CreateParticipantInput,
-    userId?: string
+    userId?: string,
   ): Promise<CombatParticipant> {
     if (userId) {
       // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
@@ -60,45 +56,37 @@ export class CombatInitiativeService {
     const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
     const participantType = input.characterId ? 'player' : input.npcId ? 'npc' : 'other';
 
-    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for ownership verification.
-    // This ensures participants can only be added to encounters and linked to entities
-    // the user is authorized to access, in a single atomic database round-trip.
+    // This insert-select projected 8 of combat_participants' 25 columns, so Drizzle
+    // threw before issuing it and no participant could ever be added to an encounter.
+    // Its ownership clause was also redundant: verifyEncounterAccess above runs the
+    // identical query whenever userId is set. All that remains for the userId-less
+    // path is proving the encounter exists at all.
+    const [encounter] = await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId))
+      .limit(1);
+
+    if (!encounter) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Combat encounter', encounterId);
+    }
+
     const [participant] = await db
       .insert(combatParticipants)
-      .select(
-        db
-          .select({
-            encounterId: sql`${encounterId}`,
-            characterId: sql`${input.characterId || null}`,
-            npcId: sql`${input.npcId || null}`,
-            name: sql`${input.name}`,
-            initiative: sql`${initiative}`,
-            initiativeModifier: sql`${input.initiativeModifier}`,
-            turnOrder: sql`0`,
-            participantType: sql`${participantType}`,
-          })
-          .from(combatEncounters)
-          .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-          .where(
-            and(
-              eq(combatEncounters.id, encounterId),
-              userId
-                ? or(
-                    eq(campaigns.userId, userId),
-                    eq(characters.userId, userId),
-                    eq(characters.ownerId, userId),
-                  )
-                : sql`true`,
-            ),
-          )
-          .limit(1),
-      )
+      .values({
+        encounterId,
+        characterId: input.characterId || null,
+        npcId: input.npcId || null,
+        name: input.name,
+        initiative,
+        initiativeModifier: input.initiativeModifier,
+        turnOrder: 0,
+        participantType,
+      })
       .returning();
 
     if (!participant) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
       throw new NotFoundError('Combat encounter', encounterId);
     }
 
@@ -118,13 +106,11 @@ export class CombatInitiativeService {
     participantId: string,
     roll?: number,
     modifier?: number,
-    userId?: string
+    userId?: string,
   ): Promise<InitiativeRoll> {
     // ⚡ Bolt: Parallelize ownership verification and participant retrieval to reduce latency
     const [_, participant] = await Promise.all([
-      userId
-        ? verifyParticipantOwnership(participantId, encounterId, userId)
-        : Promise.resolve(),
+      userId ? verifyParticipantOwnership(participantId, encounterId, userId) : Promise.resolve(),
       db.query.combatParticipants.findFirst({
         where: (cp, { eq, and }) => and(eq(cp.id, participantId), eq(cp.encounterId, encounterId)),
       }),
@@ -274,7 +260,7 @@ export class CombatInitiativeService {
     const { nextTurnOrder, newRound, newRoundNumber } = InitiativeMechanics.calculateNextTurn(
       encounter.currentTurnOrder,
       participants.length,
-      encounter.currentRound
+      encounter.currentRound,
     );
 
     // Update encounter
@@ -285,16 +271,15 @@ export class CombatInitiativeService {
         currentRound: newRoundNumber,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(combatEncounters.id, encounterId),
-        eq(combatEncounters.status, 'active')
-      ));
+      .where(and(eq(combatEncounters.id, encounterId), eq(combatEncounters.status, 'active')));
 
     // Get new current participant from memory
     const currentParticipant = participants[nextTurnOrder];
 
     if (!currentParticipant) {
-      throw new BusinessLogicError('No participant found at turn order position', { nextTurnOrder });
+      throw new BusinessLogicError('No participant found at turn order position', {
+        nextTurnOrder,
+      });
     }
 
     await resetTurnResources(currentParticipant.id, newRoundNumber);
@@ -468,12 +453,11 @@ export class CombatInitiativeService {
    * Update participant HP
    * Note: HP is now tracked in combatParticipantStatus table
    */
-  static async updateParticipantHP(
-    _participantId: string,
-    _hpCurrent: number
-  ): Promise<void> {
+  static async updateParticipantHP(_participantId: string, _hpCurrent: number): Promise<void> {
     // This method needs to be updated to use combatParticipantStatus table
     // For now, this is a placeholder to maintain API compatibility
-    throw new Error('updateParticipantHP needs to be implemented with combatParticipantStatus table');
+    throw new Error(
+      'updateParticipantHP needs to be implemented with combatParticipantStatus table',
+    );
   }
 }

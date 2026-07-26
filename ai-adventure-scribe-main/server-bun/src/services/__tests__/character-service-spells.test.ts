@@ -28,7 +28,7 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     eq: vi.fn(),
     and: vi.fn(),
     or: vi.fn(),
@@ -57,13 +57,15 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
       unionAll: vi.fn().mockImplementation(() => createMockSelect()),
       then: vi.fn((cb) => Promise.resolve(cb([]))),
       // Add support for async/await
-      [Symbol.iterator]: function* () { yield Promise.resolve([]); },
+      [Symbol.iterator]: function* () {
+        yield Promise.resolve([]);
+      },
     });
 
     (db.select as any).mockImplementation(createMockSelect);
 
     // Make db.select also a thenable for direct await
-    const mockSelect = (db.select as any);
+    const mockSelect = db.select as any;
     mockSelect.mockReturnValue({
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -88,19 +90,23 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
     // 2. Delete mock returns empty array (no rows affected)
     (db.delete as any).mockReturnValue({
       where: vi.fn().mockReturnThis(),
-      returning: vi.fn().mockResolvedValue([])
+      returning: vi.fn().mockResolvedValue([]),
     });
 
     // 3. Ownership check fallback returns null
     (db.query.characters.findFirst as any).mockResolvedValue(null);
 
-    await expect(CharacterSpellService.saveCharacterSpells(mockCharacterId, mockUserId, [], 'Wizard'))
-      .rejects.toThrow(NotFoundError);
+    await expect(
+      CharacterSpellService.saveCharacterSpells(mockCharacterId, mockUserId, [], 'Wizard'),
+    ).rejects.toThrow(NotFoundError);
   });
 
   it('should call delete and insert if character is owned', async () => {
     // 1. Ownership check
-    (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId, userId: mockUserId });
+    (db.query.characters.findFirst as any).mockResolvedValue({
+      id: mockCharacterId,
+      userId: mockUserId,
+    });
 
     // 2. Class lookup mock
     const mockClassSelect = {
@@ -115,46 +121,63 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
       from: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
-      then: (onFullfilled: any) => Promise.resolve([{ spellId: 'spell-1', spellName: 'Magic Missile' }]).then(onFullfilled),
+      then: (onFullfilled: any) =>
+        Promise.resolve([{ spellId: 'spell-1', spellName: 'Magic Missile' }]).then(onFullfilled),
     };
 
-    // 3. Spells lookup mock (for consistency check at the end)
-    const mockSpellsSelect = {
+    // The insert used to be an insert-select carrying the ownership check in its
+    // subquery -- and, projecting 5 of character_spells' 10 columns, Drizzle
+    // rejected it, so this write never ran. It is now an explicit ownership query
+    // plus a class_spells lookup plus a plain insert.
+    //
+    // Those two extra statements cannot be positioned with mockReturnValueOnce: the
+    // surrounding DELETE and ownership clauses build nested exists() subqueries, each
+    // of which is its own db.select call, so the call index of any given statement is
+    // not stable. Only the first two calls are deterministic; everything after falls
+    // through to a permissive default whose single row satisfies both readers
+    // (`editable` wants any row, `grantable` reads `.spellId`).
+    const permissiveSelect = () => ({
       from: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
-      then: (onFullfilled: any) => Promise.resolve([
-        { name: 'Fireball', level: 3 },
-        { name: 'Light', level: 0 }
-      ]).then(onFullfilled),
-    };
+      limit: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      then: (onFulfilled: any) =>
+        Promise.resolve([{ one: 1, spellId: 'spell-1' }]).then(onFulfilled),
+    });
 
     (db.select as any)
+      .mockImplementation(permissiveSelect)
       .mockReturnValueOnce(mockClassSelect) // For class lookup
-      .mockReturnValueOnce(mockValidSpellsSelect) // For validation
-      .mockReturnValueOnce(mockSpellsSelect); // For sync fetch
+      .mockReturnValueOnce(mockValidSpellsSelect); // For validation
 
     // 4. Delete mock
     (db.delete as any).mockReturnValue({
       where: vi.fn().mockReturnThis(),
-      returning: vi.fn().mockResolvedValue([{ id: 'deleted-123' }])
+      returning: vi.fn().mockResolvedValue([{ id: 'deleted-123' }]),
     });
 
     // 5. Insert mock
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
-      returning: vi.fn().mockResolvedValue([{ id: 'log-123' }])
+      returning: vi.fn().mockResolvedValue([{ id: 'log-123' }]),
     });
 
     // 6. Update mock (called by updateSpells)
     (db.update as any).mockReturnValue({
       set: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
-      returning: vi.fn().mockResolvedValue([{ id: mockCharacterId }])
+      returning: vi.fn().mockResolvedValue([{ id: mockCharacterId }]),
     });
 
-    const result = await CharacterSpellService.saveCharacterSpells(mockCharacterId, mockUserId, ['spell-1'], 'Wizard');
+    const result = await CharacterSpellService.saveCharacterSpells(
+      mockCharacterId,
+      mockUserId,
+      ['spell-1'],
+      'Wizard',
+    );
 
     expect(result.success).toBe(true);
     expect(db.delete).toHaveBeenCalled();

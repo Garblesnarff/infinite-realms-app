@@ -15,7 +15,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { claimTurnAction, setDefensiveAction } from './combat-turn-resources.js';
+import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import {
@@ -289,12 +289,23 @@ export async function executeCombatIntent(
         userId,
       );
     } else if (intent.type === 'dash') {
-      await claimTurnAction(intent.actorId, encounterId, intent.expectedVersion);
-      result = await grantTacticalDash(encounter.sessionId, intent.actorId);
+      result = await claimTurnActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        () => grantTacticalDash(encounter.sessionId, intent.actorId),
+      );
     } else if (intent.type === 'dodge' || intent.type === 'disengage') {
-      await claimTurnAction(intent.actorId, encounterId, intent.expectedVersion);
-      await setDefensiveAction(intent.actorId, intent.type);
-      result = { applied: true, action: intent.type };
+      const action = intent.type;
+      result = await claimTurnActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          await setDefensiveAction(intent.actorId, action);
+          return { applied: true, action };
+        },
+      );
     } else {
       const turn = await CombatInitiativeService.advanceTurn(encounterId, userId);
       await resetTacticalMovementForTurn(encounter.sessionId, turn.currentParticipant.id);
@@ -333,6 +344,19 @@ export async function executeCombatIntent(
       source,
       reason: error instanceof Error ? error.message : 'unknown',
     });
+    // A killing blow can commit and the call still throw on the way out -- the HP
+    // write lands, then something downstream fails. The success path is the only
+    // thing that calls endCombatIfResolved, so without this the last hostile is at
+    // 0 HP and the encounter never ends: no living enemy left to attack, so no
+    // later damaging action to re-trigger the check either.
+    //
+    // Guarded and swallowed on purpose. This is recovery, and recovery must not
+    // replace the error that caused it.
+    try {
+      await endCombatIfResolved(encounterId, userId);
+    } catch (endError) {
+      logger.warn({ msg: 'COMBAT_END_CHECK_AFTER_FAILURE_FAILED', endError, encounterId });
+    }
     throw error;
   }
 }

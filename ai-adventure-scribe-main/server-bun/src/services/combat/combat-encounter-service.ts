@@ -9,10 +9,7 @@
 
 import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 
-import {
-  verifyCharactersAccessBatch,
-  verifyNPCsAccessBatch,
-} from './combat-authorization.js';
+import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
 import { GENERIC_NPC_STATS, resolveSrdMonsterStats } from './srd-monster-resolution.js';
 import { db } from '../../../../db/client';
@@ -28,14 +25,10 @@ import {
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../../db/schema/index';
-import { NotFoundError, InternalServerError } from '../../lib/errors.js';
+import { NotFoundError } from '../../lib/errors.js';
 
 import type { EntitySize } from '../../tactical/types.js';
-import type {
-  CombatState,
-  CreateParticipantInput,
-  TurnOrderEntry,
-} from '../../types/combat.js';
+import type { CombatState, CreateParticipantInput, TurnOrderEntry } from '../../types/combat.js';
 
 export class CombatEncounterService {
   /**
@@ -73,55 +66,52 @@ export class CombatEncounterService {
       ]);
     }
 
-    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for session ownership verification.
-    // This ensures combat encounters can only be started for authorized sessions in a single round-trip,
-    // while masking resource existence and preventing race conditions.
+    // Session-ownership check split out of the insert.
     //
-    // ⚠️ Every column of `combat_encounters` must be projected here, in table-definition
-    // order. Drizzle's insert-select validates the projection against the table and throws
-    // synchronously ("selected fields are not the same or are in a different order compared
-    // to the table definition") otherwise — which is exactly how this endpoint 500'd on
-    // every single call. Adding a column to the table means adding it here too.
+    // This call site was repaired in 33537a67 by extending the projection to all 13
+    // columns of combat_encounters -- correct, but load-bearing on a comment: adding
+    // a column to the table silently re-broke it, and the failure only ever showed up
+    // as a 500 in production. The check is separable, so it is now separate, and the
+    // insert-select ban in eslint.config.js stops the pattern coming back.
+    const [session] = await db
+      .select({ id: gameSessions.id })
+      .from(gameSessions)
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(
+        and(
+          eq(gameSessions.id, sessionId),
+          userId
+            ? or(
+                eq(campaigns.userId, userId),
+                eq(characters.userId, userId),
+                eq(characters.ownerId, userId),
+              )
+            : sql`true`,
+        ),
+      )
+      .limit(1);
+
+    if (!session) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Session', sessionId);
+    }
+
     const [encounter] = await db
       .insert(combatEncounters)
-      .select(
-        db
-          .select({
-            id: sql`gen_random_uuid()`,
-            sessionId: gameSessions.id,
-            status: sql`${'active'}`,
-            currentRound: sql`${surpriseRound ? 0 : 1}`,
-            currentTurnOrder: sql`0`,
-            version: sql`1`,
-            location: sql`null::text`,
-            difficulty: sql`null::text`,
-            experienceAwarded: sql`null::integer`,
-            startedAt: sql`now()`,
-            endedAt: sql`null::timestamptz`,
-            createdAt: sql`now()`,
-            updatedAt: sql`now()`,
-          })
-          .from(gameSessions)
-          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-          .where(
-            and(
-              eq(gameSessions.id, sessionId),
-              userId
-                ? or(
-                    eq(campaigns.userId, userId),
-                    eq(characters.userId, userId),
-                    eq(characters.ownerId, userId),
-                  )
-                : sql`true`,
-            ),
-          )
-          .limit(1),
-      )
+      .values({
+        sessionId: session.id,
+        status: 'active',
+        currentRound: surpriseRound ? 0 : 1,
+        currentTurnOrder: 0,
+        version: 1,
+        location: null,
+        difficulty: null,
+        experienceAwarded: null,
+      })
       .returning();
 
     if (!encounter) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
       throw new NotFoundError('Session', sessionId);
     }
 
@@ -130,19 +120,25 @@ export class CombatEncounterService {
 
     // Batch insert all participants (single query instead of N queries)
     if (participantInputs.length > 0) {
-      const characterIds = participantInputs.flatMap((input) => input.characterId ? [input.characterId] : []);
-      const npcIds = participantInputs.flatMap((input) => input.npcId ? [input.npcId] : []);
+      const characterIds = participantInputs.flatMap((input) =>
+        input.characterId ? [input.characterId] : [],
+      );
+      const npcIds = participantInputs.flatMap((input) => (input.npcId ? [input.npcId] : []));
       const [characterRows, npcRows] = await Promise.all([
-        characterIds.length ? db.select({ character: characters, stats: characterStats })
-          .from(characters).leftJoin(characterStats, eq(characters.id, characterStats.characterId))
-          .where(inArray(characters.id, characterIds)) : [],
+        characterIds.length
+          ? db
+              .select({ character: characters, stats: characterStats })
+              .from(characters)
+              .leftJoin(characterStats, eq(characters.id, characterStats.characterId))
+              .where(inArray(characters.id, characterIds))
+          : [],
         npcIds.length ? db.select().from(npcs).where(inArray(npcs.id, npcIds)) : [],
       ]);
       const charactersById = new Map(characterRows.map((row) => [row.character.id, row]));
       const npcsById = new Map(npcRows.map((row) => [row.id, row]));
 
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
-      const participantsWithInitiative = participantInputs.map(input => {
+      const participantsWithInitiative = participantInputs.map((input) => {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
         const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;
@@ -159,9 +155,12 @@ export class CombatEncounterService {
           input.characterId || input.npcId
             ? { armorClass: 10, maxHp: 10, speed: 30 }
             : (monster ?? GENERIC_NPC_STATS);
-        const dexterity = Number(character?.stats?.dexterity ?? npcStats.dexterity ?? npcStats.dex ?? 10);
+        const dexterity = Number(
+          character?.stats?.dexterity ?? npcStats.dexterity ?? npcStats.dex ?? 10,
+        );
         const initiativeModifier = Number(
-          character?.stats?.initiativeBonus ?? npcStats.initiativeModifier ??
+          character?.stats?.initiativeBonus ??
+            npcStats.initiativeModifier ??
             monster?.initiativeModifier ??
             // The client already computed the PC's DEX modifier; honour it rather than
             // silently zeroing initiative when no character_stats row exists.
@@ -172,10 +171,19 @@ export class CombatEncounterService {
           character?.stats?.armorClass ?? npcStats.armorClass ?? npcStats.ac ?? fallback.armorClass,
         );
         const maxHp = Number(
-          character?.stats?.maxHitPoints ?? npcStats.maxHp ?? npcStats.hitPoints ?? input.hpMax ??
+          character?.stats?.maxHitPoints ??
+            npcStats.maxHp ??
+            npcStats.hitPoints ??
+            input.hpMax ??
             fallback.maxHp,
         );
-        const currentHp = Number(character?.stats?.currentHitPoints ?? npcStats.currentHp ?? npcStats.hitPoints ?? input.hpCurrent ?? maxHp);
+        const currentHp = Number(
+          character?.stats?.currentHitPoints ??
+            npcStats.currentHp ??
+            npcStats.hitPoints ??
+            input.hpCurrent ??
+            maxHp,
+        );
         const speed = Number(character?.stats?.speed ?? npcStats.speed ?? fallback.speed);
         const roll = rollD20();
         const initiative = InitiativeMechanics.calculateInitiative(roll, initiativeModifier);
@@ -194,13 +202,13 @@ export class CombatEncounterService {
           damageImmunities: monster?.damageImmunities ?? [],
           damageVulnerabilities: monster?.damageVulnerabilities ?? [],
           participantType: input.characterId
-            ? 'player' as const
+            ? ('player' as const)
             : input.npcId
-              ? 'npc' as const
-              // 'monster' (not 'other') is what the combat UI filters on for enemies.
-              : input.monsterId
-                ? 'monster' as const
-                : 'other' as const,
+              ? ('npc' as const)
+              : // 'monster' (not 'other') is what the combat UI filters on for enemies.
+                input.monsterId
+                ? ('monster' as const)
+                : ('other' as const),
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
       });
@@ -217,7 +225,10 @@ export class CombatEncounterService {
         }),
       );
 
-      const insertedParticipants = await db.insert(combatParticipants).values(participantValues).returning();
+      const insertedParticipants = await db
+        .insert(combatParticipants)
+        .values(participantValues)
+        .returning();
       // combat_participants has no monster column, so the SRD size resolved above cannot be
       // re-derived from the row. Carry it out by participant id for tactical map generation.
       // Keyed on turnOrder rather than array position so it never depends on RETURNING order.
@@ -228,28 +239,35 @@ export class CombatEncounterService {
         participantSizes[inserted.id] =
           sizeByTurnOrder.get(inserted.turnOrder) ?? GENERIC_NPC_STATS.size;
       }
-      const currentHpByEntity = new Map(sortedValues.map((participant) => [
-        participant.characterId ?? participant.npcId ?? participant.name,
-        participant.currentHp,
-      ]));
-      await db.insert(combatParticipantStatus).values(insertedParticipants.map((participant) => ({
-        participantId: participant.id,
-        currentHp: currentHpByEntity.get(participant.characterId ?? participant.npcId ?? participant.name) ?? participant.maxHp,
-        maxHp: participant.maxHp,
-      })));
+      const currentHpByEntity = new Map(
+        sortedValues.map((participant) => [
+          participant.characterId ?? participant.npcId ?? participant.name,
+          participant.currentHp,
+        ]),
+      );
+      await db.insert(combatParticipantStatus).values(
+        insertedParticipants.map((participant) => ({
+          participantId: participant.id,
+          currentHp:
+            currentHpByEntity.get(
+              participant.characterId ?? participant.npcId ?? participant.name,
+            ) ?? participant.maxHp,
+          maxHp: participant.maxHp,
+        })),
+      );
       // Ensure participants are sorted by turnOrder to match getCombatState behavior
       participants = insertedParticipants.sort((a, b) => a.turnOrder - b.turnOrder);
     }
 
     // ⚡ Bolt: Construct CombatState in-memory to avoid redundant fetch of just-inserted data.
     // This reduces database round-trips from 6 down to 3.
-    const activeParticipants = participants.filter(p => p.isActive);
+    const activeParticipants = participants.filter((p) => p.isActive);
     const currentParticipant = activeParticipants[0] || null;
 
     const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(
       activeParticipants,
       0,
-      currentParticipant?.id || null
+      currentParticipant?.id || null,
     );
 
     return {
@@ -361,14 +379,14 @@ export class CombatEncounterService {
     const { participants, ...encounter } = encounterWithParticipants;
 
     // Filter active participants and determine current turn in-memory
-    const activeParticipants = participants.filter(p => p.isActive);
+    const activeParticipants = participants.filter((p) => p.isActive);
     const currentParticipant = activeParticipants[encounter.currentTurnOrder] || null;
 
     // Build turn order entries in-memory
     const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(
       activeParticipants,
       encounter.currentTurnOrder,
-      currentParticipant?.id || null
+      currentParticipant?.id || null,
     );
 
     return {

@@ -10,21 +10,13 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, isNotNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, isNotNull, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
-import {
-  characterPermissions,
-  characterStats,
-  characters,
-} from '../../../db/schema/index';
+import { characterPermissions, characterStats, characters } from '../../../db/schema/index';
 import { InternalServerError } from '../lib/errors.js';
 
-import type {
-  Character,
-  CharacterPermission,
-  PermissionLevel,
-} from '../../../db/schema/index';
+import type { Character, CharacterPermission, PermissionLevel } from '../../../db/schema/index';
 
 export class CharacterPermissionService {
   /**
@@ -33,7 +25,7 @@ export class CharacterPermissionService {
   static async checkPermission(
     characterId: string,
     userId: string,
-    requiredLevel?: 'viewer' | 'editor' | 'owner'
+    requiredLevel?: 'viewer' | 'editor' | 'owner',
   ): Promise<{ hasAccess: boolean; permission?: CharacterPermission; isOwner: boolean }> {
     // ⚡ Bolt: Optimized to use a single query with leftJoin to avoid redundant 1+1 query pattern.
     // This improves performance for every authorization check by reducing database round-trips.
@@ -48,17 +40,19 @@ export class CharacterPermissionService {
         characterPermissions,
         and(
           eq(characterPermissions.characterId, characters.id),
-          eq(characterPermissions.userId, userId)
-        )
+          eq(characterPermissions.userId, userId),
+        ),
       )
-      .where(and(
-        eq(characters.id, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId),
-          isNotNull(characterPermissions.id)
-        )
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            isNotNull(characterPermissions.id),
+          ),
+        ),
+      )
       .limit(1);
 
     if (!result) {
@@ -100,7 +94,7 @@ export class CharacterPermissionService {
     characterId: string,
     userId: string,
     targetUserId: string,
-    permission: PermissionLevel
+    permission: PermissionLevel,
   ): Promise<CharacterPermission> {
     // 🛡️ Sentinel: Combined ownership and existence check to prevent IDOR and race conditions.
     // Use an atomic query to verify the requester owns the character and check for existing permissions.
@@ -114,14 +108,14 @@ export class CharacterPermissionService {
         characterPermissions,
         and(
           eq(characterPermissions.characterId, characters.id),
-          eq(characterPermissions.userId, targetUserId)
-        )
+          eq(characterPermissions.userId, targetUserId),
+        ),
       )
       .where(
         and(
           eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        )
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
       )
       .limit(1);
 
@@ -140,27 +134,21 @@ export class CharacterPermissionService {
       });
     }
 
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // The insert-select repeated, verbatim, the ownership query already run above --
+    // and since its projection covered 6 of character_permissions' 8 columns,
+    // Drizzle threw before sending anything and sharing a character never worked.
+    // The check above is the authorization; this is just the write.
+    const canEdit = permission === 'editor' || permission === 'owner';
     const [newPermission] = await db
       .insert(characterPermissions)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            userId: sql`${targetUserId}`,
-            permissionLevel: sql`${permission}`,
-            canControlToken: sql`${permission === 'editor' || permission === 'owner'}`,
-            canEditSheet: sql`${permission === 'editor' || permission === 'owner'}`,
-            grantedBy: sql`${userId}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      )
+      .values({
+        characterId,
+        userId: targetUserId,
+        permissionLevel: permission,
+        canControlToken: canEdit,
+        canEditSheet: canEdit,
+        grantedBy: userId,
+      })
       .returning();
 
     if (!newPermission) {
@@ -177,7 +165,7 @@ export class CharacterPermissionService {
     characterId: string,
     userId: string,
     targetUserId: string,
-    permission: PermissionLevel
+    permission: PermissionLevel,
   ): Promise<CharacterPermission> {
     // 🛡️ Sentinel: Atomic update with inline ownership check (must be owner to modify permissions).
     const [updated] = await db
@@ -198,11 +186,11 @@ export class CharacterPermissionService {
               .where(
                 and(
                   eq(characters.id, characterId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                )
-              )
-          )
-        )
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
       )
       .returning();
 
@@ -223,7 +211,7 @@ export class CharacterPermissionService {
   static async revokePermission(
     characterId: string,
     userId: string,
-    targetUserId: string
+    targetUserId: string,
   ): Promise<boolean> {
     // 🛡️ Sentinel: Atomic delete with inline ownership check (must be owner to revoke permissions).
     const result = await db
@@ -239,11 +227,11 @@ export class CharacterPermissionService {
               .where(
                 and(
                   eq(characters.id, characterId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                )
-              )
-          )
-        )
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
       )
       .returning({ id: characterPermissions.id });
 
@@ -253,7 +241,9 @@ export class CharacterPermissionService {
   /**
    * List all characters shared with a user
    */
-  static async listSharedCharacters(userId: string): Promise<Array<Character & { permission: CharacterPermission }>> {
+  static async listSharedCharacters(
+    userId: string,
+  ): Promise<Array<Character & { permission: CharacterPermission }>> {
     // ⚡ Bolt: Consolidated permission check, character retrieval, and stats into a single joined query.
     // This eliminates the N+1 problem for shared characters by eager-loading stats (HP, attributes)
     // needed for the character selection UI.
@@ -292,7 +282,7 @@ export class CharacterPermissionService {
    */
   static async listPermissions(
     characterId: string,
-    userId: string
+    userId: string,
   ): Promise<CharacterPermission[]> {
     // 🛡️ Sentinel: Incorporate ownership check directly into the query for defense-in-depth.
     // We use a join to verify ownership while fetching permissions in a single round-trip.
@@ -307,8 +297,8 @@ export class CharacterPermissionService {
       .where(
         and(
           eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        )
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
       );
 
     if (results.length === 0) {
@@ -320,8 +310,6 @@ export class CharacterPermissionService {
     }
 
     // Filter out null permissions (caused by leftJoin when character has no permissions)
-    return results
-      .map((r) => r.permission)
-      .filter((p): p is CharacterPermission => p !== null);
+    return results.map((r) => r.permission).filter((p): p is CharacterPermission => p !== null);
   }
 }

@@ -59,34 +59,38 @@ export class DrawingService {
     userId: string,
     data: CreateDrawingData,
   ): Promise<SceneDrawing> {
-    // ⚡ Bolt: Optimized to use a single atomic INSERT ... SELECT query for ownership verification.
-    // This reduces database round-trips from 2 to 1 and prevents cross-scene unauthorized writes.
+    // Scene-ownership check split out of the insert. As an insert-select this
+    // projected 12 of scene_drawings' 15 columns and Drizzle rejected it, so no
+    // drawing was ever created.
+    const owned = await db
+      .select({ one: sql`1` })
+      .from(scenes)
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      .limit(1);
+
+    if (owned.length === 0) {
+      throw new NotFoundError('Scene', sceneId);
+    }
+
     const [drawing] = await db
       .insert(sceneDrawings)
-      .select(
-        db
-          .select({
-            sceneId: sql`${sceneId}`,
-            createdBy: sql`${userId}`,
-            drawingType: sql`${data.drawingType}`,
-            // Use JSON.stringify for complex pointsData array to ensure correct JSONB casting
-            pointsData: sql`${JSON.stringify(data.pointsData)}::jsonb`,
-            strokeColor: sql`${data.strokeColor}`,
-            strokeWidth: sql`${data.strokeWidth}`,
-            fillColor: sql`${data.fillColor ?? null}`,
-            fillOpacity: sql`${data.fillOpacity ?? 0}`,
-            zIndex: sql`${data.zIndex ?? 0}`,
-            textContent: sql`${data.textContent ?? null}`,
-            fontSize: sql`${data.fontSize ?? null}`,
-            fontFamily: sql`${data.fontFamily ?? null}`,
-          })
-          .from(scenes)
-          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId))),
-      )
+      .values({
+        sceneId,
+        createdBy: userId,
+        drawingType: data.drawingType,
+        pointsData: data.pointsData,
+        strokeColor: data.strokeColor,
+        strokeWidth: data.strokeWidth,
+        fillColor: data.fillColor ?? null,
+        fillOpacity: data.fillOpacity ?? 0,
+        zIndex: data.zIndex ?? 0,
+        textContent: data.textContent ?? null,
+        fontSize: data.fontSize ?? null,
+        fontFamily: data.fontFamily ?? null,
+      })
       .returning();
 
     if (!drawing) {
-      // If no row was inserted, it means the SELECT returned zero rows (unauthorized or scene not found)
       throw new NotFoundError('Scene', sceneId);
     }
 
