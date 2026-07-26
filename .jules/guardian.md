@@ -291,3 +291,7 @@
 ## 2026-07-23 - [Vitest Hoisting & Voice Profile Service]
 **Learning:** Any shared mock variables referred to inside hoisted `vi.mock` modules must be declared inside a `vi.hoisted()` block, otherwise early reference errors occur during execution. Additionally, discovered that `voiceProfileService.upsertVoiceProfile` catches its own thrown database/payload exceptions internally and logs them, returning a `null` value to the caller rather than propagating/rejecting.
 **Action:** When writing test suites in Vitest with hoisted mocks, always leverage `vi.hoisted` to declare spies or mock handlers cleanly. Ensure test assertions for upsert errors match the true codebase behavior of returning a `null` resolution.
+
+## 2026-07-26 - [React Hook with Array Dependencies / Infinite Loops]
+**Learning:** When writing unit tests for custom React hooks that track array/object dependencies (such as `useSpellSelectionValidation`), passing inline arrays (e.g. `selectedCantrips: ['cantrip-1']`) directly into options inside the `renderHook` callback instantiates new array references on every single render. This triggers effect hooks to loop infinitely and hang tests.
+**Action:** Always supply stable array/object references from outside the `renderHook` scope, or memoize them, to ensure referential stability and prevent infinite rendering loops.
