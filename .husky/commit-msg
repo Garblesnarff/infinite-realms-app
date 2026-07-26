@@ -1,5 +1,26 @@
 #!/bin/bash
-# Run commitlint from the subdirectory but reference the correct commit message file
-GIT_ROOT="$(git rev-parse --show-toplevel)"
+# Run commitlint from the subdirectory that holds its config, against the message
+# file git actually handed us.
+#
+# git passes that file as $1, relative to the repo root. It is only
+# .git/COMMIT_EDITMSG for a plain `git commit` -- rebase reword, cherry-pick,
+# merge, `commit -F`, and linked worktrees all use a different path, and in a
+# worktree .git is a file rather than a directory. Hardcoding
+# "$GIT_ROOT/.git/COMMIT_EDITMSG" therefore linted a stale message in every one of
+# those cases, silently passing invalid ones. $1 is resolved to an absolute path
+# up front, before the `cd` below changes what a relative path means.
+GIT_ROOT="$(git rev-parse --show-toplevel)" || exit 1
+
+case "${1-}" in
+  "") echo "commit-msg: git passed no message file" >&2; exit 1 ;;
+  /*) MSG_FILE="$1" ;;
+  *)  MSG_FILE="$GIT_ROOT/$1" ;;
+esac
+
+if [ ! -f "$MSG_FILE" ]; then
+  echo "commit-msg: message file not found: $MSG_FILE" >&2
+  exit 1
+fi
+
 cd "$GIT_ROOT/ai-adventure-scribe-main" || exit 1
-bunx commitlint --edit "$GIT_ROOT/.git/COMMIT_EDITMSG"
+exec bunx commitlint --edit "$MSG_FILE"
