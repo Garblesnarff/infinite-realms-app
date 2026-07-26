@@ -38,18 +38,41 @@ describe('CombatRulesPrompts', () => {
   });
 
   describe('buildCombatRollRequirementsSection', () => {
-    it('reserves roll_requests for saves and checks during combat', () => {
+    /**
+     * This assertion is the inverse of the one it replaces, deliberately.
+     *
+     * It used to demand that no attack example appear here, on run 8's reasoning that examples
+     * beat instructions and the old examples taught the wrong channel. Run 9 emptied the
+     * prompt of attack examples and the model stopped emitting structured attacks entirely —
+     * twenty-three of them in pure prose across thirty turns. The example is the elicitation;
+     * the server translates whichever channel arrives. So it is required here now.
+     */
+    it('teaches attacks, saves, and checks as one coherent roll_requests contract', () => {
       const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
 
       expect(section).toContain('<combat_roll_requirements>');
       expect(section).toContain('`roll_requests` array');
       expect(section).toContain('"type": "save"');
       expect(section).toContain('"type": "check"');
-      // Attacks moved to combat_actions; teaching an attack example here is what produced the
-      // prose attack rolls that never reached the engine at all.
-      expect(section).not.toContain('"type": "attack"');
-      expect(section).toContain('resolved by the engine');
+      expect(section).toContain('"type": "attack"');
+      // The example must be worked, not gestured at: a real purpose naming both digest ids.
+      expect(section).toContain('"purpose": "the-seeker attacks shadow-roach-1 with longsword"');
+      // ...and it must not reintroduce the contradiction it is replacing.
+      expect(section).not.toMatch(/saving throws and ability checks ONLY/i);
+      expect(section).toContain('INTENTIONAL_ELICITATION_DIALECT');
+      expect(section).toContain('resolves each one');
       expect(section).toContain('</combat_roll_requirements>');
+    });
+
+    it('keeps combat_actions documented as an equally valid channel', () => {
+      const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
+      expect(section).toContain('combat_actions');
+      expect(section).toMatch(/resolved identically|Either channel works/);
+    });
+
+    it('names the failure the floor exists to catch: declaring nothing at all', () => {
+      const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
+      expect(section).toMatch(/appears in neither array is an attack the engine never rolled/);
     });
   });
 
@@ -58,7 +81,7 @@ describe('CombatRulesPrompts', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
       expect(section).toContain('<spatial_turn_contract>');
-      expect(section).toContain('declared in `combat_actions`');
+      expect(section).toContain('`roll_requests` entry with `"type": "attack"`');
       expect(section).toContain('walks the attacker');
       // The old instruction — emit a move yourself before attacking — is what the model
       // ignored for thirty turns. It must not survive anywhere in this section.
@@ -67,12 +90,28 @@ describe('CombatRulesPrompts', () => {
       expect(section).toContain('</spatial_turn_contract>');
     });
 
+    /**
+     * This section and <combat_roll_requirements> must teach the SAME channel. Run 8 spent
+     * eleven correctives on a prompt where one block demanded `combat_actions` while another
+     * still worked an example in `roll_requests`; the model followed the example. Their
+     * agreement is the property under test, not the channel they happen to agree on.
+     */
+    it('is written in the same dialect the roll requirements block teaches', () => {
+      const contract = CombatRulesPrompts.buildSpatialTurnContractSection();
+      const requirements = CombatRulesPrompts.buildCombatRollRequirementsSection();
+      for (const section of [contract, requirements]) {
+        expect(section).toContain('INTENTIONAL_ELICITATION_DIALECT');
+        expect(section).toContain('"type": "attack"');
+        expect(section).not.toMatch(/Do NOT put attacks in `roll_requests`/i);
+      }
+    });
+
     it('works the three-roach example through both outcomes', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
       // Two monster attacks declared in one turn, against digest-real ids.
-      expect(section).toContain('"actor_id":"shadow-roach-1","action_type":"attack"');
-      expect(section).toContain('"actor_id":"shadow-roach-2","action_type":"attack"');
+      expect(section).toContain('"purpose":"shadow-roach-1 attacks the-seeker"');
+      expect(section).toContain('"purpose":"shadow-roach-2 attacks the-seeker"');
       expect(section).toContain('shadow-roach-1|Shadow Roach@6,5');
       expect(section).toContain('shadow-roach-2|Shadow Roach@10,9');
       // One auto-approach outcome and one out-of-reach-becomes-move outcome.

@@ -69,10 +69,16 @@ function nearestOf(
   return entities.reduce((best, entity) => (distance(entity) < distance(best) ? entity : best));
 }
 
-type Mention = { ids: string[]; index: number; length: number };
+export type Mention = { ids: string[]; index: number; length: number };
 
-/** Every entity name the text contains, in order of first appearance. */
-function collectMentions(digest: TacticalDigest, text: string): Mention[] {
+/**
+ * Every entity name the text contains, in order of first appearance.
+ *
+ * Exported because the prose-intent floor matches narration with exactly this matcher. A
+ * second implementation would drift from it, and the whole point of the floor is that prose
+ * the spatial contract can already read is prose the engine can already act on.
+ */
+export function collectEntityMentions(digest: TacticalDigest, text: string): Mention[] {
   const haystack = normalizeEntityToken(text);
   const matches: Mention[] = [];
   const consider = (alias: string, ids: string[]): void => {
@@ -112,7 +118,7 @@ function collectMentions(digest: TacticalDigest, text: string): Mention[] {
  * pragmatism: writes still refuse ambiguity outright.
  */
 export function resolvePairFromText(digest: TacticalDigest, text: string): ResolvedPair | null {
-  const mentions = collectMentions(digest, text);
+  const mentions = collectEntityMentions(digest, text);
   const active = digest.activeId ? (digest.entities.get(digest.activeId) ?? null) : null;
   const fallbacks: PairFallback[] = [];
 

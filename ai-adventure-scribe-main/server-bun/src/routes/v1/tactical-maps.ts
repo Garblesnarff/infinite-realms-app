@@ -2,15 +2,18 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
+import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-service.js';
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
+import { publishCombatState } from '../../services/combat/combat-sync-service.js';
 import {
   applyDmTacticalActions,
   applyTacticalMapAction,
   consumeDmTacticalCorrection,
   consumeDmTacticalFacts,
+  noteEngineResolutions,
 } from '../../services/combat/tactical-action-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
@@ -19,6 +22,7 @@ import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
 import { resolveEntityRef } from '../../tactical/identity.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
+import { buildStallDirective, shouldBreakStall } from '../../tactical/stall-breaker.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
 
@@ -100,6 +104,18 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       consumeDmTacticalCorrection(params.id),
       consumeDmTacticalFacts(params.id),
     ]);
+    // Silence is measured where the context is assembled, because the thing being counted is
+    // turns on which the DM was handed nothing the engine had done.
+    const silentTurns = await noteEngineResolutions(params.id, facts.length > 0);
+    const stalled = shouldBreakStall(silentTurns);
+    if (stalled)
+      logger.warn({
+        msg: 'DM_COMBAT_STALL_DIRECTIVE',
+        alert: true,
+        sessionId: params.id,
+        silentTurns,
+        activeEntityId: params.entityId,
+      });
     return {
       tacticalContext:
         buildTacticalPrompt(map, params.entityId) +
@@ -110,7 +126,8 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
           : '') +
         (correction
           ? `\n\n<previous_tactical_failure>${correction}</previous_tactical_failure>`
-          : ''),
+          : '') +
+        (stalled ? `\n\n${buildStallDirective(map, params.entityId, silentTurns)}` : ''),
     };
   })
   .post(
@@ -287,12 +304,28 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       }),
     },
   )
+  /**
+   * The DM's `combat_transition: "end"` lands here, and it must end the whole encounter.
+   *
+   * It used to destroy only the map. That asymmetry is what run 9's "four restarts" actually
+   * were: `start` creates an encounter AND a map, `end` removed the map and left the encounter
+   * active forever, and 47205c12's idempotent-start gate — which the CLI does hit, via
+   * `/v1/combat/sessions/:id/start` — then correctly refused every subsequent start as a no-op.
+   * The result was combat with a live encounter and no board: `getMap()` 404s, no digest
+   * reaches the prompt, nothing can resolve, and each end/start cycle reads as a restart. The
+   * gate was never the bug; this endpoint's half-transition was.
+   */
   .post('/:id/tactical-map/end', async ({ params, user, set }) => {
     const access = await verifySessionOwnership(params.id, user.userId);
     if (!access.success) {
       set.status = access.error!.status;
       return { error: access.error!.message };
     }
+    const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
     await destroyTacticalCombatMap(params.id);
-    return { ok: true };
+    if (encounter) {
+      await CombatEncounterService.endCombat(encounter.id, user.userId);
+      await publishCombatState(encounter.id, user.userId, 'combat_ended');
+    }
+    return { ok: true, encounterEnded: !!encounter };
   });

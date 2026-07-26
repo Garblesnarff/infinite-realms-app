@@ -54,6 +54,13 @@ export interface TacticalMap {
    * that walked but could not reach, most of all. Consumed by the next context request.
    */
   pendingDmFacts?: string[];
+  /**
+   * How many consecutive DM contexts have been built with nothing for the engine to report.
+   * Zero means something resolved last turn. It climbs only while combat is active and the
+   * board is standing still, which is the measurable form of "the DM is narrating attacks that
+   * never reach the engine" — the run 9 failure, counted rather than inferred.
+   */
+  dmSilentTurns?: number;
 }
 
 export type Point = { x: number; y: number };

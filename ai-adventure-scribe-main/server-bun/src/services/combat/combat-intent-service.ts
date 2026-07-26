@@ -1,4 +1,6 @@
-import { decideAttackApproach } from './combat-approach-service.js';
+/* eslint-disable max-lines -- the single mutation gateway for every combat intent; splitting
+   the dispatch would put the turn's authorization, resolution, and reporting in three files. */
+import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { CombatAttackService } from './combat-attack-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { trackCombatEvent } from './combat-events.js';
@@ -12,7 +14,7 @@ import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { claimTurnAction, setDefensiveAction } from './combat-turn-resources.js';
-import { applyTacticalMapAction } from './tactical-action-service.js';
+import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import {
   destroyTacticalCombatMap,
   grantTacticalDash,
@@ -121,13 +123,16 @@ export async function executeCombatIntent(
         );
       }
     } else if (intent.type === 'attack') {
+      const actorLabel = actor.name ?? intent.actorId;
+      const targetLabel = await participantLabel(encounterId, intent.targetId, userId);
+      const weapon = await getEquippedWeaponProfile(actor);
       const approach = await decideAttackApproach({
         sessionId: encounter.sessionId,
         actorId: intent.actorId,
-        actorLabel: actor.name ?? intent.actorId,
+        actorLabel,
         targetId: intent.targetId,
-        targetLabel: await participantLabel(encounterId, intent.targetId, userId),
-        weapon: await getEquippedWeaponProfile(actor),
+        targetLabel,
+        weapon,
       });
       if (approach.movementOnly) {
         result = approach.result;
@@ -144,6 +149,18 @@ export async function executeCombatIntent(
             disadvantage: intent.disadvantage,
           } satisfies AttackRollInput,
           userId,
+        );
+        // Every resolution is reported, not just the ones that failed to reach. A hit the DM is
+        // never told about is a hit it cannot narrate, and a DM with nothing to narrate repeats
+        // the paragraph it wrote last turn.
+        await recordDmTacticalFact(
+          encounter.sessionId,
+          describeResolvedAttack(
+            actorLabel,
+            targetLabel,
+            result as Parameters<typeof describeResolvedAttack>[2],
+            weapon.name,
+          ),
         );
       }
     } else if (intent.type === 'spell') {

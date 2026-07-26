@@ -76,9 +76,9 @@ block or marker inside \`text\`. The game engine reads \`roll_requests\` directl
 \`roll_requests\`: \`[{"type":"check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14,"ac":null,"advantage":false,"disadvantage":false}]\`
 
 Valid roll types: "check", "save", "attack", "damage", "initiative" (use "check" for all
-ability/skill checks - do not invent other type strings). "attack" is only for the roll that
-STARTS a fight; while combat is active, attacks are declared in \`combat_actions\` and resolved
-by the engine, never requested here.
+ability/skill checks - do not invent other type strings). "attack" declares an attack, both at the
+start of a fight and on every turn during one; while combat is active the engine resolves it from
+here rather than the player rolling it. See <combat_roll_requirements>.
 **If you leave \`roll_requests\` empty for an uncertain action, the player CANNOT roll dice and the game stalls!**
 **Do NOT narrate the outcome of an action in \`text\` while also populating \`roll_requests\` for that same action - request the roll and stop; narrate the result next turn.**
 </dice_roll_format>`;
@@ -87,8 +87,8 @@ by the engine, never requested here.
 <title>DM RESPONSE GUIDELINES</title>
 <core_principles>
 - Respond to the player's action with clear consequences and vivid descriptions.
-- Use D&D 5e mechanics when appropriate (ask for ability checks and saving throws; during
-  active combat, declare attacks in \`combat_actions\` rather than asking for them).
+- Use D&D 5e mechanics when appropriate (ask for ability checks and saving throws; declare
+  attacks as \`"type": "attack"\` roll requests, which the engine resolves during active combat).
 - Include sensory details and environmental context.
 - Track narrative threads and callback to previous events from memories.
 - Give NPCs distinct voices and personalities.
@@ -166,7 +166,8 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
     const reminderBlock = `**RESPONSE ORDER: Narrative (text) → roll_requests field → Options → Memory tags**
 
 **DICE ROLLS ARE MANDATORY** for uncertain actions (skill checks, saves, ability checks).
-During active combat, attacks are NOT dice roll requests - they go in \`combat_actions\`.
+**EVERY COMBAT ATTACK MUST BE DECLARED** as a \`"type": "attack"\` entry naming attacker and target;
+the engine resolves it. An attack you only narrate never happens.
 Populate the \`roll_requests\` JSON array field - it is a structured field, NOT a code block or
 text marker inside \`text\`. Without it, the dice UI breaks and the player cannot proceed!
 

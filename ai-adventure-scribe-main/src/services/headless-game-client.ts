@@ -8,6 +8,11 @@ import type { RollRequest } from '@/types/roll-request';
 import { buildAIContext } from '@/hooks/ai/ai-utils';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { AIService } from '@/services/ai-service';
+import {
+  executeAuthoritativeCombatIntent,
+  executeStructuredCombatAction,
+  type StructuredCombatAction,
+} from '@/services/combat/combat-action-executor';
 import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
 import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
@@ -136,6 +141,9 @@ export class HeadlessGameClient {
       : { intent: this.turnCount === 0 ? 'first_action' : 'query' };
     const game = await userDataApi.getSessionContext(this.sessionId);
     this.character = game.character;
+    const combat = this.combatActive
+      ? await this.combatSnapshot()
+      : { encounterId: null, currentParticipantId: null, initiativeOrder: [] };
     const aiContext = buildAIContext({
       sessionId: this.sessionId,
       starterCampaignId: game.starter_campaign_id || undefined,
@@ -143,8 +151,18 @@ export class HeadlessGameClient {
       character: game.character,
       currentPhase: 'exploration',
       isInCombat: this.combatActive,
+      encounterId: combat.encounterId,
+      currentTurnParticipantId: combat.currentParticipantId,
       pendingRollsCount: this.pending.length,
     });
+    // The tactical server computes geometry; the DM receives only its digest and never derives
+    // distance itself. Without this the prompt carries no board and every combat contract on
+    // the server — translation, prose floor, spatial check — is a no-op.
+    if (combat.currentParticipantId) {
+      const tacticalContext = await this.loadTacticalContext(combat.currentParticipantId);
+      if (tacticalContext)
+        (aiContext.gameState as Record<string, unknown>).tacticalContext = tacticalContext;
+    }
     const nextTurnCount = this.turnCount + 1;
     const response = await AIService.chatWithDM({
       message: effectiveInput,
@@ -186,6 +204,18 @@ export class HeadlessGameClient {
       );
       if (!actionResponse.ok)
         throw new Error(`DM tactical action batch failed (${actionResponse.status})`);
+    }
+    // Declared attacks are executed here, not merely reported. The CLI used to print
+    // `combat_actions` into a transcript and drop them, so no headless run has ever put an
+    // attack through the engine — which is exactly what "zero combat_actions ever populated"
+    // measured. The encounter id is re-read because a start transition on this same turn is
+    // what created it.
+    const targeted = ((response.combat_actions ?? []) as StructuredCombatAction[]).filter(
+      (action) => 'target_ids' in action,
+    );
+    if (targeted.length && this.combatActive) {
+      const encounterId = combat.encounterId ?? (await this.combatSnapshot()).encounterId;
+      if (encounterId) await this.resolveCombatActions(encounterId, targeted);
     }
     const processed = await processRollRequests({
       responseText: response.text,
@@ -340,14 +370,79 @@ export class HeadlessGameClient {
 
   /** The whole order, monsters included; an unavailable encounter degrades to an empty list. */
   async getInitiativeOrder(): Promise<InitiativeOrderEntry[]> {
+    return (await this.combatSnapshot()).initiativeOrder;
+  }
+
+  /**
+   * Who is acting and in which encounter. Both are needed before a turn can be played: the
+   * encounter id is where combat actions are sent, and the current participant is whose
+   * perspective the tactical context is built from.
+   */
+  private async combatSnapshot(): Promise<{
+    encounterId: string | null;
+    currentParticipantId: string | null;
+    initiativeOrder: InitiativeOrderEntry[];
+  }> {
+    const empty = { encounterId: null, currentParticipantId: null, initiativeOrder: [] };
     try {
       const response = await userDataApi.getActiveCombat(this.sessionId);
-      if (!response.ok) return [];
-      const payload = (await response.json()) as { initiativeOrder?: InitiativeOrderEntry[] };
-      return payload.initiativeOrder ?? [];
+      if (!response.ok) return empty;
+      const payload = (await response.json()) as {
+        initiativeOrder?: InitiativeOrderEntry[];
+        combat?: { encounter?: { id?: string } };
+      };
+      const initiativeOrder = payload.initiativeOrder ?? [];
+      return {
+        encounterId: payload.combat?.encounter?.id ?? null,
+        currentParticipantId: initiativeOrder.find((entry) => entry.isCurrent)?.id ?? null,
+        initiativeOrder,
+      };
     } catch {
       // Turn order is reporting, never gameplay: a lookup failure must not lose the turn.
-      return [];
+      return empty;
+    }
+  }
+
+  /**
+   * The tactical context the server builds for this turn: the board, the digest, and —
+   * critically — `<engine_resolved_outcomes>` and the stall directive.
+   *
+   * The CLI never fetched this. That single omission is why runs 5-9 could not have worked
+   * whatever the model emitted: with no `<tactical_context>` block in the prompt there is no
+   * digest, and with no digest the legacy-attack translator, the prose-intent floor, and the
+   * spatial contract all return null on their first line. It is also why the feedback loop
+   * "never once fired in prod" — the endpoint that emits engine outcomes was never called.
+   */
+  private async loadTacticalContext(currentParticipantId: string): Promise<string | null> {
+    try {
+      const response = await userDataApi.getTacticalMapContext(
+        this.sessionId,
+        currentParticipantId,
+      );
+      if (!response.ok) return null;
+      return ((await response.json()) as { tacticalContext?: string }).tacticalContext ?? null;
+    } catch {
+      // Context is an enrichment, not a precondition: a failed fetch must not lose the turn.
+      return null;
+    }
+  }
+
+  /**
+   * Sends every declared attack to the engine and ends the actor's turn, which is what makes
+   * initiative advance. Nothing here decides whether the attack is legal or how far the
+   * attacker must walk — the engine owns all of that.
+   */
+  private async resolveCombatActions(
+    encounterId: string,
+    actions: readonly StructuredCombatAction[],
+  ): Promise<void> {
+    for (const action of actions) {
+      await executeStructuredCombatAction(encounterId, action);
+      await executeAuthoritativeCombatIntent(
+        encounterId,
+        { type: 'end_turn', actorId: action.actor_id },
+        'dm',
+      );
     }
   }
 

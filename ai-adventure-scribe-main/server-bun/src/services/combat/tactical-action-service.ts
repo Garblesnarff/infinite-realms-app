@@ -151,6 +151,27 @@ export async function consumeDmTacticalFacts(sessionId: string): Promise<string[
   return facts;
 }
 
+/**
+ * Advances the engine-silence streak by one turn, or resets it because something resolved.
+ * Returns the streak the DM context should be built against.
+ *
+ * Counting happens where the context is assembled rather than where actions are executed,
+ * because the thing being counted is turns the DM was given nothing — and a turn the DM never
+ * asked about is a turn that did not happen.
+ */
+export async function noteEngineResolutions(
+  sessionId: string,
+  resolvedSomething: boolean,
+): Promise<number> {
+  const map = await loadActiveTacticalMap(sessionId);
+  if (!map) return 0;
+  const streak = resolvedSomething ? 0 : (map.dmSilentTurns ?? 0) + 1;
+  if ((map.dmSilentTurns ?? 0) === streak) return streak;
+  map.dmSilentTurns = streak;
+  await saveTacticalMap(map);
+  return streak;
+}
+
 /** Return the one-shot correction fact with the next tactical digest, then clear it. */
 export async function consumeDmTacticalCorrection(sessionId: string): Promise<string | null> {
   const map = await loadActiveTacticalMap(sessionId);

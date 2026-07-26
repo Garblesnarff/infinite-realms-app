@@ -28,9 +28,10 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 - **Animal Handling**: Calming, training, controlling animals
 - **Performance**: Entertaining, impressing, distracting
 - **Combat saves and checks**: Saving throws, and checks the fiction demands mid-fight
+- **Combat attacks**: Declared as \`"type": "attack"\` entries naming both sides. You do not stop
+  and wait on these - the engine resolves them. See <combat_roll_requirements>.
 - **Starting combat**: Initiative, when combat is not yet active
-  (During active combat, attacks and damage are NOT rolls you request - they are declared in
-  \`combat_actions\` and resolved by the engine. See <combat_roll_requirements>.)
+  (Damage is never a roll you request during combat: the engine applies it.)
 </uncertain_outcomes_need_rolls>
 
 <certain_outcomes_no_rolls>
@@ -66,14 +67,14 @@ Each entry in \`roll_requests\` looks like:
 
 <field_requirements>
 - **type**: exactly one of "check", "save", "attack", "damage", "initiative" (ability/skill
-  checks are always "check" - do NOT invent other type strings like "skill_check"). "attack"
-  and "initiative" belong to the moment combat STARTS; once combat is active, attacks are
-  declared in \`combat_actions\` instead and an attack here is not rolled by anyone.
+  checks are always "check" - do NOT invent other type strings like "skill_check"). "attack" is
+  how every attack is declared, both at the moment combat starts and on every turn after it;
+  during active combat the engine resolves it instead of the player rolling it.
 - **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
 - **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
 - **dc**: Difficulty Class for checks/saves, or \`null\` if not applicable
 - **ac**: Target Armor Class for a combat-starting attack, or \`null\` if not applicable
-  (during active combat the engine reads AC off the board; you never supply it)
+  (during active combat the engine reads AC off the board; leave it \`null\`)
 - **advantage/disadvantage**: \`true\`/\`false\`
 </field_requirements>
 
@@ -133,15 +134,19 @@ DO NOT, in the same turn you populate \`roll_requests\`:
 \`roll_requests\`: \`[]\`
 
 The outcome narration happens in your NEXT response, AFTER you see the player's roll result.
+
+This applies to attacks too, with one difference: nobody hands an attack back to you as a player
+roll. The engine resolves it and returns it in \`<engine_resolved_outcomes>\` on your next turn. So
+set the swing up in \`text\`, declare it, and stop - never write whether it hit.
 </critical_roll_stopping_rule>
 
 <npc_rolls>
 You handle NPC/monster checks and saves "behind the screen" - narrate them, do not request them:
 ✅ "The wizard mutters an incantation (you sense hostile magic forming)..."
 ✅ "The sentry glances your way and sees nothing but shadow."
-During active combat, an NPC attack is NOT narrated with numbers you invented. Declare it in
-\`combat_actions\`; the engine rolls it, applies cover and AC, and tells you what happened in
-\`<engine_resolved_outcomes>\`. Narrate that.
+During active combat, an NPC attack is NOT narrated with numbers you invented. Declare it as a
+\`"type": "attack"\` entry naming the NPC and its target; the engine rolls it, applies cover and AC,
+and tells you what happened in \`<engine_resolved_outcomes>\`. Narrate that.
 ❌ "The orc swings its greataxe (rolled 16, hits AC 13) dealing 12 slashing damage!" - those
 numbers came from nowhere and the target's HP never changed.
 </npc_rolls>

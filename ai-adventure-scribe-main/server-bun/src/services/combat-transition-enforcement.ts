@@ -1,15 +1,15 @@
 import { LLMProviderService, type LLMResponse } from './llm-provider-service.js';
 import { logger } from '../lib/logger.js';
 import {
+  acceptWhateverWasEmitted,
+  type AcceptedResponse,
+} from '../tactical/accept-attack-dialects.js';
+import {
   buildCombatTransitionCorrectivePrompt,
   validateCombatTransitionContract,
 } from '../tactical/dispatch.js';
 import { claimFirstOffenseHint, encounterKeyFromPrompt } from '../tactical/encounter-hints.js';
-import {
-  buildLegacyAttackHintPrompt,
-  translateLegacyAttackRolls,
-  type LegacyAttackTranslationResult,
-} from '../tactical/legacy-attack-translation.js';
+import { buildLegacyAttackHintPrompt } from '../tactical/legacy-attack-translation.js';
 import {
   buildSpatialCorrectivePrompt,
   validateSpatialCombatContract,
@@ -54,14 +54,12 @@ const combineUsage = (first: LLMResponse, second: LLMResponse): LLMResponse['usa
 };
 
 /**
- * The client is handed the translated JSON, not the model's original. Everything downstream —
+ * The client is handed the accepted JSON, not the model's original. Everything downstream —
  * the frontend's `combat_actions` execution, the engine, `<engine_resolved_outcomes>` — reads
- * `result.text`, so a translation that is not written back is a translation that never happened.
+ * `result.text`, so an acceptance that is not written back never happened.
  */
-const withTranslation = (
-  response: LLMResponse,
-  translation: LegacyAttackTranslationResult,
-): LLMResponse => ({ ...response, text: JSON.stringify(translation.response) });
+const withAcceptance = (response: LLMResponse, accepted: AcceptedResponse): LLMResponse =>
+  accepted.rewritten ? { ...response, text: JSON.stringify(accepted.response) } : response;
 
 type ContractBreach = {
   contract: 'combat_transition' | 'spatial';
@@ -122,12 +120,13 @@ export async function enforceCombatTransitionContract(params: {
   if (!parsed) return result;
 
   const combatActive = combatIsActiveInPrompt(prompt);
-  // Acceptance before judgement: the response is translated into the engine's dialect first,
+  // Acceptance before judgement: the response is rewritten into the engine's dialect first,
   // and everything downstream — validation, correction, the text handed back to the client —
-  // sees the translated form. An attack can no longer fail to resolve because of its envelope.
-  const translation = translateLegacyAttackRolls(parsed, prompt, combatActive);
-  const accepted = translation ? withTranslation(result, translation) : result;
-  const breach = findBreach(translation?.response ?? parsed, prompt);
+  // sees the rewritten form. An attack can no longer fail to resolve because of its envelope.
+  const acceptance = acceptWhateverWasEmitted(parsed, prompt, combatActive);
+  const accepted = withAcceptance(result, acceptance);
+  const { translation, inference } = acceptance;
+  const breach = findBreach(acceptance.response, prompt);
 
   // A single first-offense hint per encounter teaches the dialect; after that translation is
   // silent. Eleven identical correctives taught run 8's model nothing and cost it every turn.
@@ -145,6 +144,17 @@ export async function enforceCombatTransitionContract(params: {
         fallbacks: entry.fallbacks,
       })),
       untranslated: translation.untranslated,
+    });
+  // The floor firing is never routine: it means both structured channels were empty on a turn
+  // that was describing an attack, which is the exact shape of the run 9 regression.
+  if (inference)
+    logger.warn({
+      msg: 'DM_PROSE_ATTACK_INFERRED',
+      alert: true,
+      actorId: inference.actorId,
+      targetId: inference.targetId,
+      distanceFeet: inference.distanceFeet,
+      action: inference.action,
     });
   if (!breach && !hint) return accepted;
 
@@ -183,14 +193,13 @@ export async function enforceCombatTransitionContract(params: {
 
   const retryParsed = parseDmResponse(retry.text);
   // The retry gets the same acceptance the first response did. A model that answers a hint by
-  // writing the old dialect again is translated again, silently.
-  const retryTranslation = retryParsed
-    ? translateLegacyAttackRolls(retryParsed, prompt, combatActive)
+  // writing the old dialect again is translated again, silently; one that answers in prose is
+  // read out of its prose again.
+  const retryAcceptance = retryParsed
+    ? acceptWhateverWasEmitted(retryParsed, prompt, combatActive)
     : null;
-  const retryAccepted = retryTranslation ? withTranslation(retry, retryTranslation) : retry;
-  const retryBreach = retryParsed
-    ? findBreach(retryTranslation?.response ?? retryParsed, prompt)
-    : null;
+  const retryAccepted = retryAcceptance ? withAcceptance(retry, retryAcceptance) : retry;
+  const retryBreach = retryAcceptance ? findBreach(retryAcceptance.response, prompt) : null;
   if (retryBreach) {
     // Telemetry over deadlock: one correction is the whole budget, so a second violation is
     // logged loudly and the turn is allowed through rather than stalling the table.
