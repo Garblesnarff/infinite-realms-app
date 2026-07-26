@@ -1,12 +1,18 @@
 import { Elysia, t } from 'elysia';
 
 import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
+import {
+  combatIntentEnvelopeSchema,
+  combatIntentRequestValidator,
+  describeIntentRejection,
+} from './intent-schema.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import {
   executeCombatIntent,
   getLegalCombatActions,
+  type SubmittedCombatIntent,
 } from '../../../services/combat/combat-intent-service.js';
 import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { loadActiveTacticalMap } from '../../../services/combat/tactical-map-store.js';
@@ -17,49 +23,6 @@ const encounterIdParams = t.Object({
 
 const sessionIdParams = t.Object({
   sessionId: t.String({ minLength: 1, maxLength: 255 }),
-});
-
-const combatIntentSchema = t.Union([
-  t.Object({
-    type: t.Literal('move'),
-    actorId: t.String({ minLength: 1, maxLength: 255 }),
-    x: t.Number(),
-    y: t.Number(),
-  }),
-  t.Object({
-    type: t.Literal('attack'),
-    actorId: t.String({ minLength: 1, maxLength: 255 }),
-    targetId: t.String({ minLength: 1, maxLength: 255 }),
-    weaponId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
-    expectedVersion: t.Number({ minimum: 0 }),
-    advantage: t.Optional(t.Boolean()),
-    disadvantage: t.Optional(t.Boolean()),
-  }),
-  t.Object({
-    type: t.Literal('spell'),
-    actorId: t.String({ minLength: 1, maxLength: 255 }),
-    targetIds: t.Array(t.String({ minLength: 1, maxLength: 255 }), { minItems: 1, maxItems: 100 }),
-    spellId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
-    spellName: t.String({ minLength: 1, maxLength: 255 }),
-    slotLevel: t.Optional(t.Number({ minimum: 1, maximum: 9 })),
-    expectedVersion: t.Number({ minimum: 0 }),
-  }),
-  t.Object({
-    type: t.Union([t.Literal('dash'), t.Literal('dodge'), t.Literal('disengage')]),
-    actorId: t.String({ minLength: 1, maxLength: 255 }),
-    expectedVersion: t.Number({ minimum: 0 }),
-  }),
-  t.Object({
-    type: t.Literal('end_turn'),
-    actorId: t.String({ minLength: 1, maxLength: 255 }),
-  }),
-]);
-
-const combatIntentRequestSchema = t.Object({
-  // Keep the existing route-level error response for a missing intent.
-  intent: t.Optional(combatIntentSchema),
-  source: t.Optional(t.Union([t.Literal('player'), t.Literal('dm')])),
-  dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
 });
 
 // Elysia's status union is intentionally framework-owned and wider than a simple number.
@@ -108,10 +71,21 @@ export const intentRoutes = new Elysia()
         set.status = access.error!.status;
         return { error: access.error!.message };
       }
-      const payload = body;
+      // The envelope schema is deliberately untyped; `combatIntentRequestValidator` below is
+      // what actually establishes this shape.
+      const payload = body as {
+        intent?: SubmittedCombatIntent;
+        source?: 'player' | 'dm';
+        dmStartedAt?: number;
+      };
       if (!payload.intent?.type || !payload.intent.actorId) {
         set.status = 400;
         return { error: 'A typed combat intent with actorId is required' };
+      }
+      // --- Bad payload: 422 naming the variant that refused it, before any work happens. ---
+      if (!combatIntentRequestValidator?.Check(payload)) {
+        set.status = 422;
+        return describeIntentRejection(payload);
       }
       try {
         const result = await executeCombatIntent(
@@ -126,7 +100,7 @@ export const intentRoutes = new Elysia()
         return mapIntentError(set, cause);
       }
     },
-    { params: encounterIdParams, body: combatIntentRequestSchema },
+    { params: encounterIdParams, body: combatIntentEnvelopeSchema },
   )
   .get(
     '/sessions/:sessionId/active',

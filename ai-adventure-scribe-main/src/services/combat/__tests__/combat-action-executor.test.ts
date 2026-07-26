@@ -42,12 +42,12 @@ describe('combat-action-executor', () => {
             Authorization: 'Bearer test-token',
           }),
           body: JSON.stringify({ intent, source: 'player', dmStartedAt: 12345 }),
-        })
+        }),
       );
       expect(result).toBe('dash-success');
     });
 
-    it('should fetch the combat status first if expectedVersion is undefined', async () => {
+    it('should fetch the combat status first if a player intent has no expectedVersion', async () => {
       const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: undefined };
 
       const statusResponse = {
@@ -63,7 +63,7 @@ describe('combat-action-executor', () => {
         .mockResolvedValueOnce(statusResponse)
         .mockResolvedValueOnce(intentResponse);
 
-      const result = await executeAuthoritativeCombatIntent(encounterId, intent, 'dm');
+      const result = await executeAuthoritativeCombatIntent(encounterId, intent, 'player');
 
       expect(globalThis.fetch).toHaveBeenCalledTimes(2);
       expect(globalThis.fetch).toHaveBeenNthCalledWith(
@@ -71,7 +71,7 @@ describe('combat-action-executor', () => {
         'http://localhost:8888/v1/combat/encounter-123/status',
         expect.objectContaining({
           headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        })
+        }),
       );
       expect(globalThis.fetch).toHaveBeenNthCalledWith(
         2,
@@ -80,12 +80,50 @@ describe('combat-action-executor', () => {
           method: 'POST',
           body: JSON.stringify({
             intent: { ...intent, expectedVersion: 10 },
-            source: 'dm',
+            source: 'player',
             dmStartedAt: undefined,
           }),
-        })
+        }),
       );
       expect(result).toBe('dash-success-fetched-version');
+    });
+
+    // The old guard was `'expectedVersion' in intent`, which is false for every object literal
+    // that simply omits the field — so no caller ever triggered the status read. Both hooks
+    // that build player attacks construct exactly this shape.
+    it('should fetch the version for a player attack built without the key at all', async () => {
+      const intent = { type: 'attack' as const, actorId: 'actor-1', targetId: 'target-1' };
+      (globalThis.fetch as any)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ encounter: { version: 4 } }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ result: 'hit' }) });
+
+      await executeAuthoritativeCombatIntent(encounterId, intent);
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        2,
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          body: expect.stringContaining('"expectedVersion":4'),
+        }),
+      );
+    });
+
+    // The server dispatch is the authoritative sequencer for DM-sourced intents: it reads the
+    // encounter version itself, so the client must not spend a round trip guessing one.
+    it('should not read the version for a DM-sourced intent', async () => {
+      const intent = { type: 'attack' as const, actorId: 'the-void-maw', targetId: 'the-seeker' };
+      (globalThis.fetch as any).mockResolvedValue({ ok: true, json: async () => ({ result: {} }) });
+
+      await executeAuthoritativeCombatIntent(encounterId, intent, 'dm', 12345);
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          body: JSON.stringify({ intent, source: 'dm', dmStartedAt: 12345 }),
+        }),
+      );
     });
 
     it('should fallback to expectedVersion 1 if status response does not contain encounter or version', async () => {
@@ -116,7 +154,7 @@ describe('combat-action-executor', () => {
             source: 'player',
             dmStartedAt: undefined,
           }),
-        })
+        }),
       );
       expect(result).toBe('dash-success-fallback-version');
     });
@@ -132,7 +170,7 @@ describe('combat-action-executor', () => {
       (globalThis.fetch as any).mockResolvedValue(statusResponse);
 
       await expect(executeAuthoritativeCombatIntent(encounterId, intent)).rejects.toThrow(
-        'Combat state unavailable (404)'
+        'Combat state unavailable (404)',
       );
     });
 
@@ -148,7 +186,7 @@ describe('combat-action-executor', () => {
       (globalThis.fetch as any).mockResolvedValue(intentResponse);
 
       await expect(executeAuthoritativeCombatIntent(encounterId, intent)).rejects.toThrow(
-        'Invalid actor state'
+        'Invalid actor state',
       );
     });
 
@@ -166,7 +204,7 @@ describe('combat-action-executor', () => {
       (globalThis.fetch as any).mockResolvedValue(intentResponse);
 
       await expect(executeAuthoritativeCombatIntent(encounterId, intent)).rejects.toThrow(
-        'Combat action rejected (500)'
+        'Combat action rejected (500)',
       );
     });
   });
@@ -204,7 +242,7 @@ describe('combat-action-executor', () => {
         'http://localhost:8888/v1/combat/encounter-123/intent',
         expect.objectContaining({
           body: expect.stringContaining('"type":"attack"'),
-        })
+        }),
       );
 
       expect(result).toEqual([
@@ -249,7 +287,7 @@ describe('combat-action-executor', () => {
         'http://localhost:8888/v1/combat/encounter-123/intent',
         expect.objectContaining({
           body: expect.stringContaining('"type":"spell"'),
-        })
+        }),
       );
 
       expect(result).toEqual([

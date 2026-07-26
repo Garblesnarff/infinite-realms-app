@@ -22,7 +22,7 @@ import {
 } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
-import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
+import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 
 import type { AttackRollInput, SpellAttackInput } from '../../types/combat.js';
 
@@ -50,6 +50,43 @@ export type CombatIntent =
   | { type: 'end_turn'; actorId: string };
 
 export type CombatActionSource = 'player' | 'dm';
+
+/**
+ * An intent as submitted, before the dispatch resolves it. `expectedVersion` may be absent —
+ * which only a DM-sourced intent is allowed to do.
+ */
+type VersionOptional<T> = T extends { expectedVersion: number }
+  ? Omit<T, 'expectedVersion'> & { expectedVersion?: number }
+  : T;
+export type SubmittedCombatIntent = VersionOptional<CombatIntent>;
+
+const VERSIONED_INTENT_TYPES = new Set(['attack', 'spell', 'dash', 'dodge', 'disengage']);
+
+/**
+ * Optimistic concurrency arbitrates *racing player clients*: two browsers acting on one
+ * encounter, where the loser must be told its read is stale. A DM-sourced intent has no such
+ * peer — this dispatch is the only writer, and it is the authoritative sequencer — so it reads
+ * the version it is about to act on rather than demanding the caller echo one back.
+ *
+ * Player-sourced intents keep the requirement. A player intent with no version is a
+ * lost-update, not a convenience.
+ */
+function resolveExpectedVersion(
+  intent: SubmittedCombatIntent,
+  source: CombatActionSource,
+  encounterVersion: number,
+): CombatIntent {
+  if (!VERSIONED_INTENT_TYPES.has(intent.type)) return intent as CombatIntent;
+  if ((intent as { expectedVersion?: number }).expectedVersion !== undefined) {
+    return intent as CombatIntent;
+  }
+  if (source !== 'dm') {
+    throw new ValidationError('expectedVersion is required for player-sourced combat intents', {
+      intentType: intent.type,
+    });
+  }
+  return { ...intent, expectedVersion: encounterVersion } as CombatIntent;
+}
 
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
@@ -100,13 +137,14 @@ async function assertActorTurn(encounterId: string, actorId: string, userId: str
 /** The single mutation gateway for player and AI-DM combat intents. */
 export async function executeCombatIntent(
   encounterId: string,
-  intent: CombatIntent,
+  submitted: SubmittedCombatIntent,
   userId: string,
   source: CombatActionSource,
   dmStartedAt?: number,
 ): Promise<unknown> {
   try {
-    const { actor, encounter } = await assertActorTurn(encounterId, intent.actorId, userId);
+    const { actor, encounter } = await assertActorTurn(encounterId, submitted.actorId, userId);
+    const intent = resolveExpectedVersion(submitted, source, encounter.version);
     let result: unknown;
     if (intent.type === 'move') {
       result = await applyTacticalMapAction(encounter.sessionId, {
@@ -216,8 +254,8 @@ export async function executeCombatIntent(
   } catch (error) {
     trackCombatEvent('action_refused', {
       encounterId,
-      actorId: intent.actorId,
-      action: intent.type,
+      actorId: submitted.actorId,
+      action: submitted.type,
       source,
       reason: error instanceof Error ? error.message : 'unknown',
     });
