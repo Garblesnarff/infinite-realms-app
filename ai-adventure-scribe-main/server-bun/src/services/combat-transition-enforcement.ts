@@ -1,11 +1,15 @@
 import { LLMProviderService, type LLMResponse } from './llm-provider-service.js';
 import { logger } from '../lib/logger.js';
 import {
-  buildCombatActionChannelCorrectivePrompt,
   buildCombatTransitionCorrectivePrompt,
-  validateCombatActionChannel,
   validateCombatTransitionContract,
 } from '../tactical/dispatch.js';
+import { claimFirstOffenseHint, encounterKeyFromPrompt } from '../tactical/encounter-hints.js';
+import {
+  buildLegacyAttackHintPrompt,
+  translateLegacyAttackRolls,
+  type LegacyAttackTranslationResult,
+} from '../tactical/legacy-attack-translation.js';
 import {
   buildSpatialCorrectivePrompt,
   validateSpatialCombatContract,
@@ -49,8 +53,18 @@ const combineUsage = (first: LLMResponse, second: LLMResponse): LLMResponse['usa
   return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
 };
 
+/**
+ * The client is handed the translated JSON, not the model's original. Everything downstream —
+ * the frontend's `combat_actions` execution, the engine, `<engine_resolved_outcomes>` — reads
+ * `result.text`, so a translation that is not written back is a translation that never happened.
+ */
+const withTranslation = (
+  response: LLMResponse,
+  translation: LegacyAttackTranslationResult,
+): LLMResponse => ({ ...response, text: JSON.stringify(translation.response) });
+
 type ContractBreach = {
-  contract: 'combat_transition' | 'combat_action_channel' | 'spatial';
+  contract: 'combat_transition' | 'spatial';
   correctivePrompt: string;
   detail: Record<string, unknown>;
 };
@@ -58,6 +72,11 @@ type ContractBreach = {
 /**
  * Both combat contracts are checked against the same response. The transition contract runs
  * first because a response that has not legally entered combat has no board to be coherent with.
+ *
+ * The old channel contract is gone from this list. Attacks written in `roll_requests` are no
+ * longer a breach to argue about — they are translated into `combat_actions` before this runs
+ * (see `translateLegacyAttackRolls`), so by the time a response is judged it speaks the
+ * engine's dialect regardless of the one the model chose.
  */
 function findBreach(response: DMResponse, prompt: string): ContractBreach | null {
   const combatActive = combatIsActiveInPrompt(prompt);
@@ -67,17 +86,6 @@ function findBreach(response: DMResponse, prompt: string): ContractBreach | null
       contract: 'combat_transition',
       correctivePrompt: buildCombatTransitionCorrectivePrompt(transition),
       detail: { rollTypes: transition.rollTypes },
-    };
-  }
-  // The channel check comes before the spatial one: an attack moved into combat_actions is an
-  // attack the engine will path and reach-check itself, which dissolves most spatial breaches
-  // rather than arguing about them.
-  const channel = validateCombatActionChannel(response, combatActive);
-  if (channel) {
-    return {
-      contract: 'combat_action_channel',
-      correctivePrompt: buildCombatActionChannelCorrectivePrompt(channel),
-      detail: { purposes: channel.purposes, reason: channel.message },
     };
   }
   const spatial = validateSpatialCombatContract(response, prompt, combatActive);
@@ -112,17 +120,43 @@ export async function enforceCombatTransitionContract(params: {
   if (result.error || !isDmResponseSchema(responseSchema)) return result;
   const parsed = parseDmResponse(result.text);
   if (!parsed) return result;
-  const breach = findBreach(parsed, prompt);
-  if (!breach) return result;
 
-  logger.warn({
-    msg: 'DM_COMBAT_CONTRACT_CORRECTIVE_REPROMPT',
-    alert: true,
-    contract: breach.contract,
-    ...breach.detail,
-  });
+  const combatActive = combatIsActiveInPrompt(prompt);
+  // Acceptance before judgement: the response is translated into the engine's dialect first,
+  // and everything downstream — validation, correction, the text handed back to the client —
+  // sees the translated form. An attack can no longer fail to resolve because of its envelope.
+  const translation = translateLegacyAttackRolls(parsed, prompt, combatActive);
+  const accepted = translation ? withTranslation(result, translation) : result;
+  const breach = findBreach(translation?.response ?? parsed, prompt);
+
+  // A single first-offense hint per encounter teaches the dialect; after that translation is
+  // silent. Eleven identical correctives taught run 8's model nothing and cost it every turn.
+  const hint =
+    translation && !breach && claimFirstOffenseHint(encounterKeyFromPrompt(prompt))
+      ? buildLegacyAttackHintPrompt(translation)
+      : null;
+  if (translation)
+    logger.info({
+      msg: 'DM_LEGACY_ATTACK_TRANSLATED',
+      hinted: !!hint,
+      translations: translation.translations.map((entry) => ({
+        purpose: entry.purpose,
+        action: entry.action,
+        fallbacks: entry.fallbacks,
+      })),
+      untranslated: translation.untranslated,
+    });
+  if (!breach && !hint) return accepted;
+
+  if (breach)
+    logger.warn({
+      msg: 'DM_COMBAT_CONTRACT_CORRECTIVE_REPROMPT',
+      alert: true,
+      contract: breach.contract,
+      ...breach.detail,
+    });
   const retry = await LLMProviderService.generate({
-    prompt: breach.correctivePrompt,
+    prompt: breach ? breach.correctivePrompt : hint!,
     model: params.model,
     maxTokens: params.maxTokens,
     temperature: params.temperature,
@@ -139,14 +173,24 @@ export async function enforceCombatTransitionContract(params: {
       msg: '!!!!!!!!!!!!!!!! DM_COMBAT_CONTRACT_CORRECTION_FAILED !!!!!!!!!!!!!!!!',
       alert: true,
       error: retry.error,
-      contract: breach.contract,
-      ...breach.detail,
+      contract: breach?.contract ?? 'legacy_attack_hint',
+      ...(breach?.detail ?? {}),
     });
-    return result;
+    // The already-translated response is what goes back, never the raw one: a failed retry
+    // must not cost the table the attacks the server already understood.
+    return accepted;
   }
 
   const retryParsed = parseDmResponse(retry.text);
-  const retryBreach = retryParsed ? findBreach(retryParsed, prompt) : null;
+  // The retry gets the same acceptance the first response did. A model that answers a hint by
+  // writing the old dialect again is translated again, silently.
+  const retryTranslation = retryParsed
+    ? translateLegacyAttackRolls(retryParsed, prompt, combatActive)
+    : null;
+  const retryAccepted = retryTranslation ? withTranslation(retry, retryTranslation) : retry;
+  const retryBreach = retryParsed
+    ? findBreach(retryTranslation?.response ?? retryParsed, prompt)
+    : null;
   if (retryBreach) {
     // Telemetry over deadlock: one correction is the whole budget, so a second violation is
     // logged loudly and the turn is allowed through rather than stalling the table.
@@ -159,5 +203,5 @@ export async function enforceCombatTransitionContract(params: {
       model: retry.model,
     });
   }
-  return { ...retry, usage: combineUsage(result, retry) };
+  return { ...retryAccepted, usage: combineUsage(result, retry) };
 }

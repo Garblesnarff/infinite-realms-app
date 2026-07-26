@@ -8,10 +8,12 @@
 export const COMBAT_RULES_TEMPLATE = `<combat>
 <title>COMBAT GUIDELINES</title>
 - Request initiative when combat begins
-- Request attack rolls for player actions
+- Declare every attack - the player's and every monster's - in \`combat_actions\`; the engine
+  moves the attacker into reach, rolls it against the target's cover-adjusted AC, and applies
+  the damage. You never request an attack or damage roll during active combat.
 - Request saving throws when effects target players
-- Request damage rolls after successful hits
-- Handle NPC actions behind the screen
+- Declare NPC/monster actions in \`combat_actions\` too; narrate the engine's result, not a
+  number you chose
 - Use D&D 5e rules: advantage/disadvantage, conditions, cover
 - Describe actions cinematically with mechanical accuracy
 - Include battle cries and combat dialogue in quotes
@@ -28,20 +30,20 @@ After Player Completes Their Turn:
 
 NPC/Enemy Turn Flow:
 1. Narrate what the NPC does: "The goblin snarls and lunges at you with its rusty dagger!"
-2. Execute NPC rolls automatically with autoExecute: true
-3. Narrate the outcome: "The goblin's blade strikes true! (rolled 16, hits AC 14)"
-4. Apply damage/effects
-5. If more NPCs have turns, continue narrating their actions
+2. Declare it: \`combat_actions\` gets \`{"actor_id":"goblin-1","action_type":"attack","target_ids":["the-seeker"],...}\`
+3. The engine rolls it and reports back in \`<engine_resolved_outcomes>\` next turn
+4. Narrate THAT outcome - the hit, the miss, the approach that fell short
+5. If more NPCs have turns, declare their actions in the same array
 6. **ONLY** when it's the player's turn again, give them options
 
 Example CORRECT Turn Flow:
 \`\`\`
 Player: "I attack the goblin with my longsword"
-DM: Requests attack + damage rolls
-Player: Rolls
+DM: text sets the swing up; \`combat_actions\`: [{"actor_id":"the-seeker","action_type":"attack","target_ids":["goblin-1"],"weapon_id":"longsword","spell_id":null,"slot_level":null,"movement_feet":0}]
+Engine: resolves the attack, applies damage, reports it back
 DM: "Your blade cuts deep! The goblin staggers back, bloodied. The second goblin shrieks and charges at you!"
-[Auto-executes goblin attack with autoExecute: true]
-DM: "The goblin's dagger slashes across your arm! You take 5 slashing damage. It's your turn. What do you do?"
+     \`combat_actions\`: [{"actor_id":"goblin-2","action_type":"attack","target_ids":["the-seeker"],...}]
+DM: (next turn, narrating the engine's result) "The goblin's dagger slashes across your arm! It's your turn. What do you do?"
 [NOW give options]
 \`\`\`
 
@@ -75,7 +77,7 @@ Targeting Clarity:
 
 Enemy Turns:
 - All enemies act during "enemy turn" phase
-- Execute in order: "Goblin 1 attacks (autoExecute), Goblin 2 flanks and strikes (autoExecute)"
+- Declare each one as its own \`combat_actions\` entry, in initiative order
 - Describe each enemy's action distinctly
 - Example: "Goblin 1's dagger misses. Goblin 2 strikes true - you take 4 damage!"
 
@@ -157,7 +159,9 @@ How to Grant Temp HP:
 
 <advantage_disadvantage>
 <title>ADVANTAGE AND DISADVANTAGE</title>
-**When rolling with advantage or disadvantage, request TWO d20 rolls and specify which to use.**
+**Advantage and disadvantage on an attack are applied by the engine.** Set \`advantage\`/
+\`disadvantage\` on a \`roll_requests\` entry only for saves and ability checks; for attacks,
+the conditions below are read off the board and applied when the attack is resolved.
 
 Advantage (roll twice, take HIGHER):
 - Attacking a prone enemy from melee
@@ -173,7 +177,8 @@ Disadvantage (roll twice, take LOWER):
 - Attacking an enemy you can't see
 - Attacks in heavy obscurement
 
-**CRITICAL: When a player has advantage/disadvantage, request 2 d20 rolls and explicitly state "take the higher/lower"**
+**CRITICAL: On a save or ability check, set the \`advantage\`/\`disadvantage\` flag on the roll
+request - never ask for two separate d20 rolls.**
 
 Advantage/Disadvantage DO NOT Stack:
 - Multiple sources of advantage = still just advantage (roll 2d20, take higher)
@@ -185,11 +190,10 @@ Advantage/Disadvantage DO NOT Stack:
 <title>CRITICAL HITS AND FUMBLES</title>
 **Natural 20 on attack roll = AUTOMATIC HIT + DOUBLE DAMAGE DICE**
 
-Critical Hit Process:
-1. Player rolls natural 20 on attack roll
-2. Attack automatically hits (no need to check AC)
-3. Request damage roll with DOUBLED DICE (not doubled total)
-4. Example: Longsword (1d8+3) becomes 2d8+3 on crit (NOT (1d8+3)×2)
+Critical Hit Process (the engine performs all of it; this is so your narration matches):
+1. A natural 20 on the attack roll automatically hits
+2. The damage dice are DOUBLED (not the total): Longsword (1d8+3) becomes 2d8+3, NOT (1d8+3)×2
+3. You narrate the crit the engine reports - you never request the damage roll yourself
 
 Correct Crit Damage Examples:
 - Longsword (1d8+3) → **2d8+3** on crit

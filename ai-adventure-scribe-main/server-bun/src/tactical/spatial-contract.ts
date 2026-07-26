@@ -90,7 +90,18 @@ const movesActor = (
       (action.action === 'forced_move' && actionTargets(digest, action.target, actorId)),
   );
 
-type AttackIntent = { actor: DigestEntity; target: DigestEntity; ranged: boolean };
+type AttackIntent = {
+  actor: DigestEntity;
+  target: DigestEntity;
+  ranged: boolean;
+  /**
+   * Where the intent was declared. An attack in `combat_actions` reaches the engine, which
+   * walks the attacker into reach itself, so demanding the model volunteer that move is a
+   * violation the engine has already dissolved. Only the reach check cares; line of sight is
+   * not something approach grants, so it is judged the same either way.
+   */
+  engineApproached: boolean;
+};
 
 function collectAttackIntents(
   response: Pick<DMResponse, 'roll_requests' | 'combat_actions'>,
@@ -109,7 +120,8 @@ function collectAttackIntents(
       action.action_type === 'cast_spell' || isRangedDescriptor(action.weapon_id, action.spell_id);
     for (const targetId of action.target_ids ?? []) {
       const target = resolveDigestEntity(digest, targetId);
-      if (target && target.id !== actor.id) intents.push({ actor, target, ranged });
+      if (target && target.id !== actor.id)
+        intents.push({ actor, target, ranged, engineApproached: true });
     }
   }
   for (const request of response.roll_requests ?? []) {
@@ -140,6 +152,7 @@ function collectAttackIntents(
       actor: pair.actor,
       target: pair.target,
       ranged: isRangedDescriptor(request.purpose),
+      engineApproached: false,
     });
   }
   return intents;
@@ -157,10 +170,13 @@ export function validateSpatialCombatContract(
   if (!combatActive) return null;
   const digest = parseTacticalDigest(prompt);
   if (!digest) return null;
-  for (const { actor, target, ranged } of collectAttackIntents(response, digest)) {
+  for (const { actor, target, ranged, engineApproached } of collectAttackIntents(
+    response,
+    digest,
+  )) {
     const relation = actor.relations.get(target.id);
     if (!relation) continue;
-    if (!ranged && relation.distanceFeet > MELEE_REACH_FEET) {
+    if (!ranged && !engineApproached && relation.distanceFeet > MELEE_REACH_FEET) {
       if (moveFixesReach(response, digest, actor.id, target)) continue;
       return {
         kind: 'melee_out_of_reach',

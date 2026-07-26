@@ -47,7 +47,11 @@ export function formatDMTask(messages: ChatMessage[], latestMessage: ChatMessage
  */
 export async function fetchGameContext(
   sessionId: string,
-): Promise<{ campaign: Partial<Campaign>; character: Partial<Character>; starterCampaignId?: string } | null> {
+): Promise<{
+  campaign: Partial<Campaign>;
+  character: Partial<Character>;
+  starterCampaignId?: string;
+} | null> {
   try {
     const sessionData = await userDataApi.getSessionContext(sessionId);
 
@@ -81,6 +85,8 @@ export function buildAIContext(params: {
   character: Record<string, unknown> | Partial<Character>;
   currentPhase: string;
   isInCombat: boolean;
+  /** Identifies the encounter to the server, which teaches the combat dialect once per fight. */
+  encounterId?: string | null;
   currentTurnParticipantId?: string | null;
   pendingRollsCount: number;
   currentRound?: number | null;
@@ -108,19 +114,19 @@ export function buildAIContext(params: {
     gameState: {
       currentPhase: params.currentPhase,
       isInCombat: params.isInCombat,
+      encounterId: params.encounterId,
       currentTurnPlayerId: params.currentTurnParticipantId,
       pendingRolls: params.pendingRollsCount,
       round: params.currentRound,
-      participants:
-        (params.participants || []).map((participant) => ({
-          id: participant.id,
-          name: participant.name,
-          type: participant.participantType,
-          hp: participant.currentHitPoints,
-          maxHp: participant.maxHitPoints,
-          armorClass: participant.armorClass,
-          conditions: (participant.conditions || []).map((condition) => condition.name),
-        })),
+      participants: (params.participants || []).map((participant) => ({
+        id: participant.id,
+        name: participant.name,
+        type: participant.participantType,
+        hp: participant.currentHitPoints,
+        maxHp: participant.maxHitPoints,
+        armorClass: participant.armorClass,
+        conditions: (participant.conditions || []).map((condition) => condition.name),
+      })),
     },
   };
 }

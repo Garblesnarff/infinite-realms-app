@@ -55,8 +55,10 @@ DETECTED COMBAT ACTIONS:`;
 
 **COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
-1. **REQUEST** dice rolls for player actions via the \`roll_requests\` array field (DO NOT roll for the player)
-2. **AUTO-EXECUTE** NPC/enemy actions and narrate them behind the screen (do not put NPC rolls in \`roll_requests\`, which is player-facing only)
+1. **DECLARE** every attack - the player's and every enemy's - in the \`combat_actions\` array
+   field, naming an \`actor_id\` and \`target_ids\` from the tactical digest. The engine rolls it.
+2. **RESERVE** \`roll_requests\` for saving throws and ability checks. An attack placed there is
+   not a roll anyone makes.
 3. **DESCRIBE** actions cinematically while maintaining mechanical accuracy
 4. **ENFORCE** turn order (player turn, then all NPCs, then player again)
 `;

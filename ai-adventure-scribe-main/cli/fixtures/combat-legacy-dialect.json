@@ -1,0 +1,93 @@
+{
+  "turns": [
+    {
+      "input": "I hold the line by the wagon.",
+      "response": {
+        "text": "The Shadow Roach skitters out of the dark, mandibles wide.",
+        "roll_requests": [
+          {
+            "type": "attack",
+            "formula": "1d20+4",
+            "purpose": "The Shadow Roach lunges at you",
+            "dc": null,
+            "ac": 15,
+            "advantage": false,
+            "disadvantage": false
+          }
+        ],
+        "combat_transition": "none",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [],
+        "combat_actions": [],
+        "activeEntityId": "shadow-roach"
+      }
+    },
+    {
+      "input": "I swing for the roach.",
+      "response": {
+        "text": "You set your feet and cut at the thing.",
+        "roll_requests": [
+          {
+            "type": "attack",
+            "formula": "1d20+5",
+            "purpose": "Attack roll with longsword against the Shadow Roach",
+            "dc": null,
+            "ac": 13,
+            "advantage": false,
+            "disadvantage": false
+          }
+        ],
+        "combat_transition": "none",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [],
+        "combat_actions": [],
+        "activeEntityId": "the-seeker"
+      }
+    },
+    {
+      "input": "I finish it.",
+      "response": {
+        "text": "The roach folds in on itself and goes still. The gallery is quiet again.",
+        "roll_requests": [],
+        "combat_transition": "end",
+        "scene_spec": null,
+        "combatants": [],
+        "map_actions": [],
+        "combat_actions": [],
+        "activeEntityId": "the-seeker"
+      }
+    }
+  ],
+  "map": {
+    "id": "map-legacy",
+    "sessionId": "fixture-session",
+    "width": 14,
+    "height": 12,
+    "round": 1,
+    "sceneDescription": "A damp gallery, wagon wheels rotting against one wall.",
+    "entities": [
+      {
+        "id": "the-seeker",
+        "name": "The Seeker",
+        "x": 1,
+        "y": 1,
+        "size": "medium",
+        "type": "pc",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      },
+      {
+        "id": "shadow-roach",
+        "name": "Shadow Roach",
+        "x": 9,
+        "y": 8,
+        "size": "medium",
+        "type": "monster",
+        "speedFeet": 30,
+        "movementRemaining": 30
+      }
+    ]
+  }
+}

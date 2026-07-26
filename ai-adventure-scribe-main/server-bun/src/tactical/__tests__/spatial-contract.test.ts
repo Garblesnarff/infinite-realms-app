@@ -75,6 +75,17 @@ const response = (overrides: Partial<DMResponse> = {}): DMResponse => ({
   ...overrides,
 });
 
+/** The same melee attack the DM writes in the old dialect: a roll request, no actor field. */
+const meleeAttackRequest = () => ({
+  type: 'attack' as const,
+  formula: '1d20+4',
+  purpose: "Void-Maw's claw against The Seeker",
+  dc: null,
+  ac: 15,
+  advantage: false,
+  disadvantage: false,
+});
+
 const meleeAttack = (movementFeet = 0) => ({
   actor_id: 'void-maw',
   action_type: 'attack' as const,
@@ -99,9 +110,24 @@ describe('spatial combat contract', () => {
     expect(digest!.aliases.get('the seeker')).toBe('seeker');
   });
 
-  test('a melee combat_action at 30ft is a violation that cites the real distance', () => {
+  // An attack in combat_actions reaches the engine, which walks the attacker into reach
+  // itself before rolling. Correcting the model for a gap the engine closes is how run 8
+  // spent every turn arguing instead of resolving.
+  test('a melee combat_action at 30ft is left to the engine to approach', () => {
+    expect(
+      validateSpatialCombatContract(
+        response({ combat_actions: [meleeAttack()] }),
+        promptFor(board()),
+        true,
+      ),
+    ).toBeNull();
+  });
+
+  test('a melee attack roll_request at 30ft is still a violation that cites the real distance', () => {
     const violation = validateSpatialCombatContract(
-      response({ combat_actions: [meleeAttack()] }),
+      response({
+        roll_requests: [meleeAttackRequest()],
+      }),
       promptFor(board()),
       true,
     );
@@ -114,17 +140,7 @@ describe('spatial combat contract', () => {
   test('a melee attack roll_request is paired from its purpose text', () => {
     const violation = validateSpatialCombatContract(
       response({
-        roll_requests: [
-          {
-            type: 'attack',
-            formula: '1d20+4',
-            purpose: "Void-Maw's claw against The Seeker",
-            dc: null,
-            ac: 15,
-            advantage: false,
-            disadvantage: false,
-          },
-        ],
+        roll_requests: [meleeAttackRequest()],
       }),
       promptFor(board()),
       true,
@@ -144,11 +160,11 @@ describe('spatial combat contract', () => {
     expect(violation).toBeNull();
   });
 
-  test('a move that still ends out of reach remains a violation', () => {
+  test('a move that still ends out of reach remains a violation for a roll_request attack', () => {
     const violation = validateSpatialCombatContract(
       response({
         map_actions: [{ action: 'move', entityId: 'void-maw', x: 5, y: 5, changes: null }],
-        combat_actions: [meleeAttack(10)],
+        roll_requests: [meleeAttackRequest()],
       }),
       promptFor(board()),
       true,

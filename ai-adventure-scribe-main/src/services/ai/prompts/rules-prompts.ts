@@ -27,7 +27,10 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 - **Medicine**: Stabilizing, diagnosing, treating wounds
 - **Animal Handling**: Calming, training, controlling animals
 - **Performance**: Entertaining, impressing, distracting
-- **ALL combat**: Attacks, damage, saves, initiative
+- **Combat saves and checks**: Saving throws, and checks the fiction demands mid-fight
+- **Starting combat**: Initiative, when combat is not yet active
+  (During active combat, attacks and damage are NOT rolls you request - they are declared in
+  \`combat_actions\` and resolved by the engine. See <combat_roll_requirements>.)
 </uncertain_outcomes_need_rolls>
 
 <certain_outcomes_no_rolls>
@@ -63,11 +66,14 @@ Each entry in \`roll_requests\` looks like:
 
 <field_requirements>
 - **type**: exactly one of "check", "save", "attack", "damage", "initiative" (ability/skill
-  checks are always "check" - do NOT invent other type strings like "skill_check")
+  checks are always "check" - do NOT invent other type strings like "skill_check"). "attack"
+  and "initiative" belong to the moment combat STARTS; once combat is active, attacks are
+  declared in \`combat_actions\` instead and an attack here is not rolled by anyone.
 - **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
 - **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
 - **dc**: Difficulty Class for checks/saves, or \`null\` if not applicable
-- **ac**: Target Armor Class for attacks, or \`null\` if not applicable
+- **ac**: Target Armor Class for a combat-starting attack, or \`null\` if not applicable
+  (during active combat the engine reads AC off the board; you never supply it)
 - **advantage/disadvantage**: \`true\`/\`false\`
 </field_requirements>
 
@@ -75,7 +81,6 @@ Each entry in \`roll_requests\` looks like:
 Stealth: \`{"type": "check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\`
 Persuasion: \`{"type": "check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
 Perception: \`{"type": "check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\`
-Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "dc": null, "ac": 15, "advantage": false, "disadvantage": false}\`
 Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
 Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 </examples>
@@ -131,9 +136,14 @@ The outcome narration happens in your NEXT response, AFTER you see the player's 
 </critical_roll_stopping_rule>
 
 <npc_rolls>
-You handle NPC/monster rolls "behind the screen":
-✅ "The orc swings its greataxe (rolled 16, hits AC 13) dealing 12 slashing damage!"
+You handle NPC/monster checks and saves "behind the screen" - narrate them, do not request them:
 ✅ "The wizard mutters an incantation (you sense hostile magic forming)..."
+✅ "The sentry glances your way and sees nothing but shadow."
+During active combat, an NPC attack is NOT narrated with numbers you invented. Declare it in
+\`combat_actions\`; the engine rolls it, applies cover and AC, and tells you what happened in
+\`<engine_resolved_outcomes>\`. Narrate that.
+❌ "The orc swings its greataxe (rolled 16, hits AC 13) dealing 12 slashing damage!" - those
+numbers came from nowhere and the target's HP never changed.
 </npc_rolls>
 
 <dialogue>

@@ -38,11 +38,13 @@ const map = (): TacticalMap => ({
   height: 10,
   round: 1,
   sceneDescription: 'test',
+  // Column 4 is solid wall: the only spatial breach the engine cannot dissolve by walking is
+  // a ranged attack through something you cannot see through.
   cells: Array.from({ length: 10 }, () =>
-    Array.from({ length: 10 }, () => ({
-      terrain: 'floor' as const,
-      blocksMovement: false,
-      blocksSight: false,
+    Array.from({ length: 10 }, (_unused, x) => ({
+      terrain: x === 4 ? ('wall' as const) : ('floor' as const),
+      blocksMovement: x === 4,
+      blocksSight: x === 4,
       cover: 0 as const,
       elevation: 0,
     })),
@@ -91,7 +93,8 @@ const attack = {
   actor_id: 'void-maw',
   action_type: 'attack' as const,
   target_ids: ['seeker'],
-  weapon_id: null,
+  // Ranged: melee attacks in `combat_actions` are approached by the engine, not corrected.
+  weapon_id: 'longbow',
   spell_id: null,
   slot_level: null,
   movement_feet: 0,
@@ -99,7 +102,7 @@ const attack = {
 
 const illegal = dmResponse({ combat_actions: [attack] });
 const legal = dmResponse({
-  map_actions: [{ action: 'move', entityId: 'void-maw', x: 2, y: 2, changes: null }],
+  map_actions: [{ action: 'move', entityId: 'void-maw', x: 3, y: 3, changes: null }],
   combat_actions: [{ ...attack, movement_feet: 25 }],
 });
 
@@ -120,19 +123,21 @@ beforeEach(() => {
 });
 
 describe('spatial contract enforcement in the DM transport', () => {
-  test('melee at range triggers exactly one corrective re-prompt citing the distance', async () => {
+  test('a ranged attack with no line of sight triggers exactly one corrective re-prompt', async () => {
     generate.mockImplementation(async () => ({ text: legal, provider: 'openrouter' as const }));
     const result = await enforce(illegal);
 
     expect(generate).toHaveBeenCalledTimes(1);
     const corrective = generate.mock.calls[0][0];
     expect(corrective.prompt).toContain(
-      'Void-Maw is 30ft from The Seeker; melee requires 5ft; you have 30ft movement.',
+      'Void-Maw has no line of sight to The Seeker at 30ft; ranged attacks require line of ' +
+        'sight; you have 30ft movement.',
     );
     expect(result.text).toBe(legal);
     expect(warnings[0]).toMatchObject({
       msg: 'DM_COMBAT_CONTRACT_CORRECTIVE_REPROMPT',
       contract: 'spatial',
+      kind: 'ranged_without_line_of_sight',
       distanceFeet: 30,
     });
     expect(errors).toHaveLength(0);

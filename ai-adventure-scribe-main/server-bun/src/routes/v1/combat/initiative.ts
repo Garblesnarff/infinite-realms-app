@@ -222,6 +222,32 @@ export const initiativeRoutes = new Elysia()
           };
         }
 
+        // A start while combat is already running is a no-op that reports the encounter in
+        // progress. Run 8 restarted combat four times in thirty turns because this endpoint
+        // took every "start" literally: each one inserted a second active encounter, rerolled
+        // initiative, and rebuilt the board mid-fight. An encounter now ends only by an end
+        // transition or by every hostile going down — never by someone asking to begin again.
+        const active = await runStage('ownership', () =>
+          CombatEncounterService.getActiveEncounter(params.sessionId, user.userId),
+        );
+        if (active) {
+          logger.info({
+            msg: 'Ignored combat start for a session already in combat',
+            sessionId: params.sessionId,
+            encounterId: active.id,
+            requestedParticipants: Array.isArray(participants) ? participants.length : 0,
+          });
+          const current = await runStage('participants', () =>
+            CombatEncounterService.getCombatState(active.id, user.userId),
+          );
+          set.status = 200;
+          return {
+            ...current,
+            initiativeOrder: buildInitiativeOrder(current),
+            alreadyActive: true,
+          };
+        }
+
         const combatState = await runStage('participants', () =>
           CombatEncounterService.startCombat(
             params.sessionId,

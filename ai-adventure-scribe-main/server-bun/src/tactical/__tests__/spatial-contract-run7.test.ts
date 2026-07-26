@@ -2,11 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { resolvePairFromText } from '../attack-pair.js';
 import { parseTacticalDigest } from '../digest-parse.js';
-import {
-  buildCombatActionChannelCorrectivePrompt,
-  validateCombatActionChannel,
-} from '../dispatch.js';
 import { assignEntitySlugs } from '../identity.js';
+import { translateLegacyAttackRolls } from '../legacy-attack-translation.js';
 import { buildTacticalPrompt } from '../prompt.js';
 import { validateSpatialCombatContract } from '../spatial-contract.js';
 
@@ -187,33 +184,46 @@ describe('run 7: purposes that name only one side of the attack', () => {
   });
 });
 
-describe('run 7: attacks are steered out of roll_requests and into combat_actions', () => {
-  test('an attack roll_request during active combat is a channel violation', () => {
-    const violation = validateCombatActionChannel(
+/**
+ * Run 7 steered attacks into `combat_actions` with a corrective. Run 8 proved a corrective
+ * cannot do that job — eleven of them, zero adoption — so the steering became translation.
+ * The behaviour that mattered is unchanged and still pinned here: an attack written the old
+ * way ends up in `combat_actions`, and saves and checks are left exactly where they were.
+ */
+describe('run 7, settled by run 8: attacks end up in combat_actions either way', () => {
+  test('an attack roll_request during active combat is translated, not refused', () => {
+    const prompt = turnPrompt('the-seeker');
+    const result = translateLegacyAttackRolls(
       response({ roll_requests: [attackRequest('Attack roll against the Shadow Roach')] }),
+      prompt,
       true,
     )!;
-    expect(violation.purposes).toEqual(['Attack roll against the Shadow Roach']);
-    expect(buildCombatActionChannelCorrectivePrompt(violation)).toContain('combat_actions');
+    expect(result.response.roll_requests).toHaveLength(0);
+    expect(result.response.combat_actions[0]).toMatchObject({
+      actor_id: 'the-seeker',
+      action_type: 'attack',
+    });
   });
 
   test('saves and checks during combat are left alone', () => {
     expect(
-      validateCombatActionChannel(
+      translateLegacyAttackRolls(
         response({
           roll_requests: [
             { ...attackRequest('Dexterity save vs the collapsing floor'), type: 'save', dc: 14 },
           ],
         }),
+        turnPrompt('the-seeker'),
         true,
       ),
     ).toBeNull();
   });
 
-  test('outside combat the channel rule does not apply', () => {
+  test('outside combat nothing is translated', () => {
     expect(
-      validateCombatActionChannel(
+      translateLegacyAttackRolls(
         response({ roll_requests: [attackRequest('Attack roll against the bandit')] }),
+        turnPrompt('the-seeker'),
         false,
       ),
     ).toBeNull();

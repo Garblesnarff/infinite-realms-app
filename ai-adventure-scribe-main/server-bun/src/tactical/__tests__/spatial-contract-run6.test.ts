@@ -131,7 +131,10 @@ describe('run 6: spatial contract on a slug-addressed, UUID-keyed board', () => 
     ).toMatchObject({ actorId: 'shadow-roach', targetId: 'the-seeker', distanceFeet: 55 });
   });
 
-  test('a slug-addressed combat_action at 55ft is caught the same way', () => {
+  // Run 6's defect was identity: drifted slugs resolved to nothing, so nothing was checked.
+  // That still has to resolve. What changed since is the verdict for `combat_actions`, which
+  // the engine approaches on the model's behalf rather than correcting it about.
+  test('a slug-addressed combat_action at 55ft resolves, and is left to the engine to approach', () => {
     expect(
       validateSpatialCombatContract(
         response({
@@ -147,6 +150,16 @@ describe('run 6: spatial contract on a slug-addressed, UUID-keyed board', () => 
             },
           ],
         }),
+        turnPrompt(board()),
+        true,
+      ),
+    ).toBeNull();
+  });
+
+  test('the same attack as a roll_request still resolves both slugs and is caught at 55ft', () => {
+    expect(
+      validateSpatialCombatContract(
+        response({ roll_requests: [meleeRollRequest('Shadow Roach bites The Seeker')] }),
         turnPrompt(board()),
         true,
       ),

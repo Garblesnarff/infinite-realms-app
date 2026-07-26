@@ -163,47 +163,6 @@ export function validateCombatTransitionContract(
   };
 }
 
-/**
- * During active combat an attack belongs in `combat_actions`, where it names an actor and a
- * target the engine can path, reach-check, and resolve. The same attack in `roll_requests` is
- * a sentence: no actor, no target, no geometry, and nothing for the engine to execute.
- *
- * This is a migration guard for the old prompt's habit. It steers once; a response that
- * repeats the pattern is accepted and checked by the spatial contract's inference fallback,
- * because stalling the table is worse than validating against an assumption.
- */
-export function validateCombatActionChannel(
-  response: Pick<DMResponse, 'roll_requests'>,
-  combatActive: boolean,
-): { purposes: string[]; message: string } | null {
-  if (!combatActive) return null;
-  const purposes = (response.roll_requests ?? [])
-    .filter((request) => request.type === 'attack')
-    .map((request) => request.purpose);
-  if (!purposes.length) return null;
-  return {
-    purposes,
-    message:
-      'Combat channel violation: while combat is active, attacks are declared in combat_actions ' +
-      'with actor_id and target_ids copied from the tactical digest. roll_requests is reserved ' +
-      'for saving throws and ability checks; an attack there is never rolled or resolved.',
-  };
-}
-
-export function buildCombatActionChannelCorrectivePrompt(violation: {
-  purposes: string[];
-  message: string;
-}): string {
-  return `<corrective_instruction>
-${violation.message}
-The prior response put these attacks in roll_requests: ${violation.purposes.map((purpose) => JSON.stringify(purpose)).join(', ')}.
-Return one corrected response now. Keep the same fiction. Move each attack into combat_actions as
-{"actor_id","action_type":"attack","target_ids",...}, using ids copied verbatim from the tactical
-digest, and leave roll_requests holding only saves and checks. Do not add map_actions to close
-distance: the engine moves the attacker into reach. Do not explain the correction.
-</corrective_instruction>`;
-}
-
 export function buildCombatTransitionCorrectivePrompt(
   violation: CombatTransitionContractViolation,
 ): string {

@@ -184,6 +184,7 @@ export const useAIResponse = () => {
           character: gameContext.character,
           currentPhase: gameState.currentPhase,
           isInCombat: combatState.isInCombat,
+          encounterId: combatState.activeEncounter?.id,
           currentTurnParticipantId: combatState.activeEncounter?.currentTurnParticipantId,
           pendingRollsCount: gameState.diceRollQueue.pendingRolls.length,
           currentRound: combatState.activeEncounter?.currentRound,
