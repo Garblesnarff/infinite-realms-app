@@ -9,9 +9,11 @@
 
 import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 
+import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
+import { resolveCombatantStats } from './combatant-stat-resolution.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
-import { GENERIC_NPC_STATS, resolveSrdMonsterStats } from './srd-monster-resolution.js';
+import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
 import { db } from '../../../../db/client';
 import {
   combatEncounters,
@@ -74,7 +76,7 @@ export class CombatEncounterService {
     // as a 500 in production. The check is separable, so it is now separate, and the
     // insert-select ban in eslint.config.js stops the pattern coming back.
     const [session] = await db
-      .select({ id: gameSessions.id })
+      .select({ id: gameSessions.id, starterCampaignId: gameSessions.starterCampaignId })
       .from(gameSessions)
       .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
       .leftJoin(characters, eq(gameSessions.characterId, characters.id))
@@ -137,17 +139,22 @@ export class CombatEncounterService {
       const charactersById = new Map(characterRows.map((row) => [row.character.id, row]));
       const npcsById = new Map(npcRows.map((row) => [row.id, row]));
 
+      // One indexed, memoized query per campaign for the whole encounter -- never one per
+      // combatant. A campaign with no starter bible yields an empty index and the ladder
+      // starts at the SRD rung, exactly as it did before authored stats existed.
+      const campaignIndex = await loadCampaignMonsterIndex(session.starterCampaignId);
+
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
       const participantsWithInitiative = participantInputs.map((input) => {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
         const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;
-        // Structured DM combatants carry an SRD id instead of a database row. Resolving it
-        // gives real stat blocks; a missing/unknown id falls back to generic NPC numbers,
-        // and an unresolved *supplied* id is logged rather than silently swallowed.
+        // Structured DM combatants carry an id instead of a database row. Resolving it walks
+        // the ladder -- campaign-authored bible stats, then the SRD catalog, then generic NPC
+        // numbers -- and every rung down is logged rather than silently swallowed.
         const monster =
           !input.characterId && !input.npcId
-            ? resolveSrdMonsterStats(input.monsterId, input.name, { sessionId })
+            ? resolveCombatantStats(campaignIndex, input.monsterId, input.name, { sessionId })
             : null;
         // Characters and NPCs keep their historical 10/10/30 defaults. Only a combatant with
         // no database row at all falls through to SRD or generic-NPC numbers.

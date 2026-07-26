@@ -1,0 +1,180 @@
+/**
+ * The combat stat ladder.
+ *
+ *   campaign_chunks (authored bible stats, scoped to this campaign)
+ *     -> SRD catalog (monsters.json)
+ *       -> GENERIC_NPC_STATS
+ *
+ * Campaign-first is deliberate. If a bible authors its own "Goblin" with its own numbers,
+ * the author's intent outranks the generic SRD entry — the bibles are the product.
+ *
+ * Every rung down is logged distinctly. A stat downgrade is invisible in play: the creature
+ * simply dies in one hit and the fight reads as anticlimax rather than as a bug. The log is
+ * the only place it can be seen, so the generic rung states the resulting AC and HP rather
+ * than merely reporting that a lookup missed.
+ */
+import { findAuthoredMonster, type CampaignMonsterIndex } from './campaign-monster-index.js';
+import {
+  GENERIC_NPC_STATS,
+  resolveSrdMonsterStats,
+  type ResolvedMonsterStats,
+} from './srd-monster-resolution.js';
+import { logger } from '../../lib/logger.js';
+
+import type { EntitySize } from '../../tactical/types.js';
+
+/** Where each resolution landed, for logging and for tests to assert on. */
+export type StatSource = 'campaign' | 'srd' | 'generic';
+
+export interface ResolvedCombatantStats extends ResolvedMonsterStats {
+  source: StatSource;
+  /** Authored fields that were missing and had to be filled from a lower rung. */
+  filledFromFallback: string[];
+}
+
+const TACTICAL_SIZES = new Set<EntitySize>([
+  'tiny',
+  'small',
+  'medium',
+  'large',
+  'huge',
+  'gargantuan',
+]);
+
+const asTacticalSize = (size: string | undefined): EntitySize | undefined =>
+  size && TACTICAL_SIZES.has(size as EntitySize) ? (size as EntitySize) : undefined;
+
+/**
+ * Resolves one combatant's stats against the ladder.
+ *
+ * Returns `null` only for the generic rung, matching the caller's existing
+ * `monster ?? GENERIC_NPC_STATS` contract, so the fallback behaviour that is correct for
+ * DM-improvised combatants ("Doorkeeper", "Hostile Patron") survives untouched.
+ */
+export function resolveCombatantStats(
+  campaignIndex: CampaignMonsterIndex,
+  monsterId?: string | null,
+  name?: string | null,
+  context: Record<string, unknown> = {},
+): ResolvedCombatantStats | null {
+  const authored = findAuthoredMonster(campaignIndex, monsterId, name);
+
+  // The SRD entry is resolved regardless, because it is both the next rung down AND the
+  // source that fills gaps in a partially-authored block. Its own fallback warn is
+  // suppressed because an SRD miss is not yet a downgrade here -- the campaign rung may
+  // still have supplied real numbers, and the true bottom-of-ladder warn is issued below
+  // with the campaign context attached. Its near-miss log is NOT suppressed: that one
+  // records an inference, which is worth seeing wherever it happens.
+  const srd = resolveSrdMonsterStats(monsterId, name, context, { suppressFallbackWarn: true });
+
+  if (authored) {
+    const { parsed, coverage } = authored;
+
+    if (coverage === 'none') {
+      // The chunk exists — an author wrote this creature — but nothing in it was readable.
+      // That is a content bug with a name attached, which is the whole point of logging it.
+      logger.warn({
+        msg: 'Campaign monster chunk found but no stats could be parsed; falling through to SRD',
+        campaignId: campaignIndex.campaignId,
+        entityName: authored.entityName,
+        chunkType: authored.chunkType,
+        unparsedLabels: parsed.unparsedLabels,
+        monsterId,
+        combatantName: name,
+        ...context,
+      });
+    } else {
+      const filledFromFallback: string[] = [];
+      /**
+       * `report: false` for fields whose absence is unremarkable. Almost no bible authors a
+       * size or an initiative modifier, so reporting those would fire the partial-stats log
+       * for essentially every campaign creature and bury the cases that matter — a boss with
+       * no authored AC, or no authored HP.
+       */
+      const fill = <T>(
+        authoredValue: T | undefined,
+        fallback: T,
+        field: string,
+        report = true,
+      ): T => {
+        if (authoredValue !== undefined) return authoredValue;
+        if (report) filledFromFallback.push(field);
+        return fallback;
+      };
+
+      const stats: ResolvedCombatantStats = {
+        source: 'campaign',
+        monsterId: monsterId?.trim() || authored.entityName,
+        monsterName: authored.entityName,
+        maxHp: fill(parsed.maxHp, srd?.maxHp ?? GENERIC_NPC_STATS.maxHp, 'maxHp'),
+        armorClass: fill(
+          parsed.armorClass,
+          srd?.armorClass ?? GENERIC_NPC_STATS.armorClass,
+          'armorClass',
+        ),
+        speed: fill(parsed.speed, srd?.speed ?? GENERIC_NPC_STATS.speed, 'speed'),
+        size: fill(asTacticalSize(parsed.size), srd?.size ?? GENERIC_NPC_STATS.size, 'size', false),
+        initiativeModifier: fill(
+          parsed.initiativeModifier,
+          srd?.initiativeModifier ?? GENERIC_NPC_STATS.initiativeModifier,
+          'initiativeModifier',
+          false,
+        ),
+        damageResistances: parsed.damageResistances ?? srd?.damageResistances ?? [],
+        damageImmunities: parsed.damageImmunities ?? srd?.damageImmunities ?? [],
+        damageVulnerabilities: parsed.damageVulnerabilities ?? srd?.damageVulnerabilities ?? [],
+        filledFromFallback,
+      };
+
+      if (filledFromFallback.length > 0) {
+        logger.info({
+          msg: 'Campaign monster resolved with partially authored stats; missing fields filled from fallback',
+          campaignId: campaignIndex.campaignId,
+          entityName: authored.entityName,
+          parsedFields: parsed.parsedFields,
+          unparsedLabels: parsed.unparsedLabels,
+          filledFromFallback,
+          filledFrom: srd ? 'srd' : 'generic',
+          armorClass: stats.armorClass,
+          maxHp: stats.maxHp,
+          ...context,
+        });
+      }
+
+      return stats;
+    }
+  } else if (campaignIndex.chunkCount > 0 && (monsterId || name)) {
+    // The campaign HAS authored creatures, this combatant just is not one of them. Usually
+    // correct (DM improvisation), but it is also how a name drift between the bible and the
+    // DM's output would present, so it is recorded rather than assumed.
+    logger.debug({
+      msg: 'No campaign-authored stat block for combatant; falling through to SRD',
+      campaignId: campaignIndex.campaignId,
+      monsterId,
+      combatantName: name,
+      authoredCreatureCount: campaignIndex.chunkCount,
+      ...context,
+    });
+  }
+
+  if (srd) {
+    return { ...srd, source: 'srd', filledFromFallback: [] };
+  }
+
+  if (monsterId) {
+    // The bottom of the ladder. Name the consequence, not just the cause: a reader must be
+    // able to see that a boss was downgraded, not merely that a lookup missed.
+    logger.warn({
+      msg: 'Unresolved monster on combat start; falling back to generic NPC stats',
+      campaignId: campaignIndex.campaignId || null,
+      monsterId,
+      combatantName: name,
+      armorClass: GENERIC_NPC_STATS.armorClass,
+      maxHp: GENERIC_NPC_STATS.maxHp,
+      consequence: `combatant fights at generic NPC stats (AC ${GENERIC_NPC_STATS.armorClass}, ${GENERIC_NPC_STATS.maxHp} HP)`,
+      ...context,
+    });
+  }
+
+  return null;
+}
