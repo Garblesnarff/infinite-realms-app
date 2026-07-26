@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia';
 
+import { verifySessionOwnership } from './combat/helpers.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
@@ -33,6 +34,15 @@ const mapMessage = (message: DialogueHistory) => ({
 
 export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
+  .onBeforeHandle(async ({ params, user, set }) => {
+    if (params?.id) {
+      const verification = await verifySessionOwnership(params.id, user!.userId);
+      if (!verification.success) {
+        set.status = verification.error?.status || 404;
+        return { error: verification.error?.message || 'Session not found' };
+      }
+    }
+  })
   .get(
     '/:id/messages',
     async ({ params, query, user }) => {
