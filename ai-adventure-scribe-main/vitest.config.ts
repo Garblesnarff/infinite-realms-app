@@ -36,6 +36,8 @@ export default defineConfig({
     // keeping two configs in sync, reintroducing the same kind of drift this change
     // is meant to eliminate.
     include: [
+      'src/utils/multiclass/__tests__/validation.test.ts',
+      'src/utils/multiclass/__tests__/proficiencies.test.ts',
       'src/services/ai/prompts/__tests__/combat-rules-prompts.test.ts',
       'src/services/combat/__tests__/combat-action-executor.test.ts',
       'src/services/combat/__tests__/structured-combat-transition.test.ts',
@@ -89,6 +91,8 @@ export default defineConfig({
       // include allowlist) makes every file under src/ show up in the report, even
       // files with zero tests, so the numbers reflect real coverage instead of theater.
       include: [
+        'src/utils/multiclass/validation.ts',
+        'src/utils/multiclass/proficiencies.ts',
         'src/services/ai/prompts/combat-rules-prompts.ts',
         'src/services/combat/combat-action-executor.ts',
         'src/services/combat/structured-combat-transition.ts',
