@@ -118,13 +118,20 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
     }
   },
 }));
+const CLAWS = {
+  id: 'claws',
+  name: 'Claws',
+  damageDice: '1d6',
+  damageType: 'slashing',
+  normalRange: 5,
+  magicBonus: 0,
+  finesse: false,
+  ranged: false,
+  proficient: true,
+};
 mock.module('../../../../services/combat/data-access.js', () => ({
-  getEquippedWeaponProfile: async () => ({
-    id: 'claws',
-    name: 'Claws',
-    ranged: false,
-    normalRange: 5,
-  }),
+  listEquippedWeaponProfiles: async () => [CLAWS],
+  getEquippedWeaponProfile: async () => CLAWS,
   getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: [] }),
   getActiveConditionNames: async () => [],
 }));

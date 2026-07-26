@@ -55,14 +55,6 @@ export interface CampaignParams {
 }
 
 /**
- * Class equipment data
- */
-export interface ClassEquipment {
-  weapons: string[];
-  armor: string;
-}
-
-/**
  * AI response structure with optional features
  */
 export interface AIResponse {

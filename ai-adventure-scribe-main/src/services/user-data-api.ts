@@ -24,6 +24,26 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
+/** Mirror of `EquippedLoadout` in `server-bun/src/services/combat/equipped-loadout.ts`. */
+export type EquippedWeaponProfile = {
+  id: string;
+  name: string;
+  damageDice: string;
+  damageType: string;
+  normalRange: number;
+  longRange?: number;
+  magicBonus: number;
+  finesse: boolean;
+  ranged: boolean;
+  proficient: boolean;
+};
+
+export type EquippedLoadout = {
+  weapons: EquippedWeaponProfile[];
+  armor: string[];
+  armorClass: number | null;
+};
+
 export type SessionMessagePayload = {
   id?: string;
   speaker_type: string;
@@ -355,4 +375,11 @@ export const userDataApi = {
     }),
   deleteCharacter: (characterId: string): Promise<void> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}`, { method: 'DELETE' }),
+  /**
+   * The character's equipped weapons and armour, resolved server-side through the same code
+   * the attack engine uses. Consumed by the DM prompt builder, which must describe the gear
+   * the engine will actually roll with rather than a class-default guess.
+   */
+  getCharacterLoadout: (characterId: string): Promise<EquippedLoadout> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/loadout`),
 };

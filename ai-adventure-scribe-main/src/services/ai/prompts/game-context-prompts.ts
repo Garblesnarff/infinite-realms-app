@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getCharacterPassiveScores } from '../../passive-skills-service';
 import { fetchCampaignAssetsForPrompt } from '../asset-processor';
-import { getClassEquipment } from '../class-equipment';
 
 import type { Memory } from '../../memory-manager';
 import type { GameContext } from '../shared/types';
+import type { EquippedLoadout } from '@/services/user-data-api';
 
 import { getLoreKeeperService } from '@/agents/services/lore-keeper/LoreKeeperService';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { convertCharacterDetailsToCharacter } from '@/utils/character-converter';
 
 /**
@@ -246,7 +247,7 @@ ${handout.content}
     }
 
     if (context.characterDetails) {
-      section += GameContextPrompts.buildCharacterSection(context.characterDetails);
+      section += await GameContextPrompts.buildCharacterSection(context.characterDetails);
     }
 
     if (relevantMemories.length > 0) {
@@ -266,7 +267,69 @@ Reference these memories naturally to maintain story continuity.`;
     return section;
   }
 
-  static buildCharacterSection(char: Record<string, any>): string {
+  /**
+   * Renders the character's equipment from the sheet.
+   *
+   * This block used to be generated from a table of class defaults, so a ranger who had sold
+   * her longsword and was carrying a longbow was described to the DM as holding a longsword in
+   * studded leather, with damage dice and an AC nobody had ever rolled. The DM then narrated
+   * attacks with weapons the character did not own, which the engine either refused or
+   * silently substituted. Everything here comes from `inventory_items` + `character_equipment`
+   * (equipped=true) via the same resolver the attack engine uses, and the AC is the sheet's own.
+   */
+  private static async buildEquipmentSection(char: Record<string, any>): Promise<string> {
+    const characterId = typeof char.id === 'string' ? char.id : null;
+    const armorClass = char.character_stats?.[0]?.armor_class;
+
+    let loadout: EquippedLoadout | null = null;
+    if (characterId) {
+      try {
+        loadout = await userDataApi.getCharacterLoadout(characterId);
+      } catch (loadoutError) {
+        logger.warn(
+          `[ContextBuilder] Failed to load equipped gear for character ${char.name}:`,
+          loadoutError,
+        );
+      }
+    }
+
+    // No sheet to read means no numbers to state. Saying so is better than inventing a
+    // loadout: the DM can ask, and the engine stays the only thing that rolls damage.
+    if (!loadout) {
+      return `
+<equipment>
+UNKNOWN — the character's equipment could not be read from their sheet.
+Do not name specific weapons, damage dice, or armour class. Describe attacks in the fiction and
+let the engine resolve them.
+</equipment>`;
+    }
+
+    const weapons = loadout.weapons.map((weapon) => {
+      const bonus = weapon.magicBonus ? ` +${weapon.magicBonus}` : '';
+      const reach = weapon.ranged
+        ? `range ${weapon.normalRange}/${weapon.longRange ?? weapon.normalRange} ft`
+        : `reach ${weapon.normalRange} ft`;
+      return `${weapon.name}${bonus} (${weapon.damageDice} ${weapon.damageType}, ${reach})`;
+    });
+
+    const armorText = loadout.armor.length > 0 ? loadout.armor.join(', ') : 'No armour equipped';
+    const acText =
+      typeof armorClass === 'number'
+        ? `AC ${armorClass}`
+        : typeof loadout.armorClass === 'number'
+          ? `AC ${loadout.armorClass}`
+          : 'AC unknown';
+
+    return `
+<equipment>
+EQUIPPED WEAPONS: ${weapons.length > 0 ? weapons.join(' | ') : 'None — unarmed strike (1d1 bludgeoning, reach 5 ft)'}
+ARMOR: ${armorText} | ${acText}
+**These are the character's real, equipped items. Never name a weapon that is not on this list.**
+**USE EXACT WEAPON DICE from this list for damage roll requests.**
+</equipment>`;
+  }
+
+  static async buildCharacterSection(char: Record<string, any>): Promise<string> {
     let section = `<character_details>
 PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
 
@@ -292,13 +355,7 @@ STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calc
 <proficiency_bonus>+${profBonus}</proficiency_bonus>`;
     }
 
-    const className = char.class?.name || char.class;
-    const classEquipment = getClassEquipment(className || 'Fighter');
-    section += `
-<equipment>
-${classEquipment.weapons.join(', ')} | ${classEquipment.armor}
-**CRITICAL: USE EXACT WEAPON DICE from equipment list above for damage roll requests!**
-</equipment>`;
+    section += await GameContextPrompts.buildEquipmentSection(char);
 
     try {
       const characterForPassive = convertCharacterDetailsToCharacter(char as any);

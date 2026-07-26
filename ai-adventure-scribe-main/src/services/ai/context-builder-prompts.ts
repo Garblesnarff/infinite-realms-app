@@ -19,7 +19,7 @@ You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-soun
     return GameContextPrompts.buildGameContextSection(context, relevantMemories);
   }
 
-  static buildCharacterSection(char: Record<string, any>): string {
+  static buildCharacterSection(char: Record<string, any>): Promise<string> {
     return GameContextPrompts.buildCharacterSection(char);
   }
 

@@ -57,6 +57,61 @@ const participant = (id: string, name: string, participantType: 'player' | 'npc'
 const attackInputs: AttackRollInput[] = [];
 const dmFacts: string[] = [];
 const trackedEvents: Array<Record<string, unknown>> = [];
+/** Every weapon the approach decision was asked to reach-check with, in order. */
+const approachWeapons: Array<{ name: string; ranged: boolean; normalRange: number }> = [];
+/** Everything the real logger was told to warn about; `DM_WEAPON_UNGROUNDED` lands here. */
+const warnings: Array<Record<string, unknown>> = [];
+
+/** Whose turn it is. The seeker's own turn is needed to drive a player-character attack. */
+let activeParticipantId = 'the-void-maw';
+
+/**
+ * The Seeker's actual sheet: a longbow and a shortsword, bow first — the order the old
+ * `candidates[0]` default would have picked out.
+ */
+const SEEKER_WEAPONS = [
+  {
+    id: 'inv-longbow',
+    name: 'Longbow',
+    damageDice: '1d8',
+    damageType: 'piercing',
+    normalRange: 150,
+    longRange: 600,
+    magicBonus: 0,
+    finesse: false,
+    ranged: true,
+    proficient: true,
+  },
+  {
+    id: 'inv-shortsword',
+    name: 'Shortsword',
+    damageDice: '1d6',
+    damageType: 'piercing',
+    normalRange: 5,
+    magicBonus: 0,
+    finesse: true,
+    ranged: false,
+    proficient: true,
+  },
+];
+
+const CLAWS = {
+  id: 'claws',
+  name: 'Claws',
+  damageDice: '1d6',
+  damageType: 'slashing',
+  normalRange: 5,
+  magicBonus: 0,
+  finesse: false,
+  ranged: false,
+  proficient: true,
+};
+
+/** Keyed by participant id, so each actor's sheet is its own. */
+const equippedByActor: Record<string, typeof SEEKER_WEAPONS> = {
+  'the-seeker': SEEKER_WEAPONS,
+  'the-void-maw': [CLAWS],
+};
 
 mock.module('../../../../../../db/client', () => ({ db: {} }));
 mock.module('../../../../lib/env.js', () => ({
@@ -66,7 +121,9 @@ mock.module('../../../../lib/logger.js', () => ({
   logger: {
     debug: () => {},
     info: () => {},
-    warn: () => {},
+    warn: (payload: Record<string, unknown>) => {
+      warnings.push(payload);
+    },
     error: () => {},
     child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
   },
@@ -96,7 +153,10 @@ mock.module('../../../../services/combat/combat-encounter-service.js', () => ({
         participant('the-void-maw', 'The Void-Maw', 'npc'),
       ],
       turnOrder: [],
-      currentParticipant: participant('the-void-maw', 'The Void-Maw', 'npc'),
+      currentParticipant:
+        activeParticipantId === 'the-seeker'
+          ? participant('the-seeker', 'The Seeker', 'player')
+          : participant('the-void-maw', 'The Void-Maw', 'npc'),
       participantSizes: {},
     }),
     getActiveEncounter: async () => ({ id: ENCOUNTER_ID, sessionId: SESSION_ID }),
@@ -122,18 +182,27 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
     }
   },
 }));
+// The sheet-reading leaf. `weapon-grounding` on top of it is the real thing, so what these
+// tests exercise is the grounding rule, not a stub of it.
 mock.module('../../../../services/combat/data-access.js', () => ({
-  getEquippedWeaponProfile: async () => ({
-    id: 'claws',
-    name: 'Claws',
-    ranged: false,
-    normalRange: 5,
-  }),
+  listEquippedWeaponProfiles: async (participant: { id: string }) =>
+    equippedByActor[participant.id] ?? [],
+  getEquippedWeaponProfile: async (participant: { id: string }) =>
+    equippedByActor[participant.id]?.[0] ?? CLAWS,
   getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: [] }),
   getActiveConditionNames: async () => [],
 }));
 mock.module('../../../../services/combat/combat-approach-service.js', () => ({
-  decideAttackApproach: async () => ({ movementOnly: false, attackType: 'melee' }),
+  decideAttackApproach: async ({
+    weapon,
+  }: {
+    weapon: { name: string; ranged: boolean; normalRange: number };
+  }) => {
+    approachWeapons.push(weapon);
+    // The one rule `decideAttackApproach` applies before it reach-checks: `weapon.normalRange`
+    // is the reach it hands to `approachForAttack`, and `ranged` picks the attack type.
+    return { movementOnly: false, attackType: weapon.ranged ? 'ranged' : 'melee' };
+  },
   describeResolvedAttack: () => 'The Void-Maw strikes The Seeker.',
 }));
 mock.module('../../../../services/combat/tactical-action-service.js', () => ({
@@ -262,6 +331,9 @@ beforeEach(() => {
   dmFacts.length = 0;
   trackedEvents.length = 0;
   sentRequests.length = 0;
+  approachWeapons.length = 0;
+  warnings.length = 0;
+  activeParticipantId = 'the-void-maw';
 });
 
 describe('a translated legacy attack reaches the engine through the real intent route', () => {
@@ -373,6 +445,113 @@ describe('the run-10 body, verbatim', () => {
     // The lie that hid this for a whole run.
     expect(JSON.stringify(body)).not.toContain('Internal Server Error');
     expect(attackInputs).toHaveLength(0);
+  });
+});
+
+/**
+ * The DM narrates in prose, and prose names weapons the character sheet has never heard of.
+ * `weapon_id` was consumed as a hard identity claim, so "with her elven greatbow" reached
+ * `getEquippedWeaponProfile`, missed, and threw `Requested weapon is not equipped` — a 422 that
+ * killed the swing. An unrecognized weapon name must not be able to stop a fight.
+ */
+describe('a DM attack naming a weapon the character does not own', () => {
+  beforeEach(() => {
+    activeParticipantId = 'the-seeker';
+  });
+
+  it('resolves through the engine and logs DM_WEAPON_UNGROUNDED instead of 422-ing', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'elven-greatbow',
+      },
+      source: 'dm',
+    });
+
+    expect(response.status).toBe(200);
+    expect(attackInputs).toHaveLength(1);
+    expect(trackedEvents.some((event) => event.name === 'action_refused')).toBe(false);
+
+    const ungrounded = warnings.find((entry) => entry.event === 'DM_WEAPON_UNGROUNDED');
+    expect(ungrounded).toMatchObject({
+      actorId: 'the-seeker',
+      requested: 'elven-greatbow',
+      equipped: ['Longbow', 'Shortsword'],
+    });
+
+    // A greatbow is a bow. The substitute is the ranged weapon she owns, not the first row.
+    expect(ungrounded?.resolved).toBe('Longbow');
+    expect(approachWeapons[0]).toMatchObject({ name: 'Longbow', ranged: true });
+    expect(attackInputs[0].weaponId).toBe('inv-longbow');
+  });
+
+  it('does not log DM_WEAPON_UNGROUNDED when the claim matches the sheet', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'shortsword',
+      },
+      source: 'dm',
+    });
+
+    expect(response.status).toBe(200);
+    expect(warnings.some((entry) => entry.event === 'DM_WEAPON_UNGROUNDED')).toBe(false);
+  });
+});
+
+/**
+ * Approach was decided from `getEquippedWeaponProfile(actor)` — no weapon id — while resolution
+ * used `intent.weaponId`. On a character carrying both a bow and a sword those are different
+ * weapons, so the engine reach-checked one and rolled the other.
+ */
+describe('approach and resolution swing the same weapon', () => {
+  beforeEach(() => {
+    activeParticipantId = 'the-seeker';
+  });
+
+  it('reach-checks a shortsword attack at 5ft on a character who also has a longbow equipped', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'shortsword',
+      },
+      source: 'dm',
+    });
+
+    expect(response.status).toBe(200);
+
+    // The longbow is first on her sheet, so the old no-argument default would have made this
+    // 150ft and ranged — and walked the melee check out of existence.
+    expect(approachWeapons).toHaveLength(1);
+    expect(approachWeapons[0]).toMatchObject({
+      name: 'Shortsword',
+      ranged: false,
+      normalRange: 5,
+    });
+
+    // …and resolution was handed the same row, so it cannot re-resolve to the bow.
+    expect(attackInputs[0]).toMatchObject({
+      attackerId: 'the-seeker',
+      weaponId: 'inv-shortsword',
+      attackType: 'melee',
+    });
+  });
+
+  it('still defaults to the sheet order when the DM names no weapon at all', async () => {
+    await postIntent({
+      intent: { type: 'attack', actorId: 'the-seeker', targetId: 'the-void-maw' },
+      source: 'dm',
+    });
+
+    expect(approachWeapons[0]).toMatchObject({ name: 'Longbow', ranged: true });
+    expect(attackInputs[0].weaponId).toBe('inv-longbow');
+    expect(warnings.some((entry) => entry.event === 'DM_WEAPON_UNGROUNDED')).toBe(false);
   });
 });
 

@@ -3,8 +3,6 @@
  * Extracted from ai-service.ts for reusability
  */
 
-import type { ClassEquipment } from './types';
-
 import logger from '@/lib/logger';
 
 // In-flight request deduplication with 2s TTL
@@ -42,109 +40,4 @@ export function getOrCreateDeduped<T>(key: string, factory: () => Promise<T>): P
   inFlight.set(key, { ts: now, promise });
 
   return promise;
-}
-
-/**
- * Get default equipment for a character class
- * Used to provide the AI with weapon damage dice information
- */
-export function getClassEquipment(className: string): ClassEquipment {
-  const classLower = className.toLowerCase();
-
-  switch (classLower) {
-    case 'fighter':
-      return {
-        weapons: ['Longsword (1d8)', 'Shortsword (1d6)', 'Handaxe (1d6)', 'Light Crossbow (1d8)'],
-        armor: 'Chain mail (AC 16)',
-      };
-
-    case 'rogue':
-      return {
-        weapons: ['Shortsword (1d6)', 'Dagger (1d4)', 'Shortbow (1d6)', 'Rapier (1d8)'],
-        armor: 'Leather armor (AC 11)',
-      };
-
-    case 'ranger':
-      return {
-        weapons: ['Longsword (1d8)', 'Shortsword (1d6)', 'Longbow (1d8)', 'Handaxe (1d6)'],
-        armor: 'Studded leather (AC 12)',
-      };
-
-    case 'barbarian':
-      return {
-        weapons: ['Greataxe (1d12)', 'Handaxe (1d6)', 'Javelin (1d6)'],
-        armor: 'Unarmored (AC 10 + Dex + Con)',
-      };
-
-    case 'wizard':
-      return {
-        weapons: ['Dagger (1d4)', 'Dart (1d4)', 'Light Crossbow (1d8)', 'Quarterstaff (1d6)'],
-        armor: 'No armor (AC 10)',
-      };
-
-    case 'sorcerer':
-      return {
-        weapons: ['Dagger (1d4)', 'Dart (1d4)', 'Light Crossbow (1d8)', 'Quarterstaff (1d6)'],
-        armor: 'No armor (AC 10)',
-      };
-
-    case 'warlock':
-      return {
-        weapons: ['Dagger (1d4)', 'Light Crossbow (1d8)', 'Scimitar (1d6)'],
-        armor: 'Leather armor (AC 11)',
-      };
-
-    case 'cleric':
-      return {
-        weapons: ['Mace (1d6)', 'Warhammer (1d8)', 'Light Crossbow (1d8)', 'Shield'],
-        armor: 'Scale mail (AC 14)',
-      };
-
-    case 'druid':
-      return {
-        weapons: ['Scimitar (1d6)', 'Shield', 'Dart (1d4)', 'Javelin (1d6)'],
-        armor: 'Leather armor (AC 11)',
-      };
-
-    case 'paladin':
-      return {
-        weapons: ['Longsword (1d8)', 'Javelin (1d6)', 'Shield'],
-        armor: 'Chain mail (AC 16)',
-      };
-
-    case 'bard':
-      return {
-        weapons: ['Rapier (1d8)', 'Shortsword (1d6)', 'Dagger (1d4)', 'Hand Crossbow (1d6)'],
-        armor: 'Leather armor (AC 11)',
-      };
-
-    case 'monk':
-      return {
-        weapons: ['Shortsword (1d6)', 'Dart (1d4)', 'Unarmed Strike (1d4)'],
-        armor: 'Unarmored (AC 10 + Dex + Wis)',
-      };
-
-    default:
-      return {
-        weapons: ['Longsword (1d8)', 'Shortsword (1d6)', 'Dagger (1d4)'],
-        armor: 'Leather armor (AC 11)',
-      };
-  }
-}
-
-/**
- * Add equipment context to prompt
- */
-export function addEquipmentContext(char: Record<string, unknown>): string {
-  const charClass = char.class;
-  const className =
-    (typeof charClass === 'object' && charClass !== null && 'name' in charClass
-      ? (charClass as Record<string, unknown>).name
-      : charClass) || 'Fighter';
-  const classEquipment = getClassEquipment(String(className));
-  return `
-<equipment>
-${classEquipment.weapons.join(', ')} | ${classEquipment.armor}
-**CRITICAL: USE EXACT WEAPON DICE from equipment list above for damage roll requests!**
-</equipment>`;
 }

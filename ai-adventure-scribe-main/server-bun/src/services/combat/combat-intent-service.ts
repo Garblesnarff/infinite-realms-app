@@ -8,7 +8,9 @@ import {
   getEquippedWeaponProfile,
   getParticipantAbilityProfile,
   getActiveConditionNames,
+  listEquippedWeaponProfiles,
 } from './data-access.js';
+import { groundRequestedWeapon } from './weapon-grounding.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
@@ -214,7 +216,26 @@ export async function executeCombatIntent(
     } else if (intent.type === 'attack') {
       const actorLabel = actor.name ?? intent.actorId;
       const targetLabel = await participantLabel(encounterId, intent.targetId, userId);
-      const weapon = await getEquippedWeaponProfile(actor);
+      // The approach decision and the resolution must swing the same weapon. Deciding approach
+      // from `[0]` while resolving with `intent.weaponId` is how a bow-and-sword character got
+      // walked into melee to fire an arrow, or reach-refused for a sword she was holding.
+      const equipped = await listEquippedWeaponProfiles(actor);
+      const grounding = groundRequestedWeapon(intent.weaponId, equipped);
+      if (!grounding.grounded) {
+        logger.warn(
+          {
+            event: 'DM_WEAPON_UNGROUNDED',
+            encounterId,
+            actorId: intent.actorId,
+            source,
+            requested: grounding.requested,
+            resolved: grounding.weapon.name,
+            equipped: equipped.map((profile) => profile.name),
+          },
+          '[combat] narrated weapon is not on the character sheet; resolved to a real one',
+        );
+      }
+      const weapon = grounding.weapon;
       const approach = await decideAttackApproach({
         sessionId: encounter.sessionId,
         actorId: intent.actorId,
@@ -231,7 +252,9 @@ export async function executeCombatIntent(
           {
             attackerId: intent.actorId,
             targetId: intent.targetId,
-            weaponId: intent.weaponId,
+            // The grounded id, not the raw claim: resolution re-reads the sheet, and it must
+            // land on the weapon the reach check was made against.
+            weaponId: grounding.weaponId,
             attackType: approach.attackType,
             expectedVersion: intent.expectedVersion,
             advantage: intent.advantage,
