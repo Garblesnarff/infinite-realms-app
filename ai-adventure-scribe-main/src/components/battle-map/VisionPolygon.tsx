@@ -18,7 +18,7 @@ import type { Token } from '@/types/token';
 import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-polygon';
 
 import logger from '@/lib/logger';
-import { getVisionColor, getVisionOpacity } from '@/utils/vision-calculations';
+import { getVisionColor, getVisionOpacity } from '@/utils/vision/vision-color-utils';
 import { calculateVisionPolygon, mergeVisionPolygons } from '@/utils/vision-polygon';
 
 

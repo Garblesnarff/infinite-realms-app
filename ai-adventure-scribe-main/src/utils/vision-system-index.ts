@@ -27,9 +27,12 @@ export {
   // Vision utilities
   calculateVisionRadius,
   getActiveVisionType,
+} from './vision-calculations';
+
+export {
   getVisionColor,
   getVisionOpacity,
-} from './vision-calculations';
+} from './vision/vision-color-utils';
 
 export {
   // Light calculations
