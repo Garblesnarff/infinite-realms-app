@@ -68,8 +68,16 @@ const broadcasts: Array<Record<string, unknown>> = [];
 
 mock.module('../tactical-map-store.js', () => ({
   loadActiveTacticalMap: async () => activeMap,
+  // Engine-resolved facts are written to the session's LATEST map row rather than its active
+  // one, so that a fact recorded on a killing blow survives the board being torn down. The
+  // stub has to model that or `recordDmTacticalFact` silently writes nowhere.
+  loadLatestTacticalMapRow: async () =>
+    activeMap ? { rowId: 'row', state: activeMap, active: true } : null,
   saveTacticalMap: async (map: TacticalMap) => {
     activeMap = map;
+  },
+  saveTacticalMapRow: async (_rowId: string, state: TacticalMap) => {
+    activeMap = state;
   },
   deactivateTacticalMap: async () => {},
 }));

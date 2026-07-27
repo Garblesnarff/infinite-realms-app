@@ -33,6 +33,31 @@ export interface ParticipantResistances {
   damageVulnerabilities?: string[];
 }
 
+/**
+ * The most of a character's maximum hit points one non-critical hit may remove.
+ *
+ * A safety net, deliberately independent of the party scaler in `party-scaling.ts`. The scaler
+ * is arithmetic applied to a stat block, and arithmetic can be handed a stat block nobody
+ * anticipated — an authored creature with a hand-written damage line, a catalog entry whose
+ * dice fall outside the CR band its hit points imply, or a factor that turns out to have been
+ * misjudged. This is the floor beneath all of that.
+ *
+ * One half rather than some smaller share because one half is the smallest fraction that
+ * carries the guarantee worth having: no single ordinary blow can take a character from full
+ * health to nothing, so a fight always costs at least two landed hits, so no fight is ever
+ * decided by one roll. A tighter cap would start rewriting damage that was never dangerous and
+ * turn the net into a second, hidden scaler.
+ *
+ * Applied only when the target is a player character. The net exists because a character
+ * removed by one roll is a campaign ending on a coin flip; a monster has no such stake, and
+ * capping damage dealt TO monsters would lengthen every fight — the grind the party scaler
+ * exists to avoid.
+ */
+export const MAX_SINGLE_HIT_FRACTION_OF_MAX_HP = 0.5;
+
+/** Why a hit's damage was rewritten. Always reported; never silent. */
+export type DamageCapReason = 'per_hit_fraction' | 'critical_overkill_from_full_hp';
+
 export class HPMechanics {
   /**
    * Calculate damage results based on D&D 5E rules.
@@ -42,7 +67,7 @@ export class HPMechanics {
     participantId: string,
     status: HPStatusInput,
     resistances: ParticipantResistances,
-    options: ApplyDamageOptions
+    options: ApplyDamageOptions,
   ): DamageResult {
     const {
       damageAmount,
@@ -78,6 +103,50 @@ export class HPMechanics {
         wasVulnerable = true;
       }
     }
+
+    /**
+     * The per-hit ceiling, applied after resistances and before temporary hit points.
+     *
+     * After resistances because the cap is about what the character actually feels, not what
+     * was rolled; before temp HP because temp HP is a buffer the character earned and must not
+     * be spent against damage the cap was going to remove anyway.
+     *
+     * A critical hit is exempt from the fractional cap — a crit that could not hurt more than
+     * an ordinary hit is not a crit. What a crit cannot do is kill outright from full health:
+     * against a target at full hit points its damage is clamped to exactly that target's
+     * current hit points, so the worst a single blow can ever do to a healthy character is put
+     * them at 0 — unconscious and rolling death saving throws, which is a state they can be
+     * dragged out of. Instant death in this engine requires taking damage while ALREADY at 0
+     * (`massiveDamage` below), and that clamp is what guarantees one blow can never reach it.
+     */
+    let damageCap: DamageResult['damageCap'];
+    const capTarget = options.targetIsPlayer === true;
+    if (capTarget && modifiedDamage > 0) {
+      if (isCriticalHit) {
+        const atFullHealth = status.currentHp >= status.maxHp && status.currentHp > 0;
+        if (atFullHealth && modifiedDamage > status.currentHp) {
+          damageCap = {
+            reason: 'critical_overkill_from_full_hp',
+            rawDamage: modifiedDamage,
+            cappedTo: status.currentHp,
+          };
+          modifiedDamage = status.currentHp;
+        }
+      } else {
+        const cap = Math.max(1, Math.floor(status.maxHp * MAX_SINGLE_HIT_FRACTION_OF_MAX_HP));
+        if (modifiedDamage > cap) {
+          damageCap = {
+            reason: 'per_hit_fraction',
+            rawDamage: modifiedDamage,
+            cappedTo: cap,
+            fraction: MAX_SINGLE_HIT_FRACTION_OF_MAX_HP,
+            maxHp: status.maxHp,
+          };
+          modifiedDamage = cap;
+        }
+      }
+    }
+    const damageDealt = modifiedDamage;
 
     // Apply damage to temp HP first, then real HP
     let tempHpLost = 0;
@@ -136,6 +205,11 @@ export class HPMechanics {
       massiveDamage,
       deathSaveFailuresAdded,
       newDeathSavesFailures,
+      // What the target actually took, cap included. Callers report this rather than the
+      // number they rolled: a telemetry line or a DM fact that quoted the pre-cap figure
+      // would describe a blow that did not land the way it says it did.
+      damageDealt,
+      ...(damageCap ? { damageCap } : {}),
     };
   }
 
@@ -145,7 +219,7 @@ export class HPMechanics {
   static calculateHealingResult(
     participantId: string,
     status: HPStatusInput,
-    healingAmount: number
+    healingAmount: number,
   ): HealingResult {
     const wasUnconscious = !status.isConscious;
 
@@ -175,7 +249,7 @@ export class HPMechanics {
   static resolveDeathSave(
     participantId: string,
     status: HPStatusInput,
-    roll: number
+    roll: number,
   ): DeathSaveResult {
     let successes = status.deathSavesSuccesses;
     let failures = status.deathSavesFailures;
@@ -241,7 +315,7 @@ export class HPMechanics {
   static resolveStabilization(
     participantId: string,
     roll: number,
-    modifier: number
+    modifier: number,
   ): StabilizationResult {
     const DC = 10;
     const total = roll + modifier;

@@ -94,9 +94,17 @@ mock.module('../helpers.js', () => ({
 }));
 mock.module('../../../../services/combat/tactical-map-store.js', () => ({
   loadActiveTacticalMap: async () => activeMap,
+  // Facts and corrections are written to the session's latest map row, active or not, so a
+  // fight's last event survives the teardown. Modelled here for the same reason.
+  loadLatestTacticalMapRow: async () =>
+    activeMap ? { rowId: 'row', state: activeMap, active: true } : null,
   saveTacticalMap: async (map: TacticalMap) => {
     activeMap = map;
     savedMaps.push(map);
+  },
+  saveTacticalMapRow: async (_rowId: string, state: TacticalMap) => {
+    activeMap = state;
+    savedMaps.push(state);
   },
   deactivateTacticalMap: async () => {},
 }));

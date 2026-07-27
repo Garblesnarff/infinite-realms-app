@@ -104,7 +104,11 @@ export class CombatHPService {
       throw new BusinessLogicError('Participant has no status record', { participantId });
     }
 
-    // Delegate pure logic to HPMechanics
+    // Delegate pure logic to HPMechanics.
+    //
+    // `targetIsPlayer` is read off the participant row here rather than taken from the caller.
+    // The per-hit cap is a safety property, and a safety property that every call site has to
+    // remember to opt into is one that a future call site will forget.
     const result = HPMechanics.calculateDamageResult(
       participantId,
       status,
@@ -113,8 +117,28 @@ export class CombatHPService {
         damageResistances: participant.damageResistances,
         damageVulnerabilities: participant.damageVulnerabilities,
       },
-      options,
+      { ...options, targetIsPlayer: participant.participantType === 'player' },
     );
+
+    // Every application of the cap is announced. A cap that silently rewrote damage would be
+    // indistinguishable, in a log, from an engine that had miscalculated it.
+    if (result.damageCap) {
+      logger.info({
+        msg: 'COMBAT_DAMAGE_CAP_APPLIED',
+        encounterId,
+        participantId,
+        participantName: participant.name ?? null,
+        reason: result.damageCap.reason,
+        rawDamage: result.damageCap.rawDamage,
+        cappedTo: result.damageCap.cappedTo,
+        ...(result.damageCap.fraction === undefined
+          ? {}
+          : { fraction: result.damageCap.fraction, maxHp: result.damageCap.maxHp }),
+        currentHpBefore: status.currentHp,
+        isCriticalHit: options.isCriticalHit === true,
+        sourceDescription: sourceDescription ?? null,
+      });
+    }
 
     // 🛡️ Sentinel: Refactored to use atomic updates with existence checks for defense-in-depth.
     //

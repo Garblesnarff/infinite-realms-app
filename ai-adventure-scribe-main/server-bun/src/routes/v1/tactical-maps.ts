@@ -8,6 +8,7 @@ import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-s
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import { publishCombatState } from '../../services/combat/combat-sync-service.js';
+import { vitalStateOf, type VitalsInput } from '../../services/combat/death-saves-service.js';
 import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
@@ -26,6 +27,44 @@ import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { buildStallDirective, shouldBreakStall } from '../../tactical/stall-breaker.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
+
+/**
+ * One line per combatant: hit points, and — for a character on the floor — which of the four
+ * states the death-save rules put them in.
+ *
+ * Built here rather than in `buildTacticalPrompt` because the tactical map is deliberately
+ * database-free geometry, and hit points live in `combat_participant_status`. Degrades to an
+ * empty string on any failure: a status block is an enrichment, and losing it must never cost
+ * the DM the board it is appended to.
+ */
+async function buildCombatantStatusBlock(sessionId: string, userId: string): Promise<string> {
+  try {
+    const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
+    if (!encounter) return '';
+    const state = await CombatEncounterService.getCombatState(encounter.id, userId);
+    const lines = state.participants
+      .filter((participant) => participant.isActive)
+      .map((participant) => {
+        const hydrated = participant as unknown as VitalsInput & { name: string };
+        const currentHp = hydrated.status?.currentHp ?? participant.maxHp;
+        const vital = vitalStateOf(hydrated);
+        const detail =
+          vital === 'dying'
+            ? ` UNCONSCIOUS and DYING (${hydrated.status?.deathSavesSuccesses ?? 0} death save ` +
+              `successes, ${hydrated.status?.deathSavesFailures ?? 0} failures) — not dead`
+            : vital === 'stabilized'
+              ? ' UNCONSCIOUS but STABILISED — no longer dying, cannot act'
+              : vital === 'dead'
+                ? ' DEAD'
+                : '';
+        return `- ${participant.name}: ${currentHp}/${participant.maxHp} HP${detail}`;
+      });
+    if (!lines.length) return '';
+    return `\n\n<combatant_status>\n${lines.join('\n')}\n</combatant_status>`;
+  } catch {
+    return '';
+  }
+}
 
 /** Session-scoped tactical API; all writes delegate to the shared engine dispatcher. */
 export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
@@ -87,14 +126,34 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       return { error: access.error!.message };
     }
     const map = await loadActiveTacticalMap(params.id);
-    if (!map) {
-      set.status = 404;
-      return { error: 'No active tactical map' };
-    }
+    // Facts are consumed BEFORE the no-map check, and the no-map case is no longer an
+    // unconditional 404.
+    //
+    // The board is torn down the moment the fight resolves, and the fight's last event — the
+    // killing blow, the character going down, the reason the encounter ended — is recorded
+    // microseconds before that. Answering 404 here threw all of it away, which is the second
+    // half of why no ending has ever been narrated: even once the facts survived the teardown,
+    // the endpoint that delivers them refused to answer for a session with no board.
     const [correction, facts] = await Promise.all([
       consumeDmTacticalCorrection(params.id),
       consumeDmTacticalFacts(params.id),
     ]);
+    if (!map && !facts.length && !correction) {
+      set.status = 404;
+      return { error: 'No active tactical map' };
+    }
+    if (!map) {
+      // No board to describe, but something happened on the one that just went away.
+      return {
+        tacticalContext:
+          (facts.length
+            ? `<engine_resolved_outcomes>\n${facts.join('\n')}\n</engine_resolved_outcomes>`
+            : '') +
+          (correction
+            ? `\n\n<previous_tactical_failure>${correction}</previous_tactical_failure>`
+            : ''),
+      };
+    }
     // Silence is measured where the context is assembled, because the thing being counted is
     // turns on which the DM was handed nothing the engine had done.
     const silentTurns = await noteEngineResolutions(params.id, facts.length > 0);
@@ -115,6 +174,11 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
     return {
       tacticalContext:
         buildTacticalPrompt(map, params.entityId) +
+        // Standing state, every turn, not just on the turn it changed. A fact is a one-shot
+        // announcement; this is the answer to "is my character dying right now?", which the DM
+        // needs on every turn a character spends on the floor and not merely on the turn they
+        // hit it.
+        (await buildCombatantStatusBlock(params.id, user.userId)) +
         // Engine-resolved outcomes come before failures: they are what actually happened last
         // turn, and the DM must narrate them rather than the strike it originally declared.
         (facts.length

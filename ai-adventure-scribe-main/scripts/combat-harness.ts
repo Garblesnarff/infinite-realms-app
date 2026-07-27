@@ -39,6 +39,10 @@
  *
  * Flags:
  *   --seed <n>    PRNG seed for damage dice (default 20260726). Same seed, same numbers.
+ *   --party <n>   How many player characters are in the encounter (default 1). Monsters are
+ *                 scaled to the party actually present, so `--party 1` and `--party 4` print
+ *                 different hit points and different damage dice from the same stat blocks.
+ *                 Run both and compare; that comparison is the point of the flag.
  *   --keep        Leave the fixture rows behind for inspection instead of deleting them.
  *
  * Exit code is 0 only if every scenario resolved AND emitted a complete telemetry line.
@@ -64,6 +68,7 @@ const flag = (name: string): string | undefined => {
 };
 const SEED = Number(flag('--seed') ?? 20260726);
 const KEEP = argv.includes('--keep');
+const PARTY_SIZE = Math.max(1, Number(flag('--party') ?? 1));
 
 // ---------------------------------------------------------------------------------------
 // Determinism.
@@ -156,6 +161,8 @@ const { CombatEncounterService } =
   await import('../server-bun/src/services/combat/combat-encounter-service');
 const { clearCampaignMonsterCache } =
   await import('../server-bun/src/services/combat/campaign-monster-resolution');
+const { averageDamage, PARTY_SIZE_BASELINE } =
+  await import('../server-bun/src/services/combat/party-scaling');
 
 const {
   campaigns,
@@ -213,9 +220,13 @@ const userId = `harness-${randomUUID()}`;
 const starterCampaignId = `harness-bible-${randomUUID()}`;
 let campaignId = '';
 let characterId = '';
+/** The rest of the party at `--party N`. Present only so the encounter reads N, not 1. */
+const companionCharacterIds: string[] = [];
 let sessionId = '';
 let encounterId = '';
 let heroId = '';
+/** Scaled HP as `startCombat` stored it, captured before the scenarios inflate everyone. */
+const scaledMaxHpByKey: Record<string, number> = {};
 const monsterIds: Record<keyof typeof COMBATANTS, string> = {
   stoneGolem: '',
   glutenGolem: '',
@@ -283,10 +294,42 @@ async function seedFixture(): Promise<void> {
     .values({ campaignId, characterId, sessionNumber: 1, status: 'active', starterCampaignId })
     .returning({ id: gameSessions.id });
 
+  // The rest of the party. They exist only to be counted: party scaling derives its factor
+  // from the encounter's player-type participants, so a four-person run needs four of them on
+  // the roster. They are never given a turn and never attack.
+  for (let index = 1; index < PARTY_SIZE; index += 1) {
+    const [row] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: `Harness Companion ${index}`,
+        level: HERO.level,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    companionCharacterIds.push(row.id);
+    await db.insert(characterStats).values({
+      characterId: row.id,
+      strength: HERO.strength,
+      dexterity: HERO.dexterity,
+      armorClass: HERO.armorClass,
+      maxHitPoints: HERO.maxHp,
+      currentHitPoints: HERO.maxHp,
+      speed: 30,
+    });
+  }
+
   const state = await CombatEncounterService.startCombat(
     sessionId,
     [
       { encounterId: '', characterId, name: HERO.name, initiativeModifier: 1 },
+      ...companionCharacterIds.map((id, index) => ({
+        encounterId: '',
+        characterId: id,
+        name: `Harness Companion ${index + 1}`,
+        initiativeModifier: 0,
+      })),
       ...Object.values(COMBATANTS).map((combatant) => ({
         encounterId: '',
         name: combatant.name,
@@ -301,8 +344,12 @@ async function seedFixture(): Promise<void> {
   encounterId = state.encounter.id;
   const byName = new Map(state.participants.map((p) => [p.name, p.id]));
   heroId = byName.get(HERO.name)!;
+  const maxHpByName = new Map(state.participants.map((p) => [p.name, p.maxHp]));
   for (const key of Object.keys(COMBATANTS) as Array<keyof typeof COMBATANTS>) {
     monsterIds[key] = byName.get(COMBATANTS[key].name)!;
+    // Captured now, because the next statement gives everyone 400 HP so ten scripted attacks
+    // cannot end the fight. The scaled number is what startCombat actually wrote.
+    scaledMaxHpByKey[key] = maxHpByName.get(COMBATANTS[key].name)!;
   }
 
   // startCombat rolls initiative, so the hero can land anywhere in the order; the scenarios
@@ -321,6 +368,16 @@ async function profileOf(participantId: string): Promise<{
   derivation?: string;
   multiattack?: string;
   unsupported?: string[];
+  scaling?: {
+    partySize: number;
+    factor: number;
+    rawMaxHp: number;
+    scaledMaxHp: number;
+    rawAttacks: string[];
+  };
+  scaledAverage?: number;
+  /** Just the damage expression, e.g. `1d8+1`, for the raw-versus-scaled table. */
+  scaledDamage?: string;
 }> {
   const [row] = await db
     .select({ profile: combatParticipants.monsterAttack, name: combatParticipants.name })
@@ -332,6 +389,13 @@ async function profileOf(participantId: string): Promise<{
     derivation?: { fromMaxHp: number; challengeRating: string; damagePerRound: number };
     multiattack?: { desc: string };
     unsupported?: string[];
+    partyScaling?: {
+      partySize: number;
+      factor: number;
+      rawMaxHp: number;
+      scaledMaxHp: number;
+      rawAttacks: string[];
+    };
   } | null;
   if (!profile?.attacks?.length) return { source: 'generic', attack: 'Unarmed Strike 1d1 (+0)' };
   const first = profile.attacks[0];
@@ -340,6 +404,12 @@ async function profileOf(participantId: string): Promise<{
     attack: `${first.name} +${first.attackBonus}, ${first.damageDice}${
       Number(first.damageBonus) ? `+${first.damageBonus}` : ''
     } ${first.damageType}`,
+    ...(profile.partyScaling ? { scaling: profile.partyScaling } : {}),
+    scaledDamage: `${first.damageDice}${Number(first.damageBonus) ? `+${first.damageBonus}` : ''}`,
+    scaledAverage: averageDamage({
+      damageDice: String(first.damageDice),
+      damageBonus: Number(first.damageBonus ?? 0),
+    }),
     ...(profile.derivation
       ? {
           derivation: `${profile.derivation.fromMaxHp} HP -> CR ${profile.derivation.challengeRating} -> ${profile.derivation.damagePerRound} dmg/round`,
@@ -616,6 +686,12 @@ function report(
   console.log(
     `player            ${HERO.name}  AC ${HERO.armorClass}  ${HERO.maxHp} HP  STR ${HERO.strength} (+3)  level ${HERO.level} (prof +2)  Longsword`,
   );
+  console.log(
+    `party             ${PARTY_SIZE} player character(s)  ->  scale factor ${Math.min(
+      1,
+      PARTY_SIZE / PARTY_SIZE_BASELINE,
+    ).toFixed(2)} (baseline ${PARTY_SIZE_BASELINE})`,
+  );
 
   console.log('\n' + '-'.repeat(88));
   console.log('ATTACK PROFILES AS RESOLVED BY startCombat');
@@ -630,6 +706,48 @@ function report(
       console.log(`    multiattack   ${profile.multiattack} [NOT EXPRESSED]`);
     if (profile.unsupported) console.log(`    unsupported   ${profile.unsupported.join('; ')}`);
   }
+
+  // The raw-versus-scaled table. Every number on the left came from a source priced for four
+  // adventurers; every number on the right is what this party actually fights.
+  console.log('\n' + '-'.repeat(88));
+  console.log(
+    `PARTY-SIZE SCALING  (party of ${PARTY_SIZE} against a baseline of ${PARTY_SIZE_BASELINE})`,
+  );
+  console.log('-'.repeat(88));
+  console.log(
+    '  creature'.padEnd(20) +
+      'HP raw -> scaled'.padEnd(20) +
+      'damage raw'.padEnd(20) +
+      'damage scaled'.padEnd(16) +
+      'avg raw -> scaled',
+  );
+  for (const key of Object.keys(COMBATANTS) as Array<keyof typeof COMBATANTS>) {
+    const profile = profiles[key];
+    const scaling = profile.scaling;
+    const scaledHp = scaledMaxHpByKey[key];
+    const rawHp = scaling?.rawMaxHp ?? scaledHp;
+    // The generic rung has no scaling record because it is deliberately exempt: its hit
+    // points are a placeholder for a combatant nobody wrote, not a party-sized budget.
+    const rawExpression = scaling?.rawAttacks[0] ?? '(not scaled)';
+    const rawAverage = /avg ([\d.]+)/.exec(rawExpression)?.[1] ?? '—';
+    console.log(
+      `  ${COMBATANTS[key].name}`.padEnd(20) +
+        `${rawHp} -> ${scaledHp}`.padEnd(20) +
+        rawExpression.replace(/ \(avg [\d.]+\)/, '').padEnd(20) +
+        (scaling ? (profile.scaledDamage ?? '?') : '(not scaled)').padEnd(16) +
+        `${rawAverage} -> ${profile.scaledAverage ?? '—'}`,
+    );
+  }
+  if (PARTY_SIZE >= PARTY_SIZE_BASELINE) {
+    console.log(
+      '  factor is 1.00 at this party size: every block is used exactly as its author wrote it.',
+    );
+  }
+  console.log(
+    '  note: the scenarios below then set every combatant to 400 HP so ten scripted attacks\n' +
+      '        cannot end the fight. The per-hit cap therefore never binds in this run — the\n' +
+      '        damage figures below are what the dice actually said.',
+  );
   const sources = new Set(Object.values(profiles).map((profile) => profile.source));
   for (const expected of ['catalog', 'derived', 'generic']) {
     if (!sources.has(expected)) {
@@ -741,10 +859,11 @@ async function cleanup(): Promise<void> {
   await db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId));
   await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
   await db.delete(inventoryItems).where(eq(inventoryItems.characterId, characterId));
-  await db.delete(characterStats).where(eq(characterStats.characterId, characterId));
-  await db
-    .delete(characters)
-    .where(and(eq(characters.id, characterId), eq(characters.userId, userId)));
+  for (const id of [characterId, ...companionCharacterIds]) {
+    if (!id) continue;
+    await db.delete(characterStats).where(eq(characterStats.characterId, id));
+    await db.delete(characters).where(and(eq(characters.id, id), eq(characters.userId, userId)));
+  }
   await db.delete(campaigns).where(and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId)));
   // Chunks cascade from the starter campaign; the monster-index cache does not, and a stale
   // entry would make a second run in the same process resolve a campaign that no longer exists.

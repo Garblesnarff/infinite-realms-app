@@ -622,7 +622,13 @@ export type ConditionDurationType = 'rounds' | 'minutes' | 'hours' | 'until_save
 /**
  * Saving throw abilities
  */
-export type SaveAbility = 'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma';
+export type SaveAbility =
+  | 'strength'
+  | 'dexterity'
+  | 'constitution'
+  | 'intelligence'
+  | 'wisdom'
+  | 'charisma';
 
 /**
  * Advantage type for rolls
@@ -905,6 +911,23 @@ export interface DamageResult {
   massiveDamage: boolean;
   deathSaveFailuresAdded: number;
   newDeathSavesFailures: number;
+  /**
+   * What the target actually took after the per-hit safety cap, before temp HP absorbed any
+   * of it. Optional so pre-existing constructions of this shape stay valid; every result the
+   * engine produces carries it.
+   */
+  damageDealt?: number;
+  /**
+   * Present only when the per-hit cap rewrote this hit. Its absence is the assertion that the
+   * damage reported is the damage rolled. See `MAX_SINGLE_HIT_FRACTION_OF_MAX_HP`.
+   */
+  damageCap?: {
+    reason: 'per_hit_fraction' | 'critical_overkill_from_full_hp';
+    rawDamage: number;
+    cappedTo: number;
+    fraction?: number;
+    maxHp?: number;
+  };
 }
 
 /**
@@ -947,6 +970,13 @@ export interface ApplyDamageOptions {
   ignoreResistances?: boolean;
   ignoreImmunities?: boolean;
   isCriticalHit?: boolean;
+  /**
+   * Whether the target is a player character. Decides whether the per-hit damage cap applies:
+   * the cap protects a player from losing a campaign to one roll, and monsters have no
+   * equivalent stake. Supplied by `CombatHPService.applyDamage` from the participant row, not
+   * by callers, so no call site can forget it.
+   */
+  targetIsPlayer?: boolean;
 }
 
 /**

@@ -13,6 +13,7 @@ import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { resolveCombatantStats } from './combatant-stat-resolution.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
+import { scaleMonsterForParty } from './party-scaling.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
 import { db } from '../../../../db/client';
 import {
@@ -145,6 +146,20 @@ export class CombatEncounterService {
       // starts at the SRD rung, exactly as it did before authored stats existed.
       const campaignIndex = await loadCampaignMonsterIndex(session.starterCampaignId);
 
+      /**
+       * The party the stat blocks are about to be fitted to.
+       *
+       * Counted from the encounter's own player-type participants — the same derivation
+       * `participantType` uses below — rather than assumed to be one. Every combatant is
+       * living at the moment combat starts, so "living player-type participants" is exactly
+       * this count today; when AI party members ship they arrive as further `characterId`
+       * inputs and this reads 2, 3 or 4 with no change here.
+       */
+      const partySize = Math.max(
+        1,
+        participantInputs.filter((input) => Boolean(input.characterId)).length,
+      );
+
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
       const participantsWithInitiative = participantInputs.map((input) => {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
@@ -157,33 +172,6 @@ export class CombatEncounterService {
           !input.characterId && !input.npcId
             ? resolveCombatantStats(campaignIndex, input.monsterId, input.name, { sessionId })
             : null;
-        if (monster) {
-          // One line per combatant naming the attack it will actually swing and the rung that
-          // supplied it. `derived` is the one that matters: it says the engine INFERRED these
-          // numbers from the creature's hit points because nobody wrote an attack down, which
-          // is a materially weaker claim than reading a printed stat block. A log that called
-          // all three "resolved" would make an inference indistinguishable from a fact.
-          const profile = monster.attackProfile;
-          const primary = profile.attacks[0];
-          logger.info({
-            msg: 'COMBAT_MONSTER_ATTACK_PROFILE',
-            sessionId,
-            combatantName: input.name,
-            monsterId: input.monsterId ?? null,
-            resolvedAs: monster.monsterName,
-            statSource: monster.source,
-            attackSource: profile.source,
-            attackCount: profile.attacks.length,
-            attack: primary
-              ? `${primary.name} +${primary.attackBonus}, ${primary.damageDice}${
-                  primary.damageBonus ? `+${primary.damageBonus}` : ''
-                } ${primary.damageType}`
-              : null,
-            ...(profile.derivation ? { derivation: profile.derivation } : {}),
-            ...(profile.multiattack ? { multiattackNotExpressed: profile.multiattack.desc } : {}),
-            ...(profile.unsupported?.length ? { unsupportedActions: profile.unsupported } : {}),
-          });
-        }
         // Characters and NPCs keep their historical 10/10/30 defaults. Only a combatant with
         // no database row at all falls through to SRD or generic-NPC numbers.
         const fallback =
@@ -205,20 +193,107 @@ export class CombatEncounterService {
         const armorClass = Number(
           character?.stats?.armorClass ?? npcStats.armorClass ?? npcStats.ac ?? fallback.armorClass,
         );
-        const maxHp = Number(
+        const rawMaxHp = Number(
           character?.stats?.maxHitPoints ??
             npcStats.maxHp ??
             npcStats.hitPoints ??
             input.hpMax ??
             fallback.maxHp,
         );
-        const currentHp = Number(
+        const rawCurrentHp = Number(
           character?.stats?.currentHitPoints ??
             npcStats.currentHp ??
             npcStats.hitPoints ??
             input.hpCurrent ??
-            maxHp,
+            rawMaxHp,
         );
+
+        /**
+         * Party scaling applies to exactly the combatants the stat ladder resolves: those with
+         * neither a character row nor an NPC row. Those are the ones whose numbers came from a
+         * source priced for four adventurers — a campaign bible, the SRD catalog, the CR table,
+         * or a DM-supplied `hpMax` written with the same party-sized instinct.
+         *
+         * Player characters and database NPCs are untouched. A PC's hit points are the
+         * player's own, and an NPC row is a specific creature somebody authored for this
+         * world rather than an encounter-budget number.
+         *
+         * The generic rung is untouched too, and for the same reason read the other way
+         * round: `GENERIC_NPC_STATS.maxHp` is a placeholder for a combatant nobody wrote at
+         * all — a Doorkeeper, a Hostile Patron — not a number priced against four
+         * adventurers. Scaling it would take an improvised bystander to 3 hit points on the
+         * strength of an assumption its author never made. So the requirement is a resolved
+         * stat block OR hit points the DM stated outright, both of which are party-sized;
+         * neither is the fallback default.
+         */
+        const scalable =
+          !input.characterId && !input.npcId && (monster !== null || input.hpMax != null);
+        const scaled = scalable
+          ? scaleMonsterForParty({
+              rawMaxHp,
+              rawCurrentHp,
+              attackProfile: monster?.attackProfile ?? null,
+              partySize,
+            })
+          : null;
+        const maxHp = scaled ? scaled.maxHp : rawMaxHp;
+        const currentHp = scaled ? scaled.currentHp : rawCurrentHp;
+        const attackProfile = scaled?.attackProfile ?? monster?.attackProfile ?? null;
+
+        if (monster) {
+          // One line per combatant naming the attack it will actually swing and the rung that
+          // supplied it. `derived` is the one that matters: it says the engine INFERRED these
+          // numbers from the creature's hit points because nobody wrote an attack down, which
+          // is a materially weaker claim than reading a printed stat block. A log that called
+          // all three "resolved" would make an inference indistinguishable from a fact.
+          //
+          // The attack reported is the SCALED one, because that is the attack the creature
+          // will actually make. The raw expression it was fitted from travels beside it under
+          // `partyScaling`, so the adjustment can be undone by a reader rather than guessed at.
+          const profile = attackProfile ?? monster.attackProfile;
+          const primary = profile.attacks[0];
+          logger.info({
+            msg: 'COMBAT_MONSTER_ATTACK_PROFILE',
+            sessionId,
+            combatantName: input.name,
+            monsterId: input.monsterId ?? null,
+            resolvedAs: monster.monsterName,
+            statSource: monster.source,
+            attackSource: profile.source,
+            attackCount: profile.attacks.length,
+            attack: primary
+              ? `${primary.name} +${primary.attackBonus}, ${primary.damageDice}${
+                  primary.damageBonus ? `+${primary.damageBonus}` : ''
+                } ${primary.damageType}`
+              : null,
+            ...(profile.derivation ? { derivation: profile.derivation } : {}),
+            ...(profile.multiattack ? { multiattackNotExpressed: profile.multiattack.desc } : {}),
+            ...(profile.unsupported?.length ? { unsupportedActions: profile.unsupported } : {}),
+          });
+        }
+        if (scaled && scaled.factor < 1) {
+          // Logged separately from the profile line and only when it changes something. A
+          // scaler that rewrites a stat block in silence is the same class of problem as the
+          // silent stat fallbacks this project spent weeks eliminating.
+          logger.info({
+            msg: 'COMBAT_PARTY_SCALING',
+            sessionId,
+            combatantName: input.name,
+            monsterId: input.monsterId ?? null,
+            partySize: scaled.partySize,
+            baseline: scaled.scaling.baseline,
+            factor: scaled.factor,
+            hp: `${scaled.scaling.rawMaxHp} -> ${scaled.maxHp}`,
+            damage: scaled.scaling.rawAttacks.map(
+              (raw, index) =>
+                `${raw} -> ${scaled.attackProfile?.attacks[index]?.damageDice ?? '?'}${
+                  scaled.attackProfile?.attacks[index]?.damageBonus
+                    ? `+${scaled.attackProfile.attacks[index].damageBonus}`
+                    : ''
+                }`,
+            ),
+          });
+        }
         const speed = Number(character?.stats?.speed ?? npcStats.speed ?? fallback.speed);
         const roll = rollD20();
         const initiative = InitiativeMechanics.calculateInitiative(roll, initiativeModifier);
@@ -249,7 +324,7 @@ export class CombatEncounterService {
           // numbers duplicates ("Shadow Roach 2"), which normalizes to a key no catalog
           // holds. Resolving once here, where the campaign index and the catalog are both
           // in hand, is also what lets the row record WHICH rung supplied the numbers.
-          monsterAttack: monster?.attackProfile ?? null,
+          monsterAttack: attackProfile,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
       });

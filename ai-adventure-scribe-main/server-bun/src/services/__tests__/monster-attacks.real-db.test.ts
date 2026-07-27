@@ -120,6 +120,17 @@ const AUTHORED_ATTACKER_CHUNK = [
   '**Damage:** 2d10+4 fire',
 ].join('\n');
 
+/**
+ * Four player characters, deliberately.
+ *
+ * This suite asserts that a creature swings the numbers ITS STAT BLOCK PRINTS, and every
+ * published stat block is priced for a party of four (see `party-scaling.ts`). At a party of
+ * four the scaling factor is 1.00 and the block is used verbatim, so the assertions below stay
+ * assertions about the stat ladder rather than about the scaler. Party scaling has its own
+ * suite; conflating the two would leave neither provable.
+ */
+const PARTY_SIZE = 4;
+
 describeWithDb('monsters attack with their own numbers', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('monster-attack-user');
@@ -127,6 +138,7 @@ describeWithDb('monsters attack with their own numbers', () => {
 
   let campaignId: string;
   let characterId: string;
+  const companionIds: string[] = [];
   let sessionId: string;
   let encounterId: string;
   let heroId: string;
@@ -162,6 +174,23 @@ describeWithDb('monsters attack with their own numbers', () => {
     await db
       .insert(inventoryItems)
       .values({ characterId, name: 'Longsword', itemType: 'weapon', isEquipped: true });
+
+    // The other three. They never act; they exist so the encounter's party size is four and
+    // the scaler leaves every stat block exactly as its author printed it.
+    for (let index = 1; index < PARTY_SIZE; index += 1) {
+      const [row] = await db
+        .insert(characters)
+        .values({ userId, campaignId, name: `${NAMES.hero} Companion ${index}`, level: 3 })
+        .returning({ id: characters.id });
+      companionIds.push(row.id);
+      await db.insert(characterStats).values({
+        characterId: row.id,
+        armorClass: 13,
+        maxHitPoints: 400,
+        currentHitPoints: 400,
+        speed: 30,
+      });
+    }
 
     await db.insert(starterCampaigns).values({
       id: starterCampaignId,
@@ -199,6 +228,12 @@ describeWithDb('monsters attack with their own numbers', () => {
       sessionId,
       [
         { encounterId: '', characterId, name: NAMES.hero, initiativeModifier: 1 },
+        ...companionIds.map((id, index) => ({
+          encounterId: '',
+          characterId: id,
+          name: `${NAMES.hero} Companion ${index + 1}`,
+          initiativeModifier: 0,
+        })),
         {
           encounterId: '',
           name: NAMES.stoneGolem,
@@ -243,7 +278,7 @@ describeWithDb('monsters attack with their own numbers', () => {
     await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, encounterId));
     await db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId));
     await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
-    await db.delete(characters).where(eq(characters.id, characterId));
+    await db.delete(characters).where(inArray(characters.id, [characterId, ...companionIds]));
     await db.delete(campaigns).where(eq(campaigns.id, campaignId));
     await db.delete(starterCampaigns).where(eq(starterCampaigns.id, starterCampaignId));
     clearCampaignMonsterCache();

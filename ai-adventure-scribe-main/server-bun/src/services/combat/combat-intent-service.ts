@@ -16,6 +16,12 @@ import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
+import {
+  describeGoingDown,
+  settleDownedTurns,
+  vitalStateOf,
+  type VitalsInput,
+} from './death-saves-service.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import {
@@ -113,29 +119,61 @@ function resolveExpectedVersion(
  */
 const isHostile = (participantType: string): boolean => participantType !== 'player';
 
+/**
+ * The sentence the DM is handed when the fight is over.
+ *
+ * Recorded BEFORE the board is torn down, and — since `recordDmTacticalFact` now writes to the
+ * session's latest map row rather than its active one — it survives the teardown and reaches
+ * the next context fetch. In seventeen runs no ending of any kind had ever been narrated; this
+ * line and the killing blow beside it are what the DM was missing to narrate one.
+ */
+const describeCombatEnd = (reason: 'party_defeated' | 'last_hostile_defeated'): string =>
+  reason === 'last_hostile_defeated'
+    ? 'THE FIGHT IS OVER: the last hostile has fallen and the party is victorious. Narrate ' +
+      'the end of the combat — the final blow, the aftermath, what the party is left standing ' +
+      'in. Do not start a new encounter in the same breath.'
+    : 'THE FIGHT IS OVER: no member of the party is still able to fight. Narrate the defeat ' +
+      'and what becomes of them. Do not start a new encounter in the same breath.';
+
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
-  const living = state.participants.filter((participant) => {
-    const hydrated = participant as typeof participant & {
-      status?: { currentHp: number } | null;
-    };
-    return participant.isActive && (hydrated.status?.currentHp ?? participant.maxHp) > 0;
-  });
-  const playersStanding = living.some(
-    (participant) => !isHostile(participant.participantType as string),
+  const active = state.participants.filter((participant) => participant.isActive);
+  const vitals = active.map((participant) => ({
+    participant,
+    state: vitalStateOf(participant as unknown as VitalsInput),
+  }));
+  /**
+   * A character at 0 hit points is not out of the fight. They are dying, and a dying character
+   * is one healing word or one lucky d20 away from standing up again — which is exactly the
+   * middle state this wave exists to restore. The fight therefore continues while any player
+   * is standing OR dying, and only a party with nobody in either state has lost.
+   *
+   * Stabilised and dead both end it. A stabilised character is safe but cannot be roused by
+   * anything the engine will do on its own, so continuing would leave an encounter that no
+   * side can advance — a stall wearing a fight's clothes.
+   */
+  const partyInPlay = vitals.some(
+    ({ participant, state: vital }) =>
+      !isHostile(participant.participantType as string) &&
+      (vital === 'standing' || vital === 'dying'),
   );
-  const hostilesStanding = living.some((participant) =>
-    isHostile(participant.participantType as string),
+  const hostilesStanding = vitals.some(
+    ({ participant, state: vital }) =>
+      isHostile(participant.participantType as string) && vital === 'standing',
   );
-  if (playersStanding && hostilesStanding) return false;
+  if (partyInPlay && hostilesStanding) return false;
+  // Which side ran out is the difference between a victory and a TPK, and the old fixed
+  // string reported a victory for both.
+  const reason = hostilesStanding ? 'party_defeated' : 'last_hostile_defeated';
+  // Recorded before the teardown, deliberately: this is the only ordering in which the
+  // *reason* the fight ended can reach the DM at all.
+  await recordDmTacticalFact(state.encounter.sessionId, describeCombatEnd(reason));
   await CombatEncounterService.endCombat(encounterId, userId);
   await destroyTacticalCombatMap(state.encounter.sessionId);
   trackCombatEvent('combat_ended', {
     encounterId,
     sessionId: state.encounter.sessionId,
-    // Which side ran out is the difference between a victory and a TPK, and the old fixed
-    // string reported a victory for both.
-    reason: hostilesStanding ? 'party_defeated' : 'last_hostile_defeated',
+    reason,
   });
   await publishCombatState(encounterId, userId, 'combat_ended');
   return true;
@@ -299,6 +337,17 @@ export async function executeCombatIntent(
             weapon.name,
           ),
         );
+        // Going down is its own event, and the most important one the DM has never been told
+        // about. The attack line above says "is UNCONSCIOUS"; this says what unconscious means
+        // in the rules the engine is now enforcing, so the DM narrates a character dying on
+        // the floor rather than a character killed.
+        const outcome = result as { targetNewHp?: number; targetIsDead?: boolean };
+        const targetIsPlayer =
+          state.participants.find((participant) => participant.id === intent.targetId)
+            ?.participantType === 'player';
+        if (targetIsPlayer && outcome.targetNewHp === 0 && outcome.targetIsDead !== true) {
+          await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+        }
       }
     } else if (intent.type === 'spell') {
       result = await new CombatAttackService().resolveSpellAttack(
@@ -334,7 +383,13 @@ export async function executeCombatIntent(
     } else {
       const turn = await CombatInitiativeService.advanceTurn(encounterId, userId);
       await resetTacticalMovementForTurn(encounter.sessionId, turn.currentParticipant.id);
-      result = turn;
+      // A downed character's turn is a death saving throw, not an action. Resolving it here,
+      // as the order reaches them, is what makes 0 HP a state a fight passes through rather
+      // than the state a fight ends in.
+      const settled = await settleDownedTurns(encounterId, encounter.sessionId, userId, turn);
+      result = settled.deathSaves.length
+        ? { ...settled.turn, deathSaves: settled.deathSaves }
+        : settled.turn;
     }
 
     trackCombatEvent('action_accepted', {
@@ -358,7 +413,12 @@ export async function executeCombatIntent(
         latencyMs: Math.max(0, Date.now() - dmStartedAt),
       });
     }
-    const combatEnded = damage > 0 && (await endCombatIfResolved(encounterId, userId));
+    // `end_turn` joins damage as a trigger because a character can now die without any damage
+    // being dealt: three failed death saving throws end a campaign, and the check that ends
+    // the encounter has to run on the turn that produced the third failure.
+    const combatEnded =
+      (damage > 0 || intent.type === 'end_turn') &&
+      (await endCombatIfResolved(encounterId, userId));
     if (!combatEnded) await publishCombatState(encounterId, userId, intent.type);
     return result;
   } catch (error) {

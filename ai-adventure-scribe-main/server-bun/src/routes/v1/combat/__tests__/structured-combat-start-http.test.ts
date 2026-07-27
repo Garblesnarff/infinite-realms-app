@@ -198,11 +198,16 @@ mock.module(import.meta.resolve('../helpers.js'), () => ({
       : { success: false, error: { status: 404, message: 'Session not found' } },
   verifyEncounterOwnership: async () => ({ success: true }),
 }));
+// Every export is stubbed, not just the ones this suite calls: `mock.module` replaces the
+// module for every importer in the run, so an export left out becomes a hard
+// "Export named 'x' not found" the moment any other file imports it.
 mock.module('../../../../services/combat/tactical-map-store.js', () => ({
   loadActiveTacticalMap: async () => null,
+  loadLatestTacticalMapRow: async () => null,
   saveTacticalMap: async (map: unknown) => {
     savedMaps.push(map);
   },
+  saveTacticalMapRow: async () => {},
   deactivateTacticalMap: async () => {},
 }));
 mock.module('../../../../services/collaboration/room-manager.js', () => ({
@@ -315,13 +320,23 @@ describe('structured combat start — verbatim production envelope', () => {
     expect(response.status).toBe(201);
     const bandit = body.participants.find((p) => p.name === 'Aggressive Patron');
     // srd:bandit — AC 12, 11 hp, DEX 12 (+1), 30 ft. Not the 10/10/30 placeholder.
+    //
+    // The hit points arrive scaled: this envelope carries one player character, and every
+    // published stat block is priced for four, so the catalog's 11 becomes 3 (see
+    // `party-scaling.ts`). The raw number is asserted through the profile's own scaling
+    // record rather than dropped, because "the catalog was read" and "the party was
+    // accounted for" are two separate claims and this test is about the first one.
     expect(bandit).toMatchObject({
       participantType: 'monster',
       armorClass: 12,
-      maxHp: 11,
+      maxHp: 3,
       initiativeModifier: 1,
       speed: 30,
     });
+    expect(
+      (bandit!.monsterAttack as { partyScaling?: { rawMaxHp: number; partySize: number } })
+        .partyScaling,
+    ).toMatchObject({ rawMaxHp: 11, partySize: 1 });
     expect(body.participantSizes[String(bandit!.id)]).toBe('medium');
     expect(warnings).toEqual([]);
 
@@ -452,9 +467,11 @@ describe('structured combat start — honest error bodies', () => {
   it('reports stage "map_generation" with a 500 when the map cannot be persisted', async () => {
     mock.module('../../../../services/combat/tactical-map-store.js', () => ({
       loadActiveTacticalMap: async () => null,
+      loadLatestTacticalMapRow: async () => null,
       saveTacticalMap: async () => {
         throw new Error('tactical map write failed');
       },
+      saveTacticalMapRow: async () => {},
       deactivateTacticalMap: async () => {},
     }));
     // Cache-busting query so the route module re-binds the re-mocked tactical map store.

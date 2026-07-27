@@ -348,10 +348,19 @@ export class CombatAttackService {
             sourceDescription: weapon.name || 'attack',
             ignoreResistances: true, // Already applied in damage calculation
             ignoreImmunities: true, // Already applied in damage calculation
+            // Previously never passed, so two 5E rules downstream of it were dead code: a
+            // crit against a downed creature costs it two death-save failures rather than
+            // one, and the per-hit safety cap treats a crit differently from an ordinary hit.
+            isCriticalHit: isCrit,
           },
           userId,
           targetParticipant,
         );
+
+        // The applied figure is what the HP layer actually took, which is not always what the
+        // dice said: the per-hit cap can rewrite it. Reporting the rolled number here would
+        // put a damage figure in the telemetry that the target's HP never reflects.
+        const appliedDamage = hpResult.damageDealt ?? damageCalc.finalDamage;
 
         // Logged after the HP write, with the post-write HP included: damage that is
         // calculated but never persisted -- the exact failure mode this telemetry exists to
@@ -361,7 +370,7 @@ export class CombatAttackService {
           outcome: 'hit',
           critical: isCrit,
           damageRolled: damageCalc.damageBeforeResistances,
-          damageApplied: damageCalc.finalDamage,
+          damageApplied: appliedDamage,
           targetHpAfter: hpResult.newCurrentHp,
         });
 
@@ -375,7 +384,7 @@ export class CombatAttackService {
           effectiveResistance: damageCalc.effectiveResistance,
           effectiveVulnerability: damageCalc.effectiveVulnerability,
           effectiveImmunity: damageCalc.effectiveImmunity,
-          finalDamage: damageCalc.finalDamage,
+          finalDamage: appliedDamage,
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
@@ -629,6 +638,7 @@ export class CombatAttackService {
                   sourceDescription: spellName,
                   ignoreResistances: true, // Already applied in damage calculation
                   ignoreImmunities: true, // Already applied in damage calculation
+                  isCriticalHit: spellIsCrit,
                 },
                 userId,
                 targetParticipant,
@@ -644,7 +654,7 @@ export class CombatAttackService {
                 effectiveResistance: damageCalc.effectiveResistance,
                 effectiveVulnerability: damageCalc.effectiveVulnerability,
                 effectiveImmunity: damageCalc.effectiveImmunity,
-                finalDamage: damageCalc.finalDamage,
+                finalDamage: hpResult.damageDealt ?? damageCalc.finalDamage,
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
@@ -734,7 +744,7 @@ export class CombatAttackService {
                 effectiveResistance: damageCalc.effectiveResistance,
                 effectiveVulnerability: damageCalc.effectiveVulnerability,
                 effectiveImmunity: damageCalc.effectiveImmunity,
-                finalDamage,
+                finalDamage: hpResult.damageDealt ?? finalDamage,
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,

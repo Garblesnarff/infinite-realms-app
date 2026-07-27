@@ -1,4 +1,9 @@
-import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
+import {
+  loadActiveTacticalMap,
+  loadLatestTacticalMapRow,
+  saveTacticalMap,
+  saveTacticalMapRow,
+} from './tactical-map-store.js';
 import { combatLogger } from '../../lib/logger.js';
 import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactical/dispatch.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
@@ -133,21 +138,32 @@ export async function applyDmTacticalActions(
 /**
  * Record something the engine resolved that the DM has not been told about yet. These are
  * facts, not corrections: the DM did nothing wrong, the board simply had the final say.
+ *
+ * Written to the session's LATEST map row rather than its active one. A fact recorded on the
+ * killing blow is written microseconds before `endCombatIfResolved` tears the board down, and
+ * a channel that closes with the board is a channel that can never carry an ending. See
+ * `loadLatestTacticalMapRow`.
  */
 export async function recordDmTacticalFact(sessionId: string, fact: string): Promise<void> {
-  const map = await loadActiveTacticalMap(sessionId);
-  if (!map) return;
-  map.pendingDmFacts = [...(map.pendingDmFacts ?? []), fact];
-  await saveTacticalMap(map);
+  const row = await loadLatestTacticalMapRow(sessionId);
+  if (!row) return;
+  row.state.pendingDmFacts = [...(row.state.pendingDmFacts ?? []), fact];
+  await saveTacticalMapRow(row.rowId, row.state);
 }
 
-/** Return the engine-resolved facts with the next tactical digest, then clear them. */
+/**
+ * Return the engine-resolved facts with the next tactical digest, then clear them.
+ *
+ * Reads the latest row, active or not, for the same reason the writer does: the last thing
+ * that happened in a fight is recorded on a board that no longer exists by the time anyone
+ * asks about it.
+ */
 export async function consumeDmTacticalFacts(sessionId: string): Promise<string[]> {
-  const map = await loadActiveTacticalMap(sessionId);
-  if (!map?.pendingDmFacts?.length) return [];
-  const facts = map.pendingDmFacts;
-  delete map.pendingDmFacts;
-  await saveTacticalMap(map);
+  const row = await loadLatestTacticalMapRow(sessionId);
+  if (!row?.state.pendingDmFacts?.length) return [];
+  const facts = row.state.pendingDmFacts;
+  delete row.state.pendingDmFacts;
+  await saveTacticalMapRow(row.rowId, row.state);
   return facts;
 }
 
@@ -172,12 +188,17 @@ export async function noteEngineResolutions(
   return streak;
 }
 
-/** Return the one-shot correction fact with the next tactical digest, then clear it. */
+/**
+ * Return the one-shot correction fact with the next tactical digest, then clear it.
+ *
+ * Latest row, not active row: a correction recorded on the DM's last map action before the
+ * fight ended has exactly the same delivery problem the facts had.
+ */
 export async function consumeDmTacticalCorrection(sessionId: string): Promise<string | null> {
-  const map = await loadActiveTacticalMap(sessionId);
-  if (!map?.pendingDmCorrection) return null;
-  const correction = map.pendingDmCorrection;
-  delete map.pendingDmCorrection;
-  await saveTacticalMap(map);
+  const row = await loadLatestTacticalMapRow(sessionId);
+  if (!row?.state.pendingDmCorrection) return null;
+  const correction = row.state.pendingDmCorrection;
+  delete row.state.pendingDmCorrection;
+  await saveTacticalMapRow(row.rowId, row.state);
   return correction;
 }

@@ -158,8 +158,15 @@ export class HeadlessGameClient {
     // The tactical server computes geometry; the DM receives only its digest and never derives
     // distance itself. Without this the prompt carries no board and every combat contract on
     // the server — translation, prose floor, spatial check — is a no-op.
-    if (combat.currentParticipantId) {
-      const tacticalContext = await this.loadTacticalContext(combat.currentParticipantId);
+    //
+    // Gated on `combatActive` rather than on there being a current participant, because the
+    // one turn on which there is no current participant is the turn immediately after the
+    // engine ended the encounter — and that is precisely the turn carrying the killing blow,
+    // the character going down, and the reason the fight is over. Requiring a live participant
+    // here meant the DM was guaranteed never to be told how any fight ended. The entity id is
+    // only used to centre the board digest, so a fight with no board left passes a placeholder.
+    if (this.combatActive) {
+      const tacticalContext = await this.loadTacticalContext(combat.currentParticipantId ?? '-');
       if (tacticalContext)
         (aiContext.gameState as Record<string, unknown>).tacticalContext = tacticalContext;
     }

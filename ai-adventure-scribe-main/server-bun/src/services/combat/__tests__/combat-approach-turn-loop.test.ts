@@ -81,8 +81,15 @@ const broadcasts: Array<Record<string, unknown>> = [];
 
 mock.module('../tactical-map-store.js', () => ({
   loadActiveTacticalMap: async () => activeMap,
+  // See combat-approach-service.test.ts: facts are recorded against the latest row, not the
+  // active one, so that a fight's final blow outlives the board it happened on.
+  loadLatestTacticalMapRow: async () =>
+    activeMap ? { rowId: 'row', state: activeMap, active: true } : null,
   saveTacticalMap: async (map: TacticalMap) => {
     activeMap = map;
+  },
+  saveTacticalMapRow: async (_rowId: string, state: TacticalMap) => {
+    activeMap = state;
   },
   deactivateTacticalMap: async () => {},
 }));

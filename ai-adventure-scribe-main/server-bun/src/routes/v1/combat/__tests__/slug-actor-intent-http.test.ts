@@ -134,6 +134,10 @@ mock.module('../../../../services/combat/data-access.js', () => ({
   getEquippedWeaponProfile: async () => CLAWS,
   getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: [] }),
   getActiveConditionNames: async () => [],
+  // Not used by this suite, but `hp-data-access.js` imports it, and the death-save
+  // machinery now pulls the HP service into the intent gateway's import graph. A
+  // mocked module with a missing export is a hard SyntaxError for every importer.
+  verifyEncounterAccess: async () => {},
 }));
 mock.module('../../../../services/combat/combat-approach-service.js', () => ({
   decideAttackApproach: async () => ({ movementOnly: false, attackType: 'melee' }),
@@ -151,7 +155,12 @@ mock.module('../../../../services/combat/tactical-combat-lifecycle.js', () => ({
 // The board the DM is shown, and the only thing that knows a slug means a uuid.
 mock.module('../../../../services/combat/tactical-map-store.js', () => ({
   loadActiveTacticalMap: async () => board(),
+  // Facts are recorded against the latest map row rather than the active one; stubbed so
+  // this suite keeps a complete module surface (a missing export is a hard failure for
+  // every other file in a directory run).
+  loadLatestTacticalMapRow: async () => ({ rowId: 'row', state: board(), active: true }),
   saveTacticalMap: async () => {},
+  saveTacticalMapRow: async () => {},
   deactivateTacticalMap: async () => {},
 }));
 mock.module('../../../../services/combat/combat-sync-service.js', () => ({

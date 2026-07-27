@@ -65,6 +65,19 @@ export interface MonsterAttackProfile {
   derivation?: { fromMaxHp: number; challengeRating: string; damagePerRound: number };
   /** Present only on `catalog`/`authored` when the source declares a Multiattack. */
   multiattack?: { desc: string; expressible: false };
+  /**
+   * Present once the profile has been fitted to the party actually present. Every source
+   * above is priced for four adventurers; see `party-scaling.ts`. Its absence on a stored
+   * profile means the row predates party scaling, not that the factor was 1.
+   */
+  partyScaling?: {
+    partySize: number;
+    baseline: number;
+    factor: number;
+    rawMaxHp: number;
+    scaledMaxHp: number;
+    rawAttacks: string[];
+  };
 }
 
 /**
