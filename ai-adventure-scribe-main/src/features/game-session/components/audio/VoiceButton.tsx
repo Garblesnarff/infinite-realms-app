@@ -23,6 +23,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           className={`transition-colors ${isSpeaking ? 'text-primary' : ''}`}

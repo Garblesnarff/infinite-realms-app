@@ -28,6 +28,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, onVolumeChan
               onVolumeChange(values[0] / 100);
             }}
             className="cursor-pointer"
+            getAriaValueText={(val) => `${Math.round(val)}%`}
           />
         </div>
       </TooltipTrigger>

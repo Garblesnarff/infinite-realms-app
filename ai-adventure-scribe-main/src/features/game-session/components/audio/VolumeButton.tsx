@@ -23,6 +23,7 @@ export const VolumeButton: React.FC<VolumeButtonProps> = ({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           onClick={onToggleMute}

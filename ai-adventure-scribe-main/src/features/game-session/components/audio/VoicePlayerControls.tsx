@@ -288,6 +288,7 @@ export const VoicePlayerControls: React.FC<VoicePlayerControlsProps> = ({
           step={0.05}
           className="flex-1"
           aria-label="Adjust playback volume"
+          getAriaValueText={(val) => `${Math.round(val * 100)}%`}
         />
 
         <span className="text-xs text-muted-foreground w-10 text-right">
