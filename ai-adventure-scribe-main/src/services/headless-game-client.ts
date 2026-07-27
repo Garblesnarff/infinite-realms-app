@@ -270,6 +270,17 @@ export class HeadlessGameClient {
     if (this.options.length) events.push({ type: 'options', options: this.options });
     if (this.pending.length) events.push({ type: 'roll_request', requests: this.pending });
     const map = await this.getMap();
+    // The board is the authority on whether combat is running; `combatActive` is only a
+    // cache of it. It used to be written solely by start/end transitions, so it could not
+    // learn about an encounter the *engine* ended -- the last hostile going down tears the
+    // map down server-side without any transition passing through here. The flag then stayed
+    // true, and the next turn told the DM it was mid-fight on a board that no longer existed.
+    // Re-reading it from the map already fetched for this turn's events costs nothing and
+    // means the flag can only ever be one turn's work behind the server, never permanently
+    // wrong. (The nine-encounters loop itself was the server bug fixed in
+    // combat-intent-service's `endCombatIfResolved`; this stops the client from carrying a
+    // stale answer in either direction.)
+    this.combatActive = Boolean(map);
     if (map) {
       const tacticalMap = map as Parameters<typeof mapToAscii>[0];
       events.push({

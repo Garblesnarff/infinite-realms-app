@@ -92,25 +92,50 @@ function resolveExpectedVersion(
   return { ...intent, expectedVersion: encounterVersion } as CombatIntent;
 }
 
+/**
+ * Everything that is not the player is a hostile.
+ *
+ * This used to ask `livingTypes.has('npc')`, and that single string is what produced nine
+ * encounters in one three-minute session in run 16. `participant_type` carries four values;
+ * `startCombat` stamps a DM-authored combatant `'monster'` when it came with an SRD id and
+ * `'other'` when it did not, and only a combatant built from an `npcId` -- a database NPC
+ * row, which structured combat starts never supply -- is ever `'npc'`. So no structured
+ * encounter has ever contained a living `'npc'`, the "are both sides still standing?" test
+ * was false from the first damaging action onward, and every landed hit ended the fight and
+ * tore down the board with the enemy still up. The DM, correctly reading a session that was
+ * no longer in combat, started a new one; the next hit ended that; nine times over.
+ *
+ * Asking about `'player'` instead is the same question with no vocabulary to drift: it needs
+ * one value to be spelled consistently rather than three, and `startCombat` derives
+ * `'player'` from the presence of a `characterId` rather than from anything model-authored.
+ * Every other participant-type check in the server already reads this way
+ * (`participant-size.ts`, `tactical-combat-lifecycle.ts`); this was the odd one out.
+ */
+const isHostile = (participantType: string): boolean => participantType !== 'player';
+
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
-  const livingTypes = new Set(
-    state.participants
-      .filter((participant) => {
-        const hydrated = participant as typeof participant & {
-          status?: { currentHp: number } | null;
-        };
-        return participant.isActive && (hydrated.status?.currentHp ?? participant.maxHp) > 0;
-      })
-      .map((participant) => participant.participantType),
+  const living = state.participants.filter((participant) => {
+    const hydrated = participant as typeof participant & {
+      status?: { currentHp: number } | null;
+    };
+    return participant.isActive && (hydrated.status?.currentHp ?? participant.maxHp) > 0;
+  });
+  const playersStanding = living.some(
+    (participant) => !isHostile(participant.participantType as string),
   );
-  if (livingTypes.has('player') && livingTypes.has('npc')) return false;
+  const hostilesStanding = living.some((participant) =>
+    isHostile(participant.participantType as string),
+  );
+  if (playersStanding && hostilesStanding) return false;
   await CombatEncounterService.endCombat(encounterId, userId);
   await destroyTacticalCombatMap(state.encounter.sessionId);
   trackCombatEvent('combat_ended', {
     encounterId,
     sessionId: state.encounter.sessionId,
-    reason: 'last_hostile_defeated',
+    // Which side ran out is the difference between a victory and a TPK, and the old fixed
+    // string reported a victory for both.
+    reason: hostilesStanding ? 'party_defeated' : 'last_hostile_defeated',
   });
   await publishCombatState(encounterId, userId, 'combat_ended');
   return true;

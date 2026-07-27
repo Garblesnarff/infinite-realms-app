@@ -19,15 +19,25 @@ mock.module('../../../lib/logger.js', () => ({
 
 const { parseAuthoredStatBlock, gradeCoverage } = await import('../authored-stat-block-parser.js');
 const { resolveCombatantStats } = await import('../combatant-stat-resolution.js');
+const { normalizeMonsterKey } = await import('../monster-key.js');
 
 import type { CampaignMonsterIndex } from '../campaign-monster-index.js';
 
-/** Builds an index the way `loadCampaignMonsterIndex` does, without touching a database. */
+/**
+ * Builds an index the way `loadCampaignMonsterIndex` does, without touching a database.
+ *
+ * Keys go through `normalizeMonsterKey`, the same function production uses. This fixture used
+ * to inline `toLowerCase().replace(/[^a-z0-9]+/g, '-')` — a copy of the rule as it stood at
+ * the time — and when the rule tightened to strip separators outright, the copy did not
+ * follow: the index held `gluten-golem` while every lookup asked for `glutengolem`, and four
+ * tests failed against correct production code. That divergence is the exact failure
+ * `monster-key.ts` exists as a single module to prevent, so the fixture imports it.
+ */
 const indexOf = (campaignId: string, entries: Record<string, string>): CampaignMonsterIndex => {
   const byKey = new Map();
   for (const [entityName, content] of Object.entries(entries)) {
     const parsed = parseAuthoredStatBlock(content);
-    byKey.set(entityName.toLowerCase().replace(/[^a-z0-9]+/g, '-'), {
+    byKey.set(normalizeMonsterKey(entityName), {
       entityName,
       chunkType: 'monster',
       parsed,

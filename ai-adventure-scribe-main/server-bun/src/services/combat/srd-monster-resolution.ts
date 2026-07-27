@@ -153,8 +153,14 @@ function matchSrdMonster(monsterId?: string | null, name?: string | null): Catal
 
   // Only a *supplied* id earns a near-miss attempt; a bare narrative name is not evidence
   // that the model meant an SRD creature at all.
-  if (id) {
-    const near = findNearMissEntry(id);
+  //
+  // Deliberately the *raw* id, not the normalized one. `normalizeMonsterKey` removes
+  // separators outright (that is the point of it — `stonegolem` and `stone-golem` must be
+  // one key), so the normalized form of `srd:dire_wolf_alpha` is `direwolfalpha`, a single
+  // token that can never match the two-token `dire-wolf`. `findNearMissEntry` tokenizes what
+  // it is given, and tokenizing needs the word boundaries the lookup key throws away.
+  if (id && monsterId) {
+    const near = findNearMissEntry(monsterId);
     if (near) return { entry: near, matchType: 'near-miss' };
   }
 

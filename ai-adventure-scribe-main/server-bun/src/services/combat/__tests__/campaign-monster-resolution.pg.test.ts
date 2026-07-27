@@ -15,6 +15,17 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { campaignChunks, starterCampaigns } from '../../../../../db/schema/index';
 import { closeRealDb, describeWithDb, realDb, testId } from '../../__tests__/fixtures/real-db.js';
+import { normalizeMonsterKey } from '../monster-key.js';
+
+/**
+ * Index keys are asked for through the same function that wrote them. These assertions used
+ * to spell the keys out as literals (`'gluten-golem'`), which quietly made them a second
+ * copy of the normalization rule — and when the rule tightened to strip separators outright,
+ * the literals kept asking for keys the index no longer contained. Going through
+ * `normalizeMonsterKey` means these tests check that the *creature* is indexed, which is
+ * what they are about; `monster-key.test.ts` is where the spelling of the key is pinned.
+ */
+const key = normalizeMonsterKey;
 
 const campaignId = testId('feast');
 
@@ -108,10 +119,13 @@ describeWithDb('campaign monster index against real Postgres', () => {
       // 5 stat-bearing rows exist; the unnamed one is excluded by the IS NOT NULL filter
       // before it is ever counted, which is why chunkCount is 4 rather than 5.
       expect(index.chunkCount).toBe(4);
-      expect(index.byKey.get('gluten-golem')?.parsed).toMatchObject({ maxHp: 90, armorClass: 14 });
-      expect(index.byKey.get('shadow-roach')?.parsed.maxHp).toBe(20);
+      expect(index.byKey.get(key('Gluten Golem'))?.parsed).toMatchObject({
+        maxHp: 90,
+        armorClass: 14,
+      });
+      expect(index.byKey.get(key('Shadow Roach'))?.parsed.maxHp).toBe(20);
       // npc_tier1 was filtered out by the query, not merely unmatched.
-      expect(index.byKey.has('the-sugar-golem')).toBe(false);
+      expect(index.byKey.has(key('The Sugar Golem'))).toBe(false);
       // The unnamed 999 HP chunk is excluded by the IS NOT NULL filter.
       expect([...index.byKey.values()].some((m) => m.parsed.maxHp === 999)).toBe(false);
     },
@@ -144,9 +158,15 @@ describeWithDb('campaign monster index against real Postgres', () => {
       rows.filter((row) => row.content.length > 0),
     );
 
-    expect(index.byKey.get('gluten-golem')?.parsed).toMatchObject({ maxHp: 90, armorClass: 14 });
-    expect(index.byKey.get('shadow-roach')?.parsed).toMatchObject({ maxHp: 20, armorClass: 13 });
-    expect(index.byKey.get('the-chiropteran-hulk')?.parsed).toMatchObject({
+    expect(index.byKey.get(key('Gluten Golem'))?.parsed).toMatchObject({
+      maxHp: 90,
+      armorClass: 14,
+    });
+    expect(index.byKey.get(key('Shadow Roach'))?.parsed).toMatchObject({
+      maxHp: 20,
+      armorClass: 13,
+    });
+    expect(index.byKey.get(key('The Chiropteran Hulk'))?.parsed).toMatchObject({
       maxHp: 80,
       armorClass: 14,
     });
@@ -180,7 +200,7 @@ describeWithDb('campaign monster index against real Postgres', () => {
       .where(eq(campaignChunks.campaignId, campaignId));
 
     const index = buildCampaignMonsterIndex(campaignId, rows);
-    expect(index.byKey.get('random-encounters')?.coverage).toBe('none');
-    expect(index.byKey.get('random-encounters')?.parsed.maxHp).toBeUndefined();
+    expect(index.byKey.get(key('Random Encounters'))?.coverage).toBe('none');
+    expect(index.byKey.get(key('Random Encounters'))?.parsed.maxHp).toBeUndefined();
   });
 });

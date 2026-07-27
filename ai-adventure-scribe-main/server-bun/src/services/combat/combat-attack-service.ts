@@ -15,6 +15,7 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { resolveAttackRules } from './combat-rules.js';
 import {
   claimTurnActionAndResolve,
@@ -257,7 +258,42 @@ export class CombatAttackService {
         disadvantage: rules.disadvantage,
       });
 
+      // Everything the telemetry line knows before damage is rolled. Both branches below
+      // finish it with their own outcome, so a miss is logged as fully as a hit -- see
+      // attack-telemetry.ts for why the miss is the case that actually matters.
+      const observed = {
+        encounterId,
+        attackerId,
+        attackerSlug: participantSlug(
+          tacticalMap,
+          attackerId,
+          attackerData.participant.name as string | null,
+        ),
+        targetId,
+        targetSlug: participantSlug(tacticalMap, targetId, targetParticipant.name as string | null),
+        weapon: weapon.name || 'attack',
+        d20: attackRoll,
+        attackBonus: rules.attackBonus,
+        totalAttack: hitCheck.totalAttackRoll,
+        baseAc: baseTargetAc,
+        effectiveAc: targetAC,
+        cover: geometry?.cover ?? null,
+        coverBonus: targetAC - baseTargetAc,
+        advantage: rules.advantage,
+        disadvantage: rules.disadvantage,
+        naturalOne: hitCheck.isNaturalOne,
+        naturalTwenty: hitCheck.isNaturalTwenty,
+      } as const;
+
       if (!hitCheck.hit) {
+        logAttackResolution({
+          ...observed,
+          outcome: 'miss',
+          critical: false,
+          damageRolled: null,
+          damageApplied: null,
+          targetHpAfter: null,
+        });
         // Miss - no damage
         return {
           hit: false,
@@ -311,6 +347,18 @@ export class CombatAttackService {
           userId,
           targetParticipant,
         );
+
+        // Logged after the HP write, with the post-write HP included: damage that is
+        // calculated but never persisted -- the exact failure mode this telemetry exists to
+        // rule in or out -- shows up here as a nonzero damageApplied beside an unmoved HP.
+        logAttackResolution({
+          ...observed,
+          outcome: 'hit',
+          critical: isCrit,
+          damageRolled: damageCalc.damageBeforeResistances,
+          damageApplied: damageCalc.finalDamage,
+          targetHpAfter: hpResult.newCurrentHp,
+        });
 
         return {
           hit: true,
