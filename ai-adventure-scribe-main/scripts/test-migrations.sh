@@ -187,6 +187,11 @@ build_replay_list() {
         # Indexes dialogue_history(sequence_number), which is added by
         # supabase/migrations/20251103151855_add_message_sequence_numbers.sql.
         0001_add_session_indexes.sql) echo "20251110_000000	$f"; continue;;
+        # ALTERs combat_participants, which is created by
+        # supabase/migrations/20251112_01_add_combat_system_unified.sql. Its drizzle index
+        # prefix would sort it before every date-named migration, so it would replay against
+        # a database with no combat tables in it yet.
+        0005_happy_shadow_king.sql) echo "20260726_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac
