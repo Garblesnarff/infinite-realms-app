@@ -28,6 +28,7 @@ import {
   type CombatParticipant,
 } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 
 import type { EntitySize } from '../../tactical/types.js';
 import type { CombatState, CreateParticipantInput, TurnOrderEntry } from '../../types/combat.js';
@@ -156,6 +157,33 @@ export class CombatEncounterService {
           !input.characterId && !input.npcId
             ? resolveCombatantStats(campaignIndex, input.monsterId, input.name, { sessionId })
             : null;
+        if (monster) {
+          // One line per combatant naming the attack it will actually swing and the rung that
+          // supplied it. `derived` is the one that matters: it says the engine INFERRED these
+          // numbers from the creature's hit points because nobody wrote an attack down, which
+          // is a materially weaker claim than reading a printed stat block. A log that called
+          // all three "resolved" would make an inference indistinguishable from a fact.
+          const profile = monster.attackProfile;
+          const primary = profile.attacks[0];
+          logger.info({
+            msg: 'COMBAT_MONSTER_ATTACK_PROFILE',
+            sessionId,
+            combatantName: input.name,
+            monsterId: input.monsterId ?? null,
+            resolvedAs: monster.monsterName,
+            statSource: monster.source,
+            attackSource: profile.source,
+            attackCount: profile.attacks.length,
+            attack: primary
+              ? `${primary.name} +${primary.attackBonus}, ${primary.damageDice}${
+                  primary.damageBonus ? `+${primary.damageBonus}` : ''
+                } ${primary.damageType}`
+              : null,
+            ...(profile.derivation ? { derivation: profile.derivation } : {}),
+            ...(profile.multiattack ? { multiattackNotExpressed: profile.multiattack.desc } : {}),
+            ...(profile.unsupported?.length ? { unsupportedActions: profile.unsupported } : {}),
+          });
+        }
         // Characters and NPCs keep their historical 10/10/30 defaults. Only a combatant with
         // no database row at all falls through to SRD or generic-NPC numbers.
         const fallback =
@@ -216,6 +244,12 @@ export class CombatEncounterService {
                 input.monsterId
                 ? ('monster' as const)
                 : ('other' as const),
+          // Stored, not re-derived at attack time. A participant carries no monster id, so
+          // an attack-time lookup would have to work from the display name -- and combat
+          // numbers duplicates ("Shadow Roach 2"), which normalizes to a key no catalog
+          // holds. Resolving once here, where the campaign index and the catalog are both
+          // in hand, is also what lets the row record WHICH rung supplied the numbers.
+          monsterAttack: monster?.attackProfile ?? null,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
       });

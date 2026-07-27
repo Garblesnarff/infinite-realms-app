@@ -40,6 +40,15 @@ export type AttackTelemetry = {
   targetId: string;
   targetSlug: string;
   weapon: string;
+  /**
+   * Which rung of the attack ladder the attacker's weapon came from:
+   * `authored` | `catalog` | `derived` | `generic` for a monster, `character-sheet` for a PC.
+   *
+   * `derived` is the one a reader must be able to pick out: those numbers were inferred from
+   * the creature's hit points because no attack was written down anywhere, and `generic` means
+   * even that failed and the creature is swinging the 1d1 default this wave exists to retire.
+   */
+  profileSource: string;
   /** The raw d20 face, after advantage/disadvantage selection. */
   d20: number;
   attackBonus: number;

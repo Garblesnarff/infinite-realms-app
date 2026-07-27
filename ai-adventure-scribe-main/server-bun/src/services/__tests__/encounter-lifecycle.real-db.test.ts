@@ -178,10 +178,31 @@ describeWithDb('an encounter survives a landed hit while a hostile is still stan
     );
   };
 
+  /**
+   * Attacks until damage actually lands.
+   *
+   * The monster's AC is 1, so the only way to miss is a natural 1 — but a natural 1 always
+   * misses regardless of AC, which makes a single attack a 5% coin flip. Every assertion in
+   * this suite is about what happens *after* damage is applied, so a missed attack tests
+   * nothing and fails for a reason unrelated to the behaviour under test.
+   *
+   * This was latent from the moment the suite was written and surfaced when an unrelated new
+   * suite shifted the shared `Math.random` stream. Bounded at twelve: the odds of twelve
+   * consecutive natural 1s are 1 in 20^12.
+   */
+  const heroAttacksUntilDamage = async (): Promise<void> => {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const before = await statusOf(monsterId);
+      await heroAttacks();
+      if ((await statusOf(monsterId)) < before) return;
+    }
+    throw new Error('twelve consecutive misses against AC 1 — the dice are not the problem');
+  };
+
   test('a landed hit on a living monster does not end the encounter', async () => {
     expect(await encounterStatus()).toBe('active');
 
-    await heroAttacks();
+    await heroAttacksUntilDamage();
 
     const hpAfter = await statusOf(monsterId);
     // Precondition for the assertion that follows: damage really did land, so the
@@ -212,7 +233,7 @@ describeWithDb('an encounter survives a landed hit while a hostile is still stan
       .set({ currentHp: 1 })
       .where(eq(combatParticipantStatus.participantId, monsterId));
 
-    await heroAttacks();
+    await heroAttacksUntilDamage();
 
     expect(await statusOf(monsterId)).toBe(0);
     expect(await encounterStatus()).toBe('completed');

@@ -9,6 +9,25 @@ export type WeaponRuleProfile = {
   finesse: boolean;
   ranged: boolean;
   proficient: boolean;
+  /**
+   * A to-hit bonus that is already complete, used verbatim instead of being rebuilt from
+   * ability modifier + proficiency + magic.
+   *
+   * Monsters need this and player characters must never set it. A stat block prints one
+   * finished number ("+10 to hit") that folds in Strength, proficiency and any magic the
+   * designer priced in; there is no decomposition to recover, and a monster participant has
+   * no ability scores to recover it from -- `getParticipantAbilityProfile` returns `{}` for a
+   * combatant with neither a character nor an NPC row, so every modifier reads +0. Rebuilding
+   * from parts is what made a CR 10 golem swing at +2.
+   *
+   * Player weapons leave this undefined and take the computed path below, unchanged.
+   */
+  fixedAttackBonus?: number;
+  /**
+   * The flat damage addend that belongs with `fixedAttackBonus`. Same reasoning: the SRD's
+   * `3d8 + 6` states its own +6, which is not the monster's (nonexistent) Strength modifier.
+   */
+  fixedDamageBonus?: number;
 };
 
 export type AttackGeometry = {
@@ -44,7 +63,8 @@ export type AttackRuleResolution = {
 };
 
 export const abilityModifier = (score: number): number => Math.floor((score - 10) / 2);
-export const proficiencyBonus = (level: number): number => 2 + Math.floor((Math.max(1, level) - 1) / 4);
+export const proficiencyBonus = (level: number): number =>
+  2 + Math.floor((Math.max(1, level) - 1) / 4);
 
 const includes = (conditions: string[], names: string[]): boolean =>
   conditions.some((condition) => names.includes(condition.toLowerCase()));
@@ -77,8 +97,19 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   if (geometry && geometry.distanceFeet > weapon.normalRange) hasDisadvantage = true;
   // Ranged attacks made while an enemy is within 5 feet are disadvantaged.
   if (geometry && weapon.ranged && geometry.distanceFeet <= 5) hasDisadvantage = true;
-  if (includes(attackerConditions, ['blinded', 'poisoned', 'frightened', 'restrained'])) hasDisadvantage = true;
-  if (includes(targetConditions, ['blinded', 'paralyzed', 'petrified', 'restrained', 'stunned', 'unconscious'])) hasAdvantage = true;
+  if (includes(attackerConditions, ['blinded', 'poisoned', 'frightened', 'restrained']))
+    hasDisadvantage = true;
+  if (
+    includes(targetConditions, [
+      'blinded',
+      'paralyzed',
+      'petrified',
+      'restrained',
+      'stunned',
+      'unconscious',
+    ])
+  )
+    hasAdvantage = true;
   // Advantage and disadvantage cancel regardless of how many sources apply.
   const advantage = hasAdvantage && !hasDisadvantage;
   const disadvantage = hasDisadvantage && !hasAdvantage;
@@ -89,8 +120,8 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
     ability,
     abilityModifier: modifier,
     proficiencyBonus: proficiency,
-    attackBonus: modifier + proficiency + weapon.magicBonus,
-    damageBonus: modifier + weapon.magicBonus,
+    attackBonus: weapon.fixedAttackBonus ?? modifier + proficiency + weapon.magicBonus,
+    damageBonus: weapon.fixedDamageBonus ?? modifier + weapon.magicBonus,
     targetAc: input.baseTargetAc + coverBonus,
     advantage,
     disadvantage,
@@ -110,8 +141,8 @@ function illegal(
     ability,
     abilityModifier: modifier,
     proficiencyBonus: proficiency,
-    attackBonus: modifier + proficiency + input.weapon.magicBonus,
-    damageBonus: modifier + input.weapon.magicBonus,
+    attackBonus: input.weapon.fixedAttackBonus ?? modifier + proficiency + input.weapon.magicBonus,
+    damageBonus: input.weapon.fixedDamageBonus ?? modifier + input.weapon.magicBonus,
     targetAc: input.baseTargetAc,
     advantage: false,
     disadvantage: false,

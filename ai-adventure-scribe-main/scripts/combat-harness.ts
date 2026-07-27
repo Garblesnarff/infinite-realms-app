@@ -145,13 +145,17 @@ const quiet = <T>(work: () => T): T => {
   }
 };
 
-const { and, eq } = await import('drizzle-orm');
+const { and, eq, inArray } = await import('drizzle-orm');
 const { db } = await import('../db/client');
 const schema = await import('../db/schema/index');
 const { combatAttackService } =
   await import('../server-bun/src/services/combat/combat-attack-service');
 const { saveTacticalMap, deactivateTacticalMap } =
   await import('../server-bun/src/services/combat/tactical-map-store');
+const { CombatEncounterService } =
+  await import('../server-bun/src/services/combat/combat-encounter-service');
+const { clearCampaignMonsterCache } =
+  await import('../server-bun/src/services/combat/campaign-monster-resolution');
 
 const {
   campaigns,
@@ -164,6 +168,8 @@ const {
   combatDamageLog,
   inventoryItems,
   tacticalMaps,
+  starterCampaigns,
+  campaignChunks,
 } = schema;
 
 // ---------------------------------------------------------------------------------------
@@ -176,22 +182,55 @@ const HERO = {
   strength: 16, // +3
   dexterity: 12,
   armorClass: 13, // the AC the monster must beat — the same 13 run 16 could not check against
-  maxHp: 30,
+  maxHp: 60,
 };
-const MONSTER = {
-  name: 'Harness Golem',
-  armorClass: 17, // Stone Golem's real AC, so a lookup regression shows up as a wrong number
-  maxHp: 40,
+
+/**
+ * One creature per rung of the attack ladder, so a single run shows all of them side by side.
+ *
+ * `Gluten Golem` is a real campaign-bible creature, and its block here is the shape bibles
+ * actually ship: hit points, armour class, speed, and its abilities written as prose. There
+ * is no attack line anywhere in it — which is exactly why the derived rung has to exist.
+ */
+const GLUTEN_GOLEM_CHUNK = [
+  '**Gluten Golem**',
+  '',
+  '**HP:** 90 **AC:** 14 **Speed:** 30ft',
+  '',
+  '**Abilities:** Rising Dough — the golem swells when heated, filling the corridor behind it.',
+].join('\n');
+
+const COMBATANTS = {
+  // Catalog rung: a real SRD id, whose printed Slam is +10 for 3d8+6.
+  stoneGolem: { name: 'Stone Golem', monsterId: 'srd:stone-golem' },
+  // Derived rung: authored HP and AC, no authored attack. Every bible creature today.
+  glutenGolem: { name: 'Gluten Golem', monsterId: 'gluten_golem_01' },
+  // Generic rung: DM improvisation that matches nothing anywhere.
+  doorkeeper: { name: 'The Doorkeeper', monsterId: undefined },
 };
 
 const userId = `harness-${randomUUID()}`;
+const starterCampaignId = `harness-bible-${randomUUID()}`;
 let campaignId = '';
 let characterId = '';
 let sessionId = '';
 let encounterId = '';
 let heroId = '';
-let monsterId = '';
+const monsterIds: Record<keyof typeof COMBATANTS, string> = {
+  stoneGolem: '',
+  glutenGolem: '',
+  doorkeeper: '',
+};
 
+/**
+ * Builds the encounter through `CombatEncounterService.startCombat` rather than by inserting
+ * participant rows directly.
+ *
+ * That is the whole point of the change: attack profiles are resolved and stored *by*
+ * startCombat, walking the campaign bible then the SRD catalog then the CR derivation. A
+ * harness that inserted its own rows would be asserting against fixture data it wrote itself
+ * and would prove nothing about whether the resolution path works.
+ */
 async function seedFixture(): Promise<void> {
   [{ id: campaignId }] = await db
     .insert(campaigns)
@@ -221,54 +260,94 @@ async function seedFixture(): Promise<void> {
     { characterId, name: 'Longbow', itemType: 'weapon', isEquipped: true, quantity: 1 },
   ]);
 
+  // A minimal starter campaign carrying one authored creature, so the campaign rung of the
+  // ladder is a real database read rather than an injected index.
+  await db.insert(starterCampaigns).values({
+    id: starterCampaignId,
+    slug: starterCampaignId,
+    title: 'Combat Harness Bible',
+    genre: ['harness'],
+    tone: ['diagnostic'],
+    difficulty: 'medium',
+    premise: 'A fixture campaign that exists only to be fought in.',
+  });
+  await db.insert(campaignChunks).values({
+    campaignId: starterCampaignId,
+    chunkType: 'monster',
+    entityName: COMBATANTS.glutenGolem.name,
+    content: GLUTEN_GOLEM_CHUNK,
+  });
+
   [{ id: sessionId }] = await db
     .insert(gameSessions)
-    .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+    .values({ campaignId, characterId, sessionNumber: 1, status: 'active', starterCampaignId })
     .returning({ id: gameSessions.id });
 
-  [{ id: encounterId }] = await db
-    .insert(combatEncounters)
-    .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
-    .returning({ id: combatEncounters.id });
+  const state = await CombatEncounterService.startCombat(
+    sessionId,
+    [
+      { encounterId: '', characterId, name: HERO.name, initiativeModifier: 1 },
+      ...Object.values(COMBATANTS).map((combatant) => ({
+        encounterId: '',
+        name: combatant.name,
+        initiativeModifier: 0,
+        ...(combatant.monsterId ? { monsterId: combatant.monsterId } : {}),
+      })),
+    ] as Parameters<typeof CombatEncounterService.startCombat>[1],
+    false,
+    userId,
+  );
 
-  const inserted = await db
-    .insert(combatParticipants)
-    .values([
-      {
-        encounterId,
-        characterId,
-        name: HERO.name,
-        // 'player' is load-bearing: it is what `endCombatIfResolved` reads to decide whether
-        // the fight is over. See combat-intent-service.ts.
-        participantType: 'player',
-        turnOrder: 0,
-        initiative: 20,
-        armorClass: HERO.armorClass,
-        maxHp: HERO.maxHp,
-        speed: 30,
-      },
-      {
-        encounterId,
-        name: MONSTER.name,
-        // 'monster', not 'npc' — this is exactly what a DM-authored structured combat start
-        // produces, and reproducing it faithfully is half the point of the harness.
-        participantType: 'monster',
-        turnOrder: 1,
-        initiative: 10,
-        armorClass: MONSTER.armorClass,
-        maxHp: MONSTER.maxHp,
-        speed: 30,
-      },
-    ])
-    .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+  encounterId = state.encounter.id;
+  const byName = new Map(state.participants.map((p) => [p.name, p.id]));
+  heroId = byName.get(HERO.name)!;
+  for (const key of Object.keys(COMBATANTS) as Array<keyof typeof COMBATANTS>) {
+    monsterIds[key] = byName.get(COMBATANTS[key].name)!;
+  }
 
-  heroId = inserted.find((row) => row.turnOrder === 0)!.id;
-  monsterId = inserted.find((row) => row.turnOrder === 1)!.id;
+  // startCombat rolls initiative, so the hero can land anywhere in the order; the scenarios
+  // hand out turns explicitly. Everyone starts at full HP with a big enough pool that ten
+  // attacks cannot end the fight mid-run.
+  await db
+    .update(combatParticipantStatus)
+    .set({ currentHp: 400, maxHp: 400 })
+    .where(inArray(combatParticipantStatus.participantId, [heroId, ...Object.values(monsterIds)]));
+}
 
-  await db.insert(combatParticipantStatus).values([
-    { participantId: heroId, currentHp: HERO.maxHp, maxHp: HERO.maxHp, isConscious: true },
-    { participantId: monsterId, currentHp: MONSTER.maxHp, maxHp: MONSTER.maxHp, isConscious: true },
-  ]);
+/** The stored attack profile, read back the way the engine reads it. */
+async function profileOf(participantId: string): Promise<{
+  source: string;
+  attack: string;
+  derivation?: string;
+  multiattack?: string;
+  unsupported?: string[];
+}> {
+  const [row] = await db
+    .select({ profile: combatParticipants.monsterAttack, name: combatParticipants.name })
+    .from(combatParticipants)
+    .where(eq(combatParticipants.id, participantId));
+  const profile = row?.profile as {
+    source?: string;
+    attacks?: Array<Record<string, unknown>>;
+    derivation?: { fromMaxHp: number; challengeRating: string; damagePerRound: number };
+    multiattack?: { desc: string };
+    unsupported?: string[];
+  } | null;
+  if (!profile?.attacks?.length) return { source: 'generic', attack: 'Unarmed Strike 1d1 (+0)' };
+  const first = profile.attacks[0];
+  return {
+    source: String(profile.source),
+    attack: `${first.name} +${first.attackBonus}, ${first.damageDice}${
+      Number(first.damageBonus) ? `+${first.damageBonus}` : ''
+    } ${first.damageType}`,
+    ...(profile.derivation
+      ? {
+          derivation: `${profile.derivation.fromMaxHp} HP -> CR ${profile.derivation.challengeRating} -> ${profile.derivation.damagePerRound} dmg/round`,
+        }
+      : {}),
+    ...(profile.multiattack ? { multiattack: profile.multiattack.desc } : {}),
+    ...(profile.unsupported?.length ? { unsupported: profile.unsupported } : {}),
+  };
 }
 
 /**
@@ -279,7 +358,11 @@ async function seedFixture(): Promise<void> {
  * Adjacent placement (the default) keeps a melee weapon in reach. The cover scenario needs
  * them apart, so it is run with a reach the engine will accept — see `runScenarios`.
  */
-async function placeOnBoard(gapCells: number, coverBetween: boolean): Promise<void> {
+async function placeOnBoard(
+  monsterParticipantId: string,
+  gapCells: number,
+  coverBetween: boolean,
+): Promise<void> {
   const width = 12;
   const height = 5;
   const cells = Array.from({ length: height }, () =>
@@ -317,15 +400,14 @@ async function placeOnBoard(gapCells: number, coverBetween: boolean): Promise<vo
         name: HERO.name,
       },
       {
-        id: monsterId,
-        slug: 'harness-golem',
+        id: monsterParticipantId,
+        slug: 'harness-monster',
         x: monsterX,
         y: 2,
         size: 'medium',
         type: 'monster',
         speedFeet: 30,
         movementRemaining: 30,
-        name: MONSTER.name,
       },
     ],
     round: 1,
@@ -361,6 +443,8 @@ const hpOf = async (participantId: string): Promise<number> => {
 
 type Scenario = {
   title: string;
+  /** Which fixture creature this exchange involves; decides who stands on the board. */
+  monster: keyof typeof COMBATANTS;
   attackerId: () => string;
   targetId: () => string;
   intent: string;
@@ -379,22 +463,50 @@ const repeat = (count: number, scenario: Scenario): Scenario[] =>
   }));
 
 const SCENARIOS: Scenario[] = [
-  ...repeat(4, {
-    title: 'MONSTER ATTACKS PLAYER',
+  ...repeat(3, {
+    title: 'SRD MONSTER ATTACKS PLAYER (catalog profile)',
     intent:
-      'The case run 16 could not distinguish. A monster attack that produces no damage row is ' +
-      'now either a logged roll below AC (an honest miss) or a logged hit whose HP did not ' +
-      'move (swallowed damage). Four rolls, so both outcomes are on the page.',
-    attackerId: () => monsterId,
+      "The Stone Golem's own printed Slam: +10 to hit, 3d8+6 bludgeoning, straight out of " +
+      'monsters.json. Before this wave the same creature swung at +2 for exactly 1, because ' +
+      "nothing ever read the catalog's `actions` array.",
+    monster: 'stoneGolem',
+    attackerId: () => monsterIds.stoneGolem,
     targetId: () => heroId,
     gapCells: 1,
     cover: false,
   }),
-  ...repeat(4, {
+  ...repeat(3, {
+    title: 'CAMPAIGN-AUTHORED MONSTER ATTACKS PLAYER (derived profile)',
+    intent:
+      'The Gluten Golem has authored HP and AC and no attack line anywhere in its bible — the ' +
+      'shape every campaign creature ships in. Its attack is inferred from 90 HP via the CR ' +
+      'table, and the profile says `derived` so nobody mistakes the inference for a stat block.',
+    monster: 'glutenGolem',
+    attackerId: () => monsterIds.glutenGolem,
+    targetId: () => heroId,
+    gapCells: 1,
+    cover: false,
+  }),
+  ...repeat(2, {
+    title: 'UNRESOLVED MONSTER ATTACKS PLAYER (generic fallback)',
+    intent:
+      'DM improvisation that matches no bible and no catalog entry. It still falls back to the ' +
+      'unarmed default — correct — and now says so in the telemetry instead of looking like a ' +
+      'creature that simply hits softly.',
+    monster: 'doorkeeper',
+    attackerId: () => monsterIds.doorkeeper,
+    targetId: () => heroId,
+    gapCells: 1,
+    cover: false,
+  }),
+  ...repeat(3, {
     title: 'PLAYER ATTACKS MONSTER',
-    intent: 'Longsword off the character sheet, against the golem AC 17.',
+    intent:
+      'Longsword off the character sheet against the golem AC 17. Player numbers are unchanged ' +
+      'by this wave and this is where that is checked.',
+    monster: 'stoneGolem',
     attackerId: () => heroId,
-    targetId: () => monsterId,
+    targetId: () => monsterIds.stoneGolem,
     gapCells: 1,
     cover: false,
     weaponId: 'Longsword',
@@ -402,12 +514,11 @@ const SCENARIOS: Scenario[] = [
   ...repeat(2, {
     title: 'PLAYER ATTACKS MONSTER THROUGH HALF COVER',
     intent:
-      'Cover-adjusted AC has never been checkable in production: the engine applied the bonus ' +
-      'internally and reported only the final number. baseAc 17 against effectiveAc 19 is the ' +
-      '+2 half-cover bonus, observable for the first time. Ranged, because a melee weapon ' +
-      'cannot reach across the covering square.',
+      'Cover-adjusted AC: baseAc 17 against effectiveAc 19 is the +2 half-cover bonus. Ranged, ' +
+      'because a melee weapon cannot reach across the covering square.',
+    monster: 'stoneGolem',
     attackerId: () => heroId,
-    targetId: () => monsterId,
+    targetId: () => monsterIds.stoneGolem,
     gapCells: 3,
     cover: true,
     weaponId: 'Longbow',
@@ -427,7 +538,7 @@ async function runScenarios(): Promise<Row[]> {
   for (const scenario of SCENARIOS) {
     const attacker = scenario.attackerId();
     const target = scenario.targetId();
-    await placeOnBoard(scenario.gapCells, scenario.cover);
+    await placeOnBoard(monsterIds[scenario.monster], scenario.gapCells, scenario.cover);
     const version = await giveTurnTo(attacker);
     const hpBefore = await hpOf(target);
     const before = captured.length;
@@ -469,6 +580,7 @@ const REQUIRED_FIELDS = [
   'targetId',
   'targetSlug',
   'weapon',
+  'profileSource',
   'd20',
   'attackBonus',
   'totalAttack',
@@ -487,7 +599,10 @@ const REQUIRED_FIELDS = [
   'targetHpAfter',
 ] as const;
 
-function report(rows: Row[]): boolean {
+function report(
+  rows: Row[],
+  profiles: Record<string, Awaited<ReturnType<typeof profileOf>>>,
+): boolean {
   let ok = true;
   console.log('\n' + '='.repeat(88));
   console.log('DETERMINISTIC COMBAT HARNESS');
@@ -501,9 +616,29 @@ function report(rows: Row[]): boolean {
   console.log(
     `player            ${HERO.name}  AC ${HERO.armorClass}  ${HERO.maxHp} HP  STR ${HERO.strength} (+3)  level ${HERO.level} (prof +2)  Longsword`,
   );
-  console.log(
-    `monster           ${MONSTER.name}  AC ${MONSTER.armorClass}  ${MONSTER.maxHp} HP  participant_type='monster'`,
-  );
+
+  console.log('\n' + '-'.repeat(88));
+  console.log('ATTACK PROFILES AS RESOLVED BY startCombat');
+  console.log('-'.repeat(88));
+  for (const key of Object.keys(COMBATANTS) as Array<keyof typeof COMBATANTS>) {
+    const profile = profiles[key];
+    console.log(`  ${COMBATANTS[key].name}`);
+    console.log(`    source        ${profile.source}`);
+    console.log(`    attack        ${profile.attack}`);
+    if (profile.derivation) console.log(`    derivation    ${profile.derivation}`);
+    if (profile.multiattack)
+      console.log(`    multiattack   ${profile.multiattack} [NOT EXPRESSED]`);
+    if (profile.unsupported) console.log(`    unsupported   ${profile.unsupported.join('; ')}`);
+  }
+  const sources = new Set(Object.values(profiles).map((profile) => profile.source));
+  for (const expected of ['catalog', 'derived', 'generic']) {
+    if (!sources.has(expected)) {
+      ok = false;
+      console.log(
+        `  NO ${expected.toUpperCase()} PROFILE RESOLVED — the ladder did not reach that rung.`,
+      );
+    }
+  }
 
   for (const row of rows) {
     const { scenario, telemetry } = row;
@@ -525,7 +660,7 @@ function report(rows: Row[]): boolean {
     const missing = REQUIRED_FIELDS.filter((field) => !(field in telemetry));
     const hit = telemetry.outcome === 'hit';
     console.log(
-      `  ${telemetry.attackerSlug} -> ${telemetry.targetSlug}   weapon ${telemetry.weapon}`,
+      `  ${telemetry.attackerSlug} -> ${telemetry.targetSlug}   weapon ${telemetry.weapon}  [profile: ${telemetry.profileSource}]`,
     );
     console.log(
       `  roll              d20 ${telemetry.d20} ${Number(telemetry.attackBonus) >= 0 ? '+' : ''}${telemetry.attackBonus} = ${telemetry.totalAttack}`,
@@ -596,7 +731,8 @@ async function cleanup(): Promise<void> {
   await deactivateTacticalMap(sessionId).catch(() => {});
   await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
   await db.delete(combatDamageLog).where(eq(combatDamageLog.encounterId, encounterId));
-  for (const participantId of [heroId, monsterId]) {
+  for (const participantId of [heroId, ...Object.values(monsterIds)]) {
+    if (!participantId) continue;
     await db
       .delete(combatParticipantStatus)
       .where(eq(combatParticipantStatus.participantId, participantId));
@@ -610,13 +746,25 @@ async function cleanup(): Promise<void> {
     .delete(characters)
     .where(and(eq(characters.id, characterId), eq(characters.userId, userId)));
   await db.delete(campaigns).where(and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId)));
+  // Chunks cascade from the starter campaign; the monster-index cache does not, and a stale
+  // entry would make a second run in the same process resolve a campaign that no longer exists.
+  await db.delete(starterCampaigns).where(eq(starterCampaigns.id, starterCampaignId));
+  clearCampaignMonsterCache();
 }
 
 let exitCode = 0;
 try {
   await quiet(() => seedFixture());
   const rows = await runScenarios();
-  exitCode = report(rows) ? 0 : 1;
+  const profiles = Object.fromEntries(
+    await Promise.all(
+      (Object.keys(COMBATANTS) as Array<keyof typeof COMBATANTS>).map(async (key) => [
+        key,
+        await profileOf(monsterIds[key]),
+      ]),
+    ),
+  ) as Record<string, Awaited<ReturnType<typeof profileOf>>>;
+  exitCode = report(rows, profiles) ? 0 : 1;
 } catch (error) {
   console.error('combat-harness: aborted —', error);
   exitCode = 2;

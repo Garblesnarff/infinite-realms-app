@@ -33,6 +33,7 @@ import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
   getEquippedWeaponProfile,
+  monsterAttackSource,
 } from './data-access.js';
 import { checkHit, checkAutoCrit } from './hit-check.js';
 import { aggregateResistances } from './resistance-resolver.js';
@@ -272,6 +273,10 @@ export class CombatAttackService {
         targetId,
         targetSlug: participantSlug(tacticalMap, targetId, targetParticipant.name as string | null),
         weapon: weapon.name || 'attack',
+        profileSource:
+          attackerData.participant.characterId || attackerData.participant.npcId
+            ? 'character-sheet'
+            : monsterAttackSource(attackerData.participant),
         d20: attackRoll,
         attackBonus: rules.attackBonus,
         totalAttack: hitCheck.totalAttackRoll,

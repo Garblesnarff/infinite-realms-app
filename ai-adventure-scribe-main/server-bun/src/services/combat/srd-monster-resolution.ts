@@ -1,3 +1,8 @@
+import {
+  parseSrdActions,
+  type SrdActionEntry,
+  type SrdActionParse,
+} from './monster-attack-profile.js';
 import { monsterKeyTokens, normalizeMonsterKey } from './monster-key.js';
 import monsterCatalog from '../../../../src/data/srd/monsters.json' with { type: 'json' };
 import { logger } from '../../lib/logger.js';
@@ -22,6 +27,7 @@ type CatalogEntry = {
   resistances?: string[];
   immunities?: string[];
   vulnerabilities?: string[];
+  actions?: SrdActionEntry[];
 };
 
 export interface ResolvedMonsterStats {
@@ -35,6 +41,12 @@ export interface ResolvedMonsterStats {
   damageResistances: string[];
   damageImmunities: string[];
   damageVulnerabilities: string[];
+  /**
+   * The entry's own `actions`, classified into what the attack pipeline can swing and what
+   * it cannot. Read here rather than at attack time because this is the only place holding
+   * the catalog entry; the caller stores the result on the participant.
+   */
+  attacks: SrdActionParse;
 }
 
 /** Stat line used when no SRD id was supplied — a deliberate generic NPC, not a lie. */
@@ -232,5 +244,6 @@ export function resolveSrdMonsterStats(
     damageResistances: entry.resistances ?? [],
     damageImmunities: entry.immunities ?? [],
     damageVulnerabilities: entry.vulnerabilities ?? [],
+    attacks: parseSrdActions(entry.actions),
   };
 }

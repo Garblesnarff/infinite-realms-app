@@ -281,8 +281,20 @@ describeWithDb('attack resolution telemetry', () => {
 
   test('a HIT emits one line with every field populated', async () => {
     await setAc(monsterId, UNMISSABLE_AC);
-    const line = await attack(heroId, monsterId);
+    // A natural 1 misses regardless of AC, so even an AC of 1 is a 5% coin flip. Retry for
+    // the branch under test, exactly as the miss case below does — otherwise this suite
+    // fails one run in twenty for a reason that has nothing to do with telemetry.
+    let line: LogPayload | null = null;
+    for (let attempt = 0; attempt < 12 && !line; attempt += 1) {
+      const candidate = await attack(heroId, monsterId);
+      if (candidate.outcome === 'hit') line = candidate;
+    }
+    expect(line).not.toBeNull();
+    expectHitLine(line!);
+  });
 
+  /** Extracted so the retry above reads as one thought rather than a loop around assertions. */
+  function expectHitLine(line: LogPayload): void {
     expect(line.outcome).toBe('hit');
     expectStructurallyComplete(line);
     expect(line.baseAc).toBe(UNMISSABLE_AC);
@@ -294,11 +306,24 @@ describeWithDb('attack resolution telemetry', () => {
 
     // The HP the line reports is the HP that was written, not the HP the engine intended.
     // This is the "was damage silently dropped?" question, answered against the database.
+    return;
+  }
+
+  test('the HP the line reports is the HP that was written', async () => {
+    await setAc(monsterId, UNMISSABLE_AC);
+    let line: LogPayload | null = null;
+    for (let attempt = 0; attempt < 12 && !line; attempt += 1) {
+      const candidate = await attack(heroId, monsterId);
+      if (candidate.outcome === 'hit') line = candidate;
+    }
+    expect(line).not.toBeNull();
+    // The "was damage silently dropped?" question, answered against the database rather than
+    // against the engine's own return value.
     const [status] = await db
       .select({ currentHp: combatParticipantStatus.currentHp })
       .from(combatParticipantStatus)
       .where(eq(combatParticipantStatus.participantId, monsterId));
-    expect(status.currentHp).toBe(Number(line.targetHpAfter));
+    expect(status.currentHp).toBe(Number(line!.targetHpAfter));
   });
 
   test('a MISS logs the roll, the AC and the outcome exactly as a hit does', async () => {
@@ -329,13 +354,19 @@ describeWithDb('attack resolution telemetry', () => {
     // The direction that was invisible in run 16: nothing about monster-sourced attacks was
     // recorded at all, so both of them could be argued either way.
     await setAc(heroId, UNMISSABLE_AC);
-    const line = await attack(monsterId, heroId);
+    // Same 5% natural-1 coin flip as the hit case above.
+    let line: LogPayload | null = null;
+    for (let attempt = 0; attempt < 12 && !line; attempt += 1) {
+      const candidate = await attack(monsterId, heroId);
+      if (candidate.outcome === 'hit') line = candidate;
+    }
+    expect(line).not.toBeNull();
 
-    expectStructurallyComplete(line);
-    expect(line.attackerId).toBe(monsterId);
-    expect(line.targetId).toBe(heroId);
-    expect(line.outcome).toBe('hit');
-    expect(line.damageApplied).toBeGreaterThan(0);
+    expectStructurallyComplete(line!);
+    expect(line!.attackerId).toBe(monsterId);
+    expect(line!.targetId).toBe(heroId);
+    expect(line!.outcome).toBe('hit');
+    expect(line!.damageApplied).toBeGreaterThan(0);
     await setAc(heroId, HERO.ac);
   });
 

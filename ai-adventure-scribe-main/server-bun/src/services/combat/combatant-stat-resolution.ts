@@ -15,6 +15,10 @@
  */
 import { findAuthoredMonster, type CampaignMonsterIndex } from './campaign-monster-index.js';
 import {
+  resolveMonsterAttackProfile,
+  type MonsterAttackProfile,
+} from './monster-attack-profile.js';
+import {
   GENERIC_NPC_STATS,
   resolveSrdMonsterStats,
   type ResolvedMonsterStats,
@@ -30,6 +34,16 @@ export interface ResolvedCombatantStats extends ResolvedMonsterStats {
   source: StatSource;
   /** Authored fields that were missing and had to be filled from a lower rung. */
   filledFromFallback: string[];
+  /**
+   * What this creature swings with, and which rung supplied it.
+   *
+   * Resolved on its own ladder — authored -> catalog -> derived — because the rung that gave
+   * a creature its HP is often not the rung that can give it an attack. Every campaign bible
+   * in the product today authors HP and AC and describes its creature's abilities as prose,
+   * so `source: 'campaign'` stats routinely pair with `attackProfile.source: 'derived'`.
+   * Flattening the two into one label would report an authored attack that nobody wrote.
+   */
+  attackProfile: MonsterAttackProfile;
 }
 
 const TACTICAL_SIZES = new Set<EntitySize>([
@@ -102,11 +116,16 @@ export function resolveCombatantStats(
         return fallback;
       };
 
+      // Settled before the literal because the derived attack rung reads it: a creature's
+      // final HP is the evidence the derivation runs on, and for a partially-authored block
+      // that may be a number filled from the SRD rather than the one the bible wrote.
+      const maxHp = fill(parsed.maxHp, srd?.maxHp ?? GENERIC_NPC_STATS.maxHp, 'maxHp');
+
       const stats: ResolvedCombatantStats = {
         source: 'campaign',
         monsterId: monsterId?.trim() || authored.entityName,
         monsterName: authored.entityName,
-        maxHp: fill(parsed.maxHp, srd?.maxHp ?? GENERIC_NPC_STATS.maxHp, 'maxHp'),
+        maxHp,
         armorClass: fill(
           parsed.armorClass,
           srd?.armorClass ?? GENERIC_NPC_STATS.armorClass,
@@ -123,7 +142,14 @@ export function resolveCombatantStats(
         damageResistances: parsed.damageResistances ?? srd?.damageResistances ?? [],
         damageImmunities: parsed.damageImmunities ?? srd?.damageImmunities ?? [],
         damageVulnerabilities: parsed.damageVulnerabilities ?? srd?.damageVulnerabilities ?? [],
+        attacks: srd?.attacks ?? { attacks: [], unsupported: [] },
         filledFromFallback,
+        attackProfile: resolveMonsterAttackProfile({
+          authored: parsed,
+          catalog: srd?.attacks ?? null,
+          maxHp,
+          monsterName: authored.entityName,
+        }),
       };
 
       if (filledFromFallback.length > 0) {
@@ -158,7 +184,19 @@ export function resolveCombatantStats(
   }
 
   if (srd) {
-    return { ...srd, source: 'srd', filledFromFallback: [] };
+    // A catalog creature normally has its own printed actions. The ten entries that do not
+    // (Multiattack-only or purely save-based action lists) fall to the derived rung here
+    // rather than to the generic default, which is why the derivation is offered its HP.
+    return {
+      ...srd,
+      source: 'srd',
+      filledFromFallback: [],
+      attackProfile: resolveMonsterAttackProfile({
+        catalog: srd.attacks,
+        maxHp: srd.maxHp,
+        monsterName: srd.monsterName,
+      }),
+    };
   }
 
   if (monsterId) {

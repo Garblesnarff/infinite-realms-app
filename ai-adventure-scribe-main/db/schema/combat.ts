@@ -109,6 +109,22 @@ export const combatParticipants = pgTable(
     // Additional data
     multiclassInfo: jsonb('multiclass_info'),
 
+    /**
+     * The attack profile this combatant fights with, resolved once at combat start.
+     *
+     * Resolved-and-stored rather than looked up at attack time because the resolution needs
+     * the campaign's authored bible AND the SRD catalog AND the combatant's `monster_id` —
+     * and `monster_id` is not a column here, so an attack-time lookup would have to re-derive
+     * the creature from its display name. That fails on exactly the names combat produces:
+     * `Shadow Roach 2` normalizes to a key no catalog holds. Storing the resolved profile
+     * also records WHICH rung of the ladder it came from, which is the thing worth auditing.
+     *
+     * Nullable: a participant created before this column existed, or a DM improvisation that
+     * resolved to nothing, has no profile and falls back to the generic default.
+     * See services/combat/monster-attack-profile.ts.
+     */
+    monsterAttack: jsonb('monster_attack'),
+
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

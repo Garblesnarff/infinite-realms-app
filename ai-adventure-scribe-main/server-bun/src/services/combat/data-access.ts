@@ -34,8 +34,10 @@ import {
   characterEquipment,
 } from '../../../../db/schema/index';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 
 import type { WeaponRuleProfile } from './combat-rules.js';
+import type { MonsterAttack } from './monster-attack-profile.js';
 import type { CatalogWeapon } from './weapon-catalog.js';
 import type { WeaponAttack, CreatureStats, CombatParticipant } from '../../../../db/schema/index';
 import type { CreateWeaponAttackInput } from '../../types/combat.js';
@@ -173,7 +175,54 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
     });
   }
 
-  return [];
+  // A structured DM combatant: no character sheet, no NPC row, and until now no weapon at
+  // all. Its attack profile was resolved and stored when combat started (see
+  // `combat-encounter-service.startCombat`), so this reads a decision rather than making one.
+  return monsterAttackProfiles(participant);
+}
+
+/**
+ * The stored monster attack profile, as weapon profiles.
+ *
+ * `fixedAttackBonus`/`fixedDamageBonus` are what make this work: a stat block's `+10 to hit,
+ * 3d8 + 6` is already finished arithmetic, and this participant has no ability scores to
+ * rebuild it from. Passing the numbers through verbatim is the difference between a golem
+ * that hits like a golem and one that hits at +2 for 1.
+ */
+function monsterAttackProfiles(participant: any): WeaponRuleProfile[] {
+  const profile = participant?.monsterAttack as
+    | { source?: string; attacks?: MonsterAttack[] }
+    | null
+    | undefined;
+  const attacks = Array.isArray(profile?.attacks) ? profile.attacks : [];
+  return attacks
+    .filter((attack) => attack && typeof attack.damageDice === 'string' && attack.damageDice)
+    .map(
+      (attack) =>
+        ({
+          id: `monster-attack:${attack.name}`,
+          name: attack.name,
+          damageDice: attack.damageDice,
+          damageType: attack.damageType,
+          normalRange: Number(attack.normalRange) || 5,
+          ...(attack.longRange ? { longRange: Number(attack.longRange) } : {}),
+          // Zero, not the attack bonus: the stat block's numbers arrive through the fixed
+          // fields below, and a magic bonus here would be added to them a second time.
+          magicBonus: 0,
+          finesse: false,
+          ranged: Boolean(attack.ranged),
+          proficient: true,
+          fixedAttackBonus: Number(attack.attackBonus) || 0,
+          fixedDamageBonus: Number(attack.damageBonus) || 0,
+        }) satisfies WeaponRuleProfile,
+    );
+}
+
+/** The rung a participant's attack came from, for telemetry. `generic` means it had none. */
+export function monsterAttackSource(participant: any): string {
+  const profile = participant?.monsterAttack as { source?: string; attacks?: unknown[] } | null;
+  if (!profile?.source) return 'generic';
+  return Array.isArray(profile.attacks) && profile.attacks.length ? profile.source : 'generic';
 }
 
 /** Resolve the participant's equipped weapon from inventory/equipment, never a client stand-in. */
@@ -192,7 +241,23 @@ export async function getEquippedWeaponProfile(
     }
     return selected;
   }
-  return equipped[0] ?? { ...UNARMED_STRIKE };
+  if (equipped[0]) return equipped[0];
+
+  // Bottom of the ladder. For a player this is the correct D&D answer -- an unarmed character
+  // really does make unarmed strikes -- but for a monster it is the bug this wave exists to
+  // close, so it is logged with the identity needed to chase down which creature slipped
+  // through with no profile at all.
+  if (!participant?.characterId && !participant?.npcId) {
+    logger.warn({
+      msg: 'COMBAT_MONSTER_ATTACK_FALLBACK',
+      participantId: participant?.id ?? null,
+      encounterId: participant?.encounterId ?? null,
+      combatantName: participant?.name ?? null,
+      hasStoredProfile: Boolean(participant?.monsterAttack),
+      consequence: `no resolved attack profile; fights with ${UNARMED_STRIKE.name} (${UNARMED_STRIKE.damageDice}) at the participant's own ability modifiers`,
+    });
+  }
+  return { ...UNARMED_STRIKE };
 }
 
 export interface AbilityProfile {
