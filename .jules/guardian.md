@@ -295,3 +295,7 @@
 ## 2026-07-26 - [React Hook with Array Dependencies / Infinite Loops]
 **Learning:** When writing unit tests for custom React hooks that track array/object dependencies (such as `useSpellSelectionValidation`), passing inline arrays (e.g. `selectedCantrips: ['cantrip-1']`) directly into options inside the `renderHook` callback instantiates new array references on every single render. This triggers effect hooks to loop infinitely and hang tests.
 **Action:** Always supply stable array/object references from outside the `renderHook` scope, or memoize them, to ensure referential stability and prevent infinite rendering loops.
+
+## 2026-07-27 - [Combat Start Toast Notification Coverage]
+**Learning:** The combat starting sequence features stage-specific UI feedback toasts. Previously, these were completely untested. Adding a test suite required mocking `sonner`'s toast dispatchers and invoking the custom action triggers (`action.onClick`) manually in Vitest to verify callback propagation.
+**Action:** Always mock `sonner` as a module, verify exact stage string matches, and manually invoke spied UI callback handlers to verify action retry triggers under test.
