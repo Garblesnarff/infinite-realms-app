@@ -43,6 +43,13 @@
       "when": 1785124752407,
       "tag": "0005_happy_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785154341534,
+      "tag": "0006_record_why_an_encounter_ended",
+      "breakpoints": true
     }
   ]
 }

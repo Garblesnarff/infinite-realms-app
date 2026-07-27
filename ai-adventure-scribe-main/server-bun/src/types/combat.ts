@@ -262,6 +262,26 @@ import type { EntitySize } from '../tactical/types.js';
 export type CombatStatus = 'active' | 'paused' | 'completed';
 
 /**
+ * Why an encounter stopped. Every terminal transition names one of these, and the name is
+ * stored on the row, reported in telemetry, and turned into the sentence the DM narrates.
+ *
+ * The closed set is the point. Run 18 ended an encounter through the one path that recorded
+ * nothing at all, and "completed" was then indistinguishable from a victory. There is no
+ * member of this union meaning "no reason given".
+ */
+export type CombatEndReason =
+  /** The last hostile went down. A victory. */
+  | 'last_hostile_defeated'
+  /** No member of the party is standing or dying. A TPK. */
+  | 'party_defeated'
+  /** The DM's `combat_transition: "end"` — the fiction moved on while combatants still stood. */
+  | 'dm_ended_scene'
+  /** A client asked for this encounter to end outright. */
+  | 'ended_by_request'
+  /** A client abandoned this encounter. */
+  | 'abandoned';
+
+/**
  * Participant type discriminator
  */
 export type ParticipantType = 'character' | 'npc' | 'other';

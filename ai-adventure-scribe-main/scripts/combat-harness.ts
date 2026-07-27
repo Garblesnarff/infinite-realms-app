@@ -163,6 +163,11 @@ const { clearCampaignMonsterCache } =
   await import('../server-bun/src/services/combat/campaign-monster-resolution');
 const { averageDamage, PARTY_SIZE_BASELINE } =
   await import('../server-bun/src/services/combat/party-scaling');
+const { executeCombatIntent } =
+  await import('../server-bun/src/services/combat/combat-intent-service');
+const { consumeDmTacticalFacts } =
+  await import('../server-bun/src/services/combat/tactical-action-service');
+const { vitalStateOf } = await import('../server-bun/src/services/combat/death-saves-service');
 
 const {
   campaigns,
@@ -603,6 +608,217 @@ type Row = {
   error?: string;
 };
 
+// ---------------------------------------------------------------------------------------
+// Death saves.
+//
+// Eighteen production runs have never reached this code. Run 18's player never dropped below
+// 7 of 11 hit points, so the whole path added in 0abc7383 — going down at 0, rolling a save as
+// the order reaches you, three of either kind, a natural 20 — has been shipped and never once
+// observed. It cannot be reached by playing more: it depends on the dice going badly, and the
+// dice have not.
+//
+// So the dice are forced here. That is a deliberate exception to this file's own rule against
+// pinned rolls, and it is safe for exactly one reason that does not hold for attack
+// resolution: `CombatHPService.rollDeathSave` draws its d20 on its FIRST line, before any
+// database round-trip. The pinned value therefore cannot be consumed by a connection detail on
+// the way to the roll, which is precisely what made forcing wrong for `resolveAttack`. The
+// force is spent on the first draw and the seeded stream resumes immediately after, so nothing
+// downstream inherits a constant.
+// ---------------------------------------------------------------------------------------
+
+/** Pins the very next `Math.random()` to the value that yields `face` on a d20, once. */
+async function withForcedD20<T>(face: number, work: () => Promise<T>): Promise<T> {
+  let spent = false;
+  Math.random = () => {
+    if (spent) return prng();
+    spent = true;
+    // roll = floor(r * 20) + 1, so any r in [(face-1)/20, face/20) produces `face`.
+    return (face - 1) / 20 + 0.001;
+  };
+  try {
+    return await work();
+  } finally {
+    Math.random = prng;
+  }
+}
+
+type DeathSaveStep = {
+  label: string;
+  /** What the participant looked like before and after, and what the DM was told. */
+  vitalBefore: string;
+  vitalAfter: string;
+  hp: string;
+  tally: string;
+  facts: string[];
+};
+
+/** The hero's death-save bookkeeping, read straight off the row the engine writes. */
+async function vitalsOf(): Promise<{
+  vital: string;
+  hp: number;
+  successes: number;
+  failures: number;
+}> {
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  const hero = state.participants.find((participant) => participant.id === heroId)!;
+  const status = (hero as unknown as { status?: Record<string, number> }).status;
+  return {
+    vital: vitalStateOf(hero as never),
+    hp: status?.currentHp ?? 0,
+    successes: status?.deathSavesSuccesses ?? 0,
+    failures: status?.deathSavesFailures ?? 0,
+  };
+}
+
+/** Whoever acts immediately before the hero, so one `end_turn` lands the order on them. */
+async function participantBeforeHero(): Promise<string> {
+  const rows = await db
+    .select({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder })
+    .from(combatParticipants)
+    .where(
+      and(eq(combatParticipants.encounterId, encounterId), eq(combatParticipants.isActive, true)),
+    )
+    .orderBy(combatParticipants.turnOrder);
+  const heroIndex = rows.findIndex((row) => row.id === heroId);
+  return rows[(heroIndex - 1 + rows.length) % rows.length].id;
+}
+
+/**
+ * Puts the hero back on the floor at 0 HP with a clean tally, and — because a stabilised or
+ * dead character ends the encounter, and two of the four scenarios below produce exactly that
+ * — puts the encounter back to `active` so the next scenario has a fight to run in.
+ *
+ * Fixture surgery, stated plainly rather than hidden: the engine ending the encounter each
+ * time is the CORRECT behaviour, and re-opening it is how four mutually exclusive endings get
+ * demonstrated in one run.
+ */
+async function resetHeroToDying(): Promise<void> {
+  await db
+    .update(combatParticipantStatus)
+    .set({ currentHp: 0, isConscious: false, deathSavesSuccesses: 0, deathSavesFailures: 0 })
+    .where(eq(combatParticipantStatus.participantId, heroId));
+  await db
+    .update(combatEncounters)
+    .set({ status: 'active', endedReason: null, endedAt: null })
+    .where(eq(combatEncounters.id, encounterId));
+}
+
+/**
+ * Advances the order onto the hero with the next death-save d20 pinned, and reports what
+ * changed. The turn is passed through `executeCombatIntent`, not through `settleDownedTurns`
+ * directly, so what is exercised is the whole production path: the intent gateway, the turn
+ * advance, the save, the fact written for the DM, and the fight-over check afterwards.
+ */
+async function forcedDeathSaveTurn(label: string, face: number): Promise<DeathSaveStep> {
+  const before = await vitalsOf();
+  const predecessor = await participantBeforeHero();
+  await giveTurnTo(predecessor);
+  await withForcedD20(face, () =>
+    quiet(() =>
+      executeCombatIntent(encounterId, { type: 'end_turn', actorId: predecessor }, userId, 'dm'),
+    ),
+  );
+  const after = await vitalsOf();
+  return {
+    label: `${label} (forced d20 ${face})`,
+    vitalBefore: before.vital,
+    vitalAfter: after.vital,
+    hp: `${before.hp} -> ${after.hp}`,
+    tally: `${before.successes}s/${before.failures}f -> ${after.successes}s/${after.failures}f`,
+    facts: await consumeDmTacticalFacts(sessionId),
+  };
+}
+
+/**
+ * The four transitions, in the one order that lets a single fixture show all of them: a
+ * character is put down by a real attack, saves their way to stabilised, is reset and dies,
+ * and is reset once more to come back up on a natural 20.
+ */
+async function runDeathSaveScenarios(): Promise<DeathSaveStep[]> {
+  const steps: DeathSaveStep[] = [];
+
+  // 1. Down by a real blow, not by a fixture write. The Stone Golem's printed Slam against a
+  //    hero left on 1 hit point, with the attack roll pinned so the blow certainly lands.
+  await placeOnBoard(monsterIds.stoneGolem, 1, false);
+  await db
+    .update(combatParticipantStatus)
+    .set({ currentHp: 1, isConscious: true, deathSavesSuccesses: 0, deathSavesFailures: 0 })
+    .where(eq(combatParticipantStatus.participantId, heroId));
+  const beforeDown = await vitalsOf();
+  await giveTurnTo(monsterIds.stoneGolem);
+  // Through the intent gateway rather than `resolveAttack` directly, because the sentence that
+  // says what 0 hit points MEANS — unconscious and dying, not dead — is written by the
+  // gateway, not by the resolver. Calling the resolver here printed the transition correctly
+  // and handed the DM nothing, which is the exact shape of the bug this harness exists to
+  // catch, arriving from the harness's own shortcut.
+  await withForcedD20(20, () =>
+    quiet(() =>
+      executeCombatIntent(
+        encounterId,
+        { type: 'attack', actorId: monsterIds.stoneGolem, targetId: heroId },
+        userId,
+        'dm',
+      ),
+    ),
+  );
+  const afterDown = await vitalsOf();
+  steps.push({
+    label: 'PLAYER DRIVEN TO 0 HP BY A REAL ATTACK (forced d20 20)',
+    vitalBefore: beforeDown.vital,
+    vitalAfter: afterDown.vital,
+    hp: `${beforeDown.hp} -> ${afterDown.hp}`,
+    tally: `${beforeDown.successes}s/${beforeDown.failures}f -> ${afterDown.successes}s/${afterDown.failures}f`,
+    facts: await consumeDmTacticalFacts(sessionId),
+  });
+
+  // 2. Three successes: stabilised. A 10 or better succeeds without reviving.
+  for (let index = 1; index <= 3; index += 1)
+    steps.push(await forcedDeathSaveTurn(`DEATH SAVE SUCCESS ${index} of 3`, 15));
+
+  // 3. Three failures: dead. A 9 or worse fails; a 1 would count double and reach three in two
+  //    turns, which would prove the tally rather than the threshold.
+  await resetHeroToDying();
+  for (let index = 1; index <= 3; index += 1)
+    steps.push(await forcedDeathSaveTurn(`DEATH SAVE FAILURE ${index} of 3`, 5));
+
+  // 4. A natural 20 is not a success — it is the character back on their feet at 1 HP, taking
+  //    the turn they just started. It is the single most important line the DM has never been
+  //    handed, and the only one that turns a fight going badly back into a fight.
+  await resetHeroToDying();
+  steps.push(await forcedDeathSaveTurn('NATURAL 20 REVIVAL', 20));
+
+  return steps;
+}
+
+/** Prints the death-save sequence and fails the run if any transition was not the documented one. */
+function reportDeathSaves(steps: DeathSaveStep[]): boolean {
+  let ok = true;
+  console.log('\n' + '-'.repeat(88));
+  console.log('DEATH SAVES  (forced dice; unreachable in eighteen production runs)');
+  console.log('-'.repeat(88));
+  for (const step of steps) {
+    console.log(`\n  ${step.label}`);
+    console.log(`    state         ${step.vitalBefore} -> ${step.vitalAfter}`);
+    console.log(`    hit points    ${step.hp}`);
+    console.log(`    save tally    ${step.tally}`);
+    if (!step.facts.length) {
+      ok = false;
+      console.log('    DM WAS TOLD NOTHING — this transition is unnarratable.');
+    }
+    for (const fact of step.facts) console.log(`    DM fact       ${fact}`);
+  }
+  // The four states the rules define, each reached exactly once above. A run that reached
+  // three of them is a run whose fourth transition silently stopped working.
+  const reached = new Set(steps.map((step) => step.vitalAfter));
+  for (const expected of ['dying', 'stabilized', 'dead', 'standing']) {
+    if (!reached.has(expected)) {
+      ok = false;
+      console.log(`\n  NEVER REACHED "${expected}" — that death-save transition did not happen.`);
+    }
+  }
+  return ok;
+}
+
 async function runScenarios(): Promise<Row[]> {
   const rows: Row[] = [];
   for (const scenario of SCENARIOS) {
@@ -672,6 +888,7 @@ const REQUIRED_FIELDS = [
 function report(
   rows: Row[],
   profiles: Record<string, Awaited<ReturnType<typeof profileOf>>>,
+  deathSaves: DeathSaveStep[],
 ): boolean {
   let ok = true;
   console.log('\n' + '='.repeat(88));
@@ -839,6 +1056,8 @@ function report(
     console.log('  NO COVER-ADJUSTED AC OBSERVED — the cover scenario did not reach the engine.');
   }
 
+  if (!reportDeathSaves(deathSaves)) ok = false;
+
   console.log('\n' + '='.repeat(88));
   console.log(ok ? 'PASS — every scenario resolved and logged completely.' : 'FAIL — see above.');
   console.log('='.repeat(88) + '\n');
@@ -883,7 +1102,10 @@ try {
       ]),
     ),
   ) as Record<string, Awaited<ReturnType<typeof profileOf>>>;
-  exitCode = report(rows, profiles) ? 0 : 1;
+  // Last, because two of its four transitions correctly end the encounter: everything that
+  // needs a live fight has already run by the time this starts closing one.
+  const deathSaves = await runDeathSaveScenarios();
+  exitCode = report(rows, profiles, deathSaves) ? 0 : 1;
 } catch (error) {
   console.error('combat-harness: aborted —', error);
   exitCode = 2;

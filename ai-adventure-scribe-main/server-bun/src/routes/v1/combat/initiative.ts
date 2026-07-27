@@ -6,19 +6,45 @@ import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
+import { concludeEncounter } from '../../../services/combat/combat-ending.js';
 import { trackCombatEvent } from '../../../services/combat/combat-events.js';
 import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
 import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { sanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
 import {
   createTacticalCombatMap,
-  destroyTacticalCombatMap,
   resetTacticalMovementForTurn,
 } from '../../../services/combat/tactical-combat-lifecycle.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 
 import type { SceneSpec } from '../../../tactical/types.js';
-import type { CreateParticipantInput } from '../../../types/combat.js';
+import type { CombatEndReason, CreateParticipantInput } from '../../../types/combat.js';
+
+/**
+ * The two client-facing terminations, funnelled.
+ *
+ * Both used to hand-assemble their own ending — end the row, tear down the board, emit an
+ * event, republish — and both left out the one thing that turned out to matter: a sentence in
+ * the DM's next context saying the fight had stopped. `concludeEncounter` is now the only
+ * thing that ends an encounter, so neither can drift out of step with the resolved ending
+ * again, and neither can reach `completed` without a reason.
+ *
+ * The encounter row is re-read afterwards because these endpoints have always answered with
+ * it, and it now carries `endedReason` for the caller to see.
+ */
+async function endEncounterThroughFunnel(
+  encounterId: string,
+  sessionId: string | undefined,
+  userId: string,
+  reason: CombatEndReason,
+) {
+  const session =
+    sessionId ??
+    (await CombatEncounterService.getEncounterById(encounterId, userId))?.sessionId ??
+    '';
+  await concludeEncounter(encounterId, session, userId, reason);
+  return CombatEncounterService.getEncounterById(encounterId, userId);
+}
 
 const sessionIdParams = t.Object({
   sessionId: t.String({ minLength: 1, maxLength: 255 }),
@@ -479,17 +505,12 @@ export const initiativeRoutes = new Elysia()
           return { error: verification.error!.message };
         }
 
-        const updatedEncounter = await CombatEncounterService.endCombat(
+        return await endEncounterThroughFunnel(
           params.encounterId,
+          verification.session?.id,
           user.userId,
+          'ended_by_request',
         );
-        if (verification.session) await destroyTacticalCombatMap(verification.session.id);
-        trackCombatEvent('combat_ended', {
-          encounterId: params.encounterId,
-          sessionId: verification.session?.id,
-        });
-        await publishCombatState(params.encounterId, user.userId, 'combat_ended');
-        return updatedEncounter;
       } catch (e) {
         logger.error({ msg: 'End combat error', error: e });
         return mapCombatError(set, e, 'Failed to end combat encounter', 'Encounter not found');
@@ -512,14 +533,12 @@ export const initiativeRoutes = new Elysia()
           set.status = verification.error!.status;
           return { error: verification.error!.message };
         }
-        const updated = await CombatEncounterService.endCombat(params.encounterId, user.userId);
-        if (verification.session) await destroyTacticalCombatMap(verification.session.id);
-        trackCombatEvent('abandonment', {
-          encounterId: params.encounterId,
-          sessionId: verification.session?.id,
-        });
-        await publishCombatState(params.encounterId, user.userId, 'abandonment');
-        return updated;
+        return await endEncounterThroughFunnel(
+          params.encounterId,
+          verification.session?.id,
+          user.userId,
+          'abandoned',
+        );
       } catch (e) {
         logger.error({ msg: 'Abandon combat error', error: e });
         return mapCombatError(set, e, 'Failed to abandon combat encounter', 'Encounter not found');

@@ -40,6 +40,16 @@ export const combatEncounters = pgTable(
 
     // Combat state
     status: text('status').notNull().default('active'), // 'active' | 'paused' | 'completed'
+    /**
+     * Why this encounter stopped. Written by the same statement that writes `completed`, so a
+     * terminal encounter with no reason is not a state the code can produce.
+     *
+     * Run 18's encounter 2 was marked `completed` with a hostile alive at 2 of 11 HP, no
+     * `combat_ended` telemetry, and nothing in the DM's context to say a fight had ended. The
+     * row could not say which of the four terminating paths had run, so the abandonment was
+     * indistinguishable from a victory after the fact.
+     */
+    endedReason: text('ended_reason'),
     currentRound: integer('current_round').notNull().default(1),
     currentTurnOrder: integer('current_turn_order').notNull().default(0),
     version: integer('version').notNull().default(1),

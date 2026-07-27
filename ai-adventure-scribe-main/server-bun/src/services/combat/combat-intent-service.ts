@@ -3,19 +3,20 @@
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { CombatAttackService } from './combat-attack-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
+import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
-import {
-  getEquippedWeaponProfile,
-  getParticipantAbilityProfile,
-  getActiveConditionNames,
-  listEquippedWeaponProfiles,
-} from './data-access.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
+import {
+  getEquippedWeaponProfile,
+  getParticipantAbilityProfile,
+  getActiveConditionNames,
+  listEquippedWeaponProfiles,
+} from './data-access.js';
 import {
   describeGoingDown,
   settleDownedTurns,
@@ -24,11 +25,7 @@ import {
 } from './death-saves-service.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
-import {
-  destroyTacticalCombatMap,
-  grantTacticalDash,
-  resetTacticalMovementForTurn,
-} from './tactical-combat-lifecycle.js';
+import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
@@ -119,22 +116,6 @@ function resolveExpectedVersion(
  */
 const isHostile = (participantType: string): boolean => participantType !== 'player';
 
-/**
- * The sentence the DM is handed when the fight is over.
- *
- * Recorded BEFORE the board is torn down, and — since `recordDmTacticalFact` now writes to the
- * session's latest map row rather than its active one — it survives the teardown and reaches
- * the next context fetch. In seventeen runs no ending of any kind had ever been narrated; this
- * line and the killing blow beside it are what the DM was missing to narrate one.
- */
-const describeCombatEnd = (reason: 'party_defeated' | 'last_hostile_defeated'): string =>
-  reason === 'last_hostile_defeated'
-    ? 'THE FIGHT IS OVER: the last hostile has fallen and the party is victorious. Narrate ' +
-      'the end of the combat — the final blow, the aftermath, what the party is left standing ' +
-      'in. Do not start a new encounter in the same breath.'
-    : 'THE FIGHT IS OVER: no member of the party is still able to fight. Narrate the defeat ' +
-      'and what becomes of them. Do not start a new encounter in the same breath.';
-
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   const active = state.participants.filter((participant) => participant.isActive);
@@ -165,17 +146,7 @@ async function endCombatIfResolved(encounterId: string, userId: string): Promise
   // Which side ran out is the difference between a victory and a TPK, and the old fixed
   // string reported a victory for both.
   const reason = hostilesStanding ? 'party_defeated' : 'last_hostile_defeated';
-  // Recorded before the teardown, deliberately: this is the only ordering in which the
-  // *reason* the fight ended can reach the DM at all.
-  await recordDmTacticalFact(state.encounter.sessionId, describeCombatEnd(reason));
-  await CombatEncounterService.endCombat(encounterId, userId);
-  await destroyTacticalCombatMap(state.encounter.sessionId);
-  trackCombatEvent('combat_ended', {
-    encounterId,
-    sessionId: state.encounter.sessionId,
-    reason,
-  });
-  await publishCombatState(encounterId, userId, 'combat_ended');
+  await concludeEncounter(encounterId, state.encounter.sessionId, userId, reason);
   return true;
 }
 
@@ -228,6 +199,118 @@ function assertActorTurn(state: CombatState, actorId: string, index: SessionEnti
   return { actor: current, encounter: state.encounter };
 }
 
+/** `combat_participants` carries the action flags; the service's row type does not name them. */
+type TurnResourceView = { id: string; actionUsed?: boolean | null } & VitalsInput;
+
+/**
+ * One turn boundary, done properly: advance the order, refund the new actor's movement, and
+ * roll death saving throws for anyone the order reaches on the floor.
+ *
+ * Deliberately the same three calls the `end_turn` branch of the dispatch makes, in the same
+ * order. An implicit end of turn that only nudged `current_turn_order` would be a different
+ * kind of turn boundary from an explicit one — a dying character passed this way would never
+ * roll the save the rules owe them, and the movement pool of whoever came next would still
+ * hold last turn's remainder.
+ */
+async function advanceOneTurn(encounterId: string, sessionId: string, userId: string) {
+  const turn = await CombatInitiativeService.advanceTurn(encounterId, userId);
+  await resetTacticalMovementForTurn(sessionId, turn.currentParticipant.id);
+  return settleDownedTurns(encounterId, sessionId, userId, turn);
+}
+
+/**
+ * The turn cycle, made liberal in exactly one direction.
+ *
+ * The DM is `gemini-3.1-flash-lite`. It cannot emit `end_turn` — the `combat_actions`
+ * vocabulary has no such action type, so every turn boundary in production is synthesized by
+ * the client after an action it accepted. Any path that resolves an action WITHOUT going
+ * through that client loop — the legacy `roll_requests` dialect translated server-side, a
+ * batch whose second action threw before its `end_turn` — leaves a participant that has spent
+ * its action sitting as `current` forever. The next thing the DM declares is then for somebody
+ * else, and the engine refuses it. Run 18's encounter 2 died exactly there: a run of refusals,
+ * no `combat_ended`, a monster left standing at 2 of 11 HP.
+ *
+ * Three previous waves tried to instruct this model out of a habit and lost all three (the
+ * `combat_actions` corrective, the purged dialect, the equipped-weapon list). The established
+ * answer in this codebase is Postel: translate rather than correct. So an action declared for
+ * a participant that is not current, where the current participant has already spent its
+ * action, is read as the end-of-turn the DM never said out loud — the turn advances and the
+ * action is accepted.
+ *
+ * WHAT IS STILL REFUSED, loudly and unchanged: an action for a non-current participant while
+ * the current one still HAS its action. That is not a missing `end_turn`, it is one creature
+ * being made to act twice in a round, and no amount of tolerance should manufacture a turn for
+ * a creature the order has not reached.
+ *
+ * THE BOUND: exactly one position, and the engine — not this function — is what makes that the
+ * right number.
+ *
+ * Multi-step was written first and is unreachable. `CombatInitiativeService.advanceTurn` calls
+ * `resetTurnResources` on whoever it lands on, so the moment the order moves onto the next
+ * participant that participant has a full action again. A second step would therefore always
+ * be blocked by the very guard above, and the only way past it would be to drop the guard and
+ * skip a creature that still had its turn to take. So one step is not a cautious choice among
+ * several: it is the only advancement this absorb can ever justify, and everything beyond it is
+ * a creature being silently robbed.
+ *
+ * It is also exactly enough for the failure it exists to absorb. The wedge is "the current
+ * participant acted, and the DM's next declaration is for the creature after it" — one
+ * position, every time. An action addressed further down the order is refused, and the
+ * participant that blocked it is named in the refusal.
+ *
+ * A participant that cannot act at all (unconscious, stabilised, dead) is not passed by this
+ * function either — `settleDownedTurns`, inside the one advance, rolls the save the rules owe
+ * them and moves the order on itself.
+ */
+async function resolveActorTurn(
+  encounterId: string,
+  initial: CombatState,
+  actorId: string,
+  index: SessionEntityIndex,
+  userId: string,
+  intentType: SubmittedCombatIntent['type'],
+  source: CombatActionSource,
+): Promise<{
+  actor: NonNullable<CombatState['currentParticipant']>;
+  encounter: CombatState['encounter'];
+}> {
+  const current = initial.currentParticipant as TurnResourceView | null;
+  const known = initial.participants.some((participant) => participant.id === actorId);
+  // An explicit `end_turn` is never absorbed: it is itself a turn boundary, so advancing to
+  // reach its actor and then advancing again would consume two turns for one instruction.
+  // Player-sourced intents are never absorbed either — a player client acting out of turn is a
+  // bug or a race and must still be told so. This tolerance exists because one specific model
+  // cannot emit `end_turn`, not because out-of-turn actions became acceptable.
+  const absorbable =
+    source === 'dm' && known && intentType !== 'end_turn' && !!current && current.id !== actorId;
+  // The refusal that must survive this wave, unchanged: a creature being made to act twice.
+  if (!absorbable || (vitalStateOf(current!) === 'standing' && !current!.actionUsed)) {
+    return assertActorTurn(initial, actorId, index);
+  }
+
+  await advanceOneTurn(encounterId, initial.encounter.sessionId, userId);
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  if (state.currentParticipant?.id !== actorId) {
+    // One position was not enough to reach the addressed creature. The advance itself was
+    // legitimate — the previous participant really had finished — so the board is left where
+    // it now honestly stands rather than rolled back to a position that was already wrong.
+    return assertActorTurn(state, actorId, index);
+  }
+  logger.warn({
+    msg: 'DM_IMPLICIT_TURN_ADVANCE',
+    encounterId,
+    sessionId: state.encounter.sessionId,
+    intentType,
+    addressedActorId: actorId,
+    addressedActorSlug: index.slugFor(actorId) ?? null,
+    turnWasActorId: current!.id,
+    turnWasActorSlug: index.slugFor(current!.id) ?? null,
+    positionsAdvanced: 1,
+    skipped: [{ id: current!.id, slug: index.slugFor(current!.id) ?? null }],
+  });
+  return { actor: state.currentParticipant, encounter: state.encounter };
+}
+
 /**
  * Every entity reference on the way in, normalised against the live board in one read. Targets
  * matter as much as the actor: an attack whose `targetId` is still a slug reaches the engine
@@ -259,7 +342,15 @@ export async function executeCombatIntent(
     const state = await CombatEncounterService.getCombatState(encounterId, userId);
     const index = await loadSessionEntityIndex(state.encounter.sessionId);
     const resolved = resolveIntentRefs(submitted, index);
-    const { actor, encounter } = assertActorTurn(state, resolved.actorId, index);
+    const { actor, encounter } = await resolveActorTurn(
+      encounterId,
+      state,
+      resolved.actorId,
+      index,
+      userId,
+      resolved.type,
+      source,
+    );
     const intent = resolveExpectedVersion(resolved, source, encounter.version);
     let result: unknown;
     if (intent.type === 'move') {
@@ -381,12 +472,11 @@ export async function executeCombatIntent(
         },
       );
     } else {
-      const turn = await CombatInitiativeService.advanceTurn(encounterId, userId);
-      await resetTacticalMovementForTurn(encounter.sessionId, turn.currentParticipant.id);
       // A downed character's turn is a death saving throw, not an action. Resolving it here,
       // as the order reaches them, is what makes 0 HP a state a fight passes through rather
-      // than the state a fight ends in.
-      const settled = await settleDownedTurns(encounterId, encounter.sessionId, userId, turn);
+      // than the state a fight ends in. `advanceOneTurn` is the same boundary an implicit
+      // advance performs, so the two kinds of turn end cannot drift apart.
+      const settled = await advanceOneTurn(encounterId, encounter.sessionId, userId);
       result = settled.deathSaves.length
         ? { ...settled.turn, deathSaves: settled.deathSaves }
         : settled.turn;

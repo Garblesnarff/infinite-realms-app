@@ -49,6 +49,7 @@ describe('why drizzle insert-select is banned', () => {
     id: sql`gen_random_uuid()`,
     sessionId: schema.gameSessions.id,
     status: sql`${'active'}`,
+    endedReason: sql`null::text`,
     currentRound: sql`1`,
     currentTurnOrder: sql`0`,
     version: sql`1`,

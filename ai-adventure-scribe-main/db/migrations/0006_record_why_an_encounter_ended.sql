@@ -1,0 +1,1 @@
+ALTER TABLE "combat_encounters" ADD COLUMN "ended_reason" text;

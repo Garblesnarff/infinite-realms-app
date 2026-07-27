@@ -32,7 +32,12 @@ import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
 import type { EntitySize } from '../../tactical/types.js';
-import type { CombatState, CreateParticipantInput, TurnOrderEntry } from '../../types/combat.js';
+import type {
+  CombatEndReason,
+  CombatState,
+  CreateParticipantInput,
+  TurnOrderEntry,
+} from '../../types/combat.js';
 
 export class CombatEncounterService {
   /**
@@ -396,17 +401,29 @@ export class CombatEncounterService {
   }
 
   /**
-   * End a combat encounter
+   * End a combat encounter.
+   *
+   * `reason` is required, and it is required *by the type* rather than defaulted, because the
+   * only way an encounter reached a terminal state with nothing to say for itself was that the
+   * three callers outside `endCombatIfResolved` were not asked. Every caller now names which
+   * ending this is, and the same statement that writes `completed` writes the reason.
+   *
    * @param encounterId - Combat encounter ID
+   * @param reason - Which ending this is; stored on the row and reported in telemetry
    * @returns Updated encounter
    */
-  static async endCombat(encounterId: string, userId?: string): Promise<CombatEncounter> {
+  static async endCombat(
+    encounterId: string,
+    userId: string | undefined,
+    reason: CombatEndReason,
+  ): Promise<CombatEncounter> {
     // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
     // This ensures that combat encounters can only be ended by authorized users in a single round-trip.
     const [updated] = await db
       .update(combatEncounters)
       .set({
         status: 'completed',
+        endedReason: reason,
         endedAt: new Date(),
         updatedAt: new Date(),
       })

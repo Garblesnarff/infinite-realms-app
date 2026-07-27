@@ -6,8 +6,8 @@ import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-service.js';
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
+import { concludeEncounter } from '../../services/combat/combat-ending.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
-import { publishCombatState } from '../../services/combat/combat-sync-service.js';
 import { vitalStateOf, type VitalsInput } from '../../services/combat/death-saves-service.js';
 import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
@@ -374,6 +374,13 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
    * The result was combat with a live encounter and no board: `getMap()` 404s, no digest
    * reaches the prompt, nothing can resolve, and each end/start cycle reads as a restart. The
    * gate was never the bug; this endpoint's half-transition was.
+   *
+   * It then remained the one ending that recorded nothing. This is the path a DM reaches when
+   * it decides a scene is over, and in run 18 it closed a fight whose monster was standing at
+   * 2 of 11 hit points: no reason on the row, no `combat_ended`, and no sentence in the DM's
+   * next context — so the following encounter opened as if nothing had happened. It now goes
+   * through `concludeEncounter` like every other ending, and the reason it names says
+   * truthfully that combatants were still up.
    */
   .post('/:id/tactical-map/end', async ({ params, user, set }) => {
     const access = await verifySessionOwnership(params.id, user.userId);
@@ -382,10 +389,13 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       return { error: access.error!.message };
     }
     const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
-    await destroyTacticalCombatMap(params.id);
-    if (encounter) {
-      await CombatEncounterService.endCombat(encounter.id, user.userId);
-      await publishCombatState(encounter.id, user.userId, 'combat_ended');
+    // No encounter to conclude means the map is the only thing left to remove. With one, the
+    // teardown belongs to `concludeEncounter` — which must write the DM's fact onto the board
+    // before destroying it.
+    if (!encounter) {
+      await destroyTacticalCombatMap(params.id);
+      return { ok: true, encounterEnded: false };
     }
-    return { ok: true, encounterEnded: !!encounter };
+    await concludeEncounter(encounter.id, params.id, user.userId, 'dm_ended_scene');
+    return { ok: true, encounterEnded: true };
   });
