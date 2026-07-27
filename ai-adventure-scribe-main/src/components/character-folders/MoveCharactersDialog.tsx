@@ -24,6 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 
@@ -112,12 +118,43 @@ export const MoveCharactersDialog: React.FC<MoveCharactersDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleMove} disabled={moveMutation.isPending}>
-            {moveMutation.isPending ? 'Moving...' : 'Move Characters'}
-          </Button>
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel and close dialog</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    onClick={handleMove}
+                    disabled={moveMutation.isPending}
+                    aria-label={
+                      moveMutation.isPending
+                        ? 'Moving characters'
+                        : `Move ${characterIds.length} character${characterIds.length !== 1 ? 's' : ''} to destination folder`
+                    }
+                  >
+                    {moveMutation.isPending ? 'Moving...' : 'Move Characters'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {moveMutation.isPending
+                    ? 'Moving characters...'
+                    : `Move selected characters to the destination folder`}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </DialogFooter>
       </DialogContent>
     </Dialog>
