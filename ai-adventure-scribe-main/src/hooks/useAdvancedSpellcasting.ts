@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+/* eslint-disable max-lines */
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 import type { Spell, Character } from '@/types/character';
 
@@ -222,38 +223,57 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
 
   /**
    * Handle spell preparation
+   * ⚡ Bolt: Wrapped in useCallback with stable functional updates to avoid dependency on preparedSpells state array.
    */
-  const handleSpellPreparation = (spellId: string, checked: boolean): void => {
-    if (checked && preparedSpells.length < maxPreparedSpells) {
-      setPreparedSpells([...preparedSpells, spellId]);
-    } else if (!checked) {
-      setPreparedSpells(preparedSpells.filter((s) => s !== spellId));
+  const handleSpellPreparation = useCallback((spellId: string, checked: boolean): void => {
+    if (checked) {
+      setPreparedSpells((prev) => {
+        if (prev.length < maxPreparedSpells && !prev.includes(spellId)) {
+          return [...prev, spellId];
+        }
+        return prev;
+      });
+    } else {
+      setPreparedSpells((prev) => prev.filter((s) => s !== spellId));
     }
-  };
+  }, [maxPreparedSpells]);
 
   /**
    * Handle metamagic selection
+   * ⚡ Bolt: Wrapped in useCallback with stable functional updates to avoid dependency on selectedMetamagic state array.
    */
-  const handleMetamagicSelection = (optionId: string, checked: boolean): void => {
-    if (checked && selectedMetamagic.length < maxMetamagicOptions) {
-      setSelectedMetamagic([...selectedMetamagic, optionId]);
-    } else if (!checked) {
-      setSelectedMetamagic(selectedMetamagic.filter((m) => m !== optionId));
+  const handleMetamagicSelection = useCallback((optionId: string, checked: boolean): void => {
+    if (checked) {
+      setSelectedMetamagic((prev) => {
+        if (prev.length < maxMetamagicOptions && !prev.includes(optionId)) {
+          return [...prev, optionId];
+        }
+        return prev;
+      });
+    } else {
+      setSelectedMetamagic((prev) => prev.filter((m) => m !== optionId));
     }
-  };
+  }, [maxMetamagicOptions]);
 
   /**
    * Handle pact magic spells
+   * ⚡ Bolt: Wrapped in useCallback with stable functional updates to avoid dependency on pactMagicSpells state array.
    */
-  const handlePactSpellSelection = (spellId: string, checked: boolean): void => {
-    if (checked && pactMagicSpells.length < maxPactSpells) {
-      setPactMagicSpells([...pactMagicSpells, spellId]);
-    } else if (!checked) {
-      setPactMagicSpells(pactMagicSpells.filter((s) => s !== spellId));
+  const handlePactSpellSelection = useCallback((spellId: string, checked: boolean): void => {
+    if (checked) {
+      setPactMagicSpells((prev) => {
+        if (prev.length < maxPactSpells && !prev.includes(spellId)) {
+          return [...prev, spellId];
+        }
+        return prev;
+      });
+    } else {
+      setPactMagicSpells((prev) => prev.filter((s) => s !== spellId));
     }
-  };
+  }, [maxPactSpells]);
 
-  return {
+  // ⚡ Bolt: Return object wrapped in useMemo to enforce referential identity stability and prevent downstream Virtual DOM re-renders.
+  return useMemo(() => ({
     characterClass,
     level,
     spellcastingAbility,
@@ -281,5 +301,33 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
     handleMetamagicSelection,
     handlePactSpellSelection,
     applySpellcastingFeatures,
-  };
+  }), [
+    characterClass,
+    level,
+    spellcastingAbility,
+    abilityModifier,
+    preparedSpells,
+    selectedMetamagic,
+    ritualSpells,
+    pactMagicSpells,
+    allSpells,
+    isLoadingSpells,
+    hasSpellcasting,
+    canPrepareSpells,
+    usesRitualCasting,
+    usesPactMagic,
+    usesMetamagic,
+    maxPreparedSpells,
+    availableSpells,
+    availableRitualSpells,
+    pactProgression,
+    maxPactSpells,
+    sorceryPoints,
+    maxMetamagicOptions,
+    allSelectionsComplete,
+    handleSpellPreparation,
+    handleMetamagicSelection,
+    handlePactSpellSelection,
+    applySpellcastingFeatures,
+  ]);
 }

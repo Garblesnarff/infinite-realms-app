@@ -53,8 +53,9 @@ mock.module('../../../services/character-service.js', () => ({ CharacterService:
 mock.module('../../../services/class-features-service.js', () => ({ ClassFeaturesService: {} }));
 mock.module('../../../services/progression-service.js', () => ({ ProgressionService: {} }));
 mock.module('../../../services/spell-slots-service.js', () => ({ SpellSlotsService: {} }));
-mock.module('../combat/helpers.js', () => ({
+mock.module(import.meta.resolve('../combat/helpers.js'), () => ({
   verifySessionOwnership: async () => ({ success: true }),
+  verifyEncounterOwnership: async () => ({ success: true }),
 }));
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');

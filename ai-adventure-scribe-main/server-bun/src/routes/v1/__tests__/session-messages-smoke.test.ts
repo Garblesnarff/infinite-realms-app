@@ -31,6 +31,7 @@ mock.module(helpersPath, () => ({
     }
     return { success: false, error: { status: 404, message: 'Session not found' } };
   },
+  verifyEncounterOwnership: async () => ({ success: true }),
 }));
 
 // Mock SessionMessageService

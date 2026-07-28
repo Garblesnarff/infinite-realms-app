@@ -169,7 +169,7 @@ const warnings: Array<Record<string, unknown>> = [];
 const errorLogs: Array<Record<string, unknown>> = [];
 
 const db = drizzle(fakeClient as never, { schema });
-mock.module('../../../../../../db/client', () => ({ db }));
+mock.module(import.meta.resolve('../../../../../../db/client'), () => ({ db }));
 mock.module('../../../../lib/logger.js', () => ({
   logger: {
     debug: () => {},
