@@ -31,7 +31,7 @@
 // ============================
 // SDK/library imports
 // ============================
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 // ============================
 // External integrations
@@ -238,13 +238,24 @@ export const useGameSession = (
     };
   }, [cleanupSession]); // Only depends on stable cleanupSession
 
-  return {
-    sessionData,
-    setSessionData: safeSetSessionData, // Safe setter with validation
-    sessionId: currentSessionId,
-    sessionState,
-    updateGameSessionState,
-    createGameSession, // Expose create if manual creation is ever needed
-    isSessionReady, // Helper to check if session is ready for operations
-  };
+  return useMemo(
+    () => ({
+      sessionData,
+      setSessionData: safeSetSessionData, // Safe setter with validation
+      sessionId: currentSessionId,
+      sessionState,
+      updateGameSessionState,
+      createGameSession, // Expose create if manual creation is ever needed
+      isSessionReady, // Helper to check if session is ready for operations
+    }),
+    [
+      sessionData,
+      safeSetSessionData,
+      currentSessionId,
+      sessionState,
+      updateGameSessionState,
+      createGameSession,
+      isSessionReady,
+    ],
+  );
 };

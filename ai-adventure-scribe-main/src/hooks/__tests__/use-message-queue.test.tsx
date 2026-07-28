@@ -98,7 +98,13 @@ describe('useMessageQueue', () => {
         id: 'test-uuid',
         message: 'Hello',
         speaker_type: 'player',
-        context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' },
+        context: expect.objectContaining({
+          location: 'Tavern',
+          emotion: 'happy',
+          intent: 'greeting',
+          handouts: null,
+        }),
+        timestamp: expect.any(String),
       }),
     );
     expect(persistedMessage.id).toBe('test-uuid');

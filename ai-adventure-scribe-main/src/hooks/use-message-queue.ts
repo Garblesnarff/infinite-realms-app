@@ -1,6 +1,6 @@
 // SDK Imports
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 // Project Imports
@@ -154,7 +154,7 @@ export const useMessageQueue = (sessionId: string | null) => {
    * Process a batch of queued messages
    * Also generates IDs for each message to ensure they're immediately available
    */
-  const processMessageBatch = async (batch: ChatMessage[]) => {
+  const processMessageBatch = useCallback(async (batch: ChatMessage[]) => {
     if (!sessionId) throw new Error('Session ID is required to save messages');
     const now = new Date().toISOString();
     const formattedBatch = batch.map((message) => ({
@@ -173,12 +173,12 @@ export const useMessageQueue = (sessionId: string | null) => {
     }));
 
     await userDataApi.saveSessionMessages(sessionId, formattedBatch);
-  };
+  }, [sessionId]);
 
   /**
    * Retry all queued messages
    */
-  const retryQueuedMessages = async () => {
+  const retryQueuedMessages = useCallback(async () => {
     if (messageQueue.length > 0 && queueStatus !== 'processing') {
       try {
         const batch = messageQueue.slice(0, MAX_BATCH_SIZE);
@@ -198,12 +198,15 @@ export const useMessageQueue = (sessionId: string | null) => {
         });
       }
     }
-  };
+  }, [messageQueue, queueStatus, processMessageBatch, toast]);
 
-  return {
-    messageMutation,
-    queueStatus,
-    queueLength: messageQueue.length,
-    retryQueuedMessages,
-  };
+  return useMemo(
+    () => ({
+      messageMutation,
+      queueStatus,
+      queueLength: messageQueue.length,
+      retryQueuedMessages,
+    }),
+    [messageMutation, queueStatus, messageQueue.length, retryQueuedMessages],
+  );
 };

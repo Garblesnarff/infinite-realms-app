@@ -96,8 +96,11 @@ export const usePendingRolls = () => {
 export const useLatestPendingRoll = () => {
   const { hasPendingRolls, pendingRequests } = usePendingRolls();
 
-  return {
-    hasLatestPendingRoll: hasPendingRolls && pendingRequests.length > 0,
-    latestPendingRoll: pendingRequests.length > 0 ? pendingRequests[0] : null,
-  };
+  return useMemo(
+    () => ({
+      hasLatestPendingRoll: hasPendingRolls && pendingRequests.length > 0,
+      latestPendingRoll: pendingRequests.length > 0 ? pendingRequests[0] : null,
+    }),
+    [hasPendingRolls, pendingRequests],
+  );
 };

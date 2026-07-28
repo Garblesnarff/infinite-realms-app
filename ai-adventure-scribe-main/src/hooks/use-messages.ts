@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 import type { ChatMessage, MessageContext } from '@/types/game';
 
@@ -185,14 +185,26 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
     [sessionId, queryClient],
   );
 
-  return {
-    data: allMessages,
-    isLoading: query.isLoading,
-    isFetching: query.isFetching,
-    error: query.error,
-    hasMore,
-    loadMore,
-    resetPagination,
-    addMessage,
-  };
+  return useMemo(
+    () => ({
+      data: allMessages,
+      isLoading: query.isLoading,
+      isFetching: query.isFetching,
+      error: query.error,
+      hasMore,
+      loadMore,
+      resetPagination,
+      addMessage,
+    }),
+    [
+      allMessages,
+      query.isLoading,
+      query.isFetching,
+      query.error,
+      hasMore,
+      loadMore,
+      resetPagination,
+      addMessage,
+    ],
+  );
 };
