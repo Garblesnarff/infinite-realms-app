@@ -6,7 +6,15 @@
  * as they would be managed at a physical D&D table.
  */
 
-import React, { createContext, useContext, useReducer, useMemo, useRef, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useMemo,
+  useRef,
+  useEffect,
+  useCallback,
+} from 'react';
 
 import { useCharacter } from './CharacterContext';
 import { combatReducer, initialCombatState } from './combat/combat-reducer';
@@ -15,11 +23,11 @@ import {
   createReactionHandlers,
   createParticipantReactionHandlers,
 } from './combat/reaction-handlers';
+import { useAuthoritativeCombatSync } from './combat/use-authoritative-combat-sync';
 import { useCombatLifecycle } from './combat/use-combat-lifecycle';
 import { useParticipantManagement } from './combat/use-participant-management';
 import { useTakeAction } from './combat/use-take-action';
 import { createWeaponHandlers } from './combat/weapon-handlers';
-import { useAuthoritativeCombatSync } from './combat/use-authoritative-combat-sync';
 
 import type { CombatContextValue } from '@/types/combat';
 
@@ -46,21 +54,23 @@ interface CombatProviderProps {
   sessionId?: string;
 }
 
-export const CombatProvider: React.FC<CombatProviderProps> = ({
-  children,
-  sessionId,
-}) => {
+export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessionId }) => {
   const [state, dispatch] = useReducer(combatReducer, initialCombatState);
   const { state: characterState } = useCharacter();
-  useAuthoritativeCombatSync(sessionId, dispatch);
 
   // Ref to provide current state to extracted handlers without stale closures
   const stateRef = useRef(state);
 
-  // Sync stateRef with state changes to prevent stale closures in extracted handlers
+  // Sync stateRef with state changes to prevent stale closures in extracted handlers.
+  // Assigned during render as well: the authoritative sync reconciles against the encounter
+  // held *now*, and an effect-only update would still be showing the previous render's.
+  stateRef.current = state;
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  const getActiveEncounter = useCallback(() => stateRef.current.activeEncounter, []);
+  const refreshCombatState = useAuthoritativeCombatSync(sessionId, dispatch, getActiveEncounter);
 
   // ===========================
   // Extracted Handlers (stable references - dispatch never changes)
@@ -124,6 +134,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({
       state,
       startCombat,
       endCombat,
+      refreshCombatState,
       nextTurn,
       rollInitiative,
       takeAction,
@@ -156,6 +167,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({
       state,
       startCombat,
       endCombat,
+      refreshCombatState,
       nextTurn,
       rollInitiative,
       takeAction,

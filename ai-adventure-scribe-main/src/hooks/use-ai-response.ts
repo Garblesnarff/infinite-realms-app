@@ -96,7 +96,7 @@ export type { RollRequest } from '@/types/roll-request';
  */
 export const useAIResponse = () => {
   const { setGamePhase, state: gameState } = useGame();
-  const { state: combatState } = useCombat();
+  const { refreshCombatState } = useCombat();
   const { user, userPlan } = useAuth();
   const lastSigRef = useRef<string>('');
   // Track processed roll request signatures to prevent infinite re-parsing loops
@@ -143,6 +143,13 @@ export const useAIResponse = () => {
         // Log incoming dice roll results (delegated to session-logger)
         await logIncomingRolls(sessionId, latestMessage);
 
+        // Combat truth for this turn is re-read from the server rather than taken from the last
+        // render. Everything below — the tactical-context fetch, the combat flag the DM is told,
+        // and structured action execution — reads these two locals, so a fight the server ended
+        // on a killing blow (or started while this closure was already captured) is seen here.
+        let activeEncounter = await refreshCombatState();
+        let isInCombat = activeEncounter?.phase === 'active';
+
         // Detect if this is the first player message in the session
         const isFirstMessage = messages.filter((m) => m.sender === 'player').length <= 1;
 
@@ -162,7 +169,7 @@ export const useAIResponse = () => {
           gameContext,
           knownCharacters: Object.keys(voiceContext.knownCharacters).length,
           isFirstMessage,
-          combatDetected: combatState.isInCombat,
+          combatDetected: isInCombat,
         });
 
         // Build conversation history for AIService
@@ -183,25 +190,21 @@ export const useAIResponse = () => {
           campaign: gameContext.campaign,
           character: gameContext.character,
           currentPhase: gameState.currentPhase,
-          isInCombat: combatState.isInCombat,
-          encounterId: combatState.activeEncounter?.id,
-          currentTurnParticipantId: combatState.activeEncounter?.currentTurnParticipantId,
+          isInCombat,
+          encounterId: activeEncounter?.id,
+          currentTurnParticipantId: activeEncounter?.currentTurnParticipantId,
           pendingRollsCount: gameState.diceRollQueue.pendingRolls.length,
-          currentRound: combatState.activeEncounter?.currentRound,
-          participants: combatState.activeEncounter?.participants,
+          currentRound: activeEncounter?.currentRound,
+          participants: activeEncounter?.participants,
         });
 
         // The tactical server computes geometry. The DM receives only its bounded
         // ASCII/digest context and never derives distances or line of sight itself.
-        if (
-          combatState.isInCombat &&
-          sessionId &&
-          combatState.activeEncounter?.currentTurnParticipantId
-        ) {
+        if (isInCombat && sessionId && activeEncounter?.currentTurnParticipantId) {
           try {
             const tacticalResponse = await userDataApi.getTacticalMapContext(
               sessionId,
-              combatState.activeEncounter.currentTurnParticipantId,
+              activeEncounter.currentTurnParticipantId,
             );
             if (tacticalResponse.ok) {
               const payload = (await tacticalResponse.json()) as { tacticalContext?: string };
@@ -215,9 +218,9 @@ export const useAIResponse = () => {
 
         logger.debug('AI Context with combat awareness:', {
           phase: gameState.currentPhase,
-          inCombat: combatState.isInCombat,
+          inCombat: isInCombat,
           pendingRolls: gameState.diceRollQueue.pendingRolls.length,
-          currentTurn: combatState.activeEncounter?.currentTurnParticipantId,
+          currentTurn: activeEncounter?.currentTurnParticipantId,
         });
 
         // Call AIService
@@ -259,6 +262,21 @@ export const useAIResponse = () => {
           const endResponse = await userDataApi.endTacticalMap(sessionId);
           if (!endResponse.ok)
             logger.warn('Server refused tactical combat end', await endResponse.json());
+        }
+
+        // A transition just moved the board. Re-read rather than wait for the broadcast to land
+        // in a later render: a start that also carries combat_actions has to resolve them on this
+        // turn, and the resolution prompt below has to be told the fight is on.
+        if (
+          sessionId &&
+          (result.combat_transition === 'start' || result.combat_transition === 'end')
+        ) {
+          activeEncounter = await refreshCombatState();
+          isInCombat = activeEncounter?.phase === 'active';
+          aiContext.gameState.isInCombat = isInCombat;
+          aiContext.gameState.encounterId = activeEncounter?.id;
+          aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
+          aiContext.gameState.round = activeEncounter?.currentRound;
         }
 
         // DM map intents are one authenticated server batch. The server owns
@@ -305,23 +323,16 @@ export const useAIResponse = () => {
           }
         }
 
-        if (
-          combatState.isInCombat &&
-          combatState.activeEncounter &&
-          result.combat_actions?.length
-        ) {
+        if (isInCombat && activeEncounter && result.combat_actions?.length) {
           const resolvedActions: Array<Record<string, unknown>> = [];
           const targetedActions = result.combat_actions.filter(
             (action): action is StructuredCombatAction => 'target_ids' in action,
           );
           for (const action of targetedActions) {
-            const outcomes = await executeStructuredCombatAction(
-              combatState.activeEncounter.id,
-              action,
-            );
+            const outcomes = await executeStructuredCombatAction(activeEncounter.id, action);
             resolvedActions.push({ action, outcomes });
             await executeAuthoritativeCombatIntent(
-              combatState.activeEncounter.id,
+              activeEncounter.id,
               {
                 type: 'end_turn',
                 actorId: action.actor_id,
@@ -367,7 +378,7 @@ export const useAIResponse = () => {
         updateGamePhase({
           combatDetection: result.combatDetection,
           currentPhase: gameState.currentPhase,
-          isInCombat: combatState.isInCombat,
+          isInCombat,
           setGamePhase,
         });
 
@@ -392,7 +403,7 @@ export const useAIResponse = () => {
         const { shouldStartCombat, shouldEndCombat } = clampCombatIntentFlags(
           !!result.combatDetection?.shouldStartCombat,
           !!result.combatDetection?.shouldEndCombat,
-          combatState.isInCombat,
+          isInCombat,
         );
 
         // Append NPC roll continuation to response text
@@ -437,8 +448,7 @@ export const useAIResponse = () => {
     [
       gameState.currentPhase,
       gameState.diceRollQueue.pendingRolls.length,
-      combatState.isInCombat,
-      combatState.activeEncounter?.currentTurnParticipantId,
+      refreshCombatState,
       userPlan,
       setGamePhase,
     ],

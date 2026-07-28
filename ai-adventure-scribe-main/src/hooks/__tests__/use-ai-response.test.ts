@@ -11,12 +11,13 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({ userPlan: 'pro' })),
 }));
 
+// Combat truth now arrives through refreshCombatState(), which re-reads the server. The
+// default here is "no combat"; see browser-combat-pipeline.test.tsx for the same pipeline
+// running against the real provider, reducer and sync hook rather than this stub.
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: vi.fn(() => ({
-    state: {
-      isInCombat: false,
-      activeEncounter: { currentTurnParticipantId: 'p1' },
-    },
+    state: { isInCombat: false, activeEncounter: null },
+    refreshCombatState: vi.fn(async () => null),
   })),
 }));
 
@@ -278,11 +279,16 @@ describe('useAIResponse', () => {
     const { AIService } = await import('@/services/ai-service');
     const { useCombat } = await import('@/contexts/CombatContext');
 
+    const liveEncounter = {
+      id: 'enc-1',
+      phase: 'active',
+      currentTurnParticipantId: 'turn-entity',
+      currentRound: 1,
+      participants: [],
+    };
     vi.mocked(useCombat).mockReturnValue({
-      state: {
-        isInCombat: true,
-        activeEncounter: { currentTurnParticipantId: 'turn-entity', participants: [] },
-      },
+      state: { isInCombat: true, activeEncounter: liveEncounter },
+      refreshCombatState: vi.fn(async () => liveEncounter),
     } as any);
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
       id: mockSessionId,

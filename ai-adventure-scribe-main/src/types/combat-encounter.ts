@@ -47,6 +47,15 @@ export interface CombatEncounter {
   // Metadata
   difficulty?: 'easy' | 'medium' | 'hard' | 'deadly';
   experienceAwarded?: number;
+
+  /**
+   * Where this encounter came from. `'server'` means it was hydrated from
+   * `GET /v1/combat/sessions/:id/active` (or a `combat_state_updated` broadcast) and the
+   * server is therefore allowed to end it by no longer reporting it. Anything else —
+   * including the manual combat button, which mints a client-side encounter the server has
+   * never heard of — is left alone by the authoritative sync.
+   */
+  origin?: 'server' | 'local';
 }
 
 // ===========================
@@ -156,6 +165,13 @@ export interface CombatContextValue {
     initialParticipants: Partial<CombatParticipant>[],
   ) => Promise<void>;
   endCombat: () => Promise<void>;
+
+  /**
+   * Re-reads the encounter from the server and reconciles it into combat state, returning the
+   * encounter that is live *right now* rather than whatever the last dispatch left behind.
+   * Callers that must not act on a stale render (the DM turn pipeline) await this first.
+   */
+  refreshCombatState: () => Promise<CombatEncounter | null>;
 
   // Turn management
   nextTurn: () => Promise<void>;

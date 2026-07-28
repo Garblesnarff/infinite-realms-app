@@ -65,6 +65,9 @@ export function useCombatLifecycle({
         actions: [],
         roundsElapsed: 1,
         startTime: new Date(),
+        // Client-side encounter: the server has not been told about this one, so the
+        // authoritative sync leaves it alone instead of ending it as phantom combat.
+        origin: 'local',
         location: 'Combat Location', // Will be enhanced later
         environmentalEffects: [],
         visibility: 'clear',
