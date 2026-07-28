@@ -47,6 +47,7 @@ export default defineConfig({
       'src/hooks/__tests__/use-campaign-journal.test.tsx',
       'src/services/__tests__/voice-profile-service.test.ts',
       'src/hooks/__tests__/useSpellSelectionValidation.test.ts',
+      'src/services/voice/__tests__/voice-dialogue-parser.test.ts',
       'cli/src/**/*.{test,spec}.{ts,tsx}',
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}'
@@ -104,6 +105,7 @@ export default defineConfig({
         'src/hooks/use-campaign-journal.ts',
         'src/services/voice-profile-service.ts',
         'src/hooks/useSpellSelectionValidation.ts',
+        'src/services/voice/voice-dialogue-parser.ts',
         'src/**/*.{ts,tsx}'
       ],
       all: true,
