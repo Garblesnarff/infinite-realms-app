@@ -4,7 +4,7 @@
  * Custom hook for managing magic item attunement state and operations
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import type { Character } from '@/types/character';
 
@@ -153,7 +153,10 @@ export const useMagicItemAttunement = (
     };
   }, [character]);
 
-  return {
+  const attunedItemCount = getAttunedItemCount(character);
+  const canAttuneToMoreItems = attunedItemCount < 3;
+
+  return useMemo(() => ({
     // State
     isAttuning,
 
@@ -164,7 +167,15 @@ export const useMagicItemAttunement = (
     getAttunementSummary,
 
     // Derived values
-    attunedItemCount: getAttunedItemCount(character),
-    canAttuneToMoreItems: getAttunedItemCount(character) < 3,
-  };
+    attunedItemCount,
+    canAttuneToMoreItems,
+  }), [
+    isAttuning,
+    attuneToItem,
+    removeAttunement,
+    getItemAttunementStatus,
+    getAttunementSummary,
+    attunedItemCount,
+    canAttuneToMoreItems,
+  ]);
 };

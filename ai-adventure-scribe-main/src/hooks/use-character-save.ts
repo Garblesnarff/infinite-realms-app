@@ -1,6 +1,6 @@
 // SDK Imports
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 
 // Project Imports
 import { logger } from '../lib/logger';
@@ -47,12 +47,76 @@ export const useCharacterSave = (): {
   const { user } = useAuth();
 
   /**
+   * Generate background image for the character
+   * This runs asynchronously after character creation
+   */
+  const generateBackgroundImage = useCallback(async (
+    characterId: string,
+    character: Character,
+  ): Promise<void> => {
+    try {
+      logger.info(`Generating background image for character ${characterId}`);
+
+      // Generate the image with character portrait as reference if available
+      const options: {
+        referenceImageUrl?: string;
+        retryAttempts?: number;
+        fallbackToDefault?: boolean;
+        useSimplifiedPrompt?: boolean;
+      } = {};
+      if (character.image_url) {
+        options.referenceImageUrl = character.image_url;
+        logger.info(`Using character image as reference: ${character.image_url}`);
+      }
+
+      const imageUrl = await characterBackgroundGenerator.generateCharacterBackground(
+        character,
+        options,
+      );
+
+      // Update the character with the generated image URL
+      try {
+        await userDataApi.updateCharacter(characterId, {
+          background_image: imageUrl,
+        });
+        logger.info(
+          `Successfully generated and saved background image for character ${characterId}`,
+        );
+
+        // Invalidate specific queries to refresh the UI with the new image
+        queryClient.invalidateQueries({ queryKey: ['characters'] });
+        queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+
+        // Show success notification
+        toast({
+          title: 'Character Background Generated',
+          description: 'Your character background image has been created successfully.',
+        });
+      } catch (error) {
+        logger.error('Error updating character with background image:', error);
+      }
+    } catch (error) {
+      logger.error(`Failed to generate background image for character ${characterId}:`, error);
+
+      // Show user-friendly error notification
+      toast({
+        title: 'Background Image Generation Failed',
+        description:
+          "We couldn't generate a background image for your character, but your character was created successfully. You can add an image later.",
+        variant: 'destructive',
+      });
+
+      // Don't throw error - character creation should still succeed even if image generation fails
+    }
+  }, [toast, queryClient]);
+
+  /**
    * Saves character data to Supabase
    * Handles both creation and updates of character data
    * @param character - The character data to save
    * @returns Promise<Character | null> The saved character data or null if save failed
    */
-  const saveCharacter = async (character: Character): Promise<Character | null> => {
+  const saveCharacter = useCallback(async (character: Character): Promise<Character | null> => {
     if (!character) return null;
 
     try {
@@ -217,74 +281,10 @@ export const useCharacterSave = (): {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [campaignState.campaign?.id, user?.id, toast, queryClient, generateBackgroundImage]);
 
-  /**
-   * Generate background image for the character
-   * This runs asynchronously after character creation
-   */
-  const generateBackgroundImage = async (
-    characterId: string,
-    character: Character,
-  ): Promise<void> => {
-    try {
-      logger.info(`Generating background image for character ${characterId}`);
-
-      // Generate the image with character portrait as reference if available
-      const options: {
-        referenceImageUrl?: string;
-        retryAttempts?: number;
-        fallbackToDefault?: boolean;
-        useSimplifiedPrompt?: boolean;
-      } = {};
-      if (character.image_url) {
-        options.referenceImageUrl = character.image_url;
-        logger.info(`Using character image as reference: ${character.image_url}`);
-      }
-
-      const imageUrl = await characterBackgroundGenerator.generateCharacterBackground(
-        character,
-        options,
-      );
-
-      // Update the character with the generated image URL
-      try {
-        await userDataApi.updateCharacter(characterId, {
-          background_image: imageUrl,
-        });
-        logger.info(
-          `Successfully generated and saved background image for character ${characterId}`,
-        );
-
-        // Invalidate specific queries to refresh the UI with the new image
-        queryClient.invalidateQueries({ queryKey: ['characters'] });
-        queryClient.invalidateQueries({ queryKey: ['character', characterId] });
-
-        // Show success notification
-        toast({
-          title: 'Character Background Generated',
-          description: 'Your character background image has been created successfully.',
-        });
-      } catch (error) {
-        logger.error('Error updating character with background image:', error);
-      }
-    } catch (error) {
-      logger.error(`Failed to generate background image for character ${characterId}:`, error);
-
-      // Show user-friendly error notification
-      toast({
-        title: 'Background Image Generation Failed',
-        description:
-          "We couldn't generate a background image for your character, but your character was created successfully. You can add an image later.",
-        variant: 'destructive',
-      });
-
-      // Don't throw error - character creation should still succeed even if image generation fails
-    }
-  };
-
-  return {
+  return useMemo(() => ({
     saveCharacter,
     isSaving,
-  };
+  }), [saveCharacter, isSaving]);
 };

@@ -4,7 +4,7 @@
  * Custom hook for managing environmental hazards in the UI
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import type { Character } from '@/types/character';
 import type {
@@ -233,7 +233,7 @@ export const useEnvironmentalHazards = (character: Character) => {
     });
   }, [activeHazards, hazardInteractions, character.id]);
 
-  return {
+  return useMemo(() => ({
     // State
     activeHazards,
     hazardInteractions,
@@ -252,5 +252,18 @@ export const useEnvironmentalHazards = (character: Character) => {
 
     // Utilities
     hazardManager,
-  };
+  }), [
+    activeHazards,
+    hazardInteractions,
+    isProcessing,
+    addHazard,
+    removeHazard,
+    detectHazardById,
+    triggerHazard,
+    applyHazardEffectsToCharacter,
+    getHazardById,
+    getHazardInteractionStatus,
+    clearInteractions,
+    getDetectedHazards,
+  ]);
 };

@@ -4,7 +4,7 @@
  * Custom hook for managing multiclassing state and operations
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import type { Character, CharacterClass } from '@/types/character';
 import type { MulticlassValidationResult } from '@/utils/multiclassing';
@@ -193,7 +193,7 @@ export const useMulticlassing = (
     return character.level || 1;
   }, [character]);
 
-  return {
+  return useMemo(() => ({
     // State
     isProcessing,
     validationResult,
@@ -215,5 +215,18 @@ export const useMulticlassing = (
     isMulticlassed,
     getClassLevel,
     getTotalLevel,
-  };
+  }), [
+    isProcessing,
+    validationResult,
+    validateNewClass,
+    addNewClass,
+    levelUpSpecificClass,
+    getProficiencies,
+    getHitPoints,
+    getSpellcasting,
+    getFeatures,
+    isMulticlassed,
+    getClassLevel,
+    getTotalLevel,
+  ]);
 };

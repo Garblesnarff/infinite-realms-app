@@ -21,7 +21,7 @@
  */
 
 // SDK Imports
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Project Imports
@@ -162,5 +162,9 @@ export const useCharacterData = (characterId: string | undefined) => {
     fetchCharacter();
   }, [fetchCharacter]);
 
-  return { character, loading, refetch: fetchCharacter };
+  return useMemo(() => ({
+    character,
+    loading,
+    refetch: fetchCharacter,
+  }), [character, loading, fetchCharacter]);
 };

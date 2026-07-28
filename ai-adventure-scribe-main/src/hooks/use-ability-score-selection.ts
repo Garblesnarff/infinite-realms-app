@@ -201,7 +201,7 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     }, 0);
   }, [state.character?.abilityScores]);
 
-  return {
+  return useMemo(() => ({
     state,
     method,
     setMethod,
@@ -221,5 +221,24 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     pointBuyValid,
     standardArrayValid,
     totalModifier,
-  };
+  }), [
+    state,
+    method,
+    rollHistory,
+    currentRollDetails,
+    remainingPoints,
+    handleIncreaseScore,
+    handleDecreaseScore,
+    handleRollScores,
+    handleRerollSingleScore,
+    handleStandardArray,
+    handleReset,
+    getAbilityDescription,
+    racialBonuses,
+    getFinalScore,
+    pointsUsed,
+    pointBuyValid,
+    standardArrayValid,
+    totalModifier,
+  ]);
 };
