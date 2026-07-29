@@ -299,3 +299,7 @@
 ## 2026-07-27 - [Combat Start Toast Notification Coverage]
 **Learning:** The combat starting sequence features stage-specific UI feedback toasts. Previously, these were completely untested. Adding a test suite required mocking `sonner`'s toast dispatchers and invoking the custom action triggers (`action.onClick`) manually in Vitest to verify callback propagation.
 **Action:** Always mock `sonner` as a module, verify exact stage string matches, and manually invoke spied UI callback handlers to verify action retry triggers under test.
+
+## 2026-07-29 - [World Builder Repository Mocking Chain]
+**Learning:** Chained Supabase queries can be beautifully and lightweightly mocked using a chainable "thenable" mock builder. By returning an object that has self-referential helper methods (`select`, `eq`, `ilike`, `limit`) and a custom `then` function returning the mock promise, you can support nested chaining with standard async `await` without requiring heavy external mocking libraries.
+**Action:** Use a reusable helper like `createMockChain(resolveValue)` inside test suites requiring chainable queries, resolving table-specific data dynamically.
