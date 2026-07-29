@@ -5,6 +5,12 @@ import type { CampaignCardData } from './campaign-card-types';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
@@ -79,45 +85,70 @@ export const CampaignCardHoverPopup: React.FC<CampaignCardHoverPopupProps> = ({
       </div>
 
       <div className="flex items-center gap-2 justify-end">
-        <Button
-          size="sm"
-          className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
-          aria-label={`Play campaign: ${campaign.name}`}
-          title={`Play campaign: ${campaign.name}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPlay();
-          }}
-        >
-          <Play className="w-4 h-4" />
-          Play
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
-          aria-label={`Enter campaign management: ${campaign.name}`}
-          title={`Enter campaign management: ${campaign.name}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEnter();
-          }}
-        >
-          Enter
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
-          aria-label={`Delete campaign: ${campaign.name}`}
-          title={`Delete campaign: ${campaign.name}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteClick();
-          }}
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
+                aria-label={`Play campaign: ${campaign.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPlay();
+                }}
+              >
+                <Play className="w-4 h-4" />
+                Play
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Play campaign: {campaign.name}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
+                aria-label={`Enter campaign management: ${campaign.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEnter();
+                }}
+              >
+                Enter
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Enter campaign management: {campaign.name}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
+                aria-label={`Delete campaign: ${campaign.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteClick();
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Delete campaign: {campaign.name}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   </div>

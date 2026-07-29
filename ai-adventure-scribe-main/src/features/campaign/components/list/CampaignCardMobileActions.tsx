@@ -23,7 +23,6 @@ export const CampaignCardMobileActions: React.FC<CampaignCardMobileActionsProps>
       size="sm"
       className="bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
       aria-label={`Play campaign: ${campaignName}`}
-      title={`Play campaign: ${campaignName}`}
       onClick={(e) => {
         e.stopPropagation();
         onPlay();
@@ -37,7 +36,6 @@ export const CampaignCardMobileActions: React.FC<CampaignCardMobileActionsProps>
       variant="outline"
       className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
       aria-label={`Enter campaign: ${campaignName}`}
-      title={`Enter campaign: ${campaignName}`}
       onClick={(e) => {
         e.stopPropagation();
         onEnter();
