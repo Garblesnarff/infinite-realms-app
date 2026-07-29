@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useState, useMemo, useCallback } from 'react';
 
 import type { RollRequest } from '@/types/roll-request';
@@ -212,28 +213,57 @@ export function useDiceRollRequest({ request, onManualResult }: UseDiceRollReque
     });
   }, []);
 
-  return {
-    manualMode,
-    setManualMode,
-    manualResult,
-    setManualResult,
-    hasAdvantage,
-    hasDisadvantage,
-    showDiceAnimation,
-    isRolling,
-    character,
-    rollCalculation,
-    resolvedFormula,
-    effectiveManualMode,
-    handleAutoRoll,
-    handleDiceRollComplete,
-    handleManualSubmit,
-    handleEnterManually: useCallback(() => setManualMode(true), []),
-    handleBackToRoll: useCallback(() => {
-      setManualMode(false);
-      setManualResult('');
-    }, []),
-    toggleAdvantage,
-    toggleDisadvantage,
-  };
+  const handleEnterManually = useCallback(() => {
+    setManualMode(true);
+  }, []);
+
+  const handleBackToRoll = useCallback(() => {
+    setManualMode(false);
+    setManualResult('');
+  }, []);
+
+  // ⚡ Bolt: Wrapped the hook's return value in useMemo to enforce referential stability,
+  // preventing downstream component re-renders when state or props haven't changed.
+  return useMemo(
+    () => ({
+      manualMode,
+      setManualMode,
+      manualResult,
+      setManualResult,
+      hasAdvantage,
+      hasDisadvantage,
+      showDiceAnimation,
+      isRolling,
+      character,
+      rollCalculation,
+      resolvedFormula,
+      effectiveManualMode,
+      handleAutoRoll,
+      handleDiceRollComplete,
+      handleManualSubmit,
+      handleEnterManually,
+      handleBackToRoll,
+      toggleAdvantage,
+      toggleDisadvantage,
+    }),
+    [
+      manualMode,
+      manualResult,
+      hasAdvantage,
+      hasDisadvantage,
+      showDiceAnimation,
+      isRolling,
+      character,
+      rollCalculation,
+      resolvedFormula,
+      effectiveManualMode,
+      handleAutoRoll,
+      handleDiceRollComplete,
+      handleManualSubmit,
+      handleEnterManually,
+      handleBackToRoll,
+      toggleAdvantage,
+      toggleDisadvantage,
+    ],
+  );
 }

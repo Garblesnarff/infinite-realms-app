@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -473,5 +474,30 @@ describe('useDiceRollRequest', () => {
       'strength',
       undefined,
     );
+  });
+
+  describe('Callback and Reference Stability', () => {
+    it('maintains referential identity across re-renders with the same props and state', () => {
+      const { result, rerender } = renderHook(
+        ({ request }) => useDiceRollRequest({ request, onManualResult: mockOnManualResult }),
+        { initialProps: { request: defaultRequest } },
+      );
+
+      const firstRenderResult = result.current;
+
+      rerender({ request: defaultRequest });
+
+      // Verify that the exact same object reference is returned
+      expect(result.current).toBe(firstRenderResult);
+
+      // Verify reference stability of the individual action callbacks
+      expect(result.current.handleEnterManually).toBe(firstRenderResult.handleEnterManually);
+      expect(result.current.handleBackToRoll).toBe(firstRenderResult.handleBackToRoll);
+      expect(result.current.handleAutoRoll).toBe(firstRenderResult.handleAutoRoll);
+      expect(result.current.handleDiceRollComplete).toBe(firstRenderResult.handleDiceRollComplete);
+      expect(result.current.handleManualSubmit).toBe(firstRenderResult.handleManualSubmit);
+      expect(result.current.toggleAdvantage).toBe(firstRenderResult.toggleAdvantage);
+      expect(result.current.toggleDisadvantage).toBe(firstRenderResult.toggleDisadvantage);
+    });
   });
 });
