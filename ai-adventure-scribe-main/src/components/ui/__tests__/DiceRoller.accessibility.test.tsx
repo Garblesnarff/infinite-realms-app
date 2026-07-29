@@ -39,7 +39,7 @@ describe('DiceRoller Accessibility', () => {
     fireEvent.click(button);
 
     // The roll result badge should appear after a short delay (mocked timeout in component)
-    const resultBadge = await screen.findByLabelText(/last roll total:/i);
+    const resultBadge = await screen.findByLabelText(/last roll total: \d+\. Formula: 1d6\. Individual rolls: \d+\./i);
     expect(resultBadge).toBeInTheDocument();
     expect(resultBadge).toHaveAttribute('tabIndex', '0');
     expect(resultBadge).not.toHaveAttribute('title');

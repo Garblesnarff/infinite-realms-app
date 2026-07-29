@@ -207,14 +207,24 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
                   getResultColor(),
                 )}
                 aria-live="polite"
-                aria-label={`Last roll total: ${lastRoll.total}`}
+                aria-label={`Last roll total: ${lastRoll.total}. Formula: ${dice}${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}. Individual rolls: ${lastRoll.rolls.join(', ')}.`}
                 tabIndex={0}
               >
                 {lastRoll.total}
               </Badge>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Last roll result</p>
+              <div className="text-xs space-y-1">
+                <p className="font-semibold">Last Roll Result</p>
+                <p className="text-muted-foreground">
+                  Formula: {dice}
+                  {modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}
+                </p>
+                <p>
+                  Rolls: [{lastRoll.rolls.join(', ')}]
+                  {lastRoll.modifier !== 0 ? ` (Mod: ${lastRoll.modifier > 0 ? '+' : ''}${lastRoll.modifier})` : ''}
+                </p>
+              </div>
             </TooltipContent>
           </Tooltip>
         )}
