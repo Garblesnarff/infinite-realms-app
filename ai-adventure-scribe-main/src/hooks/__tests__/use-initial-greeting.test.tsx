@@ -45,6 +45,22 @@ vi.mock('@/hooks/use-toast', () => ({
   })),
 }));
 
+// ensure-action-options repairs option-less openings via llmApiClient; keep it
+// deterministic and offline in unit tests.
+vi.mock('@/infrastructure/api', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    llmApiClient: {
+      generateText: vi
+        .fn()
+        .mockResolvedValue(
+          'A. **Look around**, survey your surroundings.\nB. **Press on**, continue toward your goal.\nC. **Call out**, announce your presence.',
+        ),
+    },
+  };
+});
+
 // Mock global fetch
 global.fetch = vi.fn();
 
@@ -143,7 +159,7 @@ describe('useInitialGreeting', () => {
     expect(onGreetingGenerated).toHaveBeenCalledWith(
       expect.objectContaining({
         sender: 'dm',
-        text: greetingText,
+        text: expect.stringContaining(greetingText),
       }),
     );
 
@@ -258,7 +274,7 @@ describe('useInitialGreeting', () => {
     await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalledTimes(1), { timeout: 2000 });
     expect(onGreetingGenerated).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: 'Opening message: the ruined watchtower rises above the valley while morning fog curls around its stones.',
+        text: expect.stringContaining('Opening message: the ruined watchtower'),
       }),
     );
   });

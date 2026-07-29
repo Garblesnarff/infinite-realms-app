@@ -98,6 +98,22 @@ vi.mock('@/utils/combatDetection', () => ({
   })),
 }));
 
+// ensure-action-options repairs option-less DM turns via llmApiClient; keep it
+// deterministic and offline in unit tests.
+vi.mock('@/infrastructure/api', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    llmApiClient: {
+      generateText: vi
+        .fn()
+        .mockResolvedValue(
+          'A. **Look around**, survey your surroundings.\nB. **Press on**, continue toward your goal.\nC. **Call out**, announce your presence.',
+        ),
+    },
+  };
+});
+
 vi.mock('@/lib/logger', () => ({
   default: {
     info: vi.fn(),
@@ -139,7 +155,7 @@ describe('useAIResponse', () => {
     const { result } = renderHook(() => useAIResponse());
     const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
 
-    expect(response.text).toBe('Greetings traveler!');
+    expect(response.text).toContain('Greetings traveler!');
     expect(response.sender).toBe('dm');
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });

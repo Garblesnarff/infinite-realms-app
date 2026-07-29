@@ -11,6 +11,7 @@ import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { getAccessToken } from '@/services/auth/TokenService';
 import { userDataApi } from '@/services/user-data-api';
+import { ensureActionOptions } from '@/utils/ensure-action-options';
 import { createInitialMemories } from '@/utils/game-session/initial-greeting-memories';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { parseRollRequests } from '@/utils/rollRequestParser';
@@ -217,12 +218,16 @@ export const useInitialGreeting = ({
       const displayText =
         openingRollRequests.length > 0 ? truncateAtRollRequest(openingText) : openingText;
 
+      // The opening contract requires clickable options; repair if the model skipped them.
+      const displayTextWithOptions =
+        openingRollRequests.length > 0 ? displayText : await ensureActionOptions(displayText);
+
       // Create chat message from AI response (string only; narration is handled elsewhere)
       const greetingMessage: ChatMessage = {
         // Align with ChatMessage shape from '@/types/game'
         id: crypto.randomUUID(),
         sender: 'dm',
-        text: displayText,
+        text: displayTextWithOptions,
         timestamp: new Date().toISOString(),
       };
 

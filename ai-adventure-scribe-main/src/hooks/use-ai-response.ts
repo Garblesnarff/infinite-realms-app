@@ -35,6 +35,7 @@ import {
   type TacticalMapActionPayload,
 } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
+import { ensureActionOptions } from '@/utils/ensure-action-options';
 
 // Voice narration types
 export interface NarrationSegment {
@@ -411,6 +412,18 @@ export const useAIResponse = () => {
         if (processedRolls.npcRollContinuationText) {
           finalResponseText = `${responseText}\n\n${processedRolls.npcRollContinuationText}`;
           logger.info('Appended NPC roll continuation to response');
+        }
+
+        // Guarantee clickable options on ordinary narrative turns. Combat turns
+        // render server-provided legal actions, and roll-request turns pause on
+        // the dice UI, so both are excluded.
+        if (
+          !isInCombat &&
+          !shouldStartCombat &&
+          result.combat_transition !== 'start' &&
+          processedRolls.playerRollRequests.length === 0
+        ) {
+          finalResponseText = await ensureActionOptions(finalResponseText);
         }
 
         // Format the response as an EnhancedChatMessage
