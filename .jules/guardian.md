@@ -303,3 +303,7 @@
 ## 2026-07-29 - [World Builder Repository Mocking Chain]
 **Learning:** Chained Supabase queries can be beautifully and lightweightly mocked using a chainable "thenable" mock builder. By returning an object that has self-referential helper methods (`select`, `eq`, `ilike`, `limit`) and a custom `then` function returning the mock promise, you can support nested chaining with standard async `await` without requiring heavy external mocking libraries.
 **Action:** Use a reusable helper like `createMockChain(resolveValue)` inside test suites requiring chainable queries, resolving table-specific data dynamically.
+
+## 2026-07-29 - [Ensure Action Options Coverage & Type-Coercion]
+**Learning:** Found that the `ensure-action-options.ts` utility is crucial for repairing DM responses that lack interactive action choices, and verified its parser error boundaries. Specifically, if a non-string object/number is passed to `messageHasOptions`, the internal `rawContent.replace` call throws a `TypeError` which is correctly caught by a fallback try-catch.
+**Action:** When testing heuristic utilities with try-catch fallback logic, explicitly supply invalid types (e.g. nested objects or numbers as parameters) to trigger and fully cover the catch block pathways. Always mock the underlying LLM API wrappers cleanly using `vi.mocked` to isolate network calls.
