@@ -401,4 +401,20 @@ describe('useAvailableSpells', () => {
 
     expect(spellApi.getClassSpells).toHaveBeenCalledTimes(2);
   });
+
+  describe('Return Reference Stability', () => {
+    it('should maintain stable return object reference across renders when dependencies do not change', async () => {
+      const { result, rerender } = renderHook(() =>
+        useAvailableSpells({ isSpellcaster: true, className: 'Wizard', level: 1 }),
+      );
+
+      await waitFor(() => expect(result.current.isLoadingSpells).toBe(false));
+
+      const firstReturn = result.current;
+      rerender();
+      const secondReturn = result.current;
+
+      expect(firstReturn).toBe(secondReturn);
+    });
+  });
 });

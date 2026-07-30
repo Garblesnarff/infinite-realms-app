@@ -206,4 +206,35 @@ describe('useSpellSelectionValidation', () => {
     // Result shouldn't have changed to finished since it unmounted
     expect(result.current.isValidating).toBe(true);
   });
+
+  describe('Return Reference Stability', () => {
+    it('should maintain stable return object reference across renders when dependencies do not change', async () => {
+      const expectedResult = {
+        valid: true,
+        errors: [],
+        warnings: [],
+      };
+      mockValidateSpellSelectionAsync.mockResolvedValueOnce(expectedResult);
+
+      const { result, rerender } = renderHook(() =>
+        useSpellSelectionValidation({
+          character: mockCharacter,
+          selectedCantrips: stableSelectedCantrips,
+          selectedSpells: stableSelectedSpells,
+          availableCantrips: mockAvailableCantrips,
+          availableSpells: mockAvailableSpells,
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      const firstReturn = result.current;
+      rerender();
+      const secondReturn = result.current;
+
+      expect(firstReturn).toBe(secondReturn);
+    });
+  });
 });

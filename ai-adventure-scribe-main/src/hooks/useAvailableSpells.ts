@@ -172,18 +172,34 @@ export function useAvailableSpells({
     };
   }, [availableCantrips, availableSpells, searchTerm, filters]);
 
-  return {
-    availableCantrips,
-    availableSpells,
-    isLoadingSpells,
-    spellsError,
-    setSpellsError,
-    searchTerm,
-    setSearchTerm,
-    filters,
-    setFilters,
-    filteredCantrips,
-    filteredSpells,
-    refetchSpells: fetchSpells,
-  };
+  return useMemo(
+    () => ({
+      availableCantrips,
+      availableSpells,
+      isLoadingSpells,
+      spellsError,
+      setSpellsError,
+      searchTerm,
+      setSearchTerm,
+      filters,
+      setFilters,
+      filteredCantrips,
+      filteredSpells,
+      refetchSpells: fetchSpells,
+    }),
+    [
+      availableCantrips,
+      availableSpells,
+      isLoadingSpells,
+      spellsError,
+      setSpellsError,
+      searchTerm,
+      setSearchTerm,
+      filters,
+      setFilters,
+      filteredCantrips,
+      filteredSpells,
+      fetchSpells,
+    ],
+  );
 }

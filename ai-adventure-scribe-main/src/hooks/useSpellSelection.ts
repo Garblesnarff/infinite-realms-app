@@ -263,47 +263,75 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     }
   }, [selectedCantrips, selectedSpells, character, dispatch]);
 
-  return {
-    // Character and class info
-    character,
-    isSpellcaster,
-    spellcastingInfo,
+  return useMemo(
+    () => ({
+      // Character and class info
+      character,
+      isSpellcaster,
+      spellcastingInfo,
 
-    // Available spells
-    availableCantrips,
-    availableSpells,
-    racialSpells,
+      // Available spells
+      availableCantrips,
+      availableSpells,
+      racialSpells,
 
-    // Loading states
-    isLoadingSpells,
-    spellsError,
+      // Loading states
+      isLoadingSpells,
+      spellsError,
 
-    // Current selections
-    selectedCantrips,
-    selectedSpells,
+      // Current selections
+      selectedCantrips,
+      selectedSpells,
 
-    // Selection actions
-    toggleCantrip,
-    toggleSpell,
-    clearSelections,
+      // Selection actions
+      toggleCantrip,
+      toggleSpell,
+      clearSelections,
 
-    // Filtering
-    searchTerm,
-    setSearchTerm,
-    filters,
-    setFilters,
-    filteredCantrips,
-    filteredSpells,
+      // Filtering
+      searchTerm,
+      setSearchTerm,
+      filters,
+      setFilters,
+      filteredCantrips,
+      filteredSpells,
 
-    // Validation
-    validation,
-    canProceed,
+      // Validation
+      validation,
+      canProceed,
 
-    // Save to character and database
-    updateCharacterSpells,
-    isSavingSpells,
+      // Save to character and database
+      updateCharacterSpells,
+      isSavingSpells,
 
-    // Retry functionality
-    refetchSpells,
-  };
+      // Retry functionality
+      refetchSpells,
+    }),
+    [
+      character,
+      isSpellcaster,
+      spellcastingInfo,
+      availableCantrips,
+      availableSpells,
+      racialSpells,
+      isLoadingSpells,
+      spellsError,
+      selectedCantrips,
+      selectedSpells,
+      toggleCantrip,
+      toggleSpell,
+      clearSelections,
+      searchTerm,
+      setSearchTerm,
+      filters,
+      setFilters,
+      filteredCantrips,
+      filteredSpells,
+      validation,
+      canProceed,
+      updateCharacterSpells,
+      isSavingSpells,
+      refetchSpells,
+    ],
+  );
 }

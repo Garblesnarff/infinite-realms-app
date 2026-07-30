@@ -1061,8 +1061,8 @@ describe('useSpellSelection Hook', () => {
     });
   });
 
-  describe('Callback Stability', () => {
-    it('should maintain stable callback references across renders when dependencies do not change', () => {
+  describe('Callback and Reference Stability', () => {
+    it('should maintain stable callback references and return object reference across renders when dependencies do not change', async () => {
       const wizardCharacter: Character = {
         id: '1',
         name: 'Test Wizard',
@@ -1085,10 +1085,15 @@ describe('useSpellSelection Hook', () => {
         wrapper: createWrapper(wizardCharacter),
       });
 
+      await waitFor(() => {
+        expect(result.current.availableCantrips.length).toBeGreaterThan(0);
+      });
+
       const initialToggleCantrip = result.current.toggleCantrip;
       const initialToggleSpell = result.current.toggleSpell;
       const initialClearSelections = result.current.clearSelections;
       const initialUpdateCharacterSpells = result.current.updateCharacterSpells;
+      const firstReturn = result.current;
 
       // Force a re-render
       rerender();
@@ -1097,6 +1102,7 @@ describe('useSpellSelection Hook', () => {
       expect(result.current.toggleSpell).toBe(initialToggleSpell);
       expect(result.current.clearSelections).toBe(initialClearSelections);
       expect(result.current.updateCharacterSpells).toBe(initialUpdateCharacterSpells);
+      expect(result.current).toBe(firstReturn);
     });
   });
 });

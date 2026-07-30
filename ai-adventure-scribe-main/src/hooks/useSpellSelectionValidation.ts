@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 import type { Spell, Character } from '@/types/character';
 import type { SpellValidationResult } from '@/utils/spell-validation';
@@ -96,9 +96,12 @@ export function useSpellSelectionValidation({
 
   const canProceed = validation.valid && !isValidating;
 
-  return {
-    validation,
-    isValidating,
-    canProceed,
-  };
+  return useMemo(
+    () => ({
+      validation,
+      isValidating,
+      canProceed,
+    }),
+    [validation, isValidating, canProceed],
+  );
 }
