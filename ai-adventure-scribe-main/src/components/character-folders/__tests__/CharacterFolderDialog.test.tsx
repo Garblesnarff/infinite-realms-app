@@ -81,3 +81,32 @@ test('CreateFolderDialog links parent folder label to select trigger', () => {
 
   expect(label.getAttribute('for')).toBe(selectTrigger.getAttribute('id'));
 });
+
+test('CreateFolderDialog has accessible Cancel and Create Folder buttons with tooltips', () => {
+  render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
+
+  const cancelButton = screen.getByRole('button', { name: /cancel/i });
+  expect(cancelButton).toBeDefined();
+
+  const createButton = screen.getByRole('button', { name: /create folder/i });
+  expect(createButton).toBeDefined();
+  expect(createButton.getAttribute('aria-label')).toBe('Create Folder');
+});
+
+test('EditFolderDialog has accessible Cancel and Update Folder buttons with tooltips', () => {
+  render(
+    <EditFolderDialog
+      open={true}
+      onOpenChange={() => {}}
+      folderId="test-folder-id"
+      currentName="My Folder"
+    />,
+  );
+
+  const cancelButton = screen.getByRole('button', { name: /cancel/i });
+  expect(cancelButton).toBeDefined();
+
+  const updateButton = screen.getByRole('button', { name: /update folder/i });
+  expect(updateButton).toBeDefined();
+  expect(updateButton.getAttribute('aria-label')).toBe('Update Folder - My Folder');
+});

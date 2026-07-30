@@ -181,7 +181,17 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={createMutation.isPending}>
+          <Button
+            onClick={handleCreate}
+            disabled={createMutation.isPending}
+            aria-label={
+              createMutation.isPending
+                ? 'Create Folder (Creating...)'
+                : name.trim()
+                ? `Create Folder - ${name.trim()}`
+                : 'Create Folder'
+            }
+          >
             {createMutation.isPending ? 'Creating...' : 'Create Folder'}
           </Button>
         </DialogFooter>

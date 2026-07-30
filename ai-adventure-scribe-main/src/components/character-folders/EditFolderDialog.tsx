@@ -160,7 +160,17 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
+          <Button
+            onClick={handleUpdate}
+            disabled={updateMutation.isPending}
+            aria-label={
+              updateMutation.isPending
+                ? 'Update Folder (Updating...)'
+                : name.trim()
+                ? `Update Folder - ${name.trim()}`
+                : 'Update Folder'
+            }
+          >
             {updateMutation.isPending ? 'Updating...' : 'Update Folder'}
           </Button>
         </DialogFooter>
