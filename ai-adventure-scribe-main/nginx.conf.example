@@ -54,7 +54,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # Root Directory (Frontend Build)
-    root /var/www/infiniterealms/dist;
+    root /var/www/infiniterealms/ai-adventure-scribe-main/dist;
     index index.html;
 
     # Logging
@@ -120,8 +120,26 @@ server {
     }
 
     # Frontend SPA Routes (React Router)
+    # No-cache on the try_files fallback: SPA routes (e.g. /game/session/...) are served
+    # index.html via this block, so it must never let a browser cache a stale entry point.
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires 0 always;
+    }
+
+    # index.html must NEVER be cached — it's the pointer to the current hashed JS/CSS
+    # bundles. Hashed assets above are safe to cache for a year (immutable filenames);
+    # index.html is the one file where the browser must always revalidate, or a stale
+    # copy will reference chunk hashes a later deploy has already deleted (404s).
+    # Exact match (=) takes priority over the regex asset block and over location /,
+    # and try_files' internal redirect re-enters location matching — so this covers
+    # both a direct hit on /index.html and the SPA fallback above.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires 0;
     }
 
     # Health Check Endpoint
