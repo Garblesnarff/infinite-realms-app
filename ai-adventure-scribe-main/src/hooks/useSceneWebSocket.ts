@@ -13,7 +13,7 @@
  * - Scene room join/leave management
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
@@ -278,11 +278,16 @@ export function useSceneWebSocket(options: UseSceneWebSocketOptions): UseSceneWe
     };
   }, [sceneId, session?.access_token, connect, disconnect]);
 
-  return {
-    isConnected: connectionState === 'connected',
-    sendMessage,
-    reconnect,
-    disconnect,
-    connectionState,
-  };
+  // ⚡ Bolt: Wrap the hook's return value in useMemo to enforce referential stability,
+  // preventing downstream component re-renders when connection states have not changed.
+  return useMemo(
+    () => ({
+      isConnected: connectionState === 'connected',
+      sendMessage,
+      reconnect,
+      disconnect,
+      connectionState,
+    }),
+    [connectionState, sendMessage, reconnect, disconnect]
+  );
 }

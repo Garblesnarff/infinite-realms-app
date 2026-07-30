@@ -275,4 +275,19 @@ describe('useSceneWebSocket', () => {
     renderHook(() => useSceneWebSocket({ sceneId }));
     expect(global.WebSocket).not.toHaveBeenCalled();
   });
+
+  it('should maintain referential stability of returned methods and state when connectionState does not change', () => {
+    const { result, rerender } = renderHook(() => useSceneWebSocket({ sceneId }));
+
+    const firstReturn = result.current;
+
+    // Rerender with the same parameters
+    rerender();
+
+    // The reference should be strictly identical
+    expect(result.current).toBe(firstReturn);
+    expect(result.current.sendMessage).toBe(firstReturn.sendMessage);
+    expect(result.current.reconnect).toBe(firstReturn.reconnect);
+    expect(result.current.disconnect).toBe(firstReturn.disconnect);
+  });
 });

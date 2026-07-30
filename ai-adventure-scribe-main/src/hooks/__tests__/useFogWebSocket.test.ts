@@ -337,4 +337,25 @@ describe('useFogWebSocket', () => {
     expect(newCallbacks.onReveal).toHaveBeenCalledWith(revealMessage.data.areas, revealMessage.data.userId);
     expect(mockCallbacks.onReveal).not.toHaveBeenCalled();
   });
+
+  it('should maintain referential stability of returned methods and state when isConnected does not change', () => {
+    const { result, rerender } = renderHook(
+      ({ callbacks }) => useFogWebSocket({ url, token, sceneId }, callbacks),
+      {
+        initialProps: { callbacks: mockCallbacks },
+      }
+    );
+
+    const firstReturn = result.current;
+
+    // Rerender with the same parameters
+    rerender({ callbacks: mockCallbacks });
+
+    // The reference should be strictly identical
+    expect(result.current).toBe(firstReturn);
+    expect(result.current.connect).toBe(firstReturn.connect);
+    expect(result.current.disconnect).toBe(firstReturn.disconnect);
+    expect(result.current.sendReveal).toBe(firstReturn.sendReveal);
+    expect(result.current.sendConceal).toBe(firstReturn.sendConceal);
+  });
 });

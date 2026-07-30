@@ -8,7 +8,7 @@
  * @module hooks/useFogWebSocket
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 
 import type { RevealedArea } from '@/types/fog-of-war';
 
@@ -299,11 +299,16 @@ export const useFogWebSocket = function(options: WebSocketOptions, callbacks: Fo
     };
   }, [autoConnect, token, connect, disconnect]);
 
-  return {
-    isConnected,
-    connect,
-    disconnect,
-    sendReveal,
-    sendConceal,
-  };
+  // ⚡ Bolt: Wrap the hook's return value in useMemo to enforce referential stability,
+  // preventing downstream component re-renders when connection states have not changed.
+  return useMemo(
+    () => ({
+      isConnected,
+      connect,
+      disconnect,
+      sendReveal,
+      sendConceal,
+    }),
+    [isConnected, connect, disconnect, sendReveal, sendConceal]
+  );
 }
