@@ -4,6 +4,7 @@ import React, { useState, useEffect, useId } from 'react';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
@@ -163,47 +164,49 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                   return (
                     <Tooltip key={option.id} delayDuration={300}>
                       <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOptionClick(option)}
-                          disabled={isDisabled}
-                          aria-pressed={isSelected}
-                          aria-label={isSelected ? `Selected: Option ${option.number} - ${option.text}` : `Option ${option.number} - ${option.text}`}
-                          className={`
-                          flex items-start gap-3 p-4 h-full w-full text-left justify-start
-                          transition-all duration-200 border rounded-xl
-                          bg-white/[0.02] border-white/10 text-foreground/90
-                          hover:bg-infinite-gold/[0.07] hover:border-infinite-gold/40
-                          focus:ring-2 focus:ring-infinite-gold/40 focus:border-infinite-gold/60
-                          animate-in fade-in-0 slide-in-from-left-4 duration-300
-                          ${isSelected ? 'bg-infinite-gold/10 border-infinite-gold/70' : ''}
-                          ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
-                        `}
-                          style={{
-                            animationDelay: `${index * 100}ms`,
-                          }}
-                        >
-                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-infinite-gold/30 bg-infinite-gold/10">
-                            <IconComponent className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
-                          </div>
+                        <span className={cn('w-full block', isDisabled ? 'cursor-not-allowed' : '')}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOptionClick(option)}
+                            disabled={isDisabled}
+                            aria-pressed={isSelected}
+                            aria-label={isSelected ? `Selected: Option ${option.number} - ${option.text}` : `Option ${option.number} - ${option.text}`}
+                            className={`
+                            flex items-start gap-3 p-4 h-full w-full text-left justify-start
+                            transition-all duration-200 border rounded-xl
+                            bg-white/[0.02] border-white/10 text-foreground/90
+                            hover:bg-infinite-gold/[0.07] hover:border-infinite-gold/40
+                            focus:ring-2 focus:ring-infinite-gold/40 focus:border-infinite-gold/60
+                            animate-in fade-in-0 slide-in-from-left-4 duration-300
+                            ${isSelected ? 'bg-infinite-gold/10 border-infinite-gold/70' : ''}
+                            ${isDisabled ? 'opacity-50 pointer-events-none' : ''}
+                          `}
+                            style={{
+                              animationDelay: `${index * 100}ms`,
+                            }}
+                          >
+                            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-infinite-gold/30 bg-infinite-gold/10">
+                              <IconComponent className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
+                            </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="ir-display text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
-                              Option {option.number}
+                            <div className="flex-1 min-w-0">
+                              <div className="ir-display text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
+                                Option {option.number}
+                              </div>
+                              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+                                {option.text}
+                              </div>
                             </div>
-                            <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
-                              {option.text}
-                            </div>
-                          </div>
 
-                          {isSelected && (
-                            <div className="flex-shrink-0 mt-1">
-                              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse" aria-hidden="true"></div>
-                            </div>
-                          )}
-                        </Button>
+                            {isSelected && (
+                              <div className="flex-shrink-0 mt-1">
+                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse" aria-hidden="true"></div>
+                              </div>
+                            )}
+                          </Button>
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs">
                         <p>{isSelected ? `Selected` : `Select this option`}</p>

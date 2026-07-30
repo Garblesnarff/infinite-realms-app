@@ -66,6 +66,10 @@
 **Learning:** Native `window.confirm` dialogs feel disconnected from the app's dark fantasy aesthetic. Using themed Shadcn `AlertDialog` components provides a more immersive and accessible experience.
 **Action:** Replace `window.confirm` with `AlertDialog` for all destructive actions (deleting, ending sessions, revoking access).
 
+## 2026-07-30 - Disabled Button Tooltip Wrapping Pattern
+**Learning:** In Shadcn/Radix, wrapping a potentially `disabled` action button directly in a `TooltipTrigger` causes hover tooltips to fail, because disabled buttons do not emit pointer/mouse events. Wrapping the button in a `<span>` element within the `TooltipTrigger` bypasses this limitation, allowing mouse events to bubble up and tooltips to trigger correctly.
+**Action:** Always wrap `disabled` or conditionally disabled buttons in a `<span>` element inside their `TooltipTrigger` wrappers, and apply helper CSS classes (like `cursor-not-allowed` on the parent `span` and `pointer-events-none` on the `disabled` button) to maintain perfect UX feel and accessibility.
+
 ## 2025-06-14 - Gallery Accessibility and Component Redundancy
 **Learning:** Interactive gallery items implemented as `div` elements require full keyboard support (role="button", tabIndex, onKeyDown) and visible focus states (focus-visible) to be accessible. The project contains duplicate component structures in `src/components/` and `src/features/` (e.g., `GalleryGrid.tsx`), which can lead to inconsistent UX if only one is updated.
 **Action:** Always verify if a component has a duplicate in `src/features/` or `src/components/` and synchronize accessibility and z-index fixes across both. Use `e.preventDefault()` in keyboard handlers for the Space key to prevent scrolling.

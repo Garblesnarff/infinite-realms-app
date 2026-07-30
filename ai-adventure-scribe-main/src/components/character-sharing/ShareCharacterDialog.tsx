@@ -349,17 +349,19 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRevoke(permission.userId)}
-                                disabled={revokeMutation.isPending}
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                aria-label={`Revoke access for ${permission.userName || permission.userId}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <span className={revokeMutation.isPending ? 'cursor-not-allowed' : ''}>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRevoke(permission.userId)}
+                                  disabled={revokeMutation.isPending}
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  aria-label={`Revoke access for ${permission.userName || permission.userId}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </span>
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>Revoke access for {permission.userName || permission.userId}</p>
