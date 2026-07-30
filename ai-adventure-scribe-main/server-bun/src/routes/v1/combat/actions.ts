@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia';
 
 import { verifyEncounterOwnership } from './helpers.js';
-import { authenticateRequest } from '../../../lib/auth.js';
+import { requireAuth } from '../../../middleware/auth.js';
 import { AppError, NotFoundError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CharacterService } from '../../../services/character-service.js';
@@ -40,24 +40,30 @@ function mapActionError(
 }
 
 export const actionRoutes = new Elysia()
-  /**
-   * POST /v1/combat/:encounterId/attack
-   * Resolve a weapon/melee attack
-   */
-  .post('/:encounterId/attack', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    try {
-      const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+  .use(requireAuth)
+  .onBeforeHandle(async ({ params, user, set }) => {
+    if (params?.encounterId) {
+      const verification = await verifyEncounterOwnership(params.encounterId, user!.userId);
       if (!verification.success) {
         set.status = verification.error!.status;
         return { error: verification.error!.message };
       }
+    }
+    if (params?.characterId) {
+      const character = await CharacterService.getById(params.characterId, user!.userId);
+      if (!character) {
+        set.status = 404;
+        return { error: 'Character not found' };
+      }
+    }
+  })
 
+  /**
+   * POST /v1/combat/:encounterId/attack
+   * Resolve a weapon/melee attack
+   */
+  .post('/:encounterId/attack', async ({ params, body, set, user }) => {
+    try {
       const attackInput = body as AttackRollInput;
 
       if (!attackInput.attackerId || !attackInput.targetId || !Number.isInteger(attackInput.expectedVersion)) {
@@ -69,12 +75,12 @@ export const actionRoutes = new Elysia()
       const result = await attackService.resolveAttack(
         params.encounterId,
         attackInput,
-        user.userId
+        user!.userId
       );
 
       trackCombatEvent('action_accepted', { encounterId: params.encounterId, actorId: attackInput.attackerId, action: 'attack', source: 'legacy_route' });
       if (result.finalDamage > 0) trackCombatEvent('damage_applied', { encounterId: params.encounterId, actorId: attackInput.attackerId, damage: result.finalDamage });
-      await publishCombatState(params.encounterId, user.userId, 'attack');
+      await publishCombatState(params.encounterId, user!.userId, 'attack');
 
       return result;
     } catch (e) {
@@ -87,20 +93,8 @@ export const actionRoutes = new Elysia()
    * POST /v1/combat/:encounterId/spell-attack
    * Resolve a spell attack against targets
    */
-  .post('/:encounterId/spell-attack', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:encounterId/spell-attack', async ({ params, body, set, user }) => {
     try {
-      const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-      if (!verification.success) {
-        set.status = verification.error!.status;
-        return { error: verification.error!.message };
-      }
-
       const spellInput = body as SpellAttackInput;
 
       if (!spellInput.casterId || !spellInput.targetIds || !Array.isArray(spellInput.targetIds)) {
@@ -121,13 +115,13 @@ export const actionRoutes = new Elysia()
       const result = await attackService.resolveSpellAttack(
         params.encounterId,
         spellInput,
-        user.userId
+        user!.userId
       );
 
       trackCombatEvent('action_accepted', { encounterId: params.encounterId, actorId: spellInput.casterId, action: 'spell', source: 'legacy_route' });
       const damage = result.results.reduce((total, outcome) => total + outcome.finalDamage, 0);
       if (damage > 0) trackCombatEvent('damage_applied', { encounterId: params.encounterId, actorId: spellInput.casterId, damage });
-      await publishCombatState(params.encounterId, user.userId, 'spell');
+      await publishCombatState(params.encounterId, user!.userId, 'spell');
 
       return result;
     } catch (e) {
@@ -140,24 +134,10 @@ export const actionRoutes = new Elysia()
    * GET /v1/combat/characters/:characterId/attacks
    * Get all weapon attacks for a character
    */
-  .get('/characters/:characterId/attacks', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/characters/:characterId/attacks', async ({ params, set, user }) => {
     try {
       const attackService = new CombatAttackService();
-      const attacks = await attackService.getCharacterWeapons(params.characterId, user.userId);
-
-      // 🛡️ Sentinel: masked existence via empty array if character not found/owned
-      // Or better, explicit check via CharacterService to return 404
-      const character = await CharacterService.getById(params.characterId, user.userId);
-      if (!character) {
-        set.status = 404;
-        return { error: 'Character not found' };
-      }
+      const attacks = await attackService.getCharacterWeapons(params.characterId, user!.userId);
 
       return { attacks };
     } catch (e) {
@@ -171,13 +151,7 @@ export const actionRoutes = new Elysia()
    * POST /v1/combat/characters/:characterId/attacks
    * Create a new weapon attack for a character
    */
-  .post('/characters/:characterId/attacks', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/characters/:characterId/attacks', async ({ params, body, set, user }) => {
     try {
       const weaponInput = body as Omit<CreateWeaponAttackInput, 'characterId'>;
 
@@ -195,7 +169,7 @@ export const actionRoutes = new Elysia()
       const attack = await attackService.createWeaponAttack({
         characterId: params.characterId,
         ...weaponInput,
-      }, user.userId);
+      }, user!.userId);
 
       set.status = 201;
       return { attack };
