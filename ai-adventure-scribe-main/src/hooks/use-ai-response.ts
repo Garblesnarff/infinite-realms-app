@@ -1,10 +1,6 @@
 // External/SDK Imports
 import { useRef, useCallback } from 'react';
 
-import type {
-  DMAoESpellAction,
-  DMHandoutAction,
-} from '../../../server-bun/src/services/dm/dm-response-schema';
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
@@ -15,25 +11,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';
 import { fetchGameContext, buildAIContext } from '@/hooks/ai/ai-utils';
+import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import {
-  executeAuthoritativeCombatIntent,
-  executeStructuredCombatAction,
-  type StructuredCombatAction,
-} from '@/services/combat/combat-action-executor';
-import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
-import { notifyRetryableCombatStartFailure } from '@/services/combat/combat-start-toast';
-import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { MemoryManager } from '@/services/memory-manager';
-import {
-  userDataApi,
-  type JournalHandoutEntry,
-  type TacticalMapActionPayload,
-} from '@/services/user-data-api';
+import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
 
@@ -95,7 +80,13 @@ export type { RollRequest } from '@/types/roll-request';
  *
  * @author AI Dungeon Master Team
  */
-export const useAIResponse = () => {
+export const useAIResponse = (): {
+  getAIResponse: (
+    messages: ChatMessage[],
+    sessionId: string,
+    turnCount?: number,
+  ) => Promise<EnhancedChatMessage>;
+} => {
   const { setGamePhase, state: gameState } = useGame();
   const { refreshCombatState } = useCombat();
   const { user, userPlan } = useAuth();
@@ -240,126 +231,26 @@ export const useAIResponse = () => {
         const diceRolls = (result.dice_rolls || []) as DiceRoll[];
         const imageRequests: ImageRequest[] | undefined = undefined;
 
-        // A structured start is server-authoritative: the same transaction creates
-        // combat participants (whose IDs become tactical entity IDs) and the map.
-        if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
-          const envelope = result as Parameters<typeof startStructuredCombatTransition>[2];
-          const attemptStart = async (): Promise<void> => {
-            const startResponse = await startStructuredCombatTransition(
-              sessionId,
-              characterRecord,
-              envelope,
-            );
-            if (startResponse?.ok) return;
-            // The failure is recoverable: the map simply was not created, so let the player
-            // retry the same start instead of stranding the scene mid-transition.
-            const failure = await combatStartErrorFromResponse(startResponse ?? null, envelope);
-            logger.warn('Server refused structured combat start', failure.toTranscriptDetail());
-            notifyRetryableCombatStartFailure(failure, attemptStart);
-          };
-          await attemptStart();
-        }
-        if (sessionId && result.combat_transition === 'end') {
-          const endResponse = await userDataApi.endTacticalMap(sessionId);
-          if (!endResponse.ok)
-            logger.warn('Server refused tactical combat end', await endResponse.json());
-        }
+        // Process DM Actions and transitions
+        const dmActionsResult = await handleDmActionsAndTransitions({
+          sessionId,
+          result,
+          characterRecord,
+          activeEncounter,
+          isInCombat,
+          refreshCombatState,
+          aiContext,
+          conversationHistory,
+          userPlan: userPlan || undefined,
+          turnCount,
+        });
 
-        // A transition just moved the board. Re-read rather than wait for the broadcast to land
-        // in a later render: a start that also carries combat_actions has to resolve them on this
-        // turn, and the resolution prompt below has to be told the fight is on.
-        if (
-          sessionId &&
-          (result.combat_transition === 'start' || result.combat_transition === 'end')
-        ) {
-          activeEncounter = await refreshCombatState();
-          isInCombat = activeEncounter?.phase === 'active';
-          aiContext.gameState.isInCombat = isInCombat;
-          aiContext.gameState.encounterId = activeEncounter?.id;
-          aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
-          aiContext.gameState.round = activeEncounter?.currentRound;
-        }
-
-        // DM map intents are one authenticated server batch. The server owns
-        // legality, the single corrective LLM retry, persistence, and broadcast.
-        if (sessionId && result.map_actions?.length) {
-          const actionResponse = await userDataApi.applyDmTacticalActions(
-            sessionId,
-            result.map_actions as TacticalMapActionPayload[],
-          );
-          if (!actionResponse.ok)
-            logger.warn('Server refused DM tactical action batch', await actionResponse.json());
-        }
-
-        let deliveredHandouts: JournalHandoutEntry[] | undefined;
-        if (sessionId && result.handout_actions?.length) {
-          const handoutResponse = await userDataApi.applyDmHandoutActions(
-            sessionId,
-            result.handout_actions as DMHandoutAction[],
-          );
-          if (handoutResponse.ok) {
-            const payload = (await handoutResponse.json()) as { entries?: JournalHandoutEntry[] };
-            deliveredHandouts = payload.entries;
-          } else {
-            logger.warn('Server refused DM handout batch', await handoutResponse.json());
-          }
-        }
-
-        if (sessionId && result.combat_actions?.length) {
-          const aoeActions = result.combat_actions.filter(
-            (action): action is DMAoESpellAction =>
-              action.action_type === 'cast_spell' && 'origin' in action,
-          );
-          for (const action of aoeActions) {
-            const response = await userDataApi.resolveAoECast(sessionId, {
-              phase: 'propose',
-              actorId: action.actor_id,
-              spellId: action.spell_id,
-              origin: action.origin,
-              direction: action.direction,
-              slotLevel: action.slot_level,
-            });
-            if (!response.ok)
-              logger.warn('Server refused AoE spell proposal', await response.json());
-          }
-        }
-
-        if (isInCombat && activeEncounter && result.combat_actions?.length) {
-          const resolvedActions: Array<Record<string, unknown>> = [];
-          const targetedActions = result.combat_actions.filter(
-            (action): action is StructuredCombatAction => 'target_ids' in action,
-          );
-          for (const action of targetedActions) {
-            const outcomes = await executeStructuredCombatAction(activeEncounter.id, action);
-            resolvedActions.push({ action, outcomes });
-            await executeAuthoritativeCombatIntent(
-              activeEncounter.id,
-              {
-                type: 'end_turn',
-                actorId: action.actor_id,
-              },
-              'dm',
-            );
-          }
-          const narrationResult = await AIService.chatWithDM({
-            message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),
-            context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
-            conversationHistory: [
-              ...conversationHistory,
-              {
-                id: `resolution-setup-${Date.now()}`,
-                role: 'assistant' as const,
-                content: result.text,
-                timestamp: new Date(),
-              },
-            ],
-            userPlan: userPlan || undefined,
-            turnCount,
-          });
-          result = narrationResult;
-          responseText = narrationResult.text;
-          narrationSegments = narrationResult.narrationSegments;
-        }
+        result = dmActionsResult.result;
+        responseText = dmActionsResult.responseText;
+        narrationSegments = dmActionsResult.narrationSegments;
+        const deliveredHandouts = dmActionsResult.deliveredHandouts;
+        isInCombat = dmActionsResult.isInCombat;
+        activeEncounter = dmActionsResult.activeEncounter;
 
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
@@ -463,6 +354,7 @@ export const useAIResponse = () => {
       gameState.diceRollQueue.pendingRolls.length,
       refreshCombatState,
       userPlan,
+      user?.id,
       setGamePhase,
     ],
   );
