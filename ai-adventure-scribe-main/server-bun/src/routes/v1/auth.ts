@@ -76,14 +76,27 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
         '/password-login',
         async ({ body, set }) => {
           try {
-            return await authenticatePassword(body.email, body.password, authConfig.clientId, workos);
+            return await authenticatePassword(
+              body.email,
+              body.password,
+              authConfig.clientId,
+              workos,
+            );
           } catch (error) {
-            logger.warn({ msg: 'Password login failed', error: error instanceof Error ? error.message : String(error) });
+            logger.warn({
+              msg: 'Password login failed',
+              error: error instanceof Error ? error.message : String(error),
+            });
             set.status = 401;
             return { error: 'Invalid email or password' };
           }
         },
-        { body: t.Object({ email: t.String({ format: 'email', maxLength: 320 }), password: t.String({ minLength: 1, maxLength: 1024 }) }) },
+        {
+          body: t.Object({
+            email: t.String({ format: 'email', maxLength: 320 }),
+            password: t.String({ minLength: 1, maxLength: 1024 }),
+          }),
+        },
       ),
   )
   /**
@@ -139,6 +152,10 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
         msg: 'OAuth state validation failed',
         hasState: Boolean(state),
         hasCookieState: Boolean(cookieState),
+        // TEMPORARY DEBUG (remove after diagnosing hasCookieState:false root cause):
+        rawCookieHeader: request.headers.get('cookie'),
+        userAgent: request.headers.get('user-agent'),
+        referer: request.headers.get('referer'),
       });
       set.status = 400;
       return { error: 'Invalid OAuth state' };
