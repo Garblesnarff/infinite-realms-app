@@ -307,3 +307,7 @@
 ## 2026-07-29 - [Ensure Action Options Coverage & Type-Coercion]
 **Learning:** Found that the `ensure-action-options.ts` utility is crucial for repairing DM responses that lack interactive action choices, and verified its parser error boundaries. Specifically, if a non-string object/number is passed to `messageHasOptions`, the internal `rawContent.replace` call throws a `TypeError` which is correctly caught by a fallback try-catch.
 **Action:** When testing heuristic utilities with try-catch fallback logic, explicitly supply invalid types (e.g. nested objects or numbers as parameters) to trigger and fully cover the catch block pathways. Always mock the underlying LLM API wrappers cleanly using `vi.mocked` to isolate network calls.
+
+## 2026-07-31 - [Spell Validation Utilities & Mock Module Types]
+**Learning:** When mocking module exports in Vitest, we can avoid `@typescript-eslint/consistent-type-imports` lint errors by importing module namespaces as types (e.g. `import type * as SpellcastingInfoModule from '...'`) and passing `typeof SpellcastingInfoModule` to `importOriginal<T>()` rather than using inline `typeof import(...)`. Additionally, testing scaling spell limits requires passing correct `spellcasting` class metadata properties to prevent level-1 fallbacks from returning empty values.
+**Action:** Always import namespace types at the top level for module types inside hoisted `vi.mock` factory parameters, and supply realistic sub-objects in character class test fixtures to satisfy D&D rule conditions.
