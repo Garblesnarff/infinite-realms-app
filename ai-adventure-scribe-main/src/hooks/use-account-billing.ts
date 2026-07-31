@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -103,7 +103,7 @@ export function useAccountBilling(
     fetchData();
   }, [userPlan]);
 
-  const handleUpgrade = async (): Promise<void> => {
+  const handleUpgrade = useCallback(async (): Promise<void> => {
     setLoading(true);
     analytics.track('upgrade_clicked', {
       price: ACCOUNT_UPGRADE_PRICE.label,
@@ -144,9 +144,9 @@ export function useAccountBilling(
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleManageSubscription = async (): Promise<void> => {
+  const handleManageSubscription = useCallback(async (): Promise<void> => {
     setLoading(true);
     analytics.track('manage_subscription_clicked');
     try {
@@ -179,7 +179,18 @@ export function useAccountBilling(
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  return { subscription, quota, loading, handleUpgrade, handleManageSubscription };
+  // ⚡ Bolt: Wrapped the hook's return value in useMemo to enforce referential stability,
+  // preventing unnecessary downstream component re-renders when consumed high up in the hierarchy.
+  return useMemo(
+    () => ({
+      subscription,
+      quota,
+      loading,
+      handleUpgrade,
+      handleManageSubscription,
+    }),
+    [subscription, quota, loading, handleUpgrade, handleManageSubscription],
+  );
 }

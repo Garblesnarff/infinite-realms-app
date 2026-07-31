@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 /**
  * Custom hook for auto-scrolling functionality in character creation wizard
@@ -84,10 +84,15 @@ export const useAutoScroll = () => {
     [],
   );
 
-  return {
-    scrollToNavigation,
-    scrollToTop,
-    scrollToBottom,
-    scrollToElement,
-  };
+  // ⚡ Bolt: Wrapped the hook's return value in useMemo to enforce referential stability,
+  // preventing unnecessary component downstream re-renders or execution of effects.
+  return useMemo(
+    () => ({
+      scrollToNavigation,
+      scrollToTop,
+      scrollToBottom,
+      scrollToElement,
+    }),
+    [scrollToNavigation, scrollToTop, scrollToBottom, scrollToElement],
+  );
 };

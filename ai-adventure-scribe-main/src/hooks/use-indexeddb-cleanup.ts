@@ -19,7 +19,7 @@
  * @author AI Dungeon Master Team
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 import { IndexedDBService } from '../agents/messaging/services/storage/IndexedDBService';
 import { logger } from '../lib/logger';
@@ -108,13 +108,18 @@ export function useIndexedDBCleanup(): UseIndexedDBCleanupReturn {
     return () => clearInterval(interval);
   }, [refreshStats]);
 
-  return {
-    stats,
-    manualCleanup,
-    isLoading,
-    error,
-    refreshStats,
-  };
+  // ⚡ Bolt: Wrapped the hook's return value in useMemo to enforce referential stability,
+  // preventing unnecessary downstream component re-renders when consumed high up in the hierarchy.
+  return useMemo(
+    () => ({
+      stats,
+      manualCleanup,
+      isLoading,
+      error,
+      refreshStats,
+    }),
+    [stats, manualCleanup, isLoading, error, refreshStats],
+  );
 }
 
 /**
