@@ -533,6 +533,7 @@ export default tseslint.config(
       'src/components/scenes/SceneListItem.tsx',
       'src/services/ai/shared/verbalized-sampling.ts',
       'src/features/game-session/components/game/MemoryPanel.tsx',
+      'src/features/game-session/components/game/DesktopGameSidePanel.tsx',
       'src/features/game-session/components/game/GameSidePanelContent.tsx',
       'src/features/game-session/components/chat/message-list/MessageAssetCards.tsx',
       'src/features/game-session/components/audio/VoicePlayerControls.tsx',
