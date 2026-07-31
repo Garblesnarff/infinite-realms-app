@@ -41,11 +41,16 @@ function useToast() {
     else sonnerToast.dismiss();
   }, []);
 
-  return {
-    toasts: [] as never[],
-    toast: memoToast,
-    dismiss,
-  };
+  // ⚡ Bolt: Wrap the returned object in useMemo to enforce referential stability
+  // and prevent downstream component re-renders when consumed context/toast handlers are stable.
+  return React.useMemo(
+    () => ({
+      toasts: [] as never[],
+      toast: memoToast,
+      dismiss,
+    }),
+    [memoToast, dismiss],
+  );
 }
 
 export { useToast, toast };

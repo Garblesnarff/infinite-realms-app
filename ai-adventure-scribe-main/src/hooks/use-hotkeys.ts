@@ -15,7 +15,7 @@
  * @module hooks/use-hotkeys
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
 
 import logger from '@/lib/logger';
 
@@ -90,14 +90,9 @@ export interface UseHotkeysReturn {
  * Check if element is a text input field
  */
 function defaultIsInputField(element: HTMLElement | null): boolean {
-  if (!element || !element.tagName) return false;
+  if (!element?.tagName) return false;
   const tagName = element.tagName.toLowerCase();
-  return (
-    tagName === 'input' ||
-    tagName === 'textarea' ||
-    tagName === 'select' ||
-    element.contentEditable === 'true'
-  );
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || element.contentEditable === 'true';
 }
 
 /**
@@ -111,20 +106,17 @@ function getHotkeyKey(
   if (modifiers?.ctrl) parts.push('ctrl');
   if (modifiers?.alt) parts.push('alt');
   if (modifiers?.shift) parts.push('shift');
-  parts.push(key.toLowerCase());
-  return parts.join('+');
+  return [...parts, key.toLowerCase()].join('+');
 }
 
 /**
  * Check if event matches hotkey config
  */
 function matchesHotkey(event: KeyboardEvent, config: HotkeyConfig): boolean {
-  const keyMatches = event.key.toLowerCase() === config.key.toLowerCase();
-  const ctrlMatches = !!config.ctrl === (event.ctrlKey || event.metaKey);
-  const altMatches = !!config.alt === event.altKey;
-  const shiftMatches = !!config.shift === event.shiftKey;
-
-  return keyMatches && ctrlMatches && altMatches && shiftMatches;
+  return event.key.toLowerCase() === config.key.toLowerCase() &&
+    !!config.ctrl === (event.ctrlKey || event.metaKey) &&
+    !!config.alt === event.altKey &&
+    !!config.shift === event.shiftKey;
 }
 
 // ===========================
@@ -133,24 +125,6 @@ function matchesHotkey(event: KeyboardEvent, config: HotkeyConfig): boolean {
 
 /**
  * Hook for managing keyboard shortcuts
- *
- * @example
- * ```tsx
- * const { registerHotkey } = useHotkeys({
- *   hotkeys: [
- *     {
- *       key: 's',
- *       description: 'Select tool',
- *       callback: () => setTool('select'),
- *     },
- *     {
- *       key: 'Escape',
- *       description: 'Cancel action',
- *       callback: () => cancelAction(),
- *     },
- *   ],
- * });
- * ```
  */
 export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   const {
@@ -175,57 +149,27 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   // ===========================
 
   const registerHotkey = useCallback((config: HotkeyConfig) => {
-    const hotkeyKey = getHotkeyKey(config.key, {
-      ctrl: config.ctrl,
-      alt: config.alt,
-      shift: config.shift,
-    });
-
-    // Check for conflicts
-    const existing = hotkeysRef.current.find((h) => {
-      const existingKey = getHotkeyKey(h.key, {
-        ctrl: h.ctrl,
-        alt: h.alt,
-        shift: h.shift,
-      });
-      return existingKey === hotkeyKey;
-    });
-
+    const key = getHotkeyKey(config.key, { ctrl: config.ctrl, alt: config.alt, shift: config.shift });
+    const existing = hotkeysRef.current.find((h) => getHotkeyKey(h.key, { ctrl: h.ctrl, alt: h.alt, shift: h.shift }) === key);
     if (existing) {
-      logger.warn(`Hotkey conflict detected: ${hotkeyKey}`, {
-        existing: existing.description,
-        new: config.description,
-      });
-      // Remove existing and add new
+      logger.warn(`Hotkey conflict: ${key}`, { existing: existing.description, new: config.description });
       hotkeysRef.current = hotkeysRef.current.filter((h) => h !== existing);
     }
-
     hotkeysRef.current = [...hotkeysRef.current, config];
-    logger.debug(`Registered hotkey: ${hotkeyKey}`, { description: config.description });
+    logger.debug(`Registered hotkey: ${key}`, { description: config.description });
   }, []);
 
   const unregisterHotkey = useCallback((key: string) => {
-    hotkeysRef.current = hotkeysRef.current.filter(
-      (h) => h.key.toLowerCase() !== key.toLowerCase(),
-    );
+    hotkeysRef.current = hotkeysRef.current.filter((h) => h.key.toLowerCase() !== key.toLowerCase());
     logger.debug(`Unregistered hotkey: ${key}`);
   }, []);
 
-  const getHotkeys = useCallback(() => {
-    return [...hotkeysRef.current];
-  }, []);
+  const getHotkeys = useCallback(() => [...hotkeysRef.current], []);
 
   const isRegistered = useCallback(
     (key: string, modifiers?: { ctrl?: boolean; alt?: boolean; shift?: boolean }) => {
-      const hotkeyKey = getHotkeyKey(key, modifiers);
-      return hotkeysRef.current.some((h) => {
-        const existingKey = getHotkeyKey(h.key, {
-          ctrl: h.ctrl,
-          alt: h.alt,
-          shift: h.shift,
-        });
-        return existingKey === hotkeyKey;
-      });
+      const target = getHotkeyKey(key, modifiers);
+      return hotkeysRef.current.some((h) => getHotkeyKey(h.key, { ctrl: h.ctrl, alt: h.alt, shift: h.shift }) === target);
     },
     [],
   );
@@ -294,12 +238,18 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   // Return
   // ===========================
 
-  return {
-    registerHotkey,
-    unregisterHotkey,
-    getHotkeys,
-    isRegistered,
-  };
+  // ⚡ Bolt: Wrap the returned object in useMemo to enforce referential stability
+  // across component renders, limiting unnecessary downstream Virtual DOM reconciliations
+  // and child component re-renders when hotkey handlers remain unchanged.
+  return useMemo(
+    () => ({
+      registerHotkey,
+      unregisterHotkey,
+      getHotkeys,
+      isRegistered,
+    }),
+    [registerHotkey, unregisterHotkey, getHotkeys, isRegistered],
+  );
 }
 
 // ===========================

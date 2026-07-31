@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
@@ -325,9 +325,14 @@ export const useInitialGreeting = ({
     }
   };
 
-  return {
-    isGenerating: state.isGenerating,
-    hasGenerated: state.hasGenerated,
-    error: state.error,
-  };
+  // ⚡ Bolt: Wrap the returned object in useMemo to enforce referential stability
+  // and prevent downstream component re-renders when consumed context/initial greeting states are stable.
+  return useMemo(
+    () => ({
+      isGenerating: state.isGenerating,
+      hasGenerated: state.hasGenerated,
+      error: state.error,
+    }),
+    [state.isGenerating, state.hasGenerated, state.error],
+  );
 };

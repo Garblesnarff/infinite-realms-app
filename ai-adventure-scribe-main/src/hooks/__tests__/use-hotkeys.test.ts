@@ -321,4 +321,31 @@ describe('useHotkeys', () => {
       enabled: false,
     });
   });
+
+  it('should maintain referential stability of returned handlers between re-renders', () => {
+    const options = {
+      hotkeys: [
+        {
+          key: 'a',
+          callback: mockCallback,
+          description: 'Stable Test Hotkey',
+        },
+      ],
+    };
+
+    const { result, rerender } = renderHook(() => useHotkeys(options));
+    const firstResult = result.current;
+
+    // Trigger a re-render
+    rerender();
+
+    const secondResult = result.current;
+
+    // Assert that the returned object itself retains reference identity
+    expect(firstResult).toBe(secondResult);
+    expect(firstResult.registerHotkey).toBe(secondResult.registerHotkey);
+    expect(firstResult.unregisterHotkey).toBe(secondResult.unregisterHotkey);
+    expect(firstResult.getHotkeys).toBe(secondResult.getHotkeys);
+    expect(firstResult.isRegistered).toBe(secondResult.isRegistered);
+  });
 });
