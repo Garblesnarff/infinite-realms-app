@@ -150,4 +150,14 @@ describe('useTokenSelection', () => {
 
     expect(mockOnSelectionChange).toHaveBeenCalledWith(['token-1']);
   });
+
+  it('should maintain referential stability of returned object across re-renders when dependencies do not change', () => {
+    const { result, rerender } = renderHook(() => useTokenSelection());
+
+    const firstResult = result.current;
+    rerender();
+    const secondResult = result.current;
+
+    expect(firstResult).toBe(secondResult);
+  });
 });

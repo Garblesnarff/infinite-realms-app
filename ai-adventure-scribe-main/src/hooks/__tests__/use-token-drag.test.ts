@@ -205,4 +205,19 @@ describe('useTokenDrag', () => {
 
     expect(result.current.dragState.isDragging).toBe(false);
   });
+
+  it('should maintain referential stability of returned object across re-renders when dependencies do not change', () => {
+    const { result, rerender } = renderHook(() =>
+      useTokenDrag({
+        token: mockToken as any,
+        sceneSettings: mockSceneSettings as any,
+      }),
+    );
+
+    const firstResult = result.current;
+    rerender();
+    const secondResult = result.current;
+
+    expect(firstResult).toBe(secondResult);
+  });
 });

@@ -12,7 +12,7 @@
  * - Get selected tokens from store
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import { useBattleMapStore, useSelectedTokenIds } from '@/stores/useBattleMapStore';
 
@@ -76,7 +76,7 @@ export function useTokenSelection(options: UseTokenSelectionOptions = {}): UseTo
   useEffect(() => {
     if (!enableKeyboardShortcuts) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       // ESC to clear selection
       if (event.key === 'Escape' && selectedTokenIds.length > 0) {
         clearSelection();
@@ -104,7 +104,10 @@ export function useTokenSelection(options: UseTokenSelectionOptions = {}): UseTo
     }
   }, [selectedTokenIds, onSelectionChange]);
 
-  return {
+  // ⚡ Bolt: Wrap return value in useMemo to guarantee referential identity stability.
+  // This prevents downstream consumers and rendering contexts from triggering
+  // unnecessary virtual DOM reconciliations and component re-renders.
+  return useMemo(() => ({
     selectedTokenIds,
     selectToken,
     deselectToken,
@@ -113,5 +116,14 @@ export function useTokenSelection(options: UseTokenSelectionOptions = {}): UseTo
     isSelected,
     handleTokenClick,
     handleBackgroundClick,
-  };
+  }), [
+    selectedTokenIds,
+    selectToken,
+    deselectToken,
+    toggleSelectToken,
+    clearSelection,
+    isSelected,
+    handleTokenClick,
+    handleBackgroundClick,
+  ]);
 }
