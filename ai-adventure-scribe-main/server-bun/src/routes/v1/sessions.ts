@@ -1,4 +1,4 @@
-/* eslint-disable import/order */
+/* eslint-disable import/order, max-lines */
 /**
  * Session Routes for Elysia
  *
@@ -101,6 +101,26 @@ const completeSessionSchema = t.Object({
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
+  .resolve(async ({ user, params }) => {
+    let session = null;
+    if (user && params?.id) {
+      try {
+        session = await SessionService.getSessionById(
+          params.id,
+          (user as { userId: string }).userId,
+        );
+      } catch (_error) {
+        // Return null so onBeforeHandle can respond with 404
+      }
+    }
+    return { session };
+  })
+  .onBeforeHandle(async ({ params, session, set }) => {
+    if (params?.id && !session) {
+      set.status = 404;
+      return { error: 'Not found' };
+    }
+  })
 
   /**
    * POST /v1/sessions
@@ -161,21 +181,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * GET /v1/sessions/:id
    * Get a session by ID (with ownership verification)
    */
-  .get('/:id', async ({ params, set, user }) => {
-    const { id } = params;
-
-    try {
-      const session = await SessionService.getSessionById(id, (user as { userId: string }).userId);
-      return mapSessionToApi(session);
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        set.status = 404;
-        return { error: 'Not found' };
-      }
-      logger.error({ msg: 'SESSION_GET error', error });
-      set.status = 500;
-      return { error: 'Failed to fetch session' };
-    }
+  .get('/:id', async ({ session }) => {
+    return mapSessionToApi(session as GameSession);
   }, { params: sessionIdParams })
 
   /**

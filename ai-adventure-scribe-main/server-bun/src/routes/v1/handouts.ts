@@ -60,20 +60,29 @@ const handoutResponseShell = (actions: unknown[]) => ({
 /** Session-owned handout delivery and campaign journal reads. */
 export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
-  .get('/:id/journal', async ({ params, user, set }) => {
-    const access = await verifySessionOwnership(params.id, user.userId);
-    if (!access.success) {
-      set.status = access.error!.status;
-      return { error: access.error!.message };
+  .resolve(async ({ user, params }) => {
+    let access = null;
+    if (user && params?.id) {
+      access = await verifySessionOwnership(params.id, user.userId);
     }
-    if (!access.session?.campaignId) return { entries: [] };
+    return { access };
+  })
+  .onBeforeHandle(async ({ params, access, set }) => {
+    if (params?.id && (!access || !access.success)) {
+      set.status = access?.error?.status || 404;
+      return { error: access?.error?.message || 'Not found' };
+    }
+  })
+  .get('/:id/journal', async ({ access }) => {
+    const session = access!.session!;
+    if (!session.campaignId) return { entries: [] };
     const rows = await db
       .select({ entry: campaignJournalEntries, sessionNumber: gameSessions.sessionNumber })
       .from(campaignJournalEntries)
       .innerJoin(gameSessions, eq(campaignJournalEntries.sessionId, gameSessions.id))
       .where(
         and(
-          eq(campaignJournalEntries.campaignId, access.session.campaignId),
+          eq(campaignJournalEntries.campaignId, session.campaignId),
           eq(campaignJournalEntries.entryType, 'handout'),
         ),
       )
@@ -82,13 +91,8 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
   })
   .post(
     '/:id/handout-actions',
-    async ({ params, body, user, set }) => {
-      const access = await verifySessionOwnership(params.id, user.userId);
-      if (!access.success) {
-        set.status = access.error!.status;
-        return { error: access.error!.message };
-      }
-      const session = access.session!;
+    async ({ params, body, access, set }) => {
+      const session = access!.session!;
       if (!session.campaignId) {
         set.status = 422;
         return { error: 'Handouts require a campaign-backed session' };
