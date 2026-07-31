@@ -1,18 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getCharacterPassiveScores } from '../../passive-skills-service';
-import { fetchCampaignAssetsForPrompt } from '../asset-processor';
+import { CampaignContextPrompts } from './campaign-context-prompts';
+import { CharacterContextPrompts } from './character-context-prompts';
 
 import type { Memory } from '../../memory-manager';
 import type { GameContext } from '../shared/types';
-import type { EquippedLoadout } from '@/services/user-data-api';
 
-import { getLoreKeeperService } from '@/agents/services/lore-keeper/LoreKeeperService';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
-import { convertCharacterDetailsToCharacter } from '@/utils/character-converter';
 
 /**
- * GameContextPrompts - Handles building the game context and character sections of the prompt
+ * GameContextPrompts - Handles building the game context sections of the prompt
  * Extracted from ContextBuilderPrompts.ts
  */
 export class GameContextPrompts {
@@ -63,187 +59,7 @@ DESCRIPTION: ${campaignDescription}
     }
 
     if (starterCampaignId) {
-      try {
-        const loreKeeper = getLoreKeeperService();
-        const [campaignOverview, campaignRules, campaignAssets, campaignEntities] =
-          await Promise.all([
-            loreKeeper.getCampaignOverview(starterCampaignId),
-            loreKeeper.getRules(starterCampaignId),
-            fetchCampaignAssetsForPrompt(starterCampaignId),
-            loreKeeper.getEntities(starterCampaignId),
-          ]);
-
-        if (campaignOverview) {
-          const overview = campaignOverview as unknown as Record<string, unknown>;
-          const overviewTitle = overview.title || overview.name || 'Unnamed Starter Campaign';
-          const premise =
-            overview.premise || overview.description || 'A mysterious adventure awaits.';
-          const creativeBrief =
-            overview.creativeBrief ||
-            overview.creative_brief ||
-            'Maintain an immersive, atmospheric tone.';
-          const campaignOverviewText = overview.overview || overview.setting_details || '';
-          section += `
-<starter_campaign_lore>
-<canonical_setting>
-TITLE: ${overviewTitle}
-PREMISE: ${premise}
-OVERVIEW: ${campaignOverviewText}
-</canonical_setting>
-
-<creative_direction>
-${creativeBrief}
-</creative_direction>`;
-
-          if (campaignRules && campaignRules.length > 0) {
-            section += `
-<world_rules>
-These rules govern how the world responds to player actions:
-${campaignRules.map((rule: any) => `- ${rule.condition} → ${rule.effect}${rule.reversible ? ' (reversible)' : ''}`).join('\n')}
-</world_rules>`;
-          }
-
-          const {
-            npcs = [],
-            locations = [],
-            factions = [],
-            items = [],
-            monsters = [],
-            handouts = [],
-          } = campaignEntities || {};
-          const totalEntities =
-            npcs.length +
-            locations.length +
-            factions.length +
-            items.length +
-            monsters.length +
-            handouts.length;
-
-          if (totalEntities > 0) {
-            section += `
-
-<canonical_entities>
-<instruction>These are the OFFICIAL NPCs, locations, and creatures for this campaign. USE THESE EXACT NAMES. Do NOT invent new NPCs when these exist.</instruction>`;
-
-            if (npcs.length > 0) {
-              section += `
-
-<npcs count="${npcs.length}">
-${npcs
-  .map((npc: any) => {
-    const hasImage = !!npc.metadata?.image_url;
-    const assetKey = npc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
-    const assetTag = hasImage ? `[ASSET:npc:${assetKey}]` : '';
-    return `<npc name="${npc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
-${npc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when introducing this character**` : ''}
-</npc>`;
-  })
-  .join('\n')}
-</npcs>`;
-            }
-
-            if (locations.length > 0) {
-              section += `
-
-<locations count="${locations.length}">
-${locations
-  .map((loc: any) => {
-    const hasImage = !!loc.metadata?.image_url;
-    const assetKey = loc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
-    const assetTag = hasImage ? `[ASSET:location:${assetKey}]` : '';
-    return `<location name="${loc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
-${loc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when the party enters or views this location**` : ''}
-</location>`;
-  })
-  .join('\n')}
-</locations>`;
-            }
-
-            if (factions.length > 0) {
-              section += `
-
-<factions count="${factions.length}">
-${factions
-  .map(
-    (f: any) => `<faction name="${f.entityName}">
-${f.content}
-</faction>`,
-  )
-  .join('\n')}
-</factions>`;
-            }
-
-            if (items.length > 0) {
-              section += `
-
-<items count="${items.length}">
-${items
-  .map(
-    (item: any) => `<item name="${item.entityName}">
-${item.content}
-</item>`,
-  )
-  .join('\n')}
-</items>`;
-            }
-
-            if (monsters.length > 0) {
-              section += `
-
-<monsters count="${monsters.length}">
-${monsters
-  .map((m: any) => {
-    const hasImage = !!m.metadata?.image_url;
-    const assetKey = m.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
-    const assetTag = hasImage ? `[ASSET:monster:${assetKey}]` : '';
-    return `<monster name="${m.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
-${m.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when this creature appears or attacks**` : ''}
-</monster>`;
-  })
-  .join('\n')}
-</monsters>`;
-            }
-
-            if (handouts.length > 0) {
-              section += `
-
-<available_handouts>
-<instruction>Deliver authored handouts only through handout_actions using the exact key. The server validates every key.</instruction>
-${handouts
-  .map(
-    (
-      handout: any,
-    ) => `<handout key="${handout.metadata?.key || ''}" title="${handout.metadata?.title || handout.entityName || ''}" giver="${handout.metadata?.giver || ''}">
-${handout.content}
-</handout>`,
-  )
-  .join('\n')}
-</available_handouts>`;
-            }
-
-            section += `
-</canonical_entities>`;
-          }
-
-          section += `
-
-<lore_adherence>
-- USE the canonical NPCs listed above - do NOT invent new characters when these exist
-- When introducing an NPC from the list, use their EXACT name
-- Reference canonical locations and describe them as specified
-- Apply world rules consistently
-- **CRITICAL: Include the asset_tag shown for any entity with a portrait/image when you first mention them**
-- Asset tags like [ASSET:npc:headmaster] display the entity's artwork to the player
-</lore_adherence>
-</starter_campaign_lore>`;
-
-          if (campaignAssets) {
-            section += campaignAssets;
-          }
-        }
-      } catch (loreError) {
-        logger.warn('[ContextBuilder] Failed to fetch starter campaign lore:', loreError);
-      }
+      section += await CampaignContextPrompts.buildStarterCampaignLoreSection(starterCampaignId);
     }
 
     if (context.characterDetails) {
@@ -268,120 +84,16 @@ Reference these memories naturally to maintain story continuity.`;
   }
 
   /**
-   * Renders the character's equipment from the sheet.
-   *
-   * This block used to be generated from a table of class defaults, so a ranger who had sold
-   * her longsword and was carrying a longbow was described to the DM as holding a longsword in
-   * studded leather, with damage dice and an AC nobody had ever rolled. The DM then narrated
-   * attacks with weapons the character did not own, which the engine either refused or
-   * silently substituted. Everything here comes from `inventory_items` + `character_equipment`
-   * (equipped=true) via the same resolver the attack engine uses, and the AC is the sheet's own.
+   * Delegates the equipment section rendering to CharacterContextPrompts
    */
-  private static async buildEquipmentSection(char: Record<string, any>): Promise<string> {
-    const characterId = typeof char.id === 'string' ? char.id : null;
-    const armorClass = char.character_stats?.[0]?.armor_class;
-
-    let loadout: EquippedLoadout | null = null;
-    if (characterId) {
-      try {
-        loadout = await userDataApi.getCharacterLoadout(characterId);
-      } catch (loadoutError) {
-        logger.warn(
-          `[ContextBuilder] Failed to load equipped gear for character ${char.name}:`,
-          loadoutError,
-        );
-      }
-    }
-
-    // No sheet to read means no numbers to state. Saying so is better than inventing a
-    // loadout: the DM can ask, and the engine stays the only thing that rolls damage.
-    if (!loadout) {
-      return `
-<equipment>
-UNKNOWN — the character's equipment could not be read from their sheet.
-Do not name specific weapons, damage dice, or armour class. Describe attacks in the fiction and
-let the engine resolve them.
-</equipment>`;
-    }
-
-    const weapons = loadout.weapons.map((weapon) => {
-      const bonus = weapon.magicBonus ? ` +${weapon.magicBonus}` : '';
-      const reach = weapon.ranged
-        ? `range ${weapon.normalRange}/${weapon.longRange ?? weapon.normalRange} ft`
-        : `reach ${weapon.normalRange} ft`;
-      return `${weapon.name}${bonus} (${weapon.damageDice} ${weapon.damageType}, ${reach})`;
-    });
-
-    const armorText = loadout.armor.length > 0 ? loadout.armor.join(', ') : 'No armour equipped';
-    const acText =
-      typeof armorClass === 'number'
-        ? `AC ${armorClass}`
-        : typeof loadout.armorClass === 'number'
-          ? `AC ${loadout.armorClass}`
-          : 'AC unknown';
-
-    return `
-<equipment>
-EQUIPPED WEAPONS: ${weapons.length > 0 ? weapons.join(' | ') : 'None — unarmed strike (1d1 bludgeoning, reach 5 ft)'}
-ARMOR: ${armorText} | ${acText}
-**These are the character's real, equipped items. Never name a weapon that is not on this list.**
-**USE EXACT WEAPON DICE from this list for damage roll requests.**
-</equipment>`;
+  public static async buildEquipmentSection(char: Record<string, any>): Promise<string> {
+    return CharacterContextPrompts.buildEquipmentSection(char);
   }
 
-  static async buildCharacterSection(char: Record<string, any>): Promise<string> {
-    let section = `<character_details>
-PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
-
-    if (char.background) {
-      section += ` (${char.background} background)`;
-    }
-
-    if (char.character_stats && char.character_stats.length > 0) {
-      const stats = char.character_stats[0];
-      const calcMod = (score: number = 10): string => {
-        const mod = Math.floor((score - 10) / 2);
-        return mod >= 0 ? `+${mod}` : `${mod}`;
-      };
-
-      section += `
-<ability_scores>
-STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calcMod(stats.dexterity)}), CON ${stats.constitution}(${calcMod(stats.constitution)}), INT ${stats.intelligence}(${calcMod(stats.intelligence)}), WIS ${stats.wisdom}(${calcMod(stats.wisdom)}), CHA ${stats.charisma}(${calcMod(stats.charisma)})
-</ability_scores>`;
-
-      const profBonus =
-        char.level >= 17 ? 6 : char.level >= 13 ? 5 : char.level >= 9 ? 4 : char.level >= 5 ? 3 : 2;
-      section += `
-<proficiency_bonus>+${profBonus}</proficiency_bonus>`;
-    }
-
-    section += await GameContextPrompts.buildEquipmentSection(char);
-
-    try {
-      const characterForPassive = convertCharacterDetailsToCharacter(char as any);
-      const passiveScores = getCharacterPassiveScores(characterForPassive);
-      section += `
-
-<passive_skills>
-**D&D 5E PASSIVE SKILLS (Automatic Checks)**
-Passive Perception: ${passiveScores.perception} (notices hidden objects, creatures, traps without rolling)
-Passive Insight: ${passiveScores.insight} (senses deception, motives, emotional states automatically)
-Passive Investigation: ${passiveScores.investigation} (spots clues, patterns, logical inconsistencies passively)
-
-**DM GUIDANCE: Use these passive scores to proactively reveal information:**
-- If a scene has hidden elements with DC ≤ passive score, reveal them automatically
-- Example: "Your keen awareness (Passive Perception ${passiveScores.perception}) notices subtle scuff marks on the floor"
-- Reserve active checks (d20 rolls) for deliberate investigation or difficult perception tasks
-</passive_skills>`;
-    } catch (passiveSkillError) {
-      logger.warn(
-        `[ContextBuilder] Failed to calculate passive skills for character ${char.name} (non-fatal):`,
-        passiveSkillError,
-      );
-    }
-
-    section += `
-</character_details>`;
-    return section;
+  /**
+   * Delegates the character section rendering to CharacterContextPrompts
+   */
+  public static async buildCharacterSection(char: Record<string, any>): Promise<string> {
+    return CharacterContextPrompts.buildCharacterSection(char);
   }
 }
