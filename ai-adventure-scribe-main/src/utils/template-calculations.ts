@@ -6,9 +6,10 @@
  */
 
 
+import { calculateDistance } from './templates/distance-utils';
+
 import type { MeasurementTemplate } from '@/types/drawing';
 import type { Point2D } from '@/types/scene';
-import type { Token } from '@/types/token';
 
 import { TemplateType } from '@/types/drawing';
 import { GridType } from '@/types/scene';
@@ -44,65 +45,11 @@ export interface MeasurementPath {
   totalDistance: number;
 }
 
-// ===========================
-// Distance Calculations
-// ===========================
-
-/**
- * Calculates Euclidean distance between two points
- */
-export function euclideanDistance(p1: Point2D, p2: Point2D): number {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
- * Calculates grid distance using D&D 5e rules (5-10-5 diagonal pattern)
- * @param p1 - First point in pixels
- * @param p2 - Second point in pixels
- * @param gridSize - Grid size in pixels
- * @returns Distance in feet
- */
-export function gridDistance(p1: Point2D, p2: Point2D, gridSize: number): number {
-  const dx = Math.abs(p2.x - p1.x) / gridSize;
-  const dy = Math.abs(p2.y - p1.y) / gridSize;
-
-  // Use the D&D 5e diagonal rule: every other diagonal costs 10 feet
-  const straight = Math.abs(dx - dy);
-  const diagonal = Math.min(dx, dy);
-
-  // Count diagonals: alternate between 5ft and 10ft
-  const fullDiagonalPairs = Math.floor(diagonal / 2);
-  const remainingDiagonal = diagonal % 2;
-
-  const diagonalDistance = fullDiagonalPairs * 15 + remainingDiagonal * 5;
-  const straightDistance = straight * 5;
-
-  return diagonalDistance + straightDistance;
-}
-
-/**
- * Calculates distance in feet between two points
- * @param p1 - First point in pixels
- * @param p2 - Second point in pixels
- * @param gridSize - Grid size in pixels
- * @param useGridDistance - Whether to use D&D grid distance rules
- * @returns Distance in feet
- */
-export function calculateDistance(
-  p1: Point2D,
-  p2: Point2D,
-  gridSize: number,
-  useGridDistance: boolean = true,
-): number {
-  if (useGridDistance) {
-    return gridDistance(p1, p2, gridSize);
-  }
-
-  const pixelDistance = euclideanDistance(p1, p2);
-  return (pixelDistance / gridSize) * FEET_PER_GRID_SQUARE;
-}
+export {
+  euclideanDistance,
+  gridDistance,
+  calculateDistance,
+} from './templates/distance-utils';
 
 /**
  * Calculates a measurement path with waypoints
@@ -127,91 +74,12 @@ export function calculateMeasurementPath(
   return { waypoints, segments, totalDistance };
 }
 
-// ===========================
-// Cone Template Calculations
-// ===========================
-
-/**
- * Gets tokens within a cone template
- */
-export function getTokensInCone(
-  origin: Point2D,
-  direction: number,
-  angle: number,
-  distance: number,
-  tokens: Token[],
-  gridSize: number,
-): Token[] {
-  const conePoints = getConePoints(origin, direction, distance, angle, gridSize);
-  return tokens.filter((token) => {
-    const tokenCenter = { x: token.x + gridSize / 2, y: token.y + gridSize / 2 };
-    return isPointInPolygon(tokenCenter, conePoints);
-  });
-}
-
-// ===========================
-// Sphere/Circle Template Calculations
-// ===========================
-
-/**
- * Gets tokens within a sphere/circle template
- */
-export function getTokensInSphere(
-  origin: Point2D,
-  radius: number,
-  tokens: Token[],
-  gridSize: number,
-  useGridDistance: boolean = true,
-): Token[] {
-  return tokens.filter((token) => {
-    const tokenCenter = { x: token.x + gridSize / 2, y: token.y + gridSize / 2 };
-    const distance = calculateDistance(origin, tokenCenter, gridSize, useGridDistance);
-    return distance <= radius;
-  });
-}
-
-// ===========================
-// Cube/Square Template Calculations
-// ===========================
-
-/**
- * Gets tokens within a cube/square template
- */
-export function getTokensInCube(
-  origin: Point2D,
-  size: number,
-  tokens: Token[],
-  gridSize: number,
-  rotation: number = 0,
-): Token[] {
-  const cubePoints = getCubePoints(origin, size, gridSize, rotation);
-  return tokens.filter((token) => {
-    const tokenCenter = { x: token.x + gridSize / 2, y: token.y + gridSize / 2 };
-    return isPointInPolygon(tokenCenter, cubePoints);
-  });
-}
-
-// ===========================
-// Line Template Calculations
-// ===========================
-
-/**
- * Gets tokens within a line template
- */
-export function getTokensInLine(
-  origin: Point2D,
-  direction: number,
-  width: number,
-  length: number,
-  tokens: Token[],
-  gridSize: number,
-): Token[] {
-  const linePoints = getLinePoints(origin, direction, length, width, gridSize);
-  return tokens.filter((token) => {
-    const tokenCenter = { x: token.x + gridSize / 2, y: token.y + gridSize / 2 };
-    return isPointInPolygon(tokenCenter, linePoints);
-  });
-}
+export {
+  getTokensInCone,
+  getTokensInSphere,
+  getTokensInCube,
+  getTokensInLine,
+} from './templates/token-filters';
 
 // ===========================
 // Grid Square Calculations
