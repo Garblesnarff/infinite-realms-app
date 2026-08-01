@@ -79,5 +79,7 @@ export function useEntityLabel(type: EntityType, id: string | null) {
     };
   }, [type, id]);
 
-  return { label, loading } as const;
+  // ⚡ Bolt: Memoize the return object to ensure stable reference identity
+  // and prevent redundant downstream re-renders (e.g. in Breadcrumbs component).
+  return React.useMemo(() => ({ label, loading }) as const, [label, loading]);
 }

@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useEntityLabel } from '../use-entity-label';
 
-import { userDataApi } from '@/services/user-data-api';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 // useEntityLabel now resolves campaign/character/session labels via userDataApi
 // (getCampaign/getCharacter/getSession - the Bun server's REST API client) instead of
@@ -209,5 +209,25 @@ describe('useEntityLabel', () => {
 
     // Since we can't easily check the internal 'cancelled' variable,
     // we just ensure it doesn't crash and hopefully coverage shows the return statement being hit.
+  });
+
+  it('should maintain referential stability when values do not change', async () => {
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue({ name: 'Stable Campaign' } as any);
+
+    const { result, rerender } = renderHook(() => useEntityLabel('campaign', 'stable-123'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const firstReturn = result.current;
+
+    // Rerender with the same inputs
+    rerender();
+
+    const secondReturn = result.current;
+
+    // Assert reference equality
+    expect(firstReturn).toBe(secondReturn);
   });
 });
