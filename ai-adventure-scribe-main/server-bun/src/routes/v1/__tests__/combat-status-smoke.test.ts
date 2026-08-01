@@ -8,6 +8,16 @@ import { Elysia } from 'elysia';
 
 const noopLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
+class MockRowList<T> extends Array<T> {
+  static get [Symbol.species]() {
+    return Array;
+  }
+}
+
+// Mock database and env modules before other imports load them
+mock.module('../../../lib/db.js', () => ({ sql: async () => new MockRowList() }));
+mock.module('../../../lib/env.js', () => ({ env: { WORKOS_CLIENT_ID: 'test-client' } }));
+
 // Mock auth module
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) => {

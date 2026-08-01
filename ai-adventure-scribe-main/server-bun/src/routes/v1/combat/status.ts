@@ -8,12 +8,11 @@ import {
   campaigns,
   characters,
 } from '../../../../../db/schema/index';
-import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
+import { requireAuth } from '../../../middleware/auth.js';
 import { ConditionQueryService } from '../../../services/conditions/condition-query-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
-import { verifyEncounterOwnership } from './helpers.js';
 
 
 import type {
@@ -45,24 +44,33 @@ function mapCombatError(
 }
 
 export const statusRoutes = new Elysia()
+  .use(requireAuth)
+  .resolve(async ({ params, user }) => {
+    let encounter = null;
+    let verification = null;
+    if (params?.encounterId && user) {
+      const result = await verifyEncounterOwnership(params.encounterId, user.userId);
+      verification = result;
+      if (result.success) {
+        encounter = result.encounter;
+      }
+    }
+    return { encounter, verification };
+  })
+  .onBeforeHandle(async ({ params, verification, set }) => {
+    if (params?.encounterId) {
+      if (!verification || !verification.success) {
+        set.status = verification?.error?.status || 404;
+        return { error: verification?.error?.message || 'Encounter not found' };
+      }
+    }
+  })
   /**
    * POST /v1/combat/:encounterId/conditions/apply
    * Apply a condition to a combat participant
    */
-  .post('/:encounterId/conditions/apply', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:encounterId/conditions/apply', async ({ params, body, set, user, verification }) => {
     try {
-      const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-      if (!verification.success) {
-        set.status = verification.error!.status;
-        return { error: verification.error!.message };
-      }
-
       const conditionRequest = body as ApplyConditionRequest;
 
       if (!conditionRequest.participantId || !conditionRequest.conditionName || !conditionRequest.durationType) {
@@ -79,8 +87,8 @@ export const statusRoutes = new Elysia()
         conditionRequest.saveDc,
         conditionRequest.saveAbility,
         conditionRequest.source,
-        verification.encounter.currentRound,
-        user.userId
+        verification?.encounter?.currentRound ?? 1,
+        user!.userId
       );
 
       set.status = 201;
@@ -99,26 +107,14 @@ export const statusRoutes = new Elysia()
    * DELETE /v1/combat/:encounterId/conditions/:conditionId
    * Remove a condition from a participant
    */
-  .delete('/:encounterId/conditions/:conditionId', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .delete('/:encounterId/conditions/:conditionId', async ({ params, set, user }) => {
     try {
-      const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-      if (!verification.success) {
-        set.status = verification.error!.status;
-        return { error: verification.error!.message };
-      }
-
       if (!params.conditionId) {
         set.status = 400;
         return { error: 'conditionId is required' };
       }
 
-      const removed = await ConditionsService.removeCondition(params.conditionId, params.encounterId, user.userId);
+      const removed = await ConditionsService.removeCondition(params.conditionId, params.encounterId, user!.userId);
 
       if (!removed) {
         set.status = 404;
@@ -136,20 +132,8 @@ export const statusRoutes = new Elysia()
    * POST /v1/combat/:encounterId/conditions/:conditionId/save
    * Attempt a saving throw against a condition
    */
-  .post('/:encounterId/conditions/:conditionId/save', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:encounterId/conditions/:conditionId/save', async ({ params, body, set, user }) => {
     try {
-      const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-      if (!verification.success) {
-        set.status = verification.error!.status;
-        return { error: verification.error!.message };
-      }
-
       if (!params.conditionId) {
         set.status = 400;
         return { error: 'conditionId is required' };
@@ -162,7 +146,7 @@ export const statusRoutes = new Elysia()
         return { error: 'saveRoll must be between 1 and 20' };
       }
 
-      const result = await ConditionsService.attemptSave(params.conditionId, params.encounterId, saveRoll, user.userId);
+      const result = await ConditionsService.attemptSave(params.conditionId, params.encounterId, saveRoll, user!.userId);
 
       return {
         success: true,
@@ -180,13 +164,7 @@ export const statusRoutes = new Elysia()
    * GET /v1/combat/:encounterId/conditions/active
    * Get all active conditions in an encounter
    */
-  .get('/:encounterId/conditions/active', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:encounterId/conditions/active', async ({ params, set, user }) => {
     try {
       // ⚡ Bolt: Consolidate ownership verification, encounter state, and conditions retrieval into a single database round-trip.
       // This reduces database overhead and network latency from 5 queries down to 1 for this frequently-called status endpoint.
@@ -268,13 +246,7 @@ export const statusRoutes = new Elysia()
    * GET /v1/combat/conditions/library
    * Get all available conditions from the library
    */
-  .get('/conditions/library', async ({ request, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/conditions/library', async ({ set }) => {
     try {
       const conditions = await ConditionQueryService.getConditionsLibrary();
       return { conditions };
@@ -288,19 +260,13 @@ export const statusRoutes = new Elysia()
    * GET /v1/combat/participants/:participantId/conditions
    * Get active conditions for a specific participant
    */
-  .get('/participants/:participantId/conditions', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/participants/:participantId/conditions', async ({ params, set, user }) => {
     try {
       // 🛡️ Sentinel: Use updated service methods that incorporate ownership checks
       // and prevent existence leakage by throwing NotFoundError instead of Access Denied.
       const conditions = await ConditionQueryService.getActiveConditions(
         params.participantId,
-        user.userId
+        user!.userId
       );
 
       // ⚡ Bolt: Use pre-fetched conditions to calculate aggregated effects in-memory.
