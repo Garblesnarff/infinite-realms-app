@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Character Modifiers Utility
  *
@@ -10,8 +11,8 @@
 import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
 
-import { calculateProficiencyBonus as calculateBasicProficiencyBonus } from '@/utils/character/basic-math';
 import logger from '@/lib/logger';
+import { calculateProficiencyBonus as calculateBasicProficiencyBonus } from '@/utils/character/basic-math';
 
 // D&D 5e ability names
 export type AbilityName =
@@ -133,7 +134,7 @@ export function calculateSkillModifier(character: Character, skillName: string):
   const abilityMod = getAbilityModifier(character, ability);
   const proficient = isSkillProficient(character, skillName);
   const expertise = character.expertiseProficiencies?.some(
-    (entry) => entry.toLowerCase() === skillName.toLowerCase(),
+    (entry) => entry.toLowerCase() === actualSkill,
   );
   const proficiencyBonus = proficient ? getProficiencyBonus(character) * (expertise ? 2 : 1) : 0;
 
@@ -288,7 +289,7 @@ export function calculateRollWithBreakdown(
       abilityMod = getAbilityModifier(character, skillAbility);
       isProficient = isSkillProficient(character, skillName);
       const hasExpertise = character.expertiseProficiencies?.some(
-        (entry) => entry.toLowerCase() === skillName.toLowerCase(),
+        (entry) => entry.toLowerCase() === actualSkill,
       );
       proficiencyBonus = isProficient ? getProficiencyBonus(character) * (hasExpertise ? 2 : 1) : 0;
       breakdown.push(

@@ -1,61 +1,50 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
   calculateAbilityModifier,
   calculateProficiencyBonus,
   getAbilityModifier,
+  getProficiencyBonus,
   isSkillProficient,
   isSaveProficient,
   calculateSkillModifier,
   calculateSaveModifier,
   calculateAttackModifier,
+  calculateInitiativeModifier,
+  generateDiceFormula,
   calculateRollWithBreakdown,
   parseAbilityName,
   getCharacterStatsForAI,
 } from '../characterModifiers';
 
+import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
 
-// Mock logger
+
 vi.mock('@/lib/logger', () => ({
   default: {
+    warn: vi.fn(),
     info: vi.fn(),
     error: vi.fn(),
-    warn: vi.fn(),
     debug: vi.fn(),
   },
 }));
 
 describe('characterModifiers', () => {
-  const mockCharacter: Character = {
-    id: 'char-1',
-    name: 'Test Character',
-    level: 1,
-    abilityScores: {
-      strength: { score: 14, modifier: 2, savingThrow: true },
-      dexterity: { score: 12, modifier: 1, savingThrow: false },
-      constitution: { score: 10, modifier: 0, savingThrow: false },
-      intelligence: { score: 8, modifier: -1, savingThrow: false },
-      wisdom: { score: 16, modifier: 3, savingThrow: true },
-      charisma: { score: 13, modifier: 1, savingThrow: false },
-    },
-    skillProficiencies: ['Athletics', 'Perception', 'Stealth'],
-    toolProficiencies: ["Thieves' Tools"],
-    savingThrowProficiencies: ['strength', 'wisdom'],
-  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   describe('calculateAbilityModifier', () => {
     it('should calculate correct modifiers for various scores', () => {
       expect(calculateAbilityModifier(1)).toBe(-5);
-      expect(calculateAbilityModifier(8)).toBe(-1);
+      expect(calculateAbilityModifier(5)).toBe(-3);
       expect(calculateAbilityModifier(9)).toBe(-1);
       expect(calculateAbilityModifier(10)).toBe(0);
       expect(calculateAbilityModifier(11)).toBe(0);
       expect(calculateAbilityModifier(12)).toBe(1);
-      expect(calculateAbilityModifier(13)).toBe(1);
-      expect(calculateAbilityModifier(14)).toBe(2);
       expect(calculateAbilityModifier(15)).toBe(2);
       expect(calculateAbilityModifier(20)).toBe(5);
       expect(calculateAbilityModifier(30)).toBe(10);
@@ -63,7 +52,7 @@ describe('characterModifiers', () => {
   });
 
   describe('calculateProficiencyBonus', () => {
-    it('should calculate correct proficiency bonus for all levels', () => {
+    it('should return correct D&D 5e proficiency bonuses based on level', () => {
       expect(calculateProficiencyBonus(1)).toBe(2);
       expect(calculateProficiencyBonus(4)).toBe(2);
       expect(calculateProficiencyBonus(5)).toBe(3);
@@ -78,238 +67,448 @@ describe('characterModifiers', () => {
   });
 
   describe('getAbilityModifier', () => {
-    it('should return the pre-calculated modifier if available', () => {
-      const char = {
+    it('should use pre-calculated modifier if available', () => {
+      const character: Partial<Character> = {
         abilityScores: {
-          strength: { score: 14, modifier: 3 }, // Overridden modifier
-        },
-      } as any;
-      expect(getAbilityModifier(char, 'strength')).toBe(3);
+          strength: { score: 14, modifier: 3, savingThrow: false },
+        } as any,
+      };
+      expect(getAbilityModifier(character as Character, 'strength')).toBe(3);
     });
 
-    it('should calculate modifier if not pre-calculated', () => {
-      const char = {
+    it('should calculate modifier from score if modifier is undefined', () => {
+      const character: Partial<Character> = {
         abilityScores: {
-          strength: { score: 14 },
-        },
-      } as any;
-      expect(getAbilityModifier(char, 'strength')).toBe(2);
+          strength: { score: 14 } as any,
+        } as any,
+      };
+      expect(getAbilityModifier(character as Character, 'strength')).toBe(2);
     });
 
     it('should return 0 if ability score is missing', () => {
-      const char = { abilityScores: {} } as any;
-      expect(getAbilityModifier(char, 'strength')).toBe(0);
+      const character: Partial<Character> = {
+        abilityScores: {} as any,
+      };
+      expect(getAbilityModifier(character as Character, 'strength')).toBe(0);
+    });
+  });
+
+  describe('getProficiencyBonus', () => {
+    it('should calculate bonus based on character level', () => {
+      const character: Partial<Character> = { level: 9 };
+      expect(getProficiencyBonus(character as Character)).toBe(4);
+    });
+
+    it('should default to level 1 if level is missing', () => {
+      const character: Partial<Character> = {};
+      expect(getProficiencyBonus(character as Character)).toBe(2);
     });
   });
 
   describe('isSkillProficient', () => {
-    it('should return true if character has skill proficiency', () => {
-      expect(isSkillProficient(mockCharacter, 'Athletics')).toBe(true);
-      expect(isSkillProficient(mockCharacter, 'athletics')).toBe(true);
-      expect(isSkillProficient(mockCharacter, 'Stealth')).toBe(true);
+    it('should return true if character has the skill in skillProficiencies', () => {
+      const character: Partial<Character> = {
+        skillProficiencies: ['Athletics', 'Stealth'],
+      };
+      expect(isSkillProficient(character as Character, 'athletics')).toBe(true);
+      expect(isSkillProficient(character as Character, 'STEALTH')).toBe(true);
     });
 
-    it('should handle skill aliases', () => {
-      expect(isSkillProficient(mockCharacter, 'Animal')).toBe(false); // Animal Handling not in list
-      const charWithAnimal = { ...mockCharacter, skillProficiencies: ['Animal Handling'] };
-      expect(isSkillProficient(charWithAnimal, 'Animal')).toBe(true);
-      expect(isSkillProficient(charWithAnimal, 'handle')).toBe(true);
-      expect(isSkillProficient(charWithAnimal, 'sleight')).toBe(false);
+    it('should resolve aliases correctly', () => {
+      const character: Partial<Character> = {
+        skillProficiencies: ['Sleight of Hand', 'Animal Handling'],
+      };
+      expect(isSkillProficient(character as Character, 'sleight')).toBe(true);
+      expect(isSkillProficient(character as Character, 'animal')).toBe(true);
+      expect(isSkillProficient(character as Character, 'handle')).toBe(true);
     });
 
-    it('should return false if character has no skill proficiencies', () => {
-      const char = { ...mockCharacter, skillProficiencies: undefined };
-      expect(isSkillProficient(char, 'Athletics')).toBe(false);
+    it('should return false if skill is not in skillProficiencies', () => {
+      const character: Partial<Character> = {
+        skillProficiencies: ['Athletics'],
+      };
+      expect(isSkillProficient(character as Character, 'stealth')).toBe(false);
+    });
+
+    it('should return false if skillProficiencies is missing', () => {
+      const character: Partial<Character> = {};
+      expect(isSkillProficient(character as Character, 'athletics')).toBe(false);
     });
   });
 
   describe('isSaveProficient', () => {
-    it('should return true if in savingThrowProficiencies', () => {
-      expect(isSaveProficient(mockCharacter, 'strength')).toBe(true);
-      expect(isSaveProficient(mockCharacter, 'dexterity')).toBe(false);
+    it('should return true if ability is in savingThrowProficiencies', () => {
+      const character: Partial<Character> = {
+        savingThrowProficiencies: ['strength'],
+      };
+      expect(isSaveProficient(character as Character, 'strength')).toBe(true);
+      expect(isSaveProficient(character as Character, 'dexterity')).toBe(false);
     });
 
-    it('should use fallback if savingThrowProficiencies is missing', () => {
-      const char = {
+    it('should fall back to checking the savingThrow flag on abilityScore', () => {
+      const character: Partial<Character> = {
         abilityScores: {
-          strength: { score: 14, savingThrow: true },
-          dexterity: { score: 12, savingThrow: false },
-        },
-      } as any;
-      expect(isSaveProficient(char, 'strength')).toBe(true);
-      expect(isSaveProficient(char, 'dexterity')).toBe(false);
-      expect(isSaveProficient(char, 'wisdom')).toBe(false);
+          strength: { score: 10, modifier: 0, savingThrow: true },
+          dexterity: { score: 10, modifier: 0, savingThrow: false },
+        } as any,
+      };
+      expect(isSaveProficient(character as Character, 'strength')).toBe(true);
+      expect(isSaveProficient(character as Character, 'dexterity')).toBe(false);
+    });
+
+    it('should return false if both fields are missing', () => {
+      const character: Partial<Character> = {};
+      expect(isSaveProficient(character as Character, 'strength')).toBe(false);
     });
   });
 
   describe('calculateSkillModifier', () => {
-    it('should calculate correct skill modifier including proficiency', () => {
-      // Athletics: Str(2) + Prof(2) = 4
-      expect(calculateSkillModifier(mockCharacter, 'Athletics')).toBe(4);
-      // Stealth: Dex(1) + Prof(2) = 3
-      expect(calculateSkillModifier(mockCharacter, 'Stealth')).toBe(3);
-      // Perception: Wis(3) + Prof(2) = 5
-      expect(calculateSkillModifier(mockCharacter, 'Perception')).toBe(5);
+    it('should return 0 and log warning for unknown skill', async () => {
+      const character: Partial<Character> = {};
+      const logger = (await import('@/lib/logger')).default;
+
+      const result = calculateSkillModifier(character as Character, 'unknown_skill');
+
+      expect(result).toBe(0);
+      expect(logger.warn).toHaveBeenCalledWith('Unknown skill: unknown_skill');
     });
 
-    it('should calculate correct skill modifier without proficiency', () => {
-      // Arcana: Int(-1) + No Prof(0) = -1
-      expect(calculateSkillModifier(mockCharacter, 'Arcana')).toBe(-1);
+    it('should return ability modifier only if not proficient', () => {
+      const character: Partial<Character> = {
+        abilityScores: {
+          dexterity: { score: 14, modifier: 2, savingThrow: false },
+        } as any,
+        skillProficiencies: [],
+      };
+      expect(calculateSkillModifier(character as Character, 'stealth')).toBe(2);
     });
 
-    it('should double proficiency for expertise', () => {
-      expect(
-        calculateSkillModifier(
-          { ...mockCharacter, expertiseProficiencies: ['Stealth'] },
-          'Stealth',
-        ),
-      ).toBe(5);
+    it('should return ability modifier + proficiency bonus if proficient', () => {
+      const character: Partial<Character> = {
+        level: 5, // prof bonus: +3
+        abilityScores: {
+          dexterity: { score: 14, modifier: 2, savingThrow: false },
+        } as any,
+        skillProficiencies: ['Stealth'],
+      };
+      expect(calculateSkillModifier(character as Character, 'stealth')).toBe(5);
     });
 
-    it('should return 0 and log warning for unknown skill', () => {
-      expect(calculateSkillModifier(mockCharacter, 'Unknown')).toBe(0);
+    it('should return ability modifier + double proficiency bonus if expertise is present', () => {
+      const character: Partial<Character> = {
+        level: 5, // prof bonus: +3
+        abilityScores: {
+          dexterity: { score: 14, modifier: 2, savingThrow: false },
+        } as any,
+        skillProficiencies: ['Stealth'],
+        expertiseProficiencies: ['Stealth'],
+      };
+      // 2 + 3 * 2 = 8
+      expect(calculateSkillModifier(character as Character, 'stealth')).toBe(8);
+    });
+
+    it('should correctly apply expertise even when using a skill alias', () => {
+      const character: Partial<Character> = {
+        level: 1, // prof bonus: +2
+        abilityScores: {
+          dexterity: { score: 16, modifier: 3, savingThrow: false },
+        } as any,
+        skillProficiencies: ['Sleight of Hand'],
+        expertiseProficiencies: ['Sleight of Hand'],
+      };
+      // Alias "sleight" should resolve to "sleight of hand" and trigger both proficiency and expertise.
+      // 3 + 2 * 2 = 7
+      expect(calculateSkillModifier(character as Character, 'sleight')).toBe(7);
     });
   });
 
   describe('calculateSaveModifier', () => {
-    it('should calculate correct save modifier', () => {
-      expect(calculateSaveModifier(mockCharacter, 'strength')).toBe(4);
-      expect(calculateSaveModifier(mockCharacter, 'intelligence')).toBe(-1);
+    it('should return ability modifier only if not proficient in save', () => {
+      const character: Partial<Character> = {
+        abilityScores: {
+          strength: { score: 14, modifier: 2, savingThrow: false },
+        } as any,
+      };
+      expect(calculateSaveModifier(character as Character, 'strength')).toBe(2);
+    });
+
+    it('should return ability modifier + proficiency bonus if proficient in save', () => {
+      const character: Partial<Character> = {
+        level: 1, // prof bonus: +2
+        abilityScores: {
+          strength: { score: 14, modifier: 2, savingThrow: true },
+        } as any,
+      };
+      expect(calculateSaveModifier(character as Character, 'strength')).toBe(4);
     });
   });
 
   describe('calculateAttackModifier', () => {
-    it('should default to Strength for unarmed/no weapon', () => {
-      // Str(2) + Prof(2) = 4
-      expect(calculateAttackModifier(mockCharacter)).toBe(4);
-      expect(calculateAttackModifier(mockCharacter, null)).toBe(4);
-    });
-
-    it('should use Strength for non-finesse melee weapons', () => {
-      const longsword = { weaponProperties: { finesse: false } } as any;
-      expect(calculateAttackModifier(mockCharacter, longsword)).toBe(4);
-    });
-
-    it('should use Dexterity for ranged weapons', () => {
-      const longbow = { range: '150/600' } as any;
-      // Dex(1) + Prof(2) = 3
-      expect(calculateAttackModifier(mockCharacter, longbow)).toBe(3);
-    });
-
-    it('should use higher of Str/Dex for finesse weapons', () => {
-      const rapier = { weaponProperties: { finesse: true } } as any;
-      // Str(2) is higher than Dex(1), so uses Str
-      expect(calculateAttackModifier(mockCharacter, rapier)).toBe(4);
-
-      const highDexChar = {
-        ...mockCharacter,
+    it('should default to strength for unarmed strikes or null weapon', () => {
+      const character: Partial<Character> = {
+        level: 1, // prof bonus: +2
         abilityScores: {
-          ...mockCharacter.abilityScores,
-          dexterity: { score: 18, modifier: 4 },
-        },
-      } as any;
-      // Dex(4) is higher than Str(2), so uses Dex
-      expect(calculateAttackModifier(highDexChar, rapier)).toBe(6); // Dex(4) + Prof(2)
+          strength: { score: 14, modifier: 2, savingThrow: false },
+          dexterity: { score: 10, modifier: 0, savingThrow: false },
+        } as any,
+      };
+      expect(calculateAttackModifier(character as Character)).toBe(4);
+      expect(calculateAttackModifier(character as Character, null)).toBe(4);
+    });
+
+    it('should use dex for ranged weapons', () => {
+      const character: Partial<Character> = {
+        level: 1, // prof bonus: +2
+        abilityScores: {
+          strength: { score: 14, modifier: 2, savingThrow: false },
+          dexterity: { score: 16, modifier: 3, savingThrow: false },
+        } as any,
+      };
+      const bow: Partial<Equipment> = {
+        range: '80/320',
+      };
+      // 3 (DEX) + 2 (Prof) = 5
+      expect(calculateAttackModifier(character as Character, bow as Equipment)).toBe(5);
+    });
+
+    it('should use strength for non-finesse melee weapons', () => {
+      const character: Partial<Character> = {
+        level: 1, // prof bonus: +2
+        abilityScores: {
+          strength: { score: 16, modifier: 3, savingThrow: false },
+          dexterity: { score: 10, modifier: 0, savingThrow: false },
+        } as any,
+      };
+      const greatsword: Partial<Equipment> = {
+        weaponProperties: { finesse: false },
+      };
+      // 3 (STR) + 2 (Prof) = 5
+      expect(calculateAttackModifier(character as Character, greatsword as Equipment)).toBe(5);
+    });
+
+    it('should use higher of strength and dexterity for finesse weapons', () => {
+      const greatDexCharacter: Partial<Character> = {
+        level: 1, // prof bonus: +2
+        abilityScores: {
+          strength: { score: 10, modifier: 0, savingThrow: false },
+          dexterity: { score: 16, modifier: 3, savingThrow: false },
+        } as any,
+      };
+      const greatStrCharacter: Partial<Character> = {
+        level: 1, // prof bonus: +2
+        abilityScores: {
+          strength: { score: 16, modifier: 3, savingThrow: false },
+          dexterity: { score: 10, modifier: 0, savingThrow: false },
+        } as any,
+      };
+      const rapier: Partial<Equipment> = {
+        weaponProperties: { finesse: true },
+      };
+
+      // DEX is higher: 3 (DEX) + 2 (Prof) = 5
+      expect(calculateAttackModifier(greatDexCharacter as Character, rapier as Equipment)).toBe(5);
+      // STR is higher: 3 (STR) + 2 (Prof) = 5
+      expect(calculateAttackModifier(greatStrCharacter as Character, rapier as Equipment)).toBe(5);
+    });
+  });
+
+  describe('calculateInitiativeModifier', () => {
+    it('should return dexterity modifier', () => {
+      const character: Partial<Character> = {
+        abilityScores: {
+          dexterity: { score: 16, modifier: 3, savingThrow: false },
+        } as any,
+      };
+      expect(calculateInitiativeModifier(character as Character)).toBe(3);
+    });
+  });
+
+  describe('generateDiceFormula', () => {
+    it('should generate correctly formatted formulas', () => {
+      expect(generateDiceFormula(20, 1, 0)).toBe('1d20');
+      expect(generateDiceFormula(20, 1, 5)).toBe('1d20+5');
+      expect(generateDiceFormula(6, 3, -2)).toBe('3d6-2');
     });
   });
 
   describe('calculateRollWithBreakdown', () => {
-    it('should handle attack roll breakdown', () => {
-      const result = calculateRollWithBreakdown(mockCharacter, 'attack', 'strength');
-      expect(result.formula).toBe('1d20+4');
-      expect(result.totalModifier).toBe(4);
-      expect(result.breakdown).toContain('STR +2');
-      expect(result.breakdown).toContain('Prof +2');
+    const character: Partial<Character> = {
+      level: 1, // prof bonus: +2
+      abilityScores: {
+        strength: { score: 14, modifier: 2, savingThrow: true },
+        dexterity: { score: 10, modifier: 0, savingThrow: false },
+        intelligence: { score: 8, modifier: -1, savingThrow: false },
+      } as any,
+      skillProficiencies: ['Sleight of Hand'],
+      expertiseProficiencies: ['Sleight of Hand'],
+      toolProficiencies: ['Thieves Tools'],
+    };
+
+    it('should calculate breakdown for attack roll', () => {
+      const calculation = calculateRollWithBreakdown(character as Character, 'attack', 'strength');
+      expect(calculation.formula).toBe('1d20+4');
+      expect(calculation.totalModifier).toBe(4);
+      expect(calculation.abilityModifier).toBe(2);
+      expect(calculation.proficiencyBonus).toBe(2);
+      expect(calculation.breakdown).toEqual(['1d20', 'STR +2', 'Prof +2']);
     });
 
-    it('should handle save roll breakdown', () => {
-      const result = calculateRollWithBreakdown(mockCharacter, 'save', 'strength');
-      expect(result.isProficient).toBe(true);
-      expect(result.formula).toBe('1d20+4');
-      expect(result.breakdown).toContain('STR +2');
-      expect(result.breakdown).toContain('Prof +2');
-
-      const resultInt = calculateRollWithBreakdown(mockCharacter, 'save', 'intelligence');
-      expect(resultInt.isProficient).toBe(false);
-      expect(resultInt.formula).toBe('1d20-1');
-      expect(resultInt.breakdown).toContain('INT -1');
-      expect(resultInt.breakdown).not.toContain('Prof +2');
+    it('should calculate breakdown for save roll', () => {
+      const calculation = calculateRollWithBreakdown(character as Character, 'save', 'strength');
+      expect(calculation.formula).toBe('1d20+4');
+      expect(calculation.totalModifier).toBe(4);
+      expect(calculation.breakdown).toEqual(['1d20', 'STR +2', 'Prof +2']);
     });
 
-    it('should handle check roll breakdown', () => {
-      const result = calculateRollWithBreakdown(mockCharacter, 'check', 'wisdom');
-      expect(result.formula).toBe('1d20+3');
-      expect(result.breakdown).toContain('WIS +3');
+    it('should throw error for save roll if ability is missing', () => {
+      expect(() => calculateRollWithBreakdown(character as Character, 'save')).toThrow(
+        'Ability required for saving throw',
+      );
     });
 
-    it('should add proficiency for a selected tool at check resolution', () => {
-      const result = calculateRollWithBreakdown(
-        mockCharacter,
+    it('should calculate breakdown for check roll without tool proficiency', () => {
+      const calculation = calculateRollWithBreakdown(character as Character, 'check', 'strength');
+      expect(calculation.formula).toBe('1d20+2');
+      expect(calculation.totalModifier).toBe(2);
+      expect(calculation.breakdown).toEqual(['1d20', 'STR +2']);
+    });
+
+    it('should calculate breakdown for check roll with tool proficiency', () => {
+      const calculation = calculateRollWithBreakdown(
+        character as Character,
         'check',
         'dexterity',
-        "Thieves' Tools",
+        'Thieves Tools',
       );
-
-      expect(result.isProficient).toBe(true);
-      expect(result.totalModifier).toBe(3);
-      expect(result.breakdown).toContain("Thieves' Tools Prof +2");
+      expect(calculation.formula).toBe('1d20+2');
+      expect(calculation.totalModifier).toBe(2);
+      expect(calculation.proficiencyBonus).toBe(2);
+      expect(calculation.breakdown).toEqual(['1d20', 'DEX +0', 'Thieves Tools Prof +2']);
     });
 
-    it('should handle skill roll breakdown', () => {
-      const result = calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'Stealth');
-      expect(result.formula).toBe('1d20+3');
-      expect(result.breakdown).toContain('DEX +1');
-      expect(result.breakdown).toContain('Prof +2');
+    it('should throw error for check roll if ability is missing', () => {
+      expect(() => calculateRollWithBreakdown(character as Character, 'check')).toThrow(
+        'Ability required for ability check',
+      );
     });
 
-    it('should throw error for save roll without ability', () => {
-      expect(() => calculateRollWithBreakdown(mockCharacter, 'save')).toThrow();
+    it('should calculate breakdown for skill roll', () => {
+      const calculation = calculateRollWithBreakdown(
+        character as Character,
+        'skill',
+        undefined,
+        'Sleight of Hand',
+      );
+      // DEX (0) + 2 (Prof) * 2 (Expertise) = 4
+      expect(calculation.formula).toBe('1d20+4');
+      expect(calculation.totalModifier).toBe(4);
+      expect(calculation.breakdown).toEqual(['1d20', 'DEX +0', 'Prof +4']);
     });
 
-    it('should throw error for check roll without ability', () => {
-      expect(() => calculateRollWithBreakdown(mockCharacter, 'check')).toThrow();
+    it('should calculate breakdown for skill roll with alias and expertise', () => {
+      const calculation = calculateRollWithBreakdown(
+        character as Character,
+        'skill',
+        undefined,
+        'sleight',
+      );
+      // Alias "sleight" should resolve and apply expertise correctly.
+      // DEX (0) + 2 (Prof) * 2 (Expertise) = 4
+      expect(calculation.formula).toBe('1d20+4');
+      expect(calculation.totalModifier).toBe(4);
+      expect(calculation.breakdown).toEqual(['1d20', 'DEX +0', 'Prof +4']);
     });
 
-    it('should throw error for skill roll without skill name', () => {
-      expect(() => calculateRollWithBreakdown(mockCharacter, 'skill')).toThrow();
+    it('should throw error for skill roll if skillName is missing', () => {
+      expect(() => calculateRollWithBreakdown(character as Character, 'skill')).toThrow(
+        'Skill name required for skill check',
+      );
     });
 
-    it('should throw error for unknown skill in breakdown', () => {
+    it('should throw error for skill roll if skill is unknown', () => {
       expect(() =>
-        calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'UnknownSkill'),
-      ).toThrow();
+        calculateRollWithBreakdown(character as Character, 'skill', undefined, 'unknown_skill'),
+      ).toThrow('Unknown skill: unknown_skill');
     });
 
-    it('should handle aliased skills (Animal Handling)', () => {
-      // "Animal" is an alias for "Animal Handling", which uses Wisdom
-      // Wisdom modifier is 3. Proficiency is 2 (but character not proficient in Animal Handling)
-      const result = calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'Animal');
-      expect(result.ability).toBe('wisdom');
-      expect(result.formula).toBe('1d20+3');
-    });
-
-    it('should handle initiative breakdown', () => {
-      const result = calculateRollWithBreakdown(mockCharacter, 'initiative');
-      expect(result.formula).toBe('1d20+1');
-      expect(result.breakdown).toContain('DEX +1');
+    it('should calculate breakdown for initiative roll', () => {
+      const calculation = calculateRollWithBreakdown(character as Character, 'initiative');
+      expect(calculation.formula).toBe('1d20');
+      expect(calculation.totalModifier).toBe(0);
+      expect(calculation.breakdown).toEqual(['1d20', 'DEX +0']);
     });
   });
 
   describe('parseAbilityName', () => {
-    it('should parse various ability name formats', () => {
-      expect(parseAbilityName('STR')).toBe('strength');
-      expect(parseAbilityName('  Dexterity  ')).toBe('dexterity');
+    it('should correctly parse standard D&D ability formats', () => {
+      expect(parseAbilityName('str')).toBe('strength');
+      expect(parseAbilityName('STR   ')).toBe('strength');
+      expect(parseAbilityName('strength')).toBe('strength');
+      expect(parseAbilityName('dex')).toBe('dexterity');
+      expect(parseAbilityName('DEX')).toBe('dexterity');
+      expect(parseAbilityName('dexterity')).toBe('dexterity');
       expect(parseAbilityName('con')).toBe('constitution');
-      expect(parseAbilityName('Invalid')).toBe(null);
+      expect(parseAbilityName('constitution')).toBe('constitution');
+      expect(parseAbilityName('int')).toBe('intelligence');
+      expect(parseAbilityName('intelligence')).toBe('intelligence');
+      expect(parseAbilityName('wis')).toBe('wisdom');
+      expect(parseAbilityName('wisdom')).toBe('wisdom');
+      expect(parseAbilityName('cha')).toBe('charisma');
+      expect(parseAbilityName('charisma')).toBe('charisma');
+    });
+
+    it('should return null for unknown strings', () => {
+      expect(parseAbilityName('invalid')).toBeNull();
     });
   });
 
   describe('getCharacterStatsForAI', () => {
-    it('should return a formatted summary', () => {
-      const summary = getCharacterStatsForAI(mockCharacter);
-      expect(summary).toContain('Level 1');
-      expect(summary).toContain('STR 14(+2)');
-      expect(summary).toContain('Proficiency Bonus: +2');
+    it('should return a detailed summary of the character stats', () => {
+      const character: Partial<Character> = {
+        level: 3,
+        race: { name: 'Elf' } as any,
+        class: { name: 'Ranger' } as any,
+        abilityScores: {
+          strength: { score: 10, modifier: 0, savingThrow: false },
+          dexterity: { score: 16, modifier: 3, savingThrow: false },
+          constitution: { score: 14, modifier: 2, savingThrow: false },
+          intelligence: { score: 8, modifier: -1, savingThrow: false },
+          wisdom: { score: 12, modifier: 1, savingThrow: false },
+          charisma: { score: 13, modifier: 1, savingThrow: false },
+        },
+      };
+
+      const result = getCharacterStatsForAI(character as Character);
+
+      expect(result).toContain('Level 3 Elf Ranger');
+      expect(result).toContain('STR 10(+0)');
+      expect(result).toContain('DEX 16(+3)');
+      expect(result).toContain('INT 8(-1)');
+      expect(result).toContain('Proficiency Bonus: +2');
+    });
+
+    it('should handle missing race and class names gracefully', () => {
+      const character: Partial<Character> = {
+        level: 1,
+        abilityScores: {
+          strength: { score: 10, modifier: 0, savingThrow: false },
+          dexterity: { score: 10, modifier: 0, savingThrow: false },
+          constitution: { score: 10, modifier: 0, savingThrow: false },
+          intelligence: { score: 10, modifier: 0, savingThrow: false },
+          wisdom: { score: 10, modifier: 0, savingThrow: false },
+          charisma: { score: 10, modifier: 0, savingThrow: false },
+        },
+      };
+
+      const result = getCharacterStatsForAI(character as Character);
+
+      expect(result).toContain('Level 1 Unknown Unknown');
+    });
+
+    it('should return warning message if abilityScores are missing', () => {
+      const character: Partial<Character> = {};
+      const result = getCharacterStatsForAI(character as Character);
+      expect(result).toBe('No ability scores available');
     });
   });
 });

@@ -38,6 +38,7 @@ export default defineConfig({
     include: [
       'src/utils/spell-validation/__tests__/utils.test.ts',
       'src/utils/__tests__/ensure-action-options.test.ts',
+      'src/utils/__tests__/characterModifiers.test.ts',
       'src/utils/multiclass/__tests__/validation.test.ts',
       'src/utils/multiclass/__tests__/proficiencies.test.ts',
       'src/services/ai/prompts/__tests__/combat-rules-prompts.test.ts',
@@ -100,6 +101,7 @@ export default defineConfig({
       include: [
         'src/utils/spell-validation/utils.ts',
         'src/utils/ensure-action-options.ts',
+        'src/utils/characterModifiers.ts',
         'src/utils/multiclass/validation.ts',
         'src/utils/multiclass/proficiencies.ts',
         'src/services/ai/prompts/combat-rules-prompts.ts',

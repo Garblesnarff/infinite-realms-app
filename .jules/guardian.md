@@ -311,3 +311,7 @@
 ## 2026-07-31 - [Spell Validation Utilities & Mock Module Types]
 **Learning:** When mocking module exports in Vitest, we can avoid `@typescript-eslint/consistent-type-imports` lint errors by importing module namespaces as types (e.g. `import type * as SpellcastingInfoModule from '...'`) and passing `typeof SpellcastingInfoModule` to `importOriginal<T>()` rather than using inline `typeof import(...)`. Additionally, testing scaling spell limits requires passing correct `spellcasting` class metadata properties to prevent level-1 fallbacks from returning empty values.
 **Action:** Always import namespace types at the top level for module types inside hoisted `vi.mock` factory parameters, and supply realistic sub-objects in character class test fixtures to satisfy D&D rule conditions.
+
+## 2026-08-01 - [Character Modifiers Alias Expertise Bug Fix & Coverage]
+**Learning:** Found that custom skill modifier calculations inside `src/utils/characterModifiers.ts` failed to correctly apply expertise multipliers if skill names were passed as aliases (e.g., "sleight" instead of "sleight of hand"). This was due to evaluating the expertise array directly against the un-normalized alias string instead of its canonical resolved counterpart.
+**Action:** Always normalize alias skill inputs using canonical lists (`SKILL_ALIASES`) before comparing against `expertiseProficiencies` or any other proficiency trackers. Created a comprehensive, 43-test suite covering 100% of pathways in `characterModifiers.ts`.
