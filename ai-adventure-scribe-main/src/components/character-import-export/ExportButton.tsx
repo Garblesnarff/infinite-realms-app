@@ -1,19 +1,7 @@
-/**
- * ExportButton Component
- *
- * Provides a button to export character data as JSON:
- * - Export button on character sheet
- * - Downloads JSON file with character data
- * - Filename format: "CharacterName_YYYY-MM-DD.json"
- * - Success toast notification
- * - Loading state during export
- */
-
 import { Download, Loader2 } from 'lucide-react';
 import React, { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import logger from '@/lib/logger';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,8 +9,15 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC } from '@/infrastructure/api/trpc-hooks';
+import logger from '@/lib/logger';
 
 interface ExportButtonProps {
   characterId: string;
@@ -33,37 +28,25 @@ interface ExportButtonProps {
   className?: string;
 }
 
-/**
- * Generate filename with current date
- */
 const generateFilename = (characterName: string): string => {
   const sanitizedName = characterName.replace(/[^a-z0-9]/gi, '_');
-  const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const date = new Date().toISOString().split('T')[0];
   return `${sanitizedName}_${date}.json`;
 };
 
-/**
- * Download JSON data as file
- */
-const downloadJSON = (data: any, filename: string) => {
+const downloadJSON = (data: unknown, filename: string): void => {
   const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
   link.click();
-
-  // Cleanup
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
 
-/**
- * ExportButton component with dropdown options
- */
 export const ExportButton: React.FC<ExportButtonProps> = ({
   characterId,
   characterName = 'Character',
@@ -76,40 +59,26 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
   const trpc = useTRPC();
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleExport = async (format: 'json' | 'pdf' = 'json') => {
+  const handleExport = async (format: 'json' | 'pdf' = 'json'): Promise<void> => {
     if (format === 'pdf') {
-      toast({
-        title: 'Coming Soon',
-        description: 'PDF export will be available in a future update.',
-      });
+      toast({ title: 'Coming Soon', description: 'PDF export will be available in a future update.' });
       return;
     }
-
     setIsExporting(true);
-
     try {
-      // Fetch character data via tRPC
       const characterData = await trpc.characters.export.query({ characterId });
-
-      if (!characterData) {
-        throw new Error('No character data received');
-      }
-
-      // Generate filename and download
+      if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
       downloadJSON(characterData, filename);
-
       toast({
         title: 'Export Successful',
         description: `Character "${characterName}" has been exported to ${filename}`,
       });
     } catch (error) {
-      // ⚡ Bolt: Replace console.error with structured logger for better performance and observability
       logger.error('Export error', { error });
       toast({
         title: 'Export Failed',
-        description:
-          error instanceof Error ? error.message : 'Failed to export character. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to export character.',
         variant: 'destructive',
       });
     } finally {
@@ -117,42 +86,55 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
     }
   };
 
+  const isIconOnly = size === 'icon' || !showLabel;
+  const buttonAriaLabel = isIconOnly ? `Export options for ${characterName}` : undefined;
+  const tooltipText = isExporting ? `Exporting ${characterName}...` : `Export options for ${characterName}`;
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant={variant} size={size} disabled={isExporting} className={className}>
-          {isExporting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-          {showLabel && <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => handleExport('json')}>
-          <Download className="mr-2 h-4 w-4" />
-          <div>
-            <div className="font-medium">Export as JSON</div>
-            <div className="text-xs text-muted-foreground">For backup or transfer</div>
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleExport('pdf')} disabled>
-          <Download className="mr-2 h-4 w-4" />
-          <div>
-            <div className="font-medium">Export as PDF</div>
-            <div className="text-xs text-muted-foreground">Coming soon</div>
-          </div>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <TooltipProvider>
+      <DropdownMenu>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant={variant}
+                size={size}
+                disabled={isExporting}
+                className={className}
+                aria-label={buttonAriaLabel}
+              >
+                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {!isIconOnly && <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>}
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{tooltipText}</p>
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => handleExport('json')}>
+            <Download className="mr-2 h-4 w-4" />
+            <div>
+              <div className="font-medium">Export as JSON</div>
+              <div className="text-xs text-muted-foreground">For backup or transfer</div>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleExport('pdf')} disabled>
+            <Download className="mr-2 h-4 w-4" />
+            <div>
+              <div className="font-medium">Export as PDF</div>
+              <div className="text-xs text-muted-foreground">Coming soon</div>
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
   );
 };
 
-/**
- * Simple export button without dropdown (just JSON)
- */
 export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> = ({
   characterId,
   characterName = 'Character',
@@ -164,32 +146,19 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
   const trpc = useTRPC();
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleExport = async () => {
+  const handleExport = async (): Promise<void> => {
     setIsExporting(true);
-
     try {
-      // Fetch character data via tRPC
       const characterData = await trpc.characters.export.query({ characterId });
-
-      if (!characterData) {
-        throw new Error('No character data received');
-      }
-
-      // Generate filename and download
+      if (!characterData) throw new Error('No character data received');
       const filename = generateFilename(characterName);
       downloadJSON(characterData, filename);
-
-      toast({
-        title: 'Export Successful',
-        description: `Character exported as ${filename}`,
-      });
+      toast({ title: 'Export Successful', description: `Character exported as ${filename}` });
     } catch (error) {
-      // ⚡ Bolt: Replace console.error with structured logger for better performance and observability
       logger.error('Export error', { error });
       toast({
         title: 'Export Failed',
-        description:
-          error instanceof Error ? error.message : 'Failed to export character. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to export character.',
         variant: 'destructive',
       });
     } finally {
@@ -197,26 +166,43 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
     }
   };
 
+  const isIconOnly = size === 'icon';
+  const buttonAriaLabel = isIconOnly ? `Export ${characterName} data as JSON` : undefined;
+  const tooltipText = isExporting ? `Exporting ${characterName}...` : `Export ${characterName} data as JSON`;
+
   return (
-    <Button
-      variant={variant}
-      size={size}
-      onClick={handleExport}
-      disabled={isExporting}
-      className={className}
-    >
-      {isExporting ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="ml-2">Exporting...</span>
-        </>
-      ) : (
-        <>
-          <Download className="h-4 w-4" />
-          <span className="ml-2">Export</span>
-        </>
-      )}
-    </Button>
+    <TooltipProvider>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <span className={isExporting ? 'cursor-not-allowed inline-block' : 'inline-block'}>
+            <Button
+              type="button"
+              variant={variant}
+              size={size}
+              onClick={handleExport}
+              disabled={isExporting}
+              className={className}
+              aria-label={buttonAriaLabel}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {!isIconOnly && <span className="ml-2">Exporting...</span>}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  {!isIconOnly && <span className="ml-2">Export</span>}
+                </>
+              )}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 
