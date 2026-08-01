@@ -284,11 +284,12 @@ async function getEntityByName(
   const client = getClient();
 
   // Use the RPC function for case-insensitive lookup
-  const { data, error } = await client.rpc('get_campaign_entity', {
+  // ⚡ Bolt: Append select(CHUNK_COLUMNS) to avoid over-fetching heavy vector embeddings (~3KB/row)
+  const { data, error } = await (client.rpc('get_campaign_entity', {
     p_campaign_id: campaignId,
     p_entity_name: name,
     p_chunk_type: chunkTypes.length === 1 ? chunkTypes[0] : null,
-  });
+  }).select(CHUNK_COLUMNS) as any);
 
   if (error) {
     // Fallback to direct query if RPC fails
@@ -363,13 +364,14 @@ export async function searchLore(
   const queryEmbedding = embeddingResponse.data[0].embedding;
 
   // Use RPC function for vector search
-  const { data, error } = await client.rpc('search_campaign_lore', {
+  // ⚡ Bolt: Append select to avoid over-fetching heavy vector embeddings (~3KB/row)
+  const { data, error } = await (client.rpc('search_campaign_lore', {
     p_campaign_id: campaignId,
     p_query_embedding: formatEmbedding(queryEmbedding),
     p_chunk_types: options?.chunkTypes ?? null,
     p_limit: limit,
     p_threshold: threshold,
-  });
+  }).select(`${CHUNK_COLUMNS}, similarity`) as any);
 
   if (error) {
     throw new Error(`Failed to search lore: ${error.message}`);

@@ -237,13 +237,14 @@ export class LoreKeeperService {
       const embedding = await this.generateEmbedding(query);
 
       // Use RPC function for vector search
-      const { data, error } = await supabase.rpc('search_campaign_lore', {
+      // ⚡ Bolt: Append select to avoid over-fetching heavy vector embeddings (~3KB/row)
+      const { data, error } = await (supabase.rpc('search_campaign_lore', {
         p_campaign_id: campaignId,
         p_query_embedding: `[${embedding.join(',')}]`,
         p_chunk_types: options?.chunkTypes || null,
         p_limit: options?.limit || 5,
         p_threshold: 0.7,
-      });
+      }).select(`${CHUNK_COLUMNS}, similarity`) as any);
 
       if (error) {
         logger.error('[LoreKeeper] Search failed:', error);

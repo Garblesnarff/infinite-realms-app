@@ -132,7 +132,9 @@ describe('Database Operations', () => {
     describe('getNPC()', () => {
       it('should return an NPC when found', async () => {
         const npcData = { id: '1', entity_name: 'Gandalf', chunk_type: 'npc_tier1' };
-        rpcStub.resolves({ data: [npcData], error: null });
+        rpcStub.returns({
+          select: sinon.stub().resolves({ data: [npcData], error: null }),
+        });
         const npc = await db.getNPC('test-campaign', 'Gandalf');
         assert.deepStrictEqual(npc?.entityName, 'Gandalf');
       });
@@ -145,7 +147,9 @@ describe('Database Operations', () => {
 
       it('should use fallback query if RPC fails', async () => {
         const npcData = { id: '1', entity_name: 'Gandalf', chunk_type: 'npc_tier1' };
-        rpcStub.resolves({data: null, error: new Error('RPC failed')});
+        rpcStub.returns({
+          select: sinon.stub().resolves({ data: null, error: new Error('RPC failed') }),
+        });
         const { single } = setupQueryBuilderMock(fromStub, npcData);
 
         const npc = await db.getNPC('test-campaign', 'Gandalf');
@@ -175,7 +179,10 @@ describe('Database Operations', () => {
     describe('searchLore()', () => {
         it('should apply custom options like limit, threshold, and chunkTypes', async () => {
             const searchData = [{ id: '1', content: 'Some lore', similarity: 0.9 }];
-            rpcStub.resolves({ data: searchData, error: null });
+            const selectStub = sinon.stub().resolves({ data: searchData, error: null });
+            rpcStub.returns({
+                select: selectStub
+            });
 
             await db.searchLore('test-campaign', 'lore query', {
                 limit: 10,
@@ -188,6 +195,7 @@ describe('Database Operations', () => {
                 p_threshold: 0.8,
                 p_chunk_types: ['location', 'npc_tier1']
             })));
+            assert(selectStub.calledWith(sinon.match('similarity')));
         });
     });
 

@@ -261,7 +261,8 @@ describe('LoreKeeperService', () => {
       });
 
       const mockData = [{ id: '1', entity_name: 'Match', similarity: 0.9 }];
-      (supabase.rpc as any).mockResolvedValue({ data: mockData, error: null });
+      const mockSelect = vi.fn().mockResolvedValue({ data: mockData, error: null });
+      (supabase.rpc as any).mockReturnValue({ select: mockSelect });
 
       const result = await service.searchLore(mockCampaignId, 'find something');
 
@@ -270,6 +271,7 @@ describe('LoreKeeperService', () => {
         p_campaign_id: mockCampaignId,
         p_query_embedding: expect.stringContaining('0.1'),
       }));
+      expect(mockSelect).toHaveBeenCalledWith(expect.stringContaining('similarity'));
       expect(result).toHaveLength(1);
       expect(result[0].similarity).toBe(0.9);
     });
@@ -277,7 +279,8 @@ describe('LoreKeeperService', () => {
     it('does not require a browser API key', async () => {
       const noKeyService = new LoreKeeperService('');
       global.fetch = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({ embedding: [0.1] }) });
-      (supabase.rpc as any).mockResolvedValue({ data: [], error: null });
+      const mockSelect = vi.fn().mockResolvedValue({ data: [], error: null });
+      (supabase.rpc as any).mockReturnValue({ select: mockSelect });
       const result = await noKeyService.searchLore(mockCampaignId, 'query');
       expect(result).toEqual([]);
       expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/ai-proxy/embeddings'), expect.anything());
@@ -302,7 +305,8 @@ describe('LoreKeeperService', () => {
         json: vi.fn().mockResolvedValue({ embedding: { values: mockEmbedding } }),
       });
 
-      (supabase.rpc as any).mockResolvedValue({ data: null, error: { message: 'rpc error' } });
+      const mockSelect = vi.fn().mockResolvedValue({ data: null, error: { message: 'rpc error' } });
+      (supabase.rpc as any).mockReturnValue({ select: mockSelect });
 
       const result = await service.searchLore(mockCampaignId, 'query');
       expect(result).toEqual([]);
