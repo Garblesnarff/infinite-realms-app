@@ -8,13 +8,16 @@ export {
   extractCharacterDetails,
   extractEnhancementVisuals,
   extractVisualPersonalityTraits,
+  buildCharacterDescriptionSegment,
+  buildCharacterConcept,
+} from './character-prompt-extractors';
+
+export {
   extractWeaponsFromClass,
   extractWeaponsFromEnhancements,
   summarizeOutfit,
   summarizeWeapons,
-  buildCharacterDescriptionSegment,
-  buildCharacterConcept,
-} from './character-prompt-extractors';
+} from './character-outfit-weapons';
 
 export const INCH_TO_CM = 2.54;
 export const POUND_TO_KG = 0.45359237;
@@ -23,7 +26,9 @@ export const isPositiveNumber = (value: Maybe<number>): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
 export const formatHeightForPrompt = (height: Maybe<number>): string | null => {
-  if (!isPositiveNumber(height)) return null;
+  if (!isPositiveNumber(height)) {
+    return null;
+  }
   const totalInches = Math.round(height);
   const feet = Math.floor(totalInches / 12);
   const remainingInches = totalInches - feet * 12;
@@ -34,7 +39,9 @@ export const formatHeightForPrompt = (height: Maybe<number>): string | null => {
 };
 
 export const formatWeightForPrompt = (weight: Maybe<number>): string | null => {
-  if (!isPositiveNumber(weight)) return null;
+  if (!isPositiveNumber(weight)) {
+    return null;
+  }
   const lbs = Math.round(weight);
   const kg = Math.round(weight * POUND_TO_KG);
   return `${lbs} lbs (${kg} kg)`;
@@ -45,13 +52,27 @@ export const buildPhysicalTraitLines = (data: CharacterPromptData): string[] => 
   const height = formatHeightForPrompt(data.height);
   const weight = formatWeightForPrompt(data.weight);
 
-  if (data.gender) lines.push(`Gender: ${data.gender}`);
-  if (data.age && data.age > 0) lines.push(`Age: ${data.age} years old`);
-  if (height) lines.push(`Height: ${height}`);
-  if (weight) lines.push(`Weight: ${weight}`);
-  if (data.eyes?.trim()) lines.push(`Eye Color: ${data.eyes.trim()}`);
-  if (data.skin?.trim()) lines.push(`Skin Tone: ${data.skin.trim()}`);
-  if (data.hair?.trim()) lines.push(`Hair: ${data.hair.trim()}`);
+  if (data.gender) {
+    lines.push(`Gender: ${data.gender}`);
+  }
+  if (data.age && data.age > 0) {
+    lines.push(`Age: ${data.age} years old`);
+  }
+  if (height) {
+    lines.push(`Height: ${height}`);
+  }
+  if (weight) {
+    lines.push(`Weight: ${weight}`);
+  }
+  if (data.eyes?.trim()) {
+    lines.push(`Eye Color: ${data.eyes.trim()}`);
+  }
+  if (data.skin?.trim()) {
+    lines.push(`Skin Tone: ${data.skin.trim()}`);
+  }
+  if (data.hair?.trim()) {
+    lines.push(`Hair: ${data.hair.trim()}`);
+  }
   return lines;
 };
 
@@ -60,7 +81,9 @@ export const appendPhysicalTraitsDescriptionPrompt = (
   data: CharacterPromptData,
 ): void => {
   const lines = buildPhysicalTraitLines(data);
-  if (lines.length === 0) return;
+  if (lines.length === 0) {
+    return;
+  }
 
   parts.push('\nPhysical Traits (MANDATORY):');
   lines.forEach((line) => parts.push(`- ${line}`));
@@ -74,7 +97,9 @@ export const appendPhysicalTraitsImagePrompt = (
   data: CharacterPromptData,
 ): void => {
   const lines = buildPhysicalTraitLines(data);
-  if (lines.length === 0) return;
+  if (lines.length === 0) {
+    return;
+  }
 
   parts.push(
     `exact physical traits: ${lines.join('; ')}. strictly follow these measurements and colors without deviation.`,
@@ -87,11 +112,14 @@ export const sanitize = (value: Maybe<string>): string | undefined => {
 };
 
 export const listFrom = (values: Maybe<string[] | string>): string[] => {
-  if (!values) return [];
-  if (Array.isArray(values))
+  if (!values) {
+    return [];
+  }
+  if (Array.isArray(values)) {
     return values
       .filter((item) => typeof item === 'string' && item.trim())
       .map((item) => item.trim());
+  }
   return values
     .split(/[;,]/)
     .map((item) => item.trim())

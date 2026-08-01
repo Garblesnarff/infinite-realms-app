@@ -1,4 +1,10 @@
 import {
+  extractWeaponsFromClass,
+  extractWeaponsFromEnhancements,
+  summarizeOutfit,
+  summarizeWeapons,
+} from './character-outfit-weapons';
+import {
   buildPhysicalTraitLines,
   getClassPrompt,
   getRacePrompt,
@@ -27,31 +33,73 @@ export const extractCharacterDetails = (characterData: CharacterPromptData): Ext
   if (characterData.appearance) {
     const appearance = characterData.appearance.toLowerCase();
 
-    if (appearance.includes('tall')) details.physicalFeatures.push('tall stature');
-    if (appearance.includes('short')) details.physicalFeatures.push('short stature');
-    if (appearance.includes('muscular')) details.physicalFeatures.push('muscular build');
-    if (appearance.includes('lean')) details.physicalFeatures.push('lean build');
-    if (appearance.includes('stocky')) details.physicalFeatures.push('stocky build');
+    if (appearance.includes('tall')) {
+      details.physicalFeatures.push('tall stature');
+    }
+    if (appearance.includes('short')) {
+      details.physicalFeatures.push('short stature');
+    }
+    if (appearance.includes('muscular')) {
+      details.physicalFeatures.push('muscular build');
+    }
+    if (appearance.includes('lean')) {
+      details.physicalFeatures.push('lean build');
+    }
+    if (appearance.includes('stocky')) {
+      details.physicalFeatures.push('stocky build');
+    }
 
-    if (appearance.includes('brown hair')) details.physicalFeatures.push('brown hair');
-    if (appearance.includes('black hair')) details.physicalFeatures.push('black hair');
-    if (appearance.includes('blonde hair')) details.physicalFeatures.push('blonde hair');
-    if (appearance.includes('red hair')) details.physicalFeatures.push('red hair');
-    if (appearance.includes('white hair')) details.physicalFeatures.push('white hair');
-    if (appearance.includes('braid')) details.physicalFeatures.push('braided hair');
+    if (appearance.includes('brown hair')) {
+      details.physicalFeatures.push('brown hair');
+    }
+    if (appearance.includes('black hair')) {
+      details.physicalFeatures.push('black hair');
+    }
+    if (appearance.includes('blonde hair')) {
+      details.physicalFeatures.push('blonde hair');
+    }
+    if (appearance.includes('red hair')) {
+      details.physicalFeatures.push('red hair');
+    }
+    if (appearance.includes('white hair')) {
+      details.physicalFeatures.push('white hair');
+    }
+    if (appearance.includes('braid')) {
+      details.physicalFeatures.push('braided hair');
+    }
 
-    if (appearance.includes('blue eyes')) details.physicalFeatures.push('blue eyes');
-    if (appearance.includes('green eyes')) details.physicalFeatures.push('green eyes');
-    if (appearance.includes('brown eyes')) details.physicalFeatures.push('brown eyes');
-    if (appearance.includes('piercing eyes')) details.physicalFeatures.push('piercing gaze');
+    if (appearance.includes('blue eyes')) {
+      details.physicalFeatures.push('blue eyes');
+    }
+    if (appearance.includes('green eyes')) {
+      details.physicalFeatures.push('green eyes');
+    }
+    if (appearance.includes('brown eyes')) {
+      details.physicalFeatures.push('brown eyes');
+    }
+    if (appearance.includes('piercing eyes')) {
+      details.physicalFeatures.push('piercing gaze');
+    }
 
-    if (appearance.includes('scar')) details.distinguishingMarks.push('battle scars');
-    if (appearance.includes('tattoo')) details.distinguishingMarks.push('tattoos');
+    if (appearance.includes('scar')) {
+      details.distinguishingMarks.push('battle scars');
+    }
+    if (appearance.includes('tattoo')) {
+      details.distinguishingMarks.push('tattoos');
+    }
 
-    if (appearance.includes('leather armor')) details.equipment.push('leather armor');
-    if (appearance.includes('plate armor')) details.equipment.push('plate armor');
-    if (appearance.includes('chainmail')) details.equipment.push('chainmail');
-    if (appearance.includes('surcoat')) details.equipment.push('surcoat');
+    if (appearance.includes('leather armor')) {
+      details.equipment.push('leather armor');
+    }
+    if (appearance.includes('plate armor')) {
+      details.equipment.push('plate armor');
+    }
+    if (appearance.includes('chainmail')) {
+      details.equipment.push('chainmail');
+    }
+    if (appearance.includes('surcoat')) {
+      details.equipment.push('surcoat');
+    }
   }
 
   const traits = buildPhysicalTraitLines(characterData);
@@ -71,154 +119,94 @@ export const extractEnhancementVisuals = (
       : String(selection.value);
     const combined = `${value} ${selection.customValue || ''}`.toLowerCase();
 
-    if (combined.includes('scar')) visualElements.push('distinctive scars');
-    if (combined.includes('tattoo')) visualElements.push('meaningful tattoos');
-    if (combined.includes('piercing')) visualElements.push('piercings');
-    if (combined.includes('jewelry') || combined.includes('ring') || combined.includes('necklace'))
+    if (combined.includes('scar')) {
+      visualElements.push('distinctive scars');
+    }
+    if (combined.includes('tattoo')) {
+      visualElements.push('meaningful tattoos');
+    }
+    if (combined.includes('piercing')) {
+      visualElements.push('piercings');
+    }
+    if (combined.includes('jewelry') || combined.includes('ring') || combined.includes('necklace')) {
       visualElements.push('distinctive jewelry');
+    }
     if (
       combined.includes('weapon') ||
       combined.includes('sword') ||
       combined.includes('axe') ||
       combined.includes('bow')
-    )
+    ) {
       visualElements.push('special weapon');
-    if (combined.includes('armor') || combined.includes('shield'))
+    }
+    if (combined.includes('armor') || combined.includes('shield')) {
       visualElements.push('unique armor');
-    if (combined.includes('cloak') || combined.includes('cape') || combined.includes('robe'))
+    }
+    if (combined.includes('cloak') || combined.includes('cape') || combined.includes('robe')) {
       visualElements.push('distinctive clothing');
-    if (combined.includes('mark') || combined.includes('brand') || combined.includes('symbol'))
+    }
+    if (combined.includes('mark') || combined.includes('brand') || combined.includes('symbol')) {
       visualElements.push('mystical markings');
-    if (combined.includes('aura') || combined.includes('glow') || combined.includes('magic'))
+    }
+    if (combined.includes('aura') || combined.includes('glow') || combined.includes('magic')) {
       visualElements.push('magical aura');
-    if (combined.includes('eye') || combined.includes('gaze')) visualElements.push('striking eyes');
-    if (combined.includes('hair') || combined.includes('beard'))
+    }
+    if (combined.includes('eye') || combined.includes('gaze')) {
+      visualElements.push('striking eyes');
+    }
+    if (combined.includes('hair') || combined.includes('beard')) {
       visualElements.push('distinctive hair');
-    if (combined.includes('posture') || combined.includes('stance'))
+    }
+    if (combined.includes('posture') || combined.includes('stance')) {
       visualElements.push('unique posture');
-    if (combined.includes('familiar') || combined.includes('companion') || combined.includes('pet'))
+    }
+    if (combined.includes('familiar') || combined.includes('companion') || combined.includes('pet')) {
       visualElements.push('animal companion');
+    }
   });
 
   return [...new Set(visualElements)];
 };
 
 export const extractVisualPersonalityTraits = (personalityText: Maybe<string>): string[] => {
-  if (!personalityText) return [];
+  if (!personalityText) {
+    return [];
+  }
   const notes = personalityText.toLowerCase();
   const visualTraits: string[] = [];
 
-  if (notes.includes('tourettes') || notes.includes('tics'))
+  if (notes.includes('tourettes') || notes.includes('tics')) {
     visualTraits.push('subtle facial tics');
-  if (notes.includes('fidgety') || notes.includes('restless')) visualTraits.push('fidgety posture');
-  if (notes.includes('anxious') || notes.includes('nervous'))
+  }
+  if (notes.includes('fidgety') || notes.includes('restless')) {
+    visualTraits.push('fidgety posture');
+  }
+  if (notes.includes('anxious') || notes.includes('nervous')) {
     visualTraits.push('anxious expression');
+  }
 
-  if (notes.includes('confident') || notes.includes('bold')) visualTraits.push('confident stance');
-  if (notes.includes('proud') || notes.includes('arrogant')) visualTraits.push('proud bearing');
+  if (notes.includes('confident') || notes.includes('bold')) {
+    visualTraits.push('confident stance');
+  }
+  if (notes.includes('proud') || notes.includes('arrogant')) {
+    visualTraits.push('proud bearing');
+  }
 
-  if (notes.includes('shy') || notes.includes('timid')) visualTraits.push('shy demeanor');
-  if (notes.includes('friendly') || notes.includes('warm')) visualTraits.push('warm expression');
+  if (notes.includes('shy') || notes.includes('timid')) {
+    visualTraits.push('shy demeanor');
+  }
+  if (notes.includes('friendly') || notes.includes('warm')) {
+    visualTraits.push('warm expression');
+  }
 
-  if (notes.includes('scar')) visualTraits.push('visible scars');
-  if (notes.includes('tattoo')) visualTraits.push('tattoos');
+  if (notes.includes('scar')) {
+    visualTraits.push('visible scars');
+  }
+  if (notes.includes('tattoo')) {
+    visualTraits.push('tattoos');
+  }
 
   return visualTraits;
-};
-
-export const extractWeaponsFromClass = (characterClass: string): string[] => {
-  const classWeaponsMap: Record<string, string[]> = {
-    barbarian: ['greataxe', 'battleaxe'],
-    fighter: ['longsword', 'shield'],
-    paladin: ['longsword', 'mace', 'shield'],
-    ranger: ['longbow', 'shortsword'],
-    rogue: ['rapier', 'dagger'],
-    bard: ['rapier', 'dagger'],
-    cleric: ['mace', 'shield'],
-    druid: ['quarterstaff', 'scimitar'],
-    monk: ['quarterstaff', 'unarmed strikes'],
-    sorcerer: ['light crossbow', 'dagger'],
-    warlock: ['light crossbow', 'eldritch blast'],
-    wizard: ['quarterstaff', 'dagger'],
-    artificer: ['hand crossbow', 'simple weapon'],
-    'blood hunter': ['greatsword', 'hand crossbow'],
-  };
-
-  const weapons = classWeaponsMap[characterClass.toLowerCase()] || ['appropriate weapons'];
-  return weapons;
-};
-
-export const extractWeaponsFromEnhancements = (
-  enhancementSelections: EnhancementSelection[],
-): string[] => {
-  const weapons: string[] = [];
-
-  enhancementSelections.forEach((selection) => {
-    const value = Array.isArray(selection.value)
-      ? selection.value.join(' ')
-      : String(selection.value);
-    const combined = `${value} ${selection.customValue || ''}`.toLowerCase();
-
-    if (combined.includes('sword') || combined.includes('blade')) weapons.push('sword');
-    if (combined.includes('axe')) weapons.push('axe');
-    if (combined.includes('bow') || combined.includes('arrow')) weapons.push('bow');
-    if (combined.includes('dagger') || combined.includes('knife')) weapons.push('dagger');
-    if (combined.includes('mace') || combined.includes('hammer')) weapons.push('mace');
-    if (combined.includes('staff') || combined.includes('quarterstaff'))
-      weapons.push('quarterstaff');
-    if (combined.includes('crossbow')) weapons.push('crossbow');
-    if (combined.includes('spear') || combined.includes('lance')) weapons.push('spear');
-  });
-
-  return [...new Set(weapons)];
-};
-
-export const summarizeOutfit = (outfitParts: string[]): string => {
-  if (outfitParts.length === 0) return '';
-
-  const armorTypes = outfitParts.filter(
-    (part) =>
-      part.includes('armor') ||
-      part.includes('chainmail') ||
-      part.includes('plate') ||
-      part.includes('leather'),
-  );
-  const clothingTypes = outfitParts.filter(
-    (part) =>
-      part.includes('robe') ||
-      part.includes('cloak') ||
-      part.includes('vestments') ||
-      part.includes('clothing'),
-  );
-  const accessories = outfitParts.filter(
-    (part) =>
-      part.includes('symbol') ||
-      part.includes('focus') ||
-      part.includes('instrument') ||
-      part.includes('book'),
-  );
-
-  const summaryParts: string[] = [];
-
-  if (armorTypes.length > 0) summaryParts.push(armorTypes[0].split(' with ')[0]);
-  if (clothingTypes.length > 0) summaryParts.push(clothingTypes[0]);
-  if (accessories.length > 0) summaryParts.push(accessories[0]);
-
-  return summaryParts.length > 0 ? `wearing ${summaryParts.join(' and ')}` : '';
-};
-
-export const summarizeWeapons = (weaponParts: string[]): string => {
-  if (weaponParts.length === 0) return '';
-
-  const primaryWeapons = weaponParts.filter(
-    (w) => w.includes('sword') || w.includes('axe') || w.includes('staff') || w.includes('bow'),
-  );
-  const summary =
-    primaryWeapons.length > 0
-      ? `armed with ${primaryWeapons.join(' and ')}`
-      : `armed with ${weaponParts[0]}`;
-
-  return summary;
 };
 
 export const buildCharacterDescriptionSegment = (
@@ -262,7 +250,9 @@ export const buildCharacterDescriptionSegment = (
 
   if (characterData.enhancementSelections && characterData.enhancementSelections.length > 0) {
     const enhancementVisuals = extractEnhancementVisuals(characterData.enhancementSelections);
-    if (enhancementVisuals.length > 0) descParts.push(enhancementVisuals.join(', '));
+    if (enhancementVisuals.length > 0) {
+      descParts.push(enhancementVisuals.join(', '));
+    }
   }
 
   if (characterData.enhancementEffects?.equipment?.length) {
@@ -317,7 +307,9 @@ export const buildCharacterConcept = (
     outfitParts.push(...characterData.enhancementEffects.equipment);
   }
   const outfitSummary = summarizeOutfit(outfitParts);
-  if (outfitSummary) conceptParts.push(outfitSummary);
+  if (outfitSummary) {
+    conceptParts.push(outfitSummary);
+  }
 
   const weaponParts: string[] = [];
   if (characterData.class) {
@@ -327,14 +319,20 @@ export const buildCharacterConcept = (
     weaponParts.push(...extractWeaponsFromEnhancements(characterData.enhancementSelections));
   }
   const weaponSummary = summarizeWeapons(weaponParts);
-  if (weaponSummary) conceptParts.push(weaponSummary);
+  if (weaponSummary) {
+    conceptParts.push(weaponSummary);
+  }
 
   const personalityVisuals = extractVisualPersonalityTraits(
     characterData.personality_traits || characterData.personality_notes,
   );
-  if (personalityVisuals.length > 0) conceptParts.push(...personalityVisuals);
+  if (personalityVisuals.length > 0) {
+    conceptParts.push(...personalityVisuals);
+  }
 
-  if (extracted.distinguishingMarks.length > 0) conceptParts.push(...extracted.distinguishingMarks);
+  if (extracted.distinguishingMarks.length > 0) {
+    conceptParts.push(...extracted.distinguishingMarks);
+  }
 
   const fullConcept = conceptParts.join(', ');
   return `${fullConcept}, rendered in ${theme} theme, professional concept art style`;
