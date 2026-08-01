@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
@@ -32,10 +32,10 @@ export const useNPCRollQueue = (): {
     }
   }, [currentRoll, queue]);
 
-  return {
+  return useMemo(() => ({
     currentRoll,
     addRolls,
     dismissCurrent,
     queueLength: queue.length,
-  };
+  }), [currentRoll, addRolls, dismissCurrent, queue.length]);
 };

@@ -105,4 +105,13 @@ describe('useNPCRollQueue', () => {
     expect(result.current.addRolls).toBe(initialAddRolls);
     expect(result.current.dismissCurrent).toBe(initialDismissCurrent);
   });
+
+  it('maintains referential stability for the returned object', () => {
+    const { result, rerender } = renderHook(() => useNPCRollQueue());
+    const initialRef = result.current;
+
+    rerender();
+
+    expect(result.current).toBe(initialRef);
+  });
 });

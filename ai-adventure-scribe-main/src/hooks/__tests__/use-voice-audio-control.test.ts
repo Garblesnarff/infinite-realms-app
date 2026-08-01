@@ -365,4 +365,13 @@ describe('useVoiceAudioControl', () => {
     expect(audio.volume).toBe(1);
     expect(window.localStorage.getItem('progressive-voice-muted')).toBe('0');
   });
+
+  it('should maintain referential stability for the returned object', () => {
+    const { result, rerender } = renderHook(() => useVoiceAudioControl());
+    const initialRef = result.current;
+
+    rerender();
+
+    expect(result.current).toBe(initialRef);
+  });
 });

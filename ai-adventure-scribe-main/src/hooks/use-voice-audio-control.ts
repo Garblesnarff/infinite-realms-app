@@ -216,7 +216,7 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
     }
   }, [isMuted, volume, setIsMuted]);
 
-  return {
+  return React.useMemo(() => ({
     volume,
     isMuted,
     currentAudio,
@@ -227,5 +227,16 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
     stopPlayback,
     handleSetVolume,
     toggleMute,
-  };
+  }), [
+    volume,
+    isMuted,
+    currentAudio,
+    initializeAudioContext,
+    playAudioSegment,
+    pausePlayback,
+    resumePlayback,
+    stopPlayback,
+    handleSetVolume,
+    toggleMute,
+  ]);
 };
