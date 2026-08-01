@@ -442,7 +442,6 @@ export default tseslint.config(
       'server-bun/src/services/combat/hp-mechanics.ts',
       'server-bun/src/types/combat.ts',
       'src/utils/downtimeActivities.ts',
-      'src/utils/characterModifiers.ts',
       'src/utils/conditionEffects.ts',
       'src/utils/condition-definitions.ts',
       'src/utils/multiclassing.ts',
