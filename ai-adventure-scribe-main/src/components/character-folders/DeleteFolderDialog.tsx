@@ -81,21 +81,18 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <TooltipProvider>
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Cancel and keep folder</p>
-              </TooltipContent>
-            </Tooltip>
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <AlertDialogAction
                   onClick={handleDelete}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  aria-label={`Confirm deleting ${folderName} folder`}
+                  aria-label={
+                    deleteMutation.isPending
+                      ? 'Deleting...'
+                      : `Delete Folder - Confirm deleting ${folderName} folder`
+                  }
                 >
                   {deleteMutation.isPending ? 'Deleting...' : 'Delete Folder'}
                 </AlertDialogAction>

@@ -3,6 +3,7 @@ import React from 'react';
 import { expect, test, vi } from 'vitest';
 
 import { CreateFolderDialog } from '../CreateFolderDialog';
+import { DeleteFolderDialog } from '../DeleteFolderDialog';
 import { EditFolderDialog } from '../EditFolderDialog';
 
 // Mock TRPC and other hooks
@@ -12,6 +13,7 @@ vi.mock('@/infrastructure/api/trpc-hooks', () => ({
       list: { useQuery: () => ({ data: [] }) },
       create: { useMutation: () => ({ isPending: false }) },
       update: { useMutation: () => ({ isPending: false }) },
+      delete: { useMutation: () => ({ isPending: false }) },
     },
   }),
   useTRPCUtils: () => ({
@@ -109,4 +111,22 @@ test('EditFolderDialog has accessible Cancel and Update Folder buttons with tool
   const updateButton = screen.getByRole('button', { name: /update folder/i });
   expect(updateButton).toBeDefined();
   expect(updateButton.getAttribute('aria-label')).toBe('Update Folder - My Folder');
+});
+
+test('DeleteFolderDialog has accessible Cancel and Delete Folder buttons with WCAG-compliant attributes', () => {
+  render(
+    <DeleteFolderDialog
+      open={true}
+      onOpenChange={() => {}}
+      folderId="test-folder-id"
+      folderName="NPCs"
+    />,
+  );
+
+  const cancelButton = screen.getByRole('button', { name: /cancel/i });
+  expect(cancelButton).toBeDefined();
+
+  const deleteButton = screen.getByRole('button', { name: /delete folder/i });
+  expect(deleteButton).toBeDefined();
+  expect(deleteButton.getAttribute('aria-label')).toBe('Delete Folder - Confirm deleting NPCs folder');
 });
