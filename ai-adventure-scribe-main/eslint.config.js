@@ -562,6 +562,7 @@ export default tseslint.config(
       'src/components/game/__tests__/NPCRollDisplay.test.tsx',
       'src/components/game/voice/DMMessageVoiceControls.tsx',
       'src/components/game/voice/__tests__/DMMessageVoiceControls.test.tsx',
+      'src/hooks/__tests__/use-drawing-tool.test.tsx',
       'src/contexts/character/character-updater.ts',
       'src/services/world-builders/npc-generator.ts',
       'src/services/world-builders/__tests__/npc-generator.test.ts',

@@ -15,7 +15,7 @@
  * @module hooks/use-drawing-tool
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import { useDrawingPersistence } from './drawing/use-drawing-persistence';
 import { useDrawingToolKeyboardShortcuts } from './drawing/use-drawing-tool-keyboard-shortcuts';
@@ -131,9 +131,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   // Tool Selection
   // ===========================
 
-  const setActiveTool = useCallback((tool: DrawingType | null) => {
-    setState((prev) => ({ ...prev, activeTool: tool, currentDrawing: null }));
-  }, []);
+  const setActiveTool = useCallback((tool: DrawingType | null) => setState((p) => ({ ...p, activeTool: tool, currentDrawing: null })), []);
 
   // ===========================
   // Drawing Management
@@ -142,21 +140,10 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   const startDrawing = useCallback(
     (point: Point2D) => {
       const { activeTool, strokeColor, strokeWidth, fillColor, fillOpacity, fillEnabled } = state;
-
       if (!activeTool) return;
 
-      const stroke: StrokeConfig = {
-        width: strokeWidth,
-        color: strokeColor,
-        alpha: 1.0,
-        style: 'solid',
-      };
-
-      const fill: FillConfig = {
-        type: fillEnabled ? FillType.SOLID : FillType.NONE,
-        color: fillColor,
-        alpha: fillOpacity,
-      };
+      const stroke: StrokeConfig = { width: strokeWidth, color: strokeColor, alpha: 1.0, style: 'solid' };
+      const fill: FillConfig = { type: fillEnabled ? FillType.SOLID : FillType.NONE, color: fillColor, alpha: fillOpacity };
 
       const newDrawing: Partial<SceneDrawing> = {
         sceneId,
@@ -173,80 +160,45 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
         gmOnly: false,
       };
 
-      setState((prev) => ({ ...prev, currentDrawing: newDrawing }));
+      setState((p) => ({ ...p, currentDrawing: newDrawing }));
     },
     [state, sceneId, userId],
   );
 
   const updateDrawing = useCallback((data: Partial<SceneDrawing>) => {
-    setState((prev) => ({
-      ...prev,
-      currentDrawing: prev.currentDrawing ? { ...prev.currentDrawing, ...data } : null,
-    }));
+    setState((p) => ({ ...p, currentDrawing: p.currentDrawing ? { ...p.currentDrawing, ...data } : null }));
   }, []);
 
   const finishDrawing = useCallback(async () => {
     const { currentDrawing } = state;
-
     if (!currentDrawing) return;
 
     try {
       const savedDrawing = await saveDrawing(currentDrawing);
-
       if (savedDrawing) {
         recordDrawing(savedDrawing);
-
-        if (onDrawingCreated) {
-          onDrawingCreated(savedDrawing);
-        }
+        if (onDrawingCreated) onDrawingCreated(savedDrawing);
       }
-
-      // Clear current drawing
-      setState((prev) => ({ ...prev, currentDrawing: null }));
+      setState((p) => ({ ...p, currentDrawing: null }));
     } catch (error) {
       logger.error('Failed to finish drawing', { error });
     }
   }, [state, onDrawingCreated, saveDrawing, recordDrawing]);
 
-  const cancelDrawing = useCallback(() => {
-    setState((prev) => ({ ...prev, currentDrawing: null }));
-  }, []);
+  const cancelDrawing = useCallback(() => setState((p) => ({ ...p, currentDrawing: null })), []);
 
   // ===========================
   // Settings
   // ===========================
 
-  const setStrokeColor = useCallback((color: string) => {
-    setState((prev) => ({ ...prev, strokeColor: color }));
-  }, []);
-
-  const setStrokeWidth = useCallback((width: number) => {
-    setState((prev) => ({ ...prev, strokeWidth: width }));
-  }, []);
-
-  const setFillColor = useCallback((color: string) => {
-    setState((prev) => ({ ...prev, fillColor: color }));
-  }, []);
-
-  const setFillOpacity = useCallback((opacity: number) => {
-    setState((prev) => ({ ...prev, fillOpacity: opacity }));
-  }, []);
-
-  const setFillEnabled = useCallback((enabled: boolean) => {
-    setState((prev) => ({ ...prev, fillEnabled: enabled }));
-  }, []);
-
-  const setFontSize = useCallback((size: 'small' | 'medium' | 'large') => {
-    setState((prev) => ({ ...prev, fontSize: size }));
-  }, []);
-
-  const setTextColor = useCallback((color: string) => {
-    setState((prev) => ({ ...prev, textColor: color }));
-  }, []);
-
-  const setSelectedLayer = useCallback((layer: string) => {
-    setState((prev) => ({ ...prev, selectedLayer: layer }));
-  }, []);
+  const setStrokeColor = useCallback((color: string) => setState((p) => ({ ...p, strokeColor: color })), []);
+  const setStrokeWidth = useCallback((width: number) => setState((p) => ({ ...p, strokeWidth: width })), []);
+  const setFillColor = useCallback((color: string) => setState((p) => ({ ...p, fillColor: color })), []);
+  const setFillOpacity = useCallback((opacity: number) => setState((p) => ({ ...p, fillOpacity: opacity })), []);
+  const setFillEnabled = useCallback((enabled: boolean) => setState((p) => ({ ...p, fillEnabled: enabled })), []);
+  const setFontSize = useCallback((size: 'small' | 'medium' | 'large') => setState((p) => ({ ...p, fontSize: size })), []);
+  const setTextColor = useCallback((color: string) => setState((p) => ({ ...p, textColor: color })), []);
+  const setSelectedLayer = useCallback((layer: string) => setState((p) => ({ ...p, selectedLayer: layer })), []);
 
   // ===========================
   // Keyboard Shortcuts
@@ -260,30 +212,59 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   });
 
   // ===========================
-  // Return Values
+  // Return Values & Memoization
   // ===========================
 
-  return {
-    state,
-    setActiveTool,
-    startDrawing,
-    updateDrawing,
-    finishDrawing,
-    cancelDrawing,
-    setStrokeColor,
-    setStrokeWidth,
-    setFillColor,
-    setFillOpacity,
-    setFillEnabled,
-    setFontSize,
-    setTextColor,
-    setSelectedLayer,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-    saveDrawing,
-    deleteDrawing,
-    isDrawing: state.currentDrawing !== null,
-  };
+  // ⚡ Bolt: Memoize the returned object to ensure reference and callback stability.
+  // This avoids redundant canvas component re-renders during active gameplay drawing actions.
+  const isDrawing = state.currentDrawing !== null;
+
+  return useMemo(
+    () => ({
+      state,
+      setActiveTool,
+      startDrawing,
+      updateDrawing,
+      finishDrawing,
+      cancelDrawing,
+      setStrokeColor,
+      setStrokeWidth,
+      setFillColor,
+      setFillOpacity,
+      setFillEnabled,
+      setFontSize,
+      setTextColor,
+      setSelectedLayer,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      saveDrawing,
+      deleteDrawing,
+      isDrawing,
+    }),
+    [
+      state,
+      setActiveTool,
+      startDrawing,
+      updateDrawing,
+      finishDrawing,
+      cancelDrawing,
+      setStrokeColor,
+      setStrokeWidth,
+      setFillColor,
+      setFillOpacity,
+      setFillEnabled,
+      setFontSize,
+      setTextColor,
+      setSelectedLayer,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      saveDrawing,
+      deleteDrawing,
+      isDrawing,
+    ],
+  );
 }

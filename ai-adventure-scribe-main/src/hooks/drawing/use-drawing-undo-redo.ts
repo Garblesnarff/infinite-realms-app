@@ -4,7 +4,7 @@
  * @module hooks/drawing/use-drawing-undo-redo
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import type { SceneDrawing } from '@/types/drawing';
 
@@ -71,11 +71,19 @@ export function useDrawingUndoRedo({
     }
   }, [redoStack, saveDrawing]);
 
-  return {
-    recordDrawing,
-    undo,
-    redo,
-    canUndo: undoStack.length > 0,
-    canRedo: redoStack.length > 0,
-  };
+  // ⚡ Bolt: Wrap the return value in useMemo to guarantee referential stability
+  // across render cycles and avoid downstream Virtual DOM reconciliations.
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+
+  return useMemo(
+    () => ({
+      recordDrawing,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+    }),
+    [recordDrawing, undo, redo, canUndo, canRedo],
+  );
 }

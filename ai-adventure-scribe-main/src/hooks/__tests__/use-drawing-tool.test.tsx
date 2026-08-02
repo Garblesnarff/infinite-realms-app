@@ -306,4 +306,40 @@ describe('useDrawingTool', () => {
     await result.current.deleteDrawing('id');
     // Just verifying it doesn't crash
   });
+
+  it('should maintain referential stability on identical renders', () => {
+    const { result, rerender } = renderHook(
+      ({ sId, uId }) => useDrawingTool({ sceneId: sId, userId: uId }),
+      { initialProps: { sId: sceneId, uId: userId } }
+    );
+
+    const firstReturn = result.current;
+
+    // Trigger a rerender with identical parameters
+    rerender({ sId: sceneId, uId: userId });
+
+    const secondReturn = result.current;
+
+    // The root returned object should be referentially stable
+    expect(firstReturn).toBe(secondReturn);
+
+    // Callbacks must be referentially stable
+    expect(firstReturn.setActiveTool).toBe(secondReturn.setActiveTool);
+    expect(firstReturn.startDrawing).toBe(secondReturn.startDrawing);
+    expect(firstReturn.updateDrawing).toBe(secondReturn.updateDrawing);
+    expect(firstReturn.finishDrawing).toBe(secondReturn.finishDrawing);
+    expect(firstReturn.cancelDrawing).toBe(secondReturn.cancelDrawing);
+    expect(firstReturn.setStrokeColor).toBe(secondReturn.setStrokeColor);
+    expect(firstReturn.setStrokeWidth).toBe(secondReturn.setStrokeWidth);
+    expect(firstReturn.setFillColor).toBe(secondReturn.setFillColor);
+    expect(firstReturn.setFillOpacity).toBe(secondReturn.setFillOpacity);
+    expect(firstReturn.setFillEnabled).toBe(secondReturn.setFillEnabled);
+    expect(firstReturn.setFontSize).toBe(secondReturn.setFontSize);
+    expect(firstReturn.setTextColor).toBe(secondReturn.setTextColor);
+    expect(firstReturn.setSelectedLayer).toBe(secondReturn.setSelectedLayer);
+    expect(firstReturn.undo).toBe(secondReturn.undo);
+    expect(firstReturn.redo).toBe(secondReturn.redo);
+    expect(firstReturn.saveDrawing).toBe(secondReturn.saveDrawing);
+    expect(firstReturn.deleteDrawing).toBe(secondReturn.deleteDrawing);
+  });
 });

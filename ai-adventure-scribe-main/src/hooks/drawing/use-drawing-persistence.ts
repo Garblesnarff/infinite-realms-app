@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import type { SceneDrawing, CreateDrawingData } from '@/types/drawing';
 
@@ -78,8 +78,13 @@ export function useDrawingPersistence(options: UseDrawingPersistenceOptions) {
     [deleteDrawingMutation, onDrawingDeleted],
   );
 
-  return {
-    saveDrawing,
-    deleteDrawing,
-  };
+  // ⚡ Bolt: Wrap the return value in useMemo to guarantee referential stability
+  // across render cycles and avoid downstream Virtual DOM reconciliations.
+  return useMemo(
+    () => ({
+      saveDrawing,
+      deleteDrawing,
+    }),
+    [saveDrawing, deleteDrawing],
+  );
 }
