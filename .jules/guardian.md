@@ -315,3 +315,7 @@
 ## 2026-08-01 - [Character Modifiers Alias Expertise Bug Fix & Coverage]
 **Learning:** Found that custom skill modifier calculations inside `src/utils/characterModifiers.ts` failed to correctly apply expertise multipliers if skill names were passed as aliases (e.g., "sleight" instead of "sleight of hand"). This was due to evaluating the expertise array directly against the un-normalized alias string instead of its canonical resolved counterpart.
 **Action:** Always normalize alias skill inputs using canonical lists (`SKILL_ALIASES`) before comparing against `expertiseProficiencies` or any other proficiency trackers. Created a comprehensive, 43-test suite covering 100% of pathways in `characterModifiers.ts`.
+
+## 2026-08-02 - [Heuristic Combat Actions Parser Verification]
+**Learning:** The combat actions parser (`actions.ts`) extracts actors from sentences by splitting them into words and matching them against `COMBAT_KEYWORDS.enemies`. Non-enemy nouns (like "construct", even if present in other templates) default to "Unknown" because they are absent from the `COMBAT_KEYWORDS.enemies` list.
+**Action:** Always test heuristic extraction using exact keywords contained within their expected taxonomy domains to prevent actor mismatch false failures in tests.

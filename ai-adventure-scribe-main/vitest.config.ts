@@ -36,6 +36,7 @@ export default defineConfig({
     // keeping two configs in sync, reintroducing the same kind of drift this change
     // is meant to eliminate.
     include: [
+      'src/utils/combat/detection/__tests__/actions.test.ts',
       'src/utils/spell-validation/__tests__/utils.test.ts',
       'src/utils/__tests__/ensure-action-options.test.ts',
       'src/utils/__tests__/characterModifiers.test.ts',
@@ -99,6 +100,7 @@ export default defineConfig({
       // include allowlist) makes every file under src/ show up in the report, even
       // files with zero tests, so the numbers reflect real coverage instead of theater.
       include: [
+        'src/utils/combat/detection/actions.ts',
         'src/utils/spell-validation/utils.ts',
         'src/utils/ensure-action-options.ts',
         'src/utils/characterModifiers.ts',

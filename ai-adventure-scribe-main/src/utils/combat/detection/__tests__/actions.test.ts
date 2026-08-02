@@ -1,123 +1,180 @@
-
 import { describe, it, expect } from 'vitest';
 
 import { detectCombatActions, extractAction, detectPlayerCombatAction } from '../actions';
 
 describe('combat detection actions', () => {
   describe('detectCombatActions', () => {
-    it('should detect attack actions from narrative', () => {
-      const text = 'The goblin attacks with a sword. It strikes quickly.';
-      const actions = detectCombatActions(text);
-
-      expect(actions).toHaveLength(2);
-      expect(actions[0]).toMatchObject({
+    it('should detect attack actions', () => {
+      const text = 'The goblin attacks with a sword';
+      const result = detectCombatActions(text);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
         actor: 'Goblin',
         action: 'attack',
+        target: '',
         weapon: 'sword',
+        rollNeeded: true,
         rollType: 'attack',
-        rollNeeded: true
       });
-      expect(actions[1].action).toBe('attack');
     });
 
-    it('should detect spell casting actions', () => {
-      const text = 'The cultist casts a mysterious spell.';
-      const actions = detectCombatActions(text);
-
-      expect(actions).toHaveLength(1);
-      expect(actions[0]).toMatchObject({
+    it('should detect spellcasting actions', () => {
+      const text = 'The cultist casts fireball';
+      const result = detectCombatActions(text);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        actor: 'Cultist',
         action: 'spell',
+        target: '',
+        weapon: '',
+        rollNeeded: true,
         rollType: 'save',
-        rollNeeded: true
       });
     });
 
-    it('should detect damage dealing', () => {
-      const text = 'The trap deals 10 damage. You lose hit points.';
-      const actions = detectCombatActions(text);
-
-      expect(actions).toHaveLength(2);
-      expect(actions[0]).toMatchObject({
+    it('should detect damage actions', () => {
+      const text = 'You take 10 damage from the mech';
+      const result = detectCombatActions(text);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        actor: 'Mech',
         action: 'damage',
+        target: '',
+        weapon: '',
+        rollNeeded: false,
         rollType: 'damage',
-        rollNeeded: false
       });
     });
 
-    it('should handle multiple sentences with mixed actions', () => {
-      const text = 'An orc attacks! Then it casts a spell. Finally, you take damage.';
-      const actions = detectCombatActions(text);
+    it('should handle multiple sentences with different actions', () => {
+      const text = 'The skeleton swings its weapon. The cultist casts a spell. You take 5 HP damage.';
+      const result = detectCombatActions(text);
+      expect(result).toHaveLength(3);
+      expect(result[0].action).toBe('attack');
+      expect(result[0].actor).toBe('Skeleton');
+      expect(result[1].action).toBe('spell');
+      expect(result[1].actor).toBe('Cultist');
+      expect(result[2].action).toBe('damage');
+      expect(result[2].actor).toBe('Unknown');
+    });
 
-      expect(actions).toHaveLength(3);
-      expect(actions[0].action).toBe('attack');
-      expect(actions[1].action).toBe('spell');
-      expect(actions[2].action).toBe('damage');
+    it('should return empty array when no keywords match', () => {
+      const text = 'You walk down the quiet alley. The sun shines brightly.';
+      const result = detectCombatActions(text);
+      expect(result).toEqual([]);
     });
   });
 
   describe('extractAction', () => {
-    it('should identify known enemies as actors', () => {
-      const action = extractAction('A dragon swings its tail', 'attack');
-      expect(action?.actor).toBe('Dragon');
+    it('should extract action with known enemy actor and weapon', () => {
+      const sentence = 'A fierce dragon lunges with a sharp claw';
+      const action = extractAction(sentence, 'attack');
+      expect(action).toEqual({
+        actor: 'Dragon',
+        action: 'attack',
+        target: '',
+        weapon: 'claw',
+        rollNeeded: true,
+        rollType: 'attack',
+      });
     });
 
-    it('should identify known weapons', () => {
-      const action = extractAction('He strikes with a mace', 'attack');
-      expect(action?.weapon).toBe('mace');
-    });
-
-    it('should default to Unknown actor if no enemy keyword is found', () => {
-      const action = extractAction('Something strikes from the shadows', 'attack');
+    it('should default actor to Unknown when no enemies are found', () => {
+      const sentence = 'A shadow strikes from the darkness';
+      const action = extractAction(sentence, 'attack');
       expect(action?.actor).toBe('Unknown');
     });
 
-    it('should set correct roll types for different actions', () => {
-      expect(extractAction('attack', 'attack')?.rollType).toBe('attack');
-      expect(extractAction('cast', 'spell')?.rollType).toBe('save');
-      expect(extractAction('damage', 'damage')?.rollType).toBe('damage');
+    it('should extract correct weapons based on sentence content', () => {
+      const weapons = ['sword', 'crossbow', 'bow', 'dagger', 'mace', 'weapon', 'claw', 'bite'];
+      for (const weapon of weapons) {
+        const sentence = `The warrior swings a ${weapon}`;
+        const action = extractAction(sentence, 'attack');
+        expect(action?.weapon).toBe(weapon);
+      }
+    });
+
+    it('should set rollType to save for spells', () => {
+      const sentence = 'The guard casts a spell';
+      const action = extractAction(sentence, 'spell');
+      expect(action).toMatchObject({
+        rollNeeded: true,
+        rollType: 'save',
+      });
+    });
+
+    it('should set rollNeeded to false and rollType to damage for damage actions', () => {
+      const sentence = 'The robot deals damage';
+      const action = extractAction(sentence, 'damage');
+      expect(action).toMatchObject({
+        rollNeeded: false,
+        rollType: 'damage',
+      });
     });
   });
 
   describe('detectPlayerCombatAction', () => {
+    it('should detect defense actions and prioritize them', () => {
+      // Testing prioritization of defense keywords
+      const inputs = [
+        'I dodge the attack',
+        'I defend against the blow',
+        'I block with my shield',
+      ];
+      for (const input of inputs) {
+        const action = detectPlayerCombatAction(input);
+        expect(action).toEqual({
+          actor: 'Player',
+          action: 'defend',
+          rollNeeded: false,
+          rollType: 'skill',
+        });
+      }
+    });
+
     it('should detect attack actions', () => {
-      expect(detectPlayerCombatAction('I attack the orc')).toMatchObject({
-        actor: 'Player',
-        action: 'attack',
-        rollType: 'attack'
-      });
-      expect(detectPlayerCombatAction('I hit it')).toMatchObject({ action: 'attack' });
-      expect(detectPlayerCombatAction('I shoot the bow')).toMatchObject({ action: 'attack' });
+      const inputs = [
+        'I attack the goblin',
+        'I hit the skeleton with my mace',
+        'I shoot my crossbow',
+      ];
+      for (const input of inputs) {
+        const action = detectPlayerCombatAction(input);
+        expect(action).toEqual({
+          actor: 'Player',
+          action: 'attack',
+          rollNeeded: true,
+          rollType: 'attack',
+        });
+      }
     });
 
-    it('should detect spell casting', () => {
-      expect(detectPlayerCombatAction('I cast fireball')).toMatchObject({
-        actor: 'Player',
-        action: 'cast spell',
-        rollType: 'attack'
-      });
-      expect(detectPlayerCombatAction('I use a spell')).toMatchObject({ action: 'cast spell' });
+    it('should detect spellcasting actions', () => {
+      const inputs = [
+        'I cast magic missile',
+        'I cast a spell',
+      ];
+      for (const input of inputs) {
+        const action = detectPlayerCombatAction(input);
+        expect(action).toEqual({
+          actor: 'Player',
+          action: 'cast spell',
+          rollNeeded: true,
+          rollType: 'attack',
+        });
+      }
     });
 
-    it('should detect defense actions', () => {
-      expect(detectPlayerCombatAction('I dodge')).toMatchObject({
-        actor: 'Player',
-        action: 'defend',
-        rollNeeded: false,
-        rollType: 'skill'
-      });
-      expect(detectPlayerCombatAction('I block the blow')).toMatchObject({ action: 'defend' });
-      expect(detectPlayerCombatAction('I defend myself')).toMatchObject({ action: 'defend' });
-    });
-
-    it('should return null for non-combat actions', () => {
-      expect(detectPlayerCombatAction('I talk to the guard')).toBeNull();
-      expect(detectPlayerCombatAction('I look around')).toBeNull();
-    });
-
-    it('BUG: should prioritize defense over attack in "I dodge the attack"', () => {
-      // This identifies a bug where "attack" keyword triggers before "dodge"
-      const result = detectPlayerCombatAction('I dodge the attack');
-      expect(result?.action).toBe('defend');
+    it('should return null for non-combat inputs', () => {
+      const inputs = [
+        'I look around the room',
+        'I talk to the merchant',
+        'I open the heavy iron door',
+      ];
+      for (const input of inputs) {
+        const action = detectPlayerCombatAction(input);
+        expect(action).toBeNull();
+      }
     });
   });
 });
