@@ -319,3 +319,7 @@
 ## 2026-08-02 - [Heuristic Combat Actions Parser Verification]
 **Learning:** The combat actions parser (`actions.ts`) extracts actors from sentences by splitting them into words and matching them against `COMBAT_KEYWORDS.enemies`. Non-enemy nouns (like "construct", even if present in other templates) default to "Unknown" because they are absent from the `COMBAT_KEYWORDS.enemies` list.
 **Action:** Always test heuristic extraction using exact keywords contained within their expected taxonomy domains to prevent actor mismatch false failures in tests.
+
+## 2026-08-02 - [Basic Modifiers and Roll Breakdown Utilities Test Coverage]
+**Learning:** The basic modifier calculations and roll breakdown formatting functions inside `src/utils/character/basic-modifiers.ts` and `src/utils/character/roll-breakdown.ts` were completely untested. Discovered that the roll breakdown parser and formatter can throw descriptive errors for missing optional arguments (like missing `ability` for saving throws or missing `skillName` for skill checks).
+**Action:** Always mock character properties comprehensively (including level, race, class, abilityScores, and various proficiencies/expertises/saving throws) to test diverse roll types (`attack`, `save`, `check`, `skill`, `initiative`) and verify detailed breakdown formats (e.g., `'1d20', 'STR +3', 'Prof +3'`). Update `vitest.config.ts`'s explicit `test.include` and `coverage.include` lists to register the files.
