@@ -1,10 +1,10 @@
-import { Elysia, t } from 'elysia';
 import { and, eq, exists, ilike, sql as drizzleSql } from 'drizzle-orm';
+import { Elysia, t } from 'elysia';
 
 import { db } from '../../../../db/client';
 import { campaigns, quests } from '../../../../db/schema/index';
-import { NotFoundError } from '../../lib/errors.js';
 import { sql } from '../../lib/db.js';
+import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { normalizeRows } from '../../lib/query-rows.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -112,14 +112,10 @@ export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
   .post(
     '/quests',
     async ({ body, user, set }) => {
-      try {
-        await CampaignService.getById(body.campaign_id, user.userId);
-      } catch (error) {
-        if (error instanceof NotFoundError) {
-          set.status = 404;
-          return { error: 'Not found' };
-        }
-        throw error;
+      const campaign = await CampaignService.getById(body.campaign_id, user.userId);
+      if (!campaign) {
+        set.status = 404;
+        return { error: 'Not found' };
       }
       const [created] = await db
         .insert(quests)
@@ -169,14 +165,10 @@ export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
           .returning();
         return mapQuest(updated!);
       }
-      try {
-        await CampaignService.getById(body.campaign_id, user.userId);
-      } catch (error) {
-        if (error instanceof NotFoundError) {
-          set.status = 404;
-          return { error: 'Not found' };
-        }
-        throw error;
+      const campaign = await CampaignService.getById(body.campaign_id, user.userId);
+      if (!campaign) {
+        set.status = 404;
+        return { error: 'Not found' };
       }
       const [created] = await db
         .insert(quests)
