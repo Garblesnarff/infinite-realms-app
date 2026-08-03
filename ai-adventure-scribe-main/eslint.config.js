@@ -387,7 +387,6 @@ export default tseslint.config(
       'src/utils/character-calculations.ts',
       'src/utils/template-calculations.ts',
       'src/utils/attackUtils.ts',
-      'src/utils/raycasting.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
       'src/utils/character/data-transformers.ts',
