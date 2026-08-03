@@ -207,5 +207,47 @@ describe('parseMessageOptions', () => {
         "I have my gear. I'll need it. I've prepared myself.",
       );
     });
+
+    // Regression: the generic "you" -> "I" rule used to fire on "you were",
+    // producing "I were". Caught in a live playtest of The Eternal Feast, where
+    // an option read "demand to know why you were chosen".
+    it('should conjugate "you were" as "I was"', () => {
+      const option = {
+        id: 'opt-were',
+        number: 2,
+        text: 'Interrogate the Manager, demand to know why you were chosen for this duty.',
+        fullText: '**Interrogate the Manager**, demand to know why you were chosen for this duty.',
+      };
+
+      expect(createPlayerMessageFromOption(option)).toBe(
+        'Interrogate the Manager, demand to know why I was chosen for this duty.',
+      );
+    });
+
+    it('should conjugate negated contractions of "to be"', () => {
+      const option = {
+        id: 'opt-negated',
+        number: 3,
+        text: "You weren't invited, and you aren't welcome.",
+        fullText: "**You weren't invited**, and you aren't welcome.",
+      };
+
+      expect(createPlayerMessageFromOption(option)).toBe(
+        "I wasn't invited, and I'm not welcome.",
+      );
+    });
+
+    it('should convert the possessive pronoun "yours" to "mine"', () => {
+      const option = {
+        id: 'opt-yours',
+        number: 4,
+        text: 'Claim the blade, insisting it is yours.',
+        fullText: '**Claim the blade**, insisting it is yours.',
+      };
+
+      expect(createPlayerMessageFromOption(option)).toBe(
+        'Claim the blade, insisting it is mine.',
+      );
+    });
   });
 });

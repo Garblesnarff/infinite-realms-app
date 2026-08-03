@@ -238,8 +238,13 @@ function convertToFirstPerson(text: string): string {
     return match === 'Your' ? 'My' : match === 'your' ? 'my' : match;
   });
 
+  // Handle "you were" -> "I was" before the generic rule, so the verb agrees.
+  converted = converted.replace(/\byou\s+were\b/gi, 'I was');
+  converted = converted.replace(/\byou\s+weren't\b/gi, "I wasn't");
+  converted = converted.replace(/\byou\s+aren't\b/gi, "I'm not");
+
   // Handle "you" -> "I" with case preservation and context awareness
-  converted = converted.replace(/\byou\b(?!\s+are|'\w)/gi, (match) => {
+  converted = converted.replace(/\byou\b(?!\s+are|\s+were|\s+aren't|'\w)/gi, (match) => {
     return match === 'You' ? 'I' : match === 'you' ? 'I' : match;
   });
 
@@ -271,6 +276,12 @@ function convertToFirstPerson(text: string): string {
   // Handle "you'll" -> "I'll"
   converted = converted.replace(/\byou'll\b/gi, (match) => {
     return match === "You'll" ? "I'll" : "I'll";
+  });
+
+  // Handle "yours" -> "mine". The \byour\b rule above cannot match this:
+  // the trailing "s" is a word character, so the word boundary never lands.
+  converted = converted.replace(/\byours\b/gi, (match) => {
+    return match === 'Yours' ? 'Mine' : 'mine';
   });
 
   // Handle "yourself" -> "myself"
