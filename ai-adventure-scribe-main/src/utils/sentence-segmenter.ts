@@ -1,3 +1,5 @@
+import { ABBREVIATIONS } from './sentence-segmenter-constants';
+
 /**
  * Enhanced Sentence Segmentation Utility
  *
@@ -16,71 +18,6 @@
  * Ensures splits only occur at proper sentence boundaries, never mid-word
  */
 export class SentenceSegmenter {
-  // Common abbreviations that end with periods but aren't sentence endings
-  private static readonly ABBREVIATIONS = new Set([
-    'dr',
-    'mr',
-    'mrs',
-    'ms',
-    'prof',
-    'st',
-    'ave',
-    'blvd',
-    'etc',
-    'vs',
-    'jr',
-    'sr',
-    'inc',
-    'ltd',
-    'corp',
-    'co',
-    'dept',
-    'govt',
-    'min',
-    'max',
-    'approx',
-    'est',
-    'ft',
-    'in',
-    'yd',
-    'mi',
-    'lb',
-    'oz',
-    'pt',
-    'qt',
-    'gal',
-    'mph',
-    'rpm',
-    'no',
-    'nos',
-    'fig',
-    'figs',
-    'vol',
-    'vols',
-    'ch',
-    'chs',
-    'pg',
-    'pgs',
-    'ref',
-    'refs',
-    'ed',
-    'eds',
-    'rev',
-    'revs',
-    'jan',
-    'feb',
-    'mar',
-    'apr',
-    'may',
-    'jun',
-    'jul',
-    'aug',
-    'sep',
-    'oct',
-    'nov',
-    'dec',
-  ]);
-
   /**
    * Split text into sentences with proper boundary detection
    * Ensures no splits occur in the middle of words
@@ -174,7 +111,7 @@ export class SentenceSegmenter {
     const lastWord = words[words.length - 1];
     if (lastWord) {
       const wordWithoutPunct = lastWord.replace(/[.!?]+$/, '').toLowerCase();
-      if (this.ABBREVIATIONS.has(wordWithoutPunct)) {
+      if (ABBREVIATIONS.has(wordWithoutPunct)) {
         return false;
       }
 
