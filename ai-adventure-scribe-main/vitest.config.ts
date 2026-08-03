@@ -57,6 +57,7 @@ export default defineConfig({
       'src/hooks/__tests__/useSpellSelectionValidation.test.ts',
       'src/services/voice/__tests__/voice-dialogue-parser.test.ts',
       'src/services/world-builders/__tests__/world-builder-repository.test.ts',
+      'src/utils/environmental-hazards/__tests__/common-hazards.test.ts',
       'cli/src/**/*.{test,spec}.{ts,tsx}',
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}'
@@ -124,6 +125,7 @@ export default defineConfig({
         'src/hooks/useSpellSelectionValidation.ts',
         'src/services/voice/voice-dialogue-parser.ts',
         'src/services/world-builders/world-builder-repository.ts',
+        'src/utils/environmental-hazards/common-hazards.ts',
         'src/**/*.{ts,tsx}'
       ],
       all: true,
