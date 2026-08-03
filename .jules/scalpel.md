@@ -1,3 +1,8 @@
+## 2026-03-06 - [Surgical Fog Raycasting Extraction]
+**Challenge:** Extracting raycasting visibility polygon logic from a dense geometric utility file (`fog-calculations.ts`) without altering the public functions or breaking existing test imports.
+**Learning:** Moving algorithmic raycasting helpers to a sister `-raycasting.ts` file keeps both files cleanly focused and under the codebase's strict 200-line budget. This allows removing the target from the ESLint overrides list while maintaining complete functionality and backward compatibility.
+**Pattern:** For mathematically heavy utility files, separate pure geometric polygon calculations from raycasting/lighting queries. Export the sub-modules and re-export them from the main barrel utility to prevent consumer import churn.
+
 ## 2026-03-05 - [Surgical Prompt Templates Extraction]
 **Challenge:** Extracting static XML-style prompt templates from a large prompt construction module (`combat-rules-prompts.ts`) without altering the class name or public methods to avoid breaking existing imports.
 **Learning:** Separating multi-line static text templates into dedicated sub-modules reduces the size of logic/orchestration files significantly (from 389 down to ~120 lines). It also isolates static documentation strings from functional TypeScript logic, making the linter completely clean and files far easier to maintain.

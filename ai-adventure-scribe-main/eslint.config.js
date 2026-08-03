@@ -397,7 +397,6 @@ export default tseslint.config(
       'src/hooks/use-drawing-tool.ts', // 354 lines
       'src/components/game/NPCRollCard.tsx',
       'src/utils/lighting-integration.ts',
-      'src/utils/fog-calculations.ts',
       'src/utils/polygon-utils.ts',
       'src/workers/vision-worker.ts',
       'src/workers/vision-raycasting.ts',
