@@ -11,8 +11,8 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { authenticateRequest } from '../../lib/auth.js';
 import { recordEncounterOutcome, getDifficultyAdjustment } from '../../lib/encounter-telemetry.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 
 const encounterTelemetrySchema = t.Object({
@@ -28,19 +28,14 @@ const encounterAdjustmentQuery = t.Object({
 });
 
 export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
+  .use(planRateLimit('default'))
+  .use(requireAuth)
 
   /**
    * POST /v1/encounters/telemetry
    * Record encounter outcome for difficulty tracking
    */
-  .use(planRateLimit('default'))
-  .post('/telemetry', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/telemetry', async ({ body, set, user }) => {
     const { sessionId, difficulty, resourcesUsedEst } = body;
 
     if (!sessionId || !difficulty || typeof resourcesUsedEst !== 'number') {
@@ -48,10 +43,11 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { ok: false, error: 'Missing required fields' };
     }
 
-    const verification = await verifySessionOwnership(sessionId, user.userId);
+    const activeUser = user || { userId: '', email: '', plan: 'free' };
+    const verification = await verifySessionOwnership(sessionId, activeUser.userId);
     if (!verification.success) {
-      set.status = verification.error!.status;
-      return { ok: false, error: verification.error!.message };
+      set.status = verification.error?.status || 404;
+      return { ok: false, error: verification.error?.message || 'Session not found' };
     }
 
     recordEncounterOutcome(sessionId, difficulty, resourcesUsedEst);
@@ -62,13 +58,7 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
    * GET /v1/encounters/adjustment
    * Get difficulty adjustment factor for a session
    */
-  .get('/adjustment', async ({ request, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/adjustment', async ({ query, set, user }) => {
     const { sessionId, difficulty } = query;
 
     if (!sessionId || !difficulty) {
@@ -76,10 +66,11 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { ok: false, error: 'Missing query params' };
     }
 
-    const verification = await verifySessionOwnership(sessionId, user.userId);
+    const activeUser = user || { userId: '', email: '', plan: 'free' };
+    const verification = await verifySessionOwnership(sessionId, activeUser.userId);
     if (!verification.success) {
-      set.status = verification.error!.status;
-      return { ok: false, error: verification.error!.message };
+      set.status = verification.error?.status || 404;
+      return { ok: false, error: verification.error?.message || 'Session not found' };
     }
 
     const factor = getDifficultyAdjustment(sessionId, difficulty);

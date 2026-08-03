@@ -14,31 +14,31 @@
 
 import { Elysia, t } from 'elysia';
 
-import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
 import { isAdmin } from '../../middleware/admin.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 
 export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
+  .use(planRateLimit('default'))
+  .use(requireAuth)
+  .onBeforeHandle(({ user, set }) => {
+    if (!user) {
+      set.status = 401;
+      return { error: 'Unauthorized' };
+    }
+    if (!isAdmin(user)) {
+      set.status = 403;
+      return { error: 'Admin access required' };
+    }
+  })
 
   /**
    * POST /v1/admin/archive-sessions
    * Archive old game sessions to prevent database bloat
    */
-  .use(planRateLimit('default'))
-  .post('/archive-sessions', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    if (!isAdmin(user)) {
-      set.status = 403;
-      return { error: 'Admin access required' };
-    }
-
+  .post('/archive-sessions', async ({ body, set, user }) => {
     const { retentionDays = 90, dryRun = false } = body as {
       retentionDays?: number;
       dryRun?: boolean;
@@ -53,8 +53,10 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
       };
     }
 
+    const activeUser = user || { userId: '', email: '', plan: 'free' };
+
     try {
-      logger.info({ msg: 'Archive request', retentionDays, dryRun, userId: user.userId });
+      logger.info({ msg: 'Archive request', retentionDays, dryRun, userId: activeUser.userId });
 
       // Call the database function to archive sessions
       const { data, error } = await supabaseService.rpc('archive_old_sessions', {
@@ -90,18 +92,7 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
    * POST /v1/admin/restore-session/:sessionId
    * Restore an archived session back to the main tables
    */
-  .post('/restore-session/:sessionId', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    if (!isAdmin(user)) {
-      set.status = 403;
-      return { error: 'Admin access required' };
-    }
-
+  .post('/restore-session/:sessionId', async ({ params, set, user }) => {
     const { sessionId } = params;
 
     if (!sessionId) {
@@ -109,8 +100,10 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
       return { error: 'Missing session ID', message: 'Session ID is required' };
     }
 
+    const activeUser = user || { userId: '', email: '', plan: 'free' };
+
     try {
-      logger.info({ msg: 'Restore request', sessionId, userId: user.userId });
+      logger.info({ msg: 'Restore request', sessionId, userId: activeUser.userId });
 
       // Call the database function to restore session
       const { data, error } = await supabaseService.rpc('restore_archived_session', {
@@ -148,20 +141,11 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
    * GET /v1/admin/archive-statistics
    * Get statistics about archived vs active data
    */
-  .get('/archive-statistics', async ({ request, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    if (!isAdmin(user)) {
-      set.status = 403;
-      return { error: 'Admin access required' };
-    }
+  .get('/archive-statistics', async ({ set, user }) => {
+    const activeUser = user || { userId: '', email: '', plan: 'free' };
 
     try {
-      logger.info({ msg: 'Statistics request', userId: user.userId });
+      logger.info({ msg: 'Statistics request', userId: activeUser.userId });
 
       const { data, error } = await supabaseService
         .from('archive_statistics')
@@ -187,24 +171,15 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
    * GET /v1/admin/archivable-sessions
    * Get list of sessions eligible for archival
    */
-  .get('/archivable-sessions', async ({ request, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    if (!isAdmin(user)) {
-      set.status = 403;
-      return { error: 'Admin access required' };
-    }
+  .get('/archivable-sessions', async ({ query, set, user }) => {
+    const activeUser = user || { userId: '', email: '', plan: 'free' };
 
     try {
       // SECURITY: Validate and bound input parameters
       const retentionDays = Math.max(30, Math.min(parseInt(query.retentionDays as string) || 90, 3650));
       const limit = Math.max(1, Math.min(parseInt(query.limit as string) || 100, 1000));
 
-      logger.info({ msg: 'Archivable sessions request', retentionDays, limit, userId: user.userId });
+      logger.info({ msg: 'Archivable sessions request', retentionDays, limit, userId: activeUser.userId });
 
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
