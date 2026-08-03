@@ -1,5 +1,5 @@
 import { Sword, Sparkles, Crown } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -28,10 +28,11 @@ export const ClassFeatureChoiceCard: React.FC<ClassFeatureChoiceCardProps> = ({
   selectedValue,
   onValueChange,
 }) => {
+  const titleId = useId();
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle id={titleId} className="flex items-center gap-2">
           {getFeatureIcon(feature.id)}
           {feature.name}
         </CardTitle>
@@ -41,7 +42,7 @@ export const ClassFeatureChoiceCard: React.FC<ClassFeatureChoiceCardProps> = ({
         )}
       </CardHeader>
       <CardContent>
-        <RadioGroup value={selectedValue} onValueChange={onValueChange}>
+        <RadioGroup value={selectedValue} onValueChange={onValueChange} aria-labelledby={titleId}>
           <div className="grid gap-3">
             {feature.choices?.options.map((option, index) => {
               const [optionName, ...descriptionParts] = option.split(': ');

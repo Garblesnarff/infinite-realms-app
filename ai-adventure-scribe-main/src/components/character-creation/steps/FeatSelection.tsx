@@ -1,5 +1,5 @@
 import { Award } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 
 import { FeatSelectionAbilityScoreCard } from './FeatSelectionAbilityScoreCard';
 import { FeatSelectionFeatsCard } from './FeatSelectionFeatsCard';
@@ -24,6 +24,7 @@ const FeatSelection: React.FC = () => {
   const { toast } = useToast();
   const character = state.character;
 
+  const titleId = useId();
   const [selectionType, setSelectionType] = useState<'asi' | 'feat'>('asi');
   const [selectedFeat, setSelectedFeat] = useState<string>('');
   const [abilityIncreases, setAbilityIncreases] = useState<Record<string, number>>({
@@ -185,12 +186,13 @@ const FeatSelection: React.FC = () => {
       {/* ASI vs Feat Choice */}
       <Card>
         <CardHeader>
-          <CardTitle>Choose Your Improvement</CardTitle>
+          <CardTitle id={titleId}>Choose Your Improvement</CardTitle>
         </CardHeader>
         <CardContent>
           <RadioGroup
             value={selectionType}
             onValueChange={(value: 'asi' | 'feat') => setSelectionType(value)}
+            aria-labelledby={titleId}
           >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="asi" id="asi" />

@@ -1,5 +1,5 @@
 import { Dice1, TrendingUp } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,16 +18,18 @@ export const HitPointsMethodCard: React.FC<HitPointsMethodCardProps> = ({
   hitDie,
   averagePerLevel,
   onMethodChange,
-}) => (
-  <Card>
-    <CardHeader>
-      <CardTitle>Hit Point Method</CardTitle>
-      <p className="text-sm text-muted-foreground">
-        Choose how to determine hit points for levels beyond 1st
-      </p>
-    </CardHeader>
-    <CardContent>
-      <RadioGroup value={method} onValueChange={onMethodChange}>
+}) => {
+  const titleId = useId();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle id={titleId}>Hit Point Method</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Choose how to determine hit points for levels beyond 1st
+        </p>
+      </CardHeader>
+      <CardContent>
+        <RadioGroup value={method} onValueChange={onMethodChange} aria-labelledby={titleId}>
         <div className="space-y-3">
           <div className="flex items-center space-x-2 p-3 border rounded">
             <RadioGroupItem value="average" id="average" />
@@ -61,7 +63,8 @@ export const HitPointsMethodCard: React.FC<HitPointsMethodCardProps> = ({
             <Badge variant="outline">Variable</Badge>
           </div>
         </div>
-      </RadioGroup>
-    </CardContent>
-  </Card>
-);
+        </RadioGroup>
+      </CardContent>
+    </Card>
+  );
+};
