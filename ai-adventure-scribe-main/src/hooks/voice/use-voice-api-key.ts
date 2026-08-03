@@ -82,11 +82,11 @@ export const useVoiceApiKey = () => {
     return apiKeyRef.current;
   }, []);
 
-  return {
+  return React.useMemo(() => ({
     apiKey,
     apiKeyRef,
     error,
     retryApiKeyFetch,
     waitForApiKey,
-  };
+  }), [apiKey, error, retryApiKeyFetch, waitForApiKey]);
 };

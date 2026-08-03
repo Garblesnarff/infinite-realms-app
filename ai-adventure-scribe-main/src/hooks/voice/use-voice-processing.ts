@@ -291,10 +291,10 @@ export const useVoiceProcessing = ({
     }
   }, [state.segments, state.currentSegmentIndex, baseResumePlayback, processSegmentsProgressively, setState]);
 
-  return {
+  return React.useMemo(() => ({
     speakAISegments,
     speakPlainText,
     resumePlayback,
     abortController
-  };
+  }), [speakAISegments, speakPlainText, resumePlayback]);
 };

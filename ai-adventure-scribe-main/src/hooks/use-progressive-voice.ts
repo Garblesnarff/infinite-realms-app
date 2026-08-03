@@ -140,6 +140,10 @@ export const useProgressiveVoice = () => {
     waitForApiKey,
   } = useVoiceApiKey();
 
+  const voiceProcessingStopPlayback = React.useCallback(() => {
+    baseStopPlayback(state.segments);
+  }, [state.segments, baseStopPlayback]);
+
   // Voice processing orchestration
   const {
     speakAISegments,
@@ -154,10 +158,7 @@ export const useProgressiveVoice = () => {
     waitForApiKey,
     playAudioSegment,
     initializeAudioContext,
-    stopPlayback: React.useCallback(() => {
-      baseStopPlayback(state.segments);
-      // We'll handle abort inside useVoiceProcessing or by exposing it
-    }, [state.segments, baseStopPlayback]),
+    stopPlayback: voiceProcessingStopPlayback,
     baseResumePlayback,
     currentAudio
   });
