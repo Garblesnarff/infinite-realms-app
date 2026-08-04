@@ -1,3 +1,8 @@
+## 2026-08-04 - [IDOR and Soft Leakage in Quest Progress Route]
+**Vulnerability:** The `/v1/characters/:id/quest-progress` endpoint returned empty lists on unauthorized character lookups or non-existent IDs instead of properly failing with a 404, allowing soft existence leakage.
+**Learning:** When queries return empty sets for both "no content" and "unauthorized/not found", it leaks character ID validity. Early authorization and existence checks are required to enforce a strict security boundary.
+**Prevention:** Always implement early existence/ownership verification that explicitly fails with a 404 (masked) on unauthorized or missing targets before running target queries.
+
 ## 2026-06-18 - [IDOR and Existence Leakage in Condition Lifecycle Service]
 **Vulnerability:** The `ConditionLifecycleService` methods (`applyCondition`, `removeCondition`, and `attemptSave`) were using a "check-then-act" pattern for authorization. While they performed pre-flight ownership checks, the actual database operations (`INSERT`, `UPDATE`, and `SELECT`) did not incorporate ownership filters, leaving the system vulnerable to race conditions and existence leakage.
 **Learning:** Even with centralized authorization helpers, data-modifying and sensitive retrieval methods must implement defense-in-depth by ensuring every database operation is atomic and explicitly scoped to the authenticated user's permissions.

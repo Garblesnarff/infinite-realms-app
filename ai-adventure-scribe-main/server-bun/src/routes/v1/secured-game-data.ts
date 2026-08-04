@@ -186,7 +186,35 @@ export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
     },
     { body: questBody },
   )
-  .get('/characters/:id/quest-progress', async ({ params, user }) => {
+  .get('/characters/:id/quest-progress', async ({ params, user, set }) => {
+    // 🛡️ Sentinel: Early, centralized validation of character existence & ownership.
+    // Supports players (owners/permitted users) and DMs (campaign owners) while masking existence.
+    const authorized = await normalizeRows(
+      sql`
+        SELECT 1
+        FROM characters ch
+        LEFT JOIN campaigns c ON c.id = ch.campaign_id
+        WHERE ch.id = ${params.id}
+          AND (
+            ch.user_id = ${user.userId}
+            OR ch.owner_id = ${user.userId}
+            OR c.user_id = ${user.userId}
+            OR EXISTS (
+              SELECT 1
+              FROM character_permissions cp
+              WHERE cp.character_id = ch.id
+                AND cp.user_id = ${user.userId}
+            )
+          )
+        LIMIT 1
+      `
+    );
+
+    if (!authorized || authorized.length === 0) {
+      set.status = 404;
+      return { error: 'Character not found' };
+    }
+
     return normalizeRows(
       sql`
         SELECT qp.status, qp.updated_at, json_build_object('title', q.title) AS quests
