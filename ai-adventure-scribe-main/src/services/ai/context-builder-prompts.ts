@@ -23,6 +23,20 @@ You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-soun
     return GameContextPrompts.buildCharacterSection(char);
   }
 
+  /**
+   * Renders the "Previously On" recap (fetched via chronicles.getPreviouslyOn) as a
+   * clearly-labeled block near the top of the opening prompt, with an instruction that
+   * the DM must open with continuity from it. Only called when a recap is present.
+   */
+  static buildPreviousSessionRecapSection(recap: string): string {
+    return `
+<previous_session_recap>
+${recap}
+
+The DM MUST open this scene with narrative continuity from this recap — pick up where the story left off instead of starting the session blind to what came before.
+</previous_session_recap>`;
+  }
+
   static buildOpeningSceneSection(): string {
     return buildOpeningScenePrompt();
   }

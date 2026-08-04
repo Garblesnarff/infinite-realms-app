@@ -10,6 +10,9 @@ vi.mock('../context-builder-prompts', () => ({
   ContextBuilderPrompts: {
     buildPersonaSection: vi.fn(() => '<persona_section>'),
     buildGameContextSection: vi.fn(async () => '<game_context_section>'),
+    buildPreviousSessionRecapSection: vi.fn(
+      (recap: string) => `<previous_session_recap_section>${recap}</previous_session_recap_section>`,
+    ),
     buildOpeningSceneSection: vi.fn(() => '<opening_scene_section>'),
     buildOpeningResponseStructureSection: vi.fn(() => '<opening_response_structure_section>'),
     buildOpeningFinalRemindersSection: vi.fn(() => '<opening_final_reminders_section>'),
@@ -146,5 +149,28 @@ describe('ContextBuilder', () => {
     expect(result).toContain('<combat_context_true>');
     expect(result).toContain('<voice_optimization_section>');
     expect(result).toContain('<response_structure_section>');
+  });
+
+  it('should inject the previous session recap block into the opening prompt when present', async () => {
+    const recap = 'Last time, the party negotiated with the goblin chief and spared his tribe.';
+    const result = await ContextBuilder.build({
+      ...defaultParams,
+      isFirstMessage: true,
+      context: { ...mockContext, previousSessionRecap: recap },
+    });
+
+    expect(ContextBuilderPrompts.buildPreviousSessionRecapSection).toHaveBeenCalledWith(recap);
+    expect(result).toContain('<previous_session_recap_section>');
+    expect(result).toContain(recap);
+  });
+
+  it('should NOT include a recap block in the opening prompt when no recap is present', async () => {
+    const result = await ContextBuilder.build({
+      ...defaultParams,
+      isFirstMessage: true,
+    });
+
+    expect(ContextBuilderPrompts.buildPreviousSessionRecapSection).not.toHaveBeenCalled();
+    expect(result).not.toContain('<previous_session_recap_section>');
   });
 });

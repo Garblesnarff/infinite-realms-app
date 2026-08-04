@@ -23,6 +23,11 @@ export class ContextBuilder {
     contextPrompt += await ContextBuilderPrompts.buildGameContextSection(context, relevantMemories);
 
     if (isFirstMessage) {
+      if (context.previousSessionRecap) {
+        contextPrompt += ContextBuilderPrompts.buildPreviousSessionRecapSection(
+          context.previousSessionRecap,
+        );
+      }
       contextPrompt += ContextBuilderPrompts.buildOpeningSceneSection();
       contextPrompt += ContextBuilderPrompts.buildOpeningResponseStructureSection();
       contextPrompt += ContextBuilderPrompts.buildOpeningFinalRemindersSection();

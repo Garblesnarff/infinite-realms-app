@@ -203,6 +203,9 @@ export const useInitialGreeting = ({
           // These are stored as loose records in AIService, so cast to Record<string, unknown>
           campaignDetails: campaignData as unknown as Record<string, unknown>,
           characterDetails: characterData as unknown as Record<string, unknown>,
+          // Thread the recap into the opening-generation prompt so the DM opens with
+          // continuity instead of only seeing it as a display message afterward.
+          previousSessionRecap: previouslyOnText ?? undefined,
         },
       });
       if (typeof openingText !== 'string' || openingText.trim().length < GREETING_MIN_LENGTH) {

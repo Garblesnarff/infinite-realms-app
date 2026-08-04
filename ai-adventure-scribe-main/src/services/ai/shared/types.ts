@@ -42,6 +42,12 @@ export interface GameContext {
   campaignDetails?: Record<string, unknown>;
   characterDetails?: Record<string, unknown>;
   gameState?: Record<string, unknown>;
+  /**
+   * "Previously On" recap text for continuation sessions (session_number > 1).
+   * When present, the opening prompt renders it as a <previous_session_recap>
+   * block so the DM opens with continuity instead of starting blind.
+   */
+  previousSessionRecap?: string;
 }
 
 /**
