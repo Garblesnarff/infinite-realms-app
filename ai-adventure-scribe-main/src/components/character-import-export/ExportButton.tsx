@@ -95,19 +95,21 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
       <DropdownMenu>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant={variant}
-                size={size}
-                disabled={isExporting}
-                className={className}
-                aria-label={buttonAriaLabel}
-              >
-                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {!isIconOnly && <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>}
-              </Button>
-            </DropdownMenuTrigger>
+            <span className={isExporting ? 'cursor-not-allowed inline-block' : 'inline-block'}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant={variant}
+                  size={size}
+                  disabled={isExporting}
+                  className={`${className || ''} ${isExporting ? 'pointer-events-none' : ''}`}
+                  aria-label={buttonAriaLabel}
+                >
+                  {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  {!isIconOnly && <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>}
+                </Button>
+              </DropdownMenuTrigger>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             <p>{tooltipText}</p>
@@ -181,7 +183,7 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
               size={size}
               onClick={handleExport}
               disabled={isExporting}
-              className={className}
+              className={`${className || ''} ${isExporting ? 'pointer-events-none' : ''}`}
               aria-label={buttonAriaLabel}
             >
               {isExporting ? (

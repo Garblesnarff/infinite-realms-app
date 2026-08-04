@@ -225,3 +225,7 @@
 ## 2026-08-19 - Battle Map Loading State Accessibility
 **Learning:** Loading and skeleton screens are highly visual transitions that are completely silent to screen reader and assistive technology users unless explicitly marked. Wrapping them in a container with `role="status"` and `aria-live="polite"`, adding a screen-reader-only descriptive text (using the `.sr-only` class), and marking the raw placeholder elements (like Skeletons) with `aria-hidden="true"` ensures a smooth, non-disruptive, and fully informative experience for all users.
 **Action:** For any full-screen or component-level loading state, always add `role="status"`, `aria-live="polite"`, and an `.sr-only` descriptive label, while hiding visual placeholders using `aria-hidden="true"`.
+
+### 2026-08-20 - Disabled Button Tooltip Wrapping in Dropdown Triggers
+**Learning:** In Shadcn/Radix, wrapping a conditionally disabled button (such as during export in `ExportButton.tsx`) with a `TooltipTrigger` and `DropdownMenuTrigger` causes hover tooltips to fail when the button is disabled, because disabled buttons do not emit pointer/mouse events. Wrapping the nested trigger components in a standard helper `<span>` element with dynamic classes like `cursor-not-allowed` and applying `pointer-events-none` on the disabled button ensures hover pointer events bubble up correctly to trigger the tooltip.
+**Action:** Always wrap conditionally disabled buttons in a `<span>` element inside their `TooltipTrigger` and `DropdownMenuTrigger` wrappers to maintain perfect UX feel and tooltips.
