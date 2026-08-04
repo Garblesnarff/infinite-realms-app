@@ -59,6 +59,7 @@ export default defineConfig({
       'src/services/world-builders/__tests__/world-builder-repository.test.ts',
       'src/utils/environmental-hazards/__tests__/common-hazards.test.ts',
       'src/utils/combat/__tests__/spellcasting-actions.test.ts',
+      'src/utils/__tests__/character-proficiency-calculations.test.ts',
       'cli/src/**/*.{test,spec}.{ts,tsx}',
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}'
@@ -128,6 +129,7 @@ export default defineConfig({
         'src/services/world-builders/world-builder-repository.ts',
         'src/utils/environmental-hazards/common-hazards.ts',
         'src/utils/combat/spellcasting-actions.ts',
+        'src/utils/character-proficiency-calculations.ts',
         'src/**/*.{ts,tsx}'
       ],
       all: true,
