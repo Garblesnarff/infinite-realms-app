@@ -185,6 +185,20 @@ describe('usePointBuyLogic', () => {
     }));
   });
 
+  it('should maintain referential stability of returned hook values when parameters do not change', () => {
+    const { result, rerender } = renderHook(
+      ({ character, method }) => usePointBuyLogic({ character, dispatch: mockDispatch, method }),
+      { initialProps: { character: mockCharacter, method: 'pointBuy' } },
+    );
+
+    const firstReturn = result.current;
+
+    // Rerender with the identical character reference and method
+    rerender({ character: mockCharacter, method: 'pointBuy' });
+
+    expect(result.current).toBe(firstReturn);
+  });
+
   it('should calculate pointsUsed correctly', () => {
     const charWithModifiedScores = {
         ...mockCharacter,

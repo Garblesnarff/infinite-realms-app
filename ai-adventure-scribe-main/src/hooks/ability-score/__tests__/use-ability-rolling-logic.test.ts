@@ -167,6 +167,20 @@ describe('useAbilityRollingLogic', () => {
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 
+  it('should maintain referential stability of returned hook values when parameters do not change', () => {
+    const { result, rerender } = renderHook(
+      ({ character }) => useAbilityRollingLogic({ character, dispatch: mockDispatch }),
+      { initialProps: { character: mockCharacter } },
+    );
+
+    const firstReturn = result.current;
+
+    // Rerender with the identical character reference and mock dispatch
+    rerender({ character: mockCharacter });
+
+    expect(result.current).toBe(firstReturn);
+  });
+
   it('should handle null character during roll', () => {
     const mockRollResult = {
       scores: [10, 10, 10, 10, 10, 10],

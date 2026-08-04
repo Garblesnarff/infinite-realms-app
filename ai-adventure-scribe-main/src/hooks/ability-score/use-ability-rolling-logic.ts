@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import type { CharacterAction } from '@/contexts/character/types';
 import type { AbilityScores, Character } from '@/types/character';
@@ -126,12 +126,22 @@ export const useAbilityRollingLogic = ({ character, dispatch }: UseAbilityRollin
     [currentRollDetails, character?.abilityScores, rollHistory, dispatch, toast],
   );
 
-  return {
-    rollHistory,
-    setRollHistory,
-    currentRollDetails,
-    setCurrentRollDetails,
-    handleRollScores,
-    handleRerollSingleScore,
-  };
+  // ⚡ Bolt: Wrap the returned object in useMemo to enforce referential stability,
+  // preventing unnecessary component downstream re-renders or execution of effects.
+  return useMemo(
+    () => ({
+      rollHistory,
+      setRollHistory,
+      currentRollDetails,
+      setCurrentRollDetails,
+      handleRollScores,
+      handleRerollSingleScore,
+    }),
+    [
+      rollHistory,
+      currentRollDetails,
+      handleRollScores,
+      handleRerollSingleScore,
+    ],
+  );
 };

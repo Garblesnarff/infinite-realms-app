@@ -132,12 +132,23 @@ export const usePointBuyLogic = ({ character, dispatch, method }: UsePointBuyLog
 
   const pointBuyValid = method !== 'pointBuy' || pointsUsed <= 27;
 
-  return {
-    remainingPoints,
-    setRemainingPoints,
-    handleIncreaseScore,
-    handleDecreaseScore,
-    pointsUsed,
-    pointBuyValid,
-  };
+  // ⚡ Bolt: Wrap the returned object in useMemo to enforce referential stability,
+  // preventing unnecessary component downstream re-renders or execution of effects.
+  return useMemo(
+    () => ({
+      remainingPoints,
+      setRemainingPoints,
+      handleIncreaseScore,
+      handleDecreaseScore,
+      pointsUsed,
+      pointBuyValid,
+    }),
+    [
+      remainingPoints,
+      handleIncreaseScore,
+      handleDecreaseScore,
+      pointsUsed,
+      pointBuyValid,
+    ],
+  );
 };
