@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { handleAsyncError } from '@/utils/error-handler';
+import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 
 interface UseMessageHandlerLogicProps {
@@ -254,11 +255,18 @@ export const useMessageHandlerLogic = ({
             ...prev,
             current_scene_description: blurb,
           }));
-          logger.info(
-            '[Memory Flow] Extracting memories from AI response:',
-            sanitizedAiResponseMessage.text,
-          );
-          await extractMemories(sanitizedAiResponseMessage.text); // Non-critical path
+
+          // CRITICAL FIX (#1654): sanitizedAiResponseMessage.text is the FULL DM turn,
+          // which by contract ends with lettered/numbered action options the player never
+          // chose. Feeding that straight into extractMemories caused option text (e.g.
+          // "Rush to the kitchen, follow his order...") to be stored as story memories,
+          // polluting later DM context. Strip the options first via the same helper the
+          // UI uses to render the narrative, and only extract if narrative remains.
+          const narrativeOnly = parseMessageOptions(sanitizedAiResponseMessage.text).content;
+          if (narrativeOnly) {
+            logger.info('[Memory Flow] Extracting memories from AI response:', narrativeOnly);
+            await extractMemories(narrativeOnly); // Non-critical path
+          }
         }
       }
     } catch (error) {
