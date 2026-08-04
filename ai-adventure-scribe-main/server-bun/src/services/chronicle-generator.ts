@@ -2,7 +2,7 @@
 /* eslint-disable import/order */
 import OpenAI from 'openai';
 import { randomBytes } from 'crypto';
-import { and, eq, asc, desc, or, exists } from 'drizzle-orm';
+import { and, asc, eq, exists, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -40,6 +40,20 @@ interface FreeChronicleContent {
   previouslyOn: string;
 }
 
+// A single dialogue_history row, as needed for transcript sampling.
+export interface TranscriptTurn {
+  message: string;
+  speakerType: string | null;
+  createdAt: Date | null;
+}
+
+interface SampleTranscriptOptions {
+  charBudget?: number;
+  firstN?: number;
+  lastN?: number;
+  middleCap?: number;
+}
+
 // ─── FalAI queue response shapes ────────────────────────────────────────────
 
 interface FalQueueResponse {
@@ -54,6 +68,129 @@ interface FalStatusResponse {
 
 const TEXT_TIMEOUT_MS = 60_000;
 const IMAGE_TIMEOUT_MS = 120_000;
+
+// ─── Transcript sampling ────────────────────────────────────────────────────
+// 🐝 Issue #1681: the old chronicle generator only saw the first 3 + last 3 DM
+// messages (each truncated to 300 chars), so the "Previously On" recap missed
+// most of the session and every player decision. This budget-based sampler
+// pulls in both speakers and the middle of the session while staying within a
+// fixed character budget so we never blow the model's context window.
+
+// Row cap applied at the DB query level — keeps the query cheap even for very
+// long sessions; sampling/truncation below decides what actually makes the cut.
+export const TRANSCRIPT_ROW_LIMIT = 400;
+
+// Overall character budget for the sampled transcript fed into the prompt.
+export const TRANSCRIPT_CHAR_BUDGET = 15_000;
+// Number of turns at the very start of the session kept in full.
+export const TRANSCRIPT_FIRST_N = 5;
+// Number of turns at the very end of the session kept in full.
+export const TRANSCRIPT_LAST_N = 10;
+// Per-message character cap applied to the evenly-sampled middle turns.
+export const TRANSCRIPT_MIDDLE_CAP = 600;
+
+function speakerLabel(speakerType: string | null): string {
+  if (speakerType === 'player') return 'Player';
+  if (speakerType === 'dm') return 'DM';
+  return speakerType || 'Unknown';
+}
+
+function formatTurn(turn: TranscriptTurn, cap?: number): string {
+  const text = cap != null ? turn.message.slice(0, cap) : turn.message;
+  return `${speakerLabel(turn.speakerType)}: ${text}`;
+}
+
+/**
+ * Build a chronologically-ordered, budget-bounded transcript sample from a
+ * session's dialogue turns (both DM and player messages).
+ *
+ * Strategy:
+ * - Keep the first `firstN` turns and last `lastN` turns in full (untruncated).
+ * - Evenly sample as many of the remaining "middle" turns as fit within the
+ *   remaining character budget, each capped to `middleCap` characters.
+ *
+ * Pure function — no I/O — so it can be unit tested directly.
+ */
+export function sampleTranscript(
+  turns: TranscriptTurn[],
+  options: SampleTranscriptOptions = {},
+): string[] {
+  const charBudget = options.charBudget ?? TRANSCRIPT_CHAR_BUDGET;
+  const firstN = options.firstN ?? TRANSCRIPT_FIRST_N;
+  const lastN = options.lastN ?? TRANSCRIPT_LAST_N;
+  const middleCap = options.middleCap ?? TRANSCRIPT_MIDDLE_CAP;
+
+  if (turns.length === 0) {
+    return [];
+  }
+
+  // Defensive re-sort: callers should already provide chronological order,
+  // but the sampler's first/middle/last split depends on it.
+  const sorted = [...turns].sort((a, b) => {
+    const timeA = a.createdAt?.getTime() ?? 0;
+    const timeB = b.createdAt?.getTime() ?? 0;
+    return timeA - timeB;
+  });
+
+  const total = sorted.length;
+  const firstCount = Math.min(firstN, total);
+  const lastCount = Math.min(lastN, Math.max(0, total - firstCount));
+
+  // [0, firstEnd) = first turns (full text), [lastStart, total) = last turns
+  // (full text), [firstEnd, lastStart) = middle turns (sampled + capped).
+  const firstEnd = firstCount;
+  const lastStart = Math.max(firstCount, total - lastCount);
+
+  const selected: Array<{ index: number; text: string }> = [];
+  let usedChars = 0;
+
+  for (let i = 0; i < firstEnd; i++) {
+    const text = formatTurn(sorted[i]);
+    selected.push({ index: i, text });
+    usedChars += text.length;
+  }
+
+  for (let i = lastStart; i < total; i++) {
+    const text = formatTurn(sorted[i]);
+    selected.push({ index: i, text });
+    usedChars += text.length;
+  }
+
+  const middleIndices: number[] = [];
+  for (let i = firstEnd; i < lastStart; i++) {
+    middleIndices.push(i);
+  }
+
+  if (middleIndices.length > 0 && usedChars < charBudget) {
+    const remainingBudget = charBudget - usedChars;
+    // Rough per-message size estimate (capped text + "Speaker: " overhead)
+    // used to decide how many middle turns we can afford to sample.
+    const avgTurnSize = middleCap + 10;
+    const maxMiddleCount = Math.max(0, Math.floor(remainingBudget / avgTurnSize));
+    const sampleCount = Math.min(middleIndices.length, maxMiddleCount);
+
+    if (sampleCount > 0) {
+      const step = middleIndices.length / sampleCount;
+      const pickedIndices = new Set<number>();
+      for (let k = 0; k < sampleCount; k++) {
+        const pos = Math.min(middleIndices.length - 1, Math.floor(k * step));
+        pickedIndices.add(middleIndices[pos]);
+      }
+
+      for (const idx of Array.from(pickedIndices).sort((a, b) => a - b)) {
+        const text = formatTurn(sorted[idx], middleCap);
+        if (usedChars + text.length > charBudget) {
+          break;
+        }
+        selected.push({ index: idx, text });
+        usedChars += text.length;
+      }
+    }
+  }
+
+  selected.sort((a, b) => a.index - b.index);
+  return selected.map((s) => s.text);
+}
 
 export async function persistChronicleFailure(
   database: Pick<typeof db, 'transaction'>,
@@ -103,8 +240,12 @@ class ChronicleGenerator {
   private async fetchSessionData(sessionId: string, userId: string): Promise<SessionData> {
     // 🛡️ Sentinel: Incorporate ownership check directly into the query for defense-in-depth.
     // We join with campaigns and characters to verify the user owns the session.
-    // ⚡ Bolt: Parallelize independent database queries for session data and key dialogue moments.
-    const [sessionRows, firstMessages, lastMessages] = await Promise.all([
+    // ⚡ Bolt: Parallelize independent database queries for session data and the
+    // transcript sample. The transcript query fetches BOTH dm and player
+    // messages (issue #1681), bounded by TRANSCRIPT_ROW_LIMIT rows — the
+    // budget-based selection in `sampleTranscript` decides what actually gets
+    // used, so we don't need to fetch more than that cap.
+    const [sessionRows, transcriptRows] = await Promise.all([
       db
         .select({
           sessionNumber: gameSessions.sessionNumber,
@@ -131,13 +272,17 @@ class ChronicleGenerator {
       db
         .select({
           message: dialogueHistory.message,
+          speakerType: dialogueHistory.speakerType,
           createdAt: dialogueHistory.createdAt,
         })
         .from(dialogueHistory)
         .where(
           and(
             eq(dialogueHistory.sessionId, sessionId),
-            eq(dialogueHistory.speakerType, 'dm'),
+            or(
+              eq(dialogueHistory.speakerType, 'dm'),
+              eq(dialogueHistory.speakerType, 'player'),
+            ),
             // 🛡️ Sentinel: Defense-in-depth ownership check
             exists(
               db
@@ -159,39 +304,7 @@ class ChronicleGenerator {
           ),
         )
         .orderBy(asc(dialogueHistory.createdAt))
-        .limit(3),
-      db
-        .select({
-          message: dialogueHistory.message,
-          createdAt: dialogueHistory.createdAt,
-        })
-        .from(dialogueHistory)
-        .where(
-          and(
-            eq(dialogueHistory.sessionId, sessionId),
-            eq(dialogueHistory.speakerType, 'dm'),
-            // 🛡️ Sentinel: Defense-in-depth ownership check
-            exists(
-              db
-                .select()
-                .from(gameSessions)
-                .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-                .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-                .where(
-                  and(
-                    eq(gameSessions.id, dialogueHistory.sessionId),
-                    or(
-                      eq(campaigns.userId, userId),
-                      eq(characters.userId, userId),
-                      eq(characters.ownerId, userId),
-                    ),
-                  ),
-                ),
-            ),
-          ),
-        )
-        .orderBy(desc(dialogueHistory.createdAt))
-        .limit(3),
+        .limit(TRANSCRIPT_ROW_LIMIT),
     ]);
 
     const session = sessionRows[0];
@@ -201,21 +314,7 @@ class ChronicleGenerator {
       throw new NotFoundError('Session', sessionId);
     }
 
-    // Combine and re-sort to ensure chronological order for the AI prompt
-    const combined = [...firstMessages, ...lastMessages].sort((a, b) => {
-      const timeA = a.createdAt?.getTime() || 0;
-      const timeB = b.createdAt?.getTime() || 0;
-      return timeA - timeB;
-    });
-
-    const seen = new Set<string>();
-    const keyMoments: string[] = [];
-    for (const row of combined) {
-      if (!seen.has(row.message)) {
-        seen.add(row.message);
-        keyMoments.push(row.message.slice(0, 300));
-      }
-    }
+    const keyMoments = sampleTranscript(transcriptRows);
 
     return {
       sessionNumber: session?.sessionNumber ?? null,
@@ -246,7 +345,7 @@ SESSION DETAILS:
 - Hero: ${data.characterName} (${data.characterRace} ${data.characterClass})
 - Scene: ${data.sceneDescription ? data.sceneDescription.slice(0, 400) : 'An adventure unfolds in the realm'}
 
-KEY MOMENTS FROM THE SESSION (DM narration):
+KEY MOMENTS FROM THE SESSION (DM narration and player actions):
 ${data.keyDialogue.length > 0 ? data.keyDialogue.map((d, i) => `${i + 1}. ${d}`).join('\n') : '(No recorded dialogue — conjure a fitting chronicle from the session details above)'}
 
 INSTRUCTIONS:
@@ -292,7 +391,7 @@ SESSION DETAILS:
 - Hero: ${data.characterName} (${data.characterRace} ${data.characterClass})
 - Scene: ${data.sceneDescription ? data.sceneDescription.slice(0, 400) : 'An adventure unfolds in the realm'}
 
-KEY MOMENTS FROM THE SESSION (DM narration):
+KEY MOMENTS FROM THE SESSION (DM narration and player actions):
 ${data.keyDialogue.length > 0 ? data.keyDialogue.map((d, i) => `${i + 1}. ${d}`).join('\n') : '(No recorded dialogue — write a fitting summary from the session details above)'}
 
 INSTRUCTIONS:
