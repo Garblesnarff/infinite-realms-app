@@ -9,6 +9,20 @@ import { userDataApi } from '@/services/user-data-api';
 const PAGE_SIZE = 50;
 
 /**
+ * Compare two messages for chronological ordering.
+ * Prefers the server-assigned sequence number (monotonic, immune to clock skew and
+ * same-millisecond ties) when both messages have one; falls back to ISO timestamp
+ * string comparison otherwise. Used to keep `allMessages` strictly chronological
+ * regardless of which order pages are loaded in (see #1678).
+ */
+const compareMessages = (a: ChatMessage, b: ChatMessage): number => {
+  if (typeof a.sequenceNumber === 'number' && typeof b.sequenceNumber === 'number') {
+    return a.sequenceNumber - b.sequenceNumber;
+  }
+  return (a.timestamp || '').localeCompare(b.timestamp || '');
+};
+
+/**
  * Hook return type definition
  */
 export interface UseMessagesReturn {
@@ -70,6 +84,7 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
           sender: msg.speaker_type as ChatMessage['sender'],
           id: msg.id,
           timestamp: msg.timestamp,
+          sequenceNumber: typeof msg.sequence_number === 'number' ? msg.sequence_number : undefined,
           context: msg.context as MessageContext,
           images: Array.isArray(msg.images) ? msg.images : undefined,
           characterName:
@@ -82,8 +97,7 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
       // Defensive sort to guarantee chronological order (oldest first)
       // Even though DB query uses ascending order, we enforce it client-side
       // as a belt-and-suspenders approach for production reliability
-      // ⚡ Bolt: Use direct string comparison for ISO timestamps to avoid expensive Date object creation.
-      messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+      messages.sort(compareMessages);
 
       // Messages are now in chronological order (ascending by timestamp)
       // Display oldest at top, newest at bottom
@@ -110,11 +124,17 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
         if (page === 0) {
           return query.data.messages;
         }
-        // Append newer messages to the end when loading more history
-        // Merge new page with existing messages, avoiding duplicates
+        // Merge the newly loaded page with existing messages, avoiding duplicates.
+        // The newly loaded page may be OLDER or NEWER than what's already in state
+        // depending on pagination direction (the server returns newest-first pages,
+        // so loadMore() fetches progressively older history). Re-sort the combined
+        // array so it stays strictly chronological instead of just appending the new
+        // page at the end - appending unconditionally caused an older page to be
+        // treated as the newest conversation by the prompt's history selector, which
+        // walks the array from the end (#1678).
         const existingIds = new Set(prev.map((m) => m.id));
         const newMessages = query.data.messages.filter((m) => !existingIds.has(m.id));
-        return [...prev, ...newMessages];
+        return [...prev, ...newMessages].sort(compareMessages);
       });
       setHasMore(query.data.hasMore);
     }

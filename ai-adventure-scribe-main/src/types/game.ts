@@ -74,6 +74,10 @@ export interface ChatMessage {
   sender: SpeakerType;
   id?: string;
   timestamp?: string;
+  // Server-assigned monotonic sequence number (Phase 0.2 / #1678). Preferred over
+  // `timestamp` for chronological ordering when merging paginated history, since it
+  // is immune to clock skew and same-millisecond ties.
+  sequenceNumber?: number;
   context?: MessageContext;
   narrationSegments?: Array<{
     type: 'narration' | 'dialogue' | 'action' | 'thought' | 'dm' | 'character' | 'transition';

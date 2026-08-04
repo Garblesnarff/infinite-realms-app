@@ -328,4 +328,70 @@ describe('useMessages', () => {
       { timeout: 4000 },
     );
   });
+
+  it('keeps history chronological when an older page loads after the newest page (#1678)', async () => {
+    // Mirrors production ordering: the server returns pages newest-first (ORDER BY
+    // timestamp DESC), so the initial load (offset 0) is the NEWEST 50 messages, and
+    // loadMore() (offset 50) fetches the next, OLDER 50 messages further back in
+    // history. Before the fix, the hook appended each new page to the END of the
+    // array regardless of load order, so this older page would be treated as the
+    // newest conversation by the prompt's history selector.
+    const newestPageResults = {
+      messages: Array.from({ length: 50 }, (_, i) => ({
+        id: `msg-${i + 51}`,
+        message: `Message ${i + 51}`,
+        speaker_type: 'player',
+        timestamp: new Date(1000 * (i + 51)).toISOString(),
+        sequence_number: i + 51,
+        game_sessions: {},
+      })),
+      total: 100,
+      hasMore: true,
+    };
+
+    const olderPageResults = {
+      messages: Array.from({ length: 50 }, (_, i) => ({
+        id: `msg-${i + 1}`,
+        message: `Message ${i + 1}`,
+        speaker_type: 'player',
+        timestamp: new Date(1000 * (i + 1)).toISOString(),
+        sequence_number: i + 1,
+        game_sessions: {},
+      })),
+      total: 100,
+      hasMore: false,
+    };
+
+    vi.mocked(userDataApi.listSessionMessages).mockImplementation((_sessionId, offset = 0) => {
+      if (offset === 0) return Promise.resolve(newestPageResults);
+      return Promise.resolve(olderPageResults);
+    });
+
+    const { result } = renderHook(() => useMessages(sessionId), { wrapper });
+
+    // Initial load returns the newest page (offset 0)
+    await waitFor(() => expect(result.current.data.length).toBe(50), { timeout: 2000 });
+    expect(result.current.data[0].id).toBe('msg-51');
+    expect(result.current.data[49].id).toBe('msg-100');
+    expect(result.current.hasMore).toBe(true);
+
+    // Load the older page (scrolling back through history)
+    act(() => {
+      result.current.loadMore();
+    });
+
+    await waitFor(() => expect(result.current.data.length).toBe(100), { timeout: 4000 });
+
+    const ids = result.current.data.map((m) => m.id);
+    const expectedIds = Array.from({ length: 100 }, (_, i) => `msg-${i + 1}`);
+
+    // Array is strictly chronological (oldest first) regardless of load order.
+    expect(ids).toEqual(expectedIds);
+    // No duplicate messages after merging pages.
+    expect(new Set(ids).size).toBe(ids.length);
+    // The true newest message (highest sequence number) is last, so the prompt's
+    // history selector - which walks from the array end - picks the newest turns.
+    expect(ids[ids.length - 1]).toBe('msg-100');
+    expect(result.current.hasMore).toBe(false);
+  });
 });
