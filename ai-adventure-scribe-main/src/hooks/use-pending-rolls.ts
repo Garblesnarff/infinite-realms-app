@@ -5,7 +5,10 @@
 
 import { useMemo } from 'react';
 
+import type { RollRequest } from '@/types/roll-request';
+
 import { useMessageContext } from '@/contexts/MessageContext';
+import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { parseRollRequests } from '@/utils/rollRequestParser';
 
 /**
@@ -70,8 +73,16 @@ export const usePendingRolls = () => {
       };
     }
 
-    // Parse roll requests from the last DM message
-    const rollRequests = parseRollRequests(lastDMMessage.text);
+    // Prefer the structured roll requests the message was persisted with (see
+    // EnhancedChatMessage.rollRequests, populated by processRollRequests()). Only fall back to
+    // the regex prose parser for older messages that predate the structured field — and even
+    // then, strip action options first. Option text routinely contains combat-shaped language
+    // ("wield the shimmering cleaver", "confront Balthazar") that the prose parser misreads as a
+    // real roll request, manufacturing a phantom pending-roll banner that disables chat input.
+    // See #1658.
+    const dmMessage = lastDMMessage as (typeof messages)[0] & { rollRequests?: RollRequest[] };
+    const rollRequests =
+      dmMessage.rollRequests ?? parseRollRequests(parseMessageOptions(lastDMMessage.text).content);
 
     // Check if the last player message overall was a dice roll (mitigates buggy AI re-requesting)
     const wasJustDiceRoll = isDiceRollMessage(lastPlayerMessage);

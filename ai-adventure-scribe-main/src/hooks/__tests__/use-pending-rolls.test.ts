@@ -129,6 +129,66 @@ describe('usePendingRolls', () => {
 
     expect(result.current.hasPendingRolls).toBe(false);
   });
+
+  // Regression tests for #1658: "Phantom roll request from option text disables the chat input"
+  //
+  // The prose regex parser must never see the trailing lettered/numbered action options of a DM
+  // message. Combat-shaped language inside an option's description (e.g. "make an attack roll")
+  // used to be read as a real roll request, which flipped hasPendingRolls to true with no dice
+  // dialog ever shown, permanently disabling ChatInput.
+  it('does not raise a phantom pending roll when only action options mention combat verbs (#1658)', () => {
+    const messages = [
+      { sender: 'player', text: 'I look around the kitchen.' },
+      {
+        sender: 'dm',
+        text: `The kitchen erupts in flame as Balthazar's rage boils over.
+
+A. **Wield the shimmering cleaver**, grab the blade to stabilize the chaotic energy, confront Balthazar, and make an attack roll against his guard.
+B. **Command the imps**, use your presence to restore order and force the creatures to cease their destruction.
+C. **Douse Balthazar's flames**, use a nearby ingredient or spell to quench his fury before the kitchen collapses.`,
+      },
+    ];
+    (useMessageContext as any).mockReturnValue({ messages });
+
+    const { result } = renderHook(() => usePendingRolls());
+
+    expect(result.current.hasPendingRolls).toBe(false);
+    expect(result.current.pendingRequests).toHaveLength(0);
+  });
+
+  it('shows the pending-roll banner when the DM message carries a genuine structured roll request', () => {
+    const messages = [
+      { sender: 'player', text: 'I raise my blade toward the guard.' },
+      {
+        sender: 'dm',
+        text: 'The guard raises their shield to meet your strike.',
+        rollRequests: [{ type: 'attack', formula: '1d20+modifier', purpose: 'Attack roll' }],
+      },
+    ];
+    (useMessageContext as any).mockReturnValue({ messages });
+
+    const { result } = renderHook(() => usePendingRolls());
+
+    expect(result.current.hasPendingRolls).toBe(true);
+    expect(result.current.pendingRequests).toHaveLength(1);
+    expect(result.current.pendingRequests[0].type).toBe('attack');
+  });
+
+  it('trusts an empty structured rollRequests array instead of falling back to text parsing', () => {
+    const messages = [
+      { sender: 'player', text: 'I ready my weapon.' },
+      {
+        sender: 'dm',
+        text: 'Make an attack roll against the bandit.',
+        rollRequests: [],
+      },
+    ];
+    (useMessageContext as any).mockReturnValue({ messages });
+
+    const { result } = renderHook(() => usePendingRolls());
+
+    expect(result.current.hasPendingRolls).toBe(false);
+  });
 });
 
 describe('useLatestPendingRoll', () => {
