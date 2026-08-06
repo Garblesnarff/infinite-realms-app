@@ -68,10 +68,6 @@ export interface CampaignRule {
   priority: number;
 }
 
-export interface SearchResult extends CampaignChunk {
-  similarity: number;
-}
-
 /**
  * Maps a database row to a StarterCampaign object
  */

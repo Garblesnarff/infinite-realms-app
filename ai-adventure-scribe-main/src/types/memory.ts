@@ -167,52 +167,6 @@ export interface MemoryContext {
   }>;
 }
 
-export interface EnhancedMemory {
-  id: string;
-  type: 'dialogue' | 'description' | 'action' | 'scene_state';
-  content: string;
-  timestamp: string;
-  importance: number;
-  category: 'npc' | 'location' | 'player_action' | 'environment' | 'general';
-  context: {
-    location?: string;
-    npcs?: string[];
-    playerAction?: string;
-    sceneState?: {
-      currentLocation: string;
-      activeNPCs: Array<{
-        id: string;
-        name: string;
-        status: 'present' | 'departed' | 'inactive';
-        lastInteraction?: string;
-      }>;
-      environmentDetails: {
-        atmosphere: string;
-        timeOfDay: string;
-        sensoryDetails: string[];
-      };
-      playerState: {
-        lastAction: string;
-        currentInteraction?: string;
-      };
-    };
-  };
-  metadata: Record<string, unknown>;
-}
-
-export interface MemoryQueryOptions {
-  category?: string;
-  timeframe?: 'recent' | 'all';
-  contextMatch?: {
-    location?: string;
-    npc?: string;
-    action?: string;
-  };
-  limit?: number;
-  query?: string;
-  semanticSearch?: boolean;
-}
-
 /**
  * ⚡ Bolt: Explicit column list for memory retrieval to avoid over-fetching
  * large vector embeddings (~3KB per row) when not needed for semantic search.

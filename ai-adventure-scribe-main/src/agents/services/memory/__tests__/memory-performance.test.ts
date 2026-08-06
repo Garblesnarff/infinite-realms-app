@@ -7,8 +7,8 @@ import * as featureFlags from '@/config/featureFlags';
 // supabase.from('memories')...select() and supabase.rpc() to userDataApi.listMemories()
 // and userDataApi.matchMemories() (real fetch() calls to the Bun server). Only
 // invokeEmbedding() (supabase.functions.invoke('generate-embedding')) still uses
-// supabase directly. The mocks below were updated to match: `mockRpc` became
-// `mockMatchMemories` (returning the match array directly, not a { data, error }
+// supabase directly. The mocks below were updated to use `mockMatchMemories`
+// (returning the match array directly, not a { data, error }
 // envelope), and `setQueryResult`/`mockFrom` now back userDataApi.listMemories().
 const {
   mockMatchMemories: baseMockMatchMemories,
@@ -69,7 +69,7 @@ vi.mock('@/utils/memory/importance', () => ({
 
 describe('Memory Performance Tests', () => {
   let repository: MemoryRepository;
-  let mockRpc: any;
+  let mockMatchMemories: any;
   let mockFunctionsInvoke: any;
 
   beforeEach(() => {
@@ -77,8 +77,8 @@ describe('Memory Performance Tests', () => {
     vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
     repository = new MemoryRepository();
 
-    // Setup mock functions (mockRpc now backs userDataApi.matchMemories())
-    mockRpc = baseMockMatchMemories;
+    // Setup mock functions (mockMatchMemories backs userDataApi.matchMemories())
+    mockMatchMemories = baseMockMatchMemories;
     mockFunctionsInvoke = baseMockFunctionsInvoke;
     setQueryResult({ data: [], error: null });
   });
@@ -110,7 +110,7 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 10)); // Simulate 10ms DB latency
         return mockMemories;
       });
@@ -176,7 +176,7 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
         return mockMemories;
       });
@@ -224,7 +224,7 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         // Simulate realistic DB query time for large dataset
         await new Promise((resolve) => setTimeout(resolve, 30));
         return mockMemories;
@@ -238,50 +238,6 @@ describe('Memory Performance Tests', () => {
 
       expect(results).toHaveLength(50);
       expect(duration).toBeLessThan(100);
-    });
-
-    it('should paginate efficiently through large result sets', async () => {
-      const pageSize = 20;
-
-      setQueryResult({
-        data: Array(pageSize)
-          .fill(null)
-          .map((_, i) => ({
-            id: `${i}`,
-            content: `Memory ${i}`,
-            importance: 3,
-            session_id: 'session-123',
-            type: 'event',
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
-            metadata: null,
-          })),
-        error: null,
-      });
-
-      const memoryService = new MemoryService('session-123');
-
-      const startTime = performance.now();
-      const page1 = await memoryService.retrieveMemories({
-        limit: pageSize,
-        semanticSearch: false,
-      });
-      const page2 = await memoryService.retrieveMemories({
-        limit: pageSize,
-        semanticSearch: false,
-      });
-      const page3 = await memoryService.retrieveMemories({
-        limit: pageSize,
-        semanticSearch: false,
-      });
-      const endTime = performance.now();
-
-      const duration = endTime - startTime;
-
-      expect(page1).toHaveLength(pageSize);
-      expect(page2).toHaveLength(pageSize);
-      expect(page3).toHaveLength(pageSize);
-      expect(duration).toBeLessThan(150); // 3 queries should complete quickly
     });
 
     it('should maintain memory efficiency with large datasets', async () => {
@@ -300,8 +256,8 @@ describe('Memory Performance Tests', () => {
         }));
 
       // Mock should only return requested limit, not entire dataset. matchMemories()
-      // (backing mockRpc) now returns the array directly, not a { data, error } envelope.
-      mockRpc.mockResolvedValue(largeMemorySet.slice(0, 10));
+      // (backing mockMatchMemories) now returns the array directly, not a { data, error } envelope.
+      mockMatchMemories.mockResolvedValue(largeMemorySet.slice(0, 10));
 
       const mockEmbedding = JSON.stringify(Array(1536).fill(0.5));
       mockFunctionsInvoke.mockResolvedValue({
@@ -324,21 +280,21 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         return Array(5)
-            .fill(null)
-            .map((_, i) => ({
-              id: `${i}`,
-              content: `Memory ${i}`,
-              importance: 3,
-              similarity: 0.9,
-              session_id: 'session-123',
-              type: 'event',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              metadata: null,
-            }));
+          .fill(null)
+          .map((_, i) => ({
+            id: `${i}`,
+            content: `Memory ${i}`,
+            importance: 3,
+            similarity: 0.9,
+            session_id: 'session-123',
+            type: 'event',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            metadata: null,
+          }));
       });
 
       const startTime = performance.now();
@@ -363,21 +319,21 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
         return Array(3)
-            .fill(null)
-            .map((_, i) => ({
-              id: `${i}`,
-              content: `Memory ${i}`,
-              importance: 3,
-              similarity: 0.9,
-              session_id: 'session-123',
-              type: 'event',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              metadata: null,
-            }));
+          .fill(null)
+          .map((_, i) => ({
+            id: `${i}`,
+            content: `Memory ${i}`,
+            importance: 3,
+            similarity: 0.9,
+            session_id: 'session-123',
+            type: 'event',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            metadata: null,
+          }));
       });
 
       const startTime = performance.now();
@@ -403,24 +359,24 @@ describe('Memory Performance Tests', () => {
       let requestCount = 0;
       const requestTimes: number[] = [];
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         const reqStartTime = performance.now();
         await new Promise((resolve) => setTimeout(resolve, 10));
         requestCount++;
         requestTimes.push(performance.now() - reqStartTime);
         return Array(5)
-            .fill(null)
-            .map((_, i) => ({
-              id: `${i}`,
-              content: `Memory ${i}`,
-              importance: 3,
-              similarity: 0.9,
-              session_id: 'session-123',
-              type: 'event',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              metadata: null,
-            }));
+          .fill(null)
+          .map((_, i) => ({
+            id: `${i}`,
+            content: `Memory ${i}`,
+            importance: 3,
+            similarity: 0.9,
+            session_id: 'session-123',
+            type: 'event',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            metadata: null,
+          }));
       });
 
       // Simulate sustained load over time
@@ -454,21 +410,21 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 25)); // Simulate vector search
         return Array(10)
-            .fill(null)
-            .map((_, i) => ({
-              id: `${i}`,
-              content: `Semantically relevant memory ${i}`,
-              importance: 4,
-              similarity: 0.9 - i * 0.05,
-              session_id: 'session-123',
-              type: 'event',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              metadata: null,
-            }));
+          .fill(null)
+          .map((_, i) => ({
+            id: `${i}`,
+            content: `Semantically relevant memory ${i}`,
+            importance: 4,
+            similarity: 0.9 - i * 0.05,
+            session_id: 'session-123',
+            type: 'event',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            metadata: null,
+          }));
       });
 
       const startTime = performance.now();
@@ -517,21 +473,21 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         return Array(10)
-            .fill(null)
-            .map((_, i) => ({
-              id: `${i}`,
-              content: `Memory ${i}`,
-              importance: 3,
-              similarity: 0.9,
-              session_id: 'session-123',
-              type: 'event',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              metadata: null,
-            }));
+          .fill(null)
+          .map((_, i) => ({
+            id: `${i}`,
+            content: `Memory ${i}`,
+            importance: 3,
+            similarity: 0.9,
+            session_id: 'session-123',
+            type: 'event',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            metadata: null,
+          }));
       });
 
       const semanticStart = performance.now();
@@ -624,21 +580,21 @@ describe('Memory Performance Tests', () => {
         error: null,
       });
 
-      mockRpc.mockImplementation(async () => {
+      mockMatchMemories.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
         return Array(5)
-            .fill(null)
-            .map((_, i) => ({
-              id: `${i}`,
-              content: `Memory ${i}`,
-              importance: 3,
-              similarity: 0.9,
-              session_id: 'session-123',
-              type: 'event',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              metadata: null,
-            }));
+          .fill(null)
+          .map((_, i) => ({
+            id: `${i}`,
+            content: `Memory ${i}`,
+            importance: 3,
+            similarity: 0.9,
+            session_id: 'session-123',
+            type: 'event',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            metadata: null,
+          }));
       });
 
       const operations = [];

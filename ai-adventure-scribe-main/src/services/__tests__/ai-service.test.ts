@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { generateCampaignDescription, generateCampaignName } from '../ai/campaign-generator';
-import { ChatPersistence } from '../ai/chat-persistence';
 import { ContextBuilder } from '../ai/context-builder';
 import { processDMResponse } from '../ai/dm-response-processor';
 import { AIService } from '../ai-service';
@@ -10,7 +9,6 @@ import { MemoryManager } from '../memory-manager';
 
 import { llmApiClient } from '@/infrastructure/api';
 import { detectCombatFromText } from '@/utils/combatDetection';
-
 
 // Mock dependencies
 vi.mock('@/infrastructure/api', () => ({
@@ -44,13 +42,6 @@ vi.mock('@/utils/combatDetection', () => ({
 vi.mock('../ai/campaign-generator', () => ({
   generateCampaignDescription: vi.fn(),
   generateCampaignName: vi.fn(),
-}));
-
-vi.mock('../ai/chat-persistence', () => ({
-  ChatPersistence: {
-    saveChatMessage: vi.fn(),
-    getConversationHistory: vi.fn(),
-  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -119,22 +110,32 @@ describe('AIService', () => {
       const result = await AIService.chatWithDM(mockParams);
 
       // Assert
-      expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith(mockContext.sessionId, 'Hello DM', 8);
+      expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith(
+        mockContext.sessionId,
+        'Hello DM',
+        8,
+      );
       expect(detectCombatFromText).not.toHaveBeenCalled();
-      expect(ContextBuilder.build).toHaveBeenCalledWith(expect.objectContaining({
-        context: mockContext,
-        message: 'Hello DM',
-        relevantMemories: mockMemories,
-        combatDetection: mockCombatResult,
-        isFirstMessage: false, // Message is not empty
-      }));
-      expect(llmApiClient.generateText).toHaveBeenCalledWith(expect.objectContaining({
-        prompt: expect.stringContaining(mockPrompt),
-      }));
-      expect(processDMResponse).toHaveBeenCalledWith(expect.objectContaining({
-        rawResponse: 'AI RAW Response',
-        combatDetection: mockCombatResult,
-      }));
+      expect(ContextBuilder.build).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: mockContext,
+          message: 'Hello DM',
+          relevantMemories: mockMemories,
+          combatDetection: mockCombatResult,
+          isFirstMessage: false, // Message is not empty
+        }),
+      );
+      expect(llmApiClient.generateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining(mockPrompt),
+        }),
+      );
+      expect(processDMResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rawResponse: 'AI RAW Response',
+          combatDetection: mockCombatResult,
+        }),
+      );
       expect(result).toEqual(mockProcessedResponse);
     });
 
@@ -154,9 +155,11 @@ describe('AIService', () => {
       await AIService.chatWithDM(paramsWithMemories);
 
       expect(MemoryManager.getRelevantMemories).not.toHaveBeenCalled();
-      expect(ContextBuilder.build).toHaveBeenCalledWith(expect.objectContaining({
-        relevantMemories: providedMemories,
-      }));
+      expect(ContextBuilder.build).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relevantMemories: providedMemories,
+        }),
+      );
     });
 
     it('should handle errors gracefully', async () => {
@@ -167,34 +170,18 @@ describe('AIService', () => {
       };
       vi.mocked(llmApiClient.generateText).mockRejectedValue(new Error('API Failure'));
 
-      await expect(AIService.chatWithDM(mockParams)).rejects.toThrow('Failed to get DM response - AI service unavailable');
-    });
-  });
-
-  describe('saveChatMessage', () => {
-    it('should delegate to ChatPersistence', async () => {
-      const params = { sessionId: '123', role: 'user' as const, content: 'hi' };
-      await AIService.saveChatMessage(params);
-      expect(ChatPersistence.saveChatMessage).toHaveBeenCalledWith(params);
-    });
-  });
-
-  describe('getConversationHistory', () => {
-    it('should delegate to ChatPersistence', async () => {
-      const history = [{ role: 'user', content: 'hi' }];
-      vi.mocked(ChatPersistence.getConversationHistory).mockResolvedValue(history as any);
-
-      const result = await AIService.getConversationHistory('123');
-
-      expect(ChatPersistence.getConversationHistory).toHaveBeenCalledWith('123');
-      expect(result).toEqual(history);
+      await expect(AIService.chatWithDM(mockParams)).rejects.toThrow(
+        'Failed to get DM response - AI service unavailable',
+      );
     });
   });
 
   describe('generateOpeningMessage', () => {
     it('should call chatWithDM with empty message and return text', async () => {
       const mockContext: any = { sessionId: '123-opening' };
-      const spy = vi.spyOn(AIService, 'chatWithDM').mockResolvedValue({ text: 'Opening scene' } as any);
+      const spy = vi
+        .spyOn(AIService, 'chatWithDM')
+        .mockResolvedValue({ text: 'Opening scene' } as any);
 
       const result = await AIService.generateOpeningMessage({ context: mockContext });
 

@@ -54,7 +54,6 @@ export * from './game/game-content';
 export { MessageListSkeleton } from './game/skeletons/MessageListSkeleton';
 
 // Memory components
-export { MemoryTester } from './game/memory/MemoryTester';
 export { MemoryCard } from './game/memory/MemoryCard';
 export { MemoryFilter } from './game/memory/MemoryFilter';
 export { useMemoryFiltering } from './game/memory/useMemoryFiltering';

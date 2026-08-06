@@ -2,11 +2,9 @@ import { llmApiClient } from '@/infrastructure/api';
 import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
 import type { Memory as UIMemory, MemoryType as UIMemoryType } from '@/types/memory';
-import type { EnhancedMemory, MemoryQueryOptions } from '@/types/memory';
 
 import { MemoryImportanceService } from './MemoryImportanceService';
 import { MemoryRepository } from './MemoryRepository';
-import { SceneStateTracker } from './SceneStateTracker';
 
 export type Memory = UIMemory;
 export type MemoryType = UIMemoryType;
@@ -153,72 +151,5 @@ Extract 1-4 key memories in this JSON format:
 
   static async loadRecentMemories(sessionId: string): Promise<Memory[]> {
     return repository.loadRecentMemories(sessionId);
-  }
-
-  // ===== Instance API (session-scoped) =====
-  private sessionId: string;
-  private sceneTracker: SceneStateTracker;
-
-  constructor(sessionId: string) {
-    this.sessionId = sessionId;
-    this.sceneTracker = new SceneStateTracker();
-  }
-
-  async storeMemory(
-    content: string,
-    type: EnhancedMemory['type'],
-    category: EnhancedMemory['category'],
-    context: Partial<EnhancedMemory['context']> = {},
-  ): Promise<void> {
-    const { importance, embedding } = await importanceService.evaluate(content, type, category);
-    const metadata = {
-      category,
-      context: JSON.stringify({ ...context, sceneState: this.sceneTracker.snapshot() }),
-      timestamp: new Date().toISOString(),
-    };
-    await repository.insertMemories([
-      {
-        session_id: this.sessionId,
-        type,
-        content,
-        importance,
-        metadata,
-        embedding,
-      },
-    ]);
-
-    this.sceneTracker.updateFromMemory({
-      type,
-      content,
-      context,
-      category,
-      importance,
-      metadata,
-    } as Partial<EnhancedMemory>);
-  }
-
-  async retrieveMemories(options: MemoryQueryOptions = {}): Promise<EnhancedMemory[]> {
-    if (options.query && options.semanticSearch) {
-      return this.semanticSearch(options.query, options);
-    }
-    const data = await repository.fetchMemories(this.sessionId, options);
-    return data.map((item) => repository.transformDatabaseMemory(item));
-  }
-
-  private async semanticSearch(
-    query: string,
-    options: MemoryQueryOptions,
-  ): Promise<EnhancedMemory[]> {
-    const queryEmbedding = await importanceService.embedQuery(query);
-    if (!queryEmbedding) {
-      return this.retrieveMemories({ ...options, semanticSearch: false });
-    }
-    const data = await repository.matchMemories(
-      this.sessionId,
-      queryEmbedding,
-      options.limit || 10,
-      0.7,
-    );
-    return data.map((item: any) => repository.transformDatabaseMemory(item));
   }
 }

@@ -1,5 +1,4 @@
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
-import { ChatPersistence } from './ai/chat-persistence';
 import { ContextBuilder } from './ai/context-builder';
 import { processDMResponse } from './ai/dm-response-processor';
 import {
@@ -200,26 +199,6 @@ export class AIService {
     // Store promise in in-flight map and return it
     inFlight.set(key, { ts: now, promise: p });
     return p;
-  }
-
-  /**
-   * Save a chat message to the database
-   */
-  static async saveChatMessage(params: {
-    sessionId: string;
-    role: 'user' | 'assistant';
-    content: string;
-    speakerId?: string;
-    id?: string;
-  }): Promise<void> {
-    return ChatPersistence.saveChatMessage(params);
-  }
-
-  /**
-   * Get conversation history for a session
-   */
-  static async getConversationHistory(sessionId: string): Promise<ChatMessage[]> {
-    return ChatPersistence.getConversationHistory(sessionId);
   }
 
   /**
