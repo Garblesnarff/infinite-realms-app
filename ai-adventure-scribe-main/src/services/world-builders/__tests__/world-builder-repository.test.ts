@@ -6,22 +6,16 @@ import { WorldBuilderRepository } from '../world-builder-repository';
 
 import { userDataApi } from '@/services/user-data-api';
 
-// Declare hoisted mocks
-const { mockFrom } = vi.hoisted(() => ({
-  mockFrom: vi.fn(),
-}));
-
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: mockFrom,
-  },
-}));
-
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCampaign: vi.fn(),
     listQuests: vi.fn(),
     upsertQuest: vi.fn(),
+    getWorldBuilderStats: vi.fn(),
+    findWorldBuilderNpc: vi.fn(),
+    findWorldBuilderLocation: vi.fn(),
+    createWorldBuilderNpc: vi.fn(),
+    createWorldBuilderLocation: vi.fn(),
   },
 }));
 
@@ -37,21 +31,6 @@ vi.mock('@/lib/logger', () => ({
 describe('WorldBuilderRepository', () => {
   const campaignId = 'camp-123';
   const userId = 'user-456';
-
-  // Helper to create a chainable mock thenable
-  function createMockChain(resolveValue: any): any {
-    const chain: any = {
-      select: vi.fn().mockImplementation(() => chain),
-      eq: vi.fn().mockImplementation(() => chain),
-      ilike: vi.fn().mockImplementation(() => chain),
-      limit: vi.fn().mockImplementation(() => chain),
-      insert: vi.fn().mockImplementation(() => Promise.resolve(resolveValue)),
-      then: vi.fn().mockImplementation((onfulfilled) => {
-        return Promise.resolve(onfulfilled(resolveValue));
-      }),
-    };
-    return chain;
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -115,20 +94,15 @@ describe('WorldBuilderRepository', () => {
     });
 
     it('should aggregate stats correctly if user campaign access is valid', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
-      vi.mocked(userDataApi.listQuests).mockResolvedValue([
-        { id: 'q1' },
-        { id: 'q2' },
-      ] as any);
-
-      mockFrom.mockImplementation((table: string) => {
-        if (table === 'locations') {
-          return createMockChain({ data: [{ id: 'loc-1' }, { id: 'loc-2' }, { id: 'loc-3' }], error: null });
-        }
-        if (table === 'npcs') {
-          return createMockChain({ data: [{ id: 'npc-1' }], error: null });
-        }
-        return createMockChain({ data: [], error: null });
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.getWorldBuilderStats).mockResolvedValue({
+        locations: 3,
+        npcs: 1,
+        quests: 2,
+        totalElements: 6,
       });
 
       const stats = await WorldBuilderRepository.getWorldStats(campaignId, userId);
@@ -139,16 +113,15 @@ describe('WorldBuilderRepository', () => {
         quests: 2,
         totalElements: 6,
       });
-      expect(mockFrom).toHaveBeenCalledWith('locations');
-      expect(mockFrom).toHaveBeenCalledWith('npcs');
-      expect(userDataApi.listQuests).toHaveBeenCalledWith(campaignId);
+      expect(userDataApi.getWorldBuilderStats).toHaveBeenCalledWith(campaignId);
     });
 
     it('should return default zero stats on exceptions', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
-      mockFrom.mockImplementation(() => {
-        throw new Error('Supabase fail');
-      });
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.getWorldBuilderStats).mockRejectedValue(new Error('API fail'));
 
       const stats = await WorldBuilderRepository.getWorldStats(campaignId, userId);
       expect(stats).toEqual({ locations: 0, npcs: 0, quests: 0, totalElements: 0 });
@@ -164,51 +137,87 @@ describe('WorldBuilderRepository', () => {
 
     it('should return false if user campaign access is denied', async () => {
       vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
-      const result = await WorldBuilderRepository.saveNPCFromXML(campaignId, 'sess-1', mockNpc, userId);
+      const result = await WorldBuilderRepository.saveNPCFromXML(
+        campaignId,
+        'sess-1',
+        mockNpc,
+        userId,
+      );
       expect(result).toBe(false);
     });
 
     it('should skip insertion and return true if NPC already exists', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderNpc).mockResolvedValue({ id: 'existing-npc' });
 
-      mockFrom.mockReturnValue(createMockChain({ data: [{ id: 'existing-npc' }], error: null }));
-
-      const result = await WorldBuilderRepository.saveNPCFromXML(campaignId, 'sess-1', mockNpc, userId);
+      const result = await WorldBuilderRepository.saveNPCFromXML(
+        campaignId,
+        'sess-1',
+        mockNpc,
+        userId,
+      );
 
       expect(result).toBe(true);
-      expect(mockFrom).toHaveBeenCalledWith('npcs');
+      expect(userDataApi.createWorldBuilderNpc).not.toHaveBeenCalled();
     });
 
     it('should insert NPC and return true if NPC does not exist', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderNpc).mockResolvedValue(null);
+      vi.mocked(userDataApi.createWorldBuilderNpc).mockResolvedValue({ id: 'npc-1' });
 
-      // First call is query, returns empty data. Second call is insert.
-      mockFrom.mockReturnValueOnce(createMockChain({ data: [], error: null }))
-              .mockReturnValueOnce(createMockChain({ error: null }));
-
-      const result = await WorldBuilderRepository.saveNPCFromXML(campaignId, 'sess-1', mockNpc, userId);
+      const result = await WorldBuilderRepository.saveNPCFromXML(
+        campaignId,
+        'sess-1',
+        mockNpc,
+        userId,
+      );
 
       expect(result).toBe(true);
-      expect(mockFrom).toHaveBeenCalledWith('npcs');
+      expect(userDataApi.createWorldBuilderNpc).toHaveBeenCalledWith({
+        campaign_id: campaignId,
+        name: mockNpc.name,
+        description: mockNpc.description,
+        location: mockNpc.location,
+      });
     });
 
     it('should return false if insert fails', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderNpc).mockResolvedValue(null);
+      vi.mocked(userDataApi.createWorldBuilderNpc).mockRejectedValue(new Error('Insert fail'));
 
-      mockFrom.mockReturnValueOnce(createMockChain({ data: [], error: null }))
-              .mockReturnValueOnce(createMockChain({ error: new Error('Insert fail') }));
-
-      const result = await WorldBuilderRepository.saveNPCFromXML(campaignId, 'sess-1', mockNpc, userId);
+      const result = await WorldBuilderRepository.saveNPCFromXML(
+        campaignId,
+        'sess-1',
+        mockNpc,
+        userId,
+      );
       expect(result).toBe(false);
     });
 
     it('should return false and catch error on exceptions', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
-      mockFrom.mockImplementation(() => {
-        throw new Error('Unexpected crash');
-      });
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderNpc).mockRejectedValue(new Error('Unexpected crash'));
 
-      const result = await WorldBuilderRepository.saveNPCFromXML(campaignId, 'sess-1', mockNpc, userId);
+      const result = await WorldBuilderRepository.saveNPCFromXML(
+        campaignId,
+        'sess-1',
+        mockNpc,
+        userId,
+      );
       expect(result).toBe(false);
     });
   });
@@ -221,50 +230,90 @@ describe('WorldBuilderRepository', () => {
 
     it('should return false if user campaign access is denied', async () => {
       vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
-      const result = await WorldBuilderRepository.saveLocationFromXML(campaignId, 'sess-1', mockLocation, userId);
+      const result = await WorldBuilderRepository.saveLocationFromXML(
+        campaignId,
+        'sess-1',
+        mockLocation,
+        userId,
+      );
       expect(result).toBe(false);
     });
 
     it('should skip insertion and return true if location already exists', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderLocation).mockResolvedValue({ id: 'existing-loc' });
 
-      mockFrom.mockReturnValue(createMockChain({ data: [{ id: 'existing-loc' }], error: null }));
-
-      const result = await WorldBuilderRepository.saveLocationFromXML(campaignId, 'sess-1', mockLocation, userId);
+      const result = await WorldBuilderRepository.saveLocationFromXML(
+        campaignId,
+        'sess-1',
+        mockLocation,
+        userId,
+      );
 
       expect(result).toBe(true);
-      expect(mockFrom).toHaveBeenCalledWith('locations');
+      expect(userDataApi.createWorldBuilderLocation).not.toHaveBeenCalled();
     });
 
     it('should insert location and return true if location does not exist', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderLocation).mockResolvedValue(null);
+      vi.mocked(userDataApi.createWorldBuilderLocation).mockResolvedValue({ id: 'loc-1' });
 
-      mockFrom.mockReturnValueOnce(createMockChain({ data: [], error: null }))
-              .mockReturnValueOnce(createMockChain({ error: null }));
-
-      const result = await WorldBuilderRepository.saveLocationFromXML(campaignId, 'sess-1', mockLocation, userId);
+      const result = await WorldBuilderRepository.saveLocationFromXML(
+        campaignId,
+        'sess-1',
+        mockLocation,
+        userId,
+      );
 
       expect(result).toBe(true);
-      expect(mockFrom).toHaveBeenCalledWith('locations');
+      expect(userDataApi.createWorldBuilderLocation).toHaveBeenCalledWith({
+        campaign_id: campaignId,
+        name: mockLocation.name,
+        description: mockLocation.description,
+        location_type: 'point_of_interest',
+        generated_by: 'xml_extraction',
+      });
     });
 
     it('should return false if insert fails', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderLocation).mockResolvedValue(null);
+      vi.mocked(userDataApi.createWorldBuilderLocation).mockRejectedValue(new Error('Insert fail'));
 
-      mockFrom.mockReturnValueOnce(createMockChain({ data: [], error: null }))
-              .mockReturnValueOnce(createMockChain({ error: new Error('Insert fail') }));
-
-      const result = await WorldBuilderRepository.saveLocationFromXML(campaignId, 'sess-1', mockLocation, userId);
+      const result = await WorldBuilderRepository.saveLocationFromXML(
+        campaignId,
+        'sess-1',
+        mockLocation,
+        userId,
+      );
       expect(result).toBe(false);
     });
 
     it('should return false and catch error on exceptions', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
-      mockFrom.mockImplementation(() => {
-        throw new Error('Unexpected crash');
-      });
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
+      vi.mocked(userDataApi.findWorldBuilderLocation).mockRejectedValue(
+        new Error('Unexpected crash'),
+      );
 
-      const result = await WorldBuilderRepository.saveLocationFromXML(campaignId, 'sess-1', mockLocation, userId);
+      const result = await WorldBuilderRepository.saveLocationFromXML(
+        campaignId,
+        'sess-1',
+        mockLocation,
+        userId,
+      );
       expect(result).toBe(false);
     });
   });
@@ -277,15 +326,28 @@ describe('WorldBuilderRepository', () => {
 
     it('should return false if user campaign access is denied', async () => {
       vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
-      const result = await WorldBuilderRepository.saveQuestFromXML(campaignId, 'sess-1', mockQuest, userId);
+      const result = await WorldBuilderRepository.saveQuestFromXML(
+        campaignId,
+        'sess-1',
+        mockQuest,
+        userId,
+      );
       expect(result).toBe(false);
     });
 
     it('should call upsertQuest and return true if campaign access is valid', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
       vi.mocked(userDataApi.upsertQuest).mockResolvedValue({} as any);
 
-      const result = await WorldBuilderRepository.saveQuestFromXML(campaignId, 'sess-1', mockQuest, userId);
+      const result = await WorldBuilderRepository.saveQuestFromXML(
+        campaignId,
+        'sess-1',
+        mockQuest,
+        userId,
+      );
 
       expect(result).toBe(true);
       expect(userDataApi.upsertQuest).toHaveBeenCalledWith({
@@ -298,10 +360,18 @@ describe('WorldBuilderRepository', () => {
     });
 
     it('should return false and catch error on exceptions', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: campaignId, user_id: userId } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: campaignId,
+        user_id: userId,
+      } as any);
       vi.mocked(userDataApi.upsertQuest).mockRejectedValue(new Error('Upsert fail'));
 
-      const result = await WorldBuilderRepository.saveQuestFromXML(campaignId, 'sess-1', mockQuest, userId);
+      const result = await WorldBuilderRepository.saveQuestFromXML(
+        campaignId,
+        'sess-1',
+        mockQuest,
+        userId,
+      );
       expect(result).toBe(false);
     });
   });

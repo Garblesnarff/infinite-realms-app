@@ -3,7 +3,6 @@ import { buildNPCPrompt } from './npc-prompt-builder';
 import type { NPCRequest, GeneratedNPC } from './npc-types';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -88,42 +87,36 @@ export class NPCGenerator {
    */
   static async saveNPC(npc: GeneratedNPC): Promise<string> {
     try {
+      const generatedAt = npc.metadata.createdAt.toISOString();
       const npcData = {
         name: npc.name,
         description: npc.description,
         race: npc.race,
-        class: npc.class,
-        level: npc.level,
-        gender: npc.gender,
-        age: npc.age,
-        height: npc.height,
-        weight: npc.weight,
-        eyes: npc.eyes,
-        skin: npc.skin,
-        hair: npc.hair,
-        personality_traits: npc.personality.traits,
         campaign_id: npc.metadata.campaignId,
-        location_id: npc.metadata.locationId,
-        metadata: {
+        occupation: npc.occupation,
+        personality: JSON.stringify(npc.personality),
+        backstory: npc.background,
+        relationship: JSON.stringify(npc.relationships),
+        location: npc.metadata.locationId,
+        stats: {
           ...npc,
-          generatedAt: npc.metadata.createdAt.toISOString(),
+          metadata: {
+            ...npc.metadata,
+            createdAt: generatedAt,
+          },
+          generatedAt,
           generator: 'NPCGenerator',
           version: '1.0',
         },
       };
 
-      const { data, error } = await supabase.from('npcs').insert(npcData).select('id').single();
-
-      if (error) {
-        logger.error('Error saving NPC:', error);
-        throw new Error('Failed to save NPC to database');
-      }
+      const data = await userDataApi.createWorldBuilderNpc(npcData);
 
       logger.info(`💾 Saved NPC "${npc.name}" with ID: ${data.id}`);
       return data.id;
     } catch (error) {
       logger.error('Error saving NPC:', error);
-      throw error;
+      throw new Error('Failed to save NPC to database');
     }
   }
 

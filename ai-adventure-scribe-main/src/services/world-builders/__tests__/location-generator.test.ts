@@ -7,23 +7,12 @@ import { calculateNarrativeWeight } from '../location-prompts';
 import { WorldBuildingAnalyzer } from '../world-building-analyzer';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 vi.mock('@/infrastructure/api', () => ({
   llmApiClient: {
     generateText: vi.fn(),
-  },
-}));
-
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      single: vi.fn(),
-    })),
   },
 }));
 
@@ -43,10 +32,9 @@ vi.mock('@/utils/character-level-utils', () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCampaign: vi.fn(),
+    createWorldBuilderLocation: vi.fn(),
   },
 }));
-
-import { userDataApi } from '@/services/user-data-api';
 
 describe('LocationGenerator', () => {
   beforeEach(() => {
@@ -83,7 +71,9 @@ describe('LocationGenerator', () => {
     };
 
     it('should generate a location successfully', async () => {
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(`Here is your JSON: ${JSON.stringify(mockLocationData)}`);
+      vi.mocked(llmApiClient.generateText).mockResolvedValue(
+        `Here is your JSON: ${JSON.stringify(mockLocationData)}`,
+      );
 
       const result = await LocationGenerator.generateLocation(mockRequest);
 
@@ -97,13 +87,17 @@ describe('LocationGenerator', () => {
     it('should throw error if no JSON is found', async () => {
       vi.mocked(llmApiClient.generateText).mockResolvedValue('No JSON here');
 
-      await expect(LocationGenerator.generateLocation(mockRequest)).rejects.toThrow('No JSON found');
+      await expect(LocationGenerator.generateLocation(mockRequest)).rejects.toThrow(
+        'No JSON found',
+      );
     });
 
     it('should throw error if JSON is invalid', async () => {
       vi.mocked(llmApiClient.generateText).mockResolvedValue('{ invalid json }');
 
-      await expect(LocationGenerator.generateLocation(mockRequest)).rejects.toThrow('Invalid response format');
+      await expect(LocationGenerator.generateLocation(mockRequest)).rejects.toThrow(
+        'Invalid response format',
+      );
     });
   });
 
@@ -153,16 +147,10 @@ describe('LocationGenerator', () => {
         metadata: { createdAt: new Date(), campaignId: 'c1' },
       };
 
-      const mockFrom = vi.mocked(supabase.from);
-      mockFrom.mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'loc-123' }, error: null }),
-      } as any);
+      vi.mocked(userDataApi.createWorldBuilderLocation).mockResolvedValue({ id: 'loc-123' });
 
       const id = await LocationGenerator.saveLocation(mockLocation);
       expect(id).toBe('loc-123');
-      expect(mockFrom).toHaveBeenCalledWith('locations');
     });
 
     it('should throw error on database failure', async () => {
@@ -171,13 +159,11 @@ describe('LocationGenerator', () => {
         metadata: { createdAt: new Date() },
       };
 
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
-      } as any);
+      vi.mocked(userDataApi.createWorldBuilderLocation).mockRejectedValue(new Error('DB Error'));
 
-      await expect(LocationGenerator.saveLocation(mockLocation)).rejects.toThrow('Failed to save location to database');
+      await expect(LocationGenerator.saveLocation(mockLocation)).rejects.toThrow(
+        'Failed to save location to database',
+      );
     });
   });
 
@@ -186,13 +172,11 @@ describe('LocationGenerator', () => {
       const mockLocationData = { name: 'The Forest', type: 'wilderness' };
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify(mockLocationData));
 
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'loc-123' }, error: null }),
-      } as any);
+      vi.mocked(userDataApi.createWorldBuilderLocation).mockResolvedValue({ id: 'loc-123' });
 
-      const result = await LocationGenerator.createLocation({ context: { campaignId: 'c1' } } as any);
+      const result = await LocationGenerator.createLocation({
+        context: { campaignId: 'c1' },
+      } as any);
       expect(result.id).toBe('loc-123');
       expect(result.name).toBe('The Forest');
     });
@@ -200,13 +184,11 @@ describe('LocationGenerator', () => {
     it('should return location even if save fails', async () => {
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ name: 'The Cave' }));
 
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Save Error' } }),
-      } as any);
+      vi.mocked(userDataApi.createWorldBuilderLocation).mockRejectedValue(new Error('Save Error'));
 
-      const result = await LocationGenerator.createLocation({ context: { campaignId: 'c1' } } as any);
+      const result = await LocationGenerator.createLocation({
+        context: { campaignId: 'c1' },
+      } as any);
       expect(result.name).toBe('The Cave');
       expect(result.id).toBeUndefined();
     });
@@ -214,12 +196,24 @@ describe('LocationGenerator', () => {
 
   describe('generateContextualLocation', () => {
     it('should verify campaign ownership and generate location', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'u1', genre: 'horror' } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: 'c1',
+        user_id: 'u1',
+        genre: 'horror',
+      } as any);
 
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ name: 'Spooky House' }));
+      vi.mocked(llmApiClient.generateText).mockResolvedValue(
+        JSON.stringify({ name: 'Spooky House' }),
+      );
       vi.mocked(getAveragePartyLevel).mockResolvedValue(5);
 
-      await LocationGenerator.generateContextualLocation('c1', 's1', 'Enter building', undefined, 'u1');
+      await LocationGenerator.generateContextualLocation(
+        'c1',
+        's1',
+        'Enter building',
+        undefined,
+        'u1',
+      );
 
       expect(userDataApi.getCampaign).toHaveBeenCalledWith('c1');
       expect(getAveragePartyLevel).toHaveBeenCalledWith('c1', 's1');
@@ -227,7 +221,13 @@ describe('LocationGenerator', () => {
 
     it('should fail closed when userId is missing', async () => {
       await expect(
-        LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, undefined as any),
+        LocationGenerator.generateContextualLocation(
+          'c1',
+          's1',
+          'Action',
+          undefined,
+          undefined as any,
+        ),
       ).rejects.toThrow('User ID is required for location generation');
       expect(userDataApi.getCampaign).not.toHaveBeenCalled();
     });
@@ -235,13 +235,21 @@ describe('LocationGenerator', () => {
     it('should throw if campaign is not owned by the user', async () => {
       vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
 
-      await expect(LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1')).rejects.toThrow('Campaign not found or access denied');
+      await expect(
+        LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1'),
+      ).rejects.toThrow('Campaign not found or access denied');
     });
 
     it('should throw if campaign owner does not match user context', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'different-user', genre: 'horror' } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: 'c1',
+        user_id: 'different-user',
+        genre: 'horror',
+      } as any);
 
-      await expect(LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1')).rejects.toThrow('Campaign not found or access denied');
+      await expect(
+        LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1'),
+      ).rejects.toThrow('Campaign not found or access denied');
     });
   });
 

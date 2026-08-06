@@ -107,6 +107,13 @@ export type JournalHandoutEntry = {
   createdAt: string;
 };
 
+export type WorldBuilderStats = {
+  locations: number;
+  npcs: number;
+  quests: number;
+  totalElements: number;
+};
+
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
   const token = loadCachedSession()?.access_token;
@@ -200,6 +207,24 @@ export const userDataApi = {
     request('/v1/quests', { method: 'POST', body: JSON.stringify(payload) }),
   upsertQuest: (payload: Record<string, unknown>): Promise<any> =>
     request('/v1/quests/upsert', { method: 'POST', body: JSON.stringify(payload) }),
+  getWorldBuilderStats: (campaignId: string): Promise<WorldBuilderStats> => {
+    const query = new URLSearchParams({ campaign_id: campaignId });
+    return request(`/v1/world-builder/stats?${query.toString()}`);
+  },
+  findWorldBuilderNpc: async (campaignId: string, name: string): Promise<any | null> => {
+    const query = new URLSearchParams({ campaign_id: campaignId, name });
+    const rows = await request<any[]>(`/v1/world-builder/npcs?${query.toString()}`);
+    return rows[0] ?? null;
+  },
+  findWorldBuilderLocation: async (campaignId: string, name: string): Promise<any | null> => {
+    const query = new URLSearchParams({ campaign_id: campaignId, name });
+    const rows = await request<any[]>(`/v1/world-builder/locations?${query.toString()}`);
+    return rows[0] ?? null;
+  },
+  createWorldBuilderNpc: (payload: Record<string, unknown>): Promise<any> =>
+    request('/v1/world-builder/npcs', { method: 'POST', body: JSON.stringify(payload) }),
+  createWorldBuilderLocation: (payload: Record<string, unknown>): Promise<any> =>
+    request('/v1/world-builder/locations', { method: 'POST', body: JSON.stringify(payload) }),
   listStarterCharacterTemplates: (campaignId: string): Promise<any[]> =>
     request(`/v1/starter-character-templates?campaign_id=${encodeURIComponent(campaignId)}`),
   getStarterCharacterTemplate: (templateId: string): Promise<any | null> =>

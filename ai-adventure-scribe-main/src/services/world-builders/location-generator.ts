@@ -4,7 +4,6 @@ import { WorldBuildingAnalyzer } from './world-building-analyzer';
 import type { LocationRequest, GeneratedLocation } from './location-types';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -77,22 +76,13 @@ export class LocationGenerator {
         },
       };
 
-      const { data, error } = await supabase
-        .from('locations')
-        .insert(locationData)
-        .select('id')
-        .single();
-
-      if (error) {
-        logger.error('Error saving location:', error);
-        throw new Error('Failed to save location to database');
-      }
+      const data = await userDataApi.createWorldBuilderLocation(locationData);
 
       logger.info(`💾 Saved location "${location.name}" with ID: ${data.id}`);
       return data.id;
     } catch (error) {
       logger.error('Error saving location:', error);
-      throw error;
+      throw new Error('Failed to save location to database');
     }
   }
 

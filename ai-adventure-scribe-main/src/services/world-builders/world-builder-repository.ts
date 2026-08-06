@@ -1,4 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -17,7 +16,9 @@ export class WorldBuilderRepository {
     try {
       // SECURITY: Require userId for proper validation
       if (!userId) {
-        logger.warn('[WorldBuilder] No userId provided for campaign access validation - denying access');
+        logger.warn(
+          '[WorldBuilder] No userId provided for campaign access validation - denying access',
+        );
         return false;
       }
 
@@ -50,7 +51,10 @@ export class WorldBuilderRepository {
   /**
    * Get world building statistics
    */
-  static async getWorldStats(campaignId: string, userId: string): Promise<{
+  static async getWorldStats(
+    campaignId: string,
+    userId: string,
+  ): Promise<{
     locations: number;
     npcs: number;
     quests: number;
@@ -61,18 +65,7 @@ export class WorldBuilderRepository {
         return { locations: 0, npcs: 0, quests: 0, totalElements: 0 };
       }
 
-      const [locations, npcs, quests] = await Promise.all([
-        supabase.from('locations').select('id').eq('campaign_id', campaignId),
-        supabase.from('npcs').select('id').eq('campaign_id', campaignId),
-        userDataApi.listQuests(campaignId),
-      ]);
-
-      return {
-        locations: locations.data?.length || 0,
-        npcs: npcs.data?.length || 0,
-        quests: quests.length,
-        totalElements: (locations.data?.length || 0) + (npcs.data?.length || 0) + quests.length,
-      };
+      return await userDataApi.getWorldBuilderStats(campaignId);
     } catch (error) {
       logger.error('Failed to get world stats:', error);
       return { locations: 0, npcs: 0, quests: 0, totalElements: 0 };
@@ -98,36 +91,21 @@ export class WorldBuilderRepository {
         return false;
       }
 
-      // Check if NPC already exists (by name in this campaign)
-      const { data: existing } = await supabase
-        .from('npcs')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .ilike('name', npc.name)
-        .limit(1);
-
-      if (existing && existing.length > 0) {
+      const existing = await userDataApi.findWorldBuilderNpc(campaignId, npc.name);
+      if (existing) {
         logger.debug(`[WorldBuilder] NPC "${npc.name}" already exists, skipping`);
         return true;
       }
 
-      // Only use columns that exist in the npcs table schema:
-      // id, campaign_id, name, race, occupation, personality, description, backstory,
-      // relationship, location, image_url, voice_id, stats, created_at, updated_at
-      const { error } = await supabase.from('npcs').insert({
+      await userDataApi.createWorldBuilderNpc({
         campaign_id: campaignId,
         name: npc.name,
         description: npc.description,
         location: npc.location, // Use 'location' not 'current_location'
       });
 
-      if (error) {
-        logger.warn(`[WorldBuilder] Failed to save NPC "${npc.name}":`, error);
-        return false;
-      } else {
-        logger.debug(`[WorldBuilder] Saved NPC "${npc.name}" from XML`);
-        return true;
-      }
+      logger.debug(`[WorldBuilder] Saved NPC "${npc.name}" from XML`);
+      return true;
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving NPC "${npc.name}":`, error);
       return false;
@@ -148,23 +126,13 @@ export class WorldBuilderRepository {
         return false;
       }
 
-      // Check if location already exists (by name in this campaign)
-      const { data: existing } = await supabase
-        .from('locations')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .ilike('name', location.name)
-        .limit(1);
-
-      if (existing && existing.length > 0) {
+      const existing = await userDataApi.findWorldBuilderLocation(campaignId, location.name);
+      if (existing) {
         logger.debug(`[WorldBuilder] Location "${location.name}" already exists, skipping`);
         return true;
       }
 
-      // Only use columns that exist in the locations table schema:
-      // id, campaign_id, name, location_type, description, population, climate, terrain,
-      // notable_features[], connected_locations[], image_url, map_url, metadata, created_at, updated_at, generated_by
-      const { error } = await supabase.from('locations').insert({
+      await userDataApi.createWorldBuilderLocation({
         campaign_id: campaignId,
         name: location.name,
         description: location.description,
@@ -172,13 +140,8 @@ export class WorldBuilderRepository {
         generated_by: 'xml_extraction',
       });
 
-      if (error) {
-        logger.warn(`[WorldBuilder] Failed to save location "${location.name}":`, error);
-        return false;
-      } else {
-        logger.debug(`[WorldBuilder] Saved location "${location.name}" from XML`);
-        return true;
-      }
+      logger.debug(`[WorldBuilder] Saved location "${location.name}" from XML`);
+      return true;
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving location "${location.name}":`, error);
       return false;

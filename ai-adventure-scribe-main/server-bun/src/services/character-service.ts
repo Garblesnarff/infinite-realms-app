@@ -198,18 +198,76 @@ export class CharacterService {
     userId: string,
     data: Omit<Partial<NewCharacterStats>, 'characterId'>,
   ): Promise<void> {
-    const character = await this.getById(characterId, userId);
-    if (!character) {
+    // 🛡️ Sentinel: Keep authorization in the same statement as the write.
+    // The CTE updates an existing row or inserts a new one only when the caller
+    // owns the character. This avoids the old check-then-act gap without using
+    // Drizzle's known-broken insert-select builder.
+    const result = await db.execute(sql`
+      WITH authorized_character AS (
+        SELECT c.id
+        FROM characters AS c
+        WHERE c.id = ${characterId}
+          AND (c.user_id = ${userId} OR c.owner_id = ${userId})
+      ), updated AS (
+        UPDATE character_stats AS cs
+        SET strength = COALESCE(${data.strength ?? null}, cs.strength),
+            dexterity = COALESCE(${data.dexterity ?? null}, cs.dexterity),
+            constitution = COALESCE(${data.constitution ?? null}, cs.constitution),
+            intelligence = COALESCE(${data.intelligence ?? null}, cs.intelligence),
+            wisdom = COALESCE(${data.wisdom ?? null}, cs.wisdom),
+            charisma = COALESCE(${data.charisma ?? null}, cs.charisma),
+            armor_class = COALESCE(${data.armorClass ?? null}, cs.armor_class),
+            max_hit_points = COALESCE(${data.maxHitPoints ?? null}, cs.max_hit_points),
+            current_hit_points = COALESCE(${data.currentHitPoints ?? null}, cs.current_hit_points),
+            temporary_hit_points = COALESCE(${data.temporaryHitPoints ?? null}, cs.temporary_hit_points),
+            initiative_bonus = COALESCE(${data.initiativeBonus ?? null}, cs.initiative_bonus),
+            speed = COALESCE(${data.speed ?? null}, cs.speed),
+            updated_at = now()
+        FROM authorized_character AS ac
+        WHERE cs.character_id = ac.id
+        RETURNING cs.character_id
+      ), inserted AS (
+        INSERT INTO character_stats (
+          character_id,
+          strength,
+          dexterity,
+          constitution,
+          intelligence,
+          wisdom,
+          charisma,
+          armor_class,
+          max_hit_points,
+          current_hit_points,
+          temporary_hit_points,
+          initiative_bonus,
+          speed
+        )
+        SELECT
+          ac.id,
+          COALESCE(${data.strength ?? null}, 10),
+          COALESCE(${data.dexterity ?? null}, 10),
+          COALESCE(${data.constitution ?? null}, 10),
+          COALESCE(${data.intelligence ?? null}, 10),
+          COALESCE(${data.wisdom ?? null}, 10),
+          COALESCE(${data.charisma ?? null}, 10),
+          COALESCE(${data.armorClass ?? null}, 10),
+          COALESCE(${data.maxHitPoints ?? null}, 10),
+          COALESCE(${data.currentHitPoints ?? null}, 10),
+          COALESCE(${data.temporaryHitPoints ?? null}, 0),
+          COALESCE(${data.initiativeBonus ?? null}, 0),
+          COALESCE(${data.speed ?? null}, 30)
+        FROM authorized_character AS ac
+        WHERE NOT EXISTS (SELECT 1 FROM updated)
+        RETURNING character_id
+      )
+      SELECT character_id FROM updated
+      UNION ALL
+      SELECT character_id FROM inserted
+    `);
+
+    if (Array.from(result as Iterable<{ character_id: string }>).length === 0) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
     }
-
-    await db
-      .insert(characterStats)
-      .values({ ...data, characterId })
-      .onConflictDoUpdate({
-        target: characterStats.characterId,
-        set: { ...data, updatedAt: new Date() },
-      });
   }
 
   static async applyDamage(characterId: string, userId: string, amount: number) {
@@ -220,13 +278,22 @@ export class CharacterService {
         temporaryHitPoints: sql`greatest(0, coalesce(${characterStats.temporaryHitPoints}, 0) - ${amount})`,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(characterStats.characterId, characterId),
-        exists(db.select({ one: sql`1` }).from(characters).where(and(
-          eq(characters.id, characterStats.characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        ))),
-      ))
+      .where(
+        and(
+          eq(characterStats.characterId, characterId),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterStats.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
       .returning({
         currentHitPoints: characterStats.currentHitPoints,
         temporaryHitPoints: characterStats.temporaryHitPoints,
