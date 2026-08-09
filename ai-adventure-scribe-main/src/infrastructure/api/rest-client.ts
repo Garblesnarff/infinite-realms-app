@@ -34,6 +34,12 @@ export interface GenerateTextParams {
   onStream?: (chunk: string) => void;
   requestType?: 'user' | 'system';
   onResponseMetadata?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
+  /**
+   * Optional, numbers-only per-section prompt token telemetry (log-only on the
+   * server -- see #1688). No prompt content, just counts. Omitted entirely if
+   * the caller didn't compute it or computation failed.
+   */
+  metrics?: Record<string, number>;
 }
 
 export interface GenerateImageParams {
@@ -127,6 +133,7 @@ class LlmApiClient {
           provider,
           responseSchema: params.responseSchema,
           requestType: params.requestType || 'user',
+          metrics: params.metrics,
         }),
       });
 

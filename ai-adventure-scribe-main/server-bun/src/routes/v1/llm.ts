@@ -81,11 +81,36 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider = 'openrouter',
         requestType: rawRequestType = 'user',
         responseSchema,
+        metrics,
       } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
         return { error: 'Missing prompt' };
+      }
+
+      // Phase 0.6 (#1688): per-section prompt token telemetry, log-only. No storage --
+      // one structured log line per turn, WARN instead of INFO when the total estimate
+      // is large enough to matter for the Phase 4 bounded-prompt work. Absent `metrics`
+      // (old clients, or client-side computation failure) is a no-op, by design.
+      if (metrics && typeof metrics === 'object') {
+        try {
+          const total =
+            typeof metrics.total === 'number'
+              ? metrics.total
+              : Object.values(metrics).reduce(
+                  (sum, value) => sum + (typeof value === 'number' ? value : 0),
+                  0,
+                );
+          const line = `[PromptMetrics] ${JSON.stringify({ ...metrics, total })}`;
+          if (total > 30_000) {
+            logger.warn(line);
+          } else {
+            logger.info(line);
+          }
+        } catch (metricsError) {
+          logger.warn({ msg: 'PROMPT_METRICS_LOG_FAILED', error: metricsError });
+        }
       }
 
       // 🛡️ Sentinel: Restrict 'system' requests to admins to prevent quota bypass.
@@ -182,6 +207,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
         requestType: t.Optional(t.Union([t.Literal('user'), t.Literal('system')])),
         responseSchema: t.Optional(t.Any()),
+        // Phase 0.6 (#1688): optional, numbers-only per-section prompt token telemetry.
+        // Permissive on keys (log-only, never stored) so new sections don't require a
+        // schema change; values must be numbers.
+        metrics: t.Optional(t.Record(t.String(), t.Number())),
       }),
     },
   )

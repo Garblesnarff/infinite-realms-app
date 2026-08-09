@@ -10,6 +10,12 @@ let generatedResult: Record<string, unknown> = {
   model: 'test/model',
 };
 
+// Captures for the #1688 prompt-metrics log lines. Unlike the other logger
+// methods (still no-ops -- their content isn't under test elsewhere in this
+// file), info/warn push the raw message so tests can assert on it.
+let loggedInfoLines: string[] = [];
+let loggedWarnLines: string[] = [];
+
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
     user: { userId: 'smoke-user', email: 'smoke@example.test', plan: 'free' },
@@ -17,7 +23,16 @@ mock.module('../../../lib/auth.js', () => ({
   }),
 }));
 mock.module('../../../lib/logger.js', () => ({
-  logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+  logger: {
+    debug: () => {},
+    info: (msg: unknown) => {
+      if (typeof msg === 'string') loggedInfoLines.push(msg);
+    },
+    warn: (msg: unknown) => {
+      if (typeof msg === 'string') loggedWarnLines.push(msg);
+    },
+    error: () => {},
+  },
 }));
 mock.module('../../../middleware/admin.js', () => ({ isAdmin: () => false }));
 mock.module('../../../middleware/rate-limit.js', () => ({
@@ -220,5 +235,70 @@ describe('POST /v1/llm/generate HTTP contract', () => {
     expect(response.status).toBe(200);
     expect(generatedInputs).toHaveLength(2);
     expect(JSON.parse(body.text).combat_transition).toBe('none');
+  });
+
+  describe('#1688 per-section prompt token telemetry (log-only)', () => {
+    it('accepts an optional metrics field and logs a single [PromptMetrics] line at INFO', async () => {
+      loggedInfoLines = [];
+      loggedWarnLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            prompt: 'hello with metrics',
+            metrics: {
+              campaign_and_canon: 500,
+              scene_state: 50,
+              system: 120,
+              history: 300,
+              player_input: 20,
+              total: 990,
+            },
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const line = loggedInfoLines.find((entry) => entry.startsWith('[PromptMetrics] '));
+      expect(line).toBeDefined();
+      const parsed = JSON.parse(line!.slice('[PromptMetrics] '.length));
+      expect(parsed.total).toBe(990);
+      expect(parsed.campaign_and_canon).toBe(500);
+      expect(loggedWarnLines.find((entry) => entry.startsWith('[PromptMetrics] '))).toBeUndefined();
+    });
+
+    it('logs the [PromptMetrics] line at WARN when total exceeds 30000', async () => {
+      loggedInfoLines = [];
+      loggedWarnLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'hello with a huge prompt', metrics: { total: 45_000 } }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const line = loggedWarnLines.find((entry) => entry.startsWith('[PromptMetrics] '));
+      expect(line).toBeDefined();
+      expect(loggedInfoLines.find((entry) => entry.startsWith('[PromptMetrics] '))).toBeUndefined();
+    });
+
+    it('still works for requests without a metrics field (old clients, backward compatible)', async () => {
+      loggedInfoLines = [];
+      loggedWarnLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'hello, no metrics field here' }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(loggedInfoLines.some((entry) => entry.startsWith('[PromptMetrics]'))).toBe(false);
+      expect(loggedWarnLines.some((entry) => entry.startsWith('[PromptMetrics]'))).toBe(false);
+    });
   });
 });
