@@ -114,6 +114,9 @@ export type WorldBuilderStats = {
   totalElements: number;
 };
 
+/** Kinds the server allowlists for `POST /v1/telemetry/client-failure` (see #1680). */
+export type ClientFailureKind = 'lore_injection_failed' | 'scene_state_fetch_failed';
+
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
   const token = loadCachedSession()?.access_token;
@@ -407,4 +410,20 @@ export const userDataApi = {
    */
   getCharacterLoadout: (characterId: string): Promise<EquippedLoadout> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}/loadout`),
+  /**
+   * Report a continuity-path failure the client alone can see (a lore fetch that failed, a
+   * scene-state fetch that came back null) so it pages through the same `alert()` path as
+   * server-side continuity failures (#1680).
+   *
+   * Deliberately fire-and-forget: this must never throw into, delay, or otherwise affect the
+   * turn that triggered it. Callers should `void` this call rather than await it.
+   */
+  reportClientFailure: (kind: ClientFailureKind, sessionId?: string, error?: string): void => {
+    request('/v1/telemetry/client-failure', {
+      method: 'POST',
+      body: JSON.stringify({ kind, sessionId, error }),
+    }).catch(() => {
+      // Swallow: a failed failure-report must never itself fail anything.
+    });
+  },
 };

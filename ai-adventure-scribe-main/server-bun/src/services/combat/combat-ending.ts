@@ -26,6 +26,7 @@ import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
+import { alert } from '../../lib/alerting.js';
 import { logger } from '../../lib/logger.js';
 
 import type { CombatEndReason } from '../../types/combat.js';
@@ -111,6 +112,10 @@ export async function concludeEncounter(
       sessionId,
       reason,
     });
+    // Loud, not just logged (#1680): this was previously an `alert: true` marker nobody
+    // consumed. A fight ending unresolved is exactly the "working and broken look the same"
+    // continuity failure the alerting module exists for.
+    alert('combat_ended_unresolved', { sessionId, error: `reason=${reason}` });
     trackCombatEvent('abandonment', { encounterId, sessionId, reason });
   }
   await publishCombatState(encounterId, userId, 'combat_ended');

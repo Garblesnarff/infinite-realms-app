@@ -3,6 +3,7 @@ import { fetchCampaignAssetsForPrompt } from '../asset-processor';
 
 import { getLoreKeeperService } from '@/agents/services/lore-keeper/LoreKeeperService';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * CampaignContextPrompts - Handles building starter campaign lore and canonical entities sections of the prompt.
@@ -199,6 +200,10 @@ ${handout.content}
       return section;
     } catch (loreError) {
       logger.warn('[ContextBuilder] Failed to fetch starter campaign lore:', loreError);
+      // Loud, not just logged (#1680): a failed lore fetch previously only warned to a log
+      // nobody watches. `buildStarterCampaignLoreSection` isn't passed a sessionId, so this
+      // reports without one — the server route and `alert()` both treat it as optional.
+      userDataApi.reportClientFailure('lore_injection_failed', undefined, String(loreError));
       return '';
     }
   }

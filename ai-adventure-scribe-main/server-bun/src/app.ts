@@ -41,6 +41,7 @@ import { adminRoutes } from './routes/v1/admin';
 import { spellsRoutes } from './routes/v1/spells';
 import { waitlistRoutes } from './routes/v1/waitlist';
 import { internalRoutes } from './routes/v1/internal';
+import { telemetryRoutes } from './routes/v1/telemetry';
 import { securedGameDataRoutes } from './routes/v1/secured-game-data';
 import { worldBuilderRoutes } from './routes/v1/world-builder';
 import { blogApiRoutes } from './routes/v1/blog';
@@ -295,6 +296,9 @@ export function createApp() {
 
   // Observability routes (frontend error/metric logging)
   app.use(observabilityRoutes);
+
+  // Telemetry routes (client-side continuity-failure alerting, auth-gated)
+  app.use(telemetryRoutes);
 
   // Encounters routes (encounter telemetry)
   app.use(encountersRoutes);

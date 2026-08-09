@@ -4,6 +4,7 @@ import {
   saveTacticalMap,
   saveTacticalMapRow,
 } from './tactical-map-store.js';
+import { alert } from '../../lib/alerting.js';
 import { combatLogger } from '../../lib/logger.js';
 import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactical/dispatch.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
@@ -117,6 +118,15 @@ export async function applyDmTacticalActions(
           ? '[tactical] DM map action named an entity that is not on the board'
           : '[tactical] dropped invalid DM map action',
       );
+      if (unknownEntity) {
+        // Loud, not just logged (#1680): this was previously an `alert: unknownEntity`
+        // marker nobody consumed. A DM/board mismatch is exactly the kind of continuity
+        // failure that otherwise looks like a normal degraded turn in prod.
+        alert('tactical_unknown_entity', {
+          sessionId,
+          error: JSON.stringify(result.refusal),
+        });
+      }
       degraded.push(result.refusal);
     }
     results.push(result);
