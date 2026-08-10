@@ -77,6 +77,42 @@ type VersionedClientIntent = Extract<ClientCombatIntent, { expectedVersion?: num
 const requiresExpectedVersion = (intent: ClientCombatIntent): intent is VersionedClientIntent =>
   INTENT_TYPES_REQUIRING_VERSION.has(intent.type);
 
+/** What the intent route attaches to a client-fixable refusal (server `AppError.details`). */
+export interface CombatRefusalDetails {
+  role?: 'actor' | 'target';
+  intentType?: string;
+  roster?: string;
+  resource?: string;
+  id?: string;
+  currentParticipantId?: string | null;
+  currentParticipantSlug?: string | null;
+}
+
+/**
+ * A refusal the engine issued on purpose, carrying enough for the caller to fix it.
+ *
+ * The route answers an out-of-turn actor 422 and an unresolvable reference 404-with-roster
+ * (#1700), but the client used to flatten both into `new Error(payload.error)` — dropping the
+ * status and the roster on the floor. So the one thing that could have told the DM what it got
+ * wrong reached the browser and was discarded one line before it could be used, and the player
+ * saw "Actor is not the current-turn participant" as a raw error instead.
+ */
+export class CombatIntentRefusedError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly details?: CombatRefusalDetails,
+  ) {
+    super(message);
+    this.name = 'CombatIntentRefusedError';
+  }
+
+  /** A refusal the DM can plausibly correct by re-choosing an actor or target. */
+  get isRepairable(): boolean {
+    return this.status === 422 || this.status === 404;
+  }
+}
+
 export async function executeAuthoritativeCombatIntent(
   encounterId: string,
   intent: ClientCombatIntent,
@@ -108,7 +144,11 @@ export async function executeAuthoritativeCombatIntent(
   );
   const payload = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(String(payload.error || `Combat action rejected (${response.status})`));
+    throw new CombatIntentRefusedError(
+      String(payload.error || `Combat action rejected (${response.status})`),
+      response.status,
+      (payload as { details?: CombatRefusalDetails }).details,
+    );
   return payload.result;
 }
 

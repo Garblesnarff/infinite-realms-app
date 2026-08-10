@@ -194,7 +194,13 @@ function assertActorTurn(state: CombatState, actorId: string, index: SessionEnti
   }
   if (!current || current.id !== actorId) {
     logger.warn({ msg: 'COMBAT_INTENT_OUT_OF_TURN', ...currentContext });
-    throw new BusinessLogicError('Actor is not the current-turn participant', currentContext);
+    // The roster rides along on the refusal, not just in the log. A caller that is told only
+    // "wrong actor" can do nothing but repeat itself; one told who the board actually holds can
+    // re-choose. This is what the client-side repair loop regenerates against.
+    throw new BusinessLogicError('Actor is not the current-turn participant', {
+      ...currentContext,
+      roster: index.roster(),
+    });
   }
   return { actor: current, encounter: state.encounter };
 }

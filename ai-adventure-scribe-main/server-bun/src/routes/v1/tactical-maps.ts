@@ -8,7 +8,6 @@ import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-s
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { concludeEncounter } from '../../services/combat/combat-ending.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
-import { vitalStateOf, type VitalsInput } from '../../services/combat/death-saves-service.js';
 import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
@@ -19,6 +18,7 @@ import {
 } from '../../services/combat/tactical-action-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
+import { buildTurnOrderBlock } from '../../services/combat/turn-order-block.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
@@ -27,44 +27,6 @@ import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { buildStallDirective, shouldBreakStall } from '../../tactical/stall-breaker.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
-
-/**
- * One line per combatant: hit points, and — for a character on the floor — which of the four
- * states the death-save rules put them in.
- *
- * Built here rather than in `buildTacticalPrompt` because the tactical map is deliberately
- * database-free geometry, and hit points live in `combat_participant_status`. Degrades to an
- * empty string on any failure: a status block is an enrichment, and losing it must never cost
- * the DM the board it is appended to.
- */
-async function buildCombatantStatusBlock(sessionId: string, userId: string): Promise<string> {
-  try {
-    const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
-    if (!encounter) return '';
-    const state = await CombatEncounterService.getCombatState(encounter.id, userId);
-    const lines = state.participants
-      .filter((participant) => participant.isActive)
-      .map((participant) => {
-        const hydrated = participant as unknown as VitalsInput & { name: string };
-        const currentHp = hydrated.status?.currentHp ?? participant.maxHp;
-        const vital = vitalStateOf(hydrated);
-        const detail =
-          vital === 'dying'
-            ? ` UNCONSCIOUS and DYING (${hydrated.status?.deathSavesSuccesses ?? 0} death save ` +
-              `successes, ${hydrated.status?.deathSavesFailures ?? 0} failures) — not dead`
-            : vital === 'stabilized'
-              ? ' UNCONSCIOUS but STABILISED — no longer dying, cannot act'
-              : vital === 'dead'
-                ? ' DEAD'
-                : '';
-        return `- ${participant.name}: ${currentHp}/${participant.maxHp} HP${detail}`;
-      });
-    if (!lines.length) return '';
-    return `\n\n<combatant_status>\n${lines.join('\n')}\n</combatant_status>`;
-  } catch {
-    return '';
-  }
-}
 
 /** Session-scoped tactical API; all writes delegate to the shared engine dispatcher. */
 export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
@@ -178,7 +140,7 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         // announcement; this is the answer to "is my character dying right now?", which the DM
         // needs on every turn a character spends on the floor and not merely on the turn they
         // hit it.
-        (await buildCombatantStatusBlock(params.id, user.userId)) +
+        (await buildTurnOrderBlock(params.id, user.userId)) +
         // Engine-resolved outcomes come before failures: they are what actually happened last
         // turn, and the DM must narrate them rather than the strike it originally declared.
         (facts.length

@@ -9,9 +9,11 @@ import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/u
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import {
+  CombatIntentRefusedError,
   executeAuthoritativeCombatIntent,
   executeStructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
 import { notifyRetryableCombatStartFailure } from '@/services/combat/combat-start-toast';
 import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
@@ -89,10 +91,7 @@ export async function handleDmActionsAndTransitions(
   // A transition just moved the board. Re-read rather than wait for the broadcast to land
   // in a later render: a start that also carries combat_actions has to resolve them on this
   // turn, and the resolution prompt below has to be told the fight is on.
-  if (
-    sessionId &&
-    (result.combat_transition === 'start' || result.combat_transition === 'end')
-  ) {
+  if (sessionId && (result.combat_transition === 'start' || result.combat_transition === 'end')) {
     activeEncounter = await refreshCombatState();
     isInCombat = activeEncounter?.phase === 'active';
     aiContext.gameState.isInCombat = isInCombat;
@@ -151,17 +150,45 @@ export async function handleDmActionsAndTransitions(
     const targetedActions = result.combat_actions.filter(
       (action: any): action is StructuredCombatAction => 'target_ids' in action,
     );
-    for (const action of targetedActions) {
+    // One repair attempt per turn, not per action: the budget belongs to the turn, and a DM
+    // that got the actor wrong once will get it wrong for every action in the same batch.
+    let repairSpent = false;
+    const runAction = async (action: StructuredCombatAction): Promise<void> => {
       const outcomes = await executeStructuredCombatAction(activeEncounter.id, action);
       resolvedActions.push({ action, outcomes });
       await executeAuthoritativeCombatIntent(
         activeEncounter.id,
-        {
-          type: 'end_turn',
-          actorId: action.actor_id,
-        },
+        { type: 'end_turn', actorId: action.actor_id },
         'dm',
       );
+    };
+    for (const action of targetedActions) {
+      try {
+        await runAction(action);
+      } catch (error) {
+        if (!(error instanceof CombatIntentRefusedError) || repairSpent) throw error;
+        repairSpent = true;
+        const repaired = await repairRefusedCombatAction({
+          refusal: error,
+          refusedAction: action,
+          aiContext,
+          conversationHistory,
+          userPlan,
+          turnCount,
+        });
+        const corrected = repaired?.combat_actions?.filter(
+          (candidate): candidate is StructuredCombatAction => 'target_ids' in candidate,
+        );
+        if (!corrected?.length) {
+          logger.warn('[CombatRepair] outcome=failed no usable corrected action; surfacing');
+          throw error;
+        }
+        // The corrected turn replaces the refused one. A second refusal is not repaired again.
+        for (const correctedAction of corrected) await runAction(correctedAction);
+        logger.info('[CombatRepair] outcome=repaired');
+        // The repaired narration is what the player should read, not the refused declaration.
+        if (repaired.text) responseText = repaired.text;
+      }
     }
     const narrationResult = await AIService.chatWithDM({
       message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),

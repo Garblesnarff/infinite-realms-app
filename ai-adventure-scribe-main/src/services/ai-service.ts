@@ -205,9 +205,14 @@ export class AIService {
         // rules into one opaque `contextPrompt`, so that stays a single section; everything
         // assembled at this layer is measured separately:
         //   - campaign_and_canon: `contextPrompt` (ContextBuilder's full output)
-        //   - scene_state: `tacticalContext` + the ledger-rendered `<scene_state>` block.
-        //     Both are live scene state assembled here; when #1691 landed the ledger, the
-        //     real block joined the tactical fragment that had been standing in for it.
+        //   - tactical: the `<tactical_context>` block — board digest, turn order, combatant
+        //     status. It USED to be summed into `scene_state` alongside the ledger block, and
+        //     that fold is the whole reason a 2026-08-10 investigation concluded the digest
+        //     "never reached the model": no `tactical` key had ever appeared in a log line, so
+        //     its absence read as the block's absence, when in fact a ~450-token digest was
+        //     being counted under someone else's name. Two independently-sourced blocks are two
+        //     sections. A block nobody can measure is a block nobody can prove is there.
+        //   - scene_state: the ledger-rendered `<scene_state>` block alone.
         //   - system: `systemBlock` (immutable_game_state envelope + security_rules)
         //   - history: `historyContext`
         //   - player_input: `playerInput`
@@ -218,7 +223,8 @@ export class AIService {
         try {
           promptMetrics = measurePromptSections({
             campaign_and_canon: contextPrompt,
-            scene_state: `${tacticalContext}${sceneStateBlock ?? ''}`,
+            tactical: tacticalContext,
+            scene_state: sceneStateBlock ?? '',
             system: systemBlock,
             history: historyContext,
             player_input: playerInput,
