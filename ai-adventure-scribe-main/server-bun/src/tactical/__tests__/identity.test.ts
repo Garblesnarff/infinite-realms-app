@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- one board fixture, exercised by every consumer of slug identity:
+   the resolver's tiers, dispatch, the digest, and the token budget. Splitting them would clone
+   the fixture into four files and let the copies drift. */
 import { describe, expect, test } from 'bun:test';
 
 import { dispatchMapAction } from '../dispatch.js';
@@ -91,6 +94,56 @@ describe('slug-based entity identity', () => {
     expect(resolveEntityRef(entities, 'The Seeker')?.id).toBe(SEEKER_UUID);
     expect(resolveEntityRef(entities, SEEKER_UUID)?.id).toBe(SEEKER_UUID);
     expect(resolveEntityRef(entities, SEEKER_UUID.toUpperCase())?.id).toBe(SEEKER_UUID);
+  });
+
+  /**
+   * The production failure of 2026-08-10, pinned at the resolver.
+   *
+   * `assignEntitySlugs` numbers a name only when the board carries duplicates, so a lone
+   * creature is `sentient-glaze`. The DM writes `sentient-glaze-1` anyway. The slug fell
+   * through every tier, reached `combat_participants.id`, and Postgres refused it as a uuid:
+   * a 500 on the first action of the first real fight.
+   */
+  describe('a numbered token for a creature the board did not number', () => {
+    const GLAZE_UUID = 'd4e5f6a7-b8c9-4d01-8e23-f45a67b89c01';
+    const loneGlaze = () => {
+      const entities = [
+        entity(SEEKER_UUID, 'The Seeker', 1, 1, 'pc'),
+        entity(GLAZE_UUID, 'Sentient Glaze', 8, 5, 'monster'),
+      ];
+      assignEntitySlugs(entities);
+      return entities;
+    };
+
+    test('the board slug is bare, which is what makes the DM’s numbered form miss', () => {
+      expect(loneGlaze().map(entitySlug)).toEqual(['the-seeker', 'sentient-glaze']);
+    });
+
+    test.each(['sentient-glaze-1', 'Sentient_Glaze 1', 'SENTIENT-GLAZE-1'])(
+      'resolves %p to the lone glaze rather than falling through to a uuid lookup',
+      (token) => {
+        expect(resolveEntityRef(loneGlaze(), token)?.id).toBe(GLAZE_UUID);
+      },
+    );
+
+    test('a genuinely numbered board still resolves exactly, tier by tier', () => {
+      // Two roaches: `shadow-roach-1` is a real alias and never reaches the stripping tier.
+      const entities = board().entities;
+      expect(resolveEntityRef(entities, 'shadow-roach-1')?.id).toBe(ROACH_ONE_UUID);
+      expect(resolveEntityRef(entities, 'shadow-roach-2')?.id).toBe(ROACH_TWO_UUID);
+    });
+
+    test('stripping is a translation, never a guess', () => {
+      const entities = board().entities;
+      // Strips to `shadow-roach`, which two entities answer to. Picking one would be the coin
+      // flip this resolver exists to refuse.
+      expect(resolveEntityRef(entities, 'shadow-roach-3')).toBeNull();
+      expect(resolveEntityRef(entities, 'shadow-roach-9')).toBeNull();
+      // Strips to a name nobody on the board carries.
+      expect(resolveEntityRef(entities, 'wyvern-1')).toBeNull();
+      // Nothing left after stripping is not a reference at all.
+      expect(resolveEntityRef(entities, '-1')).toBeNull();
+    });
   });
 
   test('refuses to guess when a reference names more than one entity', () => {

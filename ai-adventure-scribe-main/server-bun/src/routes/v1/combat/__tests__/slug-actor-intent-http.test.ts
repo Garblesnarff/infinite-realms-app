@@ -333,6 +333,66 @@ describe('an actorId matching no entity is an unknown reference, not a turn-orde
 });
 
 /**
+ * The 2026-08-10 production 500, at the gateway that let it through.
+ *
+ * The board numbers a name only when it carries duplicates, so both creatures here hold bare
+ * slugs — and the DM emitted `sentient-glaze-1` for a lone `sentient-glaze` anyway. The token
+ * resolved to nothing, `index.resolve` handed it back unchanged by contract, and the raw slug
+ * travelled through `resolveAttack` into `inArray(combatParticipants.id, …)`, where Postgres
+ * refused it as a uuid. A `DrizzleQueryError` is not an `AppError`, so the answer was a bare
+ * 500 and the encounter sat active with zero actions on it.
+ */
+describe('the intent boundary resolves numbered slugs and refuses what it cannot resolve', () => {
+  it('accepts a numbered token for a creature the board left unnumbered', async () => {
+    const response = await postIntent({
+      intent: { type: 'attack', actorId: 'the-void-maw-1', targetId: 'the-seeker-1' },
+      source: 'dm',
+    });
+
+    expect(response.status).toBe(200);
+    expect(attackInputs[0]).toMatchObject({ attackerId: VOID_MAW_ID, targetId: SEEKER_ID });
+    expect(trackedEvents.some((event) => event.name === 'action_refused')).toBe(false);
+  });
+
+  it('answers an unresolvable target with 404 and the roster, never reaching the engine', async () => {
+    const response = await postIntent({
+      intent: { type: 'attack', actorId: 'the-void-maw', targetId: 'the-marrow-king' },
+      source: 'dm',
+    });
+    const body = (await response.json()) as {
+      error: string;
+      details?: { role?: string; id?: string; roster?: string };
+    };
+
+    expect(response.status).toBe(404);
+    expect(body.error).toBe('Combat participant not found');
+    // The roster is the half that makes the refusal actionable: it names what the DM could
+    // have written instead of the token that missed.
+    expect(body.details?.role).toBe('target');
+    expect(body.details?.id).toBe('the-marrow-king');
+    expect(body.details?.roster).toContain('the-void-maw');
+    expect(body.details?.roster).toContain('the-seeker');
+    // The engine is never handed a reference the board could not translate.
+    expect(attackInputs).toHaveLength(0);
+  });
+
+  it('refuses an unresolvable spell target the same way, before any target resolves', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'spell',
+        actorId: 'the-void-maw',
+        targetIds: ['the-seeker', 'the-marrow-king'],
+        spellName: 'Thunderwave',
+      },
+      source: 'dm',
+    });
+
+    expect(response.status).toBe(404);
+    expect(spellInputs).toHaveLength(0);
+  });
+});
+
+/**
  * The browser path, end to end. `executeStructuredCombatAction` is what the React client and
  * the headless CLI both call with the DM's `combat_actions` entries verbatim — slugs included.
  */

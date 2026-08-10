@@ -92,6 +92,9 @@ function aliasesFor(entity: EntityRef): string[] {
   return [...new Set(aliases)];
 }
 
+/** A trailing one-based index, as the DM writes it whether or not the board numbered anything. */
+const TRAILING_INDEX = /-\d+$/;
+
 /**
  * The single resolver behind DM map actions, the spatial contract, and the player
  * move route. Ambiguity is a failure, not a coin flip: "shadow-roach" with two
@@ -105,11 +108,31 @@ export function resolveEntityRef<T extends EntityRef>(entities: T[], token: stri
   if (!wanted) return null;
   const byAlias = entities.filter((entity) => aliasesFor(entity).includes(wanted));
   if (byAlias.length) return byAlias.length === 1 ? byAlias[0] : null;
-  // Last resort: a prefix that names exactly one entity ("void" for "void-maw").
+  // A prefix that names exactly one entity ("void" for "void-maw").
   const byPrefix = entities.filter((entity) =>
     aliasesFor(entity).some((alias) => alias.startsWith(`${wanted}-`)),
   );
-  return byPrefix.length === 1 ? byPrefix[0] : null;
+  if (byPrefix.length === 1) return byPrefix[0];
+  /**
+   * Last resort, and the inverse of the tier above: the token is one an alias *prefixes*,
+   * numbered. `assignEntitySlugs` numbers a name only when the board carries more than one
+   * creature answering to it, so a lone `Sentient Glaze` is `sentient-glaze` — while the DM,
+   * which has emitted `shadow-roach-1` for years, writes `sentient-glaze-1` regardless. Every
+   * tier above misses it: it is not an alias, and `sentient-glaze-1-` prefixes nothing.
+   *
+   * Production 2026-08-10: the slug fell through unresolved, reached `combat_participants.id`,
+   * and Postgres refused it as a uuid — a 500 on the first action of the first real fight.
+   *
+   * Stripping is only ever a *translation*, never a guess. The stripped form must still name
+   * exactly one entity, so `shadow-roach-3` against two roaches stays unresolved rather than
+   * quietly becoming the first of them, and `wyvern-1` against no wyvern stays unresolved too.
+   * A genuinely numbered board never reaches here at all — `shadow-roach-1` is a real alias
+   * and matched two tiers up.
+   */
+  const stripped = wanted.replace(TRAILING_INDEX, '');
+  if (stripped === wanted || !stripped) return null;
+  const byStrippedIndex = entities.filter((entity) => aliasesFor(entity).includes(stripped));
+  return byStrippedIndex.length === 1 ? byStrippedIndex[0] : null;
 }
 
 /** The board roster the DM is shown when a reference does not resolve. */

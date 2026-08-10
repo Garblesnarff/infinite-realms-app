@@ -30,7 +30,11 @@ const sessionIdParams = t.Object({
 function mapIntentError(set: any, error: unknown) {
   if (error instanceof AppError) {
     set.status = error.statusCode;
-    return { error: error.statusCode >= 500 ? 'Combat action failed' : error.message };
+    if (error.statusCode >= 500) return { error: 'Combat action failed' };
+    // Details ride along on client-fixable answers. A refusal the caller cannot act on is a
+    // refusal it will re-send verbatim: "Combat participant not found" says a reference missed,
+    // and only the roster beside it says what to write instead.
+    return { error: error.message, ...(error.details ? { details: error.details } : {}) };
   }
   set.status = 500;
   return { error: 'Combat action failed' };

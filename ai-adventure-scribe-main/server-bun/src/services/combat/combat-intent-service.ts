@@ -312,19 +312,60 @@ async function resolveActorTurn(
 }
 
 /**
- * Every entity reference on the way in, normalised against the live board in one read. Targets
- * matter as much as the actor: an attack whose `targetId` is still a slug reaches the engine
- * and fails a uuid lookup two layers down, where the error no longer mentions references.
+ * Every entity reference on the way in, normalised against the live board in one read AND
+ * checked against the encounter's own roster before anything downstream sees it.
+ *
+ * The check is the half that was missing. `index.resolve` is best-effort by contract — it
+ * returns the token unchanged when no board can say — so an unresolvable reference used to
+ * leave here still wearing its slug, and this function's own comment described what happened
+ * next: "an attack whose `targetId` is still a slug reaches the engine and fails a uuid lookup
+ * two layers down, where the error no longer mentions references". On 2026-08-10 it did
+ * exactly that. `sentient-glaze-1` travelled through the gateway, through `resolveAttack`, into
+ * `inArray(combatParticipants.id, …)`, and came back as `invalid input syntax for type uuid` —
+ * a `DrizzleQueryError`, which is not an `AppError`, so the route answered a bare 500 and the
+ * encounter was left active with zero actions on it.
+ *
+ * So resolution is now total: a reference either names a participant of this encounter or it
+ * is refused here, by name, with the board roster the DM can correct itself from. A 404 saying
+ * which token missed and what was actually on the board is an answer the caller can act on; a
+ * 500 from the database two layers down is not.
  */
 function resolveIntentRefs(
   submitted: SubmittedCombatIntent,
   index: SessionEntityIndex,
+  state: CombatState,
 ): SubmittedCombatIntent {
-  const actorId = index.resolve(submitted.actorId);
+  const roster = new Set(state.participants.map((participant) => participant.id));
+  const require = (token: string, role: 'actor' | 'target'): string => {
+    const resolved = index.resolve(token);
+    if (roster.has(resolved)) return resolved;
+    logger.warn({
+      msg: 'COMBAT_INTENT_UNRESOLVED_REF',
+      encounterId: state.encounter.id,
+      sessionId: state.encounter.sessionId,
+      intentType: submitted.type,
+      role,
+      submittedRef: token,
+      // Named separately because the two differ exactly when the board resolved a token to an
+      // id the encounter does not carry — a stale reference, not an unknown one.
+      resolvedTo: resolved === token ? null : resolved,
+      roster: index.roster(),
+    });
+    throw new NotFoundError('Combat participant', token, {
+      role,
+      intentType: submitted.type,
+      roster: index.roster(),
+    });
+  };
+  const actorId = require(submitted.actorId, 'actor');
   if (submitted.type === 'attack')
-    return { ...submitted, actorId, targetId: index.resolve(submitted.targetId) };
+    return { ...submitted, actorId, targetId: require(submitted.targetId, 'target') };
   if (submitted.type === 'spell')
-    return { ...submitted, actorId, targetIds: submitted.targetIds.map((id) => index.resolve(id)) };
+    return {
+      ...submitted,
+      actorId,
+      targetIds: submitted.targetIds.map((id) => require(id, 'target')),
+    };
   return { ...submitted, actorId };
 }
 
@@ -341,7 +382,7 @@ export async function executeCombatIntent(
     // participant ids, so asking it about a slug is asking the wrong question.
     const state = await CombatEncounterService.getCombatState(encounterId, userId);
     const index = await loadSessionEntityIndex(state.encounter.sessionId);
-    const resolved = resolveIntentRefs(submitted, index);
+    const resolved = resolveIntentRefs(submitted, index, state);
     const { actor, encounter } = await resolveActorTurn(
       encounterId,
       state,

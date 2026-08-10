@@ -16,7 +16,7 @@ export class AppError extends Error {
     public statusCode: number,
     message: string,
     public code?: string,
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
     this.name = this.constructor.name;
@@ -34,7 +34,7 @@ export class AppError extends Error {
         code: this.code,
         statusCode: this.statusCode,
         details: this.details,
-      }
+      },
     };
   }
 }
@@ -74,9 +74,14 @@ export class ForbiddenError extends AppError {
  * Use when a requested resource doesn't exist in the database
  */
 export class NotFoundError extends AppError {
-  constructor(resource: string, id?: string) {
+  /**
+   * `context` is merged into the details a caller is handed. A miss is often only actionable
+   * alongside what *was* available — the combat gateway attaches the live board roster so an
+   * unresolvable entity reference can be corrected rather than merely reported.
+   */
+  constructor(resource: string, id?: string, context?: Record<string, unknown>) {
     const message = `${resource} not found`;
-    super(404, message, 'NOT_FOUND', { resource, id });
+    super(404, message, 'NOT_FOUND', { resource, id, ...context });
   }
 }
 
