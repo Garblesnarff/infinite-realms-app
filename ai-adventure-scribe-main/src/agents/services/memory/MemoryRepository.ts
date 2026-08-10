@@ -13,16 +13,8 @@ export class MemoryRepository {
     await userDataApi.createMemories(records);
   }
 
-  async loadRecentMemories(sessionId: string, limit: number = 5): Promise<Memory[]> {
-    return userDataApi.listMemories(sessionId, { limit }) as Promise<Memory[]>;
-  }
-
   async loadTopMemories(sessionId: string, limit: number): Promise<Memory[]> {
     return userDataApi.listMemories(sessionId, { limit, top: true }) as Promise<Memory[]>;
-  }
-
-  async loadFictionReadyMemories(sessionId: string, minNarrativeWeight: number): Promise<Memory[]> {
-    return userDataApi.listMemories(sessionId, { minNarrativeWeight }) as Promise<Memory[]>;
   }
 
   async matchMemories(sessionId: string, embedding: string, limit: number, threshold: number) {
@@ -34,24 +26,6 @@ export class MemoryRepository {
       return [];
     }
     return userDataApi.matchMemories(sessionId, embedding, limit, threshold);
-  }
-
-  async updateMemoryScores(
-    memoryId: string,
-    updates: { importance?: number; narrative_weight?: number },
-  ): Promise<void> {
-    await userDataApi.updateMemoryScores(memoryId, updates);
-  }
-
-  async fetchMemoryById(
-    memoryId: string,
-  ): Promise<{ importance?: number; narrative_weight?: number } | null> {
-    try {
-      const data = await userDataApi.getMemory(memoryId);
-      return data as { importance?: number; narrative_weight?: number };
-    } catch {
-      return null;
-    }
   }
 
   async invokeEmbedding(text: string): Promise<string | null> {

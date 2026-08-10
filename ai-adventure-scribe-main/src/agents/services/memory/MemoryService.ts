@@ -71,25 +71,6 @@ export class MemoryService {
     return repository.loadTopMemories(sessionId, limit);
   }
 
-  static async getFictionReadyMemories(
-    sessionId: string,
-    minNarrativeWeight = 6,
-  ): Promise<Memory[]> {
-    return repository.loadFictionReadyMemories(sessionId, minNarrativeWeight);
-  }
-
-  static async reinforceMemory(memoryId: string, boost = 1): Promise<void> {
-    const original = await repository.fetchMemoryById(memoryId);
-    if (!original) return;
-
-    const importance = Math.min((original.importance || 1) + boost, 5);
-    const narrativeWeight = Math.min((original.narrative_weight || 0) + boost, 10);
-    await repository.updateMemoryScores(memoryId, {
-      importance,
-      narrative_weight: narrativeWeight,
-    });
-  }
-
   /**
    * Extract memories from conversation using dedicated extraction endpoint.
    * Uses free model (DeepSeek V3.1 Nex-N1) with paid fallback (ByteDance Seed 1.6 Flash).
@@ -147,9 +128,5 @@ Extract 1-4 key memories in this JSON format:
     } catch {
       return { memories: [] };
     }
-  }
-
-  static async loadRecentMemories(sessionId: string): Promise<Memory[]> {
-    return repository.loadRecentMemories(sessionId);
   }
 }

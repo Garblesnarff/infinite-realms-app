@@ -5,44 +5,17 @@ import type { MemoryType } from '@/types/memory';
 import { llmApiClient } from '@/infrastructure/api';
 
 // MemoryRepository (src/agents/services/memory/MemoryRepository.ts) was migrated from
-// supabase.from('memories')...insert()/update()/select() and supabase.rpc() to
-// userDataApi.createMemories()/updateMemoryScores()/listMemories()/getMemory()/
-// matchMemories() (real fetch() calls to the Bun server). Only invokeEmbedding()
-// (still supabase.functions.invoke('generate-embedding')) remains on supabase. The
-// mocks below were updated to match the current call sites; a
-// `queryResult`-style helper (`setQueryResult`) is kept so the many call sites below
-// didn't need renaming, but it now backs userDataApi.listMemories/getMemory rather than
-// a supabase query builder.
-const {
-  mockInsert: baseMockInsert,
-  mockUpdate: baseMockUpdate,
-  mockListMemories: baseMockListMemories,
-  mockGetMemory: baseMockGetMemory,
-  mockFunctionsInvoke: baseMockFunctionsInvoke,
-  setQueryResult,
-} = vi.hoisted(() => {
-  // Shared result queue used by both listMemories() and getMemory() - tests call
-  // setQueryResult() before invoking the code under test to control what the "backend"
-  // returns next, mirroring the old supabase query-builder `queryResult` pattern.
-  let queryResult: any = [];
-
-  const insert = vi.fn(async () => []);
-  const update = vi.fn(async () => undefined);
-  const listMemories = vi.fn(async () => queryResult);
-  const getMemory = vi.fn(async () => queryResult);
-  const functionsInvoke = vi.fn();
-
-  return {
-    mockInsert: insert,
-    mockUpdate: update,
-    mockListMemories: listMemories,
-    mockGetMemory: getMemory,
-    mockFunctionsInvoke: functionsInvoke,
-    setQueryResult: (result: { data: any; error: any }) => {
-      queryResult = result.data;
-    },
-  };
-});
+// supabase.from('memories')...insert() and supabase.rpc() to
+// userDataApi.createMemories()/listMemories()/matchMemories() (real fetch() calls to the
+// Bun server). Only invokeEmbedding() (still supabase.functions.invoke('generate-embedding'))
+// remains on supabase. The mocks below cover the userDataApi/supabase surface actually
+// exercised by MemoryService.saveMemories()/extractMemories() in the tests that remain here.
+const { mockInsert: baseMockInsert, mockFunctionsInvoke: baseMockFunctionsInvoke } = vi.hoisted(
+  () => ({
+    mockInsert: vi.fn(async () => []),
+    mockFunctionsInvoke: vi.fn(),
+  }),
+);
 
 // Mock Supabase client (only functions.invoke is still used by MemoryRepository)
 vi.mock('@/integrations/supabase/client', () => {
@@ -63,9 +36,6 @@ vi.mock('@/integrations/supabase/client', () => {
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     createMemories: baseMockInsert,
-    updateMemoryScores: baseMockUpdate,
-    listMemories: baseMockListMemories,
-    getMemory: baseMockGetMemory,
   },
 }));
 
@@ -121,7 +91,6 @@ vi.mock('@/infrastructure/api', () => ({
 
 describe('Memory Service Integration', () => {
   let mockInsert: any;
-  let mockUpdate: any;
   let mockFunctionsInvoke: any;
 
   beforeEach(() => {
@@ -129,9 +98,7 @@ describe('Memory Service Integration', () => {
     vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
 
     mockInsert = baseMockInsert;
-    mockUpdate = baseMockUpdate;
     mockFunctionsInvoke = baseMockFunctionsInvoke;
-    setQueryResult({ data: [], error: null });
     vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
       JSON.stringify({
         memories: [
@@ -260,111 +227,6 @@ describe('Memory Service Integration', () => {
         await MemoryService.saveMemories(result.memories);
         expect(mockInsert).toHaveBeenCalled();
       }
-    });
-  });
-
-  describe('Memory Reinforcement', () => {
-    it('should boost memory importance when reinforced', async () => {
-      const mockMemory = {
-        id: 'memory-123',
-        importance: 3,
-        narrative_weight: 5,
-      };
-
-      setQueryResult({
-        data: mockMemory,
-        error: null,
-      });
-
-      mockUpdate.mockResolvedValue({
-        data: null,
-        error: null,
-      });
-
-      await MemoryService.reinforceMemory('memory-123', 1);
-
-      // repository.updateMemoryScores() now calls userDataApi.updateMemoryScores(memoryId,
-      // updates) - the memoryId is a separate first argument, not folded into the update
-      // payload (see MemoryRepository.updateMemoryScores).
-      expect(mockUpdate).toHaveBeenCalledWith('memory-123', {
-        importance: 4,
-        narrative_weight: 6,
-      });
-    });
-
-    it('should cap importance at 5', async () => {
-      const mockMemory = {
-        id: 'memory-123',
-        importance: 5,
-        narrative_weight: 10,
-      };
-
-      setQueryResult({
-        data: mockMemory,
-        error: null,
-      });
-
-      mockUpdate.mockResolvedValue({
-        data: null,
-        error: null,
-      });
-
-      await MemoryService.reinforceMemory('memory-123', 2);
-
-      expect(mockUpdate).toHaveBeenCalledWith('memory-123', {
-        importance: 5, // Should not exceed 5
-        narrative_weight: 10, // Should not exceed 10
-      });
-    });
-
-    it('should handle non-existent memory gracefully', async () => {
-      setQueryResult({
-        data: null,
-        error: null,
-      });
-
-      await expect(MemoryService.reinforceMemory('non-existent', 1)).resolves.not.toThrow();
-
-      expect(mockUpdate).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Fiction-Ready Memories', () => {
-    it('should retrieve memories with high narrative weight', async () => {
-      const mockMemories = [
-        {
-          id: '1',
-          type: 'plot_point',
-          content: "The hero's secret is revealed",
-          importance: 5,
-          narrative_weight: 9,
-          session_id: 'session-123',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          metadata: null,
-        },
-        {
-          id: '2',
-          type: 'character_moment',
-          content: 'A moment of great sacrifice',
-          importance: 5,
-          narrative_weight: 8,
-          session_id: 'session-123',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          metadata: null,
-        },
-      ];
-
-      setQueryResult({
-        data: mockMemories,
-        error: null,
-      });
-
-      const results = await MemoryService.getFictionReadyMemories('session-123', 6);
-
-      expect(results).toHaveLength(2);
-      expect(results.every((m) => (m as any).narrative_weight >= 6)).toBe(true);
     });
   });
 });
