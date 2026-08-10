@@ -110,7 +110,83 @@ export async function deleteCampaignRules(campaignId: string): Promise<number> {
 }
 
 /**
- * Insert campaign chunks in batches
+ * Row shape as sent to campaign_chunks (snake_case, matches the table).
+ */
+interface CampaignChunkRow {
+  campaign_id: string;
+  chunk_type: string;
+  entity_name: string | null | undefined;
+  parent_entity: string | null | undefined;
+  content: string;
+  summary: string | null | undefined;
+  embedding: string | null;
+  metadata: Record<string, unknown>;
+  source_file: string;
+  source_section: string | null | undefined;
+  sequence_order: number | null | undefined;
+}
+
+/**
+ * True if a chunk's metadata carries a non-empty image_url.
+ * Mirrors the keep-rule in
+ * supabase/migrations/20260810_dedupe_campaign_chunks.sql so the ingest path
+ * and the one-off dedupe migration agree on which duplicate row wins.
+ */
+function hasImageUrl(metadata: Record<string, unknown> | null | undefined): boolean {
+  const value = metadata?.image_url;
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * Collapse chunks that would collide on the (campaign_id, chunk_type,
+ * entity_name) unique index before they're sent to the database.
+ *
+ * The chunker can occasionally emit two chunks for the same entity within a
+ * single run (e.g. an NPC matched by both the primary numbered-list
+ * extractor and the bonus table-format extractor in chunker.ts). Sending
+ * both rows in the same upsert batch would make Postgres reject the batch
+ * with "ON CONFLICT DO UPDATE command cannot affect row a second time"
+ * instead of silently duplicating — which is safer, but would still break
+ * ingestion. Pre-deduping here, using the same "prefer image_url, else keep
+ * first" rule as the migration, avoids that failure entirely.
+ *
+ * Rows with a null/undefined entity_name (whole-file chunks like
+ * `world_building`/`creative_brief`) are passed through untouched: the
+ * unique index does not apply to them (NULL is never equal to NULL in a
+ * Postgres unique index), so they can never conflict.
+ */
+function dedupeChunkRows(rows: CampaignChunkRow[]): CampaignChunkRow[] {
+  const passthrough: CampaignChunkRow[] = [];
+  const byKey = new Map<string, CampaignChunkRow>();
+
+  for (const row of rows) {
+    if (row.entity_name == null) {
+      passthrough.push(row);
+      continue;
+    }
+
+    const key = `${row.campaign_id} ${row.chunk_type} ${row.entity_name}`;
+    const existing = byKey.get(key);
+
+    if (!existing || (hasImageUrl(row.metadata) && !hasImageUrl(existing.metadata))) {
+      byKey.set(key, row);
+    }
+  }
+
+  return [...passthrough, ...byKey.values()];
+}
+
+/**
+ * Insert campaign chunks in batches.
+ *
+ * Uses upsert-on-conflict against the (campaign_id, chunk_type, entity_name)
+ * unique index added by
+ * supabase/migrations/20260810_dedupe_campaign_chunks.sql, per #1664's
+ * acceptance criteria ("seed/import path handles conflict gracefully -
+ * upsert, not insert"). `deleteCampaignChunks` is still called before this in
+ * index.ts for a full campaign re-ingest; the upsert here is defense in depth
+ * for any row-level write path that doesn't go through that delete-first
+ * flow.
  */
 export async function insertCampaignChunks(
   chunks: CampaignChunk[],
@@ -119,7 +195,7 @@ export async function insertCampaignChunks(
   const client = getClient();
 
   // Prepare data with embeddings
-  const chunksWithEmbeddings = chunks.map((chunk, i) => ({
+  const chunksWithEmbeddings: CampaignChunkRow[] = chunks.map((chunk, i) => ({
     campaign_id: chunk.campaignId,
     chunk_type: chunk.chunkType,
     entity_name: chunk.entityName,
@@ -133,14 +209,18 @@ export async function insertCampaignChunks(
     sequence_order: chunk.sequenceOrder,
   }));
 
+  const deduped = dedupeChunkRows(chunksWithEmbeddings);
+
   // Insert in batches of 50
   const batchSize = 50;
   let inserted = 0;
 
-  for (let i = 0; i < chunksWithEmbeddings.length; i += batchSize) {
-    const batch = chunksWithEmbeddings.slice(i, i + batchSize);
+  for (let i = 0; i < deduped.length; i += batchSize) {
+    const batch = deduped.slice(i, i + batchSize);
 
-    const { error } = await client.from('campaign_chunks').insert(batch);
+    const { error } = await client
+      .from('campaign_chunks')
+      .upsert(batch, { onConflict: 'campaign_id,chunk_type,entity_name' });
 
     if (error) {
       throw new Error(`Failed to insert chunks batch ${i}: ${error.message}`);
