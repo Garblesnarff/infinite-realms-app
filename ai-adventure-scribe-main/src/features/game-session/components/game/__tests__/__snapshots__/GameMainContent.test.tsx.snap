@@ -87,6 +87,9 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
       class="flex-1 min-h-0 flex flex-col overflow-hidden relative bg-gradient-to-b from-card/60 via-card/40 to-card/60 transition-all duration-300"
     >
       <div
+        data-testid="tactical-map-board"
+      />
+      <div
         class="flex-1 min-h-0 flex flex-col overflow-hidden relative"
       >
         <div

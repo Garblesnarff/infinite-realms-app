@@ -60,6 +60,9 @@ vi.mock('../../chat/ChatInput', () => ({
 }));
 vi.mock('../TimelineRail', () => ({ TimelineRail: () => <aside data-testid="timeline-rail" /> }));
 vi.mock('../StatsBar', () => ({ StatsBar: () => <div>Stats</div> }));
+vi.mock('../../tactical/TacticalMapBoard', () => ({
+  TacticalMapBoard: () => <div data-testid="tactical-map-board" />,
+}));
 vi.mock('@/components/combat/CombatStatus', () => ({
   CombatStatus: () => <div>Combat status</div>,
 }));
