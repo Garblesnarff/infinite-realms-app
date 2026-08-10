@@ -70,7 +70,8 @@ DESCRIPTION: ${campaignDescription}
       section += `
 <story_memories>
 <title>IMPORTANT STORY MEMORIES</title>
-Reference these memories naturally to maintain story continuity.`;
+Reference these memories naturally to maintain story continuity.
+Memories are color, not authority: where a memory conflicts with <scene_state>, the <scene_state> facts are correct and the memory is stale.`;
       relevantMemories.forEach((memory, index) => {
         section += `
 <memory index="${index + 1}" type="${memory.type.toUpperCase()}">${memory.content}</memory>`;

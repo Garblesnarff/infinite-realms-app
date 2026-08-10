@@ -6,6 +6,7 @@ import { ContextBuilder } from '../ai/context-builder';
 import { processDMResponse } from '../ai/dm-response-processor';
 import { AIService } from '../ai-service';
 import { MemoryManager } from '../memory-manager';
+import { fetchSceneState } from '../narrative/scene-state-client';
 
 import { llmApiClient } from '@/infrastructure/api';
 import { detectCombatFromText } from '@/utils/combatDetection';
@@ -42,6 +43,10 @@ vi.mock('@/utils/combatDetection', () => ({
 vi.mock('../ai/campaign-generator', () => ({
   generateCampaignDescription: vi.fn(),
   generateCampaignName: vi.fn(),
+}));
+
+vi.mock('../narrative/scene-state-client', () => ({
+  fetchSceneState: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -173,6 +178,90 @@ describe('AIService', () => {
       await expect(AIService.chatWithDM(mockParams)).rejects.toThrow(
         'Failed to get DM response - AI service unavailable',
       );
+    });
+  });
+
+  // memory-system-design-v2.md §3.3 places SCENE STATE + PLAYER INPUT at the true end of the
+  // prompt. The block is assembled here as its own piece rather than being embedded in the
+  // context section and regex-relocated (the hazard v2 §2.8 calls out), so these assert on
+  // ordering and on the assembly staying inert when there is no ground truth to state.
+  describe('chatWithDM scene state', () => {
+    const SCENE_STATE =
+      '<scene_state>\n<npc name="The Void-Maw" state="DEAD (turn 12)"/>\n</scene_state>';
+
+    // Each case needs a distinct message: AIService dedupes in-flight calls on
+    // (sessionId, message, history length) via a module-level map that `vi.clearAllMocks()`
+    // does not reset, so reusing one message would hand later tests the first test's promise.
+    const buildParams = (message: string): any => ({
+      message,
+      context: { sessionId: 'session-1', gameState: { isInCombat: false } },
+      conversationHistory: [{ role: 'assistant', content: 'The creature still threatens you.' }],
+    });
+
+    beforeEach(() => {
+      vi.mocked(ContextBuilder.build).mockResolvedValue('<game_context>canon</game_context>');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('raw');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'processed' } as any);
+    });
+
+    const lastPrompt = (): string =>
+      vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.prompt as string;
+
+    it('places the block after conversation history and immediately before player input', async () => {
+      vi.mocked(fetchSceneState).mockResolvedValue(SCENE_STATE);
+
+      await AIService.chatWithDM(buildParams('where does the block land?'));
+
+      const prompt = lastPrompt();
+      expect(prompt.indexOf('<scene_state>')).toBeGreaterThan(
+        prompt.indexOf('<conversation_history>'),
+      );
+      expect(prompt.indexOf('<player_input>')).toBeGreaterThan(prompt.indexOf('</scene_state>'));
+      // Injected verbatim: the client never re-wraps or re-orders the server's block.
+      expect(prompt).toContain(SCENE_STATE);
+    });
+
+    it('fetches ground truth for the session alongside the context build', async () => {
+      vi.mocked(fetchSceneState).mockResolvedValue(SCENE_STATE);
+
+      await AIService.chatWithDM(buildParams('is ground truth fetched?'));
+
+      expect(fetchSceneState).toHaveBeenCalledWith('session-1');
+    });
+
+    it('omits the block entirely when there is no ground truth', async () => {
+      vi.mocked(fetchSceneState).mockResolvedValue(null);
+
+      await AIService.chatWithDM(buildParams('no ground truth to state'));
+
+      const prompt = lastPrompt();
+      expect(prompt).not.toContain('<scene_state>');
+      expect(prompt).toContain('<player_input>');
+    });
+
+    it('skips the fetch when the context carries no session', async () => {
+      const params = buildParams('no session at all');
+      params.context.sessionId = undefined;
+
+      await AIService.chatWithDM(params);
+
+      expect(fetchSceneState).not.toHaveBeenCalled();
+      expect(lastPrompt()).not.toContain('<scene_state>');
+    });
+
+    it('counts the block in the scene_state prompt-metrics section (#1689)', async () => {
+      vi.mocked(fetchSceneState).mockResolvedValue(SCENE_STATE);
+
+      await AIService.chatWithDM(buildParams('metrics with a block'));
+
+      const withBlock = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.metrics;
+      expect(withBlock?.scene_state).toBeGreaterThan(0);
+
+      vi.mocked(fetchSceneState).mockResolvedValue(null);
+      await AIService.chatWithDM(buildParams('metrics without a block'));
+
+      const withoutBlock = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.metrics;
+      expect(withBlock?.scene_state).toBeGreaterThan(withoutBlock?.scene_state ?? 0);
     });
   });
 

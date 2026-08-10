@@ -24,10 +24,12 @@
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
+import { vitalStateOf, type VitalsInput } from './death-saves-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
 import { alert } from '../../lib/alerting.js';
 import { logger } from '../../lib/logger.js';
+import { NarrativeLedgerService } from '../narrative/narrative-ledger-service.js';
 
 import type { CombatEndReason } from '../../types/combat.js';
 
@@ -82,6 +84,71 @@ const isResolution = (reason: CombatEndReason): boolean =>
   reason === 'last_hostile_defeated' || reason === 'party_defeated';
 
 /**
+ * Persist only facts the combat engine can prove. Ledger failures are deliberately non-fatal:
+ * combat state must still close if a deployment has not applied the narrative migration yet.
+ */
+async function recordCombatNarrativeFacts(
+  encounterId: string,
+  sessionId: string,
+  userId: string,
+  reason: CombatEndReason,
+): Promise<void> {
+  try {
+    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    const deadParticipants = state.participants.filter(
+      (participant) => vitalStateOf(participant as unknown as VitalsInput) === 'dead',
+    );
+
+    for (const participant of deadParticipants) {
+      await NarrativeLedgerService.assertFact(
+        {
+          sessionId,
+          subjectType: participant.participantType === 'player' ? 'party' : 'npc',
+          subjectName: participant.name,
+          predicate: 'status',
+          value: { state: 'dead', encounterId },
+          knownBy: ['dm'],
+          source: 'engine',
+        },
+        userId,
+      );
+    }
+
+    // An explicit client abandonment means the party broke off while the encounter was live.
+    // Keep this separate from creature death so the DM cannot turn an unresolved retreat into
+    // a victory on the next turn.
+    if (reason === 'abandoned') {
+      await NarrativeLedgerService.assertFact(
+        {
+          sessionId,
+          subjectType: 'party',
+          subjectName: 'party',
+          predicate: 'status',
+          value: { state: 'fled', encounterId },
+          knownBy: ['dm'],
+          source: 'engine',
+        },
+        userId,
+      );
+    }
+  } catch (error) {
+    logger.warn({
+      msg: 'NARRATIVE_FACT_WRITE_FAILED',
+      encounterId,
+      sessionId,
+      error: error instanceof Error ? error.message : error,
+    });
+    // The write is non-fatal, but a ledger that silently stops recording deaths is the exact
+    // failure #1680 exists to surface: combat still closes cleanly, so nothing else in the
+    // turn looks wrong. Page on it (v2 guardrail 3).
+    alert('narrative_fact_write_failed', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Ends `encounterId` and leaves behind every record of the ending: a reason on the row, a
  * `combat_ended` telemetry line, a sentence in the DM's next context, a torn-down board, and a
  * republished state.
@@ -96,6 +163,7 @@ export async function concludeEncounter(
   userId: string,
   reason: CombatEndReason,
 ): Promise<void> {
+  await recordCombatNarrativeFacts(encounterId, sessionId, userId, reason);
   // Before the teardown, deliberately: this is the only ordering in which the reason the fight
   // ended can reach the DM at all.
   await recordDmTacticalFact(sessionId, describeCombatEnd(reason));

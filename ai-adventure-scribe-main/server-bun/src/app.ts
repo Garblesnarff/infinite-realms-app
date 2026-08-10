@@ -36,6 +36,7 @@ import { publicCampaignTemplateRoutes } from './routes/v1/public-campaign-templa
 import { sessionsRoutes } from './routes/v1/sessions';
 import { sessionMessageRoutes } from './routes/v1/session-messages';
 import { memoryRoutes } from './routes/v1/memories';
+import { narrativeFactRoutes } from './routes/v1/narrative-facts.js';
 import { personalityRoutes } from './routes/v1/personality';
 import { adminRoutes } from './routes/v1/admin';
 import { spellsRoutes } from './routes/v1/spells';
@@ -313,6 +314,7 @@ export function createApp() {
   app.use(worldBuilderRoutes);
   app.use(sessionMessageRoutes);
   app.use(memoryRoutes);
+  app.use(narrativeFactRoutes);
 
   // Personality routes (D&D personality elements)
   app.use(personalityRoutes);

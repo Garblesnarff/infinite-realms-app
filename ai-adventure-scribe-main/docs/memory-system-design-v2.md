@@ -52,14 +52,22 @@ This section exists because the v1 schema was built session-first: anything need
 
 Full detail: `docs/audits/SYSTEMS-AUDIT-2026-08-04.md` (Claude) and `MEMORY-AUDIT-GPT-2026-08.md` (GPT). Verified essentials:
 
+> **Correction, 2026-08-09 (issue #1691).** Both 2026-08-04 audits, and this section as
+> originally written, described the `feat/narrative-ledger` branch rather than deployed `main`.
+> The branch was never merged; the T7 working tree simply sat on it. Until the PR that carries
+> this correction, production had **no ledger of any kind** — no `narrative_facts` table, no
+> `<scene_state>` injection, no `/v1/narrative-facts` routes, no combat fact writer. Items 3
+> and 8 below are annotated accordingly. Verify ancestry (`git merge-base --is-ancestor`)
+> before calling anything "live."
+
 1. **Session amnesia is the root defect.** `memories` and `narrative_facts` are keyed to `session_id` (`db/schema/world.ts:124`, `db/schema/narrative-state.ts:52`). Every new session starts blank. The only bridge is the chronicle recap, built from the first 3 + last 3 DM messages truncated to 300 chars (`chronicle-generator.ts:162,194,216`), and it is NOT in the opening prompt (`use-initial-greeting.ts` fetches it but never passes it to `generateOpeningMessage`).
 2. Prompt assembly is entirely client-side; `/v1/llm/generate` is a proxy. The server never reads memory tables on the turn path.
-3. The ledger is half-built: one engine writer (combat dead/fled, `combat-ending.ts`), precedence one-sided (only `dm_delta` is blocked from superseding), name-keyed identity, insert race without retry, silent read/write failures.
+3. **The ledger does not exist in production.** (Corrected per #1691 — the description below is of the unmerged `feat/narrative-ledger` branch, not of `main`.) As built on that branch, and as first deployed by the #1691 rebase PR, it is half-built: one engine writer (combat dead/fled, `combat-ending.ts`), precedence one-sided (only `dm_delta` is blocked from superseding), name-keyed identity, insert race without retry. The silent read/write failures are fixed on the way in — the write path now fires `alert('narrative_fact_write_failed')` and the render path `alert('scene_state_render_failed')` (#1680/#1690). Note that its first deployment needs `db/migrations/0007_narrative_facts.sql` applied manually after the code ships; the table was verified absent from the prod database on 2026-08-09.
 4. The live memory write path is regex-parsed XML inside the model's text response. The structured `state_updates` schema exists with zero importers. Client clamps importance 1–5 vs schema 1–10. Memory rows can be 100K chars — "top 8" is not a token bound.
 5. The 20-turn campaign summary NEVER fires for real web players — no live handler passes `turnCount` (`use-message-handler-logic.ts:211`, `use-message-command-handler.ts:153`). It fires only in the headless playtest client. Playtests therefore look more coherent than real play.
 6. Starter-campaign canon is bulk-dumped every turn with no cap; user-created campaigns get NO canon at all. `searchLore`/pgvector is dead code. Embedding drift: lore path 768-dim Gemini vs memories 1536-dim schema vs Drizzle `text` column.
 7. World rows (`npcs`/`locations`/`quests`) are written from XML but their narrative content is never read back into any prompt; the NPC writer skips existing names, so status changes are discarded; quest writer forces `active`.
-8. Additional live-path hazards: history pagination can misorder old pages as newest (`use-messages.ts:105-118`); state writes precede message persistence; suppressed roll-request responses still write memories; `<scene_state>` is regex-relocated over unescaped content; streaming path skips combat-contract enforcement and usage recording; handout journal entries are never fed back to the DM.
+8. Additional live-path hazards: history pagination can misorder old pages as newest (`use-messages.ts:105-118`); state writes precede message persistence; suppressed roll-request responses still write memories; `<scene_state>` was regex-relocated over unescaped content on the unmerged branch — resolved before first deployment, since the #1691 rebase assembles the block as an explicit prompt piece in `ai-service.ts` (§3.3) instead of extracting it back out of the context section; streaming path skips combat-contract enforcement and usage recording; handout journal entries are never fed back to the DM.
 9. Orphaned code (delete list): `SceneStateTracker`, `MemoryService` instance API, `src/agents/messaging/**` (IndexedDB stack), `encounter-validator`/`encounter-orchestrator`, `selection.ts`, legacy `shared/prompts/game-context-prompts.ts`, `use-chat-history`/`ChatPersistence`, `MemoryTester`, lore-keeper-mcp-server (whole package), 8 dead LoreKeeperService methods.
 
 ---
@@ -230,7 +238,7 @@ Phases 0–1 are the unlock; nothing else lands without them. 2→3→4 in order
 4. Facts come from events with idempotency keys. No writer without one.
 5. Do not "fix" the ledger by loosening validation; stage and surface instead. (Same spirit as the authored stat-block parser rule.)
 6. When you change behavior, update THIS doc and delete superseded docs in the same commit. Stale docs misdirect the next agent — this codebase has been bitten repeatedly (see `memory-ledger-branch-notes.md` history).
-7. Migrations follow `docs/MIGRATION-CONSOLIDATION-PLAN.md`; never add a table to only one tree.
+7. Each table's DDL lives in exactly ONE migration tree — Drizzle (`db/migrations/`) for app tables; `supabase/migrations/` only for Supabase-platform concerns (RLS/grants/RPCs). CI's schema-drift and migration-replay guards enforce consistency; never duplicate DDL across trees. (Corrected 2026-08-09: this guardrail previously read "never add a table to only one tree", which reads as an instruction to duplicate DDL and produced exactly that in the #1691 ledger PR — two equivalent `narrative_facts` migrations that collided on replay.)
 8. Prompt sections are budgeted and ordered; do not reorder the stable prefix or interpolate unescaped content.
 9. Verify your deliverable is on GitHub before reporting done.
 

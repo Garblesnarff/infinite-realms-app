@@ -32,6 +32,12 @@ vi.mock('@/services/memory-manager', () => ({
   },
 }));
 
+// chatWithDM fetches the ledger's <scene_state> block alongside the context build. Left
+// unmocked it reaches the real client, which waits on auth and stalls these timing tests.
+vi.mock('@/services/narrative/scene-state-client', () => ({
+  fetchSceneState: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('@/services/world-builders/world-builder-service', () => ({
   WorldBuilderService: {
     respondToPlayerAction: vi.fn().mockResolvedValue({

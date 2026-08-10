@@ -1,7 +1,7 @@
 # Systems Deep Dive — LoreKeeper, Memory, MCP Servers, Agents
 **Date:** 2026-08-04 · **Source:** code audit of the T7 checkout (`infinite-realms-production`)
 **Method:** four parallel code audits + spot verification. Runtime state on the Hetzner VPS was not inspected — findings are from code, PM2 configs, and deploy scripts.
-**Note:** The memory findings here were subsequently deepened by a second independent audit (GPT 5.6 Sol) and reconciled into `docs/memory-system-design-v2.md`, which is the authoritative design. One correction from that reconciliation: the `narrative_facts` migration DOES exist in `supabase/migrations/20260728000000_narrative_facts.sql` (this audit's extract omitted the supabase tree), and the 20-turn periodic summary fires only for the headless playtest client, not real web players.
+**Note:** The memory findings here were subsequently deepened by a second independent audit (GPT 5.6 Sol) and reconciled into `docs/memory-system-design-v2.md`, which is the authoritative design. One correction from that reconciliation: the `narrative_facts` migration existed on the unmerged `feat/narrative-ledger` branch only (this audit's extract omitted the supabase tree, and per #1691 the branch was never merged — the migration now lives at `db/migrations/0007_narrative_facts.sql` and had still not been applied to production as of 2026-08-09), and the 20-turn periodic summary fires only for the headless playtest client, not real web players.
 
 ---
 

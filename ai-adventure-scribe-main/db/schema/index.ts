@@ -67,3 +67,6 @@ export * from './tactical-maps';
 
 // Campaign-instance journal entries (handouts in v1).
 export * from './journal';
+
+// Bi-temporal narrative fact ledger (server-authoritative narrative state).
+export * from './narrative-state';

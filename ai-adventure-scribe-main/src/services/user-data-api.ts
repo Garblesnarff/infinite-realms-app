@@ -117,6 +117,10 @@ export type WorldBuilderStats = {
 /** Kinds the server allowlists for `POST /v1/telemetry/client-failure` (see #1680). */
 export type ClientFailureKind = 'lore_injection_failed' | 'scene_state_fetch_failed';
 
+export type NarrativeSceneStateResponse = {
+  scene_state: string | null;
+};
+
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
   const token = loadCachedSession()?.access_token;
@@ -368,6 +372,8 @@ export const userDataApi = {
       method: 'POST',
       body: JSON.stringify({ session_id: sessionId, embedding, limit, threshold }),
     }),
+  getNarrativeSceneState: (sessionId: string): Promise<NarrativeSceneStateResponse> =>
+    request(`/v1/narrative-facts/scene-state?session_id=${encodeURIComponent(sessionId)}`),
   listCharacters: async (campaignId?: string): Promise<any[]> => {
     const characters = await request<any[]>(
       `/v1/characters${campaignId ? `?campaign_id=${encodeURIComponent(campaignId)}` : ''}`,
