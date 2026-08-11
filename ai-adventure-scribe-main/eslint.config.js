@@ -19,6 +19,8 @@ export default tseslint.config(
       'unify-service-layer/**',
       'archive/**',
       'src/archive/**',
+      // Legacy server tests run under the dedicated Vitest config, not Bun's linted source suite.
+      'server-bun/src/**/*.vitest.ts',
     ],
   },
   {
