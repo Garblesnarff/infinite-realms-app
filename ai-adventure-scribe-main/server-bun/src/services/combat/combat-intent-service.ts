@@ -43,6 +43,8 @@ export type CombatIntent =
       expectedVersion: number;
       advantage?: boolean;
       disadvantage?: boolean;
+      /** The player's own attack die, when the popup rolled it. See `AttackRollInput`. */
+      d20?: number;
     }
   | {
       type: 'spell';
@@ -375,6 +377,93 @@ function resolveIntentRefs(
   return { ...submitted, actorId };
 }
 
+/**
+ * What a player's attack would be, asked before the player rolls for it.
+ *
+ * The player rolls their own attack die, and a die means nothing beside numbers the player
+ * cannot see. This answers the popup's three questions — what is added to the die, what it must
+ * beat, and whether the rules grant advantage — from the same `resolveAttackRules` call that
+ * will judge the die when it arrives, so the popup can never promise arithmetic the resolution
+ * does not perform.
+ *
+ * It goes through the same reference resolution and the same weapon grounding as
+ * `executeCombatIntent`, because a proposal computed against a different actor, target, or
+ * weapon than the commit is worse than no proposal at all.
+ *
+ * One thing here is not read-only, and it is deliberate: the approach runs. A melee attacker
+ * out of reach is walked into reach exactly as the commit would walk it, because distance and
+ * cover are what the proposal is reporting and reporting them from the wrong square would be a
+ * lie. Movement is not the attack action and claims nothing, so an abandoned proposal costs the
+ * player a step taken toward an enemy and nothing else. When the approach cannot reach at all,
+ * the answer is the movement result itself: there is no attack to roll for, and the caller
+ * resolves it without ever opening the popup.
+ */
+export async function proposeCombatAttack(
+  encounterId: string,
+  submitted: SubmittedCombatIntent,
+  userId: string,
+  source: CombatActionSource,
+): Promise<
+  { movementOnly: true; result: unknown } | ({ movementOnly: false } & Record<string, unknown>)
+> {
+  if (submitted.type !== 'attack') {
+    throw new ValidationError('Only attack intents can be proposed', { intentType: submitted.type });
+  }
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  const index = await loadSessionEntityIndex(state.encounter.sessionId);
+  const resolved = resolveIntentRefs(submitted, index, state) as Extract<
+    CombatIntent,
+    { type: 'attack' }
+  >;
+  const { actor, encounter } = await resolveActorTurn(
+    encounterId,
+    state,
+    resolved.actorId,
+    index,
+    userId,
+    resolved.type,
+    source,
+  );
+  const actorLabel = actor.name ?? resolved.actorId;
+  const targetLabel = await participantLabel(encounterId, resolved.targetId, userId);
+  const equipped = await listEquippedWeaponProfiles(actor);
+  const grounding = groundRequestedWeapon(resolved.weaponId, equipped);
+  const approach = await decideAttackApproach({
+    sessionId: encounter.sessionId,
+    actorId: resolved.actorId,
+    actorLabel,
+    targetId: resolved.targetId,
+    targetLabel,
+    weapon: grounding.weapon,
+  });
+  if (approach.movementOnly) return { movementOnly: true, result: approach.result };
+  const proposal = await new CombatAttackService().proposeAttack(
+    encounterId,
+    {
+      attackerId: resolved.actorId,
+      targetId: resolved.targetId,
+      weaponId: grounding.weaponId,
+      attackType: approach.attackType,
+      // The proposal claims no version: it writes nothing that a concurrent write could lose.
+      expectedVersion: encounter.version,
+      advantage: resolved.advantage,
+      disadvantage: resolved.disadvantage,
+    },
+    userId,
+  );
+  // The resolved ids travel back so the commit addresses exactly what was proposed, rather than
+  // re-resolving a slug against a board the approach above may have moved.
+  return {
+    movementOnly: false,
+    ...proposal,
+    actorId: resolved.actorId,
+    targetId: resolved.targetId,
+    weaponId: grounding.weaponId,
+    expectedVersion: encounter.version,
+    targetLabel,
+  };
+}
+
 /** The single mutation gateway for player and AI-DM combat intents. */
 export async function executeCombatIntent(
   encounterId: string,
@@ -460,18 +549,27 @@ export async function executeCombatIntent(
             expectedVersion: intent.expectedVersion,
             advantage: intent.advantage,
             disadvantage: intent.disadvantage,
+            providedD20: intent.d20,
           } satisfies AttackRollInput,
           userId,
         );
         // Every resolution is reported, not just the ones that failed to reach. A hit the DM is
         // never told about is a hit it cannot narrate, and a DM with nothing to narrate repeats
         // the paragraph it wrote last turn.
+        // "(auto-rolled)" belongs only to a die the player was supposed to throw. Every monster
+        // attack is engine-rolled by design and marking those would turn the note into noise
+        // that means nothing — so the flag is narrowed to player actors here rather than in the
+        // attack service, which cannot know whose die it was.
+        const actorIsPlayer =
+          state.participants.find((participant) => participant.id === intent.actorId)
+            ?.participantType === 'player';
+        const resolvedAttack = result as Parameters<typeof describeResolvedAttack>[2];
         await recordDmTacticalFact(
           encounter.sessionId,
           describeResolvedAttack(
             actorLabel,
             targetLabel,
-            result as Parameters<typeof describeResolvedAttack>[2],
+            { ...resolvedAttack, autoRolled: actorIsPlayer && resolvedAttack.autoRolled === true },
             weapon.name,
           ),
         );

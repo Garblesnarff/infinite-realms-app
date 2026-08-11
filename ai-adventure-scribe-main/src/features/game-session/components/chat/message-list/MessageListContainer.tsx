@@ -8,6 +8,7 @@ import type { ChatMessage } from '@/types/game';
 
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { Z_INDEX } from '@/constants/z-index';
+import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 
 interface MessageListContainerProps {
   messages: ChatMessage[];
@@ -60,6 +61,10 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       handleCancelRoll,
       lastRollRef: _lastRollRef,
     } = useMessageDiceRolls({ onSendMessage, onSendFullMessage });
+
+    // Combat asks the player for their own attack die through this popup. Registered here
+    // because this is where the queue is already rendered; see use-player-roll-host.
+    usePlayerRollHost();
 
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {

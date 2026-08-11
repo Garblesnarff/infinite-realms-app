@@ -9,6 +9,7 @@ import {
   executeStructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
+import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
 
 /**
  * Handing the DM's declared combat actions to the engine, and narrating what the engine did.
@@ -29,6 +30,8 @@ export interface CombatResolutionParams {
   conversationHistory: any[];
   userPlan?: string;
   turnCount?: number;
+  /** The encounter's participants, so the player's own attacks can be told apart. */
+  participants?: Array<{ id: string; name?: string; participantType?: string }>;
 }
 
 /**
@@ -44,6 +47,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     conversationHistory,
     userPlan,
     turnCount,
+    participants,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
@@ -54,8 +58,26 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // that got the actor wrong once will get it wrong for every action in the same batch.
   let repairSpent = false;
   const runAction = async (action: StructuredCombatAction): Promise<void> => {
-    const outcomes = await executeStructuredCombatAction(encounterId, action);
-    resolvedActions.push({ action, outcomes });
+    // The player throws their own attack die; monsters keep rolling behind the screen. The
+    // detour is scoped to attacks with a target, since that is the roll the popup can describe.
+    const playerDie =
+      action.action_type === 'attack' && isPlayerActor(action.actor_id, participants)
+        ? await askPlayerForAttackDie({
+            encounterId,
+            action,
+            actorLabel:
+              participants?.find((participant) => participant.id === action.actor_id)?.name ??
+              action.actor_id,
+          })
+        : null;
+    const outcomes = await executeStructuredCombatAction(encounterId, action, playerDie?.d20);
+    resolvedActions.push({
+      action,
+      outcomes,
+      // Carried into the resolution prompt so a die the player did not throw is narrated as
+      // such rather than passed off as theirs.
+      ...(playerDie?.autoRolled ? { autoRolled: true } : {}),
+    });
     await executeAuthoritativeCombatIntent(
       encounterId,
       { type: 'end_turn', actorId: action.actor_id },

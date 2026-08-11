@@ -17,6 +17,10 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import {
+  hasPendingPlayerRoll,
+  settlePendingPlayerRoll,
+} from '@/services/combat/player-roll-bridge';
 import { MemoryManager } from '@/services/memory-manager';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
@@ -127,6 +131,15 @@ export const useAIResponse = (): {
 
         // Clear processed roll requests on new player ACTION (not dice roll)
         const isDiceRollMessage = latestMessage.context?.intent === 'dice_roll';
+        // Taking any other action is an answer to a waiting attack die too, and the answer is
+        // "not this one". Settle it engine-rolled before this turn starts, so the pending
+        // attack resolves instead of sitting behind a popup the player has visibly left. There
+        // is deliberately no wall-clock timeout: a popup open overnight is a player who came
+        // back, not a failure.
+        if (!isDiceRollMessage && hasPendingPlayerRoll()) {
+          logger.info('[PlayerRoll] superseded by a new player action; the engine rolls it');
+          settlePendingPlayerRoll({ d20: null });
+        }
         if (!isDiceRollMessage) {
           logger.debug('[useAIResponse] New player action - clearing processed roll requests');
           processedRollRequestsRef.current.clear();

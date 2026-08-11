@@ -24,6 +24,9 @@ const attackFields = {
   weaponId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   advantage: t.Optional(t.Boolean()),
   disadvantage: t.Optional(t.Boolean()),
+  // The player's own attack die. Bounded to a real d20 face here as well as in the service:
+  // a body carrying `d20: 40` is a malformed payload, not a lucky roll.
+  d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
 };
 
 const spellFields = {
@@ -74,11 +77,13 @@ const combatIntentRequestSchema = t.Union([
     // Keep the existing route-level error response for a missing intent.
     intent: t.Optional(dmCombatIntentSchema),
     dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
+    phase: t.Optional(t.Union([t.Literal('propose'), t.Literal('commit')])),
   }),
   t.Object({
     source: t.Optional(t.Literal('player')),
     intent: t.Optional(playerCombatIntentSchema),
     dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
+    phase: t.Optional(t.Union([t.Literal('propose'), t.Literal('commit')])),
   }),
 ]);
 
@@ -92,6 +97,7 @@ export const combatIntentEnvelopeSchema = t.Object({
   intent: t.Optional(t.Unknown()),
   source: t.Optional(t.Unknown()),
   dmStartedAt: t.Optional(t.Unknown()),
+  phase: t.Optional(t.Unknown()),
 });
 
 export const combatIntentRequestValidator = getSchemaValidator(combatIntentRequestSchema, {});

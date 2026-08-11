@@ -174,6 +174,7 @@ export async function handleDmActionsAndTransitions(
       encounterId: activeEncounter.id,
       combatActions: result.combat_actions,
       declarationText: result.text,
+      participants: activeEncounter.participants,
       aiContext,
       conversationHistory,
       userPlan,

@@ -55,11 +55,21 @@ import type {
   HitCheckResult,
   DamageCalculationInput,
   DamageCalculationResult,
+  AttackProposal,
   SpellAttackInput,
   SpellAttackResult,
   CreateWeaponAttackInput,
   DamageType,
 } from '../../types/combat.js';
+
+/**
+ * Whether the caller supplied a real d20 face. Guards the whole player-rolled path against a
+ * client that sends `0`, `NaN`, or a number off the die: those must fall back to the engine's
+ * own roll, never be treated as "the player rolled a 0" and silently auto-miss the turn.
+ */
+function isProvidedD20(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 20;
+}
 
 export class CombatAttackService {
   constructor() {
@@ -171,21 +181,18 @@ export class CombatAttackService {
   }
 
   /**
-   * Resolve a complete attack
+   * Everything an attack needs to know before anything is claimed, rolled, or written.
+   *
+   * Split out of `resolveAttack` so `proposeAttack` can answer "what would this attack be?"
+   * from exactly the same reads and the same `resolveAttackRules` call that will later resolve
+   * it. Two code paths computing the attack bonus independently is how a popup ends up
+   * promising `1d20+7` against a resolution that applies `+5`, and the player is shown a number
+   * the engine never used. There is one computation, and both phases call it.
+   *
+   * Everything here is a read. Nothing claims the turn action or touches hit points.
    */
-  async resolveAttack(
-    encounterId: string,
-    input: AttackRollInput,
-    userId: string,
-  ): Promise<AttackResult> {
-    const {
-      attackerId,
-      expectedVersion,
-      targetId,
-      weaponId,
-      advantage = false,
-      disadvantage = false,
-    } = input;
+  private async prepareAttack(encounterId: string, input: AttackRollInput, userId: string) {
+    const { attackerId, targetId, weaponId, advantage = false, disadvantage = false } = input;
 
     await this.assertCurrentTurn(encounterId, attackerId, userId);
 
@@ -238,6 +245,80 @@ export class CombatAttackService {
       attackerConditions,
       targetConditions,
     });
+
+    return {
+      attackerData,
+      targetParticipant,
+      targetStats,
+      weapon,
+      geometry,
+      baseTargetAc,
+      targetConditions,
+      tacticalMap,
+      rules,
+    };
+  }
+
+  /**
+   * What this attack would be, without being it.
+   *
+   * The player rolls their own attack die (owner decision, 2026-08-10), and a die is only
+   * meaningful beside the numbers it will be judged against — the bonus added to it, the AC it
+   * must beat, and whether the rules grant advantage. Those are all engine facts: cover, the
+   * target's dodge, conditions on either side. So the popup cannot compute them, and asking the
+   * player for a naked d20 while the server does the arithmetic out of sight would make the
+   * engine less visible, not more.
+   *
+   * Strictly non-mutating: no turn claim, no roll, no damage. A proposal that is never
+   * committed leaves the encounter exactly as it found it, which is what makes it safe to
+   * discard when the player closes the popup.
+   */
+  async proposeAttack(
+    encounterId: string,
+    input: AttackRollInput,
+    userId: string,
+  ): Promise<AttackProposal> {
+    const { weapon, rules, geometry, baseTargetAc } = await this.prepareAttack(
+      encounterId,
+      input,
+      userId,
+    );
+    return {
+      legal: rules.legal,
+      refusal: rules.refusal ?? null,
+      weaponName: weapon.name || 'attack',
+      attackBonus: rules.attackBonus,
+      targetAc: rules.targetAc,
+      baseAc: baseTargetAc,
+      coverBonus: rules.targetAc - baseTargetAc,
+      cover: geometry?.cover ?? null,
+      advantage: rules.advantage,
+      disadvantage: rules.disadvantage,
+    };
+  }
+
+  /**
+   * Resolve a complete attack
+   */
+  async resolveAttack(
+    encounterId: string,
+    input: AttackRollInput,
+    userId: string,
+  ): Promise<AttackResult> {
+    const { attackerId, expectedVersion, targetId, providedD20 } = input;
+
+    const {
+      attackerData,
+      targetParticipant,
+      targetStats,
+      weapon,
+      geometry,
+      baseTargetAc,
+      targetConditions,
+      tacticalMap,
+      rules,
+    } = await this.prepareAttack(encounterId, input, userId);
+
     if (!rules.legal) {
       throw new BusinessLogicError(`Attack refused: ${rules.refusal}`, { refusal: rules.refusal });
     }
@@ -246,7 +327,14 @@ export class CombatAttackService {
     // Wrapped so that anything throwing below -- damage application above all --
     // releases the claim instead of stranding the actor mid-turn.
     return claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, async () => {
-      const attackRoll = this.rollD20(rules.advantage, rules.disadvantage);
+      // The player's own die when they rolled one, and only then. `rollD20` already applied
+      // advantage when it rolled; a provided die was rolled in the popup, which was told the
+      // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die
+      // here would apply advantage twice.
+      const autoRolled = !isProvidedD20(providedD20);
+      const attackRoll = autoRolled
+        ? this.rollD20(rules.advantage, rules.disadvantage)
+        : (providedD20 as number);
 
       const targetAC = rules.targetAc;
 
@@ -278,6 +366,7 @@ export class CombatAttackService {
             ? 'character-sheet'
             : monsterAttackSource(attackerData.participant),
         d20: attackRoll,
+        autoRolled,
         attackBonus: rules.attackBonus,
         totalAttack: hitCheck.totalAttackRoll,
         baseAc: baseTargetAc,
@@ -311,6 +400,7 @@ export class CombatAttackService {
           isCritical: false,
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,
+          autoRolled,
         };
       }
 
@@ -391,6 +481,7 @@ export class CombatAttackService {
           isCritical: isCrit,
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,
+          autoRolled,
         };
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });

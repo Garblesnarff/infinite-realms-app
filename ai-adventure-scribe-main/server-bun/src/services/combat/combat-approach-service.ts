@@ -9,6 +9,9 @@
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { combatLogger } from '../../lib/logger.js';
+// Re-exported from its own module so the sentence stays importable without dragging this
+// file's logger dependency along; see attack-narration.ts.
+export { describeResolvedAttack } from './attack-narration.js';
 import { planApproach } from '../../tactical/approach.js';
 import { getDistance } from '../../tactical/engine.js';
 
@@ -122,43 +125,6 @@ export function describeUnreachableApproach(
   );
 }
 
-/**
- * The sentence the DM reads after an attack the engine actually rolled.
- *
- * Until now the only thing that ever reached `<engine_resolved_outcomes>` was an approach that
- * fell short, so a landed blow told the model nothing at all. Run 9's byte-identical paragraph
- * loop (seq 12 == seq 20, verbatim) is what feedback starvation looks like from the outside:
- * the model repeated itself because nothing ever confirmed that anything had happened.
- */
-export function describeResolvedAttack(
-  actorLabel: string,
-  targetLabel: string,
-  outcome: {
-    hit?: boolean;
-    finalDamage?: number;
-    targetNewHp?: number;
-    isCritical?: boolean;
-    targetIsDead?: boolean;
-    targetIsConscious?: boolean;
-  },
-  weaponName?: string,
-): string {
-  const weapon = weaponName ? ` with its ${weaponName}` : '';
-  if (!outcome.hit) return `${actorLabel} attacked ${targetLabel}${weapon} and MISSED. No damage.`;
-  const crit = outcome.isCritical ? 'CRITICAL HIT' : 'HIT';
-  const damage = Number(outcome.finalDamage ?? 0);
-  const hp =
-    outcome.targetNewHp == null ? '' : ` ${targetLabel} is now at ${outcome.targetNewHp} HP`;
-  const state = outcome.targetIsDead
-    ? ` and is DEAD`
-    : outcome.targetIsConscious === false
-      ? ` and is UNCONSCIOUS`
-      : '';
-  return (
-    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit} for ${damage} damage.${hp}${state}. ` +
-    'Narrate this outcome; it already happened.'
-  );
-}
 
 /** What the intent gateway records when an attack could not survive its own approach. */
 export type MovementOnlyResult = {

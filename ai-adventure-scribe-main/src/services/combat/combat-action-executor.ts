@@ -49,6 +49,8 @@ export type ClientCombatIntent =
       expectedVersion?: number;
       advantage?: boolean;
       disadvantage?: boolean;
+      /** The player's own attack die, when the dice popup rolled it. Absent = engine rolls. */
+      d20?: number;
     }
   | {
       type: 'spell';
@@ -155,6 +157,8 @@ export async function executeAuthoritativeCombatIntent(
 export async function executeStructuredCombatAction(
   encounterId: string,
   action: StructuredCombatAction,
+  /** The natural d20 the player rolled for this action, when they rolled one. */
+  providedD20?: number,
 ): Promise<ResolvedTargetDamage[]> {
   const dmStartedAt = Date.now();
   let result: unknown;
@@ -166,6 +170,7 @@ export async function executeStructuredCombatAction(
         actorId: action.actor_id,
         targetId: action.target_ids[0],
         weaponId: action.weapon_id || undefined,
+        d20: providedD20,
       },
       'dm',
       dmStartedAt,

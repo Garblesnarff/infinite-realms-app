@@ -142,6 +142,13 @@ export interface DiceRollRequest {
   // Fields for damage_taken type (incoming damage to player)
   target?: string; // "player" or NPC name - who receives the damage
   damageType?: DamageType; // Type of damage (fire, cold, slashing, etc.)
+  /**
+   * Set when this roll is the player's own attack die for an engine attack that is waiting on
+   * it. Such a roll settles the combat resolution directly and must NOT be sent to the DM as a
+   * chat message: the turn it belongs to is already in flight, and narrating the die as a new
+   * player utterance would resolve the same attack twice.
+   */
+  combatAttackRoll?: boolean;
 }
 
 export interface DiceRollQueue {

@@ -98,8 +98,14 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     expect(repairCalls()).toHaveLength(1);
     // The board the DM was shown is what it is corrected against.
     expect(repairCalls()[0][0].message).toContain('The entity whose turn it is: the-seeker.');
-    // The repaired action takes the ordinary path: it is actually resolved by the engine.
-    expect(executeStructuredCombatAction).toHaveBeenCalledWith('encounter-1', REPAIRED_ACTION);
+    // The repaired action takes the ordinary path: it is actually resolved by the engine. The
+    // trailing `undefined` is the player's attack die, which this turn has none of — no roster
+    // was supplied, so no actor can be shown to be the player's, and the engine rolls.
+    expect(executeStructuredCombatAction).toHaveBeenCalledWith(
+      'encounter-1',
+      REPAIRED_ACTION,
+      undefined,
+    );
   });
 
   it('asks exactly once, then keeps the narration when the DM still declares nothing', async () => {

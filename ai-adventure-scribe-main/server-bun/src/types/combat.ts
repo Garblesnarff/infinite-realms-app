@@ -536,6 +536,35 @@ export interface AttackRollInput {
   attackType: AttackType;
   advantage?: boolean;
   disadvantage?: boolean;
+  /**
+   * The natural d20 the player rolled in the dice popup, already reduced to a single kept die
+   * when the rules granted advantage or disadvantage. Absent means the engine rolls, which is
+   * how every monster attack resolves and how a player attack resolves when the popup was
+   * cancelled or abandoned.
+   */
+  providedD20?: number;
+}
+
+/**
+ * What an attack would be, answered before it happens.
+ *
+ * Every number here is one the player is shown beside the die they are about to roll, so it is
+ * deliberately the engine's own arithmetic rather than anything the client could approximate:
+ * `attackBonus` is what will be added to the die, `targetAc` what it must beat after cover, and
+ * `advantage`/`disadvantage` whether two dice are rolled at all.
+ */
+export interface AttackProposal {
+  legal: boolean;
+  refusal: string | null;
+  weaponName: string;
+  attackBonus: number;
+  targetAc: number;
+  baseAc: number;
+  coverBonus: number;
+  /** Cover level as the tactical engine grades it (0 = none), not a label. */
+  cover: number | null;
+  advantage: boolean;
+  disadvantage: boolean;
 }
 
 /**
@@ -558,6 +587,12 @@ export interface AttackResult {
   isCritical: boolean;
   isNaturalOne: boolean;
   isNaturalTwenty: boolean;
+  /**
+   * True when the engine rolled the attack die rather than the player. Surfaced rather than
+   * inferred so the log can say "(auto-rolled)": a player who walked away from the popup must
+   * be able to see that the die was not theirs, and never suspect hidden dice.
+   */
+  autoRolled?: boolean;
 }
 
 /**

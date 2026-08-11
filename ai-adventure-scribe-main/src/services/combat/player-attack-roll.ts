@@ -1,0 +1,96 @@
+import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
+
+import logger from '@/lib/logger';
+import { proposeAuthoritativeAttack } from '@/services/combat/combat-attack-proposal';
+import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+
+/**
+ * The player rolls their own attack die.
+ *
+ * Every d20 in this engine used to be `Math.floor(Math.random() * 20) + 1` on a server the
+ * player never sees. For a monster that is right — the DM rolls behind the screen. For the
+ * player's own character it is the one roll at a table that nobody else is allowed to make, and
+ * handing it to the server quietly deleted the moment the whole game is built around.
+ *
+ * The die alone is not enough. A d20 means nothing without the bonus added to it, the AC it has
+ * to beat, and whether the rules grant advantage — and all three are engine facts the client
+ * cannot compute: cover, the target's dodge, conditions on both sides. So the attack is first
+ * *proposed*, which is the engine answering those three questions without claiming the turn or
+ * touching hit points, and only then does the popup open with real numbers on it.
+ *
+ * The engine still owns everything except the die. It adds the bonus, compares to AC, decides
+ * criticals, and rolls damage. What changed is who rolls the one die that decides whether the
+ * blow lands.
+ */
+
+/** A player-owned participant is the only actor whose die is theirs to roll. */
+export function isPlayerActor(
+  actorId: string,
+  participants: Array<{ id: string; participantType?: string }> | undefined,
+): boolean {
+  return (
+    participants?.some(
+      (participant) => participant.id === actorId && participant.participantType === 'player',
+    ) ?? false
+  );
+}
+
+export interface PlayerAttackDieParams {
+  encounterId: string;
+  action: StructuredCombatAction;
+  actorLabel: string;
+}
+
+/**
+ * Proposes the attack, asks the player for the die, and reports what came back.
+ *
+ * Returns `{ d20: undefined }` for every case where the engine should simply roll: a proposal
+ * the engine refused on legality, an attack that resolved as movement because the target was
+ * out of reach, a cancelled or abandoned popup, or any failure of the proposal itself. That
+ * fallback is deliberate and total — the turn must always be resolvable, because a combat that
+ * can wedge behind a modal is worse than a die the player did not personally throw.
+ *
+ * `autoRolled` is reported rather than left implicit so the transcript can say so out loud. A
+ * player who closed the popup and came back must be able to see that the engine rolled for
+ * them, and never wonder whether dice are being hidden.
+ */
+export async function askPlayerForAttackDie(
+  params: PlayerAttackDieParams,
+): Promise<{ d20?: number; autoRolled: boolean; movementOnly: boolean }> {
+  const { encounterId, action, actorLabel } = params;
+  const targetId = action.target_ids[0];
+  if (!targetId) return { autoRolled: true, movementOnly: false };
+  try {
+    const proposal = await proposeAuthoritativeAttack(encounterId, {
+      type: 'attack',
+      actorId: action.actor_id,
+      targetId,
+      weaponId: action.weapon_id || undefined,
+    });
+    if (proposal.movementOnly) {
+      // The attacker could not reach; the approach already moved it and there is no attack to
+      // roll for. The commit below resolves the same movement rather than opening a popup.
+      return { autoRolled: false, movementOnly: true };
+    }
+    if (proposal.legal === false) {
+      logger.info(`[PlayerRoll] proposal illegal (${proposal.refusal}); engine resolves`);
+      return { autoRolled: true, movementOnly: false };
+    }
+    const outcome = await requestPlayerAttackRoll({
+      actorLabel,
+      targetLabel: proposal.targetLabel ?? targetId,
+      weaponName: proposal.weaponName ?? 'attack',
+      attackBonus: proposal.attackBonus ?? 0,
+      targetAc: proposal.targetAc ?? 10,
+      advantage: !!proposal.advantage,
+      disadvantage: !!proposal.disadvantage,
+    });
+    if (outcome.d20 === null) return { autoRolled: true, movementOnly: false };
+    return { d20: outcome.d20, autoRolled: false, movementOnly: false };
+  } catch (error) {
+    // A failed proposal must not cost the player their turn. The engine rolls it as it always
+    // did, which is exactly the behaviour on `main`, so this path can never be a regression.
+    logger.warn('[PlayerRoll] proposal failed; the engine rolls this attack', error);
+    return { autoRolled: true, movementOnly: false };
+  }
+}

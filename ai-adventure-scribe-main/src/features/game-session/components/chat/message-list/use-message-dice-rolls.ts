@@ -8,6 +8,7 @@ import type { MutableRefObject } from 'react';
 
 import { useGame } from '@/contexts/GameContext';
 import { formatDiceRoll as formatDiceRollUtil } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
+import { settleCombatAttackRoll } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
@@ -102,9 +103,11 @@ export function useMessageDiceRolls({
    * Memoized cancel callback
    */
   const handleCancelRoll = useCallback(() => {
-    if (currentRoll) {
-      cancelDiceRoll(currentRoll.id);
-    }
+    if (!currentRoll) return;
+    // Cancelling a combat attack die does not cancel the attack: the turn is already in flight
+    // and must resolve. The engine rolls it instead, and the transcript says so.
+    settleCombatAttackRoll(currentRoll.id, null);
+    cancelDiceRoll(currentRoll.id);
   }, [currentRoll, cancelDiceRoll]);
 
   // Handle dice roll from queue with batching support
@@ -155,6 +158,20 @@ export function useMessageDiceRolls({
         completeDiceRoll(roll.id, rollResult);
 
         const formattedRoll = formatDiceRoll({ ...roll, result: rollResult });
+
+        // A combat attack die belongs to a resolution already waiting on it. Hand it back and
+        // stop: sending it to the DM as a new player message would put the same attack through
+        // the engine a second time, which is the divergence this whole feature exists to avoid.
+        if (settleCombatAttackRoll(roll.id, rollResult.naturalRoll ?? rollResult.total)) {
+          logger.info('[useMessageDiceRolls] combat attack die returned to the engine');
+          lastRollRef.current = {
+            kind: 'attack',
+            label: roll.description,
+            result: rollResult.total,
+            nat: rollResult.naturalRoll,
+          };
+          return;
+        }
 
         const diceRollMessage: ChatMessage = {
           text: formattedRoll,
@@ -273,6 +290,14 @@ export function useMessageDiceRolls({
           ...roll,
           result: { total: numericResult },
         });
+
+        // Same diversion as the rolled path: a hand-entered attack die is still the player's
+        // die for an attack already mid-resolution, and still must not reach the DM as a
+        // message. The typed number IS the natural face, since the popup asks for a bare d20.
+        if (settleCombatAttackRoll(roll.id, numericResult)) {
+          logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');
+          return;
+        }
 
         if (roll.batchId && !willCompleteBatch) {
           const playerMessage: ChatMessage = {

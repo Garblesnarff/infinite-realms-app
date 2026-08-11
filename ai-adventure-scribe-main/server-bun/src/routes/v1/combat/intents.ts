@@ -12,6 +12,7 @@ import { CombatEncounterService } from '../../../services/combat/combat-encounte
 import {
   executeCombatIntent,
   getLegalCombatActions,
+  proposeCombatAttack,
   type SubmittedCombatIntent,
 } from '../../../services/combat/combat-intent-service.js';
 import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
@@ -81,6 +82,7 @@ export const intentRoutes = new Elysia()
         intent?: SubmittedCombatIntent;
         source?: 'player' | 'dm';
         dmStartedAt?: number;
+        phase?: 'propose' | 'commit';
       };
       if (!payload.intent?.type || !payload.intent.actorId) {
         set.status = 400;
@@ -92,6 +94,22 @@ export const intentRoutes = new Elysia()
         return describeIntentRejection(payload);
       }
       try {
+        // A proposal claims nothing and resolves nothing: it answers what the attack would be
+        // so the player can roll their own die against real numbers. Routed here rather than
+        // through a sibling endpoint so it inherits this route's authentication, ownership
+        // check, and reference resolution unchanged — a proposal computed under looser rules
+        // than the commit would be a proposal about a different attack.
+        if (payload.phase === 'propose') {
+          return {
+            accepted: true,
+            proposal: await proposeCombatAttack(
+              params.encounterId,
+              payload.intent,
+              user.userId,
+              payload.source === 'dm' ? 'dm' : 'player',
+            ),
+          };
+        }
         const result = await executeCombatIntent(
           params.encounterId,
           payload.intent,
