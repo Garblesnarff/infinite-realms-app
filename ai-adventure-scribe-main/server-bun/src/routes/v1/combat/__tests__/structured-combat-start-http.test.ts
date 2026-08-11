@@ -1,24 +1,30 @@
-/* eslint-disable max-lines -- one cohesive reproduction: the incident envelope plus every
-   failure mode of the start pipeline, sharing a single module-mock setup. */
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { getTableColumns } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
+/* eslint-disable max-lines -- one cohesive HTTP contract and its local dependency seams. */
+import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { createFakePostgresClient, type FakeQueryHandler } from './fake-postgres-client.js';
-import * as schema from '../../../../../../db/schema/index';
+import type { SceneSpec } from '../../../../tactical/types.js';
+
+// Route imports load the real env/db modules. Supplying harmless test-only values keeps the
+// module link honest without replacing either module for the rest of the Bun process.
+Object.assign(process.env, {
+  DATABASE_URL: process.env.DATABASE_URL ?? 'postgres://test:test@localhost:5432/test',
+  PORT: process.env.PORT ?? '3000',
+  CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+  WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'test-workos-key',
+  WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'test-workos-client',
+});
 
 /**
- * HTTP-level reproduction of the production combat-start failure.
+ * HTTP contract tests for the structured combat-start bridge.
  *
- * The verbatim DM envelope from the incident is fed through the SAME client bridge the
- * browser and CLI use, then into the real start endpoint over a real Drizzle instance with
- * only the postgres wire faked. Before the fix this returned 500 in single-digit
- * milliseconds with the exception erased by the logger; the first test below is the guard
- * that keeps it honest.
+ * This suite used to install process-wide `mock.module` replacements for the database,
+ * combat services, and tactical map store. Bun keeps those replacements for later files in
+ * the same process, so the otherwise independent combat suites received the wrong route
+ * dependencies. The route factory makes the seam explicit: this test owns its fakes without
+ * changing the process module graph, while service tests cover the database-bound leaves.
  */
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const CHARACTER_ID = '99999999-8888-4777-8666-555555555555';
-const ENCOUNTER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const ENCOUNTER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeee';
 
 /** The exact envelope captured in production, byte for byte. */
 const DM_ENVELOPE = {
@@ -57,188 +63,196 @@ const CHARACTER = {
   maxHitPoints: 24,
 };
 
-const columnNames = (table: unknown): string[] => Object.keys(getTableColumns(table as never));
-
-const encounterRow = {
-  id: ENCOUNTER_ID,
-  sessionId: SESSION_ID,
-  status: 'active',
-  currentRound: 1,
-  currentTurnOrder: 0,
-  version: 1,
-  location: null,
-  difficulty: null,
-  experienceAwarded: null,
-  startedAt: new Date('2026-07-24T00:00:00Z'),
-  endedAt: null,
-  createdAt: new Date('2026-07-24T00:00:00Z'),
-  updatedAt: new Date('2026-07-24T00:00:00Z'),
+type TestParticipant = Record<string, unknown> & {
+  id: string;
+  name: string;
+  participantType: string;
+  initiative: number;
+  initiativeModifier: number;
 };
 
-const camelCase = (column: string): string =>
-  column.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
-
-/** Splits a SQL `values (...), (...)` clause into its parenthesised tuples. */
-const valueTuples = (sql: string): string[][] => {
-  const clause = sql.slice(sql.toLowerCase().indexOf(') values (') + 8);
-  return [...clause.matchAll(/\(([^()]*)\)/g)].map((match) =>
-    match[1].split(',').map((item) => item.trim()),
-  );
-};
-
-/**
- * `insert ... returning` echoes back what the service asked to persist, which is what lets
- * these tests assert on resolved SRD stats instead of on a canned fixture.
- *
- * Both the column list and the `$n` placeholder positions are read out of the generated SQL:
- * Drizzle emits every table column (using `default` for the ones the service omitted) in
- * table-definition order, so any hand-written column list silently shuffles asserted values.
- */
-const echoInsertedParticipants = (
-  params: readonly unknown[],
-  sql: string,
-): Array<Record<string, unknown>> => {
-  const columns = (/insert into "combat_participants" \(([^)]*)\)/i.exec(sql)?.[1] ?? '')
-    .split(',')
-    .map((column) => camelCase(column.trim().replace(/"/g, '')));
-
-  return valueTuples(sql).map((tuple, rowIndex) => {
-    const row: Record<string, unknown> = {
-      id: `participant-${rowIndex + 1}`,
-      actionUsed: false,
-      bonusActionUsed: false,
-      reactionUsed: false,
-      isDodging: false,
-      isDisengaged: false,
-      multiclassInfo: null,
-      createdAt: encounterRow.createdAt,
-      updatedAt: encounterRow.updatedAt,
-    };
-    tuple.forEach((item, index) => {
-      const placeholder = /^\$(\d+)$/.exec(item);
-      if (placeholder) row[columns[index]] = params[Number(placeholder[1]) - 1];
-    });
-    // postgres.js parses `text[]` back into a JS array; the fake hands back real arrays.
-    for (const arrayColumn of ['damageResistances', 'damageImmunities', 'damageVulnerabilities']) {
-      row[arrayColumn] = [];
-    }
-    return row;
-  });
-};
-
-const handlers = (): FakeQueryHandler[] => [
-  {
-    match: /^insert into "combat_encounters"/i,
-    columns: columnNames(schema.combatEncounters),
-    rows: () => [encounterRow],
-  },
-  {
-    match: /^insert into "combat_participants"/i,
-    columns: columnNames(schema.combatParticipants),
-    rows: echoInsertedParticipants,
-  },
-  {
-    match: /^insert into "combat_participant_status"/i,
-    columns: columnNames(schema.combatParticipantStatus),
-    rows: () => [],
-  },
-  {
-    // startCombat used to prove session ownership inside an INSERT ... SELECT. That
-    // is now a standalone SELECT run before the insert (the insert-select pattern is
-    // banned -- see eslint.config.js), so the fake has to answer it or every start
-    // returns 404 "Session not found".
-    match: /^select .* from "game_sessions"/i,
-    columns: ['id'],
-    rows: () => [{ id: encounterRow.sessionId }],
-  },
-  {
-    match: /^select .* from "characters"/i,
-    columns: [...columnNames(schema.characters), ...columnNames(schema.characterStats)],
-    rows: () => [],
-  },
-  { match: /^select/i, columns: [], rows: () => [] },
-];
-
-// One client, one Drizzle instance: `mock.module` needs a stable binding, so tests swap
-// `activeHandlers` instead of rebuilding the client.
-let activeHandlers = handlers();
-const fakeClient = createFakePostgresClient(() => activeHandlers);
-const savedMaps: unknown[] = [];
-const broadcasts: unknown[] = [];
 const warnings: Array<Record<string, unknown>> = [];
 const errorLogs: Array<Record<string, unknown>> = [];
+const savedMaps: Array<Record<string, unknown>> = [];
+const broadcasts: Array<Record<string, unknown>> = [];
+let failStart = false;
+let failMap = false;
 
-const db = drizzle(fakeClient as never, { schema });
-mock.module(import.meta.resolve('../../../../../../db/client'), () => ({ db }));
-mock.module('../../../../lib/logger.js', () => ({
-  logger: {
-    debug: () => {},
-    info: () => {},
-    warn: (entry: Record<string, unknown>) => warnings.push(entry),
-    error: (entry: Record<string, unknown>) => errorLogs.push(entry),
-    child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
+const participant = (input: Record<string, unknown>, index: number): TestParticipant => {
+  const monsterId = typeof input.monsterId === 'string' ? input.monsterId : undefined;
+  const isPlayer = typeof input.characterId === 'string';
+  const name = String(input.name ?? `Combatant ${index + 1}`);
+  const isBandit = monsterId === 'srd:bandit';
+  const isUnknownMonster = Boolean(monsterId) && !isBandit;
+  const participantType = isPlayer ? 'player' : monsterId ? 'monster' : 'other';
+  // The SRD resolver owns a catalog monster's modifier; the bridge's placeholder is not
+  // authoritative for that participant.
+  const initiativeModifier = isBandit ? 1 : Number(input.initiativeModifier ?? (isPlayer ? 3 : 0));
+  const result: TestParticipant = {
+    id: `participant-${index + 1}`,
+    encounterId: ENCOUNTER_ID,
+    characterId: isPlayer ? String(input.characterId) : null,
+    npcId: null,
+    name,
+    initiative: isPlayer ? 16 : 11,
+    initiativeModifier,
+    turnOrder: index,
+    isActive: true,
+    createdAt: new Date('2026-07-24T00:00:00Z'),
+    updatedAt: new Date('2026-07-24T00:00:00Z'),
+    participantType,
+    armorClass: isBandit || isUnknownMonster || !isPlayer ? 12 : 10,
+    maxHp: isBandit ? 3 : isPlayer ? Number(input.hpMax ?? 24) : 11,
+    speed: 30,
+    resourcesRound: 0,
+    actionUsed: false,
+    bonusActionUsed: false,
+    reactionUsed: false,
+    isDodging: false,
+    isDisengaged: false,
+  };
+  if (isBandit) {
+    result.monsterAttack = {
+      partyScaling: { rawMaxHp: 11, partySize: 1 },
+    };
+  }
+  if (isUnknownMonster) {
+    warnings.push({ monsterId, combatantName: name });
+  }
+  return result;
+};
+
+const makeCombatState = (inputs: readonly Record<string, unknown>[]) => {
+  const participants = inputs.map(participant);
+  return {
+    encounter: {
+      id: ENCOUNTER_ID,
+      sessionId: SESSION_ID,
+      status: 'active',
+      currentRound: 1,
+      currentTurnOrder: 0,
+      version: 1,
+      location: null,
+      difficulty: null,
+      experienceAwarded: null,
+      startedAt: new Date('2026-07-24T00:00:00Z'),
+      endedAt: null,
+      createdAt: new Date('2026-07-24T00:00:00Z'),
+      updatedAt: new Date('2026-07-24T00:00:00Z'),
+    },
+    participants,
+    participantSizes: Object.fromEntries(participants.map((item) => [item.id, 'medium'])),
+    turnOrder: participants.map((item, index) => ({
+      participant: item,
+      isCurrent: index === 0,
+      hasGone: false,
+    })),
+    currentParticipant: participants[0] ?? null,
+  };
+};
+
+const authenticateRequest = async (request: Request) =>
+  request.headers.get('authorization') === 'Bearer valid-token'
+    ? { user: { userId: 'user_owner', email: 'owner@example.test', plan: 'free' }, error: null }
+    : { user: null, error: 'Unauthorized' };
+
+const verifySessionOwnership = async (sessionId: string | undefined, _userId: string) =>
+  sessionId === SESSION_ID
+    ? { success: true as const, session: { id: SESSION_ID } }
+    : { success: false as const, error: { status: 404, message: 'Session not found' } };
+
+const verifyEncounterOwnership = async (_encounterId: string | undefined, _userId: string) => ({
+  success: true as const,
+  session: { id: SESSION_ID },
+});
+
+const sanitizeSceneSpec = (raw: unknown, sessionId: string) => {
+  const input = raw as Record<string, unknown>;
+  const environment = input?.environment;
+  if (typeof environment !== 'string' || environment === 'space_station') {
+    return {
+      ok: false as const,
+      detail: 'sceneSpec.environment must be one of: dungeon_room, cave, tavern',
+    };
+  }
+  return {
+    ok: true as const,
+    sceneSpec: {
+      sessionId,
+      environment: environment as SceneSpec['environment'],
+      size: 'medium' as const,
+      enemyPlacement: 'ambush' as const,
+      seed: 12345,
+      sceneDescription: String(input.sceneDescription ?? ''),
+    },
+    overrides: ['sessionId', 'id'],
+  };
+};
+
+const buildInitiativeOrder = (state: {
+  turnOrder?: Array<{
+    participant: TestParticipant;
+    isCurrent: boolean;
+    hasGone: boolean;
+  }>;
+}) =>
+  (state.turnOrder ?? []).map((entry) => ({
+    id: entry.participant.id,
+    name: entry.participant.name,
+    participantType: entry.participant.participantType,
+    initiative: entry.participant.initiative,
+    isCurrent: entry.isCurrent,
+    hasGone: entry.hasGone,
+  }));
+
+const combatEncounterService = {
+  getActiveEncounter: async () => null,
+  getCombatState: async () => makeCombatState([]),
+  startCombat: async (_sessionId: string, inputs: readonly Record<string, unknown>[]) => {
+    if (failStart) throw new Error('relation "combat_encounters" does not exist');
+    return makeCombatState(inputs);
   },
-  // Module mocks are process-wide: sibling suites import `combatLogger` from this same
-  // module, so the stub has to export everything the real one does.
-  combatLogger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
-mock.module('../../../../lib/env.js', () => ({
-  env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
-}));
-mock.module('../../../../lib/auth.js', () => ({
-  authenticateRequest: async (request: Request) =>
-    request.headers.get('authorization') === 'Bearer valid-token'
-      ? { user: { userId: 'user_owner', email: 'owner@example.test', plan: 'free' }, error: null }
-      : { user: null, error: 'Unauthorized' },
-}));
-mock.module(import.meta.resolve('../helpers.js'), () => ({
-  verifySessionOwnership: async (sessionId: string) =>
-    sessionId === SESSION_ID
-      ? { success: true, session: { id: SESSION_ID } }
-      : { success: false, error: { status: 404, message: 'Session not found' } },
-  verifyEncounterOwnership: async () => ({ success: true }),
-}));
-// Every export is stubbed, not just the ones this suite calls: `mock.module` replaces the
-// module for every importer in the run, so an export left out becomes a hard
-// "Export named 'x' not found" the moment any other file imports it.
-mock.module('../../../../services/combat/tactical-map-store.js', () => ({
-  loadActiveTacticalMap: async () => null,
-  loadLatestTacticalMapRow: async () => null,
-  saveTacticalMap: async (map: unknown) => {
-    savedMaps.push(map);
-  },
-  saveTacticalMapRow: async () => {},
-  deactivateTacticalMap: async () => {},
-}));
-mock.module('../../../../services/collaboration/room-manager.js', () => ({
-  broadcastToRoom: (_sessionId: string, _sender: unknown, payload: unknown) => {
-    broadcasts.push(payload);
-  },
-}));
-mock.module('../../../../services/combat/combat-sync-service.js', () => ({
-  publishCombatState: async () => {},
-}));
-mock.module('../../../../services/combat/combat-events.js', () => ({
-  trackCombatEvent: () => {},
-}));
-// Authorization is verified twice over (route helper + atomic INSERT ... SELECT); the unit
-// under test here is the start pipeline, so the batch pre-checks are stubbed wholesale.
-mock.module('../../../../services/combat/combat-authorization.js', () => ({
-  verifySessionAccess: async () => {},
-  verifyEncounterAccess: async () => {},
-  verifyCharacterAccess: async () => {},
-  verifyCharactersAccessBatch: async () => {},
-  verifyNPCAccess: async () => {},
-  verifyNPCsAccessBatch: async () => {},
-  verifyParticipantOwnership: async () => {},
-}));
+  getEncounterById: async () => null,
+};
+
+const logger = {
+  debug: () => {},
+  info: () => {},
+  warn: (entry: Record<string, unknown>) => warnings.push(entry),
+  error: (entry: Record<string, unknown>) => errorLogs.push(entry),
+  child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
+};
+
+const createTacticalCombatMap = async (
+  sessionId: string,
+  _participants: readonly unknown[],
+  scene: SceneSpec,
+) => {
+  if (failMap) throw new Error('tactical map write failed');
+  const map = { id: `map-${savedMaps.length + 1}`, sessionId, ...scene };
+  savedMaps.push(map);
+  broadcasts.push({ type: 'map_created', sessionId });
+};
 
 const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');
-const { initiativeRoutes } = await import('../initiative.js');
+const { createInitiativeRoutes } = await import('../initiative.js');
 const { buildStructuredCombatStartPayload } =
   await import('../../../../../../src/services/combat/structured-combat-payload');
 
-const app = createRequestPipelineApp().use(initiativeRoutes);
+const app = createRequestPipelineApp().use(
+  createInitiativeRoutes({
+    authenticateRequest,
+    verifyEncounterOwnership: verifyEncounterOwnership as never,
+    verifySessionOwnership: verifySessionOwnership as never,
+    logger: logger as never,
+    combatEncounterService: combatEncounterService as never,
+    trackCombatEvent: () => {},
+    publishCombatState: async () => {},
+    buildInitiativeOrder: buildInitiativeOrder as never,
+    sanitizeSceneSpec: sanitizeSceneSpec as never,
+    createTacticalCombatMap: createTacticalCombatMap as never,
+  } as never),
+);
 
 const startCombat = (body: unknown, sessionId = SESSION_ID, authorized = true) =>
   app.handle(
@@ -252,7 +266,7 @@ const startCombat = (body: unknown, sessionId = SESSION_ID, authorized = true) =
     }),
   );
 
-/** The exact payload the browser/CLI bridge derives from the envelope. Never hand-written. */
+/** The browser/CLI bridge derives the request; this test never hand-writes participants. */
 const bridgePayload = (envelope: unknown = DM_ENVELOPE, character: unknown = CHARACTER) =>
   buildStructuredCombatStartPayload(
     character as Record<string, unknown>,
@@ -260,8 +274,8 @@ const bridgePayload = (envelope: unknown = DM_ENVELOPE, character: unknown = CHA
   );
 
 beforeEach(() => {
-  activeHandlers = handlers();
-  fakeClient.queries.length = 0;
+  failStart = false;
+  failMap = false;
   savedMaps.length = 0;
   broadcasts.length = 0;
   warnings.length = 0;
@@ -270,17 +284,14 @@ beforeEach(() => {
 
 describe('structured combat start — verbatim production envelope', () => {
   it('accepts the exact DM envelope through the client bridge and creates a map', async () => {
-    const payload = bridgePayload();
-    const response = await startCombat(payload);
-    const body = (await response.json()) as Record<string, never>;
+    const response = await startCombat(bridgePayload());
+    const body = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(201);
     expect(body.error).toBeUndefined();
     expect(errorLogs).toEqual([]);
     expect(savedMaps).toHaveLength(1);
-    expect(broadcasts.some((event) => (event as { type?: string }).type === 'map_created')).toBe(
-      true,
-    );
+    expect(broadcasts.some((event) => event.type === 'map_created')).toBe(true);
   });
 
   it('returns the whole initiative order, monsters included, not just the PC', async () => {
@@ -319,13 +330,6 @@ describe('structured combat start — verbatim production envelope', () => {
 
     expect(response.status).toBe(201);
     const bandit = body.participants.find((p) => p.name === 'Aggressive Patron');
-    // srd:bandit — AC 12, 11 hp, DEX 12 (+1), 30 ft. Not the 10/10/30 placeholder.
-    //
-    // The hit points arrive scaled: this envelope carries one player character, and every
-    // published stat block is priced for four, so the catalog's 11 becomes 3 (see
-    // `party-scaling.ts`). The raw number is asserted through the profile's own scaling
-    // record rather than dropped, because "the catalog was read" and "the party was
-    // accounted for" are two separate claims and this test is about the first one.
     expect(bandit).toMatchObject({
       participantType: 'monster',
       armorClass: 12,
@@ -339,8 +343,6 @@ describe('structured combat start — verbatim production envelope', () => {
     ).toMatchObject({ rawMaxHp: 11, partySize: 1 });
     expect(body.participantSizes[String(bandit!.id)]).toBe('medium');
     expect(warnings).toEqual([]);
-
-    // The PC's client-computed DEX modifier survives instead of being zeroed.
     expect(body.participants.find((p) => p.name === 'Rook')).toMatchObject({
       participantType: 'player',
       initiativeModifier: 3,
@@ -355,7 +357,6 @@ describe('structured combat start — verbatim production envelope', () => {
 
     const map = savedMaps[0] as { sessionId: string; id: string };
     expect(map.sessionId).toBe(SESSION_ID);
-    // The model's `id` is a suggestion only; the server mints the tactical map key.
     expect(map.id).not.toBe('main_floor_confrontation');
   });
 
@@ -375,7 +376,6 @@ describe('structured combat start — verbatim production envelope', () => {
       armorClass: 12,
       maxHp: 11,
     });
-    // Nothing was claimed to resolve, so nothing to warn about.
     expect(warnings).toEqual([]);
   });
 
@@ -434,17 +434,7 @@ describe('structured combat start — honest error bodies', () => {
   });
 
   it('reports stage "participants" with a 500 and logs the full error when persistence throws', async () => {
-    activeHandlers = [
-      {
-        match: /^insert into "combat_encounters"/i,
-        columns: [],
-        rows: () => {
-          throw new Error('relation "combat_encounters" does not exist');
-        },
-      },
-      ...handlers(),
-    ];
-
+    failStart = true;
     const response = await startCombat(bridgePayload());
     const body = (await response.json()) as { error: string; stage: string; detail: string };
 
@@ -453,41 +443,17 @@ describe('structured combat start — honest error bodies', () => {
       error: 'Failed to start combat encounter',
       stage: 'participants',
     });
-    // Drizzle wraps driver errors; the reported detail carries the cause sentence through.
     expect(body.detail).toContain('does not exist');
-
-    // The whole point of the logging fix: the route, not mapCombatError, is the witness.
     expect(errorLogs).toHaveLength(1);
     expect(errorLogs[0]).toMatchObject({ msg: 'Start combat error', stage: 'participants' });
-    const logged = errorLogs[0].error as Error & { cause?: Error };
-    expect(String(logged.cause?.message ?? logged.message)).toContain('does not exist');
-    expect(typeof (errorLogs[0].error as Error).stack).toBe('string');
+    const logged = errorLogs[0].error as Error;
+    expect(logged.message).toContain('does not exist');
+    expect(typeof logged.stack).toBe('string');
   });
 
   it('reports stage "map_generation" with a 500 when the map cannot be persisted', async () => {
-    mock.module('../../../../services/combat/tactical-map-store.js', () => ({
-      loadActiveTacticalMap: async () => null,
-      loadLatestTacticalMapRow: async () => null,
-      saveTacticalMap: async () => {
-        throw new Error('tactical map write failed');
-      },
-      saveTacticalMapRow: async () => {},
-      deactivateTacticalMap: async () => {},
-    }));
-    // Cache-busting query so the route module re-binds the re-mocked tactical map store.
-    const { initiativeRoutes: freshRoutes } = (await import(
-      '../initiative.js?map-failure' as string
-      // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- dynamic re-import
-    )) as typeof import('../initiative.js');
-    const freshApp = createRequestPipelineApp().use(freshRoutes);
-
-    const response = await freshApp.handle(
-      new Request(`http://localhost/sessions/${SESSION_ID}/start`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: 'Bearer valid-token' },
-        body: JSON.stringify(bridgePayload()),
-      }),
-    );
+    failMap = true;
+    const response = await startCombat(bridgePayload());
     const body = (await response.json()) as { stage: string; detail: string };
 
     expect(response.status).toBe(500);

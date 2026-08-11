@@ -1,21 +1,24 @@
 /* eslint-disable max-lines -- one cohesive encounter-lifecycle router. */
 import { Elysia, t } from 'elysia';
 
-import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
-import { authenticateRequest } from '../../../lib/auth.js';
-import { AppError } from '../../../lib/errors.js';
-import { logger } from '../../../lib/logger.js';
-import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
-import { concludeEncounter } from '../../../services/combat/combat-ending.js';
-import { trackCombatEvent } from '../../../services/combat/combat-events.js';
-import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
-import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
-import { sanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
 import {
-  createTacticalCombatMap,
-  resetTacticalMovementForTurn,
+  verifyEncounterOwnership as defaultVerifyEncounterOwnership,
+  verifySessionOwnership as defaultVerifySessionOwnership,
+} from './helpers.js';
+import { authenticateRequest as defaultAuthenticateRequest } from '../../../lib/auth.js';
+import { AppError } from '../../../lib/errors.js';
+import { logger as defaultLogger } from '../../../lib/logger.js';
+import { CombatEncounterService as DefaultCombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
+import { concludeEncounter as defaultConcludeEncounter } from '../../../services/combat/combat-ending.js';
+import { trackCombatEvent as defaultTrackCombatEvent } from '../../../services/combat/combat-events.js';
+import { publishCombatState as defaultPublishCombatState } from '../../../services/combat/combat-sync-service.js';
+import { buildInitiativeOrder as defaultBuildInitiativeOrder } from '../../../services/combat/initiative-order.js';
+import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
+import {
+  createTacticalCombatMap as defaultCreateTacticalCombatMap,
+  resetTacticalMovementForTurn as defaultResetTacticalMovementForTurn,
 } from '../../../services/combat/tactical-combat-lifecycle.js';
-import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
+import { CombatInitiativeService as DefaultCombatInitiativeService } from '../../../services/combat-initiative-service.js';
 
 import type { SceneSpec } from '../../../tactical/types.js';
 import type { CombatEndReason, CreateParticipantInput } from '../../../types/combat.js';
@@ -37,13 +40,17 @@ async function endEncounterThroughFunnel(
   sessionId: string | undefined,
   userId: string,
   reason: CombatEndReason,
+  dependencies: Pick<InitiativeRouteOptions, 'combatEncounterService' | 'concludeEncounter'> = {},
 ) {
+  const combatEncounterService =
+    dependencies.combatEncounterService ?? DefaultCombatEncounterService;
+  const concludeEncounter = dependencies.concludeEncounter ?? defaultConcludeEncounter;
   const session =
     sessionId ??
-    (await CombatEncounterService.getEncounterById(encounterId, userId))?.sessionId ??
+    (await combatEncounterService.getEncounterById(encounterId, userId))?.sessionId ??
     '';
   await concludeEncounter(encounterId, session, userId, reason);
-  return CombatEncounterService.getEncounterById(encounterId, userId);
+  return combatEncounterService.getEncounterById(encounterId, userId);
 }
 
 const sessionIdParams = t.Object({
@@ -181,401 +188,459 @@ async function runStage<T>(stage: CombatStartStage, work: () => Promise<T>): Pro
 // reads like a server bug). Reject it as the bad request it is, before any query runs.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const initiativeRoutes = new Elysia()
-  /**
-   * POST /v1/combat/sessions/:sessionId/start
-   * Start a new combat encounter
-   */
-  .post(
-    '/sessions/:sessionId/start',
-    async ({ request, params, body, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+export interface InitiativeRouteOptions {
+  authenticateRequest?: typeof defaultAuthenticateRequest;
+  verifyEncounterOwnership?: typeof defaultVerifyEncounterOwnership;
+  verifySessionOwnership?: typeof defaultVerifySessionOwnership;
+  logger?: typeof defaultLogger;
+  combatEncounterService?: typeof DefaultCombatEncounterService;
+  concludeEncounter?: typeof defaultConcludeEncounter;
+  trackCombatEvent?: typeof defaultTrackCombatEvent;
+  publishCombatState?: typeof defaultPublishCombatState;
+  buildInitiativeOrder?: typeof defaultBuildInitiativeOrder;
+  sanitizeSceneSpec?: typeof defaultSanitizeSceneSpec;
+  createTacticalCombatMap?: typeof defaultCreateTacticalCombatMap;
+  resetTacticalMovementForTurn?: typeof defaultResetTacticalMovementForTurn;
+  combatInitiativeService?: typeof DefaultCombatInitiativeService;
+}
 
-      const { participants, surpriseRound, sceneSpec } = body;
+export function createInitiativeRoutes({
+  authenticateRequest = defaultAuthenticateRequest,
+  verifyEncounterOwnership = defaultVerifyEncounterOwnership,
+  verifySessionOwnership = defaultVerifySessionOwnership,
+  logger = defaultLogger,
+  combatEncounterService = DefaultCombatEncounterService,
+  concludeEncounter,
+  trackCombatEvent = defaultTrackCombatEvent,
+  publishCombatState = defaultPublishCombatState,
+  buildInitiativeOrder = defaultBuildInitiativeOrder,
+  sanitizeSceneSpec = defaultSanitizeSceneSpec,
+  createTacticalCombatMap = defaultCreateTacticalCombatMap,
+  resetTacticalMovementForTurn = defaultResetTacticalMovementForTurn,
+  combatInitiativeService = DefaultCombatInitiativeService,
+}: InitiativeRouteOptions = {}) {
+  return (
+    new Elysia()
+      /**
+       * POST /v1/combat/sessions/:sessionId/start
+       * Start a new combat encounter
+       */
+      .post(
+        '/sessions/:sessionId/start',
+        async ({ request, params, body, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
 
-      // --- Bad payload: 422 with the stage that rejected it, before any work happens. ---
-      if (!UUID_PATTERN.test(params.sessionId)) {
-        set.status = 422;
-        return {
-          error: 'Invalid session id',
-          stage: 'ownership',
-          detail: 'sessionId must be a uuid',
-        };
-      }
-      const rejection = participantsRejection(participants);
-      if (rejection) {
-        set.status = 422;
-        return { error: 'Invalid combat start payload', stage: 'participants', detail: rejection };
-      }
+          const { participants, surpriseRound, sceneSpec } = body;
 
-      let scene: SceneSpec | null = null;
-      if (sceneSpec !== undefined && sceneSpec !== null) {
-        const sanitized = sanitizeSceneSpec(sceneSpec, params.sessionId);
-        if (!sanitized.ok) {
-          set.status = 422;
-          return {
-            error: 'Invalid combat start payload',
-            stage: 'map_generation',
-            detail: sanitized.detail,
-          };
-        }
-        scene = sanitized.sceneSpec;
-        if (sanitized.overrides.length) {
-          // Model-authored scene fields that the server refused to trust. `sessionId` is the
-          // dangerous one: it is a real foreign key on the tactical map.
-          logger.info({
-            msg: 'Overrode model-supplied scene_spec fields on combat start',
-            sessionId: params.sessionId,
-            overrides: sanitized.overrides,
-          });
-        }
-      }
-
-      try {
-        const verification = await runStage('ownership', () =>
-          verifySessionOwnership(params.sessionId, user.userId),
-        );
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return {
-            error: verification.error!.message,
-            stage: 'ownership' satisfies CombatStartStage,
-            detail: 'session is missing or not owned by the caller',
-          };
-        }
-
-        // A start while combat is already running is a no-op that reports the encounter in
-        // progress. Run 8 restarted combat four times in thirty turns because this endpoint
-        // took every "start" literally: each one inserted a second active encounter, rerolled
-        // initiative, and rebuilt the board mid-fight. An encounter now ends only by an end
-        // transition or by every hostile going down — never by someone asking to begin again.
-        const active = await runStage('ownership', () =>
-          CombatEncounterService.getActiveEncounter(params.sessionId, user.userId),
-        );
-        if (active) {
-          logger.info({
-            msg: 'Ignored combat start for a session already in combat',
-            sessionId: params.sessionId,
-            encounterId: active.id,
-            requestedParticipants: Array.isArray(participants) ? participants.length : 0,
-          });
-          const current = await runStage('participants', () =>
-            CombatEncounterService.getCombatState(active.id, user.userId),
-          );
-          set.status = 200;
-          return {
-            ...current,
-            initiativeOrder: buildInitiativeOrder(current),
-            alreadyActive: true,
-          };
-        }
-
-        const combatState = await runStage('participants', () =>
-          CombatEncounterService.startCombat(
-            params.sessionId,
-            participants as CreateParticipantInput[],
-            surpriseRound || false,
-            user.userId,
-          ),
-        );
-
-        if (scene) {
-          await runStage('map_generation', () =>
-            createTacticalCombatMap(
-              params.sessionId,
-              combatState.participants,
-              scene,
-              combatState.participantSizes,
-            ),
-          );
-        }
-
-        await runStage('persistence', async () => {
-          trackCombatEvent('combat_started', {
-            encounterId: combatState.encounter.id,
-            sessionId: params.sessionId,
-          });
-          trackCombatEvent('initiative_completed', {
-            encounterId: combatState.encounter.id,
-            participants: combatState.participants.length,
-          });
-          await publishCombatState(combatState.encounter.id, user.userId, 'combat_started');
-        });
-
-        set.status = 201;
-        // The client needs the whole order, monsters included, the moment combat starts.
-        return { ...combatState, initiativeOrder: buildInitiativeOrder(combatState) };
-      } catch (e) {
-        // Log BEFORE mapping: mapCombatError discards everything but a status, so it must
-        // never be the only witness to the failure. `error` is serialized in full by the
-        // logger (message + stack + cause), which is how the real exception gets named.
-        const stage = e instanceof CombatStartStageError ? e.stage : 'participants';
-        logger.error({
-          msg: 'Start combat error',
-          sessionId: params.sessionId,
-          userId: user.userId,
-          stage,
-          participantCount: Array.isArray(participants) ? participants.length : 0,
-          hasSceneSpec: Boolean(scene),
-          error: e instanceof CombatStartStageError ? (e.cause ?? e) : e,
-        });
-
-        if (e instanceof CombatStartStageError) {
-          const cause = e.cause;
-          if (cause instanceof AppError && cause.statusCode < 500) {
-            set.status = cause.statusCode;
+          // --- Bad payload: 422 with the stage that rejected it, before any work happens. ---
+          if (!UUID_PATTERN.test(params.sessionId)) {
+            set.status = 422;
             return {
-              error: cause.statusCode === 404 ? 'Session not found' : cause.message,
-              stage,
-              detail: cause.message,
+              error: 'Invalid session id',
+              stage: 'ownership',
+              detail: 'sessionId must be a uuid',
             };
           }
-          set.status = e.status >= 500 ? 500 : e.status;
-          return { error: 'Failed to start combat encounter', stage, detail: e.detail };
-        }
+          const rejection = participantsRejection(participants);
+          if (rejection) {
+            set.status = 422;
+            return {
+              error: 'Invalid combat start payload',
+              stage: 'participants',
+              detail: rejection,
+            };
+          }
 
-        const mapped = mapCombatError(
-          set,
-          e,
-          'Failed to start combat encounter',
-          'Session not found',
-        );
-        return { ...mapped, stage, detail: e instanceof Error ? e.message : String(e) };
-      }
-    },
-    { params: sessionIdParams, body: startCombatSchema },
-  )
+          let scene: SceneSpec | null = null;
+          if (sceneSpec !== undefined && sceneSpec !== null) {
+            const sanitized = sanitizeSceneSpec(sceneSpec, params.sessionId);
+            if (!sanitized.ok) {
+              set.status = 422;
+              return {
+                error: 'Invalid combat start payload',
+                stage: 'map_generation',
+                detail: sanitized.detail,
+              };
+            }
+            scene = sanitized.sceneSpec;
+            if (sanitized.overrides.length) {
+              // Model-authored scene fields that the server refused to trust. `sessionId` is the
+              // dangerous one: it is a real foreign key on the tactical map.
+              logger.info({
+                msg: 'Overrode model-supplied scene_spec fields on combat start',
+                sessionId: params.sessionId,
+                overrides: sanitized.overrides,
+              });
+            }
+          }
 
-  /**
-   * POST /v1/combat/:encounterId/roll-initiative
-   * Roll initiative for a participant
-   */
-  .post(
-    '/:encounterId/roll-initiative',
-    async ({ request, params, body, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+          try {
+            const verification = await runStage('ownership', () =>
+              verifySessionOwnership(params.sessionId, user.userId),
+            );
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return {
+                error: verification.error!.message,
+                stage: 'ownership' satisfies CombatStartStage,
+                detail: 'session is missing or not owned by the caller',
+              };
+            }
 
-      try {
-        const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
-        }
+            // A start while combat is already running is a no-op that reports the encounter in
+            // progress. Run 8 restarted combat four times in thirty turns because this endpoint
+            // took every "start" literally: each one inserted a second active encounter, rerolled
+            // initiative, and rebuilt the board mid-fight. An encounter now ends only by an end
+            // transition or by every hostile going down — never by someone asking to begin again.
+            const active = await runStage('ownership', () =>
+              combatEncounterService.getActiveEncounter(params.sessionId, user.userId),
+            );
+            if (active) {
+              logger.info({
+                msg: 'Ignored combat start for a session already in combat',
+                sessionId: params.sessionId,
+                encounterId: active.id,
+                requestedParticipants: Array.isArray(participants) ? participants.length : 0,
+              });
+              const current = await runStage('participants', () =>
+                combatEncounterService.getCombatState(active.id, user.userId),
+              );
+              set.status = 200;
+              return {
+                ...current,
+                initiativeOrder: buildInitiativeOrder(current),
+                alreadyActive: true,
+              };
+            }
 
-        const { participantId } = body;
+            const combatState = await runStage('participants', () =>
+              combatEncounterService.startCombat(
+                params.sessionId,
+                participants as CreateParticipantInput[],
+                surpriseRound || false,
+                user.userId,
+              ),
+            );
 
-        if (!participantId) {
-          set.status = 400;
-          return { error: 'participantId is required' };
-        }
+            if (scene) {
+              await runStage('map_generation', () =>
+                createTacticalCombatMap(
+                  params.sessionId,
+                  combatState.participants,
+                  scene,
+                  combatState.participantSizes,
+                ),
+              );
+            }
 
-        const result = await CombatInitiativeService.rollInitiative(
-          params.encounterId,
-          participantId,
-          undefined,
-          undefined,
-          user.userId,
-        );
+            await runStage('persistence', async () => {
+              trackCombatEvent('combat_started', {
+                encounterId: combatState.encounter.id,
+                sessionId: params.sessionId,
+              });
+              trackCombatEvent('initiative_completed', {
+                encounterId: combatState.encounter.id,
+                participants: combatState.participants.length,
+              });
+              await publishCombatState(combatState.encounter.id, user.userId, 'combat_started');
+            });
 
-        trackCombatEvent('initiative_completed', {
-          encounterId: params.encounterId,
-          participantId,
-        });
-        await publishCombatState(params.encounterId, user.userId, 'initiative_completed');
+            set.status = 201;
+            // The client needs the whole order, monsters included, the moment combat starts.
+            return { ...combatState, initiativeOrder: buildInitiativeOrder(combatState) };
+          } catch (e) {
+            // Log BEFORE mapping: mapCombatError discards everything but a status, so it must
+            // never be the only witness to the failure. `error` is serialized in full by the
+            // logger (message + stack + cause), which is how the real exception gets named.
+            const stage = e instanceof CombatStartStageError ? e.stage : 'participants';
+            logger.error({
+              msg: 'Start combat error',
+              sessionId: params.sessionId,
+              userId: user.userId,
+              stage,
+              participantCount: Array.isArray(participants) ? participants.length : 0,
+              hasSceneSpec: Boolean(scene),
+              error: e instanceof CombatStartStageError ? (e.cause ?? e) : e,
+            });
 
-        return result;
-      } catch (e) {
-        logger.error({ msg: 'Roll initiative error', error: e });
-        return mapCombatError(set, e, 'Failed to roll initiative', 'Combat participant not found');
-      }
-    },
-    { params: encounterIdParams, body: participantIdSchema },
-  )
+            if (e instanceof CombatStartStageError) {
+              const cause = e.cause;
+              if (cause instanceof AppError && cause.statusCode < 500) {
+                set.status = cause.statusCode;
+                return {
+                  error: cause.statusCode === 404 ? 'Session not found' : cause.message,
+                  stage,
+                  detail: cause.message,
+                };
+              }
+              set.status = e.status >= 500 ? 500 : e.status;
+              return { error: 'Failed to start combat encounter', stage, detail: e.detail };
+            }
 
-  /**
-   * POST /v1/combat/:encounterId/next-turn
-   * Advance to the next turn
-   */
-  .post(
-    '/:encounterId/next-turn',
-    async ({ request, params, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+            const mapped = mapCombatError(
+              set,
+              e,
+              'Failed to start combat encounter',
+              'Session not found',
+            );
+            return { ...mapped, stage, detail: e instanceof Error ? e.message : String(e) };
+          }
+        },
+        { params: sessionIdParams, body: startCombatSchema },
+      )
 
-      try {
-        const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
-        }
+      /**
+       * POST /v1/combat/:encounterId/roll-initiative
+       * Roll initiative for a participant
+       */
+      .post(
+        '/:encounterId/roll-initiative',
+        async ({ request, params, body, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
 
-        const result = await CombatInitiativeService.advanceTurn(params.encounterId, user.userId);
-        if (verification.session)
-          await resetTacticalMovementForTurn(verification.session.id, result.currentParticipant.id);
-        await publishCombatState(params.encounterId, user.userId, 'turn_advanced');
-        return result;
-      } catch (e) {
-        logger.error({ msg: 'Advance turn error', error: e });
-        return mapCombatError(set, e, 'Failed to advance turn', 'Encounter not found');
-      }
-    },
-    { params: encounterIdParams },
-  )
+          try {
+            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return { error: verification.error!.message };
+            }
 
-  /**
-   * PATCH /v1/combat/:encounterId/reorder
-   * Manually adjust initiative order
-   */
-  .patch(
-    '/:encounterId/reorder',
-    async ({ request, params, body, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+            const { participantId } = body;
 
-      try {
-        const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
-        }
+            if (!participantId) {
+              set.status = 400;
+              return { error: 'participantId is required' };
+            }
 
-        const { participantId, newInitiative } = body;
+            const result = await combatInitiativeService.rollInitiative(
+              params.encounterId,
+              participantId,
+              undefined,
+              undefined,
+              user.userId,
+            );
 
-        if (!participantId || newInitiative === undefined) {
-          set.status = 400;
-          return { error: 'participantId and newInitiative are required' };
-        }
+            trackCombatEvent('initiative_completed', {
+              encounterId: params.encounterId,
+              participantId,
+            });
+            await publishCombatState(params.encounterId, user.userId, 'initiative_completed');
 
-        await CombatInitiativeService.reorderInitiative(
-          params.encounterId,
-          participantId,
-          newInitiative,
-          user.userId,
-        );
-        const combatState = await CombatEncounterService.getCombatState(
-          params.encounterId,
-          user.userId,
-        );
+            return result;
+          } catch (e) {
+            logger.error({ msg: 'Roll initiative error', error: e });
+            return mapCombatError(
+              set,
+              e,
+              'Failed to roll initiative',
+              'Combat participant not found',
+            );
+          }
+        },
+        { params: encounterIdParams, body: participantIdSchema },
+      )
 
-        return combatState;
-      } catch (e) {
-        logger.error({ msg: 'Reorder initiative error', error: e });
-        return mapCombatError(
-          set,
-          e,
-          'Failed to reorder initiative',
-          'Combat participant not found',
-        );
-      }
-    },
-    { params: encounterIdParams, body: reorderInitiativeSchema },
-  )
+      /**
+       * POST /v1/combat/:encounterId/next-turn
+       * Advance to the next turn
+       */
+      .post(
+        '/:encounterId/next-turn',
+        async ({ request, params, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
 
-  /**
-   * POST /v1/combat/:encounterId/end
-   * End a combat encounter
-   */
-  .post(
-    '/:encounterId/end',
-    async ({ request, params, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+          try {
+            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return { error: verification.error!.message };
+            }
 
-      try {
-        const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
-        }
+            const result = await combatInitiativeService.advanceTurn(
+              params.encounterId,
+              user.userId,
+            );
+            if (verification.session)
+              await resetTacticalMovementForTurn(
+                verification.session.id,
+                result.currentParticipant.id,
+              );
+            await publishCombatState(params.encounterId, user.userId, 'turn_advanced');
+            return result;
+          } catch (e) {
+            logger.error({ msg: 'Advance turn error', error: e });
+            return mapCombatError(set, e, 'Failed to advance turn', 'Encounter not found');
+          }
+        },
+        { params: encounterIdParams },
+      )
 
-        return await endEncounterThroughFunnel(
-          params.encounterId,
-          verification.session?.id,
-          user.userId,
-          'ended_by_request',
-        );
-      } catch (e) {
-        logger.error({ msg: 'End combat error', error: e });
-        return mapCombatError(set, e, 'Failed to end combat encounter', 'Encounter not found');
-      }
-    },
-    { params: encounterIdParams },
-  )
+      /**
+       * PATCH /v1/combat/:encounterId/reorder
+       * Manually adjust initiative order
+       */
+      .patch(
+        '/:encounterId/reorder',
+        async ({ request, params, body, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
 
-  .post(
-    '/:encounterId/abandon',
-    async ({ request, params, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
-      try {
-        const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
-        }
-        return await endEncounterThroughFunnel(
-          params.encounterId,
-          verification.session?.id,
-          user.userId,
-          'abandoned',
-        );
-      } catch (e) {
-        logger.error({ msg: 'Abandon combat error', error: e });
-        return mapCombatError(set, e, 'Failed to abandon combat encounter', 'Encounter not found');
-      }
-    },
-    { params: encounterIdParams },
-  )
+          try {
+            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return { error: verification.error!.message };
+            }
 
-  /**
-   * GET /v1/combat/:encounterId/status
-   * Get current combat state
-   */
-  .get(
-    '/:encounterId/status',
-    async ({ request, params, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
+            const { participantId, newInitiative } = body;
 
-      try {
-        const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
-        }
+            if (!participantId || newInitiative === undefined) {
+              set.status = 400;
+              return { error: 'participantId and newInitiative are required' };
+            }
 
-        const combatState = await CombatEncounterService.getCombatState(
-          params.encounterId,
-          user.userId,
-        );
-        return { ...combatState, initiativeOrder: buildInitiativeOrder(combatState) };
-      } catch (e) {
-        logger.error({ msg: 'Get combat status error', error: e });
-        return mapCombatError(set, e, 'Failed to get combat status', 'Encounter not found');
-      }
-    },
-    { params: encounterIdParams },
+            await combatInitiativeService.reorderInitiative(
+              params.encounterId,
+              participantId,
+              newInitiative,
+              user.userId,
+            );
+            const combatState = await combatEncounterService.getCombatState(
+              params.encounterId,
+              user.userId,
+            );
+
+            return combatState;
+          } catch (e) {
+            logger.error({ msg: 'Reorder initiative error', error: e });
+            return mapCombatError(
+              set,
+              e,
+              'Failed to reorder initiative',
+              'Combat participant not found',
+            );
+          }
+        },
+        { params: encounterIdParams, body: reorderInitiativeSchema },
+      )
+
+      /**
+       * POST /v1/combat/:encounterId/end
+       * End a combat encounter
+       */
+      .post(
+        '/:encounterId/end',
+        async ({ request, params, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
+
+          try {
+            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return { error: verification.error!.message };
+            }
+
+            return await endEncounterThroughFunnel(
+              params.encounterId,
+              verification.session?.id,
+              user.userId,
+              'ended_by_request',
+              { combatEncounterService, concludeEncounter },
+            );
+          } catch (e) {
+            logger.error({ msg: 'End combat error', error: e });
+            return mapCombatError(set, e, 'Failed to end combat encounter', 'Encounter not found');
+          }
+        },
+        { params: encounterIdParams },
+      )
+
+      .post(
+        '/:encounterId/abandon',
+        async ({ request, params, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
+          try {
+            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return { error: verification.error!.message };
+            }
+            return await endEncounterThroughFunnel(
+              params.encounterId,
+              verification.session?.id,
+              user.userId,
+              'abandoned',
+              { combatEncounterService, concludeEncounter },
+            );
+          } catch (e) {
+            logger.error({ msg: 'Abandon combat error', error: e });
+            return mapCombatError(
+              set,
+              e,
+              'Failed to abandon combat encounter',
+              'Encounter not found',
+            );
+          }
+        },
+        { params: encounterIdParams },
+      )
+
+      /**
+       * GET /v1/combat/:encounterId/status
+       * Get current combat state
+       */
+      .get(
+        '/:encounterId/status',
+        async ({ request, params, set }) => {
+          const { user, error: authError } = await authenticateRequest(request);
+          if (authError || !user) {
+            set.status = 401;
+            return { error: authError || 'Unauthorized' };
+          }
+
+          try {
+            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+            if (!verification.success) {
+              set.status = verification.error!.status;
+              return { error: verification.error!.message };
+            }
+
+            const combatState = await combatEncounterService.getCombatState(
+              params.encounterId,
+              user.userId,
+            );
+            return { ...combatState, initiativeOrder: buildInitiativeOrder(combatState) };
+          } catch (e) {
+            logger.error({ msg: 'Get combat status error', error: e });
+            return mapCombatError(set, e, 'Failed to get combat status', 'Encounter not found');
+          }
+        },
+        { params: encounterIdParams },
+      )
   );
+}
+
+export const initiativeRoutes = createInitiativeRoutes();
