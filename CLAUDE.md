@@ -1,3 +1,7 @@
+## Ground rules — READ FIRST
+
+**Never merge PRs. Never push to `main`.** Only Rob merges; merges auto-deploy to production. Full rules for all AI agents: see `AGENTS.md` at the repo root. These apply to every Claude Code session (local, Hetzner, cloud) and every other agent.
+
 ## Agent skills
 
 This repo uses [Matt Pocock's engineering skills](https://github.com/mattpocock/skills) (installed under `.claude/skills/`), including `/wayfinder` for planning large efforts.
