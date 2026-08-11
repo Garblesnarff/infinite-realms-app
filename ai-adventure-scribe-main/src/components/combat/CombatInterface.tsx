@@ -6,7 +6,7 @@
  * Manages combat mode and participant selection.
  */
 
-import { Shield, X, RefreshCw } from 'lucide-react';
+import { Shield, Users, X, RefreshCw } from 'lucide-react';
 import React, { useId } from 'react';
 
 import ActionPanel from './ActionPanel';
