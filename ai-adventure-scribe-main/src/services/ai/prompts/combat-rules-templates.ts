@@ -19,6 +19,21 @@ export const COMBAT_RULES_TEMPLATE = `<combat>
 - Describe actions cinematically with mechanical accuracy
 - Include battle cries and combat dialogue in quotes
 
+<hit_point_narration>
+<title>CRITICAL: NEVER NARRATE NUMERIC HIT POINTS</title>
+Hit points are private engine/UI state. Never state a creature's numeric current HP, maximum HP,
+remaining HP, healing amount, or hit-point total in player-facing narration. Do not repeat a
+number from the engine, tactical digest, or a roll result as an HP value.
+
+Describe condition only with these tiers: **unharmed**, **wounded**, **bloodied**, or **near death**.
+Use the authoritative condition supplied by the engine when one is available; do not calculate or
+invent a tier from prose. Say "The goblin staggers, bloodied" or "The healing steadies you; you
+look wounded," never "3 HP remaining" or "you regain 7 hit points."
+
+This rule applies to PCs and NPCs, damage and healing, and temporary hit points. Numeric HP may
+remain an internal mechanic, but it must never appear in the DM's narration or dialogue.
+</hit_point_narration>
+
 <turn_flow> <!-- INTENTIONAL_ELICITATION_DIALECT -->
 <title>CRITICAL: COMBAT TURN ORDER</title>
 **Initiative order determines who acts when. NEVER give the player multiple turns in a row!**
@@ -72,7 +87,7 @@ Enemy Naming:
 Targeting Clarity:
 - When player attacks, confirm which enemy: "You strike at Goblin 1 with your longsword"
 - Track HP separately for each enemy
-- Narrate damage to specific enemies: "Goblin 1 staggers, bloodied (3 HP remaining)"
+- Narrate damage to specific enemies with a condition tier only: "Goblin 1 staggers, bloodied"
 
 Enemy Turns:
 - All enemies act during "enemy turn" phase
@@ -105,11 +120,11 @@ Taking Damage at 0 HP:
 - Critical hit while at 0 HP = 2 automatic death save failures
 
 How to Handle:
-1. When character reaches 0 HP: "You collapse, unconscious. The world fades to black. Make a death saving throw!"
+1. When the engine reports the character is down: "You collapse, unconscious. The world fades to black. Make a death saving throw!"
 2. Add to \`roll_requests\`: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."
-4. If stabilized: "You've stabilized! You're still unconscious at 0 HP, but no longer dying."
-5. If healed while down: "The healing magic washes over you. You regain X HP and wake up!"
+4. If stabilized: "You've stabilized! You're still unconscious, but no longer dying."
+5. If healed while down: "The healing magic washes over you. Your eyes flutter open!"
 6. If 3 failures: "Your third death save fails... everything goes dark. [Character name] has died."
 
 CRITICAL: Death is permanent in D&D. Treat it seriously. Give dramatic narration when lives hang in the balance.
@@ -129,11 +144,11 @@ How to Handle Healing:
 1. Player casts healing spell: Request roll for healing amount
 2. Add to \`roll_requests\`: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\`
 3. Note: Use "damage" type for healing rolls (positive HP change)
-4. Narrate: "The divine light washes over your wounds. You regain 7 hit points!"
+4. Narrate the condition change without a number: "The divine light washes over your wounds. You look less battered."
 
 Healing Mechanics:
 - HP can't exceed maximum (cap healing at max HP)
-- Healing brings unconscious characters back: "You regain 5 HP and your eyes flutter open!"
+- Healing brings unconscious characters back: "The healing brings you back from near death, and your eyes flutter open!"
 - Healing at 0 HP resets death saves to 0/0
 - Healing does NOT restore temporary HP
 - Healing during combat uses an action (Cure Wounds) or bonus action (Healing Word)
@@ -152,8 +167,8 @@ Temp HP Rules (D&D 5e):
 
 How to Grant Temp HP:
 1. Narrate the source: "You cast Armor of Agathys, and icy armor coats your skin."
-2. State the amount: "You gain 5 temporary hit points."
-3. If player already has temp HP: "You have 3 temp HP. Armor of Agathys grants 5. You keep the higher value (5 temp HP)."
+2. Describe the temporary buffer without stating its numeric amount.
+3. If the player already has temporary hit points, keep the stronger buffer without mentioning either numeric value.
 </temporary_hp>
 
 <advantage_disadvantage>

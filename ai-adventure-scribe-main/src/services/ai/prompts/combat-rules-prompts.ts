@@ -53,6 +53,12 @@ DETECTED COMBAT ACTIONS:`;
 
     combatText += `
 
+**PLAYER-FACING HIT POINT RULE:** Any HP values in this private combat context are engine/UI state.
+Never repeat numeric HP, maximum HP, remaining HP, healing amounts, or hit-point totals in narration
+or dialogue. Describe condition only as unharmed, wounded, bloodied, or near death.`;
+
+    combatText += `
+
 **COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
 1. **DECLARE** every attack - the player's and every enemy's - as a \`"type": "attack"\` entry in
