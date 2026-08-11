@@ -1,3 +1,5 @@
+import { reportCombatIntentFailure } from './combat-intent-failure';
+
 import type { DamageType } from '@/types/combat';
 
 import { getAuthHeaders } from '@/services/auth/TokenService';
@@ -121,37 +123,55 @@ export async function executeAuthoritativeCombatIntent(
   source: 'player' | 'dm' = 'player',
   dmStartedAt?: number,
 ): Promise<unknown> {
-  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
-  let authoritativeIntent = intent;
-  // DM-sourced intents skip the read: the server dispatch is the authoritative sequencer and
-  // fills the version itself. Player-sourced ones must still say which version they read.
-  if (source !== 'dm' && requiresExpectedVersion(intent) && intent.expectedVersion === undefined) {
-    const statusResponse = await fetch(
-      `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/status`,
-      { headers },
+  try {
+    const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
+    let authoritativeIntent = intent;
+    // DM-sourced intents skip the read: the server dispatch is the authoritative sequencer and
+    // fills the version itself. Player-sourced ones must still say which version they read.
+    if (
+      source !== 'dm' &&
+      requiresExpectedVersion(intent) &&
+      intent.expectedVersion === undefined
+    ) {
+      const statusResponse = await fetch(
+        `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/status`,
+        { headers },
+      );
+      if (!statusResponse.ok)
+        throw new Error(`Combat state unavailable (${statusResponse.status})`);
+      authoritativeIntent = {
+        ...intent,
+        expectedVersion: Number((await statusResponse.json()).encounter?.version ?? 1),
+      };
+    }
+    const response = await fetch(
+      `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/intent`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ intent: authoritativeIntent, source, dmStartedAt }),
+      },
     );
-    if (!statusResponse.ok) throw new Error(`Combat state unavailable (${statusResponse.status})`);
-    authoritativeIntent = {
-      ...intent,
-      expectedVersion: Number((await statusResponse.json()).encounter?.version ?? 1),
-    };
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new CombatIntentRefusedError(
+        String(payload.error || `Combat action rejected (${response.status})`),
+        response.status,
+        (payload as { details?: CombatRefusalDetails }).details,
+      );
+    return payload.result;
+  } catch (error) {
+    // Repairable DM refusals are handled by the structured combat loop. Surface player-owned
+    // failures and non-repairable DM failures, which otherwise become a vague message upstream.
+    if (
+      source === 'player' ||
+      !(error instanceof CombatIntentRefusedError) ||
+      !error.isRepairable
+    ) {
+      reportCombatIntentFailure(encounterId, error);
+    }
+    throw error;
   }
-  const response = await fetch(
-    `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/intent`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ intent: authoritativeIntent, source, dmStartedAt }),
-    },
-  );
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new CombatIntentRefusedError(
-      String(payload.error || `Combat action rejected (${response.status})`),
-      response.status,
-      (payload as { details?: CombatRefusalDetails }).details,
-    );
-  return payload.result;
 }
 
 export async function executeStructuredCombatAction(

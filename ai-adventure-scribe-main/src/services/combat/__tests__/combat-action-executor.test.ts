@@ -6,10 +6,21 @@ import {
   executeStructuredCombatAction,
 } from '../combat-action-executor';
 
+const { mockReportClientFailure, mockToast } = vi.hoisted(() => ({
+  mockReportClientFailure: vi.fn(),
+  mockToast: vi.fn(),
+}));
+
 // Mock getAuthHeaders
 vi.mock('@/services/auth/TokenService', () => ({
   getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test-token' })),
 }));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { reportClientFailure: mockReportClientFailure },
+}));
+
+vi.mock('@/hooks/use-toast', () => ({ toast: mockToast }));
 
 describe('combat-action-executor', () => {
   const encounterId = 'encounter-123';
@@ -188,6 +199,17 @@ describe('combat-action-executor', () => {
       await expect(executeAuthoritativeCombatIntent(encounterId, intent)).rejects.toThrow(
         'Invalid actor state',
       );
+
+      expect(mockReportClientFailure).toHaveBeenCalledWith(
+        'combat_intent_failed',
+        undefined,
+        'encounter=encounter-123; Invalid actor state',
+      );
+      expect(mockToast).toHaveBeenCalledWith({
+        title: 'Combat action failed',
+        description: 'The server could not complete that action. Please try again.',
+        variant: 'destructive',
+      });
     });
 
     it('should throw a fallback error message if response is not ok and json parsing fails or is empty', async () => {

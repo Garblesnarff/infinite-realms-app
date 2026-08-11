@@ -39,8 +39,10 @@ export class EdgeFunctionStrategy implements AIExecutionStrategy {
     this.priority = priority;
   }
 
-  canExecute(): boolean {
-    return true;
+  canExecute(functionName: string): boolean {
+    // dm-agent-execute is retired; only the still-supported rules compatibility call may use
+    // this legacy adapter.
+    return functionName === 'rules-interpreter-execute';
   }
 
   async execute(functionName: string, payload?: Record<string, unknown>): Promise<unknown> {

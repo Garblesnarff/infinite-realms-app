@@ -23,7 +23,11 @@ import { Elysia, t } from 'elysia';
 import { alert } from '../../lib/alerting.js';
 import { requireAuth } from '../../middleware/auth.js';
 
-const ALLOWED_CLIENT_FAILURE_KINDS = ['lore_injection_failed', 'scene_state_fetch_failed'] as const;
+const ALLOWED_CLIENT_FAILURE_KINDS = [
+  'lore_injection_failed',
+  'scene_state_fetch_failed',
+  'combat_intent_failed',
+] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 
 const isAllowedKind = (kind: string): kind is ClientFailureKind =>

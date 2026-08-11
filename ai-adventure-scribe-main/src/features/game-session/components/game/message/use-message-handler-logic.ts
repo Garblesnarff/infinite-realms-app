@@ -15,6 +15,7 @@ import { useMessageContext } from '@/contexts/MessageContext';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
+import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { handleAsyncError } from '@/utils/error-handler';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
@@ -281,11 +282,15 @@ export const useMessageHandlerLogic = ({
 
       // Provide user feedback and recovery options
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const combatIntentFailure = error instanceof CombatIntentRefusedError && !error.isRepairable;
+      const recoveryMessage = combatIntentFailure
+        ? 'The server could not complete that combat action. Please try again.'
+        : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
 
       // Add a system error message to the conversation
       try {
         const systemErrorMessage: ChatMessage = {
-          text: 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.',
+          text: recoveryMessage,
           sender: 'system',
           context: {
             intent: 'error_recovery',
@@ -320,9 +325,10 @@ export const useMessageHandlerLogic = ({
       }
 
       toast({
-        title: 'Processing Error',
-        description:
-          'I had trouble responding to your message. The conversation has been restored and you can try again.',
+        title: combatIntentFailure ? 'Combat action failed' : 'Processing Error',
+        description: combatIntentFailure
+          ? recoveryMessage
+          : 'I had trouble responding to your message. The conversation has been restored and you can try again.',
         variant: 'destructive',
       });
     }

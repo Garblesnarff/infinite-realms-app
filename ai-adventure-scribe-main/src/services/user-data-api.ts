@@ -115,7 +115,10 @@ export type WorldBuilderStats = {
 };
 
 /** Kinds the server allowlists for `POST /v1/telemetry/client-failure` (see #1680). */
-export type ClientFailureKind = 'lore_injection_failed' | 'scene_state_fetch_failed';
+export type ClientFailureKind =
+  | 'lore_injection_failed'
+  | 'scene_state_fetch_failed'
+  | 'combat_intent_failed';
 
 export type NarrativeSceneStateResponse = {
   scene_state: string | null;

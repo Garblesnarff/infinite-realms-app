@@ -5,12 +5,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useCombatAIIntegration } from '../use-combat-ai-integration';
 
 // Use vi.hoisted for variables used in vi.mock
-const { mockStartCombat, mockEndCombat, mockAddParticipant, mockAddMessage, mockLogger } =
+const { mockStartCombat, mockEndCombat, mockAddParticipant, mockCallEdgeFunction, mockLogger } =
   vi.hoisted(() => ({
     mockStartCombat: vi.fn().mockResolvedValue(undefined),
     mockEndCombat: vi.fn().mockResolvedValue(undefined),
     mockAddParticipant: vi.fn().mockResolvedValue(undefined),
-    mockAddMessage: vi.fn().mockResolvedValue(undefined),
+    mockCallEdgeFunction: vi.fn(),
     mockLogger: {
       info: vi.fn(),
       error: vi.fn(),
@@ -36,12 +36,6 @@ vi.mock('@/contexts/CombatContext', () => ({
   })),
 }));
 
-vi.mock('@/hooks/use-messages', () => ({
-  useMessages: vi.fn(() => ({
-    addMessage: mockAddMessage,
-  })),
-}));
-
 vi.mock('@/utils/combatDetection', () => ({
   detectCombatFromText: vi.fn(),
   createCombatParticipantsFromDetection: vi.fn(),
@@ -52,7 +46,7 @@ vi.mock('@/utils/diceUtils', () => ({
 }));
 
 vi.mock('@/utils/edgeFunctionHandler', () => ({
-  callEdgeFunction: vi.fn(),
+  callEdgeFunction: mockCallEdgeFunction,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -146,91 +140,40 @@ describe('useCombatAIIntegration', () => {
   });
 
   describe('processCombatEvent', () => {
-    it('should handle all event types and AI response formats', async () => {
+    it('does not invoke the retired DM edge function', async () => {
       const { callEdgeFunction } = await import('@/utils/edgeFunctionHandler');
       const { result } = renderHook(() =>
         useCombatAIIntegration({ sessionId, characterId, campaignId }),
       );
 
-      const events = [
-        { type: 'COMBAT_START' },
-        { type: 'COMBAT_END' },
-        { type: 'ROUND_START', roundNumber: 2 },
-        { type: 'ACTION_TAKEN', action: { description: 'Attacks' } },
-        { type: 'ACTION_TAKEN' },
-        { type: 'PARTICIPANT_UNCONSCIOUS' },
-        { type: 'PARTICIPANT_DEAD' },
-        { type: 'UNKNOWN' },
-      ];
+      await result.current.processCombatEvent({ type: 'ROUND_START', roundNumber: 2 } as any);
 
-      for (const e of events) {
-        (callEdgeFunction as any).mockResolvedValue({ response: 'R', narrationSegments: [] });
-        await result.current.processCombatEvent(e as any);
-
-        (callEdgeFunction as any).mockResolvedValue(null); // Null response
-        await result.current.processCombatEvent(e as any);
-
-        (callEdgeFunction as any).mockRejectedValue(new Error('!')); // Error case
-        await result.current.processCombatEvent(e as any);
-      }
+      expect(callEdgeFunction).not.toHaveBeenCalled();
     });
   });
 
   describe('validateCombatAction', () => {
-    it('should handle all validation result formats', async () => {
-      const { callEdgeFunction } = await import('@/utils/edgeFunctionHandler');
+    it('keeps the supported rules compatibility call', async () => {
       const { result } = renderHook(() =>
         useCombatAIIntegration({ sessionId, characterId, campaignId }),
       );
+      mockCallEdgeFunction.mockResolvedValue({
+        isValid: false,
+        suggestions: ['Use an action'],
+        errors: ['Not enough movement'],
+      });
 
-      const results = [
-        { isValid: false, errors: ['E'], suggestions: ['S'] },
-        { isValid: true },
-        null,
-        {},
-      ];
-
-      for (const r of results) {
-        (callEdgeFunction as any).mockResolvedValue(r);
-        await result.current.validateCombatAction(
-          { actionType: 'attack' } as any,
-          { name: 'H' } as any,
-        );
-      }
-
-      (callEdgeFunction as any).mockRejectedValue(new Error('!'));
-      await result.current.validateCombatAction({} as any, {} as any);
-    });
-  });
-
-  describe('useEffect', () => {
-    it('should handle various encounter states', async () => {
-      const { useCombat } = await import('@/contexts/CombatContext');
-      const encounter = {
-        id: 'e',
-        currentRound: 1,
-        actions: [{ id: 'a0' }],
-        participants: [{ id: 'p1', currentHitPoints: 10, deathSaves: { failures: 0 } }],
-      };
-      const mockCombat = { state: { isInCombat: true, activeEncounter: encounter } };
-      (useCombat as any).mockReturnValue(mockCombat);
-      const { rerender } = renderHook(() =>
-        useCombatAIIntegration({ sessionId, characterId, campaignId }),
+      await expect(
+        result.current.validateCombatAction({ actionType: 'attack' } as any, { name: 'H' } as any),
+      ).resolves.toEqual({
+        isValid: false,
+        suggestions: ['Use an action'],
+        errors: ['Not enough movement'],
+      });
+      expect(mockCallEdgeFunction).toHaveBeenCalledWith(
+        'rules-interpreter-execute',
+        expect.any(Object),
       );
-
-      mockCombat.state.activeEncounter = {
-        ...encounter,
-        currentRound: 2,
-        actions: [...encounter.actions, { id: 'a1' }],
-        participants: [
-          { id: 'p1', currentHitPoints: 0, deathSaves: { failures: 3 } },
-          { id: 'p2', currentHitPoints: 0, deathSaves: { failures: 0 } },
-        ],
-      };
-      rerender();
-
-      mockCombat.state.activeEncounter = null;
-      rerender();
     });
   });
 });

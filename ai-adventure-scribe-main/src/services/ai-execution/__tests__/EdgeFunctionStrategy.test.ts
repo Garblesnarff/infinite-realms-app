@@ -36,8 +36,9 @@ describe('EdgeFunctionStrategy', () => {
     expect(strategy.priority).toBe(5);
   });
 
-  it('should return true for canExecute', () => {
-    expect(strategy.canExecute()).toBe(true);
+  it('only allows the still-supported rules compatibility call', () => {
+    expect(strategy.canExecute('rules-interpreter-execute')).toBe(true);
+    expect(strategy.canExecute('dm-agent-execute')).toBe(false);
   });
 
   it('should successfully invoke a function', async () => {
