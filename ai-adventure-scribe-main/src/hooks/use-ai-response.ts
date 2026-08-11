@@ -243,6 +243,8 @@ export const useAIResponse = (): {
           conversationHistory,
           userPlan: userPlan || undefined,
           turnCount,
+          playerMessage: latestMessage.text,
+          isDiceRollMessage: !!isDiceRollMessage,
         });
 
         result = dmActionsResult.result;

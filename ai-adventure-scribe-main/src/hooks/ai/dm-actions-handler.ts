@@ -3,19 +3,13 @@ import type {
   DMAoESpellAction,
   DMHandoutAction,
 } from '../../../server-bun/src/services/dm/dm-response-schema';
-import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/user-data-api';
 
+import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import logger from '@/lib/logger';
-import { AIService } from '@/services/ai-service';
-import {
-  CombatIntentRefusedError,
-  executeAuthoritativeCombatIntent,
-  executeStructuredCombatAction,
-} from '@/services/combat/combat-action-executor';
-import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
 import { notifyRetryableCombatStartFailure } from '@/services/combat/combat-start-toast';
+import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
 import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -30,6 +24,10 @@ export interface HandleDmActionsParams {
   conversationHistory: any[];
   userPlan?: string;
   turnCount?: number;
+  /** What the player typed this turn, for the zero-action guard below. */
+  playerMessage?: string;
+  /** A submitted dice result is a continuation, not a fresh attempt; the guard stands down. */
+  isDiceRollMessage?: boolean;
 }
 
 export interface HandleDmActionsResult {
@@ -52,6 +50,8 @@ export async function handleDmActionsAndTransitions(
     conversationHistory,
     userPlan,
     turnCount,
+    playerMessage,
+    isDiceRollMessage,
   } = params;
 
   let { result, activeEncounter, isInCombat } = params;
@@ -125,6 +125,30 @@ export async function handleDmActionsAndTransitions(
     }
   }
 
+  // #1701 repairs the action the engine refused. This repairs the action that was never
+  // declared: during an active fight the player plainly attacked, and the DM answered with
+  // prose and `actions:0`, so nothing was refused because nothing was submitted. Same budget,
+  // same shape, same log — one corrective regeneration, then the turn stands as narrated.
+  //
+  // Placed above the `combat_actions` pipeline rather than inside it so a repaired turn takes
+  // the identical path a first-try turn takes, AoE proposals included.
+  const forcedActions = await enforceCombatActionOnAttempt({
+    isInCombat,
+    hasActiveEncounter: !!activeEncounter,
+    result,
+    playerMessage,
+    isDiceRollMessage,
+    aiContext,
+    conversationHistory,
+    userPlan,
+    turnCount,
+  });
+  if (forcedActions) {
+    result = { ...result, combat_actions: forcedActions.combat_actions };
+    // The regenerated narration is what the corrected turn was written against.
+    if (forcedActions.text) responseText = forcedActions.text;
+  }
+
   if (sessionId && result.combat_actions?.length) {
     const aoeActions = result.combat_actions.filter(
       (action: any): action is DMAoESpellAction =>
@@ -146,63 +170,13 @@ export async function handleDmActionsAndTransitions(
   }
 
   if (isInCombat && activeEncounter && result.combat_actions?.length) {
-    const resolvedActions: Array<Record<string, unknown>> = [];
-    const targetedActions = result.combat_actions.filter(
-      (action: any): action is StructuredCombatAction => 'target_ids' in action,
-    );
-    // One repair attempt per turn, not per action: the budget belongs to the turn, and a DM
-    // that got the actor wrong once will get it wrong for every action in the same batch.
-    let repairSpent = false;
-    const runAction = async (action: StructuredCombatAction): Promise<void> => {
-      const outcomes = await executeStructuredCombatAction(activeEncounter.id, action);
-      resolvedActions.push({ action, outcomes });
-      await executeAuthoritativeCombatIntent(
-        activeEncounter.id,
-        { type: 'end_turn', actorId: action.actor_id },
-        'dm',
-      );
-    };
-    for (const action of targetedActions) {
-      try {
-        await runAction(action);
-      } catch (error) {
-        if (!(error instanceof CombatIntentRefusedError) || repairSpent) throw error;
-        repairSpent = true;
-        const repaired = await repairRefusedCombatAction({
-          refusal: error,
-          refusedAction: action,
-          aiContext,
-          conversationHistory,
-          userPlan,
-          turnCount,
-        });
-        const corrected = repaired?.combat_actions?.filter(
-          (candidate): candidate is StructuredCombatAction => 'target_ids' in candidate,
-        );
-        if (!corrected?.length) {
-          logger.warn('[CombatRepair] outcome=failed no usable corrected action; surfacing');
-          throw error;
-        }
-        // The corrected turn replaces the refused one. A second refusal is not repaired again.
-        for (const correctedAction of corrected) await runAction(correctedAction);
-        logger.info('[CombatRepair] outcome=repaired');
-        // The repaired narration is what the player should read, not the refused declaration.
-        if (repaired.text) responseText = repaired.text;
-      }
-    }
-    const narrationResult = await AIService.chatWithDM({
-      message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),
-      context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
-      conversationHistory: [
-        ...conversationHistory,
-        {
-          id: `resolution-setup-${Date.now()}`,
-          role: 'assistant' as const,
-          content: result.text,
-          timestamp: new Date(),
-        },
-      ],
-      userPlan: userPlan || undefined,
+    const narrationResult = await resolveDeclaredCombatActions({
+      encounterId: activeEncounter.id,
+      combatActions: result.combat_actions,
+      declarationText: result.text,
+      aiContext,
+      conversationHistory,
+      userPlan,
       turnCount,
     });
     result = narrationResult;
