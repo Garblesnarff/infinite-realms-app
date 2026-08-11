@@ -230,14 +230,16 @@ describe('SceneService', () => {
       const mockData = { name: 'New Scene', campaignId: mockCampaignId };
 
       const mockInsertBuilder = (db as any).insert();
-      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.values.mockReturnValue(mockInsertBuilder);
       mockInsertBuilder.returning.mockResolvedValue([mockNewScene]);
       (db as any).insert.mockReturnValue(mockInsertBuilder);
 
-      // Mock the inner select
+      // Mock the explicit campaign ownership lookup used before the insert.
       const mockSelectBuilder = (db as any).select();
       mockSelectBuilder.from.mockReturnValue(mockSelectBuilder);
       mockSelectBuilder.where.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.limit.mockResolvedValue([{ one: 1 }]);
+      (db as any).select.mockReturnValue(mockSelectBuilder);
 
       const result = await SceneService.createScene(mockUserId, mockData);
 

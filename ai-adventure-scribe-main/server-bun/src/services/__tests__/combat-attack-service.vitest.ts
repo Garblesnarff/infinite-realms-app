@@ -5,10 +5,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
 import { CombatAttackService } from '../combat-attack-service.js';
+import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 
 vi.mock('../combat-initiative-service.js', () => ({
   CombatInitiativeService: { getCurrentTurn: vi.fn() },
+}));
+
+vi.mock('../combat-hp-service.js', () => ({
+  CombatHPService: { applyDamage: vi.fn() },
 }));
 
 // Mock the db client
@@ -60,6 +65,7 @@ vi.mock('../../../../db/client', () => ({
     delete: vi.fn(() => ({
       where: vi.fn(),
     })),
+    transaction: vi.fn(),
     execute: vi.fn(),
   },
 }));
@@ -89,11 +95,30 @@ describe('CombatAttackService', () => {
     vi.mocked(CombatInitiativeService.getCurrentTurn).mockResolvedValue({
       id: 'attacker-123',
     } as any);
+    vi.mocked(CombatHPService.applyDamage).mockResolvedValue({
+      damageDealt: 1,
+      newCurrentHp: 9,
+      isConscious: true,
+      isDead: false,
+    } as any);
     (db.update as any).mockReturnValue({
       set: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ version: 2 }]) }),
       }),
     });
+    const txUpdate = (result: unknown[]) => ({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue(result) }),
+      }),
+    });
+    (db.transaction as any).mockImplementation(async (callback: (tx: any) => unknown) =>
+      callback({
+        update: vi
+          .fn()
+          .mockReturnValueOnce(txUpdate([{ version: 2 }]))
+          .mockReturnValueOnce(txUpdate([{ id: 'attacker-123' }])),
+      }),
+    );
   });
 
   describe('Security: getCharacterWeapons', () => {
@@ -194,10 +219,23 @@ describe('CombatAttackService', () => {
           innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockResolvedValue([
             {
-              participant: { id: mockTargetId, armorClass: 15 },
+              participant: {
+                id: mockTargetId,
+                armorClass: 15,
+                participantType: 'npc',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
               stats: { armorClass: 15 },
-              status: null,
-              encounter: {},
+              status: {
+                currentHp: 10,
+                maxHp: 10,
+                tempHp: 0,
+                isConscious: true,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
             },
             {
               participant: { id: mockAttackerId, armorClass: 10 },
@@ -211,6 +249,17 @@ describe('CombatAttackService', () => {
           from: vi.fn().mockReturnThis(),
           innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
         });
 
       const result = await service.resolveAttack(

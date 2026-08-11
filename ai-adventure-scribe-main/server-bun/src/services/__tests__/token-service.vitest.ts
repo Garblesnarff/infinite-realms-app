@@ -118,8 +118,12 @@ describe('TokenService', () => {
 
   describe('createToken', () => {
     it('should use atomic INSERT ... SELECT for ownership verification', async () => {
+      const mockOwnershipBuilder = (db as any).select();
+      mockOwnershipBuilder.limit.mockResolvedValue([{ one: 1 }]);
+      (db as any).select.mockReturnValue(mockOwnershipBuilder);
+
       const mockInsertBuilder = (db as any).insert();
-      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.values.mockReturnValue(mockInsertBuilder);
       mockInsertBuilder.returning.mockResolvedValue([{ id: mockTokenId, sceneId: mockSceneId }]);
       (db as any).insert.mockReturnValue(mockInsertBuilder);
 
@@ -133,15 +137,15 @@ describe('TokenService', () => {
       });
 
       expect(db.insert).toHaveBeenCalled();
-      expect(mockInsertBuilder.select).toHaveBeenCalled();
+      expect(db.select).toHaveBeenCalled();
+      expect(mockInsertBuilder.values).toHaveBeenCalled();
       expect(result).toEqual({ id: mockTokenId, sceneId: mockSceneId });
     });
 
     it('should throw NOT_FOUND if insertion fails (unauthorized or missing)', async () => {
-      const mockInsertBuilder = (db as any).insert();
-      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
-      mockInsertBuilder.returning.mockResolvedValue([]);
-      (db as any).insert.mockReturnValue(mockInsertBuilder);
+      const mockOwnershipBuilder = (db as any).select();
+      mockOwnershipBuilder.limit.mockResolvedValue([]);
+      (db as any).select.mockReturnValue(mockOwnershipBuilder);
 
       await expect(TokenService.createToken(mockSceneId, mockUserId, {
         sceneId: mockSceneId,

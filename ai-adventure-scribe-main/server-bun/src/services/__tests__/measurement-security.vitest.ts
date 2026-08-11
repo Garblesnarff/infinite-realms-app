@@ -92,16 +92,19 @@ describe('MeasurementService Security', () => {
       distance: 20,
     };
 
-    it('should use atomic INSERT ... SELECT for ownership verification', async () => {
+    it('should verify scene ownership before the explicit insert', async () => {
+      const ownershipQuery = (db as any).select();
+      ownershipQuery._results = [{ one: 1 }];
+      (db as any).select.mockReturnValueOnce(ownershipQuery);
+
       const mockInsertBuilder = (db as any).insert();
-      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
       mockInsertBuilder.returning.mockResolvedValue([{ id: mockTemplateId, sceneId: mockSceneId }]);
       (db as any).insert.mockReturnValue(mockInsertBuilder);
 
       const result = await MeasurementService.createTemplate(mockSceneId, mockUserId, mockData);
 
       expect(db.insert).toHaveBeenCalled();
-      expect(mockInsertBuilder.select).toHaveBeenCalled();
+      expect(mockInsertBuilder.values).toHaveBeenCalled();
       expect(result.id).toBe(mockTemplateId);
     });
 

@@ -78,16 +78,14 @@ describe('InventoryConsumableService', () => {
       const mockItem = { id: mockItemId, quantity: 5 };
       const mockLog = { id: 'log-1' };
 
-      // Mock the sequence of calls
-      // 1. Get item
-      // 2. Insert log
-      // 3. Update item
+      // Mock the sequence of calls: item lookup, ownership check, log insert, update.
       let callCount = 0;
       (db.then as any).mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]); // select item
-        if (callCount === 2) return resolve([mockLog]); // insert log
-        if (callCount === 3) return resolve([{ ...mockItem, quantity: 4 }]); // update item
+        if (callCount === 2) return resolve([{ one: 1 }]); // ownership check
+        if (callCount === 3) return resolve([mockLog]); // insert log
+        if (callCount === 4) return resolve([{ ...mockItem, quantity: 4 }]); // update item
         return resolve([]);
       });
 
@@ -133,7 +131,8 @@ describe('InventoryConsumableService', () => {
       (db.then as any).mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]);
-        if (callCount === 2) return resolve([]); // failed to insert log
+        if (callCount === 2) return resolve([{ one: 1 }]); // ownership check
+        if (callCount === 3) return resolve([]); // failed to insert log
         return resolve([]);
       });
 
@@ -211,7 +210,8 @@ describe('InventoryConsumableService', () => {
       (db.then as any).mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([]); // find returns nothing
-        if (callCount === 2) return resolve([newItem]); // insert returns new item
+        if (callCount === 2) return resolve([{ one: 1 }]); // ownership check
+        if (callCount === 3) return resolve([newItem]); // insert returns new item
         return resolve([]);
       });
 

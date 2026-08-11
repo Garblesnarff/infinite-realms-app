@@ -107,6 +107,14 @@ function mockDbSelectChain(resolvedValue: any) {
   };
 }
 
+function mockInsertValuesReturning(resolvedValue: any) {
+  (db.insert as any).mockReturnValue({
+    values: vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue(resolvedValue),
+    }),
+  });
+}
+
 describe('InventoryService Security', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = 'char-123';
@@ -117,13 +125,9 @@ describe('InventoryService Security', () => {
   });
 
   describe('addItem', () => {
-    it('should throw NotFoundError if insertion fails (unauthorized or missing character)', async () => {
-      // Mock insert().select().returning() to return empty array (no rows inserted because SELECT failed)
-      (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([])
-        })
-      });
+    it('should throw NotFoundError if the character is not owned by the user', async () => {
+      // Ownership is checked before the plain INSERT.
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
 
       const input = {
         characterId: mockCharacterId,
@@ -137,11 +141,8 @@ describe('InventoryService Security', () => {
 
     it('should succeed if insertion returns the created item', async () => {
       const mockItem = { id: mockItemId, name: 'Health Potion' };
-      (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([mockItem])
-        })
-      });
+      (db.select as any).mockReturnValue(mockDbSelectChain([{ one: 1 }]));
+      mockInsertValuesReturning([mockItem]);
 
       const input = {
         characterId: mockCharacterId,
@@ -177,12 +178,8 @@ describe('InventoryService Security', () => {
       // Subsequent db.select calls (inside exists() subquery) just need a valid chain.
       (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
 
-      // Mock successful log insertion (INSERT...SELECT...RETURNING)
-      (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'log-123' }])
-        })
-      });
+      // Mock successful log insertion (plain INSERT...VALUES...RETURNING)
+      mockInsertValuesReturning([{ id: 'log-123' }]);
 
       // Mock successful update (quantity decremented, exists() subquery uses db.select internally)
       (db.update as any).mockReturnValue({
@@ -208,9 +205,7 @@ describe('InventoryService Security', () => {
       const mockItem = { id: mockItemId, name: 'Health Potion', quantity: 5 };
       // useConsumable: first db.select fetches the item (no preFetchedItem passed here).
       (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
-      (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'log-1' }]) }),
-      });
+      mockInsertValuesReturning([{ id: 'log-1' }]);
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([mockItem]) }),
@@ -672,7 +667,7 @@ describe('InventoryService Security', () => {
       // useConsumable fetches item via db.select().from().innerJoin().where().limit()
       (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
       // Log insertion succeeds
-      (db.insert as any).mockReturnValue({ select: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'log-1' }]) }) });
+      mockInsertValuesReturning([{ id: 'log-1' }]);
       // When newQuantity <= 0 the service calls db.delete (not removeItem); exists() subquery uses db.select internally.
       (db.delete as any).mockReturnValue({
         where: vi.fn().mockReturnValue({
@@ -737,14 +732,11 @@ describe('InventoryService Security', () => {
     });
 
     it('should create new ammunition if not found', async () => {
-      // Empty result from the select → create new ammo via INSERT...SELECT...RETURNING.
-      // The INSERT...SELECT also calls db.select().from().where() internally.
-      (db.select as any).mockReturnValue(mockDbSelectChain([]));
-      (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'new-ammo', quantity: 5 }])
-        })
-      });
+      // The first select finds no ammunition; the second verifies character ownership.
+      (db.select as any)
+        .mockReturnValueOnce(mockDbSelectChain([]))
+        .mockReturnValueOnce(mockDbSelectChain([{ one: 1 }]));
+      mockInsertValuesReturning([{ id: 'new-ammo', quantity: 5 }]);
 
       const result = await InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5);
       expect(result.id).toBe('new-ammo');

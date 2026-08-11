@@ -103,20 +103,21 @@ describe('CombatInitiativeService Security', () => {
     it('should succeed if all NPCs are owned by the user in startCombat', async () => {
       // 1. Mock Batch NPC access check
       const qb1 = createMockQueryBuilder([{ id: 'npc-1' }, { id: 'npc-2' }]);
-      // 2. Mock nested SELECT for INSERT ... SELECT
+      // 2. Mock session ownership check
       const qb2 = createMockQueryBuilder([{ id: mockSessionId }]);
+      // 3. Mock the participant NPC-row lookup performed before building participants.
+      const qb3 = createMockQueryBuilder([{ id: 'npc-1' }, { id: 'npc-2' }]);
 
-      (db.select as any).mockReturnValueOnce(qb1).mockReturnValueOnce(qb2);
+      (db.select as any).mockReturnValueOnce(qb1).mockReturnValueOnce(qb2).mockReturnValueOnce(qb3);
 
-      // 3. Mock encounter creation with atomic INSERT ... SELECT
+      // 4. Mock encounter creation with an explicit INSERT ... VALUES
       const insertEncounterQb = createMockQueryBuilder();
-      insertEncounterQb.select = vi.fn().mockReturnThis();
       insertEncounterQb.returning.mockResolvedValue([
         { id: mockEncounterId, status: 'active', currentRound: 1, currentTurnOrder: 0 },
       ]);
       (db.insert as any).mockReturnValueOnce(insertEncounterQb);
 
-      // 4. Mock participants insertion
+      // 5. Mock participants insertion
       const insertParticipantsQb = createMockQueryBuilder([
         {
           id: 'p1',
@@ -138,6 +139,9 @@ describe('CombatInitiativeService Security', () => {
         },
       ]);
       (db.insert as any).mockReturnValueOnce(insertParticipantsQb);
+
+      // Combat start also initializes one status row per inserted participant.
+      (db.insert as any).mockReturnValueOnce(createMockQueryBuilder());
 
       const result = await CombatEncounterService.startCombat(
         mockSessionId,
@@ -177,7 +181,7 @@ describe('CombatInitiativeService Security', () => {
       const qb1 = createMockQueryBuilder([{ id: mockEncounterId }]);
       // 2. Mock NPC access check
       const qb2 = createMockQueryBuilder([{ id: 'npc-good' }]);
-      // 3. Mock nested SELECT for INSERT ... SELECT
+      // 3. Mock encounter existence check
       const qb3 = createMockQueryBuilder([{ id: mockEncounterId }]);
 
       (db.select as any)
@@ -185,9 +189,8 @@ describe('CombatInitiativeService Security', () => {
         .mockReturnValueOnce(qb2)
         .mockReturnValueOnce(qb3);
 
-      // 4. Mock participant insertion with atomic INSERT ... SELECT
+      // 4. Mock participant insertion with an explicit INSERT ... VALUES
       const insertQb = createMockQueryBuilder();
-      insertQb.select = vi.fn().mockReturnThis();
       insertQb.returning.mockResolvedValue([{ id: 'p3', name: 'Good NPC', npcId: 'npc-good' }]);
       (db.insert as any).mockReturnValueOnce(insertQb);
 

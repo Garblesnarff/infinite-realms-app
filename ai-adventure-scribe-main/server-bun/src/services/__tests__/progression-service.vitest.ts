@@ -85,6 +85,9 @@ describe('ProgressionService Security', () => {
       // Mock progression doesn't exist
       (db.query.levelProgression.findFirst as any).mockResolvedValue(null);
 
+      // The current implementation verifies character ownership before inserting.
+      (db.select as any).mockImplementation(() => createMockChain([{ one: 1 }]));
+
       // Mock progression insertion success
       (db.insert as any).mockImplementation(() => {
         return createMockChain([{ characterId: mockCharacterId, currentLevel: 1 }]);

@@ -46,6 +46,7 @@ vi.mock('../../../../db/client', () => ({
         where: vi.fn(),
       })),
     })),
+    execute: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -78,7 +79,13 @@ describe('RestService Security', () => {
 
     it('should succeed if character is owned by user', async () => {
       // Mock character found and owned
-      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
+      (db.query.characters.findFirst as any).mockResolvedValue({
+        id: mockCharacterId,
+        hitDice: [],
+        classFeatures: null,
+        pactSlots: null,
+        spellSlots: null,
+      });
 
       // Mock internal hit dice lookup
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
@@ -86,7 +93,7 @@ describe('RestService Security', () => {
 
       // Mock rest event insertion
       (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
+        values: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'event-123' }]),
         }),
       });
@@ -110,12 +117,20 @@ describe('RestService Security', () => {
     it('should succeed if character is owned by user', async () => {
       (db.query.characters.findFirst as any).mockResolvedValue({
         id: mockCharacterId,
-        stats: { constitution: 10 },
+        stats: {
+          constitution: 10,
+          maxHitPoints: 10,
+          currentHitPoints: 10,
+        },
+        hitDice: [],
+        classFeatures: null,
+        pactSlots: null,
+        spellSlots: null,
       });
 
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
       (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
+        values: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'event-456' }]),
         }),
       });
@@ -139,8 +154,14 @@ describe('RestService Security', () => {
       (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
       (db.query.characterHitDice.findFirst as any).mockResolvedValue(null);
 
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ one: 1 }]),
+      });
+
       (db.insert as any).mockReturnValue({
-        select: vi.fn().mockReturnValue({
+        values: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'hd-123', characterId: mockCharacterId }]),
         }),
       });

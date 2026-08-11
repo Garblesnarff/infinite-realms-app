@@ -50,30 +50,25 @@ describe('CharacterFolderService Optimization', () => {
 
   describe('listFolders', () => {
     it('should use single aggregation query for character counts', async () => {
-      // Mock folders
-      const mockFolders = [
-        { id: 'folder-1', name: 'Folder 1', parentFolderId: null, sortOrder: 0 },
-        { id: 'folder-2', name: 'Folder 2', parentFolderId: null, sortOrder: 1 },
-      ];
-      (db.query.characterFolders.findMany as any).mockResolvedValue(mockFolders);
-
-      // Mock aggregated counts
-      const mockCounts = [
-        { folderId: 'folder-1', count: 5 },
-        { folderId: 'folder-2', count: 3 },
-      ];
-
       const mockSelect = {
         from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        groupBy: vi.fn().mockResolvedValue(mockCounts),
+        groupBy: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockResolvedValue([
+          {
+            folder: { id: 'folder-1', name: 'Folder 1', parentFolderId: null, sortOrder: 0 },
+            characterCount: 5,
+          },
+          {
+            folder: { id: 'folder-2', name: 'Folder 2', parentFolderId: null, sortOrder: 1 },
+            characterCount: 3,
+          },
+        ]),
       };
       (db.select as any).mockReturnValue(mockSelect);
 
       const result = await CharacterFolderService.listFolders(mockUserId);
-
-      // Verify folders were fetched
-      expect(db.query.characterFolders.findMany).toHaveBeenCalled();
 
       // Verify aggregation query was used (Bolt optimization)
       expect(db.select).toHaveBeenCalled();
@@ -93,8 +88,12 @@ describe('CharacterFolderService Optimization', () => {
       (db.query.characterFolders.findMany as any).mockResolvedValue(mockFolders);
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        groupBy: vi.fn().mockResolvedValue([]),
+        groupBy: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockResolvedValue(
+          mockFolders.map((folder) => ({ folder, characterCount: 0 })),
+        ),
       });
 
       const result = await CharacterFolderService.listFolders(mockUserId);

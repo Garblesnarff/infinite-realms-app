@@ -65,8 +65,16 @@ mock.module('../../lib/logger.js', () => ({
   errorLogSerializers: {},
 }));
 
-const { combatAttackService } = await import('../combat/combat-attack-service.js');
-const { saveTacticalMap } = await import('../combat/tactical-map-store.js');
+// Do not link the real combat modules when the suite is intentionally skipped. Their import
+// graph reaches db/client, whose eager connection guard is an environment error rather than a
+// test result. Keeping the imports behind the same gate as describeWithDb preserves the suite's
+// documented no-database behavior and leaves the real-DB path unchanged.
+const combatAttackService = hasRealDb
+  ? (await import('../combat/combat-attack-service.js')).combatAttackService
+  : undefined;
+const saveTacticalMap = hasRealDb
+  ? (await import('../combat/tactical-map-store.js')).saveTacticalMap
+  : undefined;
 
 if (!hasRealDb) {
   console.warn(
@@ -220,7 +228,7 @@ describeWithDb('attack resolution telemetry', () => {
   ): Promise<LogPayload> => {
     const expectedVersion = await giveTurnTo(attackerId);
     emitted.length = 0;
-    await combatAttackService.resolveAttack(
+    await combatAttackService!.resolveAttack(
       encounterId,
       {
         attackerId,
@@ -420,7 +428,7 @@ describeWithDb('attack resolution telemetry', () => {
     };
     // Through the store rather than a raw insert, so the board is shaped exactly as the
     // loader expects it — including the slug backfill the resolver reads.
-    await saveTacticalMap(map);
+    await saveTacticalMap!(map);
 
     const line = await attack(heroId, monsterId, 'Longbow');
 

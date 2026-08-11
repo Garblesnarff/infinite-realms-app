@@ -75,6 +75,18 @@ vi.mock('drizzle-orm', async () => {
   };
 });
 
+const mockSelectChain = (rows: any[]) => {
+  const chain: any = {
+    from: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue(rows),
+    then: (resolve: any) => Promise.resolve(rows).then(resolve),
+  };
+  return chain;
+};
+
 describe('CombatEncounterService', () => {
   const mockUserId = 'user-123';
   const mockSessionId = 'session-123';
@@ -85,25 +97,28 @@ describe('CombatEncounterService', () => {
 
   describe('startCombat', () => {
     it('should use verifyCharactersAccessBatch for multiple characters', async () => {
-      // Mock batch character access check
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{ id: 'char-1' }, { id: 'char-2' }])
-      });
+      // 1. Mock batch character access check.
+      (db.select as any).mockReturnValueOnce(
+        mockSelectChain([{ id: 'char-1' }, { id: 'char-2' }]),
+      );
 
-      // Mock encounter creation with atomic INSERT ... SELECT
+      // 2. Mock session ownership lookup introduced by the explicit-write migration.
+      (db.select as any).mockReturnValueOnce(
+        mockSelectChain([{ id: mockSessionId, starterCampaignId: null }]),
+      );
+
+      // 3. Mock the character/stat rows used to build participants.
+      (db.select as any).mockReturnValueOnce(
+        mockSelectChain([
+          { character: { id: 'char-1', level: 1, class: 'fighter' }, stats: null },
+          { character: { id: 'char-2', level: 1, class: 'fighter' }, stats: null },
+        ]),
+      );
+
+      // Mock encounter creation with an explicit INSERT ... VALUES
       (db.insert as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: 'enc-123', status: 'active', currentRound: 1, currentTurnOrder: 0 }])
-      });
-
-      // Mock nested SELECT for INSERT ... SELECT
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
       });
 
       // Mock participants insertion
