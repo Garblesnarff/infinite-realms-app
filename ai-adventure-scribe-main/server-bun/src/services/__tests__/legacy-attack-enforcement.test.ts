@@ -1,32 +1,21 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { resetEncounterHints } from '../../tactical/encounter-hints.js';
 import { assignEntitySlugs } from '../../tactical/identity.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
+import { enforceCombatTransitionContract } from '../combat-transition-enforcement.js';
+import { LLMProviderService } from '../llm-provider-service.js';
 
 import type { MapEntity, TacticalMap } from '../../tactical/types.js';
 import type { DMResponse } from '../dm/dm-response-schema.js';
 
-type GenerateArgs = { prompt: string };
-const generate = mock(async (_params: GenerateArgs) => ({
-  text: '',
-  provider: 'openrouter' as const,
-}));
 const infos: Array<Record<string, unknown>> = [];
 
-mock.module('../llm-provider-service.js', () => ({ LLMProviderService: { generate } }));
-mock.module('../../lib/logger.js', () => ({
-  logger: {
-    warn: () => undefined,
-    error: () => undefined,
-    info: (entry: Record<string, unknown>) => infos.push(entry),
-    debug: () => undefined,
-    child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
-  },
-  combatLogger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
-
-const { enforceCombatTransitionContract } = await import('../combat-transition-enforcement.js');
+const generate = spyOn(LLMProviderService, 'generate');
+const info = spyOn(logger, 'info').mockImplementation(((entry: Record<string, unknown>) => {
+  infos.push(entry);
+}) as typeof logger.info);
 
 const entity = (id: string, name: string, x: number, y: number, type: 'pc' | 'monster') =>
   ({
@@ -116,6 +105,11 @@ beforeEach(() => {
   }));
   infos.length = 0;
   resetEncounterHints();
+});
+
+afterAll(() => {
+  generate.mockRestore();
+  info.mockRestore();
 });
 
 describe('legacy attack rolls are accepted, and taught once', () => {

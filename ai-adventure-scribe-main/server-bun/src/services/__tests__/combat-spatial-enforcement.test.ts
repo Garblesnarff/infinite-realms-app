@@ -1,35 +1,23 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
+import { enforceCombatTransitionContract } from '../combat-transition-enforcement.js';
+import { LLMProviderService } from '../llm-provider-service.js';
 
 import type { TacticalMap } from '../../tactical/types.js';
 import type { DMResponse } from '../dm/dm-response-schema.js';
 
-type GenerateArgs = { prompt: string };
-const generate = mock(async (_params: GenerateArgs) => ({
-  text: '',
-  provider: 'openrouter' as const,
-}));
 const warnings: Array<Record<string, unknown>> = [];
 const errors: Array<Record<string, unknown>> = [];
 
-mock.module('../llm-provider-service.js', () => ({
-  LLMProviderService: { generate },
-}));
-mock.module('../../lib/logger.js', () => ({
-  logger: {
-    warn: (entry: Record<string, unknown>) => warnings.push(entry),
-    error: (entry: Record<string, unknown>) => errors.push(entry),
-    info: () => undefined,
-    debug: () => undefined,
-    child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
-  },
-  // Module mocks are process-wide: sibling suites import `combatLogger` from this same
-  // module, so the stub has to export everything the real one does.
-  combatLogger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
-
-const { enforceCombatTransitionContract } = await import('../combat-transition-enforcement.js');
+const generate = spyOn(LLMProviderService, 'generate');
+const warn = spyOn(logger, 'warn').mockImplementation(((entry: Record<string, unknown>) => {
+  warnings.push(entry);
+}) as typeof logger.warn);
+const error = spyOn(logger, 'error').mockImplementation(((entry: Record<string, unknown>) => {
+  errors.push(entry);
+}) as typeof logger.error);
 
 const map = (): TacticalMap => ({
   id: 'map',
@@ -120,6 +108,12 @@ beforeEach(() => {
   generate.mockClear();
   warnings.length = 0;
   errors.length = 0;
+});
+
+afterAll(() => {
+  generate.mockRestore();
+  warn.mockRestore();
+  error.mockRestore();
 });
 
 describe('spatial contract enforcement in the DM transport', () => {

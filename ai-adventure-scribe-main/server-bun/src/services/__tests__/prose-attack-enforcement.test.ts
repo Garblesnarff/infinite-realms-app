@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { resetEncounterHints } from '../../tactical/encounter-hints.js';
 import { assignEntitySlugs } from '../../tactical/identity.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
+import { enforceCombatTransitionContract } from '../combat-transition-enforcement.js';
+import { LLMProviderService } from '../llm-provider-service.js';
 
 import type { MapEntity, TacticalMap } from '../../tactical/types.js';
 import type { DMResponse } from '../dm/dm-response-schema.js';
@@ -15,26 +18,18 @@ import type { DMResponse } from '../dm/dm-response-schema.js';
  * tests pin the ordering — every envelope arrives at the engine, and exactly one layer claims
  * each one, so an inference can never double an attack the model actually declared.
  */
-type GenerateArgs = { prompt: string };
-const generate = mock(async (_params: GenerateArgs) => ({
-  text: '',
-  provider: 'openrouter' as const,
-}));
 const logs: Array<Record<string, unknown>> = [];
 
-mock.module('../llm-provider-service.js', () => ({ LLMProviderService: { generate } }));
-mock.module('../../lib/logger.js', () => ({
-  logger: {
-    warn: (entry: Record<string, unknown>) => logs.push(entry),
-    error: (entry: Record<string, unknown>) => logs.push(entry),
-    info: (entry: Record<string, unknown>) => logs.push(entry),
-    debug: () => undefined,
-    child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
-  },
-  combatLogger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
-
-const { enforceCombatTransitionContract } = await import('../combat-transition-enforcement.js');
+const generate = spyOn(LLMProviderService, 'generate');
+const warn = spyOn(logger, 'warn').mockImplementation(((entry: Record<string, unknown>) => {
+  logs.push(entry);
+}) as typeof logger.warn);
+const error = spyOn(logger, 'error').mockImplementation(((entry: Record<string, unknown>) => {
+  logs.push(entry);
+}) as typeof logger.error);
+const info = spyOn(logger, 'info').mockImplementation(((entry: Record<string, unknown>) => {
+  logs.push(entry);
+}) as typeof logger.info);
 
 const RUN_9_SEQ_12 =
   'You surge forward through the damp air, drawing your blade to meet the chitinous threat ' +
@@ -124,6 +119,13 @@ beforeEach(() => {
   generate.mockImplementation(async () => ({ text: '', provider: 'openrouter' as const }));
   logs.length = 0;
   resetEncounterHints();
+});
+
+afterAll(() => {
+  generate.mockRestore();
+  warn.mockRestore();
+  error.mockRestore();
+  info.mockRestore();
 });
 
 describe('run 9: prose-only combat now reaches the engine', () => {

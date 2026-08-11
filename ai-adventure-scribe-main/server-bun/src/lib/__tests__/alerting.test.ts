@@ -1,4 +1,7 @@
-import { describe, expect, it, mock, beforeEach, afterEach } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
+
+import { alert } from '../alerting.js';
+import { logger } from '../logger.js';
 
 const warnCalls: unknown[] = [];
 let warnShouldThrow = false;
@@ -12,9 +15,7 @@ const noopLogger = {
   error: () => {},
 };
 
-mock.module('../logger.js', () => ({ logger: noopLogger }));
-
-const { alert } = await import('../alerting.js');
+const warnSpy = spyOn(logger, 'warn').mockImplementation(noopLogger.warn);
 
 describe('alert()', () => {
   const originalFetch = globalThis.fetch;
@@ -45,15 +46,17 @@ describe('alert()', () => {
     }
   });
 
+  afterAll(() => {
+    warnSpy.mockRestore();
+  });
+
   it('always logs a structured [ALERT] line, even with no webhook configured', () => {
     delete process.env.SLACK_ALERT_WEBHOOK_URL;
 
     alert('narrative_fact_write_failed', { sessionId: 'sess-1', error: 'boom' });
 
     expect(warnCalls).toHaveLength(1);
-    expect(warnCalls[0]).toBe(
-      '[ALERT] kind=narrative_fact_write_failed session=sess-1 error=boom',
-    );
+    expect(warnCalls[0]).toBe('[ALERT] kind=narrative_fact_write_failed session=sess-1 error=boom');
   });
 
   it('does not POST to a webhook when SLACK_ALERT_WEBHOOK_URL is unset', () => {
