@@ -1,12 +1,21 @@
 /**
  * Real-request contract checks for the narrative fact boundary.
- * The service is mocked so this stays independent of DATABASE_URL while still proving auth,
- * schema validation, JSON serialization, and propagation of the authenticated owner.
+ * Dependencies are injected so this stays independent of DATABASE_URL without a process-wide
+ * module mock while still proving auth, schema validation, JSON serialization, and propagation
+ * of the authenticated owner.
  */
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import type { NarrativeFactRouteOptions } from '../narrative-facts.js';
+
 const calls: Array<{ method: string; sessionId: string; userId: string }> = [];
+
+process.env.DATABASE_URL ??= 'postgres://localhost/test';
+process.env.PORT ??= '3000';
+process.env.CORS_ORIGIN ??= 'http://localhost:3000';
+process.env.WORKOS_API_KEY ??= 'test-api-key';
+process.env.WORKOS_CLIENT_ID ??= 'test-client-id';
 
 const requireAuth = new Elysia({ name: 'test-narrative-auth' })
   .onBeforeHandle({ as: 'scoped' }, ({ request, set }) => {
@@ -19,44 +28,46 @@ const requireAuth = new Elysia({ name: 'test-narrative-auth' })
     user: { userId: 'member-1', email: 'member@example.test', plan: 'free' },
   }));
 
-mock.module('../../../middleware/auth.js', () => ({ requireAuth }));
-mock.module('../../../services/narrative/narrative-ledger-service.js', () => ({
-  NarrativeLedgerService: {
-    currentFacts: async (sessionId: string, userId: string) => {
-      calls.push({ method: 'currentFacts', sessionId, userId });
-      return [
-        {
-          id: 'fact-1',
-          sessionId,
-          campaignId: null,
-          subjectType: 'npc',
-          subjectName: 'the void-maw',
-          predicate: 'status',
-          value: { state: 'dead' },
-          knownBy: ['dm'],
-          isBelief: false,
-          source: 'engine',
-          turnIndex: null,
-          messageId: null,
-          needsReview: false,
-          validFrom: new Date('2026-08-01T00:00:00Z'),
-          invalidatedAt: null,
-          invalidatedBy: null,
-          createdAt: new Date('2026-08-01T00:00:00Z'),
-        },
-      ];
-    },
-    renderSceneState: async (sessionId: string, userId: string) => {
-      calls.push({ method: 'renderSceneState', sessionId, userId });
-      return '<scene_state>authoritative</scene_state>';
-    },
-    history: async () => [],
-    assertFact: async () => ({ rejected: false, action: 'inserted', fact: {} }),
+const ledger = {
+  currentFacts: async (sessionId: string, userId: string) => {
+    calls.push({ method: 'currentFacts', sessionId, userId });
+    return [
+      {
+        id: 'fact-1',
+        sessionId,
+        campaignId: null,
+        subjectType: 'npc',
+        subjectName: 'the void-maw',
+        predicate: 'status',
+        value: { state: 'dead' },
+        knownBy: ['dm'],
+        isBelief: false,
+        source: 'engine',
+        turnIndex: null,
+        messageId: null,
+        needsReview: false,
+        validFrom: new Date('2026-08-01T00:00:00Z'),
+        invalidatedAt: null,
+        invalidatedBy: null,
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+      },
+    ];
   },
-}));
+  renderSceneState: async (sessionId: string, userId: string) => {
+    calls.push({ method: 'renderSceneState', sessionId, userId });
+    return '<scene_state>authoritative</scene_state>';
+  },
+  history: async () => [],
+  assertFact: async () => ({ rejected: false, action: 'inserted', fact: {} }),
+};
 
-const { narrativeFactRoutes } = await import('../narrative-facts.js');
-const app = new Elysia().use(narrativeFactRoutes);
+const { createNarrativeFactRoutes } = await import('../narrative-facts.js');
+const app = new Elysia().use(
+  createNarrativeFactRoutes({
+    auth: requireAuth as NonNullable<NarrativeFactRouteOptions['auth']>,
+    ledger: ledger as unknown as NonNullable<NarrativeFactRouteOptions['ledger']>,
+  }),
+);
 
 describe('narrative fact HTTP boundary', () => {
   it('rejects anonymous scene-state reads before the handler runs', async () => {
