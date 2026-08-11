@@ -198,6 +198,66 @@ describe('Memory Service Integration', () => {
       expect(result.memories[0]).toHaveProperty('importance');
     });
 
+    it('normalizes compound extractor types before they are written', async () => {
+      vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
+        JSON.stringify({
+          memories: [
+            {
+              session_id: 'session-123',
+              type: 'event|npc|combat',
+              content: 'The guard joined the battle.',
+              importance: 4,
+              metadata: {},
+            },
+            {
+              session_id: 'session-123',
+              type: 'unknown|event',
+              content: 'An unrecognized category.',
+              importance: 2,
+              metadata: {},
+            },
+          ],
+        }),
+      );
+
+      const result = await MemoryService.extractMemories(
+        {
+          sessionId: 'session-123',
+          campaignId: 'campaign-456',
+          characterId: 'char-789',
+          currentMessage: 'The guard attacks',
+          recentMessages: [],
+        },
+        'I draw my sword',
+        'The guard joins the fight.',
+      );
+
+      expect(result.memories.map((memory) => memory.type)).toEqual(['event', 'general']);
+    });
+
+    it('normalizes types again at the memory write boundary', async () => {
+      mockFunctionsInvoke.mockResolvedValue({
+        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
+        error: null,
+      });
+
+      await MemoryService.saveMemories([
+        {
+          session_id: 'session-123',
+          type: 'event|npc|combat' as unknown as MemoryType,
+          content: 'The guard joined the battle.',
+          importance: 4,
+          metadata: {},
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      ]);
+
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ type: 'event' })]),
+      );
+    });
+
     it('should save extracted memories with embeddings', async () => {
       mockFunctionsInvoke.mockResolvedValue({
         data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },

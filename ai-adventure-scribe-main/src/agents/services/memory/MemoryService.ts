@@ -1,7 +1,11 @@
 import { llmApiClient } from '@/infrastructure/api';
 import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
-import type { Memory as UIMemory, MemoryType as UIMemoryType } from '@/types/memory';
+import {
+  normalizeMemoryType,
+  type Memory as UIMemory,
+  type MemoryType as UIMemoryType,
+} from '@/types/memory';
 
 import { MemoryImportanceService } from './MemoryImportanceService';
 import { MemoryRepository } from './MemoryRepository';
@@ -40,16 +44,15 @@ export class MemoryService {
     const toInsert = await Promise.all(
       memories.map(async (m) => {
         const rawImportance = (m as unknown as Record<string, unknown>).importance;
-        const type = (m as unknown as Record<string, unknown>).type ?? 'general';
-        const category = (m as unknown as Record<string, unknown>).category ?? 'general';
-        const evaluated = await importanceService.evaluate(
-          m.content,
-          String(type),
-          String(category),
+        const type = normalizeMemoryType(
+          (m as unknown as Record<string, unknown>).type ?? 'general',
         );
+        const category = (m as unknown as Record<string, unknown>).category ?? 'general';
+        const evaluated = await importanceService.evaluate(m.content, type, String(category));
         const importance = typeof rawImportance === 'number' ? rawImportance : evaluated.importance;
         return {
           ...m,
+          type,
           importance: Math.max(1, Math.min(5, importance)),
           embedding: evaluated.embedding,
         };
@@ -121,7 +124,16 @@ Extract 1-4 key memories in this JSON format:
       if (!jsonMatch) return { memories: [] };
 
       try {
-        return JSON.parse(jsonMatch[0]) as MemoryExtractionResult;
+        const extracted = JSON.parse(jsonMatch[0]) as MemoryExtractionResult;
+        return {
+          ...extracted,
+          memories: Array.isArray(extracted.memories)
+            ? extracted.memories.map((memory) => ({
+                ...memory,
+                type: normalizeMemoryType(memory.type),
+              }))
+            : [],
+        };
       } catch {
         return { memories: [] };
       }

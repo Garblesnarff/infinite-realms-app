@@ -19,6 +19,22 @@ export type MemoryType =
   | 'plot_point'
   | 'foreshadowing';
 
+export const MEMORY_TYPES: readonly MemoryType[] = [
+  'general',
+  'npc',
+  'location',
+  'quest',
+  'item',
+  'event',
+  'story_beat',
+  'character_moment',
+  'world_detail',
+  'dialogue_gem',
+  'atmosphere',
+  'plot_point',
+  'foreshadowing',
+];
+
 /**
  * Memory subcategories for better organization
  */
@@ -39,21 +55,16 @@ export type MemorySubcategory =
  * Type guard to check if a string is a valid MemoryType
  */
 export function isValidMemoryType(type: string): type is MemoryType {
-  return [
-    'general',
-    'npc',
-    'location',
-    'quest',
-    'item',
-    'event',
-    'story_beat',
-    'character_moment',
-    'world_detail',
-    'dialogue_gem',
-    'atmosphere',
-    'plot_point',
-    'foreshadowing',
-  ].includes(type);
+  return MEMORY_TYPES.includes(type as MemoryType);
+}
+
+/**
+ * Normalize extractor output before it reaches the memory write boundary.
+ * The extractor sometimes emits compound categories such as "event|npc|combat".
+ */
+export function normalizeMemoryType(type: unknown): MemoryType {
+  const firstSegment = typeof type === 'string' ? type.split('|', 1)[0].trim() : '';
+  return isValidMemoryType(firstSegment) ? firstSegment : 'general';
 }
 
 /**
