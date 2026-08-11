@@ -5,6 +5,25 @@ import { MemoryService } from '../../services/memory-service.js';
 
 import type { Memory } from '../../../../db/schema/index';
 
+const ALLOWED_MEMORY_TYPES = [
+  'general',
+  'npc',
+  'location',
+  'quest',
+  'item',
+  'event',
+  'story_beat',
+  'character_moment',
+  'world_detail',
+  'dialogue_gem',
+  'atmosphere',
+  'plot_point',
+  'foreshadowing',
+] as const;
+
+const isAllowedMemoryType = (value: string) =>
+  ALLOWED_MEMORY_TYPES.includes(value as (typeof ALLOWED_MEMORY_TYPES)[number]);
+
 const memorySchema = t.Object({
   id: t.Optional(t.String()),
   campaign_id: t.Optional(t.String()),
@@ -75,8 +94,20 @@ export const memoryRoutes = new Elysia({ prefix: '/v1/memories' })
   )
   .post(
     '/',
-    async ({ body, user }) => {
+    async ({ body, user, set }) => {
       const payload = Array.isArray(body) ? body : [body];
+      const invalidType = payload
+        .map((memory) => memory.type)
+        .find((value) => value !== undefined && !isAllowedMemoryType(value));
+
+      if (invalidType) {
+        set.status = 422;
+        return {
+          error: 'Invalid memory type',
+          reason: `type must be one of ${ALLOWED_MEMORY_TYPES.join(', ')}; received "${invalidType}"`,
+        };
+      }
+
       const inserted = await MemoryService.insert(
         payload.map((memory) => ({
           id: memory.id,
