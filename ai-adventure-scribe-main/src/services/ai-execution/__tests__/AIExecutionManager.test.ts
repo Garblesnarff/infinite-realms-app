@@ -61,8 +61,18 @@ describe('AIExecutionManager', () => {
     const manager = new AIExecutionManager([strategy1, strategy2]);
 
     await expect(manager.execute('test-function')).rejects.toThrow(
-      'No execution strategy available for test-function'
+      'No execution strategy available for test-function',
     );
+  });
+
+  it('should never dispatch the retired DM edge function', async () => {
+    const manager = new AIExecutionManager([strategy1, strategy2]);
+
+    await expect(manager.execute('dm-agent-execute')).rejects.toThrow(
+      'No execution strategy available for dm-agent-execute',
+    );
+    expect(strategy1.execute).not.toHaveBeenCalled();
+    expect(strategy2.execute).not.toHaveBeenCalled();
   });
 
   it('should fallback to next strategy if first one fails', async () => {
@@ -80,7 +90,7 @@ describe('AIExecutionManager', () => {
     const manager = new AIExecutionManager([strategy1, strategy2]);
 
     await expect(
-      manager.execute('test-function', {}, { fallbackOnFailure: false })
+      manager.execute('test-function', {}, { fallbackOnFailure: false }),
     ).rejects.toThrow('Strategy 2 failed');
     expect(strategy1.execute).not.toHaveBeenCalled();
   });
@@ -99,7 +109,7 @@ describe('AIExecutionManager', () => {
     const manager = new AIExecutionManager([strategy1, strategy2]);
 
     await expect(manager.execute('test-function')).rejects.toThrow(
-      'All strategies failed for test-function'
+      'All strategies failed for test-function',
     );
   });
 });

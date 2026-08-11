@@ -6,6 +6,8 @@ interface ExecutionOptions {
   fallbackOnFailure?: boolean;
 }
 
+const RETIRED_FUNCTIONS = new Set(['dm-agent-execute']);
+
 export class AIExecutionManager {
   private strategies: AIExecutionStrategy[];
 
@@ -18,7 +20,9 @@ export class AIExecutionManager {
     payload?: Record<string, unknown>,
     options: ExecutionOptions = { fallbackOnFailure: true },
   ): Promise<unknown> {
-    const applicable = this.strategies.filter((strategy) => strategy.canExecute(functionName));
+    const applicable = RETIRED_FUNCTIONS.has(functionName)
+      ? []
+      : this.strategies.filter((strategy) => strategy.canExecute(functionName));
     if (!applicable.length) {
       throw new Error(`No execution strategy available for ${functionName}`);
     }

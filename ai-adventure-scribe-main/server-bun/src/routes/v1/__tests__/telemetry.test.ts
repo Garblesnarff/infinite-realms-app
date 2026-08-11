@@ -61,7 +61,7 @@ describe('POST /v1/telemetry/client-failure', () => {
       authedRequest({ kind: 'not_a_real_kind', sessionId: 'sess-1' }),
     );
     expect(response.status).toBe(400);
-    const json: any = await response.json();
+    const json = (await response.json()) as { error?: string };
     expect(json.error).toContain('Invalid kind');
   });
 
@@ -78,6 +78,16 @@ describe('POST /v1/telemetry/client-failure', () => {
 
   it('accepts the other allowlisted kind without optional fields', async () => {
     const response = await app.handle(authedRequest({ kind: 'lore_injection_failed' }));
+    expect(response.status).toBe(204);
+  });
+
+  it('accepts combat intent failures', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'combat_intent_failed',
+        error: 'encounter=enc-1; Combat action rejected (500)',
+      }),
+    );
     expect(response.status).toBe(204);
   });
 });
