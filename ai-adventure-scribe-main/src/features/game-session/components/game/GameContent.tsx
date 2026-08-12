@@ -6,6 +6,11 @@ import { GameLoadingOverlay, GameLayout } from './game-content';
 import GameProviders from './GameProviders';
 import { useGameData } from './useGameData';
 
+import type { CharacterState } from '@/contexts/character/types';
+import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
+import type { ChatMessage } from '@/types/game';
+import type { CombatDetectionResult } from '@/utils/combatDetection';
+
 import { Button } from '@/components/ui/button';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -16,12 +21,9 @@ import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useGameSession } from '@/hooks/use-game-session';
 import { useInitialGreeting } from '@/hooks/use-initial-greeting';
 import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useStaleClientCheck } from '@/hooks/use-stale-client-check';
 import logger from '@/lib/logger';
 import { handleAsyncError } from '@/utils/error-handler';
-import type { CharacterState } from '@/contexts/character/types';
-import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
-import type { ChatMessage } from '@/types/game';
-import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 interface GameAIResponse extends ChatMessage {
   combatDetection?: CombatDetectionResult;
@@ -149,7 +151,11 @@ const GameContent: React.FC = () => {
     null;
 
   return (
-    <GameProviders sessionId={sessionId} starterCampaignId={effectiveStarterCampaignId} characterId={characterIdFromParams}>
+    <GameProviders
+      sessionId={sessionId}
+      starterCampaignId={effectiveStarterCampaignId}
+      characterId={characterIdFromParams}
+    >
       <GameContentInner
         sessionId={sessionId}
         campaignIdForHandler={campaignIdFromParams ?? null}
@@ -235,6 +241,8 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   });
   const { state: combatState } = useCombat();
   const prevInCombatRef = React.useRef(combatState.isInCombat);
+
+  useStaleClientCheck({ isInCombat: combatState.isInCombat, sessionId });
 
   const { isGenerating: isGeneratingGreeting } = useInitialGreeting({
     sessionId,

@@ -1,11 +1,63 @@
+import { execFileSync } from 'node:child_process';
 import path from 'path';
 
 import react from '@vitejs/plugin-react-swc';
 import { visualizer } from 'rollup-plugin-visualizer';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+
+const BUILD_VERSION_PLACEHOLDER = '__APP_BUILD_VERSION__';
+
+function escapeHtmlAttribute(value: string): string {
+  const replacements: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
+  return value.replace(/[&<>"']/g, (character) => replacements[character] ?? character);
+}
+
+function resolveBuildVersion(mode: string): string {
+  const env = loadEnv(mode, process.cwd(), '');
+  const configuredVersion =
+    env.VITE_RELEASE ||
+    env.VITE_APP_VERSION ||
+    env.GITHUB_SHA ||
+    env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.GITHUB_SHA ||
+    process.env.VERCEL_GIT_COMMIT_SHA;
+
+  if (configuredVersion?.trim()) return configuredVersion.trim();
+
+  try {
+    return execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return 'dev';
+  }
+}
+
+function injectBuildVersion(buildVersion: string): {
+  name: string;
+  transformIndexHtml: (html: string) => string;
+} {
+  return {
+    name: 'inject-build-version',
+    transformIndexHtml(html: string) {
+      return html.replaceAll(BUILD_VERSION_PLACEHOLDER, escapeHtmlAttribute(buildVersion));
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_BUILD_VERSION__: JSON.stringify(resolveBuildVersion(mode)),
+  },
   server: {
     host: '::',
     port: 3000, // Changed port to avoid conflicts
@@ -16,6 +68,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
+    injectBuildVersion(resolveBuildVersion(mode)),
     react(),
     mode === 'production' &&
       visualizer({

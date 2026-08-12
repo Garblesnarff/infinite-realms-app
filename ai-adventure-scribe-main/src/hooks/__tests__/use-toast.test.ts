@@ -35,6 +35,22 @@ describe('use-toast', () => {
       expect(sonnerToast).toHaveBeenCalledWith('Success');
     });
 
+    it('should pass an action and duration through to sonner', () => {
+      const onClick = vi.fn();
+      toast({
+        title: 'New version available',
+        description: 'Refresh to load the latest version.',
+        action: { label: 'Refresh', onClick },
+        duration: Infinity,
+      });
+
+      expect(sonnerToast).toHaveBeenCalledWith('New version available', {
+        description: 'Refresh to load the latest version.',
+        action: { label: 'Refresh', onClick },
+        duration: Infinity,
+      });
+    });
+
     it('should call sonnerToast.error for destructive variant with title and description', () => {
       toast({ title: 'Error', description: 'Operation failed', variant: 'destructive' });
       expect(sonnerToast.error).toHaveBeenCalledWith('Error', { description: 'Operation failed' });

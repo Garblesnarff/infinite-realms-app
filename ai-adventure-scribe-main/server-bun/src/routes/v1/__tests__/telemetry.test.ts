@@ -90,4 +90,15 @@ describe('POST /v1/telemetry/client-failure', () => {
     );
     expect(response.status).toBe(204);
   });
+
+  it('accepts stale client detections', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'stale_client_detected',
+        sessionId: 'sess-1',
+        error: 'running=old; served=new',
+      }),
+    );
+    expect(response.status).toBe(204);
+  });
 });

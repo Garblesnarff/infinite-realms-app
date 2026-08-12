@@ -27,35 +27,34 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'lore_injection_failed',
   'scene_state_fetch_failed',
   'combat_intent_failed',
+  'stale_client_detected',
 ] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 
 const isAllowedKind = (kind: string): kind is ClientFailureKind =>
   (ALLOWED_CLIENT_FAILURE_KINDS as readonly string[]).includes(kind);
 
-export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' })
-  .use(requireAuth)
-  .post(
-    '/client-failure',
-    ({ body }) => {
-      if (!isAllowedKind(body.kind)) {
-        return new Response(
-          JSON.stringify({
-            error: `Invalid kind. Must be one of: ${ALLOWED_CLIENT_FAILURE_KINDS.join(', ')}`,
-          }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } },
-        );
-      }
+export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' }).use(requireAuth).post(
+  '/client-failure',
+  ({ body }) => {
+    if (!isAllowedKind(body.kind)) {
+      return new Response(
+        JSON.stringify({
+          error: `Invalid kind. Must be one of: ${ALLOWED_CLIENT_FAILURE_KINDS.join(', ')}`,
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
 
-      alert(body.kind, { sessionId: body.sessionId, error: body.error });
+    alert(body.kind, { sessionId: body.sessionId, error: body.error });
 
-      return new Response(null, { status: 204 });
-    },
-    {
-      body: t.Object({
-        kind: t.String({ minLength: 1, maxLength: 100 }),
-        sessionId: t.Optional(t.String({ maxLength: 200 })),
-        error: t.Optional(t.String({ maxLength: 2_000 })),
-      }),
-    },
-  );
+    return new Response(null, { status: 204 });
+  },
+  {
+    body: t.Object({
+      kind: t.String({ minLength: 1, maxLength: 100 }),
+      sessionId: t.Optional(t.String({ maxLength: 200 })),
+      error: t.Optional(t.String({ maxLength: 2_000 })),
+    }),
+  },
+);

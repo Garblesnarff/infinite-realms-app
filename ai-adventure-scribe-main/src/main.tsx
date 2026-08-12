@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { v4 as uuidv4 } from 'uuid';
 
 import App from './App.tsx';
+import { APP_BUILD_VERSION } from './services/app-version';
 import { initializeAnalytics } from './utils/analytics';
 import { validateEnvironment } from './utils/env-validation';
 
@@ -9,7 +10,7 @@ import './index.css';
 
 // Basic frontend observability: request-id propagation and error reporting
 (function setupObservability() {
-  const RELEASE = import.meta.env?.VITE_RELEASE || import.meta.env?.VITE_APP_VERSION || 'dev';
+  const RELEASE = APP_BUILD_VERSION;
   const ENV = import.meta.env?.VITE_ENVIRONMENT || import.meta.env?.MODE || 'development';
   const OBS_ENABLED = (() => {
     const flag = String(import.meta.env?.VITE_OBSERVABILITY_ENABLED ?? '')

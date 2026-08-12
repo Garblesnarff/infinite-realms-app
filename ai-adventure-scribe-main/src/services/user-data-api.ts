@@ -118,7 +118,8 @@ export type WorldBuilderStats = {
 export type ClientFailureKind =
   | 'lore_injection_failed'
   | 'scene_state_fetch_failed'
-  | 'combat_intent_failed';
+  | 'combat_intent_failed'
+  | 'stale_client_detected';
 
 export type NarrativeSceneStateResponse = {
   scene_state: string | null;
