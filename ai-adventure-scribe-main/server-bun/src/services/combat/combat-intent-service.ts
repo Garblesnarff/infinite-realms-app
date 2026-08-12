@@ -320,6 +320,101 @@ async function resolveActorTurn(
 }
 
 /**
+ * The turn boundary the DM was never going to say out loud, taken by the engine instead.
+ *
+ * `resolveActorTurn` above absorbs a MISSING `end_turn` retroactively: it waits for the next
+ * declaration and reads that as the boundary. Which only works when a next declaration arrives,
+ * for the creature immediately after this one. Session 2f420489 is what happens when it does
+ * not. The #1701 repair loop regenerated a one-action batch for the current-turn NPC, the attack
+ * was accepted, the batch carried no `end_turn`, and the NPC stayed `current` with its action
+ * spent. Every player action after that was refused — correctly, forever. Three attempts across
+ * two clients, and the fight could not advance from any of them.
+ *
+ * The 2026-08-11 roach encounter recovered from the same shape for one reason: that DM batch
+ * happened to contain an `end_turn` and this one did not. That is a coin flip, and #1702 already
+ * settled what this codebase does about a rule the model follows half the time. So the boundary
+ * is taken here, when the action is spent, instead of hoped for in the next message: an NPC that
+ * has spent its action has nothing left this turn the DM has any vocabulary to declare —
+ * `combat_actions` carries no bonus action and no post-attack movement — so holding its turn
+ * open can only ever wedge the fight.
+ *
+ * PLAYERS ARE NOT ADVANCED. A player who has attacked may still move, and the popup #1716 added
+ * makes their turn a conversation rather than a single message. Their boundary stays explicit.
+ *
+ * Returns whether the order actually moved, so the caller knows the board it publishes is a new
+ * turn.
+ */
+async function advanceAfterSpentNpcTurn(
+  encounterId: string,
+  actorId: string,
+  userId: string,
+  source: CombatActionSource,
+  intentType: SubmittedCombatIntent['type'],
+  index: SessionEntityIndex,
+): Promise<boolean> {
+  // `end_turn` is already a boundary; a player-sourced intent belongs to a client that ends its
+  // own turn.
+  if (source !== 'dm' || intentType === 'end_turn') return false;
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  const actor = state.participants.find((participant) => participant.id === actorId) as
+    | (TurnResourceView & { participantType?: string })
+    | undefined;
+  if (!actor || !isHostile(actor.participantType as string)) return false;
+  // The action economy is the trigger, not the intent type: a `move`, or an attack that resolved
+  // as approach-only, spends nothing and leaves the NPC mid-turn with its attack still to make.
+  if (!actor.actionUsed) return false;
+  // Something else already moved the order — an absorbed advance, a death-save settlement — and
+  // a step here would skip whoever it landed on.
+  if (state.currentParticipant?.id !== actorId) return false;
+  await advanceOneTurn(encounterId, state.encounter.sessionId, userId);
+  const next = await CombatEncounterService.getCombatState(encounterId, userId);
+  logger.warn({
+    msg: 'NPC_TURN_AUTO_ADVANCED',
+    encounterId,
+    sessionId: state.encounter.sessionId,
+    intentType,
+    actorId,
+    actorSlug: index.slugFor(actorId) ?? null,
+    nowCurrentId: next.currentParticipant?.id ?? null,
+    nowCurrentSlug: index.slugFor(next.currentParticipant?.id) ?? null,
+  });
+  return true;
+}
+
+/**
+ * An `end_turn` for a turn that is already over.
+ *
+ * The client synthesizes one after every action it submits, and the engine now takes the NPC
+ * boundary itself — so the two meet, and without this the client's `end_turn` lands on a board
+ * that has already moved and comes back 422 "Actor is not the current-turn participant". That
+ * refusal belongs to an NPC, not to anything the player did, and #1744 is largely the story of
+ * NPC refusals reaching the player as their own failure.
+ *
+ * It is also the issue's second defect on its own terms: a DM batch whose remaining actions
+ * arrive after a turn boundary the batch itself already crossed. An `end_turn` addressed to a
+ * creature that has spent its action and is no longer current asks for something that has
+ * happened. Dropped, not refused — and not re-executed, since advancing again would consume a
+ * second creature's turn for one instruction.
+ *
+ * STILL REFUSED: an `end_turn` for a creature that has NOT spent its action. That is not a stale
+ * boundary, it is the DM ending somebody else's turn early, and skipping a creature with its
+ * whole turn to take is the one thing this file refuses everywhere else.
+ */
+function alreadyEndedTurn(
+  state: CombatState,
+  intent: SubmittedCombatIntent,
+  source: CombatActionSource,
+): { turnAlreadyEnded: true; currentParticipant: CombatState['currentParticipant'] } | null {
+  if (source !== 'dm' || intent.type !== 'end_turn') return null;
+  if (state.currentParticipant?.id === intent.actorId) return null;
+  const actor = state.participants.find((participant) => participant.id === intent.actorId) as
+    | TurnResourceView
+    | undefined;
+  if (!actor?.actionUsed) return null;
+  return { turnAlreadyEnded: true, currentParticipant: state.currentParticipant };
+}
+
+/**
  * Every entity reference on the way in, normalised against the live board in one read AND
  * checked against the encounter's own roster before anything downstream sees it.
  *
@@ -407,7 +502,9 @@ export async function proposeCombatAttack(
   { movementOnly: true; result: unknown } | ({ movementOnly: false } & Record<string, unknown>)
 > {
   if (submitted.type !== 'attack') {
-    throw new ValidationError('Only attack intents can be proposed', { intentType: submitted.type });
+    throw new ValidationError('Only attack intents can be proposed', {
+      intentType: submitted.type,
+    });
   }
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   const index = await loadSessionEntityIndex(state.encounter.sessionId);
@@ -478,6 +575,21 @@ export async function executeCombatIntent(
     const state = await CombatEncounterService.getCombatState(encounterId, userId);
     const index = await loadSessionEntityIndex(state.encounter.sessionId);
     const resolved = resolveIntentRefs(submitted, index, state);
+    // Before authorization, because a boundary that has already been crossed is not an
+    // authorization question: there is no turn left to be out of.
+    const stale = alreadyEndedTurn(state, resolved, source);
+    if (stale) {
+      logger.warn({
+        msg: 'DM_END_TURN_ALREADY_ENDED',
+        encounterId,
+        sessionId: state.encounter.sessionId,
+        actorId: resolved.actorId,
+        actorSlug: index.slugFor(resolved.actorId) ?? null,
+        currentParticipantId: stale.currentParticipant?.id ?? null,
+        currentParticipantSlug: index.slugFor(stale.currentParticipant?.id) ?? null,
+      });
+      return stale;
+    }
     const { actor, encounter } = await resolveActorTurn(
       encounterId,
       state,
@@ -654,7 +766,25 @@ export async function executeCombatIntent(
     const combatEnded =
       (damage > 0 || intent.type === 'end_turn') &&
       (await endCombatIfResolved(encounterId, userId));
-    if (!combatEnded) await publishCombatState(encounterId, userId, intent.type);
+    if (!combatEnded) {
+      // After the end check, never before: a killing blow ends the fight, and there is no next
+      // turn to advance to. And before the publish, so the board the client receives already
+      // names whoever is up — one broadcast, no window in which the UI shows a spent NPC as
+      // current.
+      const advanced = await advanceAfterSpentNpcTurn(
+        encounterId,
+        intent.actorId,
+        userId,
+        source,
+        intent.type,
+        index,
+      );
+      // The advance settles death saves for anyone the order reaches on the floor, and a third
+      // failure ends a campaign without a point of damage being dealt. Same reason `end_turn`
+      // triggers the check above.
+      const endedOnAdvance = advanced ? await endCombatIfResolved(encounterId, userId) : false;
+      if (!endedOnAdvance) await publishCombatState(encounterId, userId, intent.type);
+    }
     return result;
   } catch (error) {
     trackCombatEvent('action_refused', {

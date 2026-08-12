@@ -56,10 +56,13 @@ type LogPayload = Record<string, unknown>;
 
 const advanceLogs: LogPayload[] = [];
 const refusalLogs: LogPayload[] = [];
+/** The #1744 boundary, taken when an NPC spends its action. Separate log, separate list. */
+const autoAdvanceLogs: LogPayload[] = [];
 
 const record = (payload: LogPayload): void => {
   if (payload?.msg === 'DM_IMPLICIT_TURN_ADVANCE') advanceLogs.push(payload);
   if (payload?.msg === 'COMBAT_INTENT_OUT_OF_TURN') refusalLogs.push(payload);
+  if (payload?.msg === 'NPC_TURN_AUTO_ADVANCED') autoAdvanceLogs.push(payload);
 };
 
 const warn = mock(record);
@@ -109,6 +112,7 @@ describeWithDb(
     beforeEach(async () => {
       advanceLogs.length = 0;
       refusalLogs.length = 0;
+      autoAdvanceLogs.length = 0;
       if (!hasRealDb) return;
       if (encounterId) {
         // The order is put back to the top with everybody's action refunded, so each test states
@@ -254,7 +258,15 @@ describeWithDb(
 
       await attackBy(firstMonsterId, heroId);
 
-      expect(await currentTurnOrder()).toBe(1);
+      // Two positions, for two different reasons, and the two logs are what tell them apart.
+      // The absorb moved one — off the hero, onto the monster the DM addressed — which is what
+      // this test has always pinned. Since #1744 the monster's own turn then ends on the
+      // spending of its action rather than waiting for an `end_turn` the DM cannot emit, so the
+      // order comes to rest on the creature after it. A monster left sitting as `current` with
+      // nothing left to declare is the lockout that issue exists for.
+      expect(await currentTurnOrder()).toBe(2);
+      expect(autoAdvanceLogs).toHaveLength(1);
+      expect(autoAdvanceLogs[0]).toMatchObject({ actorId: firstMonsterId });
       expect(advanceLogs).toHaveLength(1);
       expect(advanceLogs[0]).toMatchObject({
         addressedActorId: firstMonsterId,
