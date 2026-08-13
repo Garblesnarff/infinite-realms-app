@@ -23,6 +23,7 @@ import { useInitialGreeting } from '@/hooks/use-initial-greeting';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useStaleClientCheck } from '@/hooks/use-stale-client-check';
 import logger from '@/lib/logger';
+import { inferStarterCampaignSlug } from '@/services/starter-campaign-slugs';
 import { handleAsyncError } from '@/utils/error-handler';
 
 interface GameAIResponse extends ChatMessage {
@@ -136,13 +137,8 @@ const GameContent: React.FC = () => {
   }
 
   // Infer starter campaign ID from URL params, session data, or campaign name
-  const campaignNameToSlug: Record<string, string> = {
-    'The Eternal Feast': 'the-eternal-feast',
-    'The Academy of Arcane Gastronomy': 'the-academy-of-arcane-gastronomy',
-    'Abyssal Descent': 'abyssal-descent',
-  };
   const inferredStarterCampaignId = campaignState?.campaign?.name
-    ? campaignNameToSlug[campaignState.campaign.name]
+    ? inferStarterCampaignSlug(campaignState.campaign.name)
     : undefined;
   const effectiveStarterCampaignId =
     starterCampaignIdFromParams ||

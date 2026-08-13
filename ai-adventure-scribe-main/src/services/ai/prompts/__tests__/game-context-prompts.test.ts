@@ -3,12 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Create the mock lore keeper object
 const mockLoreKeeper = {
-  getCampaignOverview: vi.fn(async () => ({
-    title: 'Mock Campaign',
-    premise: 'Mock Premise',
-    overview: 'Mock Overview',
-    creativeBrief: 'Mock Brief',
-  })),
+  getCampaignOverview: vi.fn(
+    async (_campaignId: string): Promise<Record<string, unknown> | null> => ({
+      title: 'Mock Campaign',
+      premise: 'Mock Premise',
+      overview: 'Mock Overview',
+      creativeBrief: 'Mock Brief',
+    }),
+  ),
   getRules: vi.fn(async () => [{ condition: 'Night', effect: 'Darkness', reversible: true }]),
   getEntities: vi.fn(async () => ({
     npcs: [{ entityName: 'Test NPC', content: 'NPC Content', metadata: { image_url: 'url' } }],
@@ -74,6 +76,7 @@ const getCharacterLoadout = vi.fn(async () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCharacterLoadout: (...args: unknown[]) => getCharacterLoadout(...(args as [])),
+    reportClientFailure: vi.fn(),
   },
 }));
 
@@ -254,6 +257,12 @@ describe('GameContextPrompts', () => {
   });
 
   describe('buildGameContextSection', () => {
+    const academyStarterCampaignRow = {
+      id: 'academy-of-arcane-gastronomy',
+      slug: 'academy-of-arcane-gastronomy',
+      title: 'The Academy of Arcane Gastronomy',
+    };
+
     const mockContext = {
       campaignDetails: {
         name: 'The Eternal Feast',
@@ -304,6 +313,33 @@ describe('GameContextPrompts', () => {
         expect(result).toContain('<starter_campaign_lore>');
       },
     );
+
+    it('infers the Academy id that exists in a starter_campaigns row', async () => {
+      mockLoreKeeper.getCampaignOverview.mockImplementation(async (campaignId: string) => {
+        if (campaignId !== academyStarterCampaignRow.id) return null;
+        return {
+          ...academyStarterCampaignRow,
+          premise: 'A culinary arcane academy.',
+          overview: 'A test starter campaign row.',
+          creativeBrief: 'Whimsical magic.',
+        };
+      });
+
+      const result = await GameContextPrompts.buildGameContextSection(
+        {
+          campaignDetails: {
+            name: academyStarterCampaignRow.title,
+            description: 'A school for magical cooks.',
+          },
+        } as any,
+        [],
+      );
+
+      expect(academyStarterCampaignRow.id).toBe(academyStarterCampaignRow.slug);
+      expect(mockLoreKeeper.getCampaignOverview).toHaveBeenCalledWith(academyStarterCampaignRow.id);
+      expect(result).toContain('<starter_campaign_lore>');
+      expect(result).toContain(`TITLE: ${academyStarterCampaignRow.title}`);
+    });
 
     it('should handle missing campaign details and lore', async () => {
       const minimalContext = {

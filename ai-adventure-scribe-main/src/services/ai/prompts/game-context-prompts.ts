@@ -6,6 +6,7 @@ import type { Memory } from '../../memory-manager';
 import type { GameContext } from '../shared/types';
 
 import logger from '@/lib/logger';
+import { inferStarterCampaignSlug } from '@/services/starter-campaign-slugs';
 
 /**
  * GameContextPrompts - Handles building the game context sections of the prompt
@@ -42,15 +43,7 @@ DESCRIPTION: ${campaignDescription}
 
     // Fallback: if no starterCampaignId but campaign name matches a starter campaign
     if (!starterCampaignId && campaignName) {
-      const normalizedCampaignName = String(campaignName).toLowerCase().trim();
-      const nameToSlug: Record<string, string> = {
-        'the eternal feast': 'the-eternal-feast',
-        'eternal feast': 'the-eternal-feast',
-        'abyssal descent': 'abyssal-descent',
-        'academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
-        'the academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
-      };
-      starterCampaignId = nameToSlug[normalizedCampaignName];
+      starterCampaignId = inferStarterCampaignSlug(campaignName);
       if (starterCampaignId) {
         logger.info(
           `[ContextBuilder] Inferred starter campaign '${starterCampaignId}' from campaign name`,
