@@ -52,6 +52,10 @@ const attackInputs: AttackRollInput[] = [];
 const spellInputs: Array<{ casterId: string; targetIds: string[] }> = [];
 const trackedEvents: Array<Record<string, unknown>> = [];
 let encounterStatus: 'active' | 'completed' = 'active';
+let activeEncounter: { id: string; sessionId: string } | null = {
+  id: ENCOUNTER_ID,
+  sessionId: SESSION_ID,
+};
 
 mock.module('../../../../../../db/client', () => ({ db: {} }));
 mock.module('../../../../lib/env.js', () => ({
@@ -94,7 +98,7 @@ mock.module('../../../../services/combat/combat-encounter-service.js', () => ({
       currentParticipant: participant(VOID_MAW_ID, 'The Void-Maw', 'npc'),
       participantSizes: {},
     }),
-    getActiveEncounter: async () => ({ id: ENCOUNTER_ID, sessionId: SESSION_ID }),
+    getActiveEncounter: async () => activeEncounter,
     endCombat: async () => {},
   },
 }));
@@ -252,10 +256,30 @@ const postIntent = (body: unknown) =>
 
 beforeEach(() => {
   encounterStatus = 'active';
+  activeEncounter = { id: ENCOUNTER_ID, sessionId: SESSION_ID };
   attackInputs.length = 0;
   spellInputs.length = 0;
   trackedEvents.length = 0;
   sentRequests.length = 0;
+});
+
+describe('the active combat read', () => {
+  it('returns a successful empty result when the session has no combat', async () => {
+    activeEncounter = null;
+
+    const response = await app.handle(
+      new Request(`http://localhost/v1/combat/sessions/${SESSION_ID}/active`, {
+        headers: { authorization: 'Bearer valid-token' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      combat: null,
+      initiativeOrder: [],
+      tacticalMap: null,
+    });
+  });
 });
 
 describe('a DM attack addressed by slug, on the slug-holder’s own turn', () => {

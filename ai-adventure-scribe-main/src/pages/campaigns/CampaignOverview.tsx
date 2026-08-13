@@ -37,33 +37,33 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
   const sessionExpiryMs =
     userPlan && userPlan !== 'free' ? PAID_SESSION_EXPIRY_MS : FREE_SESSION_EXPIRY_MS;
 
-  // Query for most recent active session
-  const { data: activeSession, isLoading: isLoadingActiveSession } = useQuery({
-    queryKey: ['campaign', campaignId, 'active-session'],
+  // Only use this query to decide whether the campaign has anything resumable.
+  // The button opens the session picker so the user chooses the exact session.
+  const { data: activeSessions = [], isLoading: isLoadingActiveSession } = useQuery({
+    queryKey: ['campaign', campaignId, 'active-sessions'],
     queryFn: async () => {
-      if (!campaignId) return null;
-
-      const [data] = await userDataApi.listSessions({ campaignId, status: 'active', limit: 1 });
-      if (!data) return null;
-
-      // Check if expired (24 hours)
-      const start = data.start_time || data.created_at;
-      if (!start) return null;
-
-      const startTime = new Date(start).getTime();
-      const isExpired = Number.isFinite(startTime)
-        ? Date.now() - startTime > sessionExpiryMs
-        : false;
-
-      return isExpired ? null : data;
+      if (!campaignId) return [];
+      return userDataApi.listSessions({ campaignId, status: 'active' });
     },
     enabled: Boolean(campaignId),
   });
 
-  const handleResumeSession = () => {
-    if (!activeSession?.character_id || !campaignId) return;
-    navigate(`/app/game/${campaignId}?character=${activeSession.character_id}`);
-  };
+  const hasActiveSession = React.useMemo(
+    () =>
+      activeSessions.some((session) => {
+        const start = session.start_time || session.created_at;
+        if (!start) return false;
+
+        const startTime = new Date(start).getTime();
+        return !Number.isFinite(startTime) || Date.now() - startTime <= sessionExpiryMs;
+      }),
+    [activeSessions, sessionExpiryMs],
+  );
+
+  const handleResumeSession = React.useCallback(() => {
+    if (!campaignId) return;
+    navigate(`/app/campaigns/${campaignId}/sessions`);
+  }, [campaignId, navigate]);
 
   if (!campaign) {
     return <CampaignOverviewSkeleton />;
@@ -165,7 +165,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
 
         {/* Sidebar Info Panel */}
         <CampaignOverviewSidebar
-          hasActiveSession={Boolean(activeSession)}
+          hasActiveSession={hasActiveSession}
           isLoadingActiveSession={isLoadingActiveSession}
           onResumeSession={handleResumeSession}
           onStartNewSession={onStartNewSession}

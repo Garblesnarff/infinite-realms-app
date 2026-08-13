@@ -480,6 +480,10 @@ export class HeadlessGameClient {
     );
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Tactical map failed (${response.status})`);
-    return response.json();
+    const payload = (await response.json()) as unknown;
+    if (payload && typeof payload === 'object' && 'map' in payload) {
+      return (payload as { map?: unknown | null }).map ?? null;
+    }
+    return payload;
   }
 }

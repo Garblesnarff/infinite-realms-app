@@ -142,8 +142,9 @@ export const intentRoutes = new Elysia()
         user.userId,
       );
       if (!encounter) {
-        set.status = 404;
-        return { error: 'No active combat encounter' };
+        // A session without combat is the expected result for this read. Keep
+        // optional combat polling out of the error path and its 404 noise.
+        return { combat: null, initiativeOrder: [], tacticalMap: null };
       }
       const combat = await CombatEncounterService.getCombatState(encounter.id, user.userId);
       return {

@@ -27,9 +27,9 @@ const Breadcrumbs: React.FC = () => {
   }, [pathSegments]);
   const sessionId = React.useMemo(() => {
     const idx = pathSegments.findIndex((s) => s === 'game');
-    if (idx !== -1 && pathSegments[idx + 1]) return pathSegments[idx + 1];
+    if (idx !== -1) return new URLSearchParams(location.search).get('session');
     return null;
-  }, [pathSegments]);
+  }, [location.search, pathSegments]);
 
   // Try context first, then fallback to lightweight fetch
   const { state: campaignState } = useCampaign();

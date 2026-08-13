@@ -171,6 +171,14 @@ const app = createRequestPipelineApp()
     ),
   );
 
+const noMapApp = createRequestPipelineApp().use(
+  createTacticalMapRoutes({
+    auth: auth as never,
+    sessionOwnership: sessionOwnership as never,
+    activeMapLoader: async () => null,
+  }),
+);
+
 const authorized = { 'content-type': 'application/json', authorization: 'Bearer valid-token' };
 
 const postDmActions = (actions: unknown[]) =>
@@ -198,6 +206,17 @@ beforeEach(() => {
 });
 
 describe('DM map actions over HTTP', () => {
+  it('returns an empty successful read when no tactical map is active', async () => {
+    const response = await noMapApp.handle(
+      new Request(`http://localhost/v1/sessions/${SESSION_ID}/tactical-map`, {
+        headers: authorized,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ map: null });
+  });
+
   it('applies a monster turn move to the map state and broadcasts the delta', async () => {
     const response = await postDmActions([move('void-maw', 3, 3)]);
     const body = (await response.json()) as {

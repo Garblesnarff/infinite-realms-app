@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { getCampaignSessionNumbers } from './session-numbering';
 import SessionCard, { type SessionListItem } from './SessionCard';
 
 import { Button } from '@/components/ui/button';
@@ -70,12 +71,15 @@ export const CampaignSessionsContent: React.FC<CampaignSessionsContentProps> = (
     );
   }
 
+  const sessionNumbers = getCampaignSessionNumbers(sessions);
+
   return (
     <div className="space-y-4">
       {sessions.map((session) => (
         <SessionCard
           key={session.id}
           session={session}
+          displaySessionNumber={sessionNumbers.get(session.id)}
           expired={isSessionExpired(session) || session.status === 'expired'}
           onContinue={handleContinue}
           continuing={continuingId === session.id}

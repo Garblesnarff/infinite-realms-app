@@ -36,6 +36,7 @@ export interface SessionListItem {
 
 interface SessionCardProps {
   session: SessionListItem;
+  displaySessionNumber?: number;
   expired: boolean;
   onContinue: (session: SessionListItem) => void;
   continuing?: boolean;
@@ -60,6 +61,7 @@ const statusLabels: Record<string, string> = {
 
 const SessionCard: React.FC<SessionCardProps> = ({
   session,
+  displaySessionNumber,
   expired,
   onContinue,
   continuing,
@@ -109,7 +111,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
           <div className="flex flex-wrap items-center gap-3">
             <Badge className={cn('border', badgeClass)}>{badgeLabel}</Badge>
             <span className="text-sm font-semibold text-foreground">
-              Session {session.session_number ?? '—'}
+              Session {displaySessionNumber ?? session.session_number ?? '—'}
             </span>
             {startedAt && (
               <span className="text-sm text-muted-foreground">Started {startedAgo}</span>

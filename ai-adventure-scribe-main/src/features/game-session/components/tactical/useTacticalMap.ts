@@ -51,7 +51,14 @@ export function useTacticalMap(sessionId: string) {
     fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map`, {
       headers: headers(),
     })
-      .then(async (response) => (response.ok ? (response.json() as Promise<TacticalMap>) : null))
+      .then(async (response): Promise<TacticalMap | null> => {
+        if (!response.ok) return null;
+        const payload: unknown = await response.json();
+        if (payload && typeof payload === 'object' && 'map' in payload) {
+          return (payload as { map?: TacticalMap | null }).map ?? null;
+        }
+        return payload as TacticalMap;
+      })
       .then((next) => {
         if (!cancelled && next) setMap(next);
       })

@@ -53,8 +53,9 @@ export function createTacticalMapRoutes({
         }
         const map = await activeMapLoader(params.id);
         if (!map) {
-          set.status = 404;
-          return { error: 'No active tactical map' };
+          // An absent map is normal outside tactical combat, so this optional
+          // read returns an empty result instead of an error response.
+          return { map: null };
         }
         return map;
       })
