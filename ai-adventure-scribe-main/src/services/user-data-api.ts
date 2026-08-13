@@ -157,6 +157,15 @@ export type CombatParticipantStatusUpdate = {
   deathSavesFailures?: number;
 };
 
+export type CombatDamageLogPayload = {
+  participantId: string;
+  damageAmount: number;
+  damageType: string;
+  sourceParticipantId: string | null;
+  sourceDescription: string | null;
+  roundNumber: number;
+};
+
 export type JournalHandoutEntry = {
   id: string;
   sessionId: string;
@@ -333,6 +342,14 @@ export const userDataApi = {
     skippedConditions: string[];
   }> =>
     request(`/v1/combat/encounters/${encodeURIComponent(encounterId)}/persistence`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  logCombatDamage: (
+    encounterId: string,
+    payload: CombatDamageLogPayload,
+  ): Promise<{ ok: boolean; id: string }> =>
+    request(`/v1/combat/encounters/${encodeURIComponent(encounterId)}/damage-log`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

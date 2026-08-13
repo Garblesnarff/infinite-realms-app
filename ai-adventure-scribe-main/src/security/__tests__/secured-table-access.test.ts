@@ -16,6 +16,7 @@ const SECURED_TABLES = [
   'combat_participants',
   'combat_participant_status',
   'combat_participant_conditions',
+  'combat_damage_log',
 ] as const;
 
 function sourceFiles(directory: string): string[] {

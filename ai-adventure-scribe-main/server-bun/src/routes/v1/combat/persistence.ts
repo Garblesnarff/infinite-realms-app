@@ -7,11 +7,13 @@ import { planRateLimit } from '../../../middleware/rate-limit.js';
 import {
   getCharacterCombatStatus,
   getCombatParticipantStatus,
+  recordCombatDamageLog,
   saveCombatPersistence,
   updateCombatParticipantStatus,
 } from '../../../services/combat/combat-persistence-service.js';
 
 import type {
+  CombatDamageLogInput,
   CombatParticipantStatusUpdate,
   CombatPersistenceInput,
 } from '../../../services/combat/combat-persistence-service.js';
@@ -97,6 +99,15 @@ const statusUpdateBody = t.Object({
   deathSavesFailures: t.Optional(t.Integer({ minimum: 0, maximum: 3 })),
 });
 
+const damageLogBody = t.Object({
+  participantId: uuidString,
+  damageAmount: t.Integer({ minimum: 0, maximum: 1_000_000 }),
+  damageType: t.String({ minLength: 1, maxLength: 100 }),
+  sourceParticipantId: t.Optional(t.Nullable(uuidString)),
+  sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
+  roundNumber: t.Integer({ minimum: 0, maximum: 100_000 }),
+});
+
 function mapError(
   set: { status?: number | string },
   error: unknown,
@@ -129,6 +140,22 @@ export const persistenceRoutes = new Elysia()
       }
     },
     { params: encounterParam, body: persistenceBody },
+  )
+  .post(
+    '/encounters/:encounterId/damage-log',
+    async ({ params, body, set, user }) => {
+      try {
+        const log = await recordCombatDamageLog(
+          params.encounterId,
+          body as CombatDamageLogInput,
+          user.userId,
+        );
+        return { ok: true, ...log };
+      } catch (error) {
+        return mapError(set, error, 'Failed to log combat damage');
+      }
+    },
+    { params: encounterParam, body: damageLogBody },
   )
   .get(
     '/participants/:participantId/status',

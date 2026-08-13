@@ -10,7 +10,6 @@ import type { DamageApplication, HPUpdateResult } from './damage-integrator-type
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 import type { DamageType } from '@/types/combat';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -116,21 +115,18 @@ export async function applyDamageFromRoll(damage: DamageApplication): Promise<HP
       isConscious,
     });
 
-    // This remains on its independent legacy writer; the #1760 split evidence does not include
-    // combat_damage_log in the four-table persistence surface revoked by this change.
-    const { error: logError } = await supabase.from('combat_damage_log').insert({
-      encounter_id: encounterId,
-      participant_id: participantId,
-      damage_amount: modifiedDamage,
-      damage_type: damageType,
-      source_participant_id: sourceParticipantId,
-      source_description: sourceDescription,
-      round_number: roundNumber,
-    });
-
-    if (logError) {
-      logger.error('[DamageIntegrator] Failed to log damage:', logError);
-      // Don't fail the whole operation if logging fails
+    try {
+      await userDataApi.logCombatDamage(encounterId, {
+        participantId,
+        damageAmount: modifiedDamage,
+        damageType,
+        sourceParticipantId: sourceParticipantId ?? null,
+        sourceDescription: sourceDescription ?? null,
+        roundNumber,
+      });
+    } catch (error) {
+      logger.error('[DamageIntegrator] Failed to log damage:', error);
+      // Don't fail the whole operation if logging fails.
     }
 
     logger.info(

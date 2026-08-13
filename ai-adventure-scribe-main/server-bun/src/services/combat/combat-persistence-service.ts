@@ -5,6 +5,7 @@ import { db } from '../../../../db/client';
 import {
   campaigns,
   characters,
+  combatDamageLog,
   combatEncounters,
   combatParticipantConditions,
   combatParticipantStatus,
@@ -71,6 +72,15 @@ export interface CombatParticipantStatusUpdate {
   isConscious?: boolean;
   deathSavesSuccesses?: number;
   deathSavesFailures?: number;
+}
+
+export interface CombatDamageLogInput {
+  participantId: string;
+  damageAmount: number;
+  damageType: string;
+  sourceParticipantId: string | null;
+  sourceDescription: string | null;
+  roundNumber: number;
 }
 
 export interface CombatParticipantStatusView {
@@ -426,6 +436,81 @@ export async function saveCombatPersistence(
       skippedConditions,
     };
   });
+}
+
+/**
+ * Append a damage log row for an owned encounter.
+ *
+ * The browser used to insert this row directly with the Supabase anon key. Keep the
+ * encounter, target participant, and optional source participant on the same encounter so
+ * the authenticated route cannot be used to write cross-session combat history.
+ */
+export async function recordCombatDamageLog(
+  encounterId: string,
+  input: CombatDamageLogInput,
+  userId: string,
+): Promise<{ id: string }> {
+  const [ownedEncounter] = await db
+    .select({ id: combatEncounters.id })
+    .from(combatEncounters)
+    .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+    .where(and(eq(combatEncounters.id, encounterId), getOwnershipCondition(userId, gameSessions)))
+    .limit(1);
+
+  if (!ownedEncounter) {
+    throw new NotFoundError('Encounter', encounterId);
+  }
+
+  const [participant] = await db
+    .select({ id: combatParticipants.id })
+    .from(combatParticipants)
+    .where(
+      and(
+        eq(combatParticipants.id, input.participantId),
+        eq(combatParticipants.encounterId, encounterId),
+      ),
+    )
+    .limit(1);
+
+  if (!participant) {
+    throw new NotFoundError('Participant', input.participantId);
+  }
+
+  if (input.sourceParticipantId) {
+    const [sourceParticipant] = await db
+      .select({ id: combatParticipants.id })
+      .from(combatParticipants)
+      .where(
+        and(
+          eq(combatParticipants.id, input.sourceParticipantId),
+          eq(combatParticipants.encounterId, encounterId),
+        ),
+      )
+      .limit(1);
+
+    if (!sourceParticipant) {
+      throw new NotFoundError('Source participant', input.sourceParticipantId);
+    }
+  }
+
+  const [log] = await db
+    .insert(combatDamageLog)
+    .values({
+      encounterId,
+      participantId: input.participantId,
+      damageAmount: input.damageAmount,
+      damageType: input.damageType,
+      sourceParticipantId: input.sourceParticipantId,
+      sourceDescription: input.sourceDescription,
+      roundNumber: input.roundNumber,
+    })
+    .returning({ id: combatDamageLog.id });
+
+  if (!log) {
+    throw new NotFoundError('Damage log');
+  }
+
+  return log;
 }
 
 export async function getCombatParticipantStatus(

@@ -1,9 +1,11 @@
+/* eslint-disable max-lines -- one cohesive HTTP contract and its local dependency seams. */
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia, status } from 'elysia';
 
 import { NotFoundError } from '../../../../lib/errors.js';
 
 const saveCalls: unknown[][] = [];
+const damageLogCalls: unknown[][] = [];
 const readCalls: unknown[][] = [];
 const updateCalls: unknown[][] = [];
 
@@ -18,6 +20,11 @@ const savedResult = {
 let saveImplementation = async (...args: unknown[]): Promise<typeof savedResult> => {
   saveCalls.push(args);
   return savedResult;
+};
+
+let damageLogImplementation = async (...args: unknown[]): Promise<{ id: string }> => {
+  damageLogCalls.push(args);
+  return { id: 'cccccccc-dddd-4eee-8fff-000000000000' };
 };
 
 let readImplementation = async (...args: unknown[]): Promise<Record<string, unknown>> => {
@@ -61,6 +68,7 @@ mock.module('../../../../lib/logger.js', () => ({
 }));
 mock.module('../../../../services/combat/combat-persistence-service.js', () => ({
   saveCombatPersistence: (...args: unknown[]) => saveImplementation(...args),
+  recordCombatDamageLog: (...args: unknown[]) => damageLogImplementation(...args),
   getCombatParticipantStatus: (...args: unknown[]) => readImplementation(...args),
   updateCombatParticipantStatus: (...args: unknown[]) => updateImplementation(...args),
   getCharacterCombatStatus: (...args: unknown[]) => readImplementation(...args),
@@ -83,11 +91,16 @@ const persistencePayload = {
 
 beforeEach(() => {
   saveCalls.length = 0;
+  damageLogCalls.length = 0;
   readCalls.length = 0;
   updateCalls.length = 0;
   saveImplementation = async (...args: unknown[]): Promise<typeof savedResult> => {
     saveCalls.push(args);
     return savedResult;
+  };
+  damageLogImplementation = async (...args: unknown[]): Promise<{ id: string }> => {
+    damageLogCalls.push(args);
+    return { id: 'cccccccc-dddd-4eee-8fff-000000000000' };
   };
   readImplementation = async (...args: unknown[]): Promise<Record<string, unknown>> => {
     readCalls.push(args);
@@ -151,6 +164,75 @@ describe('combat persistence HTTP boundary', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-test-user': 'owner' },
         body: JSON.stringify(persistencePayload),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Not found' });
+  });
+
+  it('rejects anonymous damage-log writes before the service can run', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/encounters/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/damage-log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          participantId: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+          damageAmount: 5,
+          damageType: 'piercing',
+          sourceParticipantId: null,
+          sourceDescription: 'test hit',
+          roundNumber: 1,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(damageLogCalls).toEqual([]);
+  });
+
+  it('passes an owned damage log to the authenticated persistence service', async () => {
+    const payload = {
+      participantId: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+      damageAmount: 5,
+      damageType: 'piercing',
+      sourceParticipantId: null,
+      sourceDescription: 'test hit',
+      roundNumber: 1,
+    };
+    const response = await app.handle(
+      new Request('http://localhost/encounters/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/damage-log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-test-user': 'owner' },
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true,
+      id: 'cccccccc-dddd-4eee-8fff-000000000000',
+    });
+    expect(damageLogCalls).toEqual([['aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', payload, 'owner-1']]);
+  });
+
+  it('masks a damage-log ownership miss as not found', async () => {
+    damageLogImplementation = async () => {
+      throw new NotFoundError('Encounter');
+    };
+
+    const response = await app.handle(
+      new Request('http://localhost/encounters/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/damage-log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-test-user': 'owner' },
+        body: JSON.stringify({
+          participantId: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+          damageAmount: 5,
+          damageType: 'piercing',
+          sourceParticipantId: null,
+          sourceDescription: null,
+          roundNumber: 1,
+        }),
       }),
     );
 

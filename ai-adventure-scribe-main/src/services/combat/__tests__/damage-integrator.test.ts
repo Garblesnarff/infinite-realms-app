@@ -10,6 +10,7 @@ import {
 } from '../damage-integrator';
 
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 // Mock Supabase
 vi.mock('@/integrations/supabase/client', () => ({
@@ -28,8 +29,8 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-// Keep the damage-log assertion on its existing Supabase seam, while the participant/status
-// reads and writes follow the same server-routed API used by production code.
+// Keep the participant/status compatibility fixtures on their existing Supabase seam while
+// asserting that the damage log itself follows the server-routed API used by production code.
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCombatParticipantStatus: async (participantId: string) => {
@@ -69,6 +70,7 @@ vi.mock('@/services/user-data-api', () => ({
       if (error) throw error;
       return {};
     },
+    logCombatDamage: vi.fn().mockResolvedValue({ ok: true, id: 'log-1' }),
   },
 }));
 
@@ -169,6 +171,14 @@ describe('DamageIntegrator', () => {
       expect(result.previousHP).toBe(20);
       expect(result.damageDealt).toBe(5);
       expect(result.becameUnconscious).toBe(false);
+      expect(userDataApi.logCombatDamage).toHaveBeenCalledWith('e1', {
+        participantId: 'p1',
+        damageAmount: 5,
+        damageType: 'piercing',
+        sourceParticipantId: null,
+        sourceDescription: null,
+        roundNumber: 1,
+      });
     });
 
     it('should deplete temp HP before real HP', async () => {
@@ -402,10 +412,8 @@ describe('DamageIntegrator', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ error: null }),
       });
-      // log call FAIL
-      (fromSpy as any).mockReturnValueOnce({
-        insert: vi.fn().mockResolvedValue({ error: { message: 'Log failed' } }),
-      });
+      // The route-backed log call fails, but damage application remains successful.
+      (userDataApi.logCombatDamage as any).mockRejectedValueOnce(new Error('Log failed'));
 
       const result = await applyDamageFromRoll({
         participantId: mockParticipantId,

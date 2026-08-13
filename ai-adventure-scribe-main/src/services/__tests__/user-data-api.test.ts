@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth-gate', () => ({ waitForAuth: vi.fn() }));
-vi.mock('@/services/auth/TokenService', () => ({ loadCachedSession: vi.fn() }));
+vi.mock('@/services/auth/TokenService', () => ({
+  getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer access-token' })),
+  loadCachedSession: vi.fn(),
+}));
 
 import { waitForAuth } from '@/lib/auth-gate';
 import { loadCachedSession } from '@/services/auth/TokenService';
@@ -18,7 +21,10 @@ describe('userDataApi tactical transport', () => {
   });
 
   it('preserves tactical endpoint paths, payloads, and non-OK responses', async () => {
-    const response = { ok: false, json: vi.fn().mockResolvedValue({ error: 'Refused' }) } as any;
+    const response = {
+      ok: false,
+      json: vi.fn().mockResolvedValue({ error: 'Refused' }),
+    } as unknown as Response;
     fetchMock.mockResolvedValue(response);
 
     await expect(userDataApi.getTacticalMapContext('session id', 'entity/id')).resolves.toBe(
@@ -74,6 +80,39 @@ describe('userDataApi tactical transport', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
         body: JSON.stringify({ action: 'move', entityId: 'entity/id', x: 2, y: 4 }),
+      },
+    );
+  });
+
+  it('routes combat damage logs through the authenticated persistence boundary', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ ok: true, id: 'log-1' }),
+    });
+    const payload = {
+      participantId: 'participant-1',
+      damageAmount: 7,
+      damageType: 'fire',
+      sourceParticipantId: null,
+      sourceDescription: 'test hit',
+      roundNumber: 2,
+    };
+
+    await expect(userDataApi.logCombatDamage('encounter/id', payload)).resolves.toEqual({
+      ok: true,
+      id: 'log-1',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8888/v1/combat/encounters/encounter%2Fid/damage-log',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer access-token',
+        },
+        body: JSON.stringify(payload),
       },
     );
   });
