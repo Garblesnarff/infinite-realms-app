@@ -203,12 +203,14 @@ export class SentenceSegmenter {
       return [segment];
     }
 
-    // Try to split on natural clause boundaries
+    // Split after clause punctuation so rejoining keeps the original boundary. Keep the
+    // conjunction lookahead non-capturing: String.split() reinserts captured groups, which used
+    // to leave the conjunction on both sides of the rejoin ("and and" / "yet yet").
     const clausePatterns = [
-      /,\s+(?=(and|but|or|yet|so|for|nor)\s+)/g, // Coordinating conjunctions
-      /,\s+(?=which|that|who|whom|whose|where|when|why|how)/g, // Relative clauses
-      /;\s+/g, // Semicolons
-      /\.\.\.\s+/g, // Ellipses
+      /(?<=,)\s+(?=(?:and|but|or|yet|so|for|nor)\s+)/g, // Coordinating conjunctions
+      /(?<=,)\s+(?=(?:which|that|who|whom|whose|where|when|why|how)\b)/g, // Relative clauses
+      /(?<=;)\s+/g, // Semicolons
+      /(?<=\.\.\.)\s+/g, // Ellipses
     ];
 
     for (const pattern of clausePatterns) {

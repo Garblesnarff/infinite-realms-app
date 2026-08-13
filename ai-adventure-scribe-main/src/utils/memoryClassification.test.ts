@@ -113,5 +113,15 @@ describe('Memory Classification', () => {
         expect(segments[0].type).toBe('general'); // Or whatever it classifies as
       }
     });
+
+    it('preserves tag-free mid-sentence conjunctions byte-for-byte', () => {
+      const narration =
+        'The lantern flickers over the old stone stairway as the party descends into the archive, but a cold draft rolls up from below and snuffs the nearest torch, yet the darkness reveals a second staircase hidden behind the shelves, and the bell in the tower begins to toll.';
+
+      const classifiedContents = processContent(narration).map((segment) => segment.content);
+
+      expect(classifiedContents.join(' ')).toBe(narration);
+      expect(classifiedContents.join(' ')).not.toMatch(/\b(and|but|yet)\s+\1\b/i);
+    });
   });
 });
