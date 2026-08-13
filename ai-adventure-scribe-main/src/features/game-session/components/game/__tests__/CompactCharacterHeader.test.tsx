@@ -8,7 +8,7 @@ import { CompactCharacterHeader } from '../CompactCharacterHeader';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { supabase } from '@/integrations/supabase/client';
-import { getParticipantStatus } from '@/services/combat/damage-integrator';
+import { userDataApi } from '@/services/user-data-api';
 
 // Mock dependencies
 vi.mock('@/contexts/CharacterContext', () => ({
@@ -22,8 +22,10 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-vi.mock('@/services/combat/damage-integrator', () => ({
-  getParticipantStatus: vi.fn(),
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCharacterCombatStatus: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -133,7 +135,7 @@ describe('CompactCharacterHeader', () => {
     expect(screen.getByLabelText(/Armor Class: 17/)).toBeInTheDocument();
   });
 
-  it('verifies combat HP fetching and display', async () => {
+  it('verifies server-routed combat HP fetching and display', async () => {
     const mockCharacter = {
       id: 'char-combat',
       name: 'Fighter',
@@ -146,21 +148,18 @@ describe('CompactCharacterHeader', () => {
       state: { character: mockCharacter },
     });
 
-    // Mock participant finding
-    (supabase.from as any).mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'part-456' }, error: null }),
-    });
-
-    // Mock damage-integrator status
-    (getParticipantStatus as any).mockResolvedValue({
+    vi.mocked(userDataApi.getCharacterCombatStatus).mockResolvedValue({
+      participant_id: 'part-456',
+      encounter_id: 'enc-123',
       current_hp: 8,
       max_hp: 12,
       temp_hp: 5,
       is_conscious: true,
+      death_saves_successes: 0,
+      death_saves_failures: 0,
+      damage_resistances: [],
+      damage_immunities: [],
+      damage_vulnerabilities: [],
     });
 
     render(<CompactCharacterHeader />);
@@ -170,7 +169,7 @@ describe('CompactCharacterHeader', () => {
     });
   });
 
-  it('verifies real-time HP updates via Supabase channel', async () => {
+  it('uses the server status seam instead of a browser Supabase channel', async () => {
     const mockCharacter = {
       id: 'char-realtime',
       name: 'Rogue',
@@ -183,26 +182,18 @@ describe('CompactCharacterHeader', () => {
       state: { character: mockCharacter },
     });
 
-    // Mock participant finding
-    (supabase.from as any).mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'part-789' }, error: null }),
-    });
-
-    (getParticipantStatus as any).mockResolvedValue({
+    vi.mocked(userDataApi.getCharacterCombatStatus).mockResolvedValue({
+      participant_id: 'part-789',
+      encounter_id: 'enc-123',
       current_hp: 9,
       max_hp: 9,
       temp_hp: 0,
       is_conscious: true,
-    });
-
-    let channelCallback: (payload: any) => void = () => {};
-    mockOn.mockImplementation((event, filter, callback) => {
-      channelCallback = callback;
-      return { on: mockOn, subscribe: mockSubscribe };
+      death_saves_successes: 0,
+      death_saves_failures: 0,
+      damage_resistances: [],
+      damage_immunities: [],
+      damage_vulnerabilities: [],
     });
 
     render(<CompactCharacterHeader />);
@@ -211,21 +202,7 @@ describe('CompactCharacterHeader', () => {
       expect(screen.getByLabelText(/Hit Points: 9/)).toBeInTheDocument();
     });
 
-    // Simulate real-time update
-    await waitFor(() => {
-      channelCallback({
-        eventType: 'UPDATE',
-        new: {
-          current_hp: 5,
-          max_hp: 9,
-          temp_hp: 0,
-          is_conscious: true,
-        },
-      });
-    });
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Hit Points: 5 out of 9/)).toBeInTheDocument();
-    });
+    expect(userDataApi.getCharacterCombatStatus).toHaveBeenCalledWith('char-realtime');
+    expect(supabase.channel).not.toHaveBeenCalled();
   });
 });

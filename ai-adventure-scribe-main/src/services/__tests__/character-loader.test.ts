@@ -7,6 +7,11 @@ import { characterSpellService } from '../characterSpellApi';
 
 import { supabase } from '@/integrations/supabase/client';
 
+const { getCharacter, getSession } = vi.hoisted(() => ({
+  getCharacter: vi.fn(),
+  getSession: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
@@ -16,6 +21,10 @@ vi.mock('@/integrations/supabase/client', () => ({
       single: vi.fn(),
     })),
   },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { getCharacter, getSession },
 }));
 
 vi.mock('../characterSpellApi', () => ({
@@ -40,6 +49,8 @@ vi.mock('@/utils/spell-id-mapping', () => ({
 describe('CharacterLoaderService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getCharacter.mockReset();
+    getSession.mockReset();
   });
 
   describe('loadCharacterWithSpells', () => {
@@ -129,12 +140,7 @@ describe('CharacterLoaderService', () => {
 
     it('should return null when character is not found', async () => {
       // Arrange
-      const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: mockSingle,
-      });
+      getCharacter.mockResolvedValue(null);
 
       // Act
       const result = await characterLoaderService.loadCharacterWithSpells('non-existent');
@@ -145,12 +151,7 @@ describe('CharacterLoaderService', () => {
 
     it('should return null when database query fails', async () => {
       // Arrange
-      const mockSingle = vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } });
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: mockSingle,
-      });
+      getCharacter.mockRejectedValue(new Error('DB Error'));
 
       // Act
       const result = await characterLoaderService.loadCharacterWithSpells('char-123');
@@ -243,11 +244,7 @@ describe('CharacterLoaderService', () => {
 
     it('should return undefined when session is not found', async () => {
       // Arrange
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
+      getSession.mockResolvedValue(null);
 
       // Act
       const result = await characterLoaderService.loadCharacterBySession('bad-session');
@@ -258,18 +255,8 @@ describe('CharacterLoaderService', () => {
 
     it('should return undefined when character associated with session is not found', async () => {
       // Arrange
-      const mockSession = { character_id: 'char-123', user_id: 'user-456' };
-      const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
+      getSession.mockResolvedValue({ character_id: 'char-123' });
+      getCharacter.mockResolvedValue(null);
 
       // Act
       const result = await characterLoaderService.loadCharacterBySession('session-789');
@@ -313,10 +300,7 @@ describe('CharacterLoaderService', () => {
 
     it('should return undefined when loadCharacterBySession throws an error', async () => {
       // Arrange
-      const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any).mockImplementation(() => {
-        throw new Error('Unexpected Error');
-      });
+      getSession.mockRejectedValue(new Error('Unexpected Error'));
 
       // Act
       const result = await characterLoaderService.loadCharacterBySession('any-session');
