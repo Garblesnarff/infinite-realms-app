@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- the single mutation gateway for every combat intent; splitting
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
-import { CombatAttackService } from './combat-attack-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
@@ -31,7 +30,19 @@ import { getSpellById, getSpellByName } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
+import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { AttackRollInput, SpellAttackInput } from '../../types/combat.js';
+
+/**
+ * Keep the attack resolver out of the intent gateway's eager module graph. Both the gateway and
+ * the resolver reach encounter state, and loading them together can expose the resolver's
+ * singleton while Bun is linking a full real-DB suite. The import is cached after the first
+ * attack, so this changes only module-evaluation order, not runtime behavior.
+ */
+async function createCombatAttackService(): Promise<CombatAttackServiceType> {
+  const { CombatAttackService } = await import('./combat-attack-service.js');
+  return new CombatAttackService();
+}
 
 export type CombatIntent =
   | { type: 'move'; actorId: string; x: number; y: number }
@@ -548,7 +559,8 @@ export async function proposeCombatAttack(
     weapon: grounding.weapon,
   });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
-  const proposal = await new CombatAttackService().proposeAttack(
+  const attackService = await createCombatAttackService();
+  const proposal = await attackService.proposeAttack(
     encounterId,
     {
       attackerId: resolved.actorId,
@@ -683,7 +695,8 @@ export async function executeCombatIntent(
       if (approach.movementOnly) {
         result = approach.result;
       } else {
-        result = await new CombatAttackService().resolveAttack(
+        const attackService = await createCombatAttackService();
+        result = await attackService.resolveAttack(
           encounterId,
           {
             attackerId: intent.actorId,
@@ -732,7 +745,8 @@ export async function executeCombatIntent(
         }
       }
     } else if (intent.type === 'spell') {
-      result = await new CombatAttackService().resolveSpellAttack(
+      const attackService = await createCombatAttackService();
+      result = await attackService.resolveSpellAttack(
         encounterId,
         {
           casterId: intent.actorId,
