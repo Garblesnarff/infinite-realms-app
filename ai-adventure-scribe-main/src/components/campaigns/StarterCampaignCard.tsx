@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 
 import type { StarterCampaign } from '@/hooks/use-starter-campaigns';
 
+import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
 import { Badge } from '@/components/ui/badge';
 import { Z_INDEX } from '@/constants/z-index';
 
@@ -68,10 +69,21 @@ function getGenreStyle(genre: string): string {
 }
 
 export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campaign }) => {
-  // Default placeholder if no cover image
-  const coverImage =
-    campaign.coverImageUrl ||
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=600&fit=crop';
+  const [coverImage, setCoverImage] = React.useState(
+    campaign.coverImageUrl || CAMPAIGN_ARTWORK_PLACEHOLDER,
+  );
+  const [artworkUnavailable, setArtworkUnavailable] = React.useState(!campaign.coverImageUrl);
+
+  React.useEffect(() => {
+    setCoverImage(campaign.coverImageUrl || CAMPAIGN_ARTWORK_PLACEHOLDER);
+    setArtworkUnavailable(!campaign.coverImageUrl);
+  }, [campaign.coverImageUrl]);
+
+  const handleImageError = (): void => {
+    if (coverImage === CAMPAIGN_ARTWORK_PLACEHOLDER) return;
+    setCoverImage(CAMPAIGN_ARTWORK_PLACEHOLDER);
+    setArtworkUnavailable(true);
+  };
 
   return (
     <Link
@@ -84,11 +96,26 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campai
         <div className="absolute inset-0">
           <img
             src={coverImage}
-            alt={`${campaign.title} cover art`}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            alt={
+              artworkUnavailable
+                ? `${campaign.title} artwork coming soon`
+                : `${campaign.title} cover art`
+            }
+            className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${artworkUnavailable ? 'opacity-80' : ''}`}
             loading="lazy"
+            onError={handleImageError}
           />
         </div>
+
+        {artworkUnavailable && (
+          <div
+            className="absolute top-16 right-4 rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-medium text-gray-200/90 backdrop-blur-sm"
+            role="status"
+            style={{ zIndex: Z_INDEX.DROPDOWN }}
+          >
+            Artwork coming soon
+          </div>
+        )}
 
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent"></div>

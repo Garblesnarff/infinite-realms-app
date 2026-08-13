@@ -14,6 +14,7 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { CampaignDetailHero } from '@/features/campaign/components/view/sections/CampaignDetailHero';
@@ -30,12 +31,22 @@ const CampaignDetailPage: React.FC = () => {
   const { toast } = useToast();
   const { campaign, isLoading, error } = useStarterCampaign(slug);
   const [isStarting, setIsStarting] = React.useState(false);
+  const campaignBannerImage = campaign?.bannerImageUrl || campaign?.coverImageUrl || null;
+  const [bannerImage, setBannerImage] = React.useState(
+    campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER,
+  );
+  const [artworkUnavailable, setArtworkUnavailable] = React.useState(!campaignBannerImage);
 
-  // Default banner placeholder
-  const bannerImage =
-    campaign?.bannerImageUrl ||
-    campaign?.coverImageUrl ||
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&h=600&fit=crop';
+  React.useEffect(() => {
+    setBannerImage(campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER);
+    setArtworkUnavailable(!campaignBannerImage);
+  }, [campaignBannerImage]);
+
+  const handleBannerImageError = (): void => {
+    if (bannerImage === CAMPAIGN_ARTWORK_PLACEHOLDER) return;
+    setBannerImage(CAMPAIGN_ARTWORK_PLACEHOLDER);
+    setArtworkUnavailable(true);
+  };
 
   /**
    * Start adventure flow:
@@ -125,6 +136,8 @@ const CampaignDetailPage: React.FC = () => {
         <CampaignDetailHero
           campaign={campaign}
           bannerImage={bannerImage}
+          artworkUnavailable={artworkUnavailable}
+          onBannerImageError={handleBannerImageError}
           onStartAdventure={handleStartAdventure}
           isStarting={isStarting}
         />

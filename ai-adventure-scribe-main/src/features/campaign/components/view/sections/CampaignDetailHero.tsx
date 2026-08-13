@@ -60,6 +60,8 @@ function getGenreStyle(genre: string): string {
 interface CampaignDetailHeroProps {
   campaign: StarterCampaign;
   bannerImage: string;
+  artworkUnavailable: boolean;
+  onBannerImageError: () => void;
   onStartAdventure: () => Promise<void>;
   isStarting: boolean;
 }
@@ -70,6 +72,8 @@ interface CampaignDetailHeroProps {
 export const CampaignDetailHero: React.FC<CampaignDetailHeroProps> = ({
   campaign,
   bannerImage,
+  artworkUnavailable,
+  onBannerImageError,
   onStartAdventure,
   isStarting,
 }) => {
@@ -78,11 +82,26 @@ export const CampaignDetailHero: React.FC<CampaignDetailHeroProps> = ({
       <div className="absolute inset-0">
         <img
           src={bannerImage}
-          alt={`${campaign.title} banner`}
-          className="w-full h-full object-cover"
+          alt={
+            artworkUnavailable
+              ? `${campaign.title} artwork coming soon`
+              : `${campaign.title} banner`
+          }
+          className={`w-full h-full object-cover ${artworkUnavailable ? 'opacity-80' : ''}`}
+          onError={onBannerImageError}
         />
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/60 to-transparent" />
+
+      {artworkUnavailable && (
+        <div
+          className="absolute right-6 top-6 rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-medium text-gray-200/90 backdrop-blur-sm"
+          role="status"
+          style={{ zIndex: Z_INDEX.CARD_HOVER }}
+        >
+          Artwork coming soon
+        </div>
+      )}
 
       {/* Back Button */}
       <div className="absolute top-6 left-6" style={{ zIndex: Z_INDEX.CARD_HOVER }}>
@@ -108,16 +127,11 @@ export const CampaignDetailHero: React.FC<CampaignDetailHeroProps> = ({
           {/* Badges */}
           <div className="flex flex-wrap gap-2 mb-4">
             {campaign.genre.map((g) => (
-              <Badge
-                key={g}
-                className={`${getGenreStyle(g)} border backdrop-blur-sm capitalize`}
-              >
+              <Badge key={g} className={`${getGenreStyle(g)} border backdrop-blur-sm capitalize`}>
                 {g}
               </Badge>
             ))}
-            <Badge
-              className={`${getDifficultyStyle(campaign.difficulty)} border backdrop-blur-sm`}
-            >
+            <Badge className={`${getDifficultyStyle(campaign.difficulty)} border backdrop-blur-sm`}>
               {formatDifficulty(campaign.difficulty)}
             </Badge>
           </div>
