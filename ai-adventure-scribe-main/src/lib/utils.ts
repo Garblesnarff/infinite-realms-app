@@ -99,5 +99,8 @@ export function stripAssetTags(text: string | null | undefined): string {
   if (!text) {
     return '';
   }
-  return text.replace(/\[ASSET:[^\]]+\]/g, '').trim();
+  return text
+    .replace(/\[ASSET:[^\]]+\]/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }

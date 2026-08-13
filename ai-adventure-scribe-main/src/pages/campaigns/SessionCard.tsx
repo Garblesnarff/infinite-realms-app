@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, stripAssetTags } from '@/lib/utils';
 
 export type SessionStatusType = 'active' | 'completed' | 'expired' | 'ending' | null;
 
@@ -87,6 +87,11 @@ const SessionCard: React.FC<SessionCardProps> = ({
     .slice(0, 2)
     .toUpperCase();
 
+  const recapText =
+    stripAssetTags(session.summary?.trim()) ||
+    stripAssetTags(session.current_scene_description?.trim()) ||
+    'No summary recorded yet.';
+
   const continueDisabled = !session.character?.id || continuing;
 
   // Determine button label and variant based on session state
@@ -120,11 +125,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
           </div>
 
           <div className="space-y-2">
-            <p className="text-base font-medium text-foreground">
-              {session.summary?.trim() ||
-                session.current_scene_description?.trim() ||
-                'No summary recorded yet.'}
-            </p>
+            <p className="text-base font-medium text-foreground">{recapText}</p>
             {startedAt && (
               <p className="text-xs text-muted-foreground">
                 {format(new Date(startedAt), 'PPP p')}

@@ -226,6 +226,154 @@ export function formatOptionForButton(option: ActionOption): string {
   return `${prefix} ${option.text}`;
 }
 
+const OBJECT_PREPOSITIONS = new Set([
+  'about',
+  'against',
+  'around',
+  'at',
+  'by',
+  'for',
+  'from',
+  'in',
+  'inside',
+  'into',
+  'near',
+  'of',
+  'off',
+  'on',
+  'onto',
+  'over',
+  'through',
+  'to',
+  'toward',
+  'under',
+  'upon',
+  'with',
+  'without',
+]);
+
+const OBJECT_VERBS = new Set([
+  'allow',
+  'allows',
+  'allowed',
+  'ask',
+  'asks',
+  'asked',
+  'catch',
+  'catches',
+  'caught',
+  'defend',
+  'defends',
+  'defended',
+  'find',
+  'finds',
+  'found',
+  'follow',
+  'follows',
+  'followed',
+  'force',
+  'forces',
+  'forced',
+  'give',
+  'gives',
+  'gave',
+  'guide',
+  'guides',
+  'guided',
+  'hear',
+  'hears',
+  'heard',
+  'help',
+  'helps',
+  'helped',
+  'hit',
+  'hits',
+  'keep',
+  'keeps',
+  'kept',
+  'knock',
+  'knocks',
+  'knocked',
+  'leave',
+  'leaves',
+  'left',
+  'let',
+  'lets',
+  'make',
+  'makes',
+  'made',
+  'meet',
+  'meets',
+  'met',
+  'notice',
+  'notices',
+  'noticed',
+  'prevent',
+  'prevents',
+  'prevented',
+  'protect',
+  'protects',
+  'protected',
+  'push',
+  'pushes',
+  'pushed',
+  'save',
+  'saves',
+  'saved',
+  'see',
+  'sees',
+  'saw',
+  'send',
+  'sends',
+  'sent',
+  'show',
+  'shows',
+  'showed',
+  'stop',
+  'stops',
+  'stopped',
+  'take',
+  'takes',
+  'took',
+  'tell',
+  'tells',
+  'told',
+  'throw',
+  'throws',
+  'threw',
+  'trust',
+  'trusts',
+  'trusted',
+  'watch',
+  'watches',
+  'watched',
+  'welcome',
+  'welcomes',
+  'welcomed',
+]);
+
+function isObjectPosition(text: string, offset: number): boolean {
+  const precedingWord = text
+    .slice(0, offset)
+    .match(/[A-Za-z]+(?=\s*$)/)?.[0]
+    .toLowerCase();
+
+  return Boolean(
+    precedingWord &&
+    (OBJECT_PREPOSITIONS.has(precedingWord) ||
+      precedingWord.endsWith('ing') ||
+      OBJECT_VERBS.has(precedingWord)),
+  );
+}
+
+function replaceYouPronoun(match: string, offset: number, source: string): string {
+  if (isObjectPosition(source, offset)) {
+    return match === 'You' ? 'Me' : 'me';
+  }
+
+  return 'I';
+}
+
 /**
  * Converts text from second person to first person perspective
  */
@@ -244,9 +392,7 @@ function convertToFirstPerson(text: string): string {
   converted = converted.replace(/\byou\s+aren't\b/gi, "I'm not");
 
   // Handle "you" -> "I" with case preservation and context awareness
-  converted = converted.replace(/\byou\b(?!\s+are|\s+were|\s+aren't|'\w)/gi, (match) => {
-    return match === 'You' ? 'I' : match === 'you' ? 'I' : match;
-  });
+  converted = converted.replace(/\byou\b(?!\s+are|\s+were|\s+aren't|'\w)/gi, replaceYouPronoun);
 
   // Handle "you are" -> "I am"
   converted = converted.replace(/\byou\s+are\b/gi, (match) => {
@@ -291,9 +437,7 @@ function convertToFirstPerson(text: string): string {
 
   // Handle remaining "you" patterns that weren't caught above
   converted = converted.replace(/\bdefend yourself\b/gi, 'defend myself');
-  converted = converted.replace(/\byou\b/gi, (match) => {
-    return match === 'You' ? 'I' : 'I';
-  });
+  converted = converted.replace(/\byou\b/gi, replaceYouPronoun);
 
   return converted;
 }

@@ -14,8 +14,8 @@ const DEFAULT_OPTIONS: SegmentationOptions = {
 };
 
 // Import the enhanced sentence segmenter
+import { stripAssetTags } from '@/lib/utils';
 import { cleanupPlainNarrativeText } from '@/utils/narrative-text-cleanup';
-import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 import { SentenceSegmenter } from '@/utils/sentence-segmenter';
 
 /**
@@ -168,17 +168,10 @@ export const stripSeparatorLines = (content: string): string =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-/**
- * Strip [ASSET:type:key] tags from content.
- * These are game-engine directives, not narrative facts — they must not
- * pollute extracted memories.
- */
-export const stripAssetTags = (content: string): string =>
-  cleanupPlainNarrativeText(
-    normalizeAssetTagsInContent(content)
-      .replace(/\[ASSET:[^\]]+\]/gi, '')
-      .replace(/[ \t]{2,}/g, ' '),
-  );
+// Keep the memory pipeline and player-facing displays on the same one-pass
+// de-tagger. Asset tags are directives, not prose, and must not add derived
+// names or otherwise mutate the surrounding narration.
+export { stripAssetTags };
 
 const finalizePlainText = (content: string): string => cleanupPlainNarrativeText(content);
 

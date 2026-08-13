@@ -196,7 +196,7 @@ describe('stripAssetTags', () => {
   it('strips a well-formed asset tag', () => {
     const result = stripAssetTags('You see [ASSET:npc:lord-diabolo] standing in the doorway.');
     expect(result).not.toContain('[ASSET:');
-    expect(result).toContain('You see Lord Diabolo standing in the doorway.');
+    expect(result).toBe('You see standing in the doorway.');
   });
 
   it('strips multiple asset tags in one string', () => {
@@ -215,6 +215,18 @@ describe('stripAssetTags', () => {
   it('passes through content with no asset tags unchanged', () => {
     const plain = 'The dragon swoops low.';
     expect(stripAssetTags(plain)).toBe(plain);
+  });
+
+  it('keeps tagged narration identical to the same narration after de-tagging', () => {
+    const taggedNarration =
+      'The party crosses the floating [ASSET:location:the-prep-islands] Prep Islands and [ASSET:npc:balthazar] your footing slips as the furnace roars.';
+    const tagStrippedNarration = stripAssetTags(taggedNarration);
+
+    expect(sanitizeForMemoryExtraction(taggedNarration)).toBe(
+      sanitizeForMemoryExtraction(tagStrippedNarration),
+    );
+    expect(splitIntoSegments(taggedNarration)).toEqual(splitIntoSegments(tagStrippedNarration));
+    expect(sanitizeForMemoryExtraction(taggedNarration)).not.toContain('Balthazar Balthazar');
   });
 });
 

@@ -208,6 +208,20 @@ describe('parseMessageOptions', () => {
       );
     });
 
+    it('should use objective case for object-position "you"', () => {
+      const option = {
+        id: 'opt-objective-case',
+        number: 5,
+        text: 'You raise your shield to prevent him from knocking you off the pedestal; the victory is yours.',
+        fullText:
+          '**Raise your shield** to prevent him from knocking you off the pedestal; the victory is yours.',
+      };
+
+      expect(createPlayerMessageFromOption(option)).toBe(
+        'I raise my shield to prevent him from knocking me off the pedestal; the victory is mine.',
+      );
+    });
+
     // Regression: the generic "you" -> "I" rule used to fire on "you were",
     // producing "I were". Caught in a live playtest of The Eternal Feast, where
     // an option read "demand to know why you were chosen".
@@ -232,9 +246,7 @@ describe('parseMessageOptions', () => {
         fullText: "**You weren't invited**, and you aren't welcome.",
       };
 
-      expect(createPlayerMessageFromOption(option)).toBe(
-        "I wasn't invited, and I'm not welcome.",
-      );
+      expect(createPlayerMessageFromOption(option)).toBe("I wasn't invited, and I'm not welcome.");
     });
 
     it('should convert the possessive pronoun "yours" to "mine"', () => {
@@ -245,9 +257,7 @@ describe('parseMessageOptions', () => {
         fullText: '**Claim the blade**, insisting it is yours.',
       };
 
-      expect(createPlayerMessageFromOption(option)).toBe(
-        'Claim the blade, insisting it is mine.',
-      );
+      expect(createPlayerMessageFromOption(option)).toBe('Claim the blade, insisting it is mine.');
     });
   });
 });
