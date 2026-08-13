@@ -1,17 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 
-import { applyDmHandoutActions } from '../handout-action-service.js';
+import { applyDmHandoutActions, buildHandoutPossessionFact } from '../handout-action-service.js';
 
 const persisted = [] as Array<Record<string, unknown>>;
 const broadcasts = [] as Array<Record<string, unknown>>;
+const recordedFacts = [] as Array<Record<string, unknown>>;
 
 function dependencies() {
   persisted.length = 0;
   broadcasts.length = 0;
+  recordedFacts.length = 0;
   return {
     sessionId: 'session-1',
     sessionNumber: 3,
     assetCampaignId: 'eternal-feast',
+    recipient: 'The Reveler',
     findAuthored: async (key: string) =>
       key === 'balthazars-recipe'
         ? { key, title: "Balthazar's Recipe", giver: 'Balthazar', body: 'Add rosemary at dawn.' }
@@ -27,6 +30,7 @@ function dependencies() {
         id: string;
         sessionId: string;
         sessionNumber: number;
+        recipient: string;
         mode: 'authored' | 'improvised';
         key: string | null;
         title: string;
@@ -36,11 +40,49 @@ function dependencies() {
         createdAt: string;
       };
     },
+    recordFact: async (entry: Record<string, unknown>) => {
+      recordedFacts.push(entry);
+    },
     broadcast: (entry: Record<string, unknown>) => broadcasts.push(entry),
   };
 }
 
 describe('DM handout actions', () => {
+  test('builds an engine possession fact for the receiving player character', () => {
+    expect(
+      buildHandoutPossessionFact(
+        {
+          id: 'entry-1',
+          sessionId: 'session-1',
+          sessionNumber: 2,
+          recipient: 'The Reveler',
+          mode: 'improvised',
+          key: null,
+          title: 'Contained Temporal Soufflé',
+          body: 'A souffle held in a pocket of time.',
+          giver: 'The Reveler',
+          assetPath: null,
+          createdAt: '2026-08-12T00:00:00.000Z',
+        },
+        'The Reveler',
+        'session-1',
+        'campaign-1',
+      ),
+    ).toEqual({
+      sessionId: 'session-1',
+      campaignId: 'campaign-1',
+      subjectType: 'party',
+      subjectName: 'The Reveler',
+      predicate: 'possesses',
+      value: {
+        name: 'Contained Temporal Soufflé',
+        description: 'A souffle held in a pocket of time.',
+      },
+      knownBy: ['dm', 'player'],
+      source: 'engine',
+    });
+  });
+
   test('retries one unknown authored key and persists only the corrected canon handout', async () => {
     let retries = 0;
     const result = await applyDmHandoutActions(
@@ -79,6 +121,9 @@ describe('DM handout actions', () => {
       }),
     ]);
     expect(broadcasts).toHaveLength(1);
+    expect(recordedFacts).toEqual([
+      expect.objectContaining({ recipient: 'The Reveler', title: 'Recipe' }),
+    ]);
   });
 
   test('persists and broadcasts an improvised handout without an asset path', async () => {
@@ -106,5 +151,8 @@ describe('DM handout actions', () => {
       }),
     ]);
     expect(broadcasts).toHaveLength(1);
+    expect(recordedFacts).toEqual([
+      expect.objectContaining({ recipient: 'The Reveler', title: 'A Torn Note' }),
+    ]);
   });
 });

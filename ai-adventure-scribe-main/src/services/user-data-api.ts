@@ -98,6 +98,7 @@ export type JournalHandoutEntry = {
   id: string;
   sessionId: string;
   sessionNumber: number | null;
+  recipient: string | null;
   mode: 'authored' | 'improvised';
   key: string | null;
   title: string;

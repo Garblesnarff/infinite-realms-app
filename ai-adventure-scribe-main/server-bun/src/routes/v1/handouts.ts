@@ -2,48 +2,20 @@ import { and, desc, eq, sql as drizzleSql } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
+import { authoredFromChunk, entryFromRow } from './handout-route-helpers.js';
 import { db } from '../../../../db/client.js';
 import {
   campaignChunks,
   campaignJournalEntries,
+  characters,
   gameSessions,
 } from '../../../../db/schema/index.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { broadcastToRoom } from '../../services/collaboration/room-manager.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
-import {
-  applyDmHandoutActions,
-  type AuthoredHandout,
-  type JournalHandoutEntry,
-} from '../../services/dm/handout-action-service.js';
+import { applyDmHandoutActions } from '../../services/dm/handout-action-service.js';
+import { recordHandoutPossessionFact } from '../../services/dm/handout-ledger-service.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
-
-const entryFromRow = (
-  row: typeof campaignJournalEntries.$inferSelect,
-  sessionNumber: number | null,
-): JournalHandoutEntry => ({
-  id: row.id,
-  sessionId: row.sessionId,
-  sessionNumber,
-  mode: row.handoutMode as 'authored' | 'improvised',
-  key: row.handoutKey,
-  title: row.title,
-  body: row.body,
-  giver: row.giver || 'Unknown',
-  assetPath: row.assetPath,
-  createdAt: row.createdAt.toISOString(),
-});
-
-const authoredFromChunk = (metadata: unknown): AuthoredHandout | null => {
-  if (!metadata || typeof metadata !== 'object') return null;
-  const record = metadata as Record<string, unknown>;
-  return typeof record.key === 'string' &&
-    typeof record.title === 'string' &&
-    typeof record.giver === 'string' &&
-    typeof record.body === 'string'
-    ? { key: record.key, title: record.title, giver: record.giver, body: record.body }
-    : null;
-};
 
 const handoutResponseShell = (actions: unknown[]) => ({
   text: '',
@@ -77,9 +49,14 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
     const session = access!.session!;
     if (!session.campaignId) return { entries: [] };
     const rows = await db
-      .select({ entry: campaignJournalEntries, sessionNumber: gameSessions.sessionNumber })
+      .select({
+        entry: campaignJournalEntries,
+        sessionNumber: gameSessions.sessionNumber,
+        recipient: characters.name,
+      })
       .from(campaignJournalEntries)
       .innerJoin(gameSessions, eq(campaignJournalEntries.sessionId, gameSessions.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
       .where(
         and(
           eq(campaignJournalEntries.campaignId, session.campaignId),
@@ -87,16 +64,28 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
         ),
       )
       .orderBy(desc(campaignJournalEntries.createdAt));
-    return { entries: rows.map(({ entry, sessionNumber }) => entryFromRow(entry, sessionNumber)) };
+    return {
+      entries: rows.map(({ entry, sessionNumber, recipient }) =>
+        entryFromRow(entry, sessionNumber, recipient),
+      ),
+    };
   })
   .post(
     '/:id/handout-actions',
-    async ({ params, body, access, set }) => {
+    async ({ params, body, access, set, user }) => {
       const session = access!.session!;
       if (!session.campaignId) {
         set.status = 422;
         return { error: 'Handouts require a campaign-backed session' };
       }
+      const [recipient] = session.characterId
+        ? await db
+            .select({ name: characters.name })
+            .from(characters)
+            .where(eq(characters.id, session.characterId))
+            .limit(1)
+        : [];
+      const recipientName = recipient?.name || null;
       const parsed = parseDmResponse(handoutResponseShell(body.actions));
       if (!parsed.success) {
         set.status = 422;
@@ -119,6 +108,7 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
           sessionId: params.id,
           sessionNumber: session.sessionNumber,
           assetCampaignId: canonCampaignId,
+          recipient: recipientName,
           findAuthored: async (key) => {
             const [row] = await db
               .select({ metadata: campaignChunks.metadata })
@@ -153,8 +143,16 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
               })
               .returning();
             if (!created) throw new Error('Failed to persist handout delivery');
-            return entryFromRow(created, session.sessionNumber);
+            return entryFromRow(created, session.sessionNumber, recipientName);
           },
+          recordFact: (entry) =>
+            recordHandoutPossessionFact({
+              entry,
+              recipientName,
+              sessionId: params.id,
+              campaignId: session.campaignId,
+              userId: user!.userId,
+            }),
           broadcast: (entry) =>
             broadcastToRoom(params.id, null as never, {
               type: 'handout_delivered',

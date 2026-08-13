@@ -1,4 +1,5 @@
 import type { DMHandoutAction } from './dm-response-schema.js';
+import type { AssertFactInput } from '../narrative/narrative-ledger-core.js';
 
 export type AuthoredHandout = {
   key: string;
@@ -11,6 +12,7 @@ export type JournalHandoutEntry = {
   id: string;
   sessionId: string;
   sessionNumber: number | null;
+  recipient: string | null;
   mode: 'authored' | 'improvised';
   key: string | null;
   title: string;
@@ -30,11 +32,39 @@ export type HandoutActionDependencies = {
   findAuthored: (key: string) => Promise<AuthoredHandout | null>;
   listAuthoredKeys: () => Promise<string[]>;
   persist: (entry: Omit<JournalHandoutEntry, 'id' | 'createdAt'>) => Promise<JournalHandoutEntry>;
+  recordFact: (entry: JournalHandoutEntry) => Promise<void>;
   broadcast: (entry: JournalHandoutEntry) => void;
   assetCampaignId: string;
   sessionId: string;
   sessionNumber: number | null;
+  recipient: string | null;
 };
+
+/**
+ * Build the engine-owned possession assertion for a delivered handout. The pre-Phase-1 ledger
+ * has no character subject type yet, so the single-player party subject is keyed by the linked
+ * character's canonical name until the entity re-key lands.
+ */
+export function buildHandoutPossessionFact(
+  entry: JournalHandoutEntry,
+  recipientName: string,
+  sessionId: string,
+  campaignId?: string,
+): AssertFactInput {
+  return {
+    sessionId,
+    campaignId,
+    subjectType: 'party',
+    subjectName: recipientName,
+    predicate: 'possesses',
+    value: {
+      name: entry.title,
+      description: entry.body ?? '',
+    },
+    knownBy: ['dm', 'player'],
+    source: 'engine',
+  };
+}
 
 export type CorrectiveHandoutReprompt = (
   refusal: HandoutRefusal,
@@ -67,6 +97,7 @@ export async function applyDmHandoutActions(
       return dependencies.persist({
         sessionId: dependencies.sessionId,
         sessionNumber: dependencies.sessionNumber,
+        recipient: dependencies.recipient,
         mode: 'improvised',
         key: null,
         title: action.title,
@@ -90,6 +121,7 @@ export async function applyDmHandoutActions(
     return dependencies.persist({
       sessionId: dependencies.sessionId,
       sessionNumber: dependencies.sessionNumber,
+      recipient: dependencies.recipient,
       mode: 'authored',
       key: authored.key,
       title: action.title || authored.title,
@@ -110,6 +142,7 @@ export async function applyDmHandoutActions(
       degraded.push(result);
       continue;
     }
+    await dependencies.recordFact(result);
     dependencies.broadcast(result);
     entries.push(result);
   }

@@ -18,6 +18,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
   const [open, setOpen] = React.useState(false);
   const imageUrl = imageUrlFor(entry);
   const authored = entry.mode === 'authored';
+  const recipient = entry.recipient || entry.giver;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -45,7 +46,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
         <div className={cn('p-4', authored ? 'text-white' : 'text-stone-900')}>
           <h4 className="font-display font-semibold">{entry.title}</h4>
           <p className={cn('mt-1 text-xs', authored ? 'text-amber-100/70' : 'text-stone-600')}>
-            Given by {entry.giver}
+            Given to {recipient}
           </p>
           {!authored && entry.body && (
             <p className="mt-3 line-clamp-3 text-sm leading-6">{entry.body}</p>
@@ -64,7 +65,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
         >
           <DialogPrimitive.Title className="sr-only">{entry.title}</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">
-            Handout given by {entry.giver}
+            Handout given to {recipient}
           </DialogPrimitive.Description>
           <DialogPrimitive.Close
             className="absolute right-3 top-3 rounded-full bg-black/50 p-2 text-white/80 hover:bg-black/70 hover:text-white"
@@ -82,14 +83,14 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
                 <span className="text-xs font-semibold uppercase tracking-[0.18em]">A handout</span>
               </div>
               <h3 className="font-display text-2xl font-bold">{entry.title}</h3>
-              <p className="mt-1 text-sm text-stone-600">Given by {entry.giver}</p>
+              <p className="mt-1 text-sm text-stone-600">Given to {recipient}</p>
               <p className="mt-6 whitespace-pre-wrap font-serif text-lg leading-8">{entry.body}</p>
             </article>
           )}
           {authored && (
             <div className="p-5 text-white">
               <h3 className="font-display text-xl font-semibold">{entry.title}</h3>
-              <p className="mt-1 text-sm text-amber-100/70">Given by {entry.giver}</p>
+              <p className="mt-1 text-sm text-amber-100/70">Given to {recipient}</p>
             </div>
           )}
         </DialogPrimitive.Content>
