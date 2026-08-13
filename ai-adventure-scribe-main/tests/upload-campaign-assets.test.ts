@@ -59,6 +59,27 @@ describe('upload-campaign-assets', () => {
     });
   });
 
+  it('accepts the generated manifest headers and filters excluded campaign rows before type validation', () => {
+    const manifest = parseManifestCsv(
+      [
+        'campaign,type,slug,source,format_actual',
+        'academy-of-arcane-gastronomy,icon,mobile-icon,academy-of-arcane-gastronomy/mobile-icon.png,jpeg',
+        'the-eternal-feast,npc,chef,the-eternal-feast/characters/chef.png,jpeg',
+      ].join('\n'),
+      'the-eternal-feast',
+    );
+
+    expect(manifest).toEqual([
+      {
+        filePath: 'the-eternal-feast/characters/chef.png',
+        campaignSlug: 'the-eternal-feast',
+        type: 'npc',
+        entitySlug: 'chef',
+        realImageFormat: 'jpg',
+      },
+    ]);
+  });
+
   it('maps every manifest type to the requested database column', () => {
     expect(getDatabaseTarget('npc')).toEqual({
       table: 'campaign_chunks',

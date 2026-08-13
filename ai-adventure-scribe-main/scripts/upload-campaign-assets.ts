@@ -268,7 +268,7 @@ export function normalizeImageExtension(value: string): string {
 }
 
 /** Parse the reconciliation manifest into validated, canonical rows. */
-export function parseManifestCsv(text: string): ManifestAsset[] {
+export function parseManifestCsv(text: string, campaignFilter?: string): ManifestAsset[] {
   const rows = parseCsv(text);
   if (rows.length < 2)
     throw new Error('Manifest CSV must contain a header and at least one asset row');
@@ -276,7 +276,7 @@ export function parseManifestCsv(text: string): ManifestAsset[] {
   const headers = rows[0];
   const filePathIndex = getRequiredColumnIndex(
     headers,
-    ['file path', 'file_path', 'path'],
+    ['file path', 'file_path', 'path', 'source'],
     'file path',
   );
   const campaignSlugIndex = getRequiredColumnIndex(
@@ -287,7 +287,7 @@ export function parseManifestCsv(text: string): ManifestAsset[] {
   const typeIndex = getRequiredColumnIndex(headers, ['type', 'asset type', 'asset_type'], 'type');
   const entitySlugIndex = getRequiredColumnIndex(
     headers,
-    ['entity slug', 'entity_slug', 'entity'],
+    ['entity slug', 'entity_slug', 'entity', 'slug'],
     'entity slug',
   );
   const realFormatIndex = getRequiredColumnIndex(
@@ -300,12 +300,23 @@ export function parseManifestCsv(text: string): ManifestAsset[] {
       'real ext',
       'real_ext',
       'extension',
+      'format actual',
+      'format_actual',
     ],
     'real image format',
   );
 
-  return rows.slice(1).map((row, rowIndex) => {
-    const manifestLine = rowIndex + 2;
+  const normalizedCampaignFilter = campaignFilter?.trim().toLowerCase();
+  const selectedRows = rows.slice(1).flatMap((row, rowIndex) => {
+    if (!normalizedCampaignFilter) return [{ row, manifestLine: rowIndex + 2 }];
+    const rowCampaign = row[campaignSlugIndex]
+      ?.trim()
+      .toLowerCase()
+      .replace(/[\s_]+/g, '-');
+    return rowCampaign === normalizedCampaignFilter ? [{ row, manifestLine: rowIndex + 2 }] : [];
+  });
+
+  return selectedRows.map(({ row, manifestLine }) => {
     const filePath = row[filePathIndex]?.trim();
     const campaignSlug = row[campaignSlugIndex]?.trim();
     const type = row[typeIndex]?.trim();
@@ -592,9 +603,7 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
   const sourceDir = resolve(options.sourceDir);
   const manifestPath = join(sourceDir, MANIFEST_PATH);
   const manifestText = await readFile(manifestPath, 'utf8');
-  const manifest = parseManifestCsv(manifestText).filter(
-    (asset) => !options.campaignFilter || asset.campaignSlug === options.campaignFilter,
-  );
+  const manifest = parseManifestCsv(manifestText, options.campaignFilter);
 
   if (manifest.length === 0) {
     throw new Error(
