@@ -24,7 +24,14 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaigns,
   characters,
@@ -36,8 +43,12 @@ import {
   inventoryItems,
 } from '../../../../db/schema/index';
 
-const { executeCombatIntent } = await import('../combat/combat-intent-service.js');
-const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
+const { executeCombatIntent } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
+const { CombatEncounterService } = await importWithRealDb(
+  () => import('../combat/combat-encounter-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(

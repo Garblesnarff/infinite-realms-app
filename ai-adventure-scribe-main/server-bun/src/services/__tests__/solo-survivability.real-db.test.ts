@@ -27,7 +27,14 @@
 import { afterAll, beforeEach, expect, mock, test } from 'bun:test';
 import { eq, inArray } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaignChunks,
   campaigns,
@@ -74,12 +81,24 @@ mock.module('../../lib/logger.js', () => ({
   errorLogSerializers: {},
 }));
 
-const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
-const { executeCombatIntent } = await import('../combat/combat-intent-service.js');
-const { clearCampaignMonsterCache } = await import('../combat/campaign-monster-resolution.js');
-const { saveTacticalMap, loadActiveTacticalMap } = await import('../combat/tactical-map-store.js');
-const { consumeDmTacticalFacts } = await import('../combat/tactical-action-service.js');
-const { MAX_SINGLE_HIT_FRACTION_OF_MAX_HP } = await import('../combat/hp-mechanics.js');
+const { CombatEncounterService } = await importWithRealDb(
+  () => import('../combat/combat-encounter-service.js'),
+);
+const { executeCombatIntent } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
+const { clearCampaignMonsterCache } = await importWithRealDb(
+  () => import('../combat/campaign-monster-resolution.js'),
+);
+const { saveTacticalMap, loadActiveTacticalMap } = await importWithRealDb(
+  () => import('../combat/tactical-map-store.js'),
+);
+const { consumeDmTacticalFacts } = await importWithRealDb(
+  () => import('../combat/tactical-action-service.js'),
+);
+const { MAX_SINGLE_HIT_FRACTION_OF_MAX_HP } = await importWithRealDb(
+  () => import('../combat/hp-mechanics.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -212,14 +231,12 @@ describeWithDb('solo combat is survivable and its endings are narratable', () =>
         speed: 30,
       });
     }
-    await db
-      .insert(inventoryItems)
-      .values({
-        characterId: partyIds[0],
-        name: 'Longsword',
-        itemType: 'weapon',
-        isEquipped: true,
-      });
+    await db.insert(inventoryItems).values({
+      characterId: partyIds[0],
+      name: 'Longsword',
+      itemType: 'weapon',
+      isEquipped: true,
+    });
 
     const [session] = await db
       .insert(gameSessions)

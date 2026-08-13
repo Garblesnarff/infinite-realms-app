@@ -29,7 +29,14 @@
 import { afterAll, beforeEach, expect, test } from 'bun:test';
 import { eq, inArray } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaigns,
   characterStats,
@@ -43,10 +50,13 @@ import {
 
 import type { CombatEndReason } from '../../types/combat.js';
 
-const { concludeEncounter, describeCombatEnd } = await import('../combat/combat-ending.js');
-const { consumeDmTacticalFacts, recordDmTacticalFact } =
-  await import('../combat/tactical-action-service.js');
-const { saveTacticalMap } = await import('../combat/tactical-map-store.js');
+const { concludeEncounter, describeCombatEnd } = await importWithRealDb(
+  () => import('../combat/combat-ending.js'),
+);
+const { consumeDmTacticalFacts, recordDmTacticalFact } = await importWithRealDb(
+  () => import('../combat/tactical-action-service.js'),
+);
+const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
 
 if (!hasRealDb) {
   console.warn(

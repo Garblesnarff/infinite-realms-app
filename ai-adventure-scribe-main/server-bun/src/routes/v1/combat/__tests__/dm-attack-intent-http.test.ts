@@ -240,6 +240,9 @@ mock.module('../../../../services/combat/combat-events.js', () => ({
 mock.module('../../../../../../src/services/auth/TokenService', () => ({
   getAuthHeaders: () => ({ authorization: 'Bearer valid-token' }),
   configureHeadlessSession: () => {},
+  loadCachedSession: () => null,
+  persistSession: () => {},
+  refreshAccessTokenOnce: async () => null,
 }));
 
 const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');

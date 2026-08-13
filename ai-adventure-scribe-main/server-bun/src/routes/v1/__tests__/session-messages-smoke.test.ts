@@ -19,6 +19,17 @@ mock.module('../../../lib/auth.js', () => ({
   },
 }));
 
+mock.module('../../../lib/env.js', () => ({
+  env: {
+    DATABASE_URL: 'postgres://test.invalid/unused',
+    PORT: '8892',
+    CORS_ORIGIN: 'http://localhost:8891',
+    WORKOS_API_KEY: 'test-workos-key',
+    WORKOS_CLIENT_ID: 'test-workos-client',
+    NODE_ENV: 'test',
+  },
+}));
+
 // Mock logger module
 mock.module('../../../lib/logger.js', () => ({ logger: noopLogger }));
 
@@ -27,7 +38,10 @@ const helpersPath = import.meta.resolve('../combat/helpers.js');
 mock.module(helpersPath, () => ({
   verifySessionOwnership: async (sessionId: string, userId: string) => {
     if (sessionId === 'valid-session-id' && userId === 'user-1') {
-      return { success: true, session: { id: 'valid-session-id', campaignId: 'camp-1', characterId: 'char-1' } };
+      return {
+        success: true,
+        session: { id: 'valid-session-id', campaignId: 'camp-1', characterId: 'char-1' },
+      };
     }
     return { success: false, error: { status: 404, message: 'Session not found' } };
   },
@@ -76,7 +90,7 @@ const app = new Elysia().use(sessionMessageRoutes);
 describe('v1 session message routes API boundaries', () => {
   it('denies unauthenticated requests on fetch messages', async () => {
     const response = await app.handle(
-      new Request('http://localhost/v1/sessions/valid-session-id/messages')
+      new Request('http://localhost/v1/sessions/valid-session-id/messages'),
     );
 
     expect(response.status).toBe(401);
@@ -86,9 +100,9 @@ describe('v1 session message routes API boundaries', () => {
     const response = await app.handle(
       new Request('http://localhost/v1/sessions/invalid-session-id/messages', {
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
         },
-      })
+      }),
     );
 
     expect(response.status).toBe(404);
@@ -98,9 +112,9 @@ describe('v1 session message routes API boundaries', () => {
     const response = await app.handle(
       new Request('http://localhost/v1/sessions/valid-session-id/messages', {
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
         },
-      })
+      }),
     );
 
     expect(response.status).toBe(200);

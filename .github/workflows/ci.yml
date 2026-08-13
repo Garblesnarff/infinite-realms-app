@@ -31,7 +31,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: ai-adventure-scribe-main/server-bun
-      - run: bunx vitest run server-bun/src
+      - run: bun test --isolate
+        working-directory: ai-adventure-scribe-main/server-bun
 
   security-lint:
     runs-on: ubuntu-latest

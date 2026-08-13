@@ -34,6 +34,15 @@ export const hasRealDb = Boolean(realDbUrl);
 /** `describe` that skips the whole block when no test database is configured. */
 export const describeWithDb: typeof describe = hasRealDb ? describe : describe.skip;
 
+/**
+ * Keep production-module imports behind the same database gate as describeWithDb. The server's
+ * eager db/client guard is an environment error, not a reason for a real-DB suite to fail when
+ * it is intentionally skipped in a no-database run.
+ */
+export async function importWithRealDb<T>(loader: () => Promise<T>): Promise<T> {
+  return hasRealDb ? loader() : ({} as T);
+}
+
 let client: ReturnType<typeof postgres> | null = null;
 
 export function realDb(): ReturnType<typeof drizzle<typeof schema>> {

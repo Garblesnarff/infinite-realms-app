@@ -18,7 +18,9 @@ Jobs:
 - **frontend** — `bun install`, `bun run lint` (ESLint), `bunx tsc --noEmit`,
   `bunx vitest run` (frontend unit tests), `bun run build`.
 - **server-vitest** — installs deps for the root app and for `server-bun`, then
-  runs `bunx vitest run server-bun/src`.
+  runs the complete Bun suite with per-file isolation from
+  `ai-adventure-scribe-main/server-bun`. Isolation keeps a test fixture's
+  process-wide `mock.module` replacements from changing another file's imports.
 - **security-lint** — runs `node scripts/security-lint.js`, a custom static
   checker that flags route handlers missing auth/rate-limiting, unbounded
   `parseInt`, unsanitized `dangerouslySetInnerHTML`, error-message leakage, and
@@ -98,7 +100,7 @@ bunx tsc --noEmit
 bunx vitest run
 
 # Server tests (mirrors `server-vitest`)
-bunx vitest run server-bun/src
+cd server-bun && bun test --isolate
 
 # Security static-analysis (mirrors `security-lint`)
 node scripts/security-lint.js

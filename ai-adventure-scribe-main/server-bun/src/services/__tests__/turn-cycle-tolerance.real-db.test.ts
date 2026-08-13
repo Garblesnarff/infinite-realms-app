@@ -40,7 +40,14 @@
 import { afterAll, beforeEach, expect, mock, test } from 'bun:test';
 import { eq, inArray } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaigns,
   characterStats,
@@ -83,7 +90,9 @@ mock.module('../../lib/logger.js', () => ({
   default: stub(),
 }));
 
-const { executeCombatIntent } = await import('../combat/combat-intent-service.js');
+const { executeCombatIntent } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
 
 if (!hasRealDb) {
   console.warn(

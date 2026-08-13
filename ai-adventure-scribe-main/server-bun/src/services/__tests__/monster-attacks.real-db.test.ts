@@ -24,7 +24,14 @@
 import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
 import { eq, inArray } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaignChunks,
   campaigns,
@@ -71,9 +78,15 @@ mock.module('../../lib/logger.js', () => ({
   errorLogSerializers: {},
 }));
 
-const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
-const { combatAttackService } = await import('../combat/combat-attack-service.js');
-const { clearCampaignMonsterCache } = await import('../combat/campaign-monster-resolution.js');
+const { CombatEncounterService } = await importWithRealDb(
+  () => import('../combat/combat-encounter-service.js'),
+);
+const { combatAttackService } = await importWithRealDb(
+  () => import('../combat/combat-attack-service.js'),
+);
+const { clearCampaignMonsterCache } = await importWithRealDb(
+  () => import('../combat/campaign-monster-resolution.js'),
+);
 
 if (!hasRealDb) {
   console.warn(

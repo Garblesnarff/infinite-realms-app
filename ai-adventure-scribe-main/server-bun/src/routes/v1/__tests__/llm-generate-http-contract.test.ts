@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- this contract file keeps the request matrix together. */
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
@@ -22,17 +23,24 @@ mock.module('../../../lib/auth.js', () => ({
     error: null,
   }),
 }));
-mock.module('../../../lib/logger.js', () => ({
-  logger: {
-    debug: () => {},
-    info: (msg: unknown) => {
-      if (typeof msg === 'string') loggedInfoLines.push(msg);
-    },
-    warn: (msg: unknown) => {
-      if (typeof msg === 'string') loggedWarnLines.push(msg);
-    },
-    error: () => {},
+const testLogger = {
+  debug: () => {},
+  info: (msg: unknown) => {
+    if (typeof msg === 'string') loggedInfoLines.push(msg);
   },
+  warn: (msg: unknown) => {
+    if (typeof msg === 'string') loggedWarnLines.push(msg);
+  },
+  error: () => {},
+  child: () => testLogger,
+};
+mock.module('../../../lib/logger.js', () => ({
+  logger: testLogger,
+  combatLogger: testLogger,
+  spellLogger: testLogger,
+  progressionLogger: testLogger,
+  errorLogSerializers: {},
+  default: testLogger,
 }));
 mock.module('../../../middleware/admin.js', () => ({ isAdmin: () => false }));
 mock.module('../../../middleware/rate-limit.js', () => ({

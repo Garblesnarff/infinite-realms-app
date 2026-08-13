@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 
-import { describeUnreachableApproach } from '../combat-approach-service.js';
+mock.module('../../../../../db/client', () => ({ db: {} }));
+
+const { describeUnreachableApproach } = await import('../combat-approach-service.js');
 
 /**
  * The sentence handed to the DM when an attacker walked but could not reach.
