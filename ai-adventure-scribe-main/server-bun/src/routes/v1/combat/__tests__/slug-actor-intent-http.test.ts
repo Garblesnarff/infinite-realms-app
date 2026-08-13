@@ -51,6 +51,7 @@ const participant = (id: string, name: string, participantType: 'player' | 'npc'
 const attackInputs: AttackRollInput[] = [];
 const spellInputs: Array<{ casterId: string; targetIds: string[] }> = [];
 const trackedEvents: Array<Record<string, unknown>> = [];
+let encounterStatus: 'active' | 'completed' = 'active';
 
 mock.module('../../../../../../db/client', () => ({ db: {} }));
 mock.module('../../../../lib/env.js', () => ({
@@ -82,7 +83,7 @@ mock.module('../../../../services/combat/combat-encounter-service.js', () => ({
       encounter: {
         id: ENCOUNTER_ID,
         sessionId: SESSION_ID,
-        status: 'active',
+        status: encounterStatus,
         version: ENCOUNTER_VERSION,
       },
       participants: [
@@ -174,6 +175,9 @@ mock.module('../../../../services/combat/combat-events.js', () => ({
 mock.module('../../../../../../src/services/auth/TokenService', () => ({
   getAuthHeaders: () => ({ authorization: 'Bearer valid-token' }),
   configureHeadlessSession: () => {},
+  loadCachedSession: () => null,
+  persistSession: () => {},
+  refreshAccessTokenOnce: async () => null,
 }));
 
 const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');
@@ -247,6 +251,7 @@ const postIntent = (body: unknown) =>
   );
 
 beforeEach(() => {
+  encounterStatus = 'active';
   attackInputs.length = 0;
   spellInputs.length = 0;
   trackedEvents.length = 0;
@@ -329,6 +334,29 @@ describe('an actorId matching no entity is an unknown reference, not a turn-orde
     expect(response.status).toBe(422);
     expect(body.error).toBe('Actor is not the current-turn participant');
     expect(attackInputs).toHaveLength(0);
+  });
+});
+
+describe('an intent that arrives after combat has concluded', () => {
+  it('returns a clean no-op before resolving stale participant references', async () => {
+    encounterStatus = 'completed';
+
+    const response = await postIntent({
+      intent: { type: 'end_turn', actorId: 'the-reveler-after-victory' },
+      source: 'dm',
+    });
+    const body = (await response.json()) as {
+      accepted: boolean;
+      result?: { encounterAlreadyConcluded?: boolean; status?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      accepted: true,
+      result: { encounterAlreadyConcluded: true, status: 'completed' },
+    });
+    expect(attackInputs).toHaveLength(0);
+    expect(spellInputs).toHaveLength(0);
   });
 });
 

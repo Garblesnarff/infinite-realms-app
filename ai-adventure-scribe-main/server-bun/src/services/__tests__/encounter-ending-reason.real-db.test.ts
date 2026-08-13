@@ -285,4 +285,23 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     expect(facts[0]).toContain('struck the Ending Golem');
     expect(facts[1]).toContain('THE FIGHT IS OVER');
   });
+
+  test('concluding an encounter twice is one terminal transition and one DM fact', async () => {
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+    const first = await encounterRow();
+
+    // This is the post-victory trailing intent from encounter 10444307. The second call must
+    // stop at the active -> completed claim before it can write another tactical fact or move
+    // the terminal timestamp.
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+    const second = await encounterRow();
+
+    expect(second.status).toBe('completed');
+    expect(second.endedReason).toBe('last_hostile_defeated');
+    expect(second.endedAt?.getTime()).toBe(first.endedAt?.getTime());
+    await recordDmTacticalFact(sessionId, 'late post-conclusion fact');
+    expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      describeCombatEnd('last_hostile_defeated'),
+    ]);
+  });
 });

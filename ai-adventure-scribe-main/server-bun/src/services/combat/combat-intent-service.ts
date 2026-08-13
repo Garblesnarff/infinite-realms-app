@@ -69,6 +69,12 @@ type VersionOptional<T> = T extends { expectedVersion: number }
   : T;
 export type SubmittedCombatIntent = VersionOptional<CombatIntent>;
 
+export type EncounterAlreadyConcludedResult = {
+  encounterAlreadyConcluded: true;
+  encounterId: string;
+  status: 'completed';
+};
+
 const VERSIONED_INTENT_TYPES = new Set(['attack', 'spell', 'dash', 'dodge', 'disengage']);
 
 /**
@@ -117,6 +123,14 @@ function resolveExpectedVersion(
  * (`participant-size.ts`, `tactical-combat-lifecycle.ts`); this was the odd one out.
  */
 const isHostile = (participantType: string): boolean => participantType !== 'player';
+
+/** Preserve the engine result while telling the client that this action crossed combat's end. */
+function markCombatEnded(result: unknown): unknown {
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    return { ...(result as Record<string, unknown>), combatEnded: true };
+  }
+  return { result, combatEnded: true };
+}
 
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
@@ -570,9 +584,29 @@ export async function executeCombatIntent(
   dmStartedAt?: number,
 ): Promise<unknown> {
   try {
+    // A completed encounter still retains its participant rows, but its tactical board is gone.
+    // Check the authoritative encounter status before loading that board or resolving a slug;
+    // otherwise a valid post-victory follow-through becomes the misleading 404 "Combat
+    // participant not found" that #1744 observed.
+    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    if (state.encounter.status !== 'active') {
+      logger.info({
+        msg: 'COMBAT_INTENT_AFTER_CONCLUSION',
+        encounterId,
+        sessionId: state.encounter.sessionId,
+        status: state.encounter.status,
+        submittedActorId: submitted.actorId,
+        action: submitted.type,
+        source,
+      });
+      return {
+        encounterAlreadyConcluded: true,
+        encounterId,
+        status: 'completed',
+      } satisfies EncounterAlreadyConcludedResult;
+    }
     // Reference resolution happens before authorization, not after: the turn check keys on
     // participant ids, so asking it about a slug is asking the wrong question.
-    const state = await CombatEncounterService.getCombatState(encounterId, userId);
     const index = await loadSessionEntityIndex(state.encounter.sessionId);
     const resolved = resolveIntentRefs(submitted, index, state);
     // Before authorization, because a boundary that has already been crossed is not an
@@ -766,6 +800,7 @@ export async function executeCombatIntent(
     const combatEnded =
       (damage > 0 || intent.type === 'end_turn') &&
       (await endCombatIfResolved(encounterId, userId));
+    let combatBoundary = combatEnded;
     if (!combatEnded) {
       // After the end check, never before: a killing blow ends the fight, and there is no next
       // turn to advance to. And before the publish, so the board the client receives already
@@ -783,9 +818,10 @@ export async function executeCombatIntent(
       // failure ends a campaign without a point of damage being dealt. Same reason `end_turn`
       // triggers the check above.
       const endedOnAdvance = advanced ? await endCombatIfResolved(encounterId, userId) : false;
+      combatBoundary = endedOnAdvance;
       if (!endedOnAdvance) await publishCombatState(encounterId, userId, intent.type);
     }
-    return result;
+    return combatBoundary ? markCombatEnded(result) : result;
   } catch (error) {
     trackCombatEvent('action_refused', {
       encounterId,

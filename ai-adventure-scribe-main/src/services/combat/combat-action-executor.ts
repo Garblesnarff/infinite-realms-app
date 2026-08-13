@@ -1,4 +1,15 @@
+/* eslint-disable max-lines -- one client seam owns authoritative intents and their DM adapter. */
+import {
+  combatBoundaryFromResult,
+  type StructuredCombatActionExecution,
+} from './combat-action-boundary';
 import { reportCombatIntentFailure } from './combat-intent-failure';
+
+export {
+  combatBoundaryFromResult,
+  type CombatActionBoundary,
+  type StructuredCombatActionExecution,
+} from './combat-action-boundary';
 
 import type { DamageType } from '@/types/combat';
 
@@ -174,12 +185,12 @@ export async function executeAuthoritativeCombatIntent(
   }
 }
 
-export async function executeStructuredCombatAction(
+export async function executeStructuredCombatActionWithBoundary(
   encounterId: string,
   action: StructuredCombatAction,
   /** The natural d20 the player rolled for this action, when they rolled one. */
   providedD20?: number,
-): Promise<ResolvedTargetDamage[]> {
+): Promise<StructuredCombatActionExecution> {
   const dmStartedAt = Date.now();
   let result: unknown;
   if (action.action_type === 'attack' && action.target_ids[0]) {
@@ -210,7 +221,7 @@ export async function executeStructuredCombatAction(
       dmStartedAt,
     );
   } else if (['dash', 'dodge', 'disengage'].includes(action.action_type)) {
-    await executeAuthoritativeCombatIntent(
+    result = await executeAuthoritativeCombatIntent(
       encounterId,
       {
         type: action.action_type as 'dash' | 'dodge' | 'disengage',
@@ -219,20 +230,36 @@ export async function executeStructuredCombatAction(
       'dm',
       dmStartedAt,
     );
-    return [];
   } else {
-    return [];
+    return { outcomes: [], boundary: null };
   }
+  const boundary = combatBoundaryFromResult(result);
+  // A post-conclusion no-op has no engine outcome. In particular, do not turn the marker into a
+  // fabricated empty-damage result for the narration pass.
+  if (boundary === 'encounter_already_concluded') return { outcomes: [], boundary };
   const outcomes: RawCombatOutcome[] =
     action.action_type === 'attack'
       ? [result as RawCombatOutcome]
       : ((result as { results?: RawCombatOutcome[] }).results ?? []);
-  return outcomes.map((outcome, index) => ({
-    participantId: action.target_ids[index] || action.target_ids[0],
-    newHp: outcome.targetNewHp,
-    damageType: outcome.damageType,
-    hit: outcome.hit,
-    finalDamage: outcome.finalDamage,
-    isCritical: outcome.isCritical,
-  }));
+  return {
+    outcomes: outcomes.map((outcome, index) => ({
+      participantId: action.target_ids[index] || action.target_ids[0],
+      newHp: outcome.targetNewHp,
+      damageType: outcome.damageType,
+      hit: outcome.hit,
+      finalDamage: outcome.finalDamage,
+      isCritical: outcome.isCritical,
+    })),
+    boundary,
+  };
+}
+
+/** Backward-compatible outcome-only bridge for callers that do not own a DM action batch. */
+export async function executeStructuredCombatAction(
+  encounterId: string,
+  action: StructuredCombatAction,
+  providedD20?: number,
+): Promise<ResolvedTargetDamage[]> {
+  return (await executeStructuredCombatActionWithBoundary(encounterId, action, providedD20))
+    .outcomes;
 }

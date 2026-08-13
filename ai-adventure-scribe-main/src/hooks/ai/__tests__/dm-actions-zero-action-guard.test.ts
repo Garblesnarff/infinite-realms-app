@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
 import { AIService } from '@/services/ai-service';
-import { executeStructuredCombatAction } from '@/services/combat/combat-action-executor';
+import { executeStructuredCombatActionWithBoundary } from '@/services/combat/combat-action-executor';
 
 /**
  * When the guard is allowed to fire, and when it must keep its hands off the turn.
@@ -24,7 +24,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  executeStructuredCombatAction: vi.fn(),
+  executeStructuredCombatActionWithBoundary: vi.fn(),
   executeAuthoritativeCombatIntent: vi.fn(),
 }));
 vi.mock('@/services/user-data-api', () => ({
@@ -84,7 +84,10 @@ describe('the zero-action guard inside the DM action pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'narrated resolution' } as any);
-    vi.mocked(executeStructuredCombatAction).mockResolvedValue([] as any);
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [],
+      boundary: null,
+    });
   });
 
   it('fires when combat is active, the player attacked, and the DM declared nothing', async () => {
@@ -101,7 +104,7 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     // The repaired action takes the ordinary path: it is actually resolved by the engine. The
     // trailing `undefined` is the player's attack die, which this turn has none of — no roster
     // was supplied, so no actor can be shown to be the player's, and the engine rolls.
-    expect(executeStructuredCombatAction).toHaveBeenCalledWith(
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'encounter-1',
       REPAIRED_ACTION,
       undefined,
@@ -117,7 +120,7 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     const outcome = await invoke();
 
     expect(repairCalls()).toHaveLength(1);
-    expect(executeStructuredCombatAction).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     // Exactly today's behaviour, so a failed repair can never be a regression.
     expect(outcome.responseText).toBe('Your claws rake across the glaze and skitter away.');
   });
@@ -157,7 +160,7 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     await invoke({ result: { text: 'You strike.', combat_actions: [REPAIRED_ACTION] } });
 
     expect(repairCalls()).toHaveLength(0);
-    expect(executeStructuredCombatAction).toHaveBeenCalledTimes(1);
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
   });
 
   it('stands down outside combat, where there is no engine turn to owe', async () => {

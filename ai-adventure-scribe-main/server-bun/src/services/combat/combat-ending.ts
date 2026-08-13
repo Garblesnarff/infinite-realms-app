@@ -163,11 +163,25 @@ export async function concludeEncounter(
   userId: string,
   reason: CombatEndReason,
 ): Promise<void> {
+  // Claim the terminal transition before writing any side effects. The conditional update is
+  // the idempotency boundary: a post-conclusion retry returns here without another ledger fact,
+  // tactical instruction, telemetry event, teardown, or publish.
+  const concluded = await CombatEncounterService.endCombat(encounterId, userId, reason);
+  if (!concluded) {
+    logger.info({
+      msg: 'COMBAT_END_ALREADY_CONCLUDED',
+      encounterId,
+      sessionId,
+      reason,
+    });
+    return;
+  }
+
   await recordCombatNarrativeFacts(encounterId, sessionId, userId, reason);
-  // Before the teardown, deliberately: this is the only ordering in which the reason the fight
-  // ended can reach the DM at all.
+  // The encounter row is already claimed as completed, but the tactical board remains active
+  // until after this write. This is the only ordering in which the reason the fight ended can
+  // reach the DM at all.
   await recordDmTacticalFact(sessionId, describeCombatEnd(reason));
-  await CombatEncounterService.endCombat(encounterId, userId, reason);
   await destroyTacticalCombatMap(sessionId);
   trackCombatEvent('combat_ended', { encounterId, sessionId, reason });
   // An encounter stopped while it was still winnable is the thing run 18 could not see. It

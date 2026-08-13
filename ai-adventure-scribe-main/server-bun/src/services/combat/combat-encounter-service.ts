@@ -410,15 +410,17 @@ export class CombatEncounterService {
    *
    * @param encounterId - Combat encounter ID
    * @param reason - Which ending this is; stored on the row and reported in telemetry
-   * @returns Updated encounter
+   * @returns Updated encounter, or null when the encounter was already terminal
    */
   static async endCombat(
     encounterId: string,
     userId: string | undefined,
     reason: CombatEndReason,
-  ): Promise<CombatEncounter> {
+  ): Promise<CombatEncounter | null> {
     // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
     // This ensures that combat encounters can only be ended by authorized users in a single round-trip.
+    // The active-status predicate is also the idempotency claim: exactly one caller can own the
+    // terminal transition, so the ending facts and broadcasts cannot be duplicated by a retry.
     const [updated] = await db
       .update(combatEncounters)
       .set({
@@ -430,6 +432,7 @@ export class CombatEncounterService {
       .where(
         and(
           eq(combatEncounters.id, encounterId),
+          eq(combatEncounters.status, 'active'),
           userId
             ? exists(
                 db
@@ -454,8 +457,18 @@ export class CombatEncounterService {
       .returning();
 
     if (!updated) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Combat encounter', encounterId);
+      // Distinguish an authorized retry of an already-completed encounter from an unknown or
+      // unauthorized one without exposing either resource. A concurrent winner also lands here
+      // after the active-status claim has changed the row.
+      const existing = await this.getEncounterById(encounterId, userId);
+      if (!existing) {
+        // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+        throw new NotFoundError('Combat encounter', encounterId);
+      }
+      if (existing.status !== 'active') return null;
+      // The guarded update should only miss an active row if a concurrent transition won between
+      // the two statements. Treat that the same as an already-completed retry.
+      return null;
     }
 
     return updated;

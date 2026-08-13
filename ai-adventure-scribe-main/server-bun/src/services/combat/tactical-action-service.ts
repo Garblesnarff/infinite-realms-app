@@ -155,6 +155,10 @@ export async function applyDmTacticalActions(
  * `loadLatestTacticalMapRow`.
  */
 export async function recordDmTacticalFact(sessionId: string, fact: string): Promise<void> {
+  // A concluded fight has no active board to receive a new engine fact. This mirrors
+  // `destroyTacticalCombatMap`: post-conclusion retries must not append another victory
+  // instruction to the latest, already-consumed map row.
+  if (!(await loadActiveTacticalMap(sessionId))) return;
   const row = await loadLatestTacticalMapRow(sessionId);
   if (!row) return;
   row.state.pendingDmFacts = [...(row.state.pendingDmFacts ?? []), fact];

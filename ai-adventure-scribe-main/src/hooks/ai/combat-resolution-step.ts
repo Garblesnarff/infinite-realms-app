@@ -5,8 +5,9 @@ import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import {
   CombatIntentRefusedError,
+  combatBoundaryFromResult,
   executeAuthoritativeCombatIntent,
-  executeStructuredCombatAction,
+  executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
@@ -41,10 +42,11 @@ export interface CombatResolutionParams {
 }
 
 /**
- * Resolves every targeted action, then asks the DM to narrate the outcomes the engine produced —
- * and only those. Refused actions travel into the narration pass named as refusals, and when the
- * player's own declaration was among them the turn holder is stated by this layer rather than
- * left to the model. A refusal that leaves the turn with nothing at all to report is rethrown.
+ * Resolves targeted actions until the first turn or combat boundary, then asks the DM to narrate
+ * the outcomes the engine produced — and only those. Refused actions travel into the narration
+ * pass named as refusals, and when the player's own declaration was among them the turn holder is
+ * stated by this layer rather than left to the model. A refusal that leaves the turn with nothing
+ * at all to report is rethrown.
  */
 export async function resolveDeclaredCombatActions(params: CombatResolutionParams): Promise<any> {
   const {
@@ -70,6 +72,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const refusedActions: Array<Record<string, unknown>> = [];
   /** Whose turn it is once everything the engine accepted has been applied. */
   let turnHolder: { id?: string; name?: string } | null = null;
+  let encounterAlreadyConcluded = false;
   const targetedActions = combatActions.filter(
     (action: any): action is StructuredCombatAction => 'target_ids' in action,
   );
@@ -93,7 +96,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         : (refusal.details?.currentParticipantSlug ?? null),
     });
   };
-  const runAction = async (action: StructuredCombatAction): Promise<void> => {
+  type BatchBoundary = 'turn_ended' | 'combat_ended';
+  const runAction = async (action: StructuredCombatAction): Promise<BatchBoundary> => {
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
     const playerDie =
@@ -106,28 +110,48 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
               action.actor_id,
           })
         : null;
-    const outcomes = await executeStructuredCombatAction(encounterId, action, playerDie?.d20);
+    const execution = await executeStructuredCombatActionWithBoundary(
+      encounterId,
+      action,
+      playerDie?.d20,
+    );
+    // A retry that arrived after victory is a clean server no-op, not an outcome to narrate.
+    // The batch is over either way; do not submit the next action against the dissolved board.
+    if (execution.boundary === 'encounter_already_concluded') {
+      encounterAlreadyConcluded = true;
+      return 'combat_ended';
+    }
     resolvedActions.push({
       action,
-      outcomes,
+      outcomes: execution.outcomes,
       // Carried into the resolution prompt so a die the player did not throw is narrated as
       // such rather than passed off as theirs.
       ...(playerDie?.autoRolled ? { autoRolled: true } : {}),
     });
+    if (execution.boundary === 'combat_ended') return 'combat_ended';
     // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
     // is told the boundary already happened. Both answers name whoever is up, which is what the
     // player has to be told when their own declaration was refused.
-    const turn = (await executeAuthoritativeCombatIntent(
+    const turn = await executeAuthoritativeCombatIntent(
       encounterId,
       { type: 'end_turn', actorId: action.actor_id },
       'dm',
-    )) as { currentParticipant?: { id?: string; name?: string } | null } | null;
-    if (turn?.currentParticipant) turnHolder = turn.currentParticipant;
+    );
+    if (combatBoundaryFromResult(turn)) return 'combat_ended';
+    const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
+    if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
+    return 'turn_ended';
   };
 
-  for (const action of targetedActions) {
+  for (let actionIndex = 0; actionIndex < targetedActions.length; actionIndex += 1) {
+    const action = targetedActions[actionIndex];
     try {
-      await runAction(action);
+      const boundary = await runAction(action);
+      const dropped = targetedActions.length - actionIndex - 1;
+      if (dropped > 0) {
+        logger.info(`[CombatBatch] boundary=${boundary} dropped=${dropped}`);
+      }
+      if (boundary) break;
     } catch (error) {
       if (!(error instanceof CombatIntentRefusedError)) throw error;
       recordRefusal(action, error);
@@ -156,8 +180,17 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         throw error;
       }
       // The corrected turn replaces the refused one. A second refusal is not repaired again.
-      for (const correctedAction of corrected) await runAction(correctedAction);
+      let correctedBoundary: BatchBoundary | null = null;
+      for (let correctedIndex = 0; correctedIndex < corrected.length; correctedIndex += 1) {
+        correctedBoundary = await runAction(corrected[correctedIndex]);
+        const dropped = corrected.length - correctedIndex - 1;
+        if (dropped > 0) {
+          logger.info(`[CombatBatch] boundary=${correctedBoundary} dropped=${dropped}`);
+        }
+        if (correctedBoundary) break;
+      }
       logger.info('[CombatRepair] outcome=repaired');
+      if (correctedBoundary) break;
       // The original assigned `responseText = repaired.text` here. It was dead: the resolution
       // narration below overwrites `responseText` unconditionally on every path out of this
       // function, so the repaired declaration never reached the player either way. Dropped in
@@ -179,11 +212,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const setupText = refusedPlayerActions.length
     ? 'The declaration for this turn was refused by the engine and is void. Narrate only the ' +
       'authoritative results supplied, and state whose turn it is.'
-    : declarationText;
+    : encounterAlreadyConcluded
+      ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
+        'as something that happened.'
+      : declarationText;
 
   const narration = await AIService.chatWithDM({
     message: JSON.stringify({
       authoritativeCombatResults: resolvedActions,
+      ...(encounterAlreadyConcluded ? { encounterAlreadyConcluded: true } : {}),
       // Named as refusals, not as results, and carrying no outcome to narrate — because there
       // is none. The engine rolled nothing for these.
       ...(refusedActions.length

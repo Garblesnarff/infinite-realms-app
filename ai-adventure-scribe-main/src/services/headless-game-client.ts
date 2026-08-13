@@ -9,8 +9,9 @@ import { buildAIContext } from '@/hooks/ai/ai-utils';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { AIService } from '@/services/ai-service';
 import {
+  combatBoundaryFromResult,
   executeAuthoritativeCombatIntent,
-  executeStructuredCombatAction,
+  executeStructuredCombatActionWithBoundary,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
 import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
@@ -446,21 +447,29 @@ export class HeadlessGameClient {
   }
 
   /**
-   * Sends every declared attack to the engine and ends the actor's turn, which is what makes
-   * initiative advance. Nothing here decides whether the attack is legal or how far the
-   * attacker must walk — the engine owns all of that.
+   * Sends the declared action to the engine and ends the actor's turn, which is what makes
+   * initiative advance. Once either boundary is crossed, trailing actions are discarded so they
+   * cannot target a board that has already advanced or dissolved. Nothing here decides whether
+   * the action is legal or how far the attacker must walk — the engine owns all of that.
    */
   private async resolveCombatActions(
     encounterId: string,
     actions: readonly StructuredCombatAction[],
   ): Promise<void> {
     for (const action of actions) {
-      await executeStructuredCombatAction(encounterId, action);
-      await executeAuthoritativeCombatIntent(
+      const execution = await executeStructuredCombatActionWithBoundary(encounterId, action);
+      // Do not send the synthesized turn boundary after a killing blow, and do not send any
+      // trailing action after either kind of combat boundary. The next DM turn must re-plan from
+      // the new board rather than address the dissolved one.
+      if (execution.boundary) return;
+      const turn = await executeAuthoritativeCombatIntent(
         encounterId,
         { type: 'end_turn', actorId: action.actor_id },
         'dm',
       );
+      if (combatBoundaryFromResult(turn)) return;
+      // The synthesized end_turn is itself a turn boundary. Drop the rest of this DM batch.
+      return;
     }
   }
 

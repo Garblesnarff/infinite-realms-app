@@ -35,7 +35,7 @@ import { CombatIntentRefusedError } from '@/services/combat/combat-action-execut
  */
 
 const chatWithDM = vi.fn();
-const executeStructuredCombatAction = vi.fn();
+const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const askPlayerForAttackDie = vi.fn();
@@ -54,7 +54,8 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
   // look-alike would take the "not a refusal, rethrow" path and pass this file for the wrong
   // reason.
   ...(await importOriginal<typeof CombatActionExecutor>()),
-  executeStructuredCombatAction: (...args: any[]) => executeStructuredCombatAction(...args),
+  executeStructuredCombatActionWithBoundary: (...args: any[]) =>
+    executeStructuredCombatActionWithBoundary(...args),
   executeAuthoritativeCombatIntent: (...args: any[]) => executeAuthoritativeCombatIntent(...args),
 }));
 vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
@@ -114,10 +115,15 @@ describe('a player action the engine refused', () => {
     vi.clearAllMocks();
     // The turn is refused for the player, and the repair regenerates the current NPC's turn —
     // exactly what production did.
-    executeStructuredCombatAction.mockImplementation(async (_encounterId: string, act: any) => {
-      if (act.actor_id === PLAYER_ID) throw outOfTurn();
-      return [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }];
-    });
+    executeStructuredCombatActionWithBoundary.mockImplementation(
+      async (_encounterId: string, act: any) => {
+        if (act.actor_id === PLAYER_ID) throw outOfTurn();
+        return {
+          outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }],
+          boundary: null,
+        };
+      },
+    );
     // The engine ends the NPC's turn itself now, so the client's `end_turn` is told the boundary
     // already happened and hands back who is up.
     executeAuthoritativeCombatIntent.mockResolvedValue({
@@ -206,9 +212,10 @@ describe('a player action the engine refused', () => {
 describe('a turn the engine accepted in full', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    executeStructuredCombatAction.mockResolvedValue([
-      { participantId: NPC_ID, hit: true, finalDamage: 6, newHp: 3 },
-    ]);
+    executeStructuredCombatActionWithBoundary.mockResolvedValue({
+      outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 6, newHp: 3 }],
+      boundary: null,
+    });
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: NPC_ID, name: 'Balthazar' },
     });
@@ -230,5 +237,66 @@ describe('a turn the engine accepted in full', () => {
     expect(setupMessage()).toBe('Balthazar swings.');
     expect(resolutionPayload().refusedActions).toBeUndefined();
     expect(result.text).not.toContain('not resolved');
+  });
+
+  it('drops trailing actions after the synthesized turn boundary', async () => {
+    const second = action(NPC_ID, PLAYER_ID);
+
+    await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      combatActions: [action(NPC_ID, PLAYER_ID), second],
+      declarationText: 'Balthazar attacks twice.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    expect(resolutionPayload().authoritativeCombatResults).toHaveLength(1);
+  });
+
+  it('drops trailing actions immediately when the first action ends combat', async () => {
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 6, newHp: 0 }],
+      boundary: 'combat_ended',
+    });
+
+    await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      combatActions: [action(NPC_ID, PLAYER_ID), action(NPC_ID, PLAYER_ID)],
+      declarationText: 'Balthazar attacks and wins.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(resolutionPayload().authoritativeCombatResults).toHaveLength(1);
+  });
+
+  it('does not narrate a batch that arrived after the encounter concluded', async () => {
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [],
+      boundary: 'encounter_already_concluded',
+    });
+
+    await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      combatActions: [action(NPC_ID, PLAYER_ID), action(NPC_ID, PLAYER_ID)],
+      declarationText: 'Balthazar swings after the fight is over.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(resolutionPayload()).toMatchObject({
+      encounterAlreadyConcluded: true,
+      authoritativeCombatResults: [],
+    });
+    expect(setupMessage()).not.toContain('Balthazar swings after the fight is over');
   });
 });
