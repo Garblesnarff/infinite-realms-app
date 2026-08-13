@@ -1,10 +1,11 @@
 import { Image as ImageIcon } from 'lucide-react';
 import * as React from 'react';
+
+import type { BlogPostFormValues } from '@/components/blog-admin/blog-post-editor/use-blog-post-editor';
+import type { BlogPostStatus } from '@/types/blog';
 import type { UseFormReturn } from 'react-hook-form';
 
 import { MultiSelect } from '@/components/blog-admin/blog-post-editor/multi-select';
-import type { BlogPostFormValues } from '@/components/blog-admin/blog-post-editor/use-blog-post-editor';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -24,7 +25,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import type { BlogPostStatus } from '@/types/blog';
 
 interface EditorSidebarProps {
   form: UseFormReturn<BlogPostFormValues>;

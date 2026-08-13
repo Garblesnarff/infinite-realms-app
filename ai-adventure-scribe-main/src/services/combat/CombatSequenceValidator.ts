@@ -5,13 +5,13 @@
  */
 
 import { combatAuditSystem } from '../combat-audit';
+import { CombatActionTracker } from './CombatActionTracker';
 import {
   CombatResponseValidator,
   type CombatValidationError,
   type CombatValidationResult,
   type CombatStateProvider,
 } from './CombatResponseValidator';
-import { CombatActionTracker } from './CombatActionTracker';
 import { CombatTurnManager, type InitiativeEntry, type TurnOrder } from './CombatTurnManager';
 
 import logger from '@/lib/logger';

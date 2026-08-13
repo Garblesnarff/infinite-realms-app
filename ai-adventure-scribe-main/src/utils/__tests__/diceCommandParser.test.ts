@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 
 import {
   parseDiceCommand,
   getDiceCommandSuggestions,
-  mightBeDiceCommand
+  mightBeDiceCommand,
 } from '../diceCommandParser';
 
 describe('diceCommandParser', () => {
@@ -24,7 +23,7 @@ describe('diceCommandParser', () => {
         dieType: 20,
         modifier: 0,
         advantage: false,
-        disadvantage: false
+        disadvantage: false,
       });
     });
 
@@ -35,7 +34,7 @@ describe('diceCommandParser', () => {
         formula: '2d6+3',
         count: 2,
         dieType: 6,
-        modifier: 3
+        modifier: 3,
       });
 
       const resultMinus = parseDiceCommand('/r 1d8-1');
@@ -44,7 +43,7 @@ describe('diceCommandParser', () => {
         formula: '1d8-1',
         count: 1,
         dieType: 8,
-        modifier: -1
+        modifier: -1,
       });
     });
 
@@ -54,12 +53,12 @@ describe('diceCommandParser', () => {
         isValid: true,
         formula: '1d20+5',
         advantage: true,
-        disadvantage: false
+        disadvantage: false,
       });
 
       const resultFull = parseDiceCommand('/roll 1d20 advantage');
       expect(resultFull).toMatchObject({
-        advantage: true
+        advantage: true,
       });
     });
 
@@ -68,12 +67,12 @@ describe('diceCommandParser', () => {
       expect(result).toMatchObject({
         isValid: true,
         disadvantage: true,
-        advantage: false
+        advantage: false,
       });
 
       const resultFull = parseDiceCommand('/roll 1d20 disadvantage');
       expect(resultFull).toMatchObject({
-        disadvantage: true
+        disadvantage: true,
       });
     });
 
@@ -83,7 +82,7 @@ describe('diceCommandParser', () => {
       expect(result).toMatchObject({
         isValid: true,
         advantage: false,
-        disadvantage: false
+        disadvantage: false,
       });
     });
 
@@ -92,7 +91,7 @@ describe('diceCommandParser', () => {
       expect(result).toMatchObject({
         isValid: true,
         formula: '1d20+2',
-        label: 'Initiative'
+        label: 'Initiative',
       });
     });
 
@@ -102,7 +101,7 @@ describe('diceCommandParser', () => {
       expect(result).toMatchObject({
         isValid: true,
         label: 'Attack with advantage',
-        advantage: false // Keywords in labels shouldn't trigger the flags
+        advantage: false, // Keywords in labels shouldn't trigger the flags
       });
     });
 
@@ -113,14 +112,14 @@ describe('diceCommandParser', () => {
         isValid: true,
         count: 1,
         dieType: 20,
-        formula: '1d20'
+        formula: '1d20',
       });
 
       const resultMod = parseDiceCommand('/r d8+2');
       expect(resultMod).toMatchObject({
         count: 1,
         dieType: 8,
-        modifier: 2
+        modifier: 2,
       });
     });
 
@@ -150,7 +149,7 @@ describe('diceCommandParser', () => {
       expect(result).toMatchObject({
         isValid: true,
         formula: '1d20',
-        advantage: true
+        advantage: true,
       });
     });
   });

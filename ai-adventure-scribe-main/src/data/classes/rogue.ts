@@ -1,5 +1,6 @@
-import type { CharacterClass, AbilityScores } from '@/types/character';
 import { classSubclasses } from './subclasses';
+
+import type { CharacterClass, AbilityScores } from '@/types/character';
 
 export const rogue: CharacterClass = {
   subclasses: classSubclasses.rogue,
@@ -25,13 +26,7 @@ export const rogue: CharacterClass = {
   ],
   numSkillChoices: 4,
   armorProficiencies: ['Light armor'],
-  weaponProficiencies: [
-    'Simple weapons',
-    'Hand crossbows',
-    'Longswords',
-    'Rapiers',
-    'Shortswords',
-  ],
+  weaponProficiencies: ['Simple weapons', 'Hand crossbows', 'Longswords', 'Rapiers', 'Shortswords'],
   toolProficiencies: ["Thieves' tools"],
   classFeatures: [
     {

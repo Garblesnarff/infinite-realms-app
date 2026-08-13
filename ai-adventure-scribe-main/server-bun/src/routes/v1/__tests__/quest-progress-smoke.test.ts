@@ -22,7 +22,7 @@ mock.module('../../../services/campaign-service.js', () => ({ CampaignService: {
 // We'll dynamically change what sql returns to simulate authorized/unauthorized states.
 let mockQueryResults: any[] = [];
 mock.module('../../../lib/db.js', () => ({
-  sql: async (strings: TemplateStringsArray, ...values: any[]) => {
+  sql: async (_strings: TemplateStringsArray, ..._values: any[]) => {
     return mockQueryResults;
   },
 }));
@@ -44,7 +44,7 @@ const app = new Elysia().use(securedGameDataRoutes);
 describe('v1 characters quest-progress security boundaries', () => {
   it('denies unauthenticated requests on quest progress', async () => {
     const response = await app.handle(
-      new Request('http://localhost/v1/characters/char-1/quest-progress')
+      new Request('http://localhost/v1/characters/char-1/quest-progress'),
     );
     expect(response.status).toBe(401);
   });
@@ -56,9 +56,9 @@ describe('v1 characters quest-progress security boundaries', () => {
     const response = await app.handle(
       new Request('http://localhost/v1/characters/unowned-char-id/quest-progress', {
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
         },
-      })
+      }),
     );
     expect(response.status).toBe(404);
     const json: any = await response.json();
@@ -67,12 +67,16 @@ describe('v1 characters quest-progress security boundaries', () => {
 
   it('allows authorized access (user owns or has access to character)', async () => {
     const mockQuestProgress = [
-      { status: 'active', updated_at: '2026-08-04T01:37:01.481Z', quests: { title: 'Slay the Dragon' } }
+      {
+        status: 'active',
+        updated_at: '2026-08-04T01:37:01.481Z',
+        quests: { title: 'Slay the Dragon' },
+      },
     ];
 
     let callCount = 0;
     mock.module('../../../lib/db.js', () => ({
-      sql: async (strings: TemplateStringsArray, ...values: any[]) => {
+      sql: async (_strings: TemplateStringsArray, ..._values: any[]) => {
         callCount++;
         if (callCount === 1) {
           // Authorization check: return a single row representing that the user is authorized.
@@ -86,9 +90,9 @@ describe('v1 characters quest-progress security boundaries', () => {
     const response = await app.handle(
       new Request('http://localhost/v1/characters/owned-char-id/quest-progress', {
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
         },
-      })
+      }),
     );
     expect(response.status).toBe(200);
     const json: any = await response.json();

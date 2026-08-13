@@ -21,8 +21,8 @@ import {
   type WSConnection,
   type FoundryMessage,
 } from './services/collaboration/room-manager.js';
-import { verifyWorkOSToken } from './services/workos.js';
 import { verifySessionAccess } from './services/combat/combat-authorization.js';
+import { verifyWorkOSToken } from './services/workos.js';
 
 // Re-export for external modules (e.g. tRPC routers)
 export { broadcastToScene } from './services/collaboration/room-manager.js';

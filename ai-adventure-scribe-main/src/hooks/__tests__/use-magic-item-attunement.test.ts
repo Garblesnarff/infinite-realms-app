@@ -6,8 +6,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useMagicItemAttunement } from '../use-magic-item-attunement';
 
 import logger from '@/lib/logger';
-import { validateAttunementRequirements, getAttunedItemCount } from '@/utils/magicItemEffects';
 import { restApi } from '@/services/rest-api';
+import { validateAttunementRequirements, getAttunedItemCount } from '@/utils/magicItemEffects';
 
 // Mock dependencies
 vi.mock('@/lib/logger', () => ({

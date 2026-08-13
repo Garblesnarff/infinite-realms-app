@@ -4,8 +4,8 @@
  * Extracted from CombatContext.tsx to reduce duplication
  */
 
-import type { CombatParticipant, FightingStyleName } from '@/types/combat';
 import type { Character } from '@/types/character';
+import type { CombatParticipant, FightingStyleName } from '@/types/combat';
 
 import { rollDie } from '@/utils/diceRolls';
 import { FIGHTING_STYLES } from '@/utils/fightingStyles';

@@ -8,11 +8,9 @@ import type { Character, CharacterClass } from '@/types/character';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getProficiencyBonus } from '@/data/levelProgression';
-import { useToast } from '@/hooks/use-toast';
 import { useMulticlassing } from '@/hooks/use-multiclassing';
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
-
-
 
 interface MulticlassManagerProps {
   character: Character;

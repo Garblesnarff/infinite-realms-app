@@ -18,8 +18,8 @@ import { MapAdjustmentControls } from './map-uploader/MapAdjustmentControls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import logger from '@/lib/logger';
 import { uploadFile, buildTimestampedFilename } from '@/infrastructure/storage/supabase-storage';
+import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 interface MapUploaderProps {

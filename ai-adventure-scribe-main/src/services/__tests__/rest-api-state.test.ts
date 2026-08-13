@@ -6,10 +6,11 @@ import {
   restApi,
   type RestApiResult,
 } from '../rest-api';
-import { handleShortRest } from '@/contexts/combat/rest-and-stealth-handlers';
 
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';
+
+import { handleShortRest } from '@/contexts/combat/rest-and-stealth-handlers';
 
 const serverShortRest: RestApiResult = {
   characterId: 'char-1',

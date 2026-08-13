@@ -6,7 +6,6 @@ import { MemoryManager } from '../../memory-manager';
 import { QuestGenerator } from '../quest-generator';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import { userDataApi } from '@/services/user-data-api';
 import { buildQuestPromptTemplate } from '@/services/world-builders/quest-prompts';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -125,7 +124,9 @@ describe('QuestGenerator', () => {
 
     it('should generate a quest successfully', async () => {
       vi.mocked(buildQuestPromptTemplate).mockReturnValue('mock-prompt');
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(`JSON: ${JSON.stringify(mockQuestData)}`);
+      vi.mocked(llmApiClient.generateText).mockResolvedValue(
+        `JSON: ${JSON.stringify(mockQuestData)}`,
+      );
 
       const result = await QuestGenerator.generateQuest(mockRequest);
 
@@ -144,13 +145,17 @@ describe('QuestGenerator', () => {
     it('should throw error if JSON is invalid', async () => {
       vi.mocked(llmApiClient.generateText).mockResolvedValue('{ invalid json }');
 
-      await expect(QuestGenerator.generateQuest(mockRequest)).rejects.toThrow(/Invalid response format/);
+      await expect(QuestGenerator.generateQuest(mockRequest)).rejects.toThrow(
+        /Invalid response format/,
+      );
     });
 
     it('should handle generic errors during generation', async () => {
       vi.mocked(llmApiClient.generateText).mockRejectedValue(new Error('API failure'));
 
-      await expect(QuestGenerator.generateQuest(mockRequest)).rejects.toThrow(/Failed to generate quest: API failure/);
+      await expect(QuestGenerator.generateQuest(mockRequest)).rejects.toThrow(
+        /Failed to generate quest: API failure/,
+      );
     });
 
     it('should handle non-Error objects in catch', async () => {
@@ -172,27 +177,42 @@ describe('QuestGenerator', () => {
     });
 
     it('should add weight for main quest type', () => {
-      const weight = (QuestGenerator as any).calculateNarrativeWeight({}, { ...baseRequest, type: 'main' });
+      const weight = (QuestGenerator as any).calculateNarrativeWeight(
+        {},
+        { ...baseRequest, type: 'main' },
+      );
       expect(weight).toBe(8); // 5 + 3
     });
 
     it('should add weight for personal quest type', () => {
-      const weight = (QuestGenerator as any).calculateNarrativeWeight({}, { ...baseRequest, type: 'personal' });
+      const weight = (QuestGenerator as any).calculateNarrativeWeight(
+        {},
+        { ...baseRequest, type: 'personal' },
+      );
       expect(weight).toBe(7); // 5 + 2
     });
 
     it('should add weight for side quest type', () => {
-      const weight = (QuestGenerator as any).calculateNarrativeWeight({}, { ...baseRequest, type: 'side' });
+      const weight = (QuestGenerator as any).calculateNarrativeWeight(
+        {},
+        { ...baseRequest, type: 'side' },
+      );
       expect(weight).toBe(6); // 5 + 1
     });
 
     it('should add weight for campaign-arc scope', () => {
-      const weight = (QuestGenerator as any).calculateNarrativeWeight({}, { ...baseRequest, scope: 'campaign-arc' });
+      const weight = (QuestGenerator as any).calculateNarrativeWeight(
+        {},
+        { ...baseRequest, scope: 'campaign-arc' },
+      );
       expect(weight).toBe(7); // 5 + 2
     });
 
     it('should add weight for multi-session scope', () => {
-      const weight = (QuestGenerator as any).calculateNarrativeWeight({}, { ...baseRequest, scope: 'multi-session' });
+      const weight = (QuestGenerator as any).calculateNarrativeWeight(
+        {},
+        { ...baseRequest, scope: 'multi-session' },
+      );
       expect(weight).toBe(6); // 5 + 1
     });
 
@@ -233,10 +253,12 @@ describe('QuestGenerator', () => {
 
       const id = await QuestGenerator.saveQuest(mockQuest);
       expect(id).toBe('quest-123');
-      expect(userDataApi.createQuest).toHaveBeenCalledWith(expect.objectContaining({
-        campaign_id: 'c1',
-        title: 'Save the King',
-      }));
+      expect(userDataApi.createQuest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          campaign_id: 'c1',
+          title: 'Save the King',
+        }),
+      );
     });
 
     it('should rethrow owned-data API failures', async () => {
@@ -264,7 +286,9 @@ describe('QuestGenerator', () => {
     });
 
     it('should return quest even if save fails', async () => {
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ title: 'Unsaved Quest' }));
+      vi.mocked(llmApiClient.generateText).mockResolvedValue(
+        JSON.stringify({ title: 'Unsaved Quest' }),
+      );
       vi.mocked(userDataApi.createQuest).mockRejectedValue(new Error('Save Error'));
 
       const result = await QuestGenerator.createQuest({ context: { campaignId: 'c1' } } as any);
@@ -275,18 +299,30 @@ describe('QuestGenerator', () => {
 
   describe('generateMemoryBasedQuest', () => {
     it('should verify campaign ownership and generate quest', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'u1', genre: 'cyberpunk' } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: 'c1',
+        user_id: 'u1',
+        genre: 'cyberpunk',
+      } as any);
 
-      vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([{ content: 'Memory 1' }] as any);
+      vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([
+        { content: 'Memory 1' },
+      ] as any);
       vi.mocked(getAveragePartyLevel).mockResolvedValue(3);
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ title: 'Memory Quest' }));
+      vi.mocked(llmApiClient.generateText).mockResolvedValue(
+        JSON.stringify({ title: 'Memory Quest' }),
+      );
 
       vi.mocked(userDataApi.createQuest).mockResolvedValue({ id: 'quest-123' } as any);
 
       await QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'main', 'u1');
 
       expect(userDataApi.getCampaign).toHaveBeenCalledWith('c1');
-      expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith('s1', 'quest opportunities', 5);
+      expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith(
+        's1',
+        'quest opportunities',
+        5,
+      );
     });
 
     it('should fail closed when userId is missing', async () => {
@@ -299,13 +335,21 @@ describe('QuestGenerator', () => {
     it('should throw if campaign is not owned by the user', async () => {
       vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
 
-      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Campaign not found or access denied');
+      await expect(
+        QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1'),
+      ).rejects.toThrow('Campaign not found or access denied');
     });
 
     it('should throw if campaign owner does not match user context', async () => {
-      vi.mocked(userDataApi.getCampaign).mockResolvedValue({ id: 'c1', user_id: 'different-user', genre: 'cyberpunk' } as any);
+      vi.mocked(userDataApi.getCampaign).mockResolvedValue({
+        id: 'c1',
+        user_id: 'different-user',
+        genre: 'cyberpunk',
+      } as any);
 
-      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Campaign not found or access denied');
+      await expect(
+        QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1'),
+      ).rejects.toThrow('Campaign not found or access denied');
     });
 
     it('should handle campaign lookup errors during memory-based quest generation', async () => {
@@ -313,7 +357,9 @@ describe('QuestGenerator', () => {
         throw new Error('Network error');
       });
 
-      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Network error');
+      await expect(
+        QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1'),
+      ).rejects.toThrow('Network error');
     });
   });
 

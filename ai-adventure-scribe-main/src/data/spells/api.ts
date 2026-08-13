@@ -1,14 +1,16 @@
-import srdSpellsJson from '@/data/srd/spells.json';
-import { logger } from '../../lib/logger';
 import nonSrdSupplementJson from './non-srd-supplement.json';
+import { logger } from '../../lib/logger';
 
 import type { Spell } from '@/types/character';
 
+import srdSpellsJson from '@/data/srd/spells.json';
+
 type SrdSpell = Spell & { classes: string[]; legacy_ids?: string[] };
-export const normalizeLegacySpellId = (id: string) => id.replace(
-  /-(?:barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)$/,
-  '',
-);
+export const normalizeLegacySpellId = (id: string) =>
+  id.replace(
+    /-(?:barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)$/,
+    '',
+  );
 const sourceSpells = [...srdSpellsJson, ...nonSrdSupplementJson];
 
 export const allSpells = sourceSpells.map((spell) => ({
@@ -19,9 +21,10 @@ export const allSpells = sourceSpells.map((spell) => ({
   somatic: spell.components_somatic,
   material: spell.components_material,
   ...(spell.material_components ? { materialDescription: spell.material_components } : {}),
-  duration: spell.concentration && !spell.duration.toLowerCase().includes('concentration')
-    ? `Concentration, ${spell.duration}`
-    : spell.duration,
+  duration:
+    spell.concentration && !spell.duration.toLowerCase().includes('concentration')
+      ? `Concentration, ${spell.duration}`
+      : spell.duration,
 })) as unknown as SrdSpell[];
 
 export const getClassSpells = (className: string): { cantrips: Spell[]; spells: Spell[] } => {

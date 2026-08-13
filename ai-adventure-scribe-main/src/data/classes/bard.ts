@@ -1,5 +1,6 @@
-import type { CharacterClass, AbilityScores } from '@/types/character';
 import { classSubclasses } from './subclasses';
+
+import type { CharacterClass, AbilityScores } from '@/types/character';
 
 export const bard: CharacterClass = {
   subclasses: classSubclasses.bard,
@@ -13,13 +14,7 @@ export const bard: CharacterClass = {
   skillChoices: ['Any'],
   numSkillChoices: 3,
   armorProficiencies: ['Light armor'],
-  weaponProficiencies: [
-    'Simple weapons',
-    'Hand crossbows',
-    'Longswords',
-    'Rapiers',
-    'Shortswords',
-  ],
+  weaponProficiencies: ['Simple weapons', 'Hand crossbows', 'Longswords', 'Rapiers', 'Shortswords'],
   toolProficiencies: ['Three musical instruments of your choice'],
   spellcasting: {
     ability: 'charisma' as keyof AbilityScores,

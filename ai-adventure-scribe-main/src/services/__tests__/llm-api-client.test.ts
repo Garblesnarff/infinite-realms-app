@@ -3,7 +3,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { llmApiClient } from '@/infrastructure/api';
-
 import * as loggerModule from '@/lib/logger';
 
 import '@/lib/auth-gate';
@@ -75,10 +74,13 @@ describe('LlmApiClient', () => {
       const result = await llmApiClient.generateText({ prompt: 'Hello' });
 
       expect(result).toBe('Generated response');
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/v1/llm/generate'), expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('"prompt":"Hello"'),
-      }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/llm/generate'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"prompt":"Hello"'),
+        }),
+      );
       // Verify logger was used (info log on success in some paths)
       // Actually llmApiClient.generateText doesn't log on success by default
     });
@@ -92,11 +94,14 @@ describe('LlmApiClient', () => {
 
       await llmApiClient.generateText({ prompt: 'Hello' });
 
-      expect(mockFetch).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+          }),
         }),
-      }));
+      );
     });
 
     it('should fallback to gemini if openrouter is not configured', async () => {
@@ -127,18 +132,31 @@ describe('LlmApiClient', () => {
         status: 502,
         statusText: 'Bad Gateway',
         headers: { get: () => '3' },
-        text: () => Promise.resolve(JSON.stringify({ error: 'upstream_model_error', retryable: true, retry_after: 3 })),
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ error: 'upstream_model_error', retryable: true, retry_after: 3 }),
+          ),
       });
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ text: 'Gemini response', provider: 'gemini', model: 'gemini-2.5-flash-lite' }),
+        json: () =>
+          Promise.resolve({
+            text: 'Gemini response',
+            provider: 'gemini',
+            model: 'gemini-2.5-flash-lite',
+          }),
       });
       const onResponseMetadata = vi.fn();
 
-      await expect(llmApiClient.generateText({ prompt: 'Hello', provider: 'openrouter', onResponseMetadata })).resolves.toBe('Gemini response');
+      await expect(
+        llmApiClient.generateText({ prompt: 'Hello', provider: 'openrouter', onResponseMetadata }),
+      ).resolves.toBe('Gemini response');
 
       expect(JSON.parse(mockFetch.mock.calls[1][1].body).provider).toBe('gemini');
-      expect(onResponseMetadata).toHaveBeenCalledWith({ provider: 'gemini', model: 'gemini-2.5-flash-lite' });
+      expect(onResponseMetadata).toHaveBeenCalledWith({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash-lite',
+      });
     });
 
     it('should fallback to openrouter if gemini is not configured', async () => {
@@ -193,7 +211,9 @@ describe('LlmApiClient', () => {
 
       expect(result).toBe('Flash model response');
       expect(mockFetch).toHaveBeenCalledTimes(3);
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('rate limited, trying fallback models'));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('rate limited, trying fallback models'),
+      );
     });
 
     // TODO(vitest-config-audit, 2026-07-14): same missing rate-limit-fallback feature as
@@ -221,9 +241,12 @@ describe('LlmApiClient', () => {
       const result = await llmApiClient.generateImage({ prompt: 'A dragon' });
 
       expect(result).toBe('base64-data');
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/v1/images/generate'), expect.objectContaining({
-        method: 'POST',
-      }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/images/generate'),
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
     });
   });
 
@@ -241,7 +264,7 @@ describe('LlmApiClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/images/message/msg-123/images'),
-        expect.objectContaining({ method: 'PATCH' })
+        expect.objectContaining({ method: 'PATCH' }),
       );
     });
 
@@ -327,7 +350,10 @@ describe('LlmApiClient', () => {
       const result = await llmApiClient.extractMemories('Conversation context');
 
       expect(result).toBe('["memory 1"]');
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/v1/llm/extract'), expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/llm/extract'),
+        expect.anything(),
+      );
     });
 
     it('should return empty string and log warning on error', async () => {
@@ -336,7 +362,10 @@ describe('LlmApiClient', () => {
       const result = await llmApiClient.extractMemories('context');
 
       expect(result).toBe('');
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Memory extraction failed'), expect.any(Error));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Memory extraction failed'),
+        expect.any(Error),
+      );
     });
   });
 
@@ -344,11 +373,15 @@ describe('LlmApiClient', () => {
     it('should enter offline fallback mode on fetch TypeError', async () => {
       mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
 
-      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow('Failed to fetch');
+      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
+        'Failed to fetch',
+      );
 
       // Next call should fail immediately without fetch
       mockFetch.mockClear();
-      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow('API unavailable');
+      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
+        'API unavailable',
+      );
       expect(mockFetch).not.toHaveBeenCalled();
     });
 

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { SafetyAuditService } from '../SafetyAuditService';
@@ -69,19 +69,21 @@ describe('SafetyAuditService', () => {
         playerMessage,
         undefined,
         sessionState,
-        userId
+        userId,
       );
 
       expect(supabase.from).toHaveBeenCalledWith('safety_audit_trail');
-      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-        session_id: sessionId,
-        user_id: userId,
-        event_type: 'pause',
-        player_message: playerMessage,
-        is_paused_after: true,
-        was_paused_before: false,
-        session_turn_number: 5,
-      }));
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          session_id: sessionId,
+          user_id: userId,
+          event_type: 'pause',
+          player_message: playerMessage,
+          is_paused_after: true,
+          was_paused_before: false,
+          session_turn_number: 5,
+        }),
+      );
     });
 
     it('should successfully log a resume event', async () => {
@@ -98,14 +100,16 @@ describe('SafetyAuditService', () => {
         undefined,
         undefined,
         sessionState,
-        userId
+        userId,
       );
 
-      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-        event_type: 'resume',
-        is_paused_after: false,
-        was_paused_before: true,
-      }));
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_type: 'resume',
+          is_paused_after: false,
+          was_paused_before: true,
+        }),
+      );
     });
 
     it('should truncate long messages', async () => {
@@ -124,7 +128,7 @@ describe('SafetyAuditService', () => {
         longMessage, // playerMessage
         longMessage, // aiResponse
         {},
-        userId
+        userId,
       );
 
       const calledWith = mockInsert.mock.calls[0][0];
@@ -140,21 +144,39 @@ describe('SafetyAuditService', () => {
         context: 'uncomfortable scene',
       };
 
-      await SafetyAuditService.logSafetyEvent(sessionId, command, 'stop', undefined, { is_paused: false }, userId);
+      await SafetyAuditService.logSafetyEvent(
+        sessionId,
+        command,
+        'stop',
+        undefined,
+        { is_paused: false },
+        userId,
+      );
 
-      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-        event_type: 'x_card',
-        action_taken: 'rewound_content',
-      }));
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event_type: 'x_card',
+          action_taken: 'rewound_content',
+        }),
+      );
     });
 
     it('should correctly set is_paused_after to true for x_card', async () => {
-       const command: any = { type: 'x_card' };
+      const command: any = { type: 'x_card' };
 
-       await SafetyAuditService.logSafetyEvent(sessionId, command, '', '', { is_paused: false }, userId);
-       expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-           is_paused_after: true
-       }));
+      await SafetyAuditService.logSafetyEvent(
+        sessionId,
+        command,
+        '',
+        '',
+        { is_paused: false },
+        userId,
+      );
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          is_paused_after: true,
+        }),
+      );
     });
 
     it('should log error when Supabase insert fails', async () => {
@@ -164,16 +186,24 @@ describe('SafetyAuditService', () => {
       const command: any = { type: 'pause' };
       await SafetyAuditService.logSafetyEvent(sessionId, command, '', '', {}, userId);
 
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to log safety event'), error);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to log safety event'),
+        error,
+      );
     });
 
     it('should catch and log unexpected errors', async () => {
-      mockInsert.mockImplementationOnce(() => { throw new Error('Boom'); });
+      mockInsert.mockImplementationOnce(() => {
+        throw new Error('Boom');
+      });
 
       const command: any = { type: 'pause' };
       await SafetyAuditService.logSafetyEvent(sessionId, command, '', '', {}, userId);
 
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Error logging safety event'), expect.any(Error));
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error logging safety event'),
+        expect.any(Error),
+      );
     });
   });
 

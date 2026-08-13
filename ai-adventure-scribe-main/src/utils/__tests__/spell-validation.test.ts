@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
+import { bard } from '@/data/classes/bard';
+import { canCastRituals } from '@/data/spellcastingFeatures';
 import {
   validateSpellSelection,
   validateCharacterSpellSelection,
@@ -11,8 +13,6 @@ import {
   isSpellValidForClass,
   getSpellValidationRules,
 } from '@/utils/spell-validation';
-import { canCastRituals } from '@/data/spellcastingFeatures';
-import { bard } from '@/data/classes/bard';
 
 // Helper function to create mock characters
 function createMockCharacter(

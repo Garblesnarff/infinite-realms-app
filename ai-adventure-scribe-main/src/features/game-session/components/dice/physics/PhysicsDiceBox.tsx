@@ -12,15 +12,16 @@
  * the main thread for now (fine for typical 1–4 dice); it can move to a Web
  * Worker later with no API change.
  */
+import * as CANNON from 'cannon-es';
 import { Howl } from 'howler';
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
-
-import logger from '@/lib/logger';
-import type { DiceRollResult } from '@/services/dice/DiceEngine';
 
 import { makeDie, type DieType, type Die } from './diceShapes';
+
+import type { DiceRollResult } from '@/services/dice/DiceEngine';
+
+import logger from '@/lib/logger';
 
 interface Props {
   result: DiceRollResult | null;
@@ -30,7 +31,13 @@ interface Props {
 }
 
 const SIDES_TO_TYPE: Record<number, DieType> = {
-  4: 'd4', 6: 'd6', 8: 'd8', 10: 'd10', 12: 'd12', 20: 'd20', 100: 'd100',
+  4: 'd4',
+  6: 'd6',
+  8: 'd8',
+  10: 'd10',
+  12: 'd12',
+  20: 'd20',
+  100: 'd100',
 };
 
 const DIE_R = 0.95;
@@ -48,7 +55,14 @@ function makeSimWorld(): CANNON.World {
   const B = BOUND + 0.3;
   const wx = new CANNON.Box(new CANNON.Vec3(0.2, 3, B + 1));
   const wz = new CANNON.Box(new CANNON.Vec3(B + 1, 3, 0.2));
-  ([[-B, 0, 0, wx], [B, 0, 0, wx], [0, 0, -B, wz], [0, 0, B, wz]] as const).forEach(([x, y, z, s]) => {
+  (
+    [
+      [-B, 0, 0, wx],
+      [B, 0, 0, wx],
+      [0, 0, -B, wz],
+      [0, 0, B, wz],
+    ] as const
+  ).forEach(([x, y, z, s]) => {
     const b = new CANNON.Body({ mass: 0, shape: s });
     b.position.set(x, y, z);
     w.addBody(b);
@@ -58,7 +72,10 @@ function makeSimWorld(): CANNON.World {
 
 const rand = (m: number) => (Math.random() * 2 - 1) * m;
 
-interface Frame { p: [number, number, number]; q: [number, number, number, number]; }
+interface Frame {
+  p: [number, number, number];
+  q: [number, number, number, number];
+}
 
 /** Pre-simulate one die until it settles on `target`; return recorded frames. */
 function simulateToValue(die: Die, target: number, laneX: number): Frame[] | null {
@@ -89,9 +106,19 @@ function simulateToValue(die: Die, target: number, laneX: number): Frame[] | nul
   return null;
 }
 
-interface Track { die: Die; frames: Frame[]; t: number; done: boolean; }
+interface Track {
+  die: Die;
+  frames: Frame[];
+  t: number;
+  done: boolean;
+}
 
-export const PhysicsDiceBox: React.FC<Props> = ({ result, isRolling, showAnimation, height = 220 }) => {
+export const PhysicsDiceBox: React.FC<Props> = ({
+  result,
+  isRolling: _isRolling,
+  showAnimation,
+  height = 220,
+}) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -149,7 +176,10 @@ export const PhysicsDiceBox: React.FC<Props> = ({ result, isRolling, showAnimati
     floor.receiveShadow = true;
     scene.add(floor);
 
-    soundRef.current = new Howl({ src: ['/sounds/dice-roll.mp3', '/sounds/dice-roll.ogg'], volume: 0.45 });
+    soundRef.current = new Howl({
+      src: ['/sounds/dice-roll.mp3', '/sounds/dice-roll.ogg'],
+      volume: 0.45,
+    });
 
     const onResize = () => {
       const ww = mount.clientWidth || 320;
@@ -181,9 +211,9 @@ export const PhysicsDiceBox: React.FC<Props> = ({ result, isRolling, showAnimati
       window.removeEventListener('resize', onResize);
       disposeTracks(tracksRef.current, scene);
       renderer.dispose();
-      if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode)
+        renderer.domElement.parentNode.removeChild(renderer.domElement);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [height]);
 
   // ---- roll when a new result arrives ----
@@ -214,9 +244,12 @@ export const PhysicsDiceBox: React.FC<Props> = ({ result, isRolling, showAnimati
 
     tracksRef.current = tracks;
     if (soundRef.current) {
-      try { soundRef.current.play(); } catch { /* sound optional */ }
+      try {
+        soundRef.current.play();
+      } catch {
+        /* sound optional */
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, showAnimation]);
 
   return <div ref={mountRef} style={{ width: '100%', height }} aria-hidden />;

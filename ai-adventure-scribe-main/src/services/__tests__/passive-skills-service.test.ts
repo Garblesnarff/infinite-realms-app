@@ -14,6 +14,7 @@ import {
   getCharacterPassiveScores,
   PassiveSkillsService,
 } from '../passive-skills-service';
+
 import { getProficiencyBonus } from '@/data/levelProgression';
 
 // Mock levelProgression to have stable proficiency bonuses for tests
@@ -158,8 +159,8 @@ describe('PassiveSkillsService', () => {
         level: 1,
         abilityScores: {
           wisdom: { score: 10 },
-          intelligence: { score: 10 }
-        }
+          intelligence: { score: 10 },
+        },
       };
 
       // Test Perception
@@ -210,7 +211,7 @@ describe('PassiveSkillsService', () => {
 
       // Insight: Rogue (12) Failure, Wizard (10) Failure
       expect(results.insight).toHaveLength(2);
-      expect(results.insight.every(r => !r.success)).toBe(true);
+      expect(results.insight.every((r) => !r.success)).toBe(true);
 
       // Investigation: Rogue (14) Failure, Wizard (10 + 4 + 3 = 17) Success
       expect(results.investigation).toHaveLength(2);

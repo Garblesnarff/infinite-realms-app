@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // below fails Vite module resolution before any test can run. Whole suite skipped
 // until someone confirms whether token rendering moved elsewhere (e.g. into
 // BattleScene.tsx / hooks) and, if so, rewrites this file against the new location.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 // import { Token } from '../Token';
 
 import type { Token as TokenData } from '@/types/token';

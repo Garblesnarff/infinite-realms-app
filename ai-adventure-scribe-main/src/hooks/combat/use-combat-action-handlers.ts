@@ -11,8 +11,8 @@ import type {
 } from '@/types/combat';
 
 import logger from '@/lib/logger';
-import { processReactionResponse } from '@/utils/reactionSystem';
 import { createGrappledCondition, rollGrappleCheck, rollShoveCheck } from '@/utils/grappleUtils';
+import { processReactionResponse } from '@/utils/reactionSystem';
 import { checkConcentration } from '@/utils/spell-management';
 
 interface UseCombatActionHandlersProps {

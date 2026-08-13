@@ -11,10 +11,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import React from 'react';
 
-import type { DiceRollResult } from '@/services/dice/DiceEngine';
-import { cardItem } from '@/utils/animations';
-
 import { PhysicsDiceBox } from './physics/PhysicsDiceBox';
+
+import type { DiceRollResult } from '@/services/dice/DiceEngine';
+
+import { cardItem } from '@/utils/animations';
 
 interface Dice3DSectionProps {
   result: DiceRollResult | null;

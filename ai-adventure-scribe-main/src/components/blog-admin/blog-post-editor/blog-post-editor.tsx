@@ -1,13 +1,12 @@
 import { Save, Eye, Send, Calendar, Loader2 } from 'lucide-react';
 import * as React from 'react';
 
+import type { BlogPost } from '@/types/blog';
+
 import { EditorSidebar } from '@/components/blog-admin/blog-post-editor/editor-sidebar';
 import { MarkdownEditor } from '@/components/blog-admin/blog-post-editor/markdown-editor';
 import { MediaManager } from '@/components/blog-admin/blog-post-editor/media-manager';
 import { useBlogPostEditor } from '@/components/blog-admin/blog-post-editor/use-blog-post-editor';
-
-import type { BlogPost } from '@/types/blog';
-
 import {
   AlertDialog,
   AlertDialogAction,

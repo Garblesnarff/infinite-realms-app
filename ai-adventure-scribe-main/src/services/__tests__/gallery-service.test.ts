@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { listEntityImages } from '../gallery-service';
+
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 
@@ -9,10 +11,10 @@ vi.mock('@/integrations/supabase/client', () => ({
     storage: {
       from: vi.fn(() => ({
         list: vi.fn(),
-        getPublicUrl: vi.fn()
-      }))
-    }
-  }
+        getPublicUrl: vi.fn(),
+      })),
+    },
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -20,8 +22,8 @@ vi.mock('@/lib/logger', () => ({
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
-    debug: vi.fn()
-  }
+    debug: vi.fn(),
+  },
 }));
 
 describe('GalleryService', () => {
@@ -41,12 +43,12 @@ describe('GalleryService', () => {
 
       const mockList = vi.fn().mockResolvedValue({ data: mockFiles, error: null });
       const mockGetPublicUrl = vi.fn((path) => ({
-        data: { publicUrl: `https://test.com/${path}` }
+        data: { publicUrl: `https://test.com/${path}` },
       }));
 
       (supabase.storage.from as any).mockReturnValue({
         list: mockList,
-        getPublicUrl: mockGetPublicUrl
+        getPublicUrl: mockGetPublicUrl,
       });
 
       const result = await listEntityImages(entityType, entityId);
@@ -54,14 +56,16 @@ describe('GalleryService', () => {
       expect(supabase.storage.from).toHaveBeenCalledWith('campaign-images');
       expect(mockList).toHaveBeenCalledWith('campaigns/test-campaign-id', {
         limit: 100,
-        offset: 0
+        offset: 0,
       });
 
       expect(result).toHaveLength(2);
       // Newest first sorting based on createdAt
       expect(result[0].name).toBe('1700000001-tavern.png');
       expect(result[0].label).toBe('Tavern');
-      expect(result[0].url).toBe('https://test.com/campaigns/test-campaign-id/1700000001-tavern.png');
+      expect(result[0].url).toBe(
+        'https://test.com/campaigns/test-campaign-id/1700000001-tavern.png',
+      );
       expect(result[0].createdAt).toBe('2023-11-15T11:00:00Z');
 
       expect(result[1].name).toBe('1700000000-dragon.png');
@@ -70,14 +74,14 @@ describe('GalleryService', () => {
     });
 
     it('should handle sorting when createdAt is missing', async () => {
-       const mockFiles = [
+      const mockFiles = [
         { name: 'image1.png', created_at: '2023-11-15T10:00:00Z' },
         { name: 'image2.png' },
       ];
 
       (supabase.storage.from as any).mockReturnValue({
         list: vi.fn().mockResolvedValue({ data: mockFiles, error: null }),
-        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } }))
+        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } })),
       });
 
       const result = await listEntityImages(entityType, entityId);
@@ -96,13 +100,11 @@ describe('GalleryService', () => {
     });
 
     it('should handle images with missing createdAt/updatedAt', async () => {
-       const mockFiles = [
-        { name: '1700000000-dragon.png' },
-      ];
+      const mockFiles = [{ name: '1700000000-dragon.png' }];
 
       (supabase.storage.from as any).mockReturnValue({
         list: vi.fn().mockResolvedValue({ data: mockFiles, error: null }),
-        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } }))
+        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } })),
       });
 
       const result = await listEntityImages(entityType, entityId);
@@ -116,12 +118,12 @@ describe('GalleryService', () => {
         { name: 'some-dir/', created_at: '2023-11-15T10:00:00Z' },
         { name: null },
         { name: 123 },
-        null
+        null,
       ];
 
       (supabase.storage.from as any).mockReturnValue({
         list: vi.fn().mockResolvedValue({ data: mockFiles, error: null }),
-        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } }))
+        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } })),
       });
 
       const result = await listEntityImages(entityType, entityId);
@@ -152,13 +154,11 @@ describe('GalleryService', () => {
     });
 
     it('should use default label when name does not match pattern', async () => {
-       const mockFiles = [
-        { name: 'plain-filename.png', created_at: '2023-11-15T10:00:00Z' },
-      ];
+      const mockFiles = [{ name: 'plain-filename.png', created_at: '2023-11-15T10:00:00Z' }];
 
       (supabase.storage.from as any).mockReturnValue({
         list: vi.fn().mockResolvedValue({ data: mockFiles, error: null }),
-        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } }))
+        getPublicUrl: vi.fn((path) => ({ data: { publicUrl: `https://test.com/${path}` } })),
       });
 
       const result = await listEntityImages(entityType, entityId);
@@ -172,7 +172,7 @@ describe('GalleryService', () => {
       const mockList = vi.fn().mockResolvedValue({ data: [], error: null });
       (supabase.storage.from as any).mockReturnValue({
         list: mockList,
-        getPublicUrl: vi.fn()
+        getPublicUrl: vi.fn(),
       });
 
       await listEntityImages('character', charId);

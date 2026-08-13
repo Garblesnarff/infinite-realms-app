@@ -26,6 +26,7 @@
  */
 
 // SDK Imports
+import { useQueryClient } from '@tanstack/react-query';
 import React, { createContext, useContext, useMemo, useCallback } from 'react'; // Added ReactNode
 
 import type { ChatMessage } from '@/types/game';
@@ -34,7 +35,6 @@ import type { ReactNode } from 'react';
 // Project Hooks
 import { useMessageQueue } from '@/hooks/use-message-queue';
 import { useMessages } from '@/hooks/use-messages';
-import { useQueryClient } from '@tanstack/react-query';
 import { useSessionStorySocket } from '@/hooks/use-session-story-socket';
 
 // Project Types
@@ -67,10 +67,13 @@ export const MessageProvider: React.FC<{
     void queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
   }, [queryClient, sessionId]);
   const notifyPeers = useSessionStorySocket(sessionId, handleRemoteMessage);
-  const sendMessage = useCallback(async (message: ChatMessage) => {
-    await mutateAsync(message);
-    notifyPeers(message.text);
-  }, [mutateAsync, notifyPeers]);
+  const sendMessage = useCallback(
+    async (message: ChatMessage) => {
+      await mutateAsync(message);
+      notifyPeers(message.text);
+    },
+    [mutateAsync, notifyPeers],
+  );
 
   /**
    * ⚡ Bolt: Memoize the context value to prevent unnecessary re-renders

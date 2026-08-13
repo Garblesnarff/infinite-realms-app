@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+
 import { Elysia } from 'elysia';
 
 import { logger } from './lib/logger.js';

@@ -2,11 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
-import { TooltipProvider } from '@/components/ui/tooltip';
-
 import ExperienceManager from '../ExperienceManager';
 
 import type { Character } from '@/types/character';
+
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Mock getExperienceForLevel and getLevelFromExperience from data/levelProgression
 vi.mock('@/data/levelProgression', () => ({
@@ -20,7 +20,7 @@ vi.mock('@/data/levelProgression', () => ({
     if (lvl === 2) return 300;
     return 0;
   }),
-  experienceTable: { 1: 0, 2: 300, 3: 900 }
+  experienceTable: { 1: 0, 2: 300, 3: 900 },
 }));
 
 describe('ExperienceManager Accessibility', () => {
@@ -125,9 +125,11 @@ describe('ExperienceManager Accessibility', () => {
     fireEvent.change(sourceInput, { target: { value: 'Test source' } });
     fireEvent.click(awardButton);
 
-    expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      experience: 600
-    }));
+    expect(mockOnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experience: 600,
+      }),
+    );
   });
 
   it('removes experience correctly', () => {
@@ -145,9 +147,11 @@ describe('ExperienceManager Accessibility', () => {
     fireEvent.change(sourceInput, { target: { value: 'Test source' } });
     fireEvent.click(removeButton);
 
-    expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      experience: 400
-    }));
+    expect(mockOnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experience: 400,
+      }),
+    );
   });
 
   it('sets level correctly', () => {
@@ -160,8 +164,10 @@ describe('ExperienceManager Accessibility', () => {
     const level3Button = screen.getByRole('button', { name: /Set experience to level 3/i });
     fireEvent.click(level3Button);
 
-    expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      experience: 900
-    }));
+    expect(mockOnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experience: 900,
+      }),
+    );
   });
 });

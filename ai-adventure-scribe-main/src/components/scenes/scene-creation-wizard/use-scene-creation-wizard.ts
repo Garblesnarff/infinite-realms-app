@@ -61,7 +61,7 @@ interface UseSceneCreationWizardProps {
 export const useSceneCreationWizard = ({
   campaignId,
   onComplete,
-  onCancel,
+  onCancel: _onCancel,
 }: UseSceneCreationWizardProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<SceneFormData>(DEFAULT_FORM_DATA);

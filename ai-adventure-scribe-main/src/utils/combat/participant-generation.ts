@@ -1,5 +1,6 @@
 import type { CombatParticipant } from '@/types/combat';
 import type { DetectedEnemy } from '@/utils/combatDetection';
+
 import { loadMonsters } from '@/services/encounters/srd-loader';
 
 export interface PlayerCharacterLike {
@@ -23,7 +24,9 @@ export function parseMultiattackSequence(description: string, attackNames: strin
   const sequence: string[] = [];
   for (const name of attackNames) {
     const singular = name.toLowerCase().replace(/s$/, '');
-    const match = lower.match(new RegExp(`(?:one|two|three|four|five|\\d+) (?:with (?:its|his|her) )?${singular}s?`));
+    const match = lower.match(
+      new RegExp(`(?:one|two|three|four|five|\\d+) (?:with (?:its|his|her) )?${singular}s?`),
+    );
     if (match) {
       const token = match[0].split(' ')[0];
       const count = numberWords[token] ?? Number(token);
@@ -77,13 +80,17 @@ export function createCombatParticipantsFromDetection(
   // Add detected enemies
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
-    const monster = loadMonsters().find((entry) =>
-      entry.id === enemy.monsterId || entry.name.toLowerCase() === enemy.name.toLowerCase());
+    const monster = loadMonsters().find(
+      (entry) =>
+        entry.id === enemy.monsterId || entry.name.toLowerCase() === enemy.name.toLowerCase(),
+    );
 
-    const initiativeModifier = monster?.abilities?.dexterity != null
-      ? Math.floor((monster.abilities.dexterity - 10) / 2)
-      : 0;
-    const attackActions = monster?.actions?.filter((action) => action.attack_bonus !== undefined) ?? [];
+    const initiativeModifier =
+      monster?.abilities?.dexterity != null
+        ? Math.floor((monster.abilities.dexterity - 10) / 2)
+        : 0;
+    const attackActions =
+      monster?.actions?.filter((action) => action.attack_bonus !== undefined) ?? [];
     const multiattack = monster?.actions?.find((action) => action.name === 'Multiattack');
 
     participants.push({
@@ -107,13 +114,15 @@ export function createCombatParticipantsFromDetection(
         alignment: monster?.alignment || 'hostile',
         specialAbilities: monster?.specialAbilities?.map((ability) => ability.name) || [],
         attacks: attackActions.map((action) => {
-          const damage = Array.isArray(action.damage) ? action.damage[0] as any : undefined;
+          const damage = Array.isArray(action.damage) ? (action.damage[0] as any) : undefined;
           const description = String(action.desc || '');
           return {
-            name: String(action.name || 'Attack'), attackBonus: Number(action.attack_bonus || 0),
+            name: String(action.name || 'Attack'),
+            attackBonus: Number(action.attack_bonus || 0),
             damageRoll: String(damage?.damage_dice || '1d4'),
             damageType: String(damage?.damage_type?.index || 'bludgeoning') as any,
-            reach: Number(description.match(/reach (\d+) ft/i)?.[1] || 5), description,
+            reach: Number(description.match(/reach (\d+) ft/i)?.[1] || 5),
+            description,
           };
         }) || [
           {
@@ -125,7 +134,12 @@ export function createCombatParticipantsFromDetection(
             description: 'A basic melee attack',
           },
         ],
-        multiattackSequence: multiattack ? parseMultiattackSequence(String(multiattack.desc || ''), attackActions.map((action) => String(action.name))) : undefined,
+        multiattackSequence: multiattack
+          ? parseMultiattackSequence(
+              String(multiattack.desc || ''),
+              attackActions.map((action) => String(action.name)),
+            )
+          : undefined,
         savingThrowBonuses: monster?.savingThrows ?? {},
         hasLegendaryActions: Boolean(monster?.legendaryActions?.length),
       },

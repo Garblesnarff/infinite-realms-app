@@ -15,9 +15,11 @@
 
 /* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
-import { Elysia, t } from 'elysia';
 import { inArray } from 'drizzle-orm';
+import { Elysia, t } from 'elysia';
 
+import { db } from '../../../../db/client';
+import { spells } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -26,8 +28,6 @@ import { CharacterSpellService } from '../../services/character/character-spell-
 import { CharacterService } from '../../services/character-service.js';
 
 import type { Character, CharacterStats } from '../../../../db/schema/index';
-import { db } from '../../../../db/client';
-import { spells } from '../../../../db/schema/index';
 
 /**
  * Validation schema for character operations

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Smoke and boundary security checks for quests routes.
  * Independent of DATABASE_URL and external services.
@@ -39,28 +39,30 @@ mock.module('../../../../../db/client', () => ({
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => [] // By default, returning empty results for existing checks
-        })
-      })
+          limit: () => [], // By default, returning empty results for existing checks
+        }),
+      }),
     }),
     insert: () => ({
       values: () => ({
-        returning: () => [{
-          id: 'quest-1',
-          campaignId: 'camp-1',
-          title: 'Test Quest',
-          description: 'A test description',
-          questGiver: 'Giver',
-          objectives: [],
-          rewards: [],
-          status: 'active',
-          difficulty: 'medium',
-          questType: 'side',
-          locationId: null,
-          metadata: {},
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }],
+        returning: () => [
+          {
+            id: 'quest-1',
+            campaignId: 'camp-1',
+            title: 'Test Quest',
+            description: 'A test description',
+            questGiver: 'Giver',
+            objectives: [],
+            rewards: [],
+            status: 'active',
+            difficulty: 'medium',
+            questType: 'side',
+            locationId: null,
+            metadata: {},
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
       }),
     }),
   },
@@ -96,7 +98,7 @@ describe('v1 quests routes API boundaries', () => {
           campaign_id: 'owned-campaign-id',
           title: 'Quest',
         }),
-      })
+      }),
     );
     expect(response.status).toBe(401);
   });
@@ -106,14 +108,14 @@ describe('v1 quests routes API boundaries', () => {
       new Request('http://localhost/v1/quests', {
         method: 'POST',
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
           campaign_id: 'owned-campaign-id',
           title: 'Quest',
         }),
-      })
+      }),
     );
     expect(response.status).toBe(201);
     const json: any = await response.json();
@@ -125,14 +127,14 @@ describe('v1 quests routes API boundaries', () => {
       new Request('http://localhost/v1/quests', {
         method: 'POST',
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
           campaign_id: 'unowned-campaign-id',
           title: 'Quest',
         }),
-      })
+      }),
     );
     expect(response.status).toBe(404);
     const json: any = await response.json();
@@ -144,14 +146,14 @@ describe('v1 quests routes API boundaries', () => {
       new Request('http://localhost/v1/quests/upsert', {
         method: 'POST',
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
           campaign_id: 'owned-campaign-id',
           title: 'Quest',
         }),
-      })
+      }),
     );
     expect(response.status).toBe(200);
     const json: any = await response.json();
@@ -163,14 +165,14 @@ describe('v1 quests routes API boundaries', () => {
       new Request('http://localhost/v1/quests/upsert', {
         method: 'POST',
         headers: {
-          'authorization': 'Bearer valid-user-token',
+          authorization: 'Bearer valid-user-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
           campaign_id: 'unowned-campaign-id',
           title: 'Quest',
         }),
-      })
+      }),
     );
     expect(response.status).toBe(404);
     const json: any = await response.json();

@@ -1,5 +1,8 @@
 import { Sparkles, Loader2 } from 'lucide-react';
 import React from 'react';
+
+import type { EnhancementOption, OptionSelection, OptionType } from '@/types/enhancement-options';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -8,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
-import type { EnhancementOption, OptionSelection, OptionType } from '@/types/enhancement-options';
 
 interface OptionInputProps<T extends OptionType = OptionType> {
   option: EnhancementOption<T>;

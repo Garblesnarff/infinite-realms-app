@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+
 import { test } from 'bun:test';
 
 import { chunkCampaignFiles } from './chunker.js';

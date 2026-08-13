@@ -1,11 +1,11 @@
 import { MemoryManager } from '../../memory-manager';
 import { WorldBuilderService, WorldBuilderRepository } from '../../world-builders';
 import { parseXMLTagsFromResponse } from '../xml-parser';
-import { llmApiClient } from '@/infrastructure/api';
 
 import type { MemoryContext } from '../../memory-manager';
 import type { GameContext, ChatMessage } from '../shared/types';
 
+import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
@@ -33,10 +33,13 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
   // the current embedding query. Every 20 turns, store an abstractive campaign summary.
   if (turnCount !== undefined && turnCount > 0 && turnCount % 20 === 0) {
     try {
-      const transcript = [...(conversationHistory || []).slice(-40), {
-        role: 'assistant' as const,
-        content: text,
-      }]
+      const transcript = [
+        ...(conversationHistory || []).slice(-40),
+        {
+          role: 'assistant' as const,
+          content: text,
+        },
+      ]
         .map((entry) => `${entry.role}: ${sanitizeForMemoryExtraction(entry.content)}`)
         .join('\n');
       const summary = await llmApiClient.extractMemories(
@@ -44,15 +47,17 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
         1200,
       );
       if (summary.trim()) {
-        await MemoryManager.saveMemories([{
-          session_id: context.sessionId,
-          campaign_id: context.campaignId,
-          content: summary.trim(),
-          type: 'story_beat',
-          memory_type: 'campaign_summary',
-          importance: 5,
-          metadata: { source: 'periodic_summary', turn: turnCount },
-        }]);
+        await MemoryManager.saveMemories([
+          {
+            session_id: context.sessionId,
+            campaign_id: context.campaignId,
+            content: summary.trim(),
+            type: 'story_beat',
+            memory_type: 'campaign_summary',
+            importance: 5,
+            metadata: { source: 'periodic_summary', turn: turnCount },
+          },
+        ]);
       }
     } catch (summaryError) {
       logger.warn('Periodic campaign summarization failed (non-fatal):', summaryError);
@@ -81,9 +86,7 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
           metadata: { source: 'xml_extraction', characterId: context.characterId },
         }));
         await MemoryManager.saveMemories(memoriesToSave);
-        logger.info(
-          `🧠 Saved ${memoriesToSave.length} memories from XML tags (no extra API call)`,
-        );
+        logger.info(`🧠 Saved ${memoriesToSave.length} memories from XML tags (no extra API call)`);
       } catch (memoryError) {
         logger.warn('Failed to save XML-extracted memories (non-fatal):', memoryError);
       }
@@ -221,9 +224,7 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
 
     if (
       worldExpansion &&
-      worldExpansion.locations.length +
-        worldExpansion.npcs.length +
-        worldExpansion.quests.length >
+      worldExpansion.locations.length + worldExpansion.npcs.length + worldExpansion.quests.length >
         0
     ) {
       logger.info(

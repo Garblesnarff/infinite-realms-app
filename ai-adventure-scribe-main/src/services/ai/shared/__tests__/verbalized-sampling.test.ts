@@ -1,10 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import {
-  parseVerbalizedResponse,
-  sampleFromVerbalizedResponse
-} from '../verbalized-sampling';
+import { parseVerbalizedResponse, sampleFromVerbalizedResponse } from '../verbalized-sampling';
 
 import logger from '@/lib/logger';
 
@@ -35,7 +31,9 @@ Content for scene 2. This also needs to be long enough to be considered valid by
 `;
       const result = parseVerbalizedResponse(raw);
       expect(result.parseMethod).toBe('section');
-      expect(result.text).toBe('Content for scene 2. This also needs to be long enough to be considered valid by the parser.');
+      expect(result.text).toBe(
+        'Content for scene 2. This also needs to be long enough to be considered valid by the parser.',
+      );
       expect(result.probability).toBe(0.7);
     });
 
@@ -67,7 +65,9 @@ Valid content that is long enough to meet the 50 character requirement of the pa
 `;
       const result = parseVerbalizedResponse(raw);
       expect(result.parseMethod).toBe('xml');
-      expect(result.text).toBe('Content for XML scene 2. This needs to be long enough to be considered valid by the parser.');
+      expect(result.text).toBe(
+        'Content for XML scene 2. This needs to be long enough to be considered valid by the parser.',
+      );
     });
   });
 
@@ -79,7 +79,9 @@ Valid content that is long enough to meet the 50 character requirement of the pa
 `;
       const result = parseVerbalizedResponse(raw);
       expect(result.parseMethod).toBe('markdown');
-      expect(result.text).toBe('First markdown option. This needs to be long enough to be considered valid by the parser.');
+      expect(result.text).toBe(
+        'First markdown option. This needs to be long enough to be considered valid by the parser.',
+      );
     });
 
     it('should parse "1. **Title** (prob: 0.5): Content" format', () => {
@@ -89,7 +91,9 @@ Valid content that is long enough to meet the 50 character requirement of the pa
 `;
       const result = parseVerbalizedResponse(raw);
       expect(result.parseMethod).toBe('markdown');
-      expect(result.text).toBe('Content for option B. This needs to be long enough to be considered valid by the parser.');
+      expect(result.text).toBe(
+        'Content for option B. This needs to be long enough to be considered valid by the parser.',
+      );
     });
   });
 
@@ -103,7 +107,9 @@ This is the second loose section. This needs to be long enough to be considered 
 `;
       const result = parseVerbalizedResponse(raw);
       expect(result.parseMethod).toBe('loose');
-      expect(result.text).toBe('This is the second loose section. This needs to be long enough to be considered valid by the parser.');
+      expect(result.text).toBe(
+        'This is the second loose section. This needs to be long enough to be considered valid by the parser.',
+      );
     });
   });
 
@@ -153,17 +159,20 @@ The sky is dark. It looks like rain.`;
     });
 
     it('should handle section without options but > 200 chars', () => {
-        const longNarrative = 'As you step into the room, you are struck by the sheer scale of the architecture. The vaulted ceilings reach high into the darkness, supported by massive pillars of white marble that seem to glow with a faint, inner light. The air is cool and still, carrying the scent of ancient dust and stale incense. It has been many centuries since anyone last walked these halls, yet the grandeur of the place remains undiminished by the passage of time.';
-        const raw = `Preamble.\n\n${longNarrative}`;
-        const result = parseVerbalizedResponse(raw);
-        expect(result.text).toBe(longNarrative);
+      const longNarrative =
+        'As you step into the room, you are struck by the sheer scale of the architecture. The vaulted ceilings reach high into the darkness, supported by massive pillars of white marble that seem to glow with a faint, inner light. The air is cool and still, carrying the scent of ancient dust and stale incense. It has been many centuries since anyone last walked these halls, yet the grandeur of the place remains undiminished by the passage of time.';
+      const raw = `Preamble.\n\n${longNarrative}`;
+      const result = parseVerbalizedResponse(raw);
+      expect(result.text).toBe(longNarrative);
     });
 
     it('should truncate extremely long responses at paragraph boundary', () => {
       const longText = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(1000);
       const result = parseVerbalizedResponse(longText);
       expect(result.text.length).toBe(2000);
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Truncated at paragraph boundary'));
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Truncated at paragraph boundary'),
+      );
     });
 
     it('should truncate at max length if no paragraph boundary found', () => {
@@ -174,9 +183,10 @@ The sky is dark. It looks like rain.`;
     });
 
     it('should return entire cleaned text if less than max length and no other rules match', () => {
-        const shortText = 'Short text that is long enough to be kept but doesnt match any fancy rules.';
-        const result = parseVerbalizedResponse(shortText);
-        expect(result.text).toBe(shortText);
+      const shortText =
+        'Short text that is long enough to be kept but doesnt match any fancy rules.';
+      const result = parseVerbalizedResponse(shortText);
+      expect(result.text).toBe(shortText);
     });
   });
 
@@ -207,7 +217,9 @@ The knight draws his sword and prepares for battle. This is a fairly long paragr
 `;
       const result = parseVerbalizedResponse(raw);
       // If the second paragraph includes the first, it is removed.
-      expect(result.text).toBe('The knight draws his sword and prepares for battle. This is a fairly long paragraph to pass the length check.');
+      expect(result.text).toBe(
+        'The knight draws his sword and prepares for battle. This is a fairly long paragraph to pass the length check.',
+      );
     });
 
     it('should remove paragraphs with overlapping middle content', () => {
@@ -246,9 +258,13 @@ the first paragraph starts with this unique sentence. the second paragraph start
     });
 
     it('should log warning on fallback-first-section', () => {
-        const raw = 'Simple text that is long enough to be a section but matches no patterns. This needs to be long enough.';
-        sampleFromVerbalizedResponse(raw);
-        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('parsing failed'), expect.any(Object));
+      const raw =
+        'Simple text that is long enough to be a section but matches no patterns. This needs to be long enough.';
+      sampleFromVerbalizedResponse(raw);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('parsing failed'),
+        expect.any(Object),
+      );
     });
   });
 });

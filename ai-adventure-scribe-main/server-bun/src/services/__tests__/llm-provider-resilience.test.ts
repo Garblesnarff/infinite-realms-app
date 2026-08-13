@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { getCircuitBreaker, resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import { createUpstreamModelErrorBody, toUpstreamModelError } from '../llm-errors.js';
 import { getConfiguredOpenRouterModels } from '../llm-model-config.js';
 import { LLMProviderService } from '../llm-provider-service.js';
-import { getModelPricing, setFetchedModelPricing } from '../model-pricing.js';
-import { getCircuitBreaker, resetCircuitBreakersForTests } from '../../utils/circuit-breaker.js';
 import {
   getModelHealthStatus,
   resetModelHealthForTests,
   validateConfiguredModels,
 } from '../model-health.js';
+import { getModelPricing, setFetchedModelPricing } from '../model-pricing.js';
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };

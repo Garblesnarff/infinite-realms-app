@@ -4,8 +4,8 @@
 
 import { buildAbilityScores } from './build-ability-scores';
 import { characterSpellService } from './characterSpellApi';
-import type { CharacterSpellData } from './characterSpellApi';
 
+import type { CharacterSpellData } from './characterSpellApi';
 import type {
   Character,
   CharacterRace,

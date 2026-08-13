@@ -1,7 +1,10 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import React from 'react';
-import SpellFilterPanel, { SpellFilters } from '../SpellFilterPanel';
+import { describe, it, expect } from 'vitest';
+
+import SpellFilterPanel from '../SpellFilterPanel';
+
+import type { SpellFilters } from '../SpellFilterPanel';
 
 describe('SpellFilterPanel Tooltips', () => {
   const mockFilters: SpellFilters = {
@@ -27,7 +30,7 @@ describe('SpellFilterPanel Tooltips', () => {
         filters={mockFilters}
         onChange={mockOnChange}
         availableSchools={availableSchools}
-      />
+      />,
     );
 
     // Badges should now have aria-label and no title
@@ -47,7 +50,7 @@ describe('SpellFilterPanel Tooltips', () => {
         filters={activeFilters}
         onChange={mockOnChange}
         availableSchools={availableSchools}
-      />
+      />,
     );
 
     // Active filter badge should have aria-label and no title

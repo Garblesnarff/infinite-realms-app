@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { canChooseAbilityScoreImprovement } from '../asi-levels';
 import {
   getSessionPartyLevel,
   getCampaignPartyLevel,
   getContentDifficultyLevel,
   getAveragePartyLevel,
 } from '../character-level-utils';
-import { canChooseAbilityScoreImprovement } from '../asi-levels';
 
 import { userDataApi } from '@/services/user-data-api';
 

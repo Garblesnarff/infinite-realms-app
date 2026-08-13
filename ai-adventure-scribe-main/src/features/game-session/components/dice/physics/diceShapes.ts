@@ -10,8 +10,8 @@
  *    read whichever face ends up on top after a physics roll.
  *  - Build a cannon-es ConvexPolyhedron from the deduped vertices for physics.
  */
-import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import * as THREE from 'three';
 
 export type DieType = 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20' | 'd100';
 
@@ -105,8 +105,15 @@ function groupFaces(geo: THREE.BufferGeometry): FaceInfo[] {
     const a = new THREE.Vector3().fromBufferAttribute(pos, i);
     const b = new THREE.Vector3().fromBufferAttribute(pos, i + 1);
     const c = new THREE.Vector3().fromBufferAttribute(pos, i + 2);
-    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
-    const cen = new THREE.Vector3().add(a).add(b).add(c).multiplyScalar(1 / 3);
+    const n = new THREE.Vector3()
+      .subVectors(b, a)
+      .cross(new THREE.Vector3().subVectors(c, a))
+      .normalize();
+    const cen = new THREE.Vector3()
+      .add(a)
+      .add(b)
+      .add(c)
+      .multiplyScalar(1 / 3);
     tris.push({ n, c: cen });
   }
   const groups: { n: THREE.Vector3; cs: THREE.Vector3[] }[] = [];
@@ -115,11 +122,16 @@ function groupFaces(geo: THREE.BufferGeometry): FaceInfo[] {
     if (g) gr_push(g, t);
     else groups.push({ n: t.n.clone(), cs: [t.c.clone()] });
   });
-  function gr_push(g: { n: THREE.Vector3; cs: THREE.Vector3[] }, t: { n: THREE.Vector3; c: THREE.Vector3 }) {
+  function gr_push(
+    g: { n: THREE.Vector3; cs: THREE.Vector3[] },
+    t: { n: THREE.Vector3; c: THREE.Vector3 },
+  ) {
     g.cs.push(t.c.clone());
   }
   return groups.map((g) => {
-    const centroid = g.cs.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / g.cs.length);
+    const centroid = g.cs
+      .reduce((acc, v) => acc.add(v), new THREE.Vector3())
+      .multiplyScalar(1 / g.cs.length);
     return { normal: g.n.clone().normalize(), centroid };
   });
 }
@@ -132,7 +144,10 @@ function toConvex(geo: THREE.BufferGeometry): CANNON.ConvexPolyhedron {
   const idx: number[] = [];
   for (let i = 0; i < pos.count; i++) {
     const v = new THREE.Vector3().fromBufferAttribute(pos, i);
-    const k = v.toArray().map((x) => x.toFixed(3)).join(',');
+    const k = v
+      .toArray()
+      .map((x) => x.toFixed(3))
+      .join(',');
     if (!map.has(k)) {
       map.set(k, verts.length);
       verts.push(new CANNON.Vec3(v.x, v.y, v.z));
@@ -164,7 +179,6 @@ export interface Die {
 export function makeDie(type: DieType, r = 1, tens = false): Die {
   const geo = baseGeometry(type, r);
   const faceInfos = groupFaces(geo);
-  const n = faceInfos.length;
   const sides = SIDES[type];
 
   // material with a subtle navy body
@@ -201,8 +215,7 @@ export function makeDie(type: DieType, r = 1, tens = false): Die {
     mesh.add(plane);
   });
 
-  const rest =
-    faceInfos.slice(0, sides).reduce((s, f) => s + f.centroid.dot(f.normal), 0) / sides;
+  const rest = faceInfos.slice(0, sides).reduce((s, f) => s + f.centroid.dot(f.normal), 0) / sides;
 
   return {
     type,

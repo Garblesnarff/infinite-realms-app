@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -43,8 +42,20 @@ describe('useStarterCharacterTemplates', () => {
         class: 'Fighter',
         background: 'Noble',
         level: 1,
-        ability_scores: { strength: 16, dexterity: 14, constitution: 15, intelligence: 10, wisdom: 12, charisma: 14 },
-        personality: { traits: ['Brave'], ideals: ['Justice'], bonds: ['The Kingdom'], flaws: ['None'] },
+        ability_scores: {
+          strength: 16,
+          dexterity: 14,
+          constitution: 15,
+          intelligence: 10,
+          wisdom: 12,
+          charisma: 14,
+        },
+        personality: {
+          traits: ['Brave'],
+          ideals: ['Justice'],
+          bonds: ['The Kingdom'],
+          flaws: ['None'],
+        },
         skills: ['Athletics'],
         languages: ['Common'],
         equipment: ['Sword'],
@@ -117,7 +128,6 @@ describe('useStarterCharacterTemplates', () => {
   });
 
   it('should handle non-Error catch objects', async () => {
-    // eslint-disable-next-line prefer-promise-reject-errors
     vi.mocked(userDataApi.listStarterCharacterTemplates).mockRejectedValueOnce('string error');
 
     const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
@@ -128,7 +138,7 @@ describe('useStarterCharacterTemplates', () => {
   });
 
   it('should provide default values for missing data', async () => {
-     const mockData = [
+    const mockData = [
       {
         id: '2',
         starter_campaign_id: mockCampaignId,
@@ -218,7 +228,6 @@ describe('useStarterCharacterTemplate', () => {
   });
 
   it('should handle string throw in single fetch', async () => {
-    // eslint-disable-next-line prefer-promise-reject-errors
     vi.mocked(userDataApi.getStarterCharacterTemplate).mockRejectedValueOnce('string error');
 
     const { result } = renderHook(() => useStarterCharacterTemplate(mockTemplateId));

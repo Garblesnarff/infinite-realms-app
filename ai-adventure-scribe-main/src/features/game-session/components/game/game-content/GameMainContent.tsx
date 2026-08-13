@@ -1,15 +1,15 @@
 import { Dice6, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
+import { GamePanelControls } from './GamePanelControls';
 import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
+import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { MessageHandler } from '../message/MessageHandler';
-import { StatsBar } from '../StatsBar';
-import { TimelineRail } from '../TimelineRail';
 import { SceneHeader } from '../overhaul/SceneHeader';
 import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
-import { GamePanelControls } from './GamePanelControls';
-import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
+import { StatsBar } from '../StatsBar';
+import { TimelineRail } from '../TimelineRail';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 

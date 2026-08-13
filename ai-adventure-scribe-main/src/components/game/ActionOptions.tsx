@@ -4,14 +4,9 @@ import React, { useState, useEffect, useId } from 'react';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
+import { cn } from '@/lib/utils';
 
 interface ActionOptionsProps {
   options: ActionOption[];
@@ -91,7 +86,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const instructionsId = useId();
+    const instructionsId = useId();
 
     // Show options after delay
     useEffect(() => {
@@ -144,10 +139,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           {/* Option buttons with fade-in animation */}
           {visible && (
             <div className="space-y-3 animate-in fade-in-0 duration-500">
-              <div
-                id={instructionsId}
-                className="text-xs text-muted-foreground text-center mb-3"
-              >
+              <div id={instructionsId} className="text-xs text-muted-foreground text-center mb-3">
                 What would you like to do?
               </div>
 
@@ -164,7 +156,9 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                   return (
                     <Tooltip key={option.id} delayDuration={300}>
                       <TooltipTrigger asChild>
-                        <span className={cn('w-full block', isDisabled ? 'cursor-not-allowed' : '')}>
+                        <span
+                          className={cn('w-full block', isDisabled ? 'cursor-not-allowed' : '')}
+                        >
                           <Button
                             type="button"
                             variant="outline"
@@ -172,7 +166,11 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                             onClick={() => handleOptionClick(option)}
                             disabled={isDisabled}
                             aria-pressed={isSelected}
-                            aria-label={isSelected ? `Selected: Option ${option.number} - ${option.text}` : `Option ${option.number} - ${option.text}`}
+                            aria-label={
+                              isSelected
+                                ? `Selected: Option ${option.number} - ${option.text}`
+                                : `Option ${option.number} - ${option.text}`
+                            }
                             className={`
                             flex items-start gap-3 p-4 h-full w-full text-left justify-start
                             transition-all duration-200 border rounded-xl
@@ -188,7 +186,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                             }}
                           >
                             <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-infinite-gold/30 bg-infinite-gold/10">
-                              <IconComponent className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
+                              <IconComponent
+                                className="h-4 w-4 text-infinite-gold"
+                                aria-hidden="true"
+                              />
                             </div>
 
                             <div className="flex-1 min-w-0">
@@ -202,7 +203,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
                             {isSelected && (
                               <div className="flex-shrink-0 mt-1">
-                                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse" aria-hidden="true"></div>
+                                <div
+                                  className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse"
+                                  aria-hidden="true"
+                                ></div>
                               </div>
                             )}
                           </Button>
@@ -218,9 +222,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
               {/* Help text */}
               {!selectedOption && (
-                <div
-                  className="text-xs text-muted-foreground text-center pt-2 opacity-75"
-                >
+                <div className="text-xs text-muted-foreground text-center pt-2 opacity-75">
                   Or describe your own action in the chat
                 </div>
               )}

@@ -2,8 +2,8 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { SafetyCommandProcessor } from '../SafetyCommandProcessor';
 import { SafetyAuditService } from '../SafetyAuditService';
+import { SafetyCommandProcessor } from '../SafetyCommandProcessor';
 import { SAFETY_ENABLED } from '../types';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -150,7 +150,10 @@ describe('SafetyCommandProcessor', () => {
     });
 
     it('should handle config load errors gracefully and use defaults', async () => {
-      mockSupabaseChain.single.mockResolvedValueOnce({ data: null, error: { message: 'Database error', status: 500 } as any });
+      mockSupabaseChain.single.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Database error', status: 500 } as any,
+      });
 
       const result = await processor.checkAutoTriggerCommands('there is blood');
       expect(result.isSafetyCommand).toBe(true);
@@ -212,42 +215,53 @@ describe('SafetyCommandProcessor', () => {
       };
 
       await processor.processSafetyCommand(command);
-      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('No userId provided for audit log'));
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining('No userId provided for audit log'),
+      );
     });
 
     it('should log successfully if userId is provided via SafetyAuditService', async () => {
-        const command: any = {
-          type: 'x_card',
-          triggeredBy: 'explicit_command',
-          timestamp: new Date().toISOString(),
-        };
+      const command: any = {
+        type: 'x_card',
+        triggeredBy: 'explicit_command',
+        timestamp: new Date().toISOString(),
+      };
 
-        mockSupabaseChain.insert.mockResolvedValueOnce({ error: null });
+      mockSupabaseChain.insert.mockResolvedValueOnce({ error: null });
 
-        await SafetyAuditService.logSafetyEvent(sessionId, command, 'player msg', 'ai msg', {}, 'user-123');
+      await SafetyAuditService.logSafetyEvent(
+        sessionId,
+        command,
+        'player msg',
+        'ai msg',
+        {},
+        'user-123',
+      );
 
-        expect(supabase.from).toHaveBeenCalledWith('safety_audit_trail');
-        expect(mockSupabaseChain.insert).toHaveBeenCalledWith(expect.objectContaining({
-            user_id: 'user-123',
-            event_type: 'x_card'
-        }));
+      expect(supabase.from).toHaveBeenCalledWith('safety_audit_trail');
+      expect(mockSupabaseChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-123',
+          event_type: 'x_card',
+        }),
+      );
     });
   });
 
   describe('findTriggerWordOptimized', () => {
-      it('should find the longest trigger word first', () => {
-          const triggers = ['blood', 'bloody'];
-          const text = 'it was very bloody';
-          // Access private method
-          const result = (processor as any).findTriggerWordOptimized(text, triggers);
-          expect(result).toBe('bloody');
-      });
+    it('should find the longest trigger word first', () => {
+      const triggers = ['blood', 'bloody'];
+      const text = 'it was very bloody';
+      // Access private method
+      const result = (processor as any).findTriggerWordOptimized(text, triggers);
+      expect(result).toBe('bloody');
+    });
 
-      it('should return null if no trigger word matches', () => {
-          const triggers = ['blood', 'gore'];
-          const text = 'hello world';
-          const result = (processor as any).findTriggerWordOptimized(text, triggers);
-          expect(result).toBe(null);
-      });
+    it('should return null if no trigger word matches', () => {
+      const triggers = ['blood', 'gore'];
+      const text = 'hello world';
+      const result = (processor as any).findTriggerWordOptimized(text, triggers);
+      expect(result).toBe(null);
+    });
   });
 });

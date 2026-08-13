@@ -12,7 +12,6 @@ import {
 import type { Character, CharacterClass } from '@/types/character';
 
 import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
-
 import {
   SKILLS_MAP,
   calculateProficiencyBonus,

@@ -1,25 +1,68 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies BEFORE importing module under test
 vi.mock('@/services/spell-progression-data', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/spell-progression-data')>();
+  const actual = await importOriginal<typeof SpellProgressionDataModule>();
   return {
     ...actual,
     spellcastingClasses: [
       ...actual.spellcastingClasses,
-      { id: 'paladin', name: 'Paladin', spellcasting_ability: 'Charisma', caster_type: 'half', spell_slots_start_level: 2 },
-      { id: 'arcane-trickster', name: 'Arcane Trickster', spellcasting_ability: 'Intelligence', caster_type: 'third', spell_slots_start_level: 3 },
+      {
+        id: 'paladin',
+        name: 'Paladin',
+        spellcasting_ability: 'Charisma',
+        caster_type: 'half',
+        spell_slots_start_level: 2,
+      },
+      {
+        id: 'arcane-trickster',
+        name: 'Arcane Trickster',
+        spellcasting_ability: 'Intelligence',
+        caster_type: 'third',
+        spell_slots_start_level: 3,
+      },
     ],
   };
 });
 
 vi.mock('@/data/spellOptions', () => ({
   allSpells: [
-    { id: 'fireball', name: 'Fireball', level: 3, school: 'Evocation', ritual: false, concentration: false, castingTime: '1 action', range: '150 feet', duration: 'Instantaneous', description: 'A bright streak...' },
-    { id: 'cure-wounds', name: 'Cure Wounds', level: 1, school: 'Evocation', ritual: false, concentration: false, castingTime: '1 action', range: 'Touch', duration: 'Instantaneous', description: 'A creature you touch...' },
-    { id: 'detect-magic', name: 'Detect Magic', level: 1, school: 'Divination', ritual: true, concentration: true, castingTime: '1 action', range: 'Self', duration: 'Concentration, up to 10 minutes', description: 'For the duration...' },
+    {
+      id: 'fireball',
+      name: 'Fireball',
+      level: 3,
+      school: 'Evocation',
+      ritual: false,
+      concentration: false,
+      castingTime: '1 action',
+      range: '150 feet',
+      duration: 'Instantaneous',
+      description: 'A bright streak...',
+    },
+    {
+      id: 'cure-wounds',
+      name: 'Cure Wounds',
+      level: 1,
+      school: 'Evocation',
+      ritual: false,
+      concentration: false,
+      castingTime: '1 action',
+      range: 'Touch',
+      duration: 'Instantaneous',
+      description: 'A creature you touch...',
+    },
+    {
+      id: 'detect-magic',
+      name: 'Detect Magic',
+      level: 1,
+      school: 'Divination',
+      ritual: true,
+      concentration: true,
+      castingTime: '1 action',
+      range: 'Self',
+      duration: 'Concentration, up to 10 minutes',
+      description: 'For the duration...',
+    },
   ],
   getClassSpells: vi.fn((className: string) => {
     if (className === 'Wizard') {
@@ -36,6 +79,9 @@ vi.mock('@/data/spellOptions', () => ({
 }));
 
 import { localSpellService } from '../localSpellService';
+
+import type * as SpellProgressionDataModule from '@/services/spell-progression-data';
+
 import { allSpells, getClassSpells } from '@/data/spellOptions';
 
 describe('LocalSpellService', () => {
@@ -53,7 +99,7 @@ describe('LocalSpellService', () => {
     it('should filter by level', async () => {
       const spells = await localSpellService.getAllSpells({ level: 1 });
       expect(spells).toHaveLength(2);
-      expect(spells.every(s => s.level === 1)).toBe(true);
+      expect(spells.every((s) => s.level === 1)).toBe(true);
     });
 
     it('should filter by school', async () => {
@@ -72,8 +118,8 @@ describe('LocalSpellService', () => {
       const spells = await localSpellService.getAllSpells({ class: 'Wizard' });
       // getClassSpells for Wizard returns fireball and detect-magic
       expect(spells).toHaveLength(2);
-      expect(spells.map(s => s.id)).toContain('fireball');
-      expect(spells.map(s => s.id)).toContain('detect-magic');
+      expect(spells.map((s) => s.id)).toContain('fireball');
+      expect(spells.map((s) => s.id)).toContain('detect-magic');
       expect(getClassSpells).toHaveBeenCalledWith('Wizard');
     });
 
@@ -193,7 +239,9 @@ describe('LocalSpellService', () => {
     });
 
     it('should throw error for non-existent spell', async () => {
-      await expect(localSpellService.getSpellById('non-existent')).rejects.toThrow('Spell with ID non-existent not found');
+      await expect(localSpellService.getSpellById('non-existent')).rejects.toThrow(
+        'Spell with ID non-existent not found',
+      );
     });
   });
 
@@ -202,7 +250,7 @@ describe('LocalSpellService', () => {
       const classes = await localSpellService.getSpellcastingClasses();
       expect(classes).toBeDefined();
       expect(classes.length).toBeGreaterThan(0);
-      expect(classes.some(c => c.name === 'Wizard')).toBe(true);
+      expect(classes.some((c) => c.name === 'Wizard')).toBe(true);
     });
   });
 });

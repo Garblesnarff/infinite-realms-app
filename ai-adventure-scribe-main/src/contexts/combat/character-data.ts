@@ -6,6 +6,7 @@
 
 import type { CharacterData } from './participant-factory';
 import type { Character } from '@/types/character';
+
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 /**

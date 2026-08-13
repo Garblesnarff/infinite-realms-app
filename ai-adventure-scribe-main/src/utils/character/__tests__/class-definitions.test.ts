@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 
 import { CLASS_FEATURES_MAP, getHitDie, getInitialCharacterResources } from '../class-definitions';
+
 import { classes } from '@/data/classes';
 
 describe('class-definitions', () => {
@@ -10,7 +10,9 @@ describe('class-definitions', () => {
     for (const characterClass of classes) {
       expect(characterClass.subclasses.length).toBeGreaterThan(0);
       expect(characterClass.subclasses[0].features.length).toBeGreaterThan(0);
-      expect(characterClass.subclasses[0].features.every((feature) => feature.level >= 1)).toBe(true);
+      expect(characterClass.subclasses[0].features.every((feature) => feature.level >= 1)).toBe(
+        true,
+      );
     }
   });
   describe('getHitDie', () => {
@@ -157,66 +159,66 @@ describe('class-definitions', () => {
     it('should return correct features for Barbarian', () => {
       const getFeatures = CLASS_FEATURES_MAP['barbarian'];
       const lvl1 = getFeatures(1);
-      expect(lvl1.some(f => f.name === 'rage')).toBe(true);
-      expect(lvl1.some(f => f.name === 'unarmored_defense')).toBe(true);
+      expect(lvl1.some((f) => f.name === 'rage')).toBe(true);
+      expect(lvl1.some((f) => f.name === 'unarmored_defense')).toBe(true);
 
-      const rage = lvl1.find(f => f.name === 'rage');
+      const rage = lvl1.find((f) => f.name === 'rage');
       expect(rage?.maxUses).toBe(2);
 
       const lvl20 = getFeatures(20);
-      const rage20 = lvl20.find(f => f.name === 'rage');
+      const rage20 = lvl20.find((f) => f.name === 'rage');
       expect(rage20?.maxUses).toBe(999); // Unlimited
     });
 
     it('should return correct features for Rogue', () => {
       const getFeatures = CLASS_FEATURES_MAP['rogue'];
-      expect(getFeatures(1).some(f => f.name === 'sneak_attack')).toBe(true);
-      expect(getFeatures(1).some(f => f.name === 'uncanny_dodge')).toBe(false);
-      expect(getFeatures(5).some(f => f.name === 'uncanny_dodge')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'sneak_attack')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'uncanny_dodge')).toBe(false);
+      expect(getFeatures(5).some((f) => f.name === 'uncanny_dodge')).toBe(true);
     });
 
     it('should return correct features for Fighter', () => {
       const getFeatures = CLASS_FEATURES_MAP['fighter'];
-      expect(getFeatures(1).some(f => f.name === 'second_wind')).toBe(true);
-      expect(getFeatures(2).some(f => f.name === 'action_surge')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'second_wind')).toBe(true);
+      expect(getFeatures(2).some((f) => f.name === 'action_surge')).toBe(true);
     });
 
     it('should return correct features for Monk', () => {
       const getFeatures = CLASS_FEATURES_MAP['monk'];
-      expect(getFeatures(1).some(f => f.name === 'unarmored_defense')).toBe(true);
-      expect(getFeatures(2).some(f => f.name === 'ki')).toBe(true);
-      expect(getFeatures(3).some(f => f.name === 'deflect_missiles')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'unarmored_defense')).toBe(true);
+      expect(getFeatures(2).some((f) => f.name === 'ki')).toBe(true);
+      expect(getFeatures(3).some((f) => f.name === 'deflect_missiles')).toBe(true);
     });
 
     it('should return correct features for Bard', () => {
       const getFeatures = CLASS_FEATURES_MAP['bard'];
-      expect(getFeatures(1).some(f => f.name === 'bardic_inspiration')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'bardic_inspiration')).toBe(true);
     });
 
     it('should return correct features for Cleric', () => {
       const getFeatures = CLASS_FEATURES_MAP['cleric'];
-      expect(getFeatures(2).some(f => f.name === 'channel_divinity')).toBe(true);
+      expect(getFeatures(2).some((f) => f.name === 'channel_divinity')).toBe(true);
     });
 
     it('should return correct features for Paladin', () => {
       const getFeatures = CLASS_FEATURES_MAP['paladin'];
-      expect(getFeatures(1).some(f => f.name === 'lay_on_hands')).toBe(true);
-      expect(getFeatures(2).some(f => f.name === 'divine_smite')).toBe(true);
-      expect(getFeatures(3).some(f => f.name === 'channel_divinity')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'lay_on_hands')).toBe(true);
+      expect(getFeatures(2).some((f) => f.name === 'divine_smite')).toBe(true);
+      expect(getFeatures(3).some((f) => f.name === 'channel_divinity')).toBe(true);
 
-      const cd = getFeatures(3).find(f => f.name === 'channel_divinity');
+      const cd = getFeatures(3).find((f) => f.name === 'channel_divinity');
       expect(cd?.maxUses).toBe(1);
     });
 
     it('should return correct features for Druid', () => {
       const getFeatures = CLASS_FEATURES_MAP['druid'];
-      expect(getFeatures(1).some(f => f.name === 'wild_shape')).toBe(false);
-      expect(getFeatures(2).some(f => f.name === 'wild_shape')).toBe(true);
+      expect(getFeatures(1).some((f) => f.name === 'wild_shape')).toBe(false);
+      expect(getFeatures(2).some((f) => f.name === 'wild_shape')).toBe(true);
 
-      const ws2 = getFeatures(2).find(f => f.name === 'wild_shape');
+      const ws2 = getFeatures(2).find((f) => f.name === 'wild_shape');
       expect(ws2?.maxUses).toBe(2);
 
-      const ws20 = getFeatures(20).find(f => f.name === 'wild_shape');
+      const ws20 = getFeatures(20).find((f) => f.name === 'wild_shape');
       expect(ws20?.maxUses).toBe(999);
     });
   });

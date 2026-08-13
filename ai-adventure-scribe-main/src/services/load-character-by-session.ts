@@ -25,7 +25,7 @@ import { userDataApi } from '@/services/user-data-api';
  */
 export async function loadCharacterBySession(
   sessionId: string,
-  userId?: string,
+  _userId?: string,
 ): Promise<Character | undefined> {
   try {
     // The authenticated server route performs the ownership check. game_sessions has no user_id column.

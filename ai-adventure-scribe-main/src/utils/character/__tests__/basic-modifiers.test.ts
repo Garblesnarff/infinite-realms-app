@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+import { describe, it, expect } from 'vitest';
 
 import {
   calculateAbilityModifier,

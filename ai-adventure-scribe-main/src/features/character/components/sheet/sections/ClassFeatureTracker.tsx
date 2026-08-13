@@ -1,5 +1,9 @@
 import React from 'react';
 
+import { FeatureSection } from './class-feature-tracker/FeatureSection';
+import { ResourceSection } from './class-feature-tracker/ResourceSection';
+import { RestActionButtons } from './class-feature-tracker/RestActionButtons';
+
 import type { Character } from '@/types/character';
 import type { ClassFeature } from '@/types/combat';
 
@@ -7,10 +11,6 @@ import logger from '@/lib/logger';
 import { updateCharacterClassFeatures } from '@/services/class-features-api';
 import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
-
-import { FeatureSection } from './class-feature-tracker/FeatureSection';
-import { ResourceSection } from './class-feature-tracker/ResourceSection';
-import { RestActionButtons } from './class-feature-tracker/RestActionButtons';
 
 interface ClassFeatureTrackerProps {
   character: Character;

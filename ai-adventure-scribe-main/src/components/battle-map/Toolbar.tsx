@@ -19,8 +19,8 @@
 import { Grid3x3, HelpCircle } from 'lucide-react';
 import React, { useCallback } from 'react';
 
-import { ToolButton } from './ToolButton';
 import { TOOLS, type ToolConfig } from './toolbar-config';
+import { ToolButton } from './ToolButton';
 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';

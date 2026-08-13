@@ -2,6 +2,7 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { formatEquipmentContextType } from '../builder';
 import {
   enhanceCampaignContext,
   enhanceMemoryContext,
@@ -13,7 +14,6 @@ import {
   sortMemoriesByRelevance,
   validateGameContext,
 } from '../contextValidation';
-import { formatEquipmentContextType } from '../builder';
 
 vi.mock('@/lib/logger', () => ({
   default: {

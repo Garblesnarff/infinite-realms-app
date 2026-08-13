@@ -1,5 +1,3 @@
-import { logger } from '../lib/logger.js';
-import { getCircuitBreaker, CircuitOpenError } from '../utils/circuit-breaker.js';
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import {
   DEFAULT_GEMINI_TEXT_MODEL,
@@ -10,6 +8,8 @@ import {
   getOpenRouterModelCandidates,
 } from './llm-model-config.js';
 import { getStructuredOutputUnsupportedModels } from './model-health.js';
+import { logger } from '../lib/logger.js';
+import { getCircuitBreaker, CircuitOpenError } from '../utils/circuit-breaker.js';
 
 /**
  * Extracted from routes/v1/llm.ts
@@ -65,10 +65,15 @@ export const validateStructuredResponseText = (
   if (!responseSchema) return;
   let parsed: unknown;
   try {
-    const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    const cleaned = text
+      .trim()
+      .replace(/^```(?:json)?\s*/, '')
+      .replace(/\s*```$/, '');
     parsed = JSON.parse(cleaned);
   } catch (error) {
-    throw new Error(`Structured response is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Structured response is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   if (
     !parsed ||
@@ -418,15 +423,15 @@ export class LLMProviderService {
         attempts.push(candidate);
         try {
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.APP_ORIGIN || 'http://localhost:5173',
-            'X-Title': 'AI Adventure Scribe',
-          },
-          body: JSON.stringify(reqBody),
-          signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': process.env.APP_ORIGIN || 'http://localhost:5173',
+              'X-Title': 'AI Adventure Scribe',
+            },
+            body: JSON.stringify(reqBody),
+            signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
           });
 
           if (response.ok) {
@@ -438,7 +443,10 @@ export class LLMProviderService {
               } catch (validationError) {
                 lastFailure = {
                   status: 502,
-                  details: validationError instanceof Error ? validationError.message : String(validationError),
+                  details:
+                    validationError instanceof Error
+                      ? validationError.message
+                      : String(validationError),
                 };
                 logger.warn({
                   msg: 'LLM_OPENROUTER_STRUCTURED_RESPONSE_INVALID',
@@ -465,7 +473,11 @@ export class LLMProviderService {
           }
 
           const errText = await response.text();
-          lastFailure = { status: response.status, details: errText, retryAfter: retryAfterSeconds(response) };
+          lastFailure = {
+            status: response.status,
+            details: errText,
+            retryAfter: retryAfterSeconds(response),
+          };
         } catch (error) {
           const details = error instanceof Error ? error.message : String(error);
           lastFailure = { status: 503, details, retryAfter: 1 };
@@ -583,7 +595,11 @@ export class LLMProviderService {
             },
           );
         } catch (error) {
-          lastFailure = { status: 503, details: error instanceof Error ? error.message : String(error), retryAfter: 1 };
+          lastFailure = {
+            status: 503,
+            details: error instanceof Error ? error.message : String(error),
+            retryAfter: 1,
+          };
           break;
         }
 
@@ -599,7 +615,10 @@ export class LLMProviderService {
             } catch (validationError) {
               lastFailure = {
                 status: 502,
-                details: validationError instanceof Error ? validationError.message : String(validationError),
+                details:
+                  validationError instanceof Error
+                    ? validationError.message
+                    : String(validationError),
               };
               logger.warn({
                 msg: 'LLM_GEMINI_STRUCTURED_RESPONSE_INVALID',
@@ -616,7 +635,11 @@ export class LLMProviderService {
         }
 
         const errText = await response.text();
-        lastFailure = { status: response.status, details: errText, retryAfter: retryAfterSeconds(response) };
+        lastFailure = {
+          status: response.status,
+          details: errText,
+          retryAfter: retryAfterSeconds(response),
+        };
 
         if (isModelUnavailableError(response.status, errText)) {
           if (!availableModels) {
@@ -638,7 +661,12 @@ export class LLMProviderService {
           break;
         }
 
-        logger.warn({ msg: 'LLM_GEMINI_REQUEST_FAILED', candidate, status: response.status, errText });
+        logger.warn({
+          msg: 'LLM_GEMINI_REQUEST_FAILED',
+          candidate,
+          status: response.status,
+          errText,
+        });
         break;
       }
       if (successPayload && successModel) break;

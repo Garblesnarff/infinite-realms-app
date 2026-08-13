@@ -1,12 +1,12 @@
-import type { CharacterClass, AbilityScores } from '@/types/character';
 import { classSubclasses } from './subclasses';
+
+import type { CharacterClass, AbilityScores } from '@/types/character';
 
 export const paladin: CharacterClass = {
   subclasses: classSubclasses.paladin,
   id: 'paladin',
   name: 'Paladin',
-  description:
-    'A holy warrior bound to a sacred oath, wielding divine magic and martial prowess.',
+  description: 'A holy warrior bound to a sacred oath, wielding divine magic and martial prowess.',
   backgroundImage: '/images/classes/paladin-class-card-background.png',
   hitDie: 10,
   primaryAbility: 'strength' as keyof AbilityScores,

@@ -7,7 +7,7 @@
  * @author AI Dungeon Master Team
  */
 
-import { MODEL_ID, VOICE_CONFIGS, CHARACTER_KEYWORDS } from './voice/voice-constants';
+import { VOICE_CONFIGS, CHARACTER_KEYWORDS } from './voice/voice-constants';
 
 import type { VoiceConfig } from './voice/voice-types';
 

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -8,7 +8,7 @@ import type { Character, CharacterClass } from '@/types/character';
 
 // Mock useMulticlassing hook
 vi.mock('@/hooks/use-multiclassing', () => ({
-  useMulticlassing: vi.fn((character, onUpdate) => ({
+  useMulticlassing: vi.fn((character, _onUpdate) => ({
     isProcessing: false,
     validationResult: null,
     validateNewClass: vi.fn(),
@@ -42,9 +42,7 @@ describe('MulticlassManager Accessibility', () => {
   it('should have role="button" and aria-expanded on class expansion headers', () => {
     const multiclassCharacter = {
       ...mockCharacter,
-      classLevels: [
-        { classId: 'fighter', className: 'Fighter', level: 1, hitDie: 10 }
-      ]
+      classLevels: [{ classId: 'fighter', className: 'Fighter', level: 1, hitDie: 10 }],
     } as Character;
 
     render(<MulticlassManager character={multiclassCharacter} onUpdate={mockOnUpdate} />);
@@ -56,11 +54,15 @@ describe('MulticlassManager Accessibility', () => {
   });
 
   it('should have role="button" on Add New Class selection items', () => {
-    const availableClasses = [
-      { id: 'wizard', name: 'Wizard', hitDie: 6 }
-    ] as CharacterClass[];
+    const availableClasses = [{ id: 'wizard', name: 'Wizard', hitDie: 6 }] as CharacterClass[];
 
-    render(<MulticlassManager character={mockCharacter} onUpdate={mockOnUpdate} availableClasses={availableClasses} />);
+    render(
+      <MulticlassManager
+        character={mockCharacter}
+        onUpdate={mockOnUpdate}
+        availableClasses={availableClasses}
+      />,
+    );
 
     const addClassButton = screen.getByRole('button', { name: /Add class: Wizard/i });
     expect(addClassButton).toBeInTheDocument();
@@ -70,9 +72,7 @@ describe('MulticlassManager Accessibility', () => {
   it('should have aria-label on level-up button', () => {
     const multiclassCharacter = {
       ...mockCharacter,
-      classLevels: [
-        { classId: 'fighter', className: 'Fighter', level: 1, hitDie: 10 }
-      ]
+      classLevels: [{ classId: 'fighter', className: 'Fighter', level: 1, hitDie: 10 }],
     } as Character;
 
     render(<MulticlassManager character={multiclassCharacter} onUpdate={mockOnUpdate} />);

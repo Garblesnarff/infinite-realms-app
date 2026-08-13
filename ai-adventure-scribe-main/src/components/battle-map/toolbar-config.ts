@@ -1,15 +1,7 @@
-import {
-  MousePointer2,
-  Hand,
-  Ruler,
-  Pen,
-  Circle,
-  Box,
-  Eye,
-} from 'lucide-react';
-import React from 'react';
+import { MousePointer2, Hand, Ruler, Pen, Circle, Box, Eye } from 'lucide-react';
 
 import type { ToolType } from '@/stores/useBattleMapStore';
+import type React from 'react';
 
 export interface ToolConfig {
   id: ToolType;

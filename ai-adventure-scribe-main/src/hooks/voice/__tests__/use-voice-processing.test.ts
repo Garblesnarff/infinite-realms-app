@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
 import { renderHook, act } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useVoiceProcessing } from '../use-voice-processing';
@@ -72,12 +71,8 @@ describe('useVoiceProcessing', () => {
   });
 
   it('should process segments progressively', async () => {
-    const aiSegments = [
-      { type: 'dm', text: 'Hello', character: 'DM' },
-    ];
-    const voiceSegments = [
-      { character: 'DM', text: 'Hello', voice_category: 'dm' },
-    ];
+    const aiSegments = [{ type: 'dm', text: 'Hello', character: 'DM' }];
+    const voiceSegments = [{ character: 'DM', text: 'Hello', voice_category: 'dm' }];
 
     (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
     (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
@@ -129,10 +124,12 @@ describe('useVoiceProcessing', () => {
       await result.current.speakAISegments([{ type: 'dm', text: 'test' }] as any);
     });
 
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'API Key Timeout',
-      variant: 'destructive',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'API Key Timeout',
+        variant: 'destructive',
+      }),
+    );
     expect(mockSetState).toHaveBeenCalledWith(expect.any(Function));
   });
 
@@ -160,7 +157,10 @@ describe('useVoiceProcessing', () => {
     });
 
     expect(mockPlayAudioSegment).toHaveBeenCalledTimes(1);
-    expect(mockPlayAudioSegment).toHaveBeenCalledWith(expect.objectContaining({ text: 'Success' }), 1);
+    expect(mockPlayAudioSegment).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Success' }),
+      1,
+    );
   });
 
   it('should handle no valid voice segments', async () => {
@@ -173,10 +173,12 @@ describe('useVoiceProcessing', () => {
       await result.current.speakAISegments([{ type: 'dm', text: 'test' }] as any);
     });
 
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Voice Error',
-      description: 'No valid voice segments created',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Voice Error',
+        description: 'No valid voice segments created',
+      }),
+    );
   });
 
   it('should resume playback from current position', async () => {
@@ -194,7 +196,10 @@ describe('useVoiceProcessing', () => {
     };
 
     mockBaseResumePlayback.mockResolvedValue(false);
-    (VoiceDirector.generateAudio as any).mockResolvedValue({ ...segments[1], audioUrl: 'http://test.com/2.mp3' });
+    (VoiceDirector.generateAudio as any).mockResolvedValue({
+      ...segments[1],
+      audioUrl: 'http://test.com/2.mp3',
+    });
 
     const { result } = renderHook(() => useVoiceProcessing(propsWithSegments));
 
@@ -269,16 +274,15 @@ describe('useVoiceProcessing', () => {
   it('should abort previous processing when a new request comes in', async () => {
     const aiSegments1 = [{ type: 'dm', text: 'First Request' }];
     const aiSegments2 = [{ type: 'dm', text: 'Second Request' }];
-    const voiceSegments1 = [{ character: 'DM', text: 'First Request' }];
-    const voiceSegments2 = [{ character: 'DM', text: 'Second Request' }];
-
     (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
-    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) => segs.map((s: any) => ({ character: 'DM', text: s.text })));
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text })),
+    );
 
     // Slow generation for first request
     (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => {
       if (segment.text === 'First Request') {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
       return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
     });
@@ -290,7 +294,7 @@ describe('useVoiceProcessing', () => {
     });
 
     // Short delay to ensure it starts
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     await act(async () => {
       await result.current.speakAISegments(aiSegments2 as any);
@@ -299,18 +303,27 @@ describe('useVoiceProcessing', () => {
     await firstCall;
 
     // This checks that VoiceDirector.generateAudio was called for the second request
-    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(expect.objectContaining({ text: 'Second Request' }), 'test-api-key');
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Second Request' }),
+      'test-api-key',
+    );
   });
 
   it('should not continue loop if aborted', async () => {
-    const aiSegments1 = [{ type: 'dm', text: '1.1' }, { type: 'dm', text: '1.2' }];
-    const voiceSegments1 = [{ character: 'DM', text: '1.1' }, { character: 'DM', text: '1.2' }];
+    const aiSegments1 = [
+      { type: 'dm', text: '1.1' },
+      { type: 'dm', text: '1.2' },
+    ];
+    const voiceSegments1 = [
+      { character: 'DM', text: '1.1' },
+      { character: 'DM', text: '1.2' },
+    ];
 
     (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments1);
     (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments1);
 
     (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
       return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
     });
 
@@ -320,7 +333,7 @@ describe('useVoiceProcessing', () => {
       await result.current.speakAISegments(aiSegments1 as any);
     });
 
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     // Abort manually via the controller
     act(() => {
@@ -330,7 +343,13 @@ describe('useVoiceProcessing', () => {
     await firstCall;
 
     expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(1);
-    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(expect.objectContaining({ text: '1.1' }), expect.any(String));
-    expect(VoiceDirector.generateAudio).not.toHaveBeenCalledWith(expect.objectContaining({ text: '1.2' }), expect.any(String));
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '1.1' }),
+      expect.any(String),
+    );
+    expect(VoiceDirector.generateAudio).not.toHaveBeenCalledWith(
+      expect.objectContaining({ text: '1.2' }),
+      expect.any(String),
+    );
   });
 });

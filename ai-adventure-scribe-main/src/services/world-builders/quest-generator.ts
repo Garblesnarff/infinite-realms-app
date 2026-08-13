@@ -3,7 +3,6 @@ import { MemoryManager } from '../memory-manager';
 import type { QuestRequest, GeneratedQuest } from '@/services/world-builders/quest-types';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import {

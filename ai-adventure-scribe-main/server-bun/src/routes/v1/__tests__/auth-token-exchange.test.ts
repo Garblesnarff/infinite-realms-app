@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import { Elysia } from 'elysia';
 
-import { createAuthTokenExchangeRoutes } from '../auth-token-exchange.js';
 import { AuthTokenExchangeCodeStore } from '../../../services/auth-token-exchange.js';
+import { createAuthTokenExchangeRoutes } from '../auth-token-exchange.js';
 
 function createTestApp(store: AuthTokenExchangeCodeStore, key: string) {
   return new Elysia({ prefix: '/v1/auth' }).use(

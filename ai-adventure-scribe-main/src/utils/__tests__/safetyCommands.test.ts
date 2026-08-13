@@ -5,7 +5,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 // We need to mock the safety types BEFORE importing safetyCommands to control SAFETY_ENABLED
 let mockSafetyEnabled = true;
 vi.mock('@/features/safety/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/safety/types')>();
+  const actual = await importOriginal<typeof SafetyTypesModule>();
   return {
     ...actual,
     get SAFETY_ENABLED() {
@@ -26,7 +26,7 @@ vi.mock('@/lib/logger', () => ({
 
 // Mock SafetyCommandProcessor to allow error injection
 vi.mock('@/features/safety/SafetyCommandProcessor', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/safety/SafetyCommandProcessor')>();
+  const actual = await importOriginal<typeof SafetyCommandProcessorModule>();
   return {
     ...actual,
     SafetyCommandProcessor: vi.fn().mockImplementation((sessionId: string) => {
@@ -36,6 +36,10 @@ vi.mock('@/features/safety/SafetyCommandProcessor', async (importOriginal) => {
 });
 
 import { checkSafetyCommands, processSafetyCommand } from '../safetyCommands';
+
+import type * as SafetyCommandProcessorModule from '@/features/safety/SafetyCommandProcessor';
+import type * as SafetyTypesModule from '@/features/safety/types';
+
 import { SafetyCommandProcessor } from '@/features/safety/SafetyCommandProcessor';
 import logger from '@/lib/logger';
 
@@ -60,31 +64,106 @@ describe('Safety Commands', () => {
     vi.clearAllMocks();
     mockSafetyEnabled = true;
     // Reset SafetyCommandProcessor mock to default implementation
-    vi.mocked(SafetyCommandProcessor).mockImplementation((sessionId: string) => {
+    vi.mocked(SafetyCommandProcessor).mockImplementation((_sessionId: string) => {
       // Use the actual implementation's prototype or a manual mock that behaves like the real thing
       // Since we want to test behavior, and the real thing is already tested,
       // we'll use a functional mock that matches the expected interface for standard tests
       return {
         checkExplicitSafetyCommands: vi.fn((msg) => {
           const trimmed = msg.trim().toLowerCase();
-          if (trimmed === '/x' || trimmed.startsWith('/x ')) return { isSafetyCommand: true, command: { type: 'x_card', triggeredBy: 'explicit_command', timestamp: new Date().toISOString(), context: msg.trim() } };
-          if (trimmed === '/veil' || trimmed.startsWith('/veil ')) return { isSafetyCommand: true, command: { type: 'veil', triggeredBy: 'explicit_command', timestamp: new Date().toISOString(), context: msg.trim() } };
-          if (trimmed === '/pause' || trimmed.startsWith('/pause ')) return { isSafetyCommand: true, command: { type: 'pause', triggeredBy: 'explicit_command', timestamp: new Date().toISOString(), context: msg.trim() }, shouldPause: true };
-          if (trimmed === '/resume' || trimmed.startsWith('/resume ')) return { isSafetyCommand: true, command: { type: 'resume', triggeredBy: 'explicit_command', timestamp: new Date().toISOString(), context: msg.trim() }, shouldResume: true };
+          if (trimmed === '/x' || trimmed.startsWith('/x '))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'x_card',
+                triggeredBy: 'explicit_command',
+                timestamp: new Date().toISOString(),
+                context: msg.trim(),
+              },
+            };
+          if (trimmed === '/veil' || trimmed.startsWith('/veil '))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'veil',
+                triggeredBy: 'explicit_command',
+                timestamp: new Date().toISOString(),
+                context: msg.trim(),
+              },
+            };
+          if (trimmed === '/pause' || trimmed.startsWith('/pause '))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'pause',
+                triggeredBy: 'explicit_command',
+                timestamp: new Date().toISOString(),
+                context: msg.trim(),
+              },
+              shouldPause: true,
+            };
+          if (trimmed === '/resume' || trimmed.startsWith('/resume '))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'resume',
+                triggeredBy: 'explicit_command',
+                timestamp: new Date().toISOString(),
+                context: msg.trim(),
+              },
+              shouldResume: true,
+            };
           return { isSafetyCommand: false, shouldProcessNormal: true };
         }),
         checkAutoTriggerCommands: vi.fn((msg, ai) => {
           const combined = (msg + ' ' + (ai || '')).toLowerCase();
-          if (combined.includes('violence')) return { isSafetyCommand: true, command: { type: 'x_card', triggeredBy: 'auto_detect', timestamp: new Date().toISOString(), autoTriggered: true, triggerWord: 'violence' }, shouldPause: true };
-          if (combined.includes('suggestive')) return { isSafetyCommand: true, command: { type: 'veil', triggeredBy: 'auto_detect', timestamp: new Date().toISOString(), autoTriggered: true, triggerWord: 'suggestive' } };
-          if (combined.includes('overwhelmed')) return { isSafetyCommand: true, command: { type: 'pause', triggeredBy: 'auto_detect', timestamp: new Date().toISOString(), autoTriggered: true, triggerWord: 'overwhelmed' }, shouldPause: true };
+          if (combined.includes('violence'))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'x_card',
+                triggeredBy: 'auto_detect',
+                timestamp: new Date().toISOString(),
+                autoTriggered: true,
+                triggerWord: 'violence',
+              },
+              shouldPause: true,
+            };
+          if (combined.includes('suggestive'))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'veil',
+                triggeredBy: 'auto_detect',
+                timestamp: new Date().toISOString(),
+                autoTriggered: true,
+                triggerWord: 'suggestive',
+              },
+            };
+          if (combined.includes('overwhelmed'))
+            return {
+              isSafetyCommand: true,
+              command: {
+                type: 'pause',
+                triggeredBy: 'auto_detect',
+                timestamp: new Date().toISOString(),
+                autoTriggered: true,
+                triggerWord: 'overwhelmed',
+              },
+              shouldPause: true,
+            };
           return { isSafetyCommand: false, shouldProcessNormal: true };
         }),
         processSafetyCommand: vi.fn(async (cmd) => {
           return {
             text: `Processed ${cmd.type}`,
             sender: 'system',
-            context: { intent: `safety_${cmd.type}`, autoTriggered: cmd.autoTriggered, triggerWord: cmd.triggerWord, urgency: cmd.type === 'x_card' ? 'immediate' : undefined }
+            context: {
+              intent: `safety_${cmd.type}`,
+              autoTriggered: cmd.autoTriggered,
+              triggerWord: cmd.triggerWord,
+              urgency: cmd.type === 'x_card' ? 'immediate' : undefined,
+            },
           };
         }),
       } as any;
@@ -170,11 +249,16 @@ describe('Safety Commands', () => {
 
         const result = await checkSafetyCommands('/pause', sessionId);
 
-        expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Error in safety command check'), error);
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.stringContaining('Error in safety command check'),
+          error,
+        );
         expect(result.isSafetyCommand).toBe(true);
         expect(result.command?.type).toBe('pause');
         expect(result.command?.triggeredBy).toBe('fallback_detection');
-        expect(result.command?.context).toContain('Fallback detection due to error: Processor failed');
+        expect(result.command?.context).toContain(
+          'Fallback detection due to error: Processor failed',
+        );
       });
 
       it('returns normal processing if fallback detection finds nothing on error', async () => {
@@ -210,7 +294,8 @@ describe('Safety Commands', () => {
 
       it('handles non-Error objects in catch block', async () => {
         vi.mocked(SafetyCommandProcessor).mockImplementationOnce(() => {
-          throw 'Something went wrong';
+          const nonError: unknown = 'Something went wrong';
+          throw nonError;
         });
 
         const result = await checkSafetyCommands('/veil', sessionId);
@@ -247,23 +332,32 @@ describe('Safety Commands', () => {
     describe('Error Handling', () => {
       it('handles errors by using fallback responses', async () => {
         const error = new Error('Processing failed');
-        vi.mocked(SafetyCommandProcessor).mockImplementationOnce(() => ({
-          processSafetyCommand: vi.fn().mockRejectedValue(error),
-        } as any));
+        vi.mocked(SafetyCommandProcessor).mockImplementationOnce(
+          () =>
+            ({
+              processSafetyCommand: vi.fn().mockRejectedValue(error),
+            }) as any,
+        );
 
         const command = { type: 'pause' as any, triggeredBy: 'test', timestamp: '' };
         const response = await processSafetyCommand(command, sessionId);
 
-        expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Error processing safety command'), error);
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.stringContaining('Error processing safety command'),
+          error,
+        );
         expect(response.sender).toBe('system');
         expect(response.context?.intent).toBe('safety_fallback');
         expect(response.text).toContain('GAME PAUSED');
       });
 
       it('provides specific fallback for each command type', async () => {
-        vi.mocked(SafetyCommandProcessor).mockImplementation(() => ({
-          processSafetyCommand: vi.fn().mockRejectedValue(new Error('fail')),
-        } as any));
+        vi.mocked(SafetyCommandProcessor).mockImplementation(
+          () =>
+            ({
+              processSafetyCommand: vi.fn().mockRejectedValue(new Error('fail')),
+            }) as any,
+        );
 
         const testCases = [
           { type: 'x_card', expected: 'SAFETY ACTIVATED' },
@@ -281,9 +375,12 @@ describe('Safety Commands', () => {
       });
 
       it('handles non-Error objects in catch block', async () => {
-        vi.mocked(SafetyCommandProcessor).mockImplementationOnce(() => ({
-          processSafetyCommand: vi.fn().mockRejectedValue('String error'),
-        } as any));
+        vi.mocked(SafetyCommandProcessor).mockImplementationOnce(
+          () =>
+            ({
+              processSafetyCommand: vi.fn().mockRejectedValue('String error'),
+            }) as any,
+        );
 
         const command = { type: 'x_card' as any, triggeredBy: 'test', timestamp: '' };
         const response = await processSafetyCommand(command, sessionId);

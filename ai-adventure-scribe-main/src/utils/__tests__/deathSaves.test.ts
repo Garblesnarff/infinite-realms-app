@@ -2,10 +2,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { needsDeathSaves, rollDeathSave, stabilizeParticipant } from '../combat/deathSaves';
-import { combatReducer } from '@/contexts/combat/combat-reducer';
 
 import type { CombatParticipant } from '@/types/combat';
 
+import { combatReducer } from '@/contexts/combat/combat-reducer';
 import { d20 } from '@/utils/diceRolls';
 
 // Mock d20
@@ -24,13 +24,20 @@ describe('deathSaves', () => {
       deathSaves: { successes: 0, failures: 0 },
       reactionOpportunities: [],
     });
-    const result = combatReducer({
-      activeEncounter: {
-        currentTurnParticipantId: 'active',
-        currentRound: 1,
-        participants: [makeParticipant('active', 10), makeParticipant('down', 0), makeParticipant('next', 8)],
-      },
-    } as any, { type: 'NEXT_TURN' });
+    const result = combatReducer(
+      {
+        activeEncounter: {
+          currentTurnParticipantId: 'active',
+          currentRound: 1,
+          participants: [
+            makeParticipant('active', 10),
+            makeParticipant('down', 0),
+            makeParticipant('next', 8),
+          ],
+        },
+      } as any,
+      { type: 'NEXT_TURN' },
+    );
 
     expect(result.activeEncounter?.currentTurnParticipantId).toBe('next');
   });

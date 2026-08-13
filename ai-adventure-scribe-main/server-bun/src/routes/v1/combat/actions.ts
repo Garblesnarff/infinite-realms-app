@@ -1,13 +1,13 @@
 import { Elysia } from 'elysia';
 
 import { verifyEncounterOwnership } from './helpers.js';
-import { requireAuth } from '../../../middleware/auth.js';
 import { AppError, NotFoundError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
+import { requireAuth } from '../../../middleware/auth.js';
 import { CharacterService } from '../../../services/character-service.js';
-import { CombatAttackService } from '../../../services/combat-attack-service.js';
-import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
 import { trackCombatEvent } from '../../../services/combat/combat-events.js';
+import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
+import { CombatAttackService } from '../../../services/combat-attack-service.js';
 
 import type {
   AttackRollInput,
@@ -20,7 +20,7 @@ function mapActionError(
   set: any,
   error: unknown,
   fallbackMessage: string,
-  notFoundMessage: string = 'Not found'
+  notFoundMessage: string = 'Not found',
 ) {
   if (error instanceof AppError) {
     if (error.statusCode === 404) {
@@ -66,7 +66,11 @@ export const actionRoutes = new Elysia()
     try {
       const attackInput = body as AttackRollInput;
 
-      if (!attackInput.attackerId || !attackInput.targetId || !Number.isInteger(attackInput.expectedVersion)) {
+      if (
+        !attackInput.attackerId ||
+        !attackInput.targetId ||
+        !Number.isInteger(attackInput.expectedVersion)
+      ) {
         set.status = 400;
         return { error: 'attackerId, targetId, and expectedVersion are required' };
       }
@@ -75,11 +79,21 @@ export const actionRoutes = new Elysia()
       const result = await attackService.resolveAttack(
         params.encounterId,
         attackInput,
-        user!.userId
+        user!.userId,
       );
 
-      trackCombatEvent('action_accepted', { encounterId: params.encounterId, actorId: attackInput.attackerId, action: 'attack', source: 'legacy_route' });
-      if (result.finalDamage > 0) trackCombatEvent('damage_applied', { encounterId: params.encounterId, actorId: attackInput.attackerId, damage: result.finalDamage });
+      trackCombatEvent('action_accepted', {
+        encounterId: params.encounterId,
+        actorId: attackInput.attackerId,
+        action: 'attack',
+        source: 'legacy_route',
+      });
+      if (result.finalDamage > 0)
+        trackCombatEvent('damage_applied', {
+          encounterId: params.encounterId,
+          actorId: attackInput.attackerId,
+          damage: result.finalDamage,
+        });
       await publishCombatState(params.encounterId, user!.userId, 'attack');
 
       return result;
@@ -115,12 +129,22 @@ export const actionRoutes = new Elysia()
       const result = await attackService.resolveSpellAttack(
         params.encounterId,
         spellInput,
-        user!.userId
+        user!.userId,
       );
 
-      trackCombatEvent('action_accepted', { encounterId: params.encounterId, actorId: spellInput.casterId, action: 'spell', source: 'legacy_route' });
+      trackCombatEvent('action_accepted', {
+        encounterId: params.encounterId,
+        actorId: spellInput.casterId,
+        action: 'spell',
+        source: 'legacy_route',
+      });
       const damage = result.results.reduce((total, outcome) => total + outcome.finalDamage, 0);
-      if (damage > 0) trackCombatEvent('damage_applied', { encounterId: params.encounterId, actorId: spellInput.casterId, damage });
+      if (damage > 0)
+        trackCombatEvent('damage_applied', {
+          encounterId: params.encounterId,
+          actorId: spellInput.casterId,
+          damage,
+        });
       await publishCombatState(params.encounterId, user!.userId, 'spell');
 
       return result;
@@ -166,10 +190,13 @@ export const actionRoutes = new Elysia()
       }
 
       const attackService = new CombatAttackService();
-      const attack = await attackService.createWeaponAttack({
-        characterId: params.characterId,
-        ...weaponInput,
-      }, user!.userId);
+      const attack = await attackService.createWeaponAttack(
+        {
+          characterId: params.characterId,
+          ...weaponInput,
+        },
+        user!.userId,
+      );
 
       set.status = 201;
       return { attack };

@@ -7,11 +7,12 @@
  * @module utils/vision-worker-manager
  */
 
-import logger from '@/lib/logger';
 import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon } from '@/utils/vision-polygon';
 import type { VisionWorkerMessage, VisionWorkerResponse } from '@/workers/vision-worker';
+
+import logger from '@/lib/logger';
 
 // ===========================
 // Types

@@ -16,11 +16,11 @@ import { eq } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
 import jwt from 'jsonwebtoken';
 
+import { authTokenExchangeRoutes } from './auth-token-exchange.js';
 import { users } from '../../../../db/schema/index';
 import { db } from '../../lib/drizzle';
 import { logger } from '../../lib/logger';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
-import { authTokenExchangeRoutes } from './auth-token-exchange.js';
 import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
 import { authenticatePassword } from '../../services/password-login.js';
 import { workos, authConfig } from '../../services/workos';

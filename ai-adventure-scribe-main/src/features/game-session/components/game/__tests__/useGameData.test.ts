@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import { useGameData } from '../useGameData';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { userDataApi } from '@/services/user-data-api';
 import { characterLoaderService } from '@/services/character-loader';
-import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -97,7 +98,9 @@ describe('useGameData', () => {
   it('should handle missing IDs', async () => {
     const { result } = renderHook(() => useGameData(null, undefined));
 
-    expect(result.current.error).toBe('Character ID or Campaign ID is missing from URL parameters.');
+    expect(result.current.error).toBe(
+      'Character ID or Campaign ID is missing from URL parameters.',
+    );
     expect(result.current.isLoading).toBe(false);
   });
 
@@ -169,7 +172,9 @@ describe('useGameData', () => {
   });
 
   it('should handle general error during load', async () => {
-    (characterLoaderService.loadCharacterWithSpells as any).mockRejectedValue(new Error('Unknown Error'));
+    (characterLoaderService.loadCharacterWithSpells as any).mockRejectedValue(
+      new Error('Unknown Error'),
+    );
     (userDataApi.getCampaign as any).mockResolvedValue({ id: 'camp-1' });
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));

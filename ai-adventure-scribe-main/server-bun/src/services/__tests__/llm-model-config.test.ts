@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import geminiModelListing from './fixtures/gemini-model-list.json';
 import { getConfiguredGeminiModels } from '../llm-model-config.js';
 import { resetModelHealthForTests, validateConfiguredModels } from '../model-health.js';
+import geminiModelListing from './fixtures/gemini-model-list.json';
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -17,7 +17,8 @@ describe('Gemini model defaults', () => {
   it('are all present in the recorded Generative Language v1/v1beta model listing', async () => {
     process.env.GOOGLE_GEMINI_API_KEY = 'test-key';
     delete process.env.OPENROUTER_API_KEY;
-    globalThis.fetch = (async () => new Response(JSON.stringify(geminiModelListing), { status: 200 })) as unknown as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(geminiModelListing), { status: 200 })) as unknown as typeof fetch;
 
     const health = await validateConfiguredModels();
 

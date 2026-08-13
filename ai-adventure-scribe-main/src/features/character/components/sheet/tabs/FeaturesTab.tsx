@@ -7,6 +7,7 @@ import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
 import type { Character } from '@/types/character';
+
 import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
 interface FeaturesTabProps {
@@ -32,14 +33,34 @@ interface Feature {
 const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
   const className = character.class?.name ?? '';
   const features: Feature[] = [
-    ...(character.race?.traits ?? []).map((trait) => ({ name: trait, source: 'race' as const, description: trait })),
+    ...(character.race?.traits ?? []).map((trait) => ({
+      name: trait,
+      source: 'race' as const,
+      description: trait,
+    })),
     ...getAllClassFeaturesUpToLevel(className, character.level ?? 1).map((feature) => ({
-      name: feature.featureName, source: 'class' as const, level: feature.level, description: feature.description,
+      name: feature.featureName,
+      source: 'class' as const,
+      level: feature.level,
+      description: feature.description,
     })),
-    ...(character.subclass?.features ?? []).filter((feature) => feature.level <= (character.level ?? 1)).map((feature) => ({
-      name: feature.name, source: 'class' as const, level: feature.level, description: feature.description,
-    })),
-    ...(character.background ? [{ name: character.background.feature.name, source: 'background' as const, description: character.background.feature.description }] : []),
+    ...(character.subclass?.features ?? [])
+      .filter((feature) => feature.level <= (character.level ?? 1))
+      .map((feature) => ({
+        name: feature.name,
+        source: 'class' as const,
+        level: feature.level,
+        description: feature.description,
+      })),
+    ...(character.background
+      ? [
+          {
+            name: character.background.feature.name,
+            source: 'background' as const,
+            description: character.background.feature.description,
+          },
+        ]
+      : []),
   ];
 
   const _getFeatureIcon = (source: string) => {

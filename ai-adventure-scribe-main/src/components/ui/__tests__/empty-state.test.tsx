@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
-import { EmptyState } from '../empty-state';
 import React from 'react';
+import { describe, it, expect } from 'vitest';
+
+import { EmptyState } from '../empty-state';
 
 describe('EmptyState', () => {
   it('renders with aria-hidden on the icon container', () => {

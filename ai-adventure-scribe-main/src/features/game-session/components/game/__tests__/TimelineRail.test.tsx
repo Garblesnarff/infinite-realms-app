@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
@@ -7,7 +6,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TimelineRail } from '../TimelineRail';
 
 import { useMessageContext } from '@/contexts/MessageContext';
-
 
 // Mock the context
 vi.mock('@/contexts/MessageContext', () => ({
@@ -71,7 +69,9 @@ describe('TimelineRail', () => {
     Object.defineProperty(mockRootRef.current, 'scrollTop', { value: 0, writable: true });
 
     // Mock requestAnimationFrame
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16));
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
+      setTimeout(() => cb(Date.now()), 16),
+    );
     vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
   });
 
@@ -130,7 +130,7 @@ describe('TimelineRail', () => {
           isIntersecting: true,
           target: { id: 'm-3' },
           intersectionRatio: 0.9,
-        }
+        },
       ]);
     });
 

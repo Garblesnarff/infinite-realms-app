@@ -5,7 +5,7 @@ import type { ActionType, CombatAction, CombatEncounter, CombatParticipant } fro
 import logger from '@/lib/logger';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
-import { getRageDamageBonus, canUseClassFeature } from '@/utils/classFeatures';
+import { canUseClassFeature } from '@/utils/classFeatures';
 import { needsDeathSaves, rollDeathSave } from '@/utils/combat/deathSaves';
 import { rollDice } from '@/utils/diceUtils';
 import {
@@ -67,8 +67,11 @@ export const useCombatMechanics = ({
 
       if (!targetId) return;
       await executeAuthoritativeCombatIntent(activeEncounter.id, {
-        type: 'attack', actorId: participantId, targetId,
-        advantage: hasAdvantage, disadvantage: hasDisadvantage,
+        type: 'attack',
+        actorId: participantId,
+        targetId,
+        advantage: hasAdvantage,
+        disadvantage: hasDisadvantage,
       });
     },
     [activeEncounter],

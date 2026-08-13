@@ -1,3 +1,5 @@
+import type { CampaignPayload } from '@/services/user-data-api';
+
 import {
   seedStarterCharacter,
   type StarterCharacterTemplateLike,
@@ -6,7 +8,6 @@ import {
   resolveOrCreateStarterCampaign,
   type StarterCampaignBootstrapSource,
 } from '@/services/starter-campaign-bootstrap';
-import type { CampaignPayload } from '@/services/user-data-api';
 
 type Session = {
   id: string;
@@ -20,14 +21,19 @@ type SessionContext = {
   starter_campaign_id?: string | null;
 };
 
-export type StarterTemplate = StarterCharacterTemplateLike & Record<string, unknown> & {
-  template_key: string;
-  name: string;
-  class: string;
-};
+export type StarterTemplate = StarterCharacterTemplateLike &
+  Record<string, unknown> & {
+    template_key: string;
+    name: string;
+    class: string;
+  };
 
 export interface PlaySessionApi {
-  listSessions(filters: { status: string; starterOnly: boolean; limit: number }): Promise<Session[]>;
+  listSessions(filters: {
+    status: string;
+    starterOnly: boolean;
+    limit: number;
+  }): Promise<Session[]>;
   getSessionContext(sessionId: string): Promise<SessionContext>;
   listStarterCharacterTemplates(campaignId: string): Promise<StarterTemplate[]>;
   listCharacters(campaignId: string): Promise<Array<{ id: string }>>;
@@ -55,7 +61,9 @@ function templateForKey(templates: StarterTemplate[], key: string): StarterTempl
   return templates.find((template) => template.template_key === key);
 }
 
-export function templateListRows(templates: StarterTemplate[]): Array<{ key: string; name: string; class: string }> {
+export function templateListRows(
+  templates: StarterTemplate[],
+): Array<{ key: string; name: string; class: string }> {
   return templates.map((template) => ({
     key: template.template_key,
     name: template.name,
@@ -86,8 +94,11 @@ async function selectCharacter(
     return existing.id;
   }
 
-  if (templates.length === 0) throw new Error(`No starter templates found for ${starterCampaignId}`);
-  return (await seedStarterCharacter(await chooseTemplate(templates), campaignId, api.createCharacter)).id;
+  if (templates.length === 0)
+    throw new Error(`No starter templates found for ${starterCampaignId}`);
+  return (
+    await seedStarterCharacter(await chooseTemplate(templates), campaignId, api.createCharacter)
+  ).id;
 }
 
 function createStarterSession(
@@ -115,33 +126,59 @@ export async function selectPlaySession(
   api: PlaySessionApi,
   dependencies: PlaySessionDependencies,
 ): Promise<string> {
-  const sessions = await api.listSessions({ status: 'active', starterOnly: Boolean(args.campaign), limit: 100 });
-  const matching = sessions.filter((session) => !args.campaign || session.starter_campaign_id === args.campaign);
+  const sessions = await api.listSessions({
+    status: 'active',
+    starterOnly: Boolean(args.campaign),
+    limit: 100,
+  });
+  const matching = sessions.filter(
+    (session) => !args.campaign || session.starter_campaign_id === args.campaign,
+  );
   const current = matching[0];
 
   if (!args.fresh && current) return current.id;
-  if (!args.fresh) throw new Error(`No active session for ${args.campaign || 'this account'}; use --new to start one.`);
+  if (!args.fresh)
+    throw new Error(
+      `No active session for ${args.campaign || 'this account'}; use --new to start one.`,
+    );
   if (!args.campaign) throw new Error('--new requires --campaign');
 
   if (current) {
     const context = await api.getSessionContext(current.id);
     if (!context.campaign_id) throw new Error(`Active session ${current.id} has no campaign`);
-    const characterId = args.template || args.character
-      ? await selectCharacter(
-        api, context.campaign_id, args.campaign, args.template, args.character,
-        dependencies.chooseTemplate,
-      )
-      : context.character_id;
+    const characterId =
+      args.template || args.character
+        ? await selectCharacter(
+            api,
+            context.campaign_id,
+            args.campaign,
+            args.template,
+            args.character,
+            dependencies.chooseTemplate,
+          )
+        : context.character_id;
     if (!characterId) throw new Error(`Active session ${current.id} has no character`);
-    return (await createStarterSession(api, context.campaign_id, characterId, args.campaign,
-      Math.max(...matching.map((session) => Number(session.session_number || 0))) + 1)).id;
+    return (
+      await createStarterSession(
+        api,
+        context.campaign_id,
+        characterId,
+        args.campaign,
+        Math.max(...matching.map((session) => Number(session.session_number || 0))) + 1,
+      )
+    ).id;
   }
 
   const starter = await dependencies.getStarterCampaign(args.campaign);
   if (!starter) throw new Error(`Starter campaign not found: ${args.campaign}`);
   const campaignId = await resolveOrCreateStarterCampaign(starter, api, dependencies.log);
   const characterId = await selectCharacter(
-    api, campaignId, starter.id, args.template, args.character, dependencies.chooseTemplate,
+    api,
+    campaignId,
+    starter.id,
+    args.template,
+    args.character,
+    dependencies.chooseTemplate,
   );
   return (await createStarterSession(api, campaignId, characterId, starter.id, 1)).id;
 }

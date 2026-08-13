@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * Inventory Service
  *
@@ -30,7 +29,6 @@ import type {
   GetUsageHistoryInput,
 } from '../types/inventory.js';
 
-
 export class InventoryService {
   // ==========================================
   // Inventory Management
@@ -46,7 +44,7 @@ export class InventoryService {
   static async getInventory(
     characterId: string,
     userId: string,
-    options: GetInventoryOptions = {}
+    options: GetInventoryOptions = {},
   ): Promise<InventorySummary> {
     return InventoryDataAccess.getInventory(characterId, userId, options);
   }
@@ -73,7 +71,7 @@ export class InventoryService {
     itemId: string,
     characterId: string,
     userId: string,
-    updates: UpdateInventoryItemInput
+    updates: UpdateInventoryItemInput,
   ): Promise<InventoryItem | null> {
     return InventoryDataAccess.updateItem(itemId, characterId, userId, updates);
   }
@@ -96,7 +94,11 @@ export class InventoryService {
    * @param userId - User ID (for ownership verification)
    * @returns Item or null if not found
    */
-  static async getItemById(itemId: string, characterId: string, userId: string): Promise<InventoryItem | null> {
+  static async getItemById(
+    itemId: string,
+    characterId: string,
+    userId: string,
+  ): Promise<InventoryItem | null> {
     return InventoryDataAccess.getItemById(itemId, characterId, userId);
   }
 
@@ -111,7 +113,7 @@ export class InventoryService {
   static async useConsumable(
     input: UseConsumableInput,
     userId: string,
-    preFetchedItem?: InventoryItem
+    preFetchedItem?: InventoryItem,
   ): Promise<UseConsumableResult> {
     // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side class method, not a React hook
     return InventoryConsumableService.useConsumable(input, userId, preFetchedItem);
@@ -125,7 +127,7 @@ export class InventoryService {
     characterId: string,
     userId: string,
     ammoType: string,
-    count: number = 1
+    count: number = 1,
   ): Promise<UseConsumableResult> {
     // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side class method, not a React hook
     return InventoryConsumableService.useAmmunition(characterId, userId, ammoType, count);
@@ -139,7 +141,7 @@ export class InventoryService {
     characterId: string,
     userId: string,
     ammoType: string,
-    count: number
+    count: number,
   ): Promise<InventoryItem> {
     return InventoryConsumableService.recoverAmmunition(characterId, userId, ammoType, count);
   }
@@ -155,7 +157,11 @@ export class InventoryService {
    * @param userId - User ID (for ownership verification)
    * @returns Equip result
    */
-  static async equipItem(characterId: string, itemId: string, userId: string): Promise<EquipResult> {
+  static async equipItem(
+    characterId: string,
+    itemId: string,
+    userId: string,
+  ): Promise<EquipResult> {
     // ⚡ Bolt: Delegation wrapper maintains compatibility with tests that spy on InventoryService.
     const result = await InventoryDataAccess.equipItem(characterId, itemId, userId);
 
@@ -181,7 +187,11 @@ export class InventoryService {
    * @param userId - User ID (for ownership verification)
    * @returns Updated item
    */
-  static async unequipItem(itemId: string, characterId: string, userId: string): Promise<InventoryItem | null> {
+  static async unequipItem(
+    itemId: string,
+    characterId: string,
+    userId: string,
+  ): Promise<InventoryItem | null> {
     return this.updateItem(itemId, characterId, userId, { isEquipped: false });
   }
 
@@ -252,7 +262,11 @@ export class InventoryService {
    * Break attunement with a magic item
    * @deprecated Use InventoryAttunementService.unattuneItem directly
    */
-  static async unattuneItem(itemId: string, characterId: string, userId: string): Promise<InventoryItem | null> {
+  static async unattuneItem(
+    itemId: string,
+    characterId: string,
+    userId: string,
+  ): Promise<InventoryItem | null> {
     return InventoryAttunementService.unattuneItem(itemId, characterId, userId);
   }
 
@@ -264,7 +278,10 @@ export class InventoryService {
    * Get consumable usage history
    * @deprecated Use InventoryConsumableService.getUsageHistory directly
    */
-  static async getUsageHistory(input: GetUsageHistoryInput, userId: string): Promise<ConsumableUsageLog[]> {
+  static async getUsageHistory(
+    input: GetUsageHistoryInput,
+    userId: string,
+  ): Promise<ConsumableUsageLog[]> {
     return InventoryConsumableService.getUsageHistory(input, userId);
   }
 }

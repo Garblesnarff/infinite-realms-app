@@ -9,8 +9,8 @@ import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant, DamageType, DiceRoll } from '@/types/combat';
 import type { DamageCalculation } from '@/utils/combat/attack-types';
 
-import { rollDamage, calculateDamage } from '@/utils/diceUtils';
 import { getWeaponDamageDice } from '@/data/equipment/weapons';
+import { rollDamage, calculateDamage } from '@/utils/diceUtils';
 
 /**
  * Calculate damage for an attack
@@ -51,7 +51,11 @@ export function calculateAttackDamage(
     damageType = 'bludgeoning';
   } else if (weapon.damage) {
     // Weapon damage
-    damageRolls = rollDamage(getWeaponDamageDice(weapon, options.wieldedTwoHanded) ?? weapon.damage.dice, criticalHit, {});
+    damageRolls = rollDamage(
+      getWeaponDamageDice(weapon, options.wieldedTwoHanded) ?? weapon.damage.dice,
+      criticalHit,
+      {},
+    );
     baseDamage = damageRolls.reduce((sum, roll) => sum + roll.total, 0);
     damageType = weapon.damage.type;
 
@@ -134,7 +138,8 @@ export function getAbilityModifier(participant: CombatParticipant, ability: stri
 
   // 1. Check abilityScores object (Standard Character structure)
   const abilityScores = participant.abilityScores as
-    Record<string, Record<string, unknown>> | undefined;
+    | Record<string, Record<string, unknown>>
+    | undefined;
   const scoreFromObject = abilityScores?.[abilityName]?.score;
   if (typeof scoreFromObject === 'number') {
     return Math.floor((scoreFromObject - 10) / 2);

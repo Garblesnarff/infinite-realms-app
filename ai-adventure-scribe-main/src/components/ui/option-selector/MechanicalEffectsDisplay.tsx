@@ -1,6 +1,8 @@
 import React from 'react';
-import { Separator } from '@/components/ui/separator';
+
 import type { EnhancementOption } from '@/types/enhancement-options';
+
+import { Separator } from '@/components/ui/separator';
 
 interface MechanicalEffectsDisplayProps {
   option: EnhancementOption<any>;

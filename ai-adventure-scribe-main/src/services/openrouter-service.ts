@@ -3,10 +3,10 @@
  * Proxies to server endpoints to avoid exposing API keys.
  */
 
-import { llmApiClient } from '@/infrastructure/api';
 import { modelUsageTracker } from './model-usage-tracker';
 import { logger } from '../lib/logger';
 
+import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ImageGenerationRequest {

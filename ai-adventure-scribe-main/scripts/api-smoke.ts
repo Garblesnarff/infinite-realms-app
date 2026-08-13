@@ -1,5 +1,6 @@
 /* eslint-disable max-lines, no-console */
 import { loginWithPassword } from '../shared/auth/headless-auth';
+
 const DEFAULT_BASE_URL = 'http://localhost:8888';
 const REQUEST_TIMEOUT_MS = 75_000;
 const SESSIONLESS_ID = '00000000-0000-4000-8000-000000000000';
@@ -110,7 +111,14 @@ export async function runApiSmoke(options: SmokeOptions = {}): Promise<SmokeResu
 
   if (!token && env.SMOKE_EMAIL && env.SMOKE_PASSWORD) {
     try {
-      token = (await loginWithPassword({ baseUrl, email: env.SMOKE_EMAIL, password: env.SMOKE_PASSWORD, fetchImpl })).accessToken;
+      token = (
+        await loginWithPassword({
+          baseUrl,
+          email: env.SMOKE_EMAIL,
+          password: env.SMOKE_PASSWORD,
+          fetchImpl,
+        })
+      ).accessToken;
       record('password-login', 'PASS', 'received WorkOS access token');
     } catch (error) {
       record('password-login', 'FAIL', error instanceof Error ? error.message : String(error));

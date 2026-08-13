@@ -1,5 +1,6 @@
-import type { CharacterClass, AbilityScores } from '@/types/character';
 import { classSubclasses } from './subclasses';
+
+import type { CharacterClass, AbilityScores } from '@/types/character';
 
 export const wizard: CharacterClass = {
   subclasses: classSubclasses.wizard,

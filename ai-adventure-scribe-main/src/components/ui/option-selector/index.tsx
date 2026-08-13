@@ -8,6 +8,9 @@
 import { Sparkles } from 'lucide-react';
 import React from 'react';
 
+import { MechanicalEffectsDisplay } from './MechanicalEffectsDisplay';
+import { OptionInput } from './OptionInput';
+
 import type { EnhancementOption, OptionSelection, OptionType } from '@/types/enhancement-options';
 
 import { Badge } from '@/components/ui/badge';
@@ -16,9 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import logger from '@/lib/logger';
 import { validateOptionSelection } from '@/types/enhancement-options';
-
-import { MechanicalEffectsDisplay } from './MechanicalEffectsDisplay';
-import { OptionInput } from './OptionInput';
 
 interface OptionSelectorProps<T extends OptionType = OptionType> {
   option: EnhancementOption<T>;
@@ -145,10 +145,7 @@ export function OptionSelector<T extends OptionType = OptionType>({
           </div>
         )}
 
-        <MechanicalEffectsDisplay
-          option={option}
-          showMechanicalEffects={showMechanicalEffects}
-        />
+        <MechanicalEffectsDisplay option={option} showMechanicalEffects={showMechanicalEffects} />
       </CardContent>
     </Card>
   );

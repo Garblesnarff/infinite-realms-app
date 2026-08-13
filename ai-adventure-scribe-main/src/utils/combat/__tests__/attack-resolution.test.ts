@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { resolveAttack } from '../attack-resolution';
@@ -29,7 +29,9 @@ describe('resolveAttack', () => {
   it('automatically crits a paralyzed target within 5 feet', () => {
     const target = { ...mockTarget, conditions: [{ name: 'paralyzed' }] } as any;
     vi.mocked(rollAttack).mockReturnValue({ total: 16, naturalRoll: 10 } as any);
-    expect(resolveAttack(mockWeapon, mockAttacker, target, { distanceInFeet: 5 }).criticalHit).toBe(true);
+    expect(resolveAttack(mockWeapon, mockAttacker, target, { distanceInFeet: 5 }).criticalHit).toBe(
+      true,
+    );
   });
   const mockAttacker: any = {
     id: 'attacker-1',
@@ -194,10 +196,13 @@ describe('resolveAttack', () => {
 
     // Explicit disadvantage passed in options
     resolveAttack(mockWeapon, invisibleAttacker, mockTarget, { disadvantage: true });
-    expect(rollAttack).toHaveBeenCalledWith(6, expect.objectContaining({
-      advantage: false,
-      disadvantage: false,
-    }));
+    expect(rollAttack).toHaveBeenCalledWith(
+      6,
+      expect.objectContaining({
+        advantage: false,
+        disadvantage: false,
+      }),
+    );
   });
 
   it('should handle weapon attack bonus', () => {

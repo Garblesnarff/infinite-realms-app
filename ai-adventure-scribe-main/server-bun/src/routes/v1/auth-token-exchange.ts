@@ -1,10 +1,9 @@
 import { Elysia, t } from 'elysia';
 
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
-import {
-  authTokenExchangeCodes,
-  AuthTokenExchangeCodeStore,
-} from '../../services/auth-token-exchange.js';
+import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
+
+import type { AuthTokenExchangeCodeStore } from '../../services/auth-token-exchange.js';
 
 const DEFAULT_RATE_LIMIT = {
   windowMs: 60_000,

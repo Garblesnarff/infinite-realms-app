@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, act, waitFor } from '@testing-library/react';

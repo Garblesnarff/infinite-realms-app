@@ -1,16 +1,16 @@
 import { Package, Shield, Sparkles, Sword } from 'lucide-react';
 import React from 'react';
 
+import { CurrencySection } from './inventory/CurrencySection';
+import { EquipmentShop } from './inventory/EquipmentShop';
+import { InventoryStats } from './inventory/InventoryStats';
+import { InventoryTabContent } from './inventory/InventoryTabContent';
+
 import type { Character } from '@/types/character';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { allEquipment, type Equipment } from '@/data/equipmentOptions';
 import { useInventoryManager } from '@/features/character/hooks/use-inventory-manager';
-
-import { CurrencySection } from './inventory/CurrencySection';
-import { EquipmentShop } from './inventory/EquipmentShop';
-import { InventoryStats } from './inventory/InventoryStats';
-import { InventoryTabContent } from './inventory/InventoryTabContent';
 
 interface InventoryManagerProps {
   character: Character;

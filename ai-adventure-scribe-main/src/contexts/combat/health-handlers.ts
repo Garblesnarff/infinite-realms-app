@@ -6,18 +6,12 @@
  */
 
 import type { ReducerAction } from './combat-reducer';
-import type {
-  CombatState,
-  CombatParticipant,
-  DamageType,
-  Condition,
-  ConditionName,
-} from '@/types/combat';
+import type { CombatState, DamageType, Condition, ConditionName } from '@/types/combat';
 
+import { rollDeathSave as resolveDeathSave } from '@/utils/combat/deathSaves';
 import { applyConditionEffects, removeConditionEffects } from '@/utils/conditionEffects';
 import { calculateDamage } from '@/utils/diceUtils';
 import { checkConcentration } from '@/utils/spell-management';
-import { rollDeathSave as resolveDeathSave } from '@/utils/combat/deathSaves';
 
 type Dispatch = (action: ReducerAction) => void;
 
@@ -72,10 +66,7 @@ export function createHealthHandlers(dispatch: Dispatch, getState: () => CombatS
     const participant = state.activeEncounter?.participants.find((p) => p.id === participantId);
     if (!participant) return;
 
-    const newCurrentHP = Math.min(
-      participant.maxHitPoints,
-      participant.currentHitPoints + healing,
-    );
+    const newCurrentHP = Math.min(participant.maxHitPoints, participant.currentHitPoints + healing);
 
     dispatch({
       type: 'UPDATE_PARTICIPANT',

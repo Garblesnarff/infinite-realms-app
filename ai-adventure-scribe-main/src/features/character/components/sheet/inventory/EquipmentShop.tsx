@@ -2,7 +2,6 @@ import { ShoppingCart, Search, Plus } from 'lucide-react';
 import React from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
-import { currencyToCopper, type Currency } from '@/features/character/hooks/use-inventory-manager';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatCurrency, convertCurrency } from '@/data/equipmentOptions';
+import { currencyToCopper, type Currency } from '@/features/character/hooks/use-inventory-manager';
 
 interface EquipmentShopProps {
   searchTerm: string;
