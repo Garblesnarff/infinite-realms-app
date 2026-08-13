@@ -18,12 +18,23 @@ import type {
 
 const uuidString = t.String({ format: 'uuid' });
 
-const uuidParam = t.Object({
-  id: uuidString,
-});
-
 const encounterParam = t.Object({
   encounterId: uuidString,
+});
+
+// Must name the path position exactly as the sibling participant routes do.
+// status.ts already registers "/participants/:participantId/conditions", and
+// memoirist refuses a second route that calls the same position ":id". The
+// refusal is a throw inside listen(), not a per-route error, so the entire
+// server fails to boot -- which is what took the API down after #1764.
+const participantParam = t.Object({
+  participantId: uuidString,
+});
+
+// Same rule, different position: actions.ts already registers
+// "/characters/:characterId/attacks".
+const characterParam = t.Object({
+  characterId: uuidString,
 });
 
 const persistenceParticipant = t.Object({
@@ -120,22 +131,22 @@ export const persistenceRoutes = new Elysia()
     { params: encounterParam, body: persistenceBody },
   )
   .get(
-    '/participants/:id/status',
+    '/participants/:participantId/status',
     async ({ params, set, user }) => {
       try {
-        return await getCombatParticipantStatus(params.id, user.userId);
+        return await getCombatParticipantStatus(params.participantId, user.userId);
       } catch (error) {
         return mapError(set, error, 'Failed to load combat participant status');
       }
     },
-    { params: uuidParam },
+    { params: participantParam },
   )
   .patch(
-    '/participants/:id/status',
+    '/participants/:participantId/status',
     async ({ params, body, set, user }) => {
       try {
         return await updateCombatParticipantStatus(
-          params.id,
+          params.participantId,
           body as CombatParticipantStatusUpdate,
           user.userId,
         );
@@ -143,16 +154,16 @@ export const persistenceRoutes = new Elysia()
         return mapError(set, error, 'Failed to update combat participant status');
       }
     },
-    { params: uuidParam, body: statusUpdateBody },
+    { params: participantParam, body: statusUpdateBody },
   )
   .get(
-    '/characters/:id/combat-status',
+    '/characters/:characterId/combat-status',
     async ({ params, set, user }) => {
       try {
-        return await getCharacterCombatStatus(params.id, user.userId);
+        return await getCharacterCombatStatus(params.characterId, user.userId);
       } catch (error) {
         return mapError(set, error, 'Failed to load character combat status');
       }
     },
-    { params: uuidParam },
+    { params: characterParam },
   );
