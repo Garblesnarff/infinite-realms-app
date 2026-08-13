@@ -1,5 +1,7 @@
 # D&D 5E Gameplay Mechanics Implementation Plan
 
+> **SUPERSEDED (2026-08-13):** Historical draft that describes combat and related mechanics as missing. Server-authoritative combat persistence now exists, and ratified current decisions live in [`combat-system-design-v2.md`](../../../docs/combat-system-design-v2.md); do not use this plan's gap list or old paths as current status.
+
 **Status:** Draft
 **Priority:** Medium
 **Estimated Total Effort:** 7-10 weeks

@@ -1,5 +1,7 @@
 # Technical Debt Plan - Completion Summary
 
+> **SUPERSEDED (2026-08-13):** Historical branch completion report from 2025. Its “complete” claim, file inventory, and legacy agent paths are not a current-main status report.
+
 **Date:** 2025-11-14
 **Branch:** `claude/review-technical-debt-plan-016JUdogSbWJFEPLgWTmnPBp`
 **Status:** ✅ **COMPLETE**

@@ -1,5 +1,7 @@
 # Character Creation Flow Adoption Metrics
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 monitoring plan. Its `server/src` query paths, Day-0 status, and dashboard assumptions are not current; do not infer live adoption from this document.
+
 ## Overview
 
 This document describes how to monitor the adoption of the new campaign-based character creation flow and determine when the legacy character creation flow can be safely deprecated.

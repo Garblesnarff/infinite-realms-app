@@ -1,5 +1,7 @@
 # API Endpoint Quick Reference
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 D&D mechanics endpoint list. Its “63+ endpoints” inventory may not match current Bun routes; use it only as historical context and verify every endpoint against current code.
+
 Complete list of all 63+ D&D 5E Mechanics API endpoints.
 
 ## Authentication

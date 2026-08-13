@@ -1,5 +1,7 @@
 # Database Migrations
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 migration inventory and split-tree instructions. Current migration ownership is governed by the v2 ledger guardrail and the root database guard workflow; verify filenames and application procedure before using any command here.
+
 ## Location
 All Supabase migrations are in: `/supabase/migrations/`
 

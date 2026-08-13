@@ -1,5 +1,7 @@
 # Testing Coverage Implementation Plan
 
+> **SUPERSEDED (2026-08-13):** This is a historical 2025 planning snapshot. Its test counts, file paths, coverage claims, and CI verdicts are not current. See the [current workflow documentation](../../../.github/workflows/README.md) and [current agent contract](../../../AGENTS.md).
+
 **Status:** In Progress (Updated 2025-11-14)
 **Priority:** High
 **Current Coverage:** ~15-20% estimated (416/527 tests passing)

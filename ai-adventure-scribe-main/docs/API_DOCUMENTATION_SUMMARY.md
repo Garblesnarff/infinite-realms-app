@@ -1,5 +1,7 @@
 # AI Adventure Scribe - API Documentation Summary
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 work-unit report. Its endpoint count, OpenAPI locations, and `server/src` paths are not a current-main API inventory. Verify against the Bun server routes and [current agent contract](../../AGENTS.md) before using any example here.
+
 ## Work Unit 3.2: OpenAPI/Swagger Documentation - COMPLETED
 
 ### Overview

@@ -1,5 +1,7 @@
 # Database Optimizations - Performance Report
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 benchmark report. Its optimization-unit scope, latency numbers, production-readiness language, and implementation paths are not current. Do not use it as a performance baseline; see the [current workflow documentation](../../.github/workflows/README.md) for the supported validation entry points.
+
 **Report Date:** November 3, 2025
 **Analysis Period:** Units 1-12 Implementation
 **Environment:** Production-ready optimizations

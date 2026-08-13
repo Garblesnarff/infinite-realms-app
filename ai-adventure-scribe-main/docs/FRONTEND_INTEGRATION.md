@@ -1,5 +1,7 @@
 # D&D 5E Mechanics API - Frontend Integration Guide
 
+> **SUPERSEDED (2026-08-13):** Historical frontend guide for the 2025 mechanics/API shape. Its endpoint examples and combat assumptions are not a current-main contract; verify against the current Bun routes and ratified combat design before copying them.
+
 > **Complete guide for integrating with the AI Adventure Scribe D&D 5E mechanics API**
 
 ## Table of Contents

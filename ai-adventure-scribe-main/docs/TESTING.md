@@ -1,5 +1,7 @@
 # Testing Guide
 
+> **SUPERSEDED (2026-08-13):** Historical testing guide whose examples use the retired `server/src` layout and pre-gate test commands. Use the root [workflow documentation](../../.github/workflows/README.md) and [AGENTS.md](../../AGENTS.md) for current validation entry points.
+
 This guide explains the testing philosophy and practices for the AI Adventure Scribe project.
 
 ## Table of Contents

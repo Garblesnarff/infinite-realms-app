@@ -1,5 +1,7 @@
 # API Rate Limiting
 
+> **PATH UPDATE (2026-08-13):** The rate-limiting concepts below may still be useful, but the implementation path at the end points to retired `server/src`; current code is under `server-bun/src`. Verify behavior and middleware names before copying examples.
+
 ## Overview
 
 AI Adventure Scribe implements intelligent plan-aware rate limiting to ensure fair usage, prevent abuse, and provide a consistent API experience. The rate limiting system supports multiple tiers and adapts to user subscription plans.

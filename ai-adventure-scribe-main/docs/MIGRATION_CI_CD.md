@@ -1,5 +1,7 @@
 # Migration Testing - CI/CD Integration Guide
 
+> **SUPERSEDED (2026-08-13):** Historical CI proposal. Do not treat its suggested workflow or prerequisites as the current migration gate. Current checks live in [ci.yml](../../.github/workflows/ci.yml) and [db-guards.yml](../../.github/workflows/db-guards.yml), with an overview in the [workflow documentation](../../.github/workflows/README.md).
+
 This guide explains how to integrate the migration testing script into your CI/CD pipeline.
 
 ## Overview

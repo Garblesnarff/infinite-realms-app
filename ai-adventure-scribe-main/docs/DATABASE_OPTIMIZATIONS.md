@@ -1,5 +1,7 @@
 # Database Optimizations - Master Summary
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 optimization report. Its “Production Ready” status, `/server/src` paths, benchmark numbers, and architecture descriptions are not current. For current repository gates and server layout, see [TESTING-REALISM.md](TESTING-REALISM.md), the [workflow documentation](../../.github/workflows/README.md), and [AGENTS.md](../../AGENTS.md).
+
 **Last Updated:** November 3, 2025
 **Status:** Production Ready
 **Total Improvements:** 12 major optimizations

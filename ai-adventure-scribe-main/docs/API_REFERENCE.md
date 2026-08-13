@@ -1,5 +1,7 @@
 # API Reference - Foundry VTT Integration
 
+> **SUPERSEDED (2026-08-13):** Historical Foundry/tRPC reference from the 2025 mechanics work. Do not treat its endpoint surface or “complete” claims as current-main API documentation; verify current Bun routes before implementation.
+
 Complete tRPC API reference for the Foundry VTT integration.
 
 ## Table of Contents

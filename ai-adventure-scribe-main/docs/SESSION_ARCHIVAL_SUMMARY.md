@@ -1,5 +1,7 @@
 # Session Archival System - Implementation Summary
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 implementation report. Its archive tables, Supabase migration paths, and “implemented” status are not a current-main inventory; verify current schema and server services before building on it.
+
 ## Overview
 
 A comprehensive session archival system has been implemented to prevent unbounded database growth while preserving historical data.

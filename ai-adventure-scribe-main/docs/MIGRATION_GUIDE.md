@@ -1,5 +1,7 @@
 # Database Optimizations - Migration Guide
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 optimization-migration instructions. Do not follow its production commands or migration paths as current; the active schema guardrails and workflow are documented in [TESTING-REALISM.md](TESTING-REALISM.md) and the [workflow documentation](../../.github/workflows/README.md).
+
 **Last Updated:** November 3, 2025
 **Estimated Time:** 30-60 minutes
 **Recommended Environment:** Staging first, then production

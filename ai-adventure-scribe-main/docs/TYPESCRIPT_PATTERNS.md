@@ -1,5 +1,7 @@
 # TypeScript Patterns and Best Practices
 
+> **SUPERSEDED (2026-08-13):** Historical patterns guide with pre-Bun `server/src` examples and old service assumptions. Use current imports and the agent contract before copying paths or architecture from this document.
+
 This document outlines recommended TypeScript patterns for the AI Adventure Scribe codebase, with a focus on avoiding `any` types and leveraging type safety.
 
 ## Table of Contents

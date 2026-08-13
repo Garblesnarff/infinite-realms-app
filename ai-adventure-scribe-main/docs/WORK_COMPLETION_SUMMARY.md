@@ -1,5 +1,7 @@
 # D&D 5E Mechanics Implementation - Work Completion Summary
 
+> **SUPERSEDED (2026-08-13):** Historical branch completion report from 2025. Its “all work completed” claim, file counts, paths, and implementation status are not a current-main inventory. Use the [current workflow documentation](../../.github/workflows/README.md) and [AGENTS.md](../../AGENTS.md) for current repository orientation.
+
 **Date:** November 14, 2025
 **Branch:** `claude/break-down-dnd-plan-011CV5PQySAUpgBaExH8kRb4`
 **Status:** ✅ **ALL WORK UNITS COMPLETED**

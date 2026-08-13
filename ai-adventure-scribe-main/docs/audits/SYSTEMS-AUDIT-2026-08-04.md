@@ -1,35 +1,52 @@
 # Systems Deep Dive — LoreKeeper, Memory, MCP Servers, Agents
+
 **Date:** 2026-08-04 · **Source:** code audit of the T7 checkout (`infinite-realms-production`)
 **Method:** four parallel code audits + spot verification. Runtime state on the Hetzner VPS was not inspected — findings are from code, PM2 configs, and deploy scripts.
-**Note:** The memory findings here were subsequently deepened by a second independent audit (GPT 5.6 Sol) and reconciled into `docs/memory-system-design-v2.md`, which is the authoritative design. One correction from that reconciliation: the `narrative_facts` migration existed on the unmerged `feat/narrative-ledger` branch only (this audit's extract omitted the supabase tree, and per #1691 the branch was never merged — the migration now lives at `db/migrations/0007_narrative_facts.sql` and had still not been applied to production as of 2026-08-09), and the 20-turn periodic summary fires only for the headless playtest client, not real web players.
+**Historical note:** The memory findings here were subsequently deepened by a second independent audit (GPT 5.6 Sol) and reconciled into [`docs/memory-system-design-v2.md`](../memory-system-design-v2.md), which is the authoritative design. At the time of this audit, the `narrative_facts` migration existed only on the unmerged `feat/narrative-ledger` branch. Later mainline commits added the migration, routes, prompt scene-state path, and additional writers; this repository-only sweep did not verify production database application or deployed code. The periodic-summary conclusion below was also true of the 2026-08-04 snapshot, but current web handlers now pass `turnCount` into the AI service.
+
+> **SUPERSEDED (2026-08-13):** This document is retained as a point-in-time audit, not as a current architecture or deployment status report. Read the current-main correction below and [`memory-system-design-v2.md`](../memory-system-design-v2.md) before making implementation decisions.
 
 ---
 
-## TL;DR Verdicts
+## Current-main correction (2026-08-13)
 
-| System | Verdict | One-liner |
-|---|---|---|
-| LoreKeeper (in-app service) | **KEEP, but it's not what you envisioned** | Live every starter-campaign turn — but as a bulk lore dumper, not RAG |
-| LoreKeeper vector search | **KILL (or consciously defer)** | pgvector embeddings are never queried. Dead since forever |
-| lore-keeper-mcp-server | **KILL / archive** | Never built, never deployed, zero references, frozen since Jun 21 |
-| dnd-5e-mcp-server | **KILL server, KEEP data** | Only its vendored SRD JSON is used (build-time import script) |
-| discord-mcp | **KEEP only if you still use it from Claude Code** | Dev tooling; no repo reference; frozen since Jun 21 |
-| Memory ledger (narrative_facts) | **FIX — highest-value target** | Half-wired: good design, one writer, silent failures |
-| src/agents directory | **PRUNE** | ~60% orphaned code + a README describing files that don't exist |
+Verified against `origin/main` `962f6c26`:
+
+- The ledger foundation is now in main: `db/schema/narrative-state.ts`, `db/migrations/0007_narrative_facts.sql`, `NarrativeLedgerService`, and mounted `/v1/narrative-facts` routes provide session/name-keyed facts, history, supersession, and rendered scene state.
+- `<scene_state>` is assembled as an explicit prompt section immediately before `<player_input>`. Render and fetch failures are observable, rather than being an undocumented regex-only relocation.
+- Engine-owned writers now include combat terminal facts and DM handout possession facts. The structured `state_updates` module is still deliberately unwired, and XML memory/world-update parsing remains live.
+- Combat persistence now crosses server-authorized Bun routes, including damage-log writes. Root CI has a real `server-vitest` Bun gate plus database guard jobs; root `AGENTS.md` exists; and `docs/combat-system-design-v2.md` records ratified D1–D8 decisions.
+- The pre-v2 gaps remain: facts are session/name keyed, the server turn gateway and full playthrough/entity/event model are not built, `pendingDmFacts` remains separate, and the correction UI/episode hierarchy are future work.
+
+Not re-verified by this repo-only sweep: production migration application and deployed VPS state; the exact live usage of MCP packages and semantic-memory paths; and whether every historical orphan recommendation remains safe to act on. Do not infer those answers from this audit.
+
+## Historical TL;DR Verdicts (2026-08-04)
+
+| System                          | Verdict                                            | One-liner                                                             |
+| ------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| LoreKeeper (in-app service)     | **KEEP, but it's not what you envisioned**         | Live every starter-campaign turn — but as a bulk lore dumper, not RAG |
+| LoreKeeper vector search        | **KILL (or consciously defer)**                    | pgvector embeddings are never queried. Dead since forever             |
+| lore-keeper-mcp-server          | **KILL / archive**                                 | Never built, never deployed, zero references, frozen since Jun 21     |
+| dnd-5e-mcp-server               | **KILL server, KEEP data**                         | Only its vendored SRD JSON is used (build-time import script)         |
+| discord-mcp                     | **KEEP only if you still use it from Claude Code** | Dev tooling; no repo reference; frozen since Jun 21                   |
+| Memory ledger (narrative_facts) | **FIX — highest-value target**                     | Half-wired: good design, one writer, silent failures                  |
+| src/agents directory            | **PRUNE**                                          | ~60% orphaned code + a README describing files that don't exist       |
 
 ---
 
-## 1. LoreKeeper — does it still work as envisioned?
+## 1. Historical LoreKeeper snapshot
 
 **Short answer: it runs, but the vision didn't ship.**
 
 **The vision** (per code comments + memory-system-design.md):
+
 - Canonical read-only campaign bible store (`starter_campaigns` / `campaign_chunks` / `campaign_rules`)
 - **Semantic retrieval**: pgvector `search_campaign_lore` picks the few relevant chunks per turn
 - Causality rules (IF-THEN `campaign_rules`) to keep Franz consistent
 - Dual access: in-process service for the app + MCP server for external tools
 
 **The reality:**
+
 - **Live path (confirmed):** `game-context-prompts.ts:74-87` → `getCampaignOverview` + `getRules` + `getEntities`, on every turn — but **only when `starterCampaignId` is set**. User-created campaigns never touch LoreKeeper.
 - **It dumps, it doesn't retrieve.** All NPCs, locations, factions, items, monsters, and handouts go into every prompt wholesale. No ranking, no relevance filter. `searchLore()` (the vector path) has zero non-test callers.
 - Only 3 of 11 service methods are used. The other 8 are test-only.
@@ -39,11 +56,12 @@
 
 ---
 
-## 2. Memory system — design vs. reality
+## 2. Historical memory snapshot
 
 The two-tier design (narrative_facts ledger = truth; memories + lore = color) is good. It is **partially wired**:
 
 **What's live:**
+
 - `<scene_state>` renders from `narrative_facts`, re-injected at true end-of-prompt via an undocumented regex trick in `ai-service.ts:168-184` (fragile if content contains `</scene_state>`).
 - Exactly **one** engine writer: combat end → dead/fled facts (`combat-ending.ts`).
 - Memories: written per turn via the old XML `<memories>` hack; read back top-8 **by importance, not similarity** — `VITE_ENABLE_SEMANTIC_MEMORIES` is off by default, so embeddings are stored null and vector matching never runs.
@@ -55,7 +73,7 @@ The two-tier design (narrative_facts ledger = truth; memories + lore = color) is
 
 ---
 
-## 3. MCP servers — which are alive?
+## 3. Historical MCP server snapshot
 
 **None are in any runtime path.** PM2 runs exactly one process (`infiniterealms-bun`, both ecosystem configs, `auto-deploy.sh`). No `.mcp.json`, no MCP client code, no stdio spawns anywhere in the repo. All three trees frozen at the 2026-06-21 bulk-import timestamp while combat code shows activity through Aug 2.
 
@@ -65,7 +83,7 @@ The two-tier design (narrative_facts ledger = truth; memories + lore = color) is
 
 ---
 
-## 4. Agent architecture — src/agents
+## 4. Historical agent architecture snapshot
 
 There is no agent orchestration; the real turn flow is: browser builds the whole prompt → `POST /v1/llm/generate` → server proxies to OpenRouter/Gemini. `src/agents` contributes exactly two leaf functions: memory read/write and starter-lore injection.
 

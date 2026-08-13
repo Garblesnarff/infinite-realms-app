@@ -1,5 +1,7 @@
 # Database Optimizations - Frequently Asked Questions
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 FAQ. Its unit list, backend paths, storage architecture, and implementation claims are not current. Use [TESTING-REALISM.md](TESTING-REALISM.md), the [workflow documentation](../../.github/workflows/README.md), and [AGENTS.md](../../AGENTS.md) for current guidance.
+
 **Last Updated:** November 3, 2025
 
 ---

@@ -1,5 +1,7 @@
 # Foundry VTT Integration Guide
 
+> **SUPERSEDED (2026-08-13):** Historical Foundry integration snapshot. Its implementation status, migration paths, and multiplayer claims are not a current-main contract; verify current tactical routes and persistence behavior before using it as a plan.
+
 Complete guide for the Foundry VTT-style virtual tabletop integration in AI Adventure Scribe.
 
 ## Table of Contents
@@ -201,7 +203,6 @@ The Foundry VTT integration provides a complete virtual tabletop system with rea
    # Supabase
    NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
    # Application
    NEXT_PUBLIC_APP_URL=http://localhost:3000

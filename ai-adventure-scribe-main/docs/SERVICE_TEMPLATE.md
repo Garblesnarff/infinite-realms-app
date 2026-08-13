@@ -1,5 +1,7 @@
 # Service Pattern Template
 
+> **SUPERSEDED (2026-08-13):** Historical work-unit template. Its “all services use static classes” decision and `server/src` examples are not a current-main architecture contract; inspect the target service and current Bun patterns before using it.
+
 ## Overview
 
 This document defines the standard pattern for all service classes in the AI Adventure Scribe codebase. All services should follow this pattern to ensure consistency, maintainability, and testability.

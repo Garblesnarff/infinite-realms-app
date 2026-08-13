@@ -1,5 +1,7 @@
 # Database Optimizations - Monitoring Guide
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 optimization-monitoring report. Its dashboards, queries, paths, and review dates are not a current observability contract; use current code and [AGENTS.md](../../AGENTS.md) before relying on it.
+
 **Last Updated:** November 3, 2025
 **Purpose:** Track health and effectiveness of database optimizations
 

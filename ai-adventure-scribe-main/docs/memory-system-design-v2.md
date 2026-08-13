@@ -1,8 +1,8 @@
 # Memory & Continuity Architecture v2 — Playthroughs, the Ledger, and Years-Long Worlds
 
-**Status:** Approved design. Supersedes `memory-system-design.md` (v1) and `memory-ledger-branch-notes.md` (stale — see §2).
-**Date:** 2026-08-04
-**Provenance:** Reconciled from two independent code audits (Claude Fable 5 via Cowork, GPT 5.6 Sol via Codex, both 2026-08-04) plus design decisions made with Rob. Every "current state" claim below was verified against code, not docs.
+**Status:** Approved design and implementation tracker. Supersedes `memory-system-design.md` (v1) and `memory-ledger-branch-notes.md`. Those historical branch documents were intentionally not re-added to `main`; if found in an older branch, treat them as non-operative.
+**Date:** 2026-08-04 · **Current-main snapshot:** 2026-08-13 (`origin/main` `962f6c26`)
+**Provenance:** Reconciled from two independent code audits (Claude Fable 5 via Cowork, GPT 5.6 Sol via Codex, both 2026-08-04) plus design decisions made with Rob. The current-main section below was rechecked against code; the target architecture remains a design, not a claim that every phase has shipped.
 
 ---
 
@@ -20,20 +20,20 @@ A player can play in the SAME world for years — 50+ sessions — and the DM ne
 
 This section exists because the v1 schema was built session-first: anything needing a home got attached to `game_sessions`, producing session-scoped amnesia and eight identified concept collisions. Every worker agent MUST use these definitions. One concept, one owner, one name.
 
-| Term | Definition | Owning table | Notes |
-|---|---|---|---|
-| **Campaign template** | The authored, read-only bible (setting, entities, rules, arcs) | `starter_campaigns` + `campaign_chunks` + `campaign_rules` | Versioned. Never mutated by play. |
-| **Playthrough** | One character's journey through one campaign template (or user campaign). THE continuity boundary. Owns all mutable world state. | `playthroughs` (NEW) | = what the player "resumes". Replaces the implicit (campaignId, characterId) pair. |
-| **Episode** | A span of play between natural breaks. Presentation/pacing only — NEVER a state boundary. | `episodes` (rename/reshape of `game_sessions`) | Soft boundaries: explicit end, 6–8h inactivity gap, long rest, arc close. |
-| **Turn** | One player action and its committed consequences. The unit of the event log. | `world_events.turn_id` | NOT message count. NOT combat round. See D6. |
-| **Entity** | A being/place/faction/item instance in a playthrough's world, with a stable UUID | `world_entities` (NEW) | Links to its canon template chunk if it originated in the bible. See D7. |
-| **Event** | An immutable record of something that happened (roll resolved, death, handout, transfer), with idempotency key | `world_events` (NEW) | Facts and recaps DERIVE from events. |
-| **Fact** | A typed, current-or-superseded assertion about an entity (bi-temporal) | `narrative_facts` (re-keyed) | Supersede, never overwrite. |
-| **Thread** | An open narrative obligation: quest, promise, debt, mystery, foreshadowing | `threads` (NEW, absorbs `quests`) | Explicit open/resolved/failed/abandoned. |
-| **Memory (episodic artifact)** | Compressed story: scene recap, episode recap, arc summary, chronicle | `episodic_artifacts` (evolves `memories` + `session_chronicles`) | Carries source event ranges for regeneration. |
-| **World-day** | Monotonic in-game day counter per playthrough | `playthroughs.world_day` (NEW) | Advanced by long rests / explicit narration. See D5. |
-| **Scene state** | The rendered ground-truth block injected into the prompt | derived (ledger render) | Not a table. |
-| **Map** | Visual/tactical battle map with layers, tokens, fog-of-war | `scenes` (RENAME to `battle_maps` when convenient) | Unrelated to scene state. See D4. |
+| Term                           | Definition                                                                                                                       | Owning table                                                     | Notes                                                                              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Campaign template**          | The authored, read-only bible (setting, entities, rules, arcs)                                                                   | `starter_campaigns` + `campaign_chunks` + `campaign_rules`       | Versioned. Never mutated by play.                                                  |
+| **Playthrough**                | One character's journey through one campaign template (or user campaign). THE continuity boundary. Owns all mutable world state. | `playthroughs` (NEW)                                             | = what the player "resumes". Replaces the implicit (campaignId, characterId) pair. |
+| **Episode**                    | A span of play between natural breaks. Presentation/pacing only — NEVER a state boundary.                                        | `episodes` (rename/reshape of `game_sessions`)                   | Soft boundaries: explicit end, 6–8h inactivity gap, long rest, arc close.          |
+| **Turn**                       | One player action and its committed consequences. The unit of the event log.                                                     | `world_events.turn_id`                                           | NOT message count. NOT combat round. See D6.                                       |
+| **Entity**                     | A being/place/faction/item instance in a playthrough's world, with a stable UUID                                                 | `world_entities` (NEW)                                           | Links to its canon template chunk if it originated in the bible. See D7.           |
+| **Event**                      | An immutable record of something that happened (roll resolved, death, handout, transfer), with idempotency key                   | `world_events` (NEW)                                             | Facts and recaps DERIVE from events.                                               |
+| **Fact**                       | A typed, current-or-superseded assertion about an entity (bi-temporal)                                                           | `narrative_facts` (re-keyed)                                     | Supersede, never overwrite.                                                        |
+| **Thread**                     | An open narrative obligation: quest, promise, debt, mystery, foreshadowing                                                       | `threads` (NEW, absorbs `quests`)                                | Explicit open/resolved/failed/abandoned.                                           |
+| **Memory (episodic artifact)** | Compressed story: scene recap, episode recap, arc summary, chronicle                                                             | `episodic_artifacts` (evolves `memories` + `session_chronicles`) | Carries source event ranges for regeneration.                                      |
+| **World-day**                  | Monotonic in-game day counter per playthrough                                                                                    | `playthroughs.world_day` (NEW)                                   | Advanced by long rests / explicit narration. See D5.                               |
+| **Scene state**                | The rendered ground-truth block injected into the prompt                                                                         | derived (ledger render)                                          | Not a table.                                                                       |
+| **Map**                        | Visual/tactical battle map with layers, tokens, fog-of-war                                                                       | `scenes` (RENAME to `battle_maps` when convenient)               | Unrelated to scene state. See D4.                                                  |
 
 ### Decisions resolving the audited ambiguities
 
@@ -48,27 +48,24 @@ This section exists because the v1 schema was built session-first: anything need
 
 ---
 
-## 2. Current state — what the reconciled audits established
+## 2. Current state — verified against current main
 
-Full detail: `docs/audits/SYSTEMS-AUDIT-2026-08-04.md` (Claude) and `MEMORY-AUDIT-GPT-2026-08.md` (GPT). Verified essentials:
+Full historical detail: [the 2026-08-04 systems audit](audits/SYSTEMS-AUDIT-2026-08-04.md). The working-tree companion audit named in older revisions is not part of current `main`. The statements below were rechecked against `origin/main` `962f6c26`; they describe repository state, not a production deployment claim.
 
-> **Correction, 2026-08-09 (issue #1691).** Both 2026-08-04 audits, and this section as
-> originally written, described the `feat/narrative-ledger` branch rather than deployed `main`.
-> The branch was never merged; the T7 working tree simply sat on it. Until the PR that carries
-> this correction, production had **no ledger of any kind** — no `narrative_facts` table, no
-> `<scene_state>` injection, no `/v1/narrative-facts` routes, no combat fact writer. Items 3
-> and 8 below are annotated accordingly. Verify ancestry (`git merge-base --is-ancestor`)
-> before calling anything "live."
+### Shipped on current main
 
-1. **Session amnesia is the root defect.** `memories` and `narrative_facts` are keyed to `session_id` (`db/schema/world.ts:124`, `db/schema/narrative-state.ts:52`). Every new session starts blank. The only bridge is the chronicle recap, built from the first 3 + last 3 DM messages truncated to 300 chars (`chronicle-generator.ts:162,194,216`), and it is NOT in the opening prompt (`use-initial-greeting.ts` fetches it but never passes it to `generateOpeningMessage`).
-2. Prompt assembly is entirely client-side; `/v1/llm/generate` is a proxy. The server never reads memory tables on the turn path.
-3. **The ledger does not exist in production.** (Corrected per #1691 — the description below is of the unmerged `feat/narrative-ledger` branch, not of `main`.) As built on that branch, and as first deployed by the #1691 rebase PR, it is half-built: one engine writer (combat dead/fled, `combat-ending.ts`), precedence one-sided (only `dm_delta` is blocked from superseding), name-keyed identity, insert race without retry. The silent read/write failures are fixed on the way in — the write path now fires `alert('narrative_fact_write_failed')` and the render path `alert('scene_state_render_failed')` (#1680/#1690). Note that its first deployment needs `db/migrations/0007_narrative_facts.sql` applied manually after the code ships; the table was verified absent from the prod database on 2026-08-09.
-4. The live memory write path is regex-parsed XML inside the model's text response. The structured `state_updates` schema exists with zero importers. Client clamps importance 1–5 vs schema 1–10. Memory rows can be 100K chars — "top 8" is not a token bound.
-5. The 20-turn campaign summary NEVER fires for real web players — no live handler passes `turnCount` (`use-message-handler-logic.ts:211`, `use-message-command-handler.ts:153`). It fires only in the headless playtest client. Playtests therefore look more coherent than real play.
-6. Starter-campaign canon is bulk-dumped every turn with no cap; user-created campaigns get NO canon at all. `searchLore`/pgvector is dead code. Embedding drift: lore path 768-dim Gemini vs memories 1536-dim schema vs Drizzle `text` column.
-7. World rows (`npcs`/`locations`/`quests`) are written from XML but their narrative content is never read back into any prompt; the NPC writer skips existing names, so status changes are discarded; quest writer forces `active`.
-8. Additional live-path hazards: history pagination can misorder old pages as newest (`use-messages.ts:105-118`); state writes precede message persistence; suppressed roll-request responses still write memories; `<scene_state>` was regex-relocated over unescaped content on the unmerged branch — resolved before first deployment, since the #1691 rebase assembles the block as an explicit prompt piece in `ai-service.ts` (§3.3) instead of extracting it back out of the context section; streaming path skips combat-contract enforcement and usage recording; handout journal entries are never fed back to the DM.
-9. Orphaned code (delete list): `SceneStateTracker`, `MemoryService` instance API, `src/agents/messaging/**` (IndexedDB stack), `encounter-validator`/`encounter-orchestrator`, `selection.ts`, legacy `shared/prompts/game-context-prompts.ts`, `use-chat-history`/`ChatPersistence`, `MemoryTester`, lore-keeper-mcp-server (whole package), 8 dead LoreKeeperService methods.
+1. **The ledger foundation is present.** `db/schema/narrative-state.ts`, migration `db/migrations/0007_narrative_facts.sql`, `NarrativeLedgerService`, and the mounted `/v1/narrative-facts` routes provide session/name-keyed current facts, history, supersession, and server-rendered scene state.
+2. **Scene state is in the live prompt assembly path.** The AI service fetches server-rendered facts and places the `<scene_state>` block immediately before `<player_input>`; render and fetch failures emit explicit telemetry.
+3. **Engine-owned fact writers are no longer limited to combat.** Combat conclusion records terminal facts, and DM handout delivery records recipient possession facts. Persistence is non-fatal to the user-facing action but failure is observable.
+4. **Combat persistence crosses server-authorized routes.** Browser persistence calls use the Bun combat routes (including damage-log writes), with route-level ownership/authorization checks.
+5. **The repository has real server and database gates.** Root CI runs the server Bun suite with `bun test --isolate`; the database guard workflow runs schema-drift and migration-replay checks. Root [`AGENTS.md`](../../AGENTS.md) is the current agent operating contract, and [`combat-system-design-v2.md`](../../docs/combat-system-design-v2.md) records ratified D1–D8 decisions.
+
+### Still pre-v2 or not verified by this sweep
+
+1. Ledger rows are still session/name keyed; the playthrough/entity/event re-key, world clock, and full event-sourced model remain target architecture.
+2. The structured `state_updates` module remains deliberately unwired, and the client XML memory/world-update path remains live. `pendingDmFacts` is still a separate tactical buffer.
+3. The server-side turn transaction gateway, bounded server prompt, episode/arc compression hierarchy, and correction UI remain future phases.
+4. This repository-only sweep did not verify whether the current migration has been applied to any production database or what code is deployed outside `origin/main`.
 
 ---
 
@@ -181,50 +178,50 @@ Player-facing "Correct the record" on journal/codex entries → creates a `corre
 
 ## 4. Keep / fix / kill map (current code → v2)
 
-| Current | Verdict |
-|---|---|
-| `narrative_facts` + ledger service | KEEP core; re-key to playthrough+entity; fix precedence matrix, insert-race retry, provenance-on-unchanged; loud failures |
-| `LoreKeeperService` (3 live methods) | KEEP as canon reader feeding the stable prefix + entity directory; DELETE 8 dead methods, `searchLore`, chunk embeddings |
-| `state_updates` schema module | PROMOTE — becomes the validated delta channel (step 5 of turn transaction) |
-| XML `<memories>`/`<world_updates>` parsing | KILL after dual-write telemetry confirms parity (keep parser temporarily as telemetry to count missed deltas) |
-| `memories` table + top-8 retrieval + client heuristics + importance scoring | REPLACE with episodic_artifacts hierarchy; migrate rows as low-confidence episodic source material |
-| `session_chronicles` + "Previously on" | KEEP concept; re-source from episode recaps; inject into opening prompt |
-| `pendingDmFacts` tactical buffer | FOLD into world_events (it is Path A with worse plumbing) |
-| `npcs`/`locations`/`quests` tables | FREEZE after migration into world_entities/facts/threads |
-| `game_sessions` | RESHAPE into `episodes` under playthroughs |
-| Orphan list in §2.9 | DELETE in one PR, including stale `src/agents/README.md` and `memory-ledger-branch-notes.md` |
+| Current                                                                     | Verdict                                                                                                                   |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `narrative_facts` + ledger service                                          | KEEP core; re-key to playthrough+entity; fix precedence matrix, insert-race retry, provenance-on-unchanged; loud failures |
+| `LoreKeeperService` (3 live methods)                                        | KEEP as canon reader feeding the stable prefix + entity directory; DELETE 8 dead methods, `searchLore`, chunk embeddings  |
+| `state_updates` schema module                                               | PROMOTE — becomes the validated delta channel (step 5 of turn transaction)                                                |
+| XML `<memories>`/`<world_updates>` parsing                                  | KILL after dual-write telemetry confirms parity (keep parser temporarily as telemetry to count missed deltas)             |
+| `memories` table + top-8 retrieval + client heuristics + importance scoring | REPLACE with episodic_artifacts hierarchy; migrate rows as low-confidence episodic source material                        |
+| `session_chronicles` + "Previously on"                                      | KEEP concept; re-source from episode recaps; inject into opening prompt                                                   |
+| `pendingDmFacts` tactical buffer                                            | FOLD into world_events (it is Path A with worse plumbing)                                                                 |
+| `npcs`/`locations`/`quests` tables                                          | FREEZE after migration into world_entities/facts/threads                                                                  |
+| `game_sessions`                                                             | RESHAPE into `episodes` under playthroughs                                                                                |
+| Historical v1/branch-note docs                                              | DO NOT RESTORE; they are superseded and intentionally absent from `main`; keep references pointed here                    |
 
 ---
 
 ## 5. Phased work order (each phase = one dispatchable work package with acceptance criteria)
 
-**Phase 0 — Observability + quick wins (hours, ship immediately, no schema change)**
-Loud failures (Slack alert / metric) on: lore injection catch, scene-state read null, ledger write fail. Per-section prompt token telemetry. Pass the chronicle recap into `generateOpeningMessage`. Widen chronicle sources (all DM+player messages, larger cap). Fix history pagination ordering. Delete orphan code + stale docs.
-*Accept: alerts fire in prod on injected failure; opening prompt contains recap text in a session-2 playtest; orphan grep returns zero.*
+**Phase 0 — Observability + quick wins (partially landed on current main, no schema change)**
+Current main has scene-state fetch/render alerts, lore-injection failure telemetry, ledger-write alerts, prompt-section metrics, and explicit true-end scene-state placement. Remaining quick wins include passing the chronicle recap into `generateOpeningMessage`, widening chronicle sources, fixing history pagination ordering, and retiring any still-confusing historical docs.
+_Accept: alerts fire in prod on injected failure; opening prompt contains recap text in a session-2 playtest; orphan grep returns zero._
 
 **Phase 1 — Playthrough anchor (the re-key)**
-Create `playthroughs`; backfill one per distinct (campaign, character) with sessions ordered under it; add `playthrough_id` to memories, narrative_facts, rest_events, chronicles (keep session_id during transition); move `starterCampaignId`, `campaignVersion`, `ruleset` to playthrough; restrict character deletion. Resume UI lists playthroughs. **Migration in BOTH trees or per the consolidation plan — the split migration trees are a known landmine.**
-*Accept: a new session in an existing playthrough sees prior facts in `<scene_state>`; 3 characters × 1 campaign = 3 isolated worlds in a playtest.*
+Create `playthroughs`; backfill one per distinct (campaign, character) with sessions ordered under it; add `playthrough_id` to memories, narrative_facts, rest_events, chronicles (keep session_id during transition); move `starterCampaignId`, `campaignVersion`, `ruleset` to playthrough; restrict character deletion. Resume UI lists playthroughs. **Migration in the single canonical tree selected by the consolidation guardrail — never duplicate DDL across trees.**
+_Accept: a new session in an existing playthrough sees prior facts in `<scene_state>`; 3 characters × 1 campaign = 3 isolated worlds in a playtest._
 
 **Phase 2 — Entity registry + event log + deterministic writers**
-`world_entities` (backfill from canon chunks + npcs + fact subject names, alias-merge pass), `world_events` with idempotency keys. Dual-write engine writers: combat end (exists), roll outcomes, handout delivery, item transfer, rest (advance `world_day`), scene transition. Re-point fact identity to entity_id.
-*Accept: spike script replays a playtest transcript and every death/handout/roll appears as exactly one event; re-running is idempotent.*
+`world_entities` (backfill from canon chunks + npcs + fact subject names, alias-merge pass), `world_events` with idempotency keys. Dual-write engine writers: combat end and handout delivery exist; roll outcomes, item transfer, rest (advance `world_day`), and scene transition remain. Re-point fact identity to entity_id.
+_Accept: spike script replays a playtest transcript and every death/handout/roll appears as exactly one event; re-running is idempotent._
 
 **Phase 3 — Server turn gateway + validated deltas**
 `POST /v1/playthroughs/:id/turn` per §3.2; wire `state_updates` into the DM schema; validator + staging; XML parsers demoted to telemetry; one corrective-regeneration loop; atomic persistence.
-*Accept: agent playtest (30-turn CLI) passes with zero XML-sourced state writes; kill-switch env flag reverts to legacy path.*
+_Accept: agent playtest (30-turn CLI) passes with zero XML-sourced state writes; kill-switch env flag reverts to legacy path._
 
 **Phase 4 — Bounded prompt + caching**
 Layered assembly per §3.3 server-side; entity-capped scene packs; critical invariants; stable hashed prefix as system message; cache-hit + truncation telemetry.
-*Accept: measured per-turn tokens flat (±10%) between turn 5 and turn 300 of a long playtest; cache-hit rate visible in telemetry.*
+_Accept: measured per-turn tokens flat (±10%) between turn 5 and turn 300 of a long playtest; cache-hit rate visible in telemetry._
 
 **Phase 5 — Episodes + compression hierarchy**
 Episodes with soft boundaries; scene/episode/arc/chronicle generation jobs; retrieval over recaps; migrate legacy memories as episodic source material; retire top-8.
-*Accept: session-50 simulated playtest: DM correctly references a session-3 fact (ledger) and a session-3 event (recap) with flat prompt size.*
+_Accept: session-50 simulated playtest: DM correctly references a session-3 fact (ledger) and a session-3 event (recap) with flat prompt size._
 
 **Phase 6 — Journal/codex + corrections UI**
 Player-facing tome; "Correct the record"; stale-artifact regeneration.
-*Accept: player corrects an NPC fact; next turn's scene_state reflects it; affected recap regenerates.*
+_Accept: player corrects an NPC fact; next turn's scene_state reflects it; affected recap regenerates._
 
 Phases 0–1 are the unlock; nothing else lands without them. 2→3→4 in order; 5–6 parallelizable after 3.
 
@@ -237,7 +234,7 @@ Phases 0–1 are the unlock; nothing else lands without them. 2→3→4 in order
 3. No silent catch on continuity paths. Degrade loudly or fail the turn.
 4. Facts come from events with idempotency keys. No writer without one.
 5. Do not "fix" the ledger by loosening validation; stage and surface instead. (Same spirit as the authored stat-block parser rule.)
-6. When you change behavior, update THIS doc and delete superseded docs in the same commit. Stale docs misdirect the next agent — this codebase has been bitten repeatedly (see `memory-ledger-branch-notes.md` history).
+6. When you change behavior, update THIS doc and retire superseded docs in the same commit. Stale docs misdirect the next agent — this codebase has been bitten repeatedly, including during the pre-v2 ledger work.
 7. Each table's DDL lives in exactly ONE migration tree — Drizzle (`db/migrations/`) for app tables, **including their RLS/policies, which ride in the same migration as the table they protect**; `supabase/migrations/` only for cross-cutting Supabase-platform concerns (grant sweeps, RPCs, storage, data fixes on Supabase-owned tables). CI's schema-drift and migration-replay guards enforce consistency; never duplicate DDL across trees. (Corrected 2026-08-09: this guardrail previously read "never add a table to only one tree", which reads as an instruction to duplicate DDL and produced exactly that in the #1691 ledger PR — two equivalent `narrative_facts` migrations that collided on replay. A table's security posture travels with its DDL: `drizzle-kit generate` cannot emit RLS, so hand-add it to the generated migration rather than splitting it into the other tree.)
 8. Prompt sections are budgeted and ordered; do not reorder the stable prefix or interpolate unescaped content.
 9. Verify your deliverable is on GitHub before reporting done.

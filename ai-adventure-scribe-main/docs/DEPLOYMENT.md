@@ -1,5 +1,7 @@
 # Deployment Guide - Foundry VTT Integration
 
+> **SUPERSEDED (2026-08-13):** Historical Foundry/Next.js/Supabase deployment guide. It is not the current Bun/Hetzner deployment contract; see repository `AGENTS.md` and current operational configuration before deploying.
+
 Complete guide for deploying the AI Adventure Scribe Foundry VTT integration to production.
 
 ## Table of Contents
@@ -71,7 +73,6 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_JWT_SECRET=your-jwt-secret
 
 # Database (if not using Supabase)

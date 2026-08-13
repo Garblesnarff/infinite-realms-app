@@ -1,5 +1,7 @@
 # Error Handling Guide
 
+> **SUPERSEDED (2026-08-13):** Historical implementation guide whose examples use the retired `server/src` layout and older API contracts. Preserve the principles, but verify current Bun error utilities and routes before applying any code change.
+
 This guide describes the standardized error handling system implemented across all AI Adventure Scribe services and API routes.
 
 ## Table of Contents

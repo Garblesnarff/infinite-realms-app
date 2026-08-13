@@ -1,5 +1,7 @@
 # Performance Optimization Index
 
+> **SUPERSEDED (2026-08-13):** Historical index for 2025 optimization artifacts. Several linked reports and benchmark paths are no longer current; do not use this page to choose implementation or validation steps. Start with the [current workflow documentation](../../.github/workflows/README.md).
+
 **Complete guide to all performance documentation and benchmarking tools**
 
 ---

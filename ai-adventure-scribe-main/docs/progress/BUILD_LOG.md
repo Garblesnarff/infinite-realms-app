@@ -1,5 +1,7 @@
 # AI Adventure Scribe - Build Log
 
+> **SUPERSEDED (2026-08-13):** Historical 2025 build log. Do not use its implementation status, embedding/provider details, test metrics, or future-phase wording as current. Use [memory-system-design-v2.md](../memory-system-design-v2.md) and the [current workflow documentation](../../../.github/workflows/README.md) for current orientation.
+
 *Building the world's first AI-powered persistent universe platform*
 
 > **Phase 1: Memory System & Database Architecture** ✅ **COMPLETED**
