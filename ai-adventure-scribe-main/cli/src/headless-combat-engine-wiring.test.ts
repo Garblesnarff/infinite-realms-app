@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AIService } from '../../src/services/ai-service';
 import {
   executeAuthoritativeCombatIntent,
-  executeStructuredCombatAction,
+  executeStructuredCombatActionWithBoundary,
 } from '../../src/services/combat/combat-action-executor';
 import { HeadlessGameClient } from '../../src/services/headless-game-client';
 import { userDataApi } from '../../src/services/user-data-api';
@@ -43,8 +43,9 @@ vi.mock('@/hooks/ai/roll-processor', () => ({
 }));
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));
 vi.mock('@/services/combat/combat-action-executor', () => ({
-  executeStructuredCombatAction: vi.fn(async () => []),
+  executeStructuredCombatActionWithBoundary: vi.fn(async () => ({ outcomes: [], boundary: null })),
   executeAuthoritativeCombatIntent: vi.fn(async () => ({})),
+  combatBoundaryFromResult: vi.fn(() => false),
 }));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
@@ -260,7 +261,7 @@ describe('the headless client executes declared attacks instead of printing them
     const client = await startCombatClient();
     await client.play('I attack the roach.');
 
-    expect(executeStructuredCombatAction).toHaveBeenCalledWith('enc-1', attackAction);
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith('enc-1', attackAction);
   });
 
   /** Initiative only advances when a turn is ended; a board that never advances is frozen. */
@@ -283,10 +284,10 @@ describe('the headless client executes declared attacks instead of printing them
     const client = await startCombatClient();
     await client.play('I look at the roach.');
 
-    expect(executeStructuredCombatAction).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
   });
 
-  it('executes each of several declared attacks, in order', async () => {
+  it('drops trailing actions after the synthesized turn boundary', async () => {
     const second = { ...attackAction, actor_id: 'shadow-roach-1', target_ids: ['the-seeker'] };
     vi.mocked(AIService.chatWithDM).mockResolvedValue(
       dmResponse({ combat_actions: [attackAction, second] }) as never,
@@ -294,9 +295,8 @@ describe('the headless client executes declared attacks instead of printing them
     const client = await startCombatClient();
     await client.play('I attack the roach.');
 
-    expect(vi.mocked(executeStructuredCombatAction).mock.calls.map((call) => call[1])).toEqual([
-      attackAction,
-      second,
+    expect(vi.mocked(executeStructuredCombatActionWithBoundary).mock.calls).toEqual([
+      ['enc-1', attackAction],
     ]);
   });
 });

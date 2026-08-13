@@ -13,8 +13,8 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/attackUtils', () => ({
-  calculateAttackDamage: vi.fn(),
+vi.mock('@/services/combat/combat-action-executor', () => ({
+  executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('@/utils/classFeatures', () => ({
@@ -55,7 +55,7 @@ vi.mock('@/utils/twoWeaponFighting', () => ({
 
 import { useCombatMechanics } from '../use-combat-mechanics';
 
-import * as attackUtils from '@/utils/attackUtils';
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import * as characterCalculations from '@/utils/character-calculations';
 import * as classFeatures from '@/utils/classFeatures';
 import * as deathSaves from '@/utils/combat/deathSaves';
@@ -70,6 +70,7 @@ describe('useCombatMechanics', () => {
   const mockUpdateParticipant = vi.fn();
 
   const mockActiveEncounter = {
+    id: 'enc-1',
     participants: [
       {
         id: 'p1',
@@ -111,92 +112,40 @@ describe('useCombatMechanics', () => {
   });
 
   describe('handleEnhancedAttack', () => {
-    it('should execute a normal attack successfully', async () => {
+    it('sends a normal attack to the authoritative combat engine', async () => {
       const { result } = renderHook(() => useCombatMechanics(defaultProps));
-
-      vi.mocked(diceUtils.rollAttack).mockReturnValue({
-        dieType: 20,
-        count: 1,
-        modifier: 5,
-        results: [15],
-        total: 20,
-        critical: false,
-        naturalRoll: 15,
-      } as any);
-
-      vi.mocked(attackUtils.calculateAttackDamage).mockReturnValue({
-        rolls: [
-          {
-            dieType: 8,
-            count: 1,
-            modifier: 3,
-            results: [5],
-            total: 8,
-          },
-        ],
-        totalBeforeResistance: 8,
-      } as any);
 
       await act(async () => {
         await result.current.handleEnhancedAttack('p1', 'p2', 'attack');
       });
 
-      expect(diceUtils.rollAttack).toHaveBeenCalledWith(
-        5,
-        expect.objectContaining({
-          advantage: false,
-          disadvantage: false,
-          halflingLucky: true, // p1 has lucky trait in mock
-        }),
-      );
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'attack',
-        'p1',
-        'p2',
-        expect.objectContaining({
-          damageDealt: 8,
-          hit: true,
-        }),
-      );
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('enc-1', {
+        type: 'attack',
+        actorId: 'p1',
+        targetId: 'p2',
+        advantage: false,
+        disadvantage: false,
+      });
     });
 
-    it('should handle critical hits and divine smite', async () => {
+    it('leaves critical-hit and smite resolution to the server', async () => {
       const { result } = renderHook(() => useCombatMechanics(defaultProps));
-
-      vi.mocked(diceUtils.rollAttack).mockReturnValue({
-        total: 25,
-        critical: true,
-        naturalRoll: 20,
-      } as any);
-
-      vi.mocked(attackUtils.calculateAttackDamage).mockReturnValue({
-        rolls: [
-          { total: 12 }, // base
-          { total: 9 }, // smite
-        ],
-        totalBeforeResistance: 21,
-      } as any);
 
       await act(async () => {
         await result.current.handleEnhancedAttack('p1', 'p2', 'attack', false, false, 1);
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'attack',
-        'p1',
-        'p2',
-        expect.objectContaining({
-          damageDealt: 21,
-          description: expect.stringContaining('CRITICAL HIT!'),
-        }),
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        expect.objectContaining({ type: 'attack', actorId: 'p1', targetId: 'p2' }),
       );
     });
 
-    it('should rely on calculateAttackDamage for Rage damage if present', async () => {
+    it('sends raging attacks without calculating Rage damage in the client', async () => {
       const barbarianProps = {
         ...defaultProps,
         activeEncounter: {
+          id: 'enc-1',
           participants: [
             {
               id: 'p1',
@@ -212,31 +161,21 @@ describe('useCombatMechanics', () => {
 
       const { result } = renderHook(() => useCombatMechanics(barbarianProps));
 
-      vi.mocked(diceUtils.rollAttack).mockReturnValue({ total: 18, critical: false } as any);
-      vi.mocked(attackUtils.calculateAttackDamage).mockReturnValue({
-        rolls: [{ total: 12, isRageBonus: true }], // 10 base + 2 rage
-        totalBeforeResistance: 12,
-      } as any);
-
       await act(async () => {
         await result.current.handleEnhancedAttack('p1', 'p2');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'attack',
-        'p1',
-        'p2',
-        expect.objectContaining({
-          damageDealt: 12,
-        }),
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        expect.objectContaining({ type: 'attack', actorId: 'p1', targetId: 'p2' }),
       );
-      expect(classFeatures.getRageDamageBonus).not.toHaveBeenCalled();
     });
 
-    it('should manually add Rage damage if utility misses it', async () => {
+    it('does not add a client-side Rage fallback when the server owns damage', async () => {
       const barbarianProps = {
         ...defaultProps,
         activeEncounter: {
+          id: 'enc-1',
           participants: [
             {
               id: 'p1',
@@ -252,25 +191,13 @@ describe('useCombatMechanics', () => {
 
       const { result } = renderHook(() => useCombatMechanics(barbarianProps));
 
-      vi.mocked(diceUtils.rollAttack).mockReturnValue({ total: 18, critical: false } as any);
-      vi.mocked(attackUtils.calculateAttackDamage).mockReturnValue({
-        rolls: [{ total: 10 }], // No isRageBonus
-        totalBeforeResistance: 10,
-      } as any);
-      vi.mocked(classFeatures.getRageDamageBonus).mockReturnValue(2);
-
       await act(async () => {
         await result.current.handleEnhancedAttack('p1', 'p2');
       });
 
-      expect(classFeatures.getRageDamageBonus).toHaveBeenCalledWith(5);
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'attack',
-        'p1',
-        'p2',
-        expect.objectContaining({
-          damageDealt: 12, // 10 + 2
-        }),
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        expect.objectContaining({ type: 'attack', actorId: 'p1', targetId: 'p2' }),
       );
     });
 

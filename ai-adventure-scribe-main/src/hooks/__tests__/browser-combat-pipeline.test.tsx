@@ -76,6 +76,20 @@ vi.mock('@/lib/logger', () => ({
 
 const SESSION_ID = 'session-abc';
 
+const narrativeResponse = {
+  text:
+    'The goblin snarls.\n\nA. **Take in your surroundings**, study the scene for details.\n' +
+    'B. **Speak up**, address whoever is present.\n' +
+    'C. **Act on instinct**, follow your gut and make a bold move.',
+  narrationSegments: [],
+  roll_requests: [],
+  combat_transition: 'none',
+  scene_spec: null,
+  map_actions: [],
+  handout_actions: [],
+  combat_actions: [],
+};
+
 /** The `combat` envelope the server returns from `/active` and broadcasts as combat_state_updated. */
 const combatPayload = (status: 'active' | 'completed') => ({
   encounter: {
@@ -248,7 +262,7 @@ describe('the DM turn reads server combat truth', () => {
       ok: true,
       json: async () => ({ tacticalContext: 'ASCII map + ACTIVE line' }),
     } as any);
-    vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'The goblin snarls.' } as any);
+    vi.mocked(AIService.chatWithDM).mockResolvedValue(narrativeResponse as any);
   });
 
   it('fetches tactical context and tells the DM it is in combat', async () => {
