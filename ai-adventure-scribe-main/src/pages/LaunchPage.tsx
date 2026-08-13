@@ -21,6 +21,7 @@ import { FinalCTASection } from '@/components/launch/FinalCTASection';
 import { FooterSection } from '@/components/launch/FooterSection';
 import { FounderStorySection } from '@/components/launch/FounderStorySection';
 import { HeroSection } from '@/components/launch/HeroSection';
+import { LaunchHeader } from '@/components/launch/LaunchHeader';
 import { RoadmapSection } from '@/components/launch/RoadmapSection';
 import { StarterCampaignsSection } from '@/components/launch/StarterCampaignsSection';
 import { VisionSection } from '@/components/launch/VisionSection';
@@ -87,56 +88,60 @@ const LaunchPage: React.FC = () => {
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 overflow-x-hidden">
-        {/* Hero Section - The Hook */}
-        <HeroSection />
+        <LaunchHeader />
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+        <main id="main-content">
+          {/* Hero Section - The Hook */}
+          <HeroSection />
 
-        {/* Vision Section - Sell the Dream */}
-        <VisionSection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+          {/* Vision Section - Sell the Dream */}
+          <VisionSection />
 
-        {/* Founder Story Section - Personal Connection & Trust Building */}
-        <FounderStorySection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          {/* Founder Story Section - Personal Connection & Trust Building */}
+          <FounderStorySection />
 
-        {/* Features Section - What We're Building */}
-        <FeaturesSection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+          {/* Features Section - What We're Building */}
+          <FeaturesSection />
 
-        {/* Starter Campaigns Section - Ready-to-Play Adventures */}
-        <StarterCampaignsSection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          {/* Starter Campaigns Section - Ready-to-Play Adventures */}
+          <StarterCampaignsSection />
 
-        {/* Roadmap Section - Clear Beta Phases */}
-        <RoadmapSection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          {/* Roadmap Section - Clear Beta Phases */}
+          <RoadmapSection />
 
-        {/* Early Access Section - Founding Adventurer Perks */}
-        <EarlyAccessSection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+          {/* Early Access Section - Founding Adventurer Perks */}
+          <EarlyAccessSection />
 
-        {/* FAQ Section - Launch-Focused Questions */}
-        <FAQSection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
 
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+          {/* FAQ Section - Launch-Focused Questions */}
+          <FAQSection />
 
-        {/* Final CTA Section - Waitlist Urgency */}
-        <FinalCTASection />
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
+
+          {/* Final CTA Section - Waitlist Urgency */}
+          <FinalCTASection />
+        </main>
 
         {/* Footer Section - Legal & Links */}
         <FooterSection />
