@@ -1,0 +1,26 @@
+-- Round 2 of the frontend RLS lockdown, closing part of the exposure confirmed
+-- in #1760: eleven tables held anon/authenticated grants with relrowsecurity =
+-- false, so their rows were readable (and seven of them writable) with the
+-- public anon key. 20260713_revoke_remaining_anon_access.sql was applied but
+-- named only seven OTHER tables, so the revoke was incomplete rather than
+-- skipped.
+--
+-- This file deliberately covers ONE of those eleven. The split analysis on
+-- #1760 found the other ten are still accessed directly from the browser via
+-- supabase-js, so revoking them here would break live features; they are
+-- blocked on #1707 Step-4 server routes and must be revoked only after those
+-- ship. Do not add them to this file — add a round 3 once the routes are live.
+--
+--   worlds  — src/utils/context/builder.ts:23 is the only reference in src/,
+--             and that module is dead: nothing imports it, and its query
+--             strings appear in zero of the 81 dist/assets/*.js chunks, so it
+--             is tree-shaken out of the shipped bundle. It was orphaned by
+--             46ee750d ("complete secured frontend data migration",
+--             2026-07-14). server-bun never queries the table, and it holds
+--             0 rows in production.
+--
+-- service_role is intentionally not named, so its existing grants remain
+-- intact — same convention as 20260713. The server connects as the superuser
+-- via DATABASE_URL and is unaffected by this change either way.
+
+REVOKE ALL PRIVILEGES ON TABLE public.worlds FROM anon, authenticated;
