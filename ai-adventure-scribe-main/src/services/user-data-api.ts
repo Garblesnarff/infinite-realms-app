@@ -94,6 +94,69 @@ export type AoECastPayload = {
   slotLevel: number | null;
 };
 
+export type CombatPersistencePayload = {
+  sessionId: string;
+  status: 'active' | 'paused' | 'completed';
+  currentRound: number;
+  currentTurnOrder: number;
+  location: string | null;
+  startedAt: string;
+  participants: Array<{
+    id: string;
+    characterId: string | null;
+    npcId: string | null;
+    name: string;
+    participantType: 'player' | 'npc' | 'enemy' | 'monster';
+    initiative: number;
+    initiativeModifier: number;
+    turnOrder: number;
+    isActive: boolean;
+    armorClass: number;
+    maxHp: number;
+    speed: number;
+    damageResistances: string[];
+    damageImmunities: string[];
+    damageVulnerabilities: string[];
+  }>;
+  statuses: Array<{
+    participantId: string;
+    currentHp: number;
+    maxHp: number;
+    tempHp: number;
+    isConscious: boolean;
+    deathSavesSuccesses: number;
+    deathSavesFailures: number;
+  }>;
+  conditions: Array<{
+    participantId: string;
+    conditionName: string;
+    durationRounds: number | null;
+    source: string | null;
+  }>;
+};
+
+export type CombatParticipantStatusResponse = {
+  participant_id: string;
+  encounter_id: string;
+  current_hp: number;
+  max_hp: number;
+  temp_hp: number;
+  is_conscious: boolean;
+  death_saves_successes: number;
+  death_saves_failures: number;
+  damage_resistances: string[];
+  damage_immunities: string[];
+  damage_vulnerabilities: string[];
+};
+
+export type CombatParticipantStatusUpdate = {
+  currentHp?: number;
+  tempHp?: number;
+  isConscious?: boolean;
+  deathSavesSuccesses?: number;
+  deathSavesFailures?: number;
+};
+
 export type JournalHandoutEntry = {
   id: string;
   sessionId: string;
@@ -258,6 +321,35 @@ export const userDataApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
+  saveCombatEncounter: (
+    encounterId: string,
+    payload: CombatPersistencePayload,
+  ): Promise<{
+    ok: boolean;
+    encounterId: string;
+    participants: number;
+    statuses: number;
+    conditions: number;
+    skippedConditions: string[];
+  }> =>
+    request(`/v1/combat/encounters/${encodeURIComponent(encounterId)}/persistence`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getCombatParticipantStatus: (participantId: string): Promise<CombatParticipantStatusResponse> =>
+    request(`/v1/combat/participants/${encodeURIComponent(participantId)}/status`),
+  updateCombatParticipantStatus: (
+    participantId: string,
+    payload: CombatParticipantStatusUpdate,
+  ): Promise<CombatParticipantStatusResponse> =>
+    request(`/v1/combat/participants/${encodeURIComponent(participantId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  getCharacterCombatStatus: (
+    characterId: string,
+  ): Promise<CombatParticipantStatusResponse | null> =>
+    request(`/v1/combat/characters/${encodeURIComponent(characterId)}/combat-status`),
   getActiveCombat: (sessionId: string): Promise<Response> =>
     requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`),
   endTacticalMap: (sessionId: string): Promise<Response> =>

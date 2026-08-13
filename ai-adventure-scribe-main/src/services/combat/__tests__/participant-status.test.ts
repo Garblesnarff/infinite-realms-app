@@ -1,20 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getParticipantStatus } from '../participant-status';
+const { mockGetCombatParticipantStatus } = vi.hoisted(() => ({
+  mockGetCombatParticipantStatus: vi.fn(),
+}));
 
-const mockSingle = vi.fn();
-const mockEq = vi.fn().mockReturnThis();
-const mockSelect = vi.fn().mockReturnThis();
-const mockFrom = vi.fn().mockReturnValue({
-  select: mockSelect,
-  eq: mockEq,
-  single: mockSingle
-});
-
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: (table: string) => mockFrom(table)
-  }
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCombatParticipantStatus: mockGetCombatParticipantStatus,
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -22,38 +15,35 @@ vi.mock('@/lib/logger', () => ({
     info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
-    debug: vi.fn()
-  }
+    debug: vi.fn(),
+  },
 }));
+
+import { getParticipantStatus } from '../participant-status';
+
+const statusResponse = {
+  participant_id: 'participant-1',
+  encounter_id: 'encounter-1',
+  current_hp: 10,
+  max_hp: 20,
+  temp_hp: 5,
+  is_conscious: true,
+  death_saves_successes: 0,
+  death_saves_failures: 0,
+  damage_resistances: ['fire'],
+  damage_immunities: ['cold'],
+  damage_vulnerabilities: ['acid'],
+};
 
 describe('getParticipantStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFrom.mockReturnValue({
-      select: mockSelect,
-      eq: mockEq,
-      single: mockSingle
-    });
-    mockSelect.mockReturnThis();
-    mockEq.mockReturnThis();
   });
 
-  it('should return participant status when found', async () => {
-    const mockData = {
-      damage_resistances: ['fire'],
-      damage_immunities: ['cold'],
-      damage_vulnerabilities: ['acid'],
-      combat_participant_status: {
-        current_hp: 10,
-        max_hp: 20,
-        temp_hp: 5,
-        is_conscious: true
-      }
-    };
+  it('returns the ownership-scoped server status response', async () => {
+    mockGetCombatParticipantStatus.mockResolvedValue(statusResponse);
 
-    mockSingle.mockResolvedValue({ data: mockData, error: null });
-
-    const result = await getParticipantStatus('test-id');
+    const result = await getParticipantStatus('participant-1');
 
     expect(result).toEqual({
       current_hp: 10,
@@ -62,75 +52,26 @@ describe('getParticipantStatus', () => {
       is_conscious: true,
       damage_resistances: ['fire'],
       damage_immunities: ['cold'],
-      damage_vulnerabilities: ['acid']
+      damage_vulnerabilities: ['acid'],
     });
-    expect(mockFrom).toHaveBeenCalledWith('combat_participants');
+    expect(mockGetCombatParticipantStatus).toHaveBeenCalledWith('participant-1');
   });
 
-  it('should return null when PGRST116 error occurs (not found)', async () => {
-    mockSingle.mockResolvedValue({
-      data: null,
-      error: { code: 'PGRST116', message: 'Not found' }
-    });
+  it('returns null when the server masks a missing or unauthorized participant', async () => {
+    mockGetCombatParticipantStatus.mockRejectedValue(new Error('Not found'));
 
-    const result = await getParticipantStatus('test-id');
-
-    expect(result).toBeNull();
+    await expect(getParticipantStatus('missing')).resolves.toBeNull();
   });
 
-  it('should return null and log error for other database errors', async () => {
-    mockSingle.mockResolvedValue({
-      data: null,
-      error: { code: 'OTHER', message: 'Some database error' }
-    });
+  it('returns null and logs when the server request fails', async () => {
+    mockGetCombatParticipantStatus.mockRejectedValue(new Error('Network failure'));
 
-    const result = await getParticipantStatus('test-id');
-
-    expect(result).toBeNull();
+    await expect(getParticipantStatus('participant-1')).resolves.toBeNull();
   });
 
-  it('should handle null resistances/immunities/vulnerabilities by returning empty arrays', async () => {
-    const mockData = {
-      damage_resistances: null,
-      damage_immunities: null,
-      damage_vulnerabilities: null,
-      combat_participant_status: {
-        current_hp: 10,
-        max_hp: 20,
-        temp_hp: 5,
-        is_conscious: true
-      }
-    };
+  it('returns null for an unusable response', async () => {
+    mockGetCombatParticipantStatus.mockResolvedValue(null);
 
-    mockSingle.mockResolvedValue({ data: mockData, error: null });
-
-    const result = await getParticipantStatus('test-id');
-
-    expect(result?.damage_resistances).toEqual([]);
-    expect(result?.damage_immunities).toEqual([]);
-    expect(result?.damage_vulnerabilities).toEqual([]);
-  });
-
-  it('should return null if participant data is null', async () => {
-    mockSingle.mockResolvedValue({ data: null, error: null });
-
-    const result = await getParticipantStatus('test-id');
-
-    expect(result).toBeNull();
-  });
-
-  it('should return null if combat_participant_status is missing', async () => {
-    const mockData = {
-      damage_resistances: [],
-      damage_immunities: [],
-      damage_vulnerabilities: [],
-      combat_participant_status: null
-    };
-
-    mockSingle.mockResolvedValue({ data: mockData, error: null });
-
-    const result = await getParticipantStatus('test-id');
-
-    expect(result).toBeNull();
+    await expect(getParticipantStatus('participant-1')).resolves.toBeNull();
   });
 });

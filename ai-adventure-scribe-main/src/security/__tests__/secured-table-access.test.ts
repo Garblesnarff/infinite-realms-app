@@ -12,6 +12,10 @@ const SECURED_TABLES = [
   'characters',
   'character_stats',
   'starter_character_templates',
+  'combat_encounters',
+  'combat_participants',
+  'combat_participant_status',
+  'combat_participant_conditions',
 ] as const;
 
 function sourceFiles(directory: string): string[] {

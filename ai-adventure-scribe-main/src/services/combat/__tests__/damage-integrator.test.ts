@@ -28,6 +28,50 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+// Keep the damage-log assertion on its existing Supabase seam, while the participant/status
+// reads and writes follow the same server-routed API used by production code.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCombatParticipantStatus: async (participantId: string) => {
+      const { data, error } = await (supabase as any)
+        .from('combat_participants')
+        .select('*')
+        .eq('id', participantId)
+        .single();
+      if (error) throw new Error(error.message || 'Status request failed');
+      if (!data?.combat_participant_status) throw new Error('Participant status not found');
+
+      return {
+        participant_id: participantId,
+        encounter_id: 'test-encounter',
+        current_hp: data.combat_participant_status.current_hp,
+        max_hp: data.combat_participant_status.max_hp,
+        temp_hp: data.combat_participant_status.temp_hp || 0,
+        is_conscious: data.combat_participant_status.is_conscious,
+        death_saves_successes: data.combat_participant_status.death_saves_successes || 0,
+        death_saves_failures: data.combat_participant_status.death_saves_failures || 0,
+        damage_resistances: data.damage_resistances || [],
+        damage_immunities: data.damage_immunities || [],
+        damage_vulnerabilities: data.damage_vulnerabilities || [],
+      };
+    },
+    updateCombatParticipantStatus: async (participantId: string, payload: any) => {
+      const { error } = await (supabase as any)
+        .from('combat_participant_status')
+        .update({
+          current_hp: payload.currentHp,
+          temp_hp: payload.tempHp,
+          is_conscious: payload.isConscious,
+          death_saves_successes: payload.deathSavesSuccesses,
+          death_saves_failures: payload.deathSavesFailures,
+        })
+        .eq('participant_id', participantId);
+      if (error) throw error;
+      return {};
+    },
+  },
+}));
+
 // Mock logger to keep test output clean
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -413,7 +457,12 @@ describe('DamageIntegrator', () => {
             damage_resistances: [],
             damage_immunities: [],
             damage_vulnerabilities: [],
-            combat_participant_status: { current_hp: 10, max_hp: 10, temp_hp: 0, is_conscious: true },
+            combat_participant_status: {
+              current_hp: 10,
+              max_hp: 10,
+              temp_hp: 0,
+              is_conscious: true,
+            },
           },
           error: null,
         }),

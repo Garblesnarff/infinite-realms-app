@@ -6,8 +6,8 @@ import { getParticipantStatus } from './participant-status';
 
 import type { HealingApplication, HPUpdateResult } from './damage-integrator-types';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Apply healing to a combat participant
@@ -51,13 +51,11 @@ export async function applyHealingFromRoll(healing: HealingApplication): Promise
     const updateData: {
       current_hp: number;
       is_conscious: boolean;
-      updated_at: string;
       death_saves_successes?: number;
       death_saves_failures?: number;
     } = {
       current_hp: newHP,
       is_conscious: isConscious,
-      updated_at: new Date().toISOString(),
     };
 
     if (deathSavesReset) {
@@ -65,12 +63,16 @@ export async function applyHealingFromRoll(healing: HealingApplication): Promise
       updateData.death_saves_failures = 0;
     }
 
-    const { error: updateError } = await supabase
-      .from('combat_participant_status')
-      .update(updateData)
-      .eq('participant_id', participantId);
-
-    if (updateError) throw updateError;
+    await userDataApi.updateCombatParticipantStatus(participantId, {
+      currentHp: updateData.current_hp,
+      isConscious: updateData.is_conscious,
+      ...(updateData.death_saves_successes !== undefined
+        ? { deathSavesSuccesses: updateData.death_saves_successes }
+        : {}),
+      ...(updateData.death_saves_failures !== undefined
+        ? { deathSavesFailures: updateData.death_saves_failures }
+        : {}),
+    });
 
     logger.info(
       `[DamageIntegrator] ✓ Healing applied: ${status.current_hp} → ${newHP} HP` +

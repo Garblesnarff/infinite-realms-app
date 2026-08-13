@@ -12,6 +12,7 @@ import type { DamageType } from '@/types/combat';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 // Re-export for backward compatibility
 export type {
@@ -109,19 +110,14 @@ export async function applyDamageFromRoll(damage: DamageApplication): Promise<HP
     const becameConscious = !wasConscious && isConscious;
 
     // Update database
-    const { error: updateError } = await supabase
-      .from('combat_participant_status')
-      .update({
-        current_hp: newHP,
-        temp_hp: newTempHP,
-        is_conscious: isConscious,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('participant_id', participantId);
+    await userDataApi.updateCombatParticipantStatus(participantId, {
+      currentHp: newHP,
+      tempHp: newTempHP,
+      isConscious,
+    });
 
-    if (updateError) throw updateError;
-
-    // Log damage to combat_damage_log
+    // This remains on its independent legacy writer; the #1760 split evidence does not include
+    // combat_damage_log in the four-table persistence surface revoked by this change.
     const { error: logError } = await supabase.from('combat_damage_log').insert({
       encounter_id: encounterId,
       participant_id: participantId,
