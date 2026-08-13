@@ -61,6 +61,8 @@ describe('CombatRulesPrompts', () => {
       expect(section).not.toMatch(/saving throws and ability checks ONLY/i);
       expect(section).toContain('INTENTIONAL_ELICITATION_DIALECT');
       expect(section).toContain('resolves each one');
+      expect(section).toContain('<check_governance>');
+      expect(section).toContain('undiscovered content');
       expect(section).toContain('</combat_roll_requirements>');
     });
 
@@ -88,6 +90,14 @@ describe('CombatRulesPrompts', () => {
       expect(section).not.toContain('you MUST emit a `map_actions` move');
       expect(section).toContain('Approach before a strike is the engine');
       expect(section).toContain('</spatial_turn_contract>');
+    });
+
+    it('keeps ability checks under the general check-governance contract', () => {
+      const section = CombatRulesPrompts.buildSpatialTurnContractSection();
+
+      expect(section).toContain('<check_governance>');
+      expect(section).toContain('declared action choose the skill');
+      expect(section).toContain('discovery-safe');
     });
 
     /**

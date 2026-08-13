@@ -6,10 +6,13 @@ export class RulesPrompts {
 
 <when_to_request_rolls>
 <title>CRITICAL: WHEN TO REQUEST DICE ROLLS</title>
-Request a roll when the outcome is UNCERTAIN. Ask yourself:
-- Can this action fail? → Request a roll
-- Is there opposition or difficulty? → Request a roll
-- Does success/failure meaningfully change the story? → Request a roll
+Use the check-governance rules below. A roll requires BOTH an uncertain outcome AND meaningful
+stakes; a technically possible failure with no meaningful consequence resolves without a roll.
+Ask yourself:
+- Is the outcome uncertain?
+- Would success or failure meaningfully change the story?
+- Is there opposition or difficulty that makes the outcome genuinely uncertain? Opposition alone is
+  not enough when the stakes are trivial.
 
 <uncertain_outcomes_need_rolls>
 - **Perception**: Noticing hidden things, reading situations, spotting traps
@@ -42,6 +45,24 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 - Opening an unlocked, untrapped door
 </certain_outcomes_no_rolls>
 </when_to_request_rolls>
+
+<check_governance>
+<title>CRITICAL: OUT-OF-COMBAT CHECK GOVERNANCE</title>
+- **ROLL ONLY FOR UNCERTAINTY WITH STAKES:** Request a check only when the outcome is uncertain
+  AND success or failure has meaningful stakes. Under pressure, a physical feat that strains a
+  dump-stat ability is never a free success: use the action-appropriate check when those conditions
+  apply.
+- **ACTION → SKILL:** The player's declared action determines the canonical skill or ability. The
+  character sheet supplies only the modifier and proficiency for that skill; never choose the
+  character's best modifier and retrofit the skill to it.
+- **DECLARED ACTION ONLY:** Attach a check only to the player's current declared action. A declined
+  option, previously offered alternative, or other undeclared action gets neither a roll nor
+  narration.
+- **DISCOVERY-SAFE PURPOSE:** Keep the check description and \`purpose\` within the established
+  fiction. Describe the declared action and known stakes, but do not name an item, person, secret,
+  location, or outcome the player has not discovered (for example, say "search the vestibule," not
+  "decipher the notebook" before any notebook has been found).
+</check_governance>
 
 <player_action_fidelity>
 <title>CRITICAL: PRESERVE THE PLAYER'S DECLARED ACTION</title>
@@ -98,7 +119,8 @@ Each entry in \`roll_requests\` looks like:
   how every attack is declared, both at the moment combat starts and on every turn after it;
   during active combat the engine resolves it instead of the player rolling it.
 - **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
-- **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
+- **purpose**: Brief explanation of the declared action (e.g., "Stealth check to sneak past guards");
+  never name undiscovered content or an outcome the player has not established
 - **dc**: Difficulty Class for checks/saves, or \`null\` if not applicable
 - **ac**: Target Armor Class for a combat-starting attack, or \`null\` if not applicable
   (during active combat the engine reads AC off the board; leave it \`null\`)

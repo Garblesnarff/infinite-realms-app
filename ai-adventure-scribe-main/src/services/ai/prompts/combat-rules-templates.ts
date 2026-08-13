@@ -377,6 +377,10 @@ applies the damage; you do not supply \`ac\`, and you do not emit a move to clos
 Attack: \\\`{"type": "attack", "formula": "1d20", "purpose": "the-seeker attacks shadow-roach-1 with longsword", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\\\`
 Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Dexterity save vs the collapsing floor", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\\\`
 Check: \\\`{"type": "check", "formula": "1d20+mod", "purpose": "Athletics to shove the brazier aside", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\\\`
+For player ability checks, apply the general \`<check_governance>\` contract even while combat is
+active: roll only for uncertainty with meaningful stakes; the declared action chooses the skill and
+the sheet supplies only its modifier; never attach a check to an undeclared or declined action; and
+keep the purpose free of undiscovered content.
 Each entry needs type/formula/purpose/dc/ac/advantage/disadvantage, in the \`roll_requests\` array
 field of your JSON response - never a text block. NPC/enemy saves are handled behind the screen in
 your narration; saves and checks in \`roll_requests\` are for the player only, while attacks there may

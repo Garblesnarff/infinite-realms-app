@@ -96,8 +96,12 @@ resolves the attack from where it ends up.
 - Declare an attack as a \`roll_requests\` entry with \`"type": "attack"\` whose \`purpose\` names the
   attacker and the target by their digest ids. \`combat_actions\` is accepted for the same attack if
   you prefer explicit id fields; both reach the engine identically.
-- \`roll_requests\` also carries the saving throws and ability checks the fiction demands. Those you
-  stop on; attacks you do not - the engine rolls the attack and hands you the result next turn.
+- \`roll_requests\` also carries the saving throws and ability checks the fiction demands. For a
+  player ability check, apply the general \`<check_governance>\` contract: request it only for an
+  uncertain outcome with meaningful stakes, let the declared action choose the skill, use the sheet
+  only for its modifier, attach it only to that action, and keep its purpose discovery-safe. Those
+  checks you stop on; attacks you do not - the engine rolls the attack and hands you the result next
+  turn.
 - \`map_actions\` moves are for repositioning that is not part of an attack: retreating, taking cover,
   circling to a better angle. Approach before a strike is the engine's job, not yours.
 - Every id you write must be copied verbatim from the tactical digest. The digest's leading token on
