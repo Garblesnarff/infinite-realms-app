@@ -170,8 +170,11 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
     return xmlParsed.narrative;
   }
 
-  // No XML tags found - fall back to traditional extraction
-  logger.info('⚠️ No XML tags found in DM response, using fallback extraction');
+  // No XML tags found - fall back to traditional extraction.
+  // Since #1799 the prompt no longer asks for <memories>/<world_updates>, so this is the
+  // expected path on every turn rather than a degraded one. Logged at debug without the
+  // warning glyph so it stops reading as a fault in the console. See #1810.
+  logger.debug('No XML tags in DM response, using fallback extraction');
 
   const shouldExtractMemory =
     userPlan === 'pro' ||

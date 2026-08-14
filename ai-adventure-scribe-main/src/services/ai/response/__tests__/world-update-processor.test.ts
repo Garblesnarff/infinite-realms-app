@@ -9,7 +9,6 @@ import { parseXMLTagsFromResponse } from '@/services/ai/xml-parser';
 import { MemoryManager } from '@/services/memory-manager';
 import { WorldBuilderRepository, WorldBuilderService } from '@/services/world-builders';
 
-
 // Mock dependencies using aliases to ensure they match the imports in the source
 vi.mock('@/services/memory-manager', () => ({
   MemoryManager: {
@@ -137,7 +136,9 @@ describe('processWorldAndMemories', () => {
 
       await processWorldAndMemories(defaultParams);
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('1/2 XML world updates failed to save'));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('1/2 XML world updates failed to save'),
+      );
     });
 
     it('should handle partial failures in XML world update saving (Locations)', async () => {
@@ -156,7 +157,9 @@ describe('processWorldAndMemories', () => {
 
       await processWorldAndMemories(defaultParams);
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('1/1 XML world updates failed to save'));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('1/1 XML world updates failed to save'),
+      );
     });
 
     it('should handle partial failures in XML world update saving (Quests)', async () => {
@@ -175,7 +178,9 @@ describe('processWorldAndMemories', () => {
 
       await processWorldAndMemories(defaultParams);
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('1/1 XML world updates failed to save'));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('1/1 XML world updates failed to save'),
+      );
     });
 
     it('should handle errors during XML saving gracefully', async () => {
@@ -191,7 +196,10 @@ describe('processWorldAndMemories', () => {
       const result = await processWorldAndMemories(defaultParams);
 
       expect(result).toBe('Clean Narrative');
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to save XML-extracted memories'), expect.any(Error));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to save XML-extracted memories'),
+        expect.any(Error),
+      );
     });
 
     it('should handle world update errors gracefully', async () => {
@@ -211,7 +219,10 @@ describe('processWorldAndMemories', () => {
       const result = await processWorldAndMemories(defaultParams);
 
       expect(result).toBe('Clean Narrative');
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to save XML-extracted world updates'), expect.any(Error));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to save XML-extracted world updates'),
+        expect.any(Error),
+      );
     });
   });
 
@@ -234,8 +245,12 @@ describe('processWorldAndMemories', () => {
       expect(MemoryManager.saveMemories).toHaveBeenCalled();
       expect(WorldBuilderService.respondToPlayerAction).toHaveBeenCalled();
 
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('⚠️ No XML tags found in DM response'));
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('World expanded (fallback): +0 locations, +1 NPCs, +0 quests'));
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('No XML tags in DM response'),
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('World expanded (fallback): +0 locations, +1 NPCs, +0 quests'),
+      );
     });
 
     it('should respect turn-based skipping for free tier', async () => {
@@ -243,7 +258,9 @@ describe('processWorldAndMemories', () => {
       await processWorldAndMemories(params);
 
       expect(MemoryManager.extractMemories).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Skipping memory extraction for free tier (turn 1'));
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping memory extraction for free tier (turn 1'),
+      );
     });
 
     it('should handle undefined turnCount for free tier skipping', async () => {
@@ -251,7 +268,9 @@ describe('processWorldAndMemories', () => {
       await processWorldAndMemories(params);
 
       expect(MemoryManager.extractMemories).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('next extraction on turn unknown'));
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('next extraction on turn unknown'),
+      );
     });
 
     it('should extract memories for free tier on turn 3', async () => {
@@ -288,13 +307,21 @@ describe('processWorldAndMemories', () => {
 
     it('should handle fallback extraction errors gracefully', async () => {
       (MemoryManager.extractMemories as any).mockRejectedValue(new Error('Extract Error'));
-      (WorldBuilderService.respondToPlayerAction as any).mockRejectedValue(new Error('Expansion Error'));
+      (WorldBuilderService.respondToPlayerAction as any).mockRejectedValue(
+        new Error('Expansion Error'),
+      );
 
       const result = await processWorldAndMemories(defaultParams);
 
       expect(result).toBe('DM Response');
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Memory extraction failed'), expect.any(Error));
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('World building failed'), expect.any(Error));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Memory extraction failed'),
+        expect.any(Error),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('World building failed'),
+        expect.any(Error),
+      );
     });
 
     it('should include recent messages in memory context', async () => {
@@ -315,7 +342,7 @@ describe('processWorldAndMemories', () => {
           recentMessages: ['msg 2', 'msg 3', 'msg 4', 'msg 5', 'msg 6'],
         }),
         'Player message',
-        'sanitized-DM Response'
+        'sanitized-DM Response',
       );
     });
   });
