@@ -1,8 +1,16 @@
-import { EMBEDDING_MAX_INPUT_CHARS } from '../../../shared/embedding-limits';
+import {
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_MAX_INPUT_CHARS,
+  EMBEDDING_MODEL,
+  normalizeEmbedding,
+} from '../../../shared/embedding-limits';
 
 /**
- * Embedding generation using Google's text-embedding-004
- * Produces 768-dimensional vectors (vs OpenAI's 1536)
+ * Embedding generation using Google's gemini-embedding-001, pinned to 768 dimensions to match
+ * the `vector(768)` column and its ivfflat cosine index.
+ *
+ * Vectors from different models are not comparable, so a campaign whose rows were embedded with
+ * the retired text-embedding-004 must be re-embedded wholesale rather than topped up. See #1816.
  */
 
 let googleApiKey: string | null = null;
@@ -18,12 +26,12 @@ export function initGemini(apiKey: string): void {
 export const initOpenAI = initGemini;
 
 /**
- * Generate embeddings for a batch of texts
- * Uses Gemini text-embedding-004 (768 dimensions)
+ * Generate embeddings for a batch of texts.
+ * Uses Gemini gemini-embedding-001 at EMBEDDING_DIMENSIONS, unit-normalized.
  */
 export async function generateEmbeddings(
   texts: string[],
-  batchSize: number = 100
+  batchSize: number = 100,
 ): Promise<number[][]> {
   if (!googleApiKey) {
     throw new Error('Google AI client not initialized. Call initGemini first.');
@@ -36,31 +44,31 @@ export async function generateEmbeddings(
     const batch = texts.slice(i, i + batchSize);
 
     // Apply the same conservative ceiling as browser and edge callers.
-    const truncatedBatch = batch.map(text =>
-      text.length > EMBEDDING_MAX_INPUT_CHARS
-        ? text.substring(0, EMBEDDING_MAX_INPUT_CHARS)
-        : text
+    const truncatedBatch = batch.map((text) =>
+      text.length > EMBEDDING_MAX_INPUT_CHARS ? text.substring(0, EMBEDDING_MAX_INPUT_CHARS) : text,
     );
 
     try {
       // Gemini's batchEmbedContents endpoint
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${googleApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:batchEmbedContents?key=${googleApiKey}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            requests: truncatedBatch.map(text => ({
-              model: 'models/text-embedding-004',
+            requests: truncatedBatch.map((text) => ({
+              model: `models/${EMBEDDING_MODEL}`,
               content: {
                 parts: [{ text }],
               },
               taskType: 'RETRIEVAL_DOCUMENT',
+              // Must be explicit: the model defaults to 3072, the column is vector(768).
+              outputDimensionality: EMBEDDING_DIMENSIONS,
             })),
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -71,7 +79,17 @@ export async function generateEmbeddings(
       const data = await response.json();
 
       for (const item of data.embeddings) {
-        embeddings.push(item.values);
+        const values: number[] = item.values;
+        // Fail loudly rather than letting a wrong width reach a vector(768) insert, where it
+        // would surface as an opaque database error partway through a write.
+        if (!Array.isArray(values) || values.length !== EMBEDDING_DIMENSIONS) {
+          throw new Error(
+            `Embedding width mismatch: expected ${EMBEDDING_DIMENSIONS}, got ${
+              Array.isArray(values) ? values.length : typeof values
+            }`,
+          );
+        }
+        embeddings.push(normalizeEmbedding(values));
       }
 
       // Add a small delay between batches to avoid rate limits
@@ -99,7 +117,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * Sleep utility
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -116,7 +134,7 @@ export function estimateTokens(text: string): number {
  */
 export function estimateCost(texts: string[]): { tokens: number; cost: number } {
   const totalTokens = texts.reduce((sum, text) => sum + estimateTokens(text), 0);
-  // Gemini text-embedding-004 is currently free (as of 2024)
+  // Gemini embeddings are currently free.
   const cost = 0;
 
   return { tokens: totalTokens, cost };

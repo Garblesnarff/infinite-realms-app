@@ -61,12 +61,35 @@ import type {
   ParsedCampaign,
 } from './types.js';
 
-// Load environment variables
+// Load environment variables.
+// server-bun/.env is included because that is where the Gemini credential actually lives on the
+// deployed host; without it an apply run had to have the key bridged in by hand. See #1816.
 config({ path: join(process.cwd(), '.env') });
+config({ path: join(process.cwd(), '../../server-bun/.env') });
 config({ path: join(process.cwd(), '../../.env') }); // Try parent directories
 config({ path: join(process.cwd(), '../../../.env') });
 
 export const DEFAULT_CAMPAIGN_REPO_PATH = '../../../infinite-realms-clean';
+
+/**
+ * Every env var name the Gemini credential is known to live under, in precedence order.
+ * `GOOGLE_GEMINI_API_KEY` is the name used by `server-bun/.env`, which is what the deployed
+ * host actually has — omitting it meant an apply run could not embed at all. See #1816.
+ */
+export const GEMINI_KEY_NAMES = [
+  'GOOGLE_AI_API_KEY',
+  'GOOGLE_GEMINI_API_KEY',
+  'VITE_GOOGLE_GEMINI_API_KEY',
+] as const;
+
+/** Resolve the embedding credential from any supported name. One source of truth. */
+export function resolveGeminiApiKey(): string | undefined {
+  for (const name of GEMINI_KEY_NAMES) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return process.env.VITE_GEMINI_API_KEYS?.split(',')[0] || undefined;
+}
 
 /**
  * Build the CLI.
@@ -212,14 +235,9 @@ async function main(options: {
 
   // Initialize Gemini for embeddings
   if (!opts.skipEmbeddings && !opts.dryRun) {
-    const googleApiKey =
-      process.env.GOOGLE_AI_API_KEY ||
-      process.env.VITE_GOOGLE_GEMINI_API_KEY ||
-      process.env.VITE_GEMINI_API_KEYS?.split(',')[0];
+    const googleApiKey = resolveGeminiApiKey();
     if (!googleApiKey) {
-      console.error(
-        '❌ Missing GOOGLE_AI_API_KEY or VITE_GOOGLE_GEMINI_API_KEY environment variable',
-      );
+      console.error(`❌ Missing embedding credential. Set one of: ${GEMINI_KEY_NAMES.join(', ')}`);
       console.error('Use --skip-embeddings to skip embedding generation');
       process.exit(1);
     }
@@ -420,13 +438,11 @@ async function runReingestCommand(options: ReingestCommandOptions): Promise<void
   }
 
   if (!options.skipEmbeddings) {
-    const googleApiKey =
-      process.env.GOOGLE_AI_API_KEY ||
-      process.env.VITE_GOOGLE_GEMINI_API_KEY ||
-      process.env.VITE_GEMINI_API_KEYS?.split(',')[0];
+    const googleApiKey = resolveGeminiApiKey();
     if (!googleApiKey) {
       throw new Error(
-        'Missing GOOGLE_AI_API_KEY or VITE_GOOGLE_GEMINI_API_KEY. Use --skip-embeddings to preserve existing embeddings.',
+        `Missing embedding credential. Set one of: ${GEMINI_KEY_NAMES.join(', ')}. ` +
+          'Use --skip-embeddings to preserve existing embeddings.',
       );
     }
     initOpenAI(googleApiKey);
