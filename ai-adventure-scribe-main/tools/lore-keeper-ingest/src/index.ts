@@ -10,10 +10,17 @@
  *   bun run ingest -- --campaign foo    # Ingest specific campaign
  *   bun run ingest -- --dry-run         # Preview without database changes
  *   bun run ingest -- --skip-embeddings # Skip embedding generation
+ *
+ *   bun run reingest -- --campaign foo --repo-path ../../../repo   # read-only diff
+ *   bun run reingest -- --campaign foo --apply                     # explicit write
+ *
+ * `ingest` is the default command, so the option-only form above still works.
+ * Each flag is declared on exactly one command — see buildProgram() and #1805.
  */
 
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 import { createClient } from '@supabase/supabase-js';
 import { Command } from 'commander';
@@ -59,32 +66,61 @@ config({ path: join(process.cwd(), '.env') });
 config({ path: join(process.cwd(), '../../.env') }); // Try parent directories
 config({ path: join(process.cwd(), '../../../.env') });
 
-const program = new Command();
+export const DEFAULT_CAMPAIGN_REPO_PATH = '../../../infinite-realms-clean';
 
-program
-  .name('lore-keeper-ingest')
-  .description('Ingest campaign files into Supabase for Lore Keeper')
-  .version('1.0.0')
-  .option('-c, --campaign <id>', 'Ingest a specific campaign by directory name')
-  .option('-d, --dry-run', 'Preview changes without modifying database', false)
-  .option('-v, --verbose', 'Show detailed output', false)
-  .option('-s, --skip-embeddings', 'Skip embedding generation', false)
-  .option('-p, --repo-path <path>', 'Path to the campaign repo', '../../../infinite-realms-clean')
-  .option('-l, --list', 'List all campaigns in repo', false)
-  .option('--list-ingested', 'List all ingested campaigns', false)
-  .action(main);
+/**
+ * Build the CLI.
+ *
+ * Every flag is declared on exactly one command. The root program deliberately
+ * declares NO options: when the root and a subcommand both declared `-c`/`-p`
+ * (and `-v`/`-s`), the root's definitions shadowed the subcommand's, so
+ * `reingest --campaign <slug> --repo-path <path>` silently received its
+ * defaults instead of what the operator passed. `--campaign` being ignored was
+ * the dangerous half — an `--apply` run would have processed every campaign
+ * directory rather than the requested one. See #1805.
+ *
+ * `enablePositionalOptions()` keeps options bound to the command they follow,
+ * and `ingest` is the default command so the historical option-only invocation
+ * (`lore-keeper-ingest --campaign foo`) still routes to the legacy path.
+ */
+export function buildProgram(): Command {
+  const program = new Command();
 
-program
-  .command('reingest')
-  .description('Safely re-ingest campaigns without the legacy delete-first flow')
-  .option('-c, --campaign <slug>', 'Re-ingest one campaign by slug')
-  .option('--apply', 'Write the safe re-ingestion changes (dry-run by default)', false)
-  .option('-v, --verbose', 'Show detailed output', false)
-  .option('-s, --skip-embeddings', 'Skip embedding generation when applying', false)
-  .option('-p, --repo-path <path>', 'Path to the campaign repo', '../../../infinite-realms-clean')
-  .action(reingestCommand);
+  program
+    .name('lore-keeper-ingest')
+    .description('Ingest campaign files into Supabase for Lore Keeper')
+    .version('1.0.0')
+    .enablePositionalOptions();
 
-program.parse();
+  program
+    .command('ingest', { isDefault: true })
+    .description('Ingest campaigns using the legacy delete-then-insert flow')
+    .option('-c, --campaign <id>', 'Ingest a specific campaign by directory name')
+    .option('-d, --dry-run', 'Preview changes without modifying database', false)
+    .option('-v, --verbose', 'Show detailed output', false)
+    .option('-s, --skip-embeddings', 'Skip embedding generation', false)
+    .option('-p, --repo-path <path>', 'Path to the campaign repo', DEFAULT_CAMPAIGN_REPO_PATH)
+    .option('-l, --list', 'List all campaigns in repo', false)
+    .option('--list-ingested', 'List all ingested campaigns', false)
+    .action(main);
+
+  program
+    .command('reingest')
+    .description('Safely re-ingest campaigns without the legacy delete-first flow')
+    .option('-c, --campaign <slug>', 'Re-ingest one campaign by slug')
+    .option('--apply', 'Write the safe re-ingestion changes (dry-run by default)', false)
+    .option('-v, --verbose', 'Show detailed output', false)
+    .option('-s, --skip-embeddings', 'Skip embedding generation when applying', false)
+    .option('-p, --repo-path <path>', 'Path to the campaign repo', DEFAULT_CAMPAIGN_REPO_PATH)
+    .action(reingestCommand);
+
+  return program;
+}
+
+// Parse only when invoked as a CLI, so the program stays importable by tests.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  buildProgram().parse();
+}
 
 async function main(options: {
   campaign?: string;
