@@ -20,7 +20,8 @@ import {
 describe('roll-request/checks', () => {
   describe('validateDMMessage', () => {
     it('should validate a perfect attack message', () => {
-      const msg = 'Make an attack roll with your longsword (1d20+5) against AC 15. Roll 1d8+3 for damage.';
+      const msg =
+        'Make an attack roll with your longsword (1d20+5) against AC 15. Roll 1d8+3 for damage.';
       const result = validateDMMessage(msg);
       expect(result.isValid).toBe(true);
       expect(result.issues).toHaveLength(0);
@@ -143,6 +144,12 @@ describe('roll-request/checks', () => {
       expect(extractDC('It is a DC 15 check')).toBe(15);
       expect(extractDC('Difficulty Class: 12')).toBe(12);
       expect(extractDC('No DC here')).toBe(null);
+    });
+
+    it('caps oversized extracted AC and DC values', () => {
+      const oversized = '7'.repeat(200);
+      expect(extractAC(`The target has AC ${oversized}`)).toBe(100);
+      expect(extractDC(`The target has DC ${oversized}`)).toBe(100);
     });
   });
 

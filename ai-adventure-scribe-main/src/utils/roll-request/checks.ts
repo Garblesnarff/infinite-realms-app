@@ -1,3 +1,5 @@
+import { parseBoundedTargetNumber } from './number-bounds';
+
 export interface ValidationIssue {
   type:
     | 'missing_attack_roll'
@@ -134,11 +136,7 @@ export function detectsSkillCheckOnly(message: string): boolean {
 }
 
 export function detectsSavingThrow(message: string): boolean {
-  const savePatterns = [
-    /saving\s+throw/gi,
-    /make\s+an?\s+[\w\s()]+\s+save/gi,
-    /[\w()]+\s+save/gi,
-  ];
+  const savePatterns = [/saving\s+throw/gi, /make\s+an?\s+[\w\s()]+\s+save/gi, /[\w()]+\s+save/gi];
   return savePatterns.some((pattern) => pattern.test(message));
 }
 
@@ -178,13 +176,13 @@ export function containsModifier(message: string): boolean {
 export function extractAC(message: string): number | null {
   const acMatch =
     /AC\s*[:\s]\s*(\d+)/gi.exec(message) || /armor\s+class\s*[:\s]\s*(\d+)/gi.exec(message);
-  return acMatch ? parseInt(acMatch[1], 10) : null;
+  return acMatch ? parseBoundedTargetNumber(acMatch[1]) : null;
 }
 
 export function extractDC(message: string): number | null {
   const dcMatch =
     /DC\s*[:\s]\s*(\d+)/gi.exec(message) || /difficulty\s+class\s*[:\s]\s*(\d+)/gi.exec(message);
-  return dcMatch ? parseInt(dcMatch[1], 10) : null;
+  return dcMatch ? parseBoundedTargetNumber(dcMatch[1]) : null;
 }
 
 export function suggestCorrection(message: string, validation: MessageValidation): string | null {

@@ -4,6 +4,7 @@
  */
 
 import { normalizeFormula } from './formula-utils';
+import { parseBoundedTargetNumber } from './number-bounds';
 import {
   AC_TAIL_PATTERN,
   ATTACK_PATTERNS,
@@ -58,7 +59,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
         ? rawWeaponName.charAt(0).toUpperCase() + rawWeaponName.slice(1)
         : undefined;
       const acMatch = AC_TAIL_PATTERN.exec(windowText);
-      const ac = acMatch ? parseInt(acMatch[2], 10) : undefined;
+      const ac = acMatch ? parseBoundedTargetNumber(acMatch[2]) : undefined;
 
       requests.push({
         type: 'attack',
@@ -97,7 +98,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
       const end = Math.min(text.length, match.index + (match[0]?.length || 0) + 200);
       const windowText = text.slice(start, end);
       const acMatch = AC_TAIL_PATTERN.exec(windowText);
-      const ac = acMatch ? parseInt(acMatch[2], 10) : undefined;
+      const ac = acMatch ? parseBoundedTargetNumber(acMatch[2]) : undefined;
 
       requests.push({
         type: 'attack',
@@ -131,7 +132,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     const ability = match[1].toLowerCase();
     const type = match[2].toLowerCase();
     const formula = match[3].trim();
-    const dc = match[4] ? parseInt(match[4]) : undefined;
+    const dc = match[4] ? parseBoundedTargetNumber(match[4]) : undefined;
 
     const rollType = type.includes('save') ? 'save' : 'check';
     const purpose = `${ability.charAt(0).toUpperCase() + ability.slice(1)} ${type}`;
@@ -150,7 +151,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
   ROLL_FOR_SKILL_PATTERN.lastIndex = 0;
   while ((match = ROLL_FOR_SKILL_PATTERN.exec(text)) !== null) {
     const skill = match[1].toLowerCase();
-    const dc = match[2] ? parseInt(match[2]) : undefined;
+    const dc = match[2] ? parseBoundedTargetNumber(match[2]) : undefined;
     requests.push({
       type: 'check',
       formula: '1d20+modifier',
@@ -171,7 +172,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     // Try to capture nearby DC (e.g., "(target DC 14)") in the trailing window
     const tail = text.slice(match.index);
     const dcMatch = DC_CONTEXT_PATTERN.exec(tail);
-    const dc = dcMatch ? parseInt(dcMatch[1], 10) : undefined;
+    const dc = dcMatch ? parseBoundedTargetNumber(dcMatch[1]) : undefined;
 
     requests.push({
       type: 'skill_check',
@@ -191,11 +192,11 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
   while ((match = ROLL_SKILL_CHECK_PATTERN.exec(text)) !== null) {
     const skill = match[1].toLowerCase();
     // Prefer explicit capture; otherwise search nearby for DC phrasing
-    let dc = match[2] ? parseInt(match[2], 10) : undefined;
+    let dc = match[2] ? parseBoundedTargetNumber(match[2]) : undefined;
     if (typeof dc === 'undefined') {
       const tail = text.slice(match.index, Math.min(match.index + 200, text.length));
       const dcMatch = DC_CONTEXT_PATTERN.exec(tail);
-      if (dcMatch) dc = parseInt(dcMatch[1], 10);
+      if (dcMatch) dc = parseBoundedTargetNumber(dcMatch[1]);
     }
     requests.push({
       type: 'skill_check',
@@ -214,11 +215,11 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
   REQUEST_SKILL_CHECK_PATTERN.lastIndex = 0;
   while ((match = REQUEST_SKILL_CHECK_PATTERN.exec(text)) !== null) {
     const skill = match[1].toLowerCase();
-    let dc = match[2] ? parseInt(match[2], 10) : undefined;
+    let dc = match[2] ? parseBoundedTargetNumber(match[2]) : undefined;
     if (typeof dc === 'undefined') {
       const tail = text.slice(match.index, Math.min(match.index + 200, text.length));
       const dcMatch = DC_CONTEXT_PATTERN.exec(tail);
-      if (dcMatch) dc = parseInt(dcMatch[1], 10);
+      if (dcMatch) dc = parseBoundedTargetNumber(dcMatch[1]);
     }
     requests.push({
       type: 'skill_check',
@@ -237,11 +238,11 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
   ROLL_SKILL_SIMPLE_PATTERN.lastIndex = 0;
   while ((match = ROLL_SKILL_SIMPLE_PATTERN.exec(text)) !== null) {
     const skill = match[1].toLowerCase();
-    let dc = match[2] ? parseInt(match[2], 10) : undefined;
+    let dc = match[2] ? parseBoundedTargetNumber(match[2]) : undefined;
     if (typeof dc === 'undefined') {
       const tail = text.slice(match.index, Math.min(match.index + 200, text.length));
       const dcMatch = DC_CONTEXT_PATTERN.exec(tail);
-      if (dcMatch) dc = parseInt(dcMatch[1], 10);
+      if (dcMatch) dc = parseBoundedTargetNumber(dcMatch[1]);
     }
     requests.push({
       type: 'skill_check',
@@ -282,16 +283,18 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
 
     const formula = match[1].trim();
     const rawPurpose = match[2]?.trim();
-    const purpose = rawPurpose ? rawPurpose.charAt(0).toUpperCase() + rawPurpose.slice(1) : 'Dice roll';
+    const purpose = rawPurpose
+      ? rawPurpose.charAt(0).toUpperCase() + rawPurpose.slice(1)
+      : 'Dice roll';
 
     // Parse AC/DC from parentheses content
     let dc: number | undefined;
     let ac: number | undefined;
     if (match[3]) {
       const dcMatch = /(?:dc|difficulty\s*class)\s*(\d+)/i.exec(match[3]);
-      if (dcMatch) dc = parseInt(dcMatch[1], 10);
+      if (dcMatch) dc = parseBoundedTargetNumber(dcMatch[1]);
       const acMatch = /(?:ac|armor\s*class)\s*(\d+)/i.exec(match[3]);
-      if (acMatch) ac = parseInt(acMatch[1], 10);
+      if (acMatch) ac = parseBoundedTargetNumber(acMatch[1]);
     }
 
     let type: ParsedRollRequest['type'] = 'check';
