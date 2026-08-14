@@ -110,6 +110,10 @@ import type { EntitySize } from '../tactical/types.js';
  *       properties:
  *         hit:
  *           type: boolean
+ *         d20:
+ *           type: integer
+ *         attackBonus:
+ *           type: integer
  *         targetAC:
  *           type: integer
  *         totalAttackRoll:
@@ -127,7 +131,12 @@ import type { EntitySize } from '../tactical/types.js';
  *           type: boolean
  *         targetIsDead:
  *           type: boolean
+ *         targetCondition:
+ *           type: string
+ *           enum: [unharmed, wounded, bloodied, near death]
  *         isCritical:
+ *           type: boolean
+ *         autoRolled:
  *           type: boolean
  *         effectiveResistance:
  *           type: boolean
@@ -572,6 +581,10 @@ export interface AttackProposal {
  */
 export interface AttackResult {
   hit: boolean;
+  /** The kept natural d20 face used for this attack, when the result came from an attack roll. */
+  d20?: number;
+  /** The engine's attack modifier, kept beside the die so the total can be audited. */
+  attackBonus?: number;
   targetAC: number;
   totalAttackRoll: number;
   damage?: number;
@@ -584,6 +597,8 @@ export interface AttackResult {
   targetNewHp?: number;
   targetIsConscious?: boolean;
   targetIsDead?: boolean;
+  /** Authoritative condition tier after damage; numeric HP stays private to engine/UI state. */
+  targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   isCritical: boolean;
   isNaturalOne: boolean;
   isNaturalTwenty: boolean;

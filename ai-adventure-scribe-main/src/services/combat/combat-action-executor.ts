@@ -53,6 +53,10 @@ type RawCombatOutcome = {
   isCritical?: boolean;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 export type ClientCombatIntent =
   | {
       type: 'attack';
@@ -237,8 +241,10 @@ export async function executeStructuredCombatActionWithBoundary(
   // A post-conclusion no-op has no engine outcome. In particular, do not turn the marker into a
   // fabricated empty-damage result for the narration pass.
   if (boundary === 'encounter_already_concluded') return { outcomes: [], boundary };
-  const outcomes: RawCombatOutcome[] =
-    action.action_type === 'attack'
+  const movementOnly = isRecord(result) && result.resolvedAs === 'movement_only';
+  const outcomes: RawCombatOutcome[] = movementOnly
+    ? []
+    : action.action_type === 'attack'
       ? [result as RawCombatOutcome]
       : ((result as { results?: RawCombatOutcome[] }).results ?? []);
   return {
@@ -250,6 +256,7 @@ export async function executeStructuredCombatActionWithBoundary(
       finalDamage: outcome.finalDamage,
       isCritical: outcome.isCritical,
     })),
+    result,
     boundary,
   };
 }

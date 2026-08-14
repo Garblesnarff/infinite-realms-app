@@ -143,6 +143,39 @@ function markCombatEnded(result: unknown): unknown {
   return { result, combatEnded: true };
 }
 
+type AttackVisibilityContext = {
+  actorId: string;
+  actorName: string;
+  targetId: string;
+  targetName: string;
+  requestedWeapon: string | null;
+  resolvedWeapon: string;
+  weaponSubstituted: boolean;
+  actorIsPlayer: boolean;
+  normalizeAutoRolled?: boolean;
+};
+
+/** Keep the engine's descriptive attack facts attached to the mutation response. */
+function exposeAttackVisibility(result: unknown, context: AttackVisibilityContext): unknown {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+  const current = result as Record<string, unknown>;
+  return {
+    ...current,
+    actorId: context.actorId,
+    actorName: context.actorName,
+    targetId: context.targetId,
+    targetName: context.targetName,
+    weaponResolution: {
+      requested: context.requestedWeapon,
+      resolved: context.resolvedWeapon,
+      substituted: context.weaponSubstituted,
+    },
+    ...(context.normalizeAutoRolled
+      ? { autoRolled: context.actorIsPlayer && current.autoRolled === true }
+      : {}),
+  };
+}
+
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   const active = state.participants.filter((participant) => participant.isActive);
@@ -684,6 +717,19 @@ export async function executeCombatIntent(
         );
       }
       const weapon = grounding.weapon;
+      const actorIsPlayer =
+        state.participants.find((participant) => participant.id === intent.actorId)
+          ?.participantType === 'player';
+      const visibility = {
+        actorId: intent.actorId,
+        actorName: actorLabel,
+        targetId: intent.targetId,
+        targetName: targetLabel,
+        requestedWeapon: grounding.requested,
+        resolvedWeapon: weapon.name || 'attack',
+        weaponSubstituted: !grounding.grounded,
+        actorIsPlayer,
+      } satisfies AttackVisibilityContext;
       const approach = await decideAttackApproach({
         sessionId: encounter.sessionId,
         actorId: intent.actorId,
@@ -693,24 +739,27 @@ export async function executeCombatIntent(
         weapon,
       });
       if (approach.movementOnly) {
-        result = approach.result;
+        result = exposeAttackVisibility(approach.result, visibility);
       } else {
         const attackService = await createCombatAttackService();
-        result = await attackService.resolveAttack(
-          encounterId,
-          {
-            attackerId: intent.actorId,
-            targetId: intent.targetId,
-            // The grounded id, not the raw claim: resolution re-reads the sheet, and it must
-            // land on the weapon the reach check was made against.
-            weaponId: grounding.weaponId,
-            attackType: approach.attackType,
-            expectedVersion: intent.expectedVersion,
-            advantage: intent.advantage,
-            disadvantage: intent.disadvantage,
-            providedD20: intent.d20,
-          } satisfies AttackRollInput,
-          userId,
+        result = exposeAttackVisibility(
+          await attackService.resolveAttack(
+            encounterId,
+            {
+              attackerId: intent.actorId,
+              targetId: intent.targetId,
+              // The grounded id, not the raw claim: resolution re-reads the sheet, and it must
+              // land on the weapon the reach check was made against.
+              weaponId: grounding.weaponId,
+              attackType: approach.attackType,
+              expectedVersion: intent.expectedVersion,
+              advantage: intent.advantage,
+              disadvantage: intent.disadvantage,
+              providedD20: intent.d20,
+            } satisfies AttackRollInput,
+            userId,
+          ),
+          { ...visibility, normalizeAutoRolled: true },
         );
         // Every resolution is reported, not just the ones that failed to reach. A hit the DM is
         // never told about is a hit it cannot narrate, and a DM with nothing to narrate repeats
@@ -719,9 +768,6 @@ export async function executeCombatIntent(
         // attack is engine-rolled by design and marking those would turn the note into noise
         // that means nothing — so the flag is narrowed to player actors here rather than in the
         // attack service, which cannot know whose die it was.
-        const actorIsPlayer =
-          state.participants.find((participant) => participant.id === intent.actorId)
-            ?.participantType === 'player';
         const resolvedAttack = result as Parameters<typeof describeResolvedAttack>[2];
         await recordDmTacticalFact(
           encounter.sessionId,

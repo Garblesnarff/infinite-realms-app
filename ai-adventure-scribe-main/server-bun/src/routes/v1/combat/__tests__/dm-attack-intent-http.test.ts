@@ -171,10 +171,16 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
       attackInputs.push(input);
       return {
         hit: true,
+        d20: 12,
+        attackBonus: 4,
+        targetAC: 14,
+        totalAttackRoll: 16,
         finalDamage: 0,
         targetNewHp: 24,
+        targetCondition: 'wounded',
         isCritical: false,
         damageType: 'slashing',
+        autoRolled: true,
       };
     }
     async resolveSpellAttack() {
@@ -482,6 +488,24 @@ describe('a DM attack naming a weapon the character does not own', () => {
     });
 
     expect(response.status).toBe(200);
+    const body = (await response.json()) as { result: Record<string, unknown> };
+    expect(body.result).toMatchObject({
+      actorId: 'the-seeker',
+      actorName: 'The Seeker',
+      targetId: 'the-void-maw',
+      targetName: 'The Void-Maw',
+      d20: 12,
+      attackBonus: 4,
+      targetAC: 14,
+      totalAttackRoll: 16,
+      targetCondition: 'wounded',
+      autoRolled: true,
+      weaponResolution: {
+        requested: 'elven-greatbow',
+        resolved: 'Longbow',
+        substituted: true,
+      },
+    });
     expect(attackInputs).toHaveLength(1);
     expect(trackedEvents.some((event) => event.name === 'action_refused')).toBe(false);
 

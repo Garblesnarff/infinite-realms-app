@@ -35,6 +35,7 @@ import {
   getEquippedWeaponProfile,
   monsterAttackSource,
 } from './data-access.js';
+import { healthConditionForCombat } from './health-condition.js';
 import { checkHit, checkAutoCrit } from './hit-check.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
@@ -391,6 +392,8 @@ export class CombatAttackService {
         // Miss - no damage
         return {
           hit: false,
+          d20: attackRoll,
+          attackBonus: rules.attackBonus,
           targetAC,
           totalAttackRoll: hitCheck.totalAttackRoll,
           effectiveResistance: false,
@@ -466,6 +469,8 @@ export class CombatAttackService {
 
         return {
           hit: true,
+          d20: attackRoll,
+          attackBonus: rules.attackBonus,
           targetAC,
           totalAttackRoll: hitCheck.totalAttackRoll,
           damage: damageCalc.baseDamage,
@@ -478,6 +483,12 @@ export class CombatAttackService {
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
+          targetCondition: healthConditionForCombat(
+            hpResult.newCurrentHp,
+            targetParticipant.maxHp,
+            hpResult.isConscious,
+            hpResult.isDead,
+          ),
           isCritical: isCrit,
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,

@@ -4,6 +4,8 @@ export type CombatActionBoundary = 'combat_ended' | 'encounter_already_concluded
 
 export interface StructuredCombatActionExecution {
   outcomes: ResolvedTargetDamage[];
+  /** The unabridged server result, retained for transcript and resolution-prompt reporting. */
+  result?: unknown;
   /** A batch must drop every action after either kind of combat boundary. */
   boundary: CombatActionBoundary;
 }

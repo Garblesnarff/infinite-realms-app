@@ -125,16 +125,6 @@ export class AIService {
           `⚔️ Authoritative combat state: ${combatDetection.isCombat ? 'ACTIVE' : 'INACTIVE'}`,
         );
 
-        if (combatDetection.isCombat) {
-          logger.info(`🎯 Combat details:`, {
-            type: combatDetection.combatType,
-            shouldStart: combatDetection.shouldStartCombat,
-            shouldEnd: combatDetection.shouldEndCombat,
-            enemies: combatDetection.enemies?.length || 0,
-            actions: combatDetection.combatActions?.length || 0,
-          });
-        }
-
         // Use OpenRouter API
         logger.info(`Using OpenRouter API for chat`);
 

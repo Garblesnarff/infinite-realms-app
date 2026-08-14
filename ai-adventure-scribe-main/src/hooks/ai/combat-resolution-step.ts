@@ -9,6 +9,10 @@ import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
+import {
+  formatCombatEngineOutcome,
+  prependCombatEngineTranscript,
+} from '@/services/combat/combat-outcome-transcript';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
 
@@ -61,6 +65,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
+  const engineTranscriptLines: string[] = [];
   /**
    * The actions the engine refused. They produced no roll, no damage, and no state change, so
    * they carry no outcome — and a narration pass that is never told about them writes one
@@ -121,9 +126,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       encounterAlreadyConcluded = true;
       return 'combat_ended';
     }
+    const engineTranscript = formatCombatEngineOutcome(action, execution.result);
+    if (engineTranscript) engineTranscriptLines.push(engineTranscript);
     resolvedActions.push({
       action,
       outcomes: execution.outcomes,
+      ...(execution.result !== undefined ? { engineResult: execution.result } : {}),
       // Carried into the resolution prompt so a die the player did not throw is narrated as
       // such rather than passed off as theirs.
       ...(playerDie?.autoRolled ? { autoRolled: true } : {}),
@@ -249,7 +257,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     turnCount,
   });
 
-  if (!refusedPlayerActions.length) return narration;
+  const narratedText = prependCombatEngineTranscript(narration?.text ?? '', engineTranscriptLines);
+  if (!refusedPlayerActions.length) {
+    return engineTranscriptLines.length ? { ...narration, text: narratedText } : narration;
+  }
   // Whose turn it is, stated by the engine rather than hoped for from the model. The prompt above
   // asks for it; this is the half that does not depend on compliance, and #1702 is the standing
   // argument for not leaving a rule the model follows half the time as the only guarantee.
@@ -258,7 +269,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       `turn=${String(refusedPlayerActions[0].currentTurn ?? 'unknown')}`,
   );
   const notice = turnNotice(turnHolder, isPlayerActor(turnHolder?.id ?? '', participants));
-  return { ...narration, text: `${narration?.text ?? ''}\n\n${notice}`.trim() };
+  return { ...narration, text: `${narratedText}\n\n${notice}`.trim() };
 }
 
 /**

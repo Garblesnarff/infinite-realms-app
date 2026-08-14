@@ -263,6 +263,43 @@ describe('a turn the engine accepted in full', () => {
     );
   });
 
+  it('prepends the engine result to the player transcript and forwards the raw payload', async () => {
+    const engineResult = {
+      actorName: 'Balthazar',
+      targetName: 'The Reveler',
+      d20: 12,
+      attackBonus: 4,
+      totalAttackRoll: 16,
+      targetAC: 12,
+      hit: true,
+      finalDamage: 3,
+      damageType: 'slashing',
+      targetCondition: 'wounded',
+      autoRolled: true,
+      weaponResolution: { resolved: 'Unarmed Strike', substituted: false },
+    };
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 3, newHp: 7 }],
+      result: engineResult,
+      boundary: null,
+    });
+
+    const result = await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      combatActions: [action(NPC_ID, PLAYER_ID)],
+      declarationText: 'Balthazar swings.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(result.text.startsWith('⚙️ Engine:')).toBe(true);
+    expect(result.text).toContain('12 + 4 = 16 vs AC 12');
+    expect(result.text).toContain('3 slashing damage');
+    expect(result.text).toContain('The Reveler is wounded');
+    expect(resolutionPayload().authoritativeCombatResults[0].engineResult).toEqual(engineResult);
+  });
+
   it('drops trailing actions after the synthesized turn boundary', async () => {
     const second = action(NPC_ID, PLAYER_ID);
 
