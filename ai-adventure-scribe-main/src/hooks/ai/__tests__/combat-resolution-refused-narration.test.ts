@@ -67,6 +67,7 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
 
 const PLAYER_ID = '8eeac28d-0000-4000-8000-000000000001';
+const PLAYER_SLUG = 'the-reveler';
 const NPC_ID = 'b962bd05-0000-4000-8000-000000000002';
 
 const PARTICIPANTS = [
@@ -237,6 +238,29 @@ describe('a turn the engine accepted in full', () => {
     expect(setupMessage()).toBe('Balthazar swings.');
     expect(resolutionPayload().refusedActions).toBeUndefined();
     expect(result.text).not.toContain('not resolved');
+  });
+
+  it('takes the player-roll path when the DM declares the player attack by slug', async () => {
+    const sluggedAttack = action(PLAYER_SLUG, NPC_ID);
+    askPlayerForAttackDie.mockResolvedValue({ d20: 17, autoRolled: false, movementOnly: false });
+
+    await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      combatActions: [sluggedAttack],
+      declarationText: 'The Reveler attacks Balthazar.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(askPlayerForAttackDie).toHaveBeenCalledWith(
+      expect.objectContaining({ action: sluggedAttack }),
+    );
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      '10444307-0000-4000-8000-000000000003',
+      sluggedAttack,
+      17,
+    );
   });
 
   it('drops trailing actions after the synthesized turn boundary', async () => {

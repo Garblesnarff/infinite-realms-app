@@ -3,6 +3,7 @@ import type { StructuredCombatAction } from '@/services/combat/combat-action-exe
 import logger from '@/lib/logger';
 import { proposeAuthoritativeAttack } from '@/services/combat/combat-attack-proposal';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import { slugify } from '@/utils/slug';
 
 /**
  * The player rolls their own attack die.
@@ -26,11 +27,13 @@ import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
 /** A player-owned participant is the only actor whose die is theirs to roll. */
 export function isPlayerActor(
   actorId: string,
-  participants: Array<{ id: string; participantType?: string }> | undefined,
+  participants: Array<{ id: string; name?: string; participantType?: string }> | undefined,
 ): boolean {
   return (
     participants?.some(
-      (participant) => participant.id === actorId && participant.participantType === 'player',
+      (participant) =>
+        participant.participantType === 'player' &&
+        (participant.id === actorId || slugify(participant.name ?? '') === actorId),
     ) ?? false
   );
 }
