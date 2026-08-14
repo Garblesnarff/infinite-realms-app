@@ -708,13 +708,17 @@ function extractSessionOutlines(campaignId: string, content: string): CampaignCh
   for (const match of matches) {
     const [, number, title, details] = match;
     const sessionNum = parseInt(number, 10);
+    const sessionTitle = normalizeEntityNameForChunkType(title, 'session_outline');
+    const sessionName = sessionTitle
+      ? `Session ${sessionNum}: ${sessionTitle}`
+      : `Session ${sessionNum}:`;
 
     chunks.push({
       campaignId,
       chunkType: 'session_outline',
-      entityName: `Session ${sessionNum}: ${title.trim()}`,
-      content: cleanContent(`**Session ${sessionNum}: ${title.trim()}**\n\n${details}`),
-      summary: `Session ${sessionNum}: ${title.trim()}`,
+      entityName: sessionName,
+      content: cleanContent(`**${sessionName}**\n\n${details}`),
+      summary: sessionName,
       metadata: { sessionNumber: sessionNum },
       sourceFile: 'campaign_bible.md',
       sourceSection: 'Campaign Roadmap',

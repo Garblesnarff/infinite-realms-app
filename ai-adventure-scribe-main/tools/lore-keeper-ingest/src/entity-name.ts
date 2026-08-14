@@ -26,8 +26,10 @@ export function normalizeEntityNameForChunkType(
   let normalized = normalizeEntityName(name);
 
   if (chunkType === 'location') {
-    normalized = normalized.replace(/^Loc\s+\d+:\s*/i, '').replace(/:\s*$/, '');
+    normalized = normalized.replace(/^Loc\s+\d+:\s*/i, '');
   }
+
+  normalized = normalized.replace(/:\s*$/, '');
 
   if (chunkType === 'faction') {
     normalized = normalized.replace(/^\d+\.\s*/, '');

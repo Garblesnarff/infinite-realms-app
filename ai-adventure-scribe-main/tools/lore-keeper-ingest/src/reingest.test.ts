@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { test } from 'bun:test';
 
+import { isSectionMarkerName, normalizeEntityNameForChunkType } from './entity-name.js';
 import {
   campaignChunkIdentity,
   dedupeCampaignChunks,
@@ -32,6 +33,16 @@ test('matches legacy formatted names to their cleaned entity identity', () => {
     campaignChunkIdentity('academy-of-arcane-gastronomy', 'npc_tier2', '"Alchemist"'),
     campaignChunkIdentity('academy-of-arcane-gastronomy', 'npc_tier2', 'Alchemist'),
   );
+  assert.equal(normalizeEntityNameForChunkType('Gravity Anchor:', 'item'), 'Gravity Anchor');
+  assert.equal(
+    campaignChunkIdentity('abyssal-descent', 'item', 'Gravity Anchor:'),
+    campaignChunkIdentity('abyssal-descent', 'item', 'Gravity Anchor'),
+  );
+});
+
+test('rejects section-marker rows such as TAG: FACTION_DATA', () => {
+  assert.equal(isSectionMarkerName('TAG: FACTION_DATA'), true);
+  assert.equal(isSectionMarkerName('TAG: FACTION_DATA:'), true);
 });
 
 test('preserves an existing image_url while refreshing parser metadata', () => {

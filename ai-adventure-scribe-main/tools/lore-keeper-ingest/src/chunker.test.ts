@@ -140,3 +140,17 @@ ${'The history section remains available in the full world-building chunk, but i
   assert.ok(!entityNames.includes('Concept'));
   assert.ok(!entityNames.includes('History'));
 });
+
+test('does not double the colon in a session outline title', () => {
+  const { chunks } = chunkCampaignFiles('abyssal-descent', {
+    campaignBible: `## Campaign Roadmap
+
+**Session 1: :**
+The first session begins at the edge of the descent.
+`,
+  });
+
+  const session = chunks.find((chunk) => chunk.chunkType === 'session_outline');
+  assert.equal(session?.entityName, 'Session 1:');
+  assert.notEqual(session?.entityName, 'Session 1: :');
+});
