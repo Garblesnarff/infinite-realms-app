@@ -140,6 +140,11 @@ When combat is not already active, requesting initiative, an attack against a cr
 save caused by a creature's attack REQUIRES \`combat_transition: "start"\` with a non-null
 \`scene_spec\` and populated \`combatants\`. Combat narrated only in \`text\` is a contract violation.
 
+- **HOSTILE PLAYER ACTIONS START COMBAT:** Any hostile player action against a creature MUST
+  emit \`combat_transition: "start"\` before its outcome is resolved, including attacks, grapples,
+  shoves, and other attempts to harm or restrain. The declared action is the opening combat
+  action; do not resolve it as an out-of-combat check or freeform narration.
+
 ✅ GOOD: Goblins attack; request initiative with \`combat_transition: "start"\`, a forest
 \`scene_spec\`, and the goblins in \`combatants\`.
 ❌ BAD: Narrate the goblin swordfight and request attack/save rolls while returning

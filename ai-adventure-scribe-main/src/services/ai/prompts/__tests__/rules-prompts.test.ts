@@ -12,6 +12,14 @@ describe('RulesPrompts combat transition contract', () => {
     expect(prompt).toContain('Combat narrated only in `text` is a contract violation');
   });
 
+  it('requires hostile player actions against creatures to start combat', () => {
+    const prompt = RulesPrompts.buildRulesOfPlaySection();
+
+    expect(prompt).toContain('Any hostile player action against a creature');
+    expect(prompt).toContain('MUST\n  emit `combat_transition: "start"`');
+    expect(prompt).toMatch(/The declared action is the opening combat\s+action/);
+  });
+
   it('teaches all four check-governance rules at the DM prompt seam', () => {
     const prompt = RulesPrompts.buildRulesOfPlaySection();
 
