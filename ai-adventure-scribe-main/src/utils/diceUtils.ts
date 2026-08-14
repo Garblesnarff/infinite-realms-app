@@ -4,6 +4,8 @@
  * Handles advantage/disadvantage, critical hits, and proper D&D mechanics
  */
 
+import { MAX_DICE_COUNT, MAX_DICE_MODIFIER, MAX_DIE_TYPE, clampDiceInteger } from './dice-bounds';
+
 import type { DiceRoll, DamageType } from '@/types/combat';
 
 export interface DiceRollOptions {
@@ -114,15 +116,15 @@ export function rollDamage(
       // Handle cases like "d20", "+d20", "-d20"
       let count = 1;
       if (countStr && countStr !== '+' && countStr !== '-') {
-        count = parseInt(countStr);
+        count = clampDiceInteger(countStr, -MAX_DICE_COUNT, MAX_DICE_COUNT);
       } else if (countStr === '-') {
         count = -1;
       }
 
-      const dieType = parseInt(dieTypeStr);
+      const dieType = clampDiceInteger(dieTypeStr, 1, MAX_DIE_TYPE);
       diceGroups.push({ count, dieType });
     } else {
-      totalModifier += parseInt(part);
+      totalModifier += clampDiceInteger(part, -MAX_DICE_MODIFIER, MAX_DICE_MODIFIER);
     }
   }
 
@@ -289,18 +291,18 @@ export function parseDiceString(diceString: string): {
       const [countStr, dieTypeStr] = part.split('d');
       let count = 1;
       if (countStr && countStr !== '+' && countStr !== '-') {
-        count = parseInt(countStr);
+        count = clampDiceInteger(countStr, -MAX_DICE_COUNT, MAX_DICE_COUNT);
       } else if (countStr === '-') {
         count = -1;
       }
-      const dieType = parseInt(dieTypeStr);
+      const dieType = clampDiceInteger(dieTypeStr, 1, MAX_DIE_TYPE);
 
       if (!firstDiceGroup) {
         firstDiceGroup = { count, dieType };
       }
       diceGroups.push({ count, dieType });
     } else {
-      totalModifier += parseInt(part);
+      totalModifier += clampDiceInteger(part, -MAX_DICE_MODIFIER, MAX_DICE_MODIFIER);
     }
   }
 

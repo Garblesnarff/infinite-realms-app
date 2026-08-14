@@ -132,6 +132,13 @@ describe('diceCommandParser', () => {
       expect(resultTooMany?.isValid).toBe(false);
     });
 
+    it('should reject dice components outside the parser limits', () => {
+      const result = parseDiceCommand('/r 999999999999999999999999d20+999999999999');
+
+      expect(result?.isValid).toBe(false);
+      expect(result?.error).toContain('supported limits');
+    });
+
     it('should return error for invalid die types', () => {
       const result = parseDiceCommand('/r 1d7');
       expect(result?.isValid).toBe(false);

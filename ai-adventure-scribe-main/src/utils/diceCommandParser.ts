@@ -3,6 +3,13 @@
  * Parses dice roll commands like /roll 1d20+5, /r 2d6 adv, etc.
  */
 
+import {
+  MAX_DICE_COUNT,
+  MAX_DICE_MODIFIER,
+  MAX_DIE_TYPE,
+  parseBoundedDiceInteger,
+} from './dice-bounds';
+
 export interface ParsedDiceCommand {
   isValid: boolean;
   formula: string;
@@ -80,10 +87,25 @@ export function parseDiceCommand(input: string): ParsedDiceCommand | null {
     };
   }
 
-  const count = diceMatch[1] ? parseInt(diceMatch[1]) : 1;
-  const dieType = parseInt(diceMatch[2]);
+  const count = diceMatch[1] ? parseBoundedDiceInteger(diceMatch[1], 0, MAX_DICE_COUNT) : 1;
+  const dieType = parseBoundedDiceInteger(diceMatch[2], 1, MAX_DIE_TYPE);
   const modifierMatch = diceMatch[3];
-  const modifier = modifierMatch ? parseInt(modifierMatch) : 0;
+  const modifier = modifierMatch
+    ? parseBoundedDiceInteger(modifierMatch, -MAX_DICE_MODIFIER, MAX_DICE_MODIFIER)
+    : 0;
+
+  if (count === null || dieType === null || modifier === null) {
+    return {
+      isValid: false,
+      formula: commandContent,
+      count: 0,
+      dieType: 0,
+      modifier: 0,
+      advantage: false,
+      disadvantage: false,
+      error: 'Dice values are outside the supported limits',
+    };
+  }
 
   // Validation
   if (count < 1 || count > 100) {

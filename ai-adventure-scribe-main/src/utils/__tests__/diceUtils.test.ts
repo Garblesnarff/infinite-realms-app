@@ -1,4 +1,3 @@
- 
 import { describe, it, expect, vi } from 'vitest';
 
 import {
@@ -179,6 +178,13 @@ describe('diceUtils', () => {
       expect(rolls[0].count).toBe(-1);
       expect(rolls[0].dieType).toBe(8);
     });
+
+    it('should bound oversized dice components before rolling', () => {
+      const rolls = rollDamage('999999d6+999999');
+
+      expect(rolls[0].count).toBe(100);
+      expect(rolls[0].modifier).toBe(1000);
+    });
   });
 
   describe('parseDiceString', () => {
@@ -199,11 +205,22 @@ describe('diceUtils', () => {
       expect(result.count).toBe(1);
       expect(result.dieType).toBe(8);
       expect(result.modifier).toBe(2);
-      expect(result.diceGroups).toEqual([{ count: 1, dieType: 8 }, { count: 1, dieType: 4 }]);
+      expect(result.diceGroups).toEqual([
+        { count: 1, dieType: 8 },
+        { count: 1, dieType: 4 },
+      ]);
     });
 
     it('should handle negative dice counts in parseDiceString', () => {
       expect(parseDiceString('-d20')).toEqual({ count: -1, dieType: 20, modifier: 0 });
+    });
+
+    it('should bound oversized dice components before parsing', () => {
+      expect(parseDiceString('999999d6+999999')).toEqual({
+        count: 100,
+        dieType: 6,
+        modifier: 1000,
+      });
     });
   });
 
