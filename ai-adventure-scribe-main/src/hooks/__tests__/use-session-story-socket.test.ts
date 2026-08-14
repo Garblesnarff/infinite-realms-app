@@ -4,8 +4,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { getAccessToken } from '@/services/auth/TokenService';
 
+const mocks = vi.hoisted(() => ({
+  reportClientFailure: vi.fn(),
+  warn: vi.fn(),
+}));
+
 vi.mock('@/services/auth/TokenService', () => ({
   getAccessToken: vi.fn(),
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { reportClientFailure: mocks.reportClientFailure },
+}));
+
+vi.mock('@/lib/logger', () => ({
+  default: { warn: mocks.warn },
 }));
 
 describe('useSessionStorySocket', () => {
@@ -58,7 +71,7 @@ describe('useSessionStorySocket', () => {
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
 
     expect(global.WebSocket).toHaveBeenCalledWith(
-      `ws://localhost:8888/ws?token=${encodeURIComponent(mockToken)}&sessionId=${encodeURIComponent(sessionId)}`
+      `ws://localhost:8888/ws?token=${encodeURIComponent(mockToken)}&sessionId=${encodeURIComponent(sessionId)}`,
     );
   });
 
@@ -69,7 +82,7 @@ describe('useSessionStorySocket', () => {
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
 
     expect(global.WebSocket).toHaveBeenCalledWith(
-      `wss://api.infiniterealms.app/ws?token=${encodeURIComponent(mockToken)}&sessionId=${encodeURIComponent(sessionId)}`
+      `wss://api.infiniterealms.app/ws?token=${encodeURIComponent(mockToken)}&sessionId=${encodeURIComponent(sessionId)}`,
     );
   });
 
@@ -115,7 +128,7 @@ describe('useSessionStorySocket', () => {
         expect.objectContaining({
           type: 'tactical-map-delta',
           detail: payload,
-        })
+        }),
       );
       dispatchSpy.mockRestore();
     });
@@ -139,7 +152,7 @@ describe('useSessionStorySocket', () => {
         expect.objectContaining({
           type: 'campaign-journal-updated',
           detail: payload,
-        })
+        }),
       );
       dispatchSpy.mockRestore();
     });
@@ -165,7 +178,7 @@ describe('useSessionStorySocket', () => {
       expect.objectContaining({
         type: 'combat-state-updated',
         detail: payload,
-      })
+      }),
     );
 
     // Second, map_created should be dispatched since tacticalMap was included
@@ -173,7 +186,7 @@ describe('useSessionStorySocket', () => {
       expect.objectContaining({
         type: 'tactical-map-delta',
         detail: { type: 'map_created', map: { id: 'map-1' } },
-      })
+      }),
     );
 
     dispatchSpy.mockRestore();
@@ -198,7 +211,7 @@ describe('useSessionStorySocket', () => {
       expect.objectContaining({
         type: 'combat-state-updated',
         detail: payload,
-      })
+      }),
     );
 
     dispatchSpy.mockRestore();
@@ -213,6 +226,13 @@ describe('useSessionStorySocket', () => {
         mockWsInstance.onmessage({ data: 'this-is-not-json' });
       });
     }).not.toThrow();
+
+    expect(mocks.warn).toHaveBeenCalledTimes(1);
+    expect(mocks.reportClientFailure).toHaveBeenCalledWith(
+      'malformed_ws_frame',
+      sessionId,
+      expect.stringContaining('channel=session-story; count=1;'),
+    );
   });
 
   it('should return a function to send chat messages and send if socket is open', async () => {
@@ -232,7 +252,7 @@ describe('useSessionStorySocket', () => {
       result.current('hello server');
     });
     expect(mockWsInstance.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'chat', text: 'hello server' })
+      JSON.stringify({ type: 'chat', text: 'hello server' }),
     );
   });
 

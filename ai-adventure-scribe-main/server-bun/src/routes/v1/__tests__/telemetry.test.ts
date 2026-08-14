@@ -101,4 +101,15 @@ describe('POST /v1/telemetry/client-failure', () => {
     );
     expect(response.status).toBe(204);
   });
+
+  it('accepts malformed WebSocket frame reports', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'malformed_ws_frame',
+        sessionId: 'sess-1',
+        error: 'channel=session-story; count=2; Unexpected token',
+      }),
+    );
+    expect(response.status).toBe(204);
+  });
 });

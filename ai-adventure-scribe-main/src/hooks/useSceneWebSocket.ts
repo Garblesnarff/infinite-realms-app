@@ -17,6 +17,10 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
+import {
+  createMalformedPeerFrameReportState,
+  reportMalformedPeerFrame,
+} from '@/services/websocket-observability';
 
 // WebSocket message types matching server
 export type WebSocketMessageType =
@@ -92,6 +96,7 @@ export function useSceneWebSocket(options: UseSceneWebSocketOptions): UseSceneWe
 
   const { session } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
+  const malformedFrameStateRef = useRef(createMalformedPeerFrameReportState());
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isManualDisconnectRef = useRef(false);
@@ -129,7 +134,10 @@ export function useSceneWebSocket(options: UseSceneWebSocketOptions): UseSceneWe
           onTokenUpdate(message.data as TokenUpdateData);
         }
       } catch (error) {
-        logger.error('[WebSocket] Failed to parse message', { error });
+        reportMalformedPeerFrame(malformedFrameStateRef.current, {
+          channel: 'scene',
+          error,
+        });
       }
     },
     [onMessage, onTokenUpdate],
@@ -288,6 +296,6 @@ export function useSceneWebSocket(options: UseSceneWebSocketOptions): UseSceneWe
       disconnect,
       connectionState,
     }),
-    [connectionState, sendMessage, reconnect, disconnect]
+    [connectionState, sendMessage, reconnect, disconnect],
   );
 }

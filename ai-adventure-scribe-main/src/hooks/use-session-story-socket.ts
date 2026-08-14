@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { getAccessToken } from '@/services/auth/TokenService';
+import {
+  createMalformedPeerFrameReportState,
+  reportMalformedPeerFrame,
+} from '@/services/websocket-observability';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export function useSessionStorySocket(sessionId: string | null, onRemoteMessage: () => void) {
   const socketRef = useRef<WebSocket | null>(null);
+  const malformedFrameStateRef = useRef(createMalformedPeerFrameReportState());
   const callbackRef = useRef(onRemoteMessage);
   callbackRef.current = onRemoteMessage;
 
@@ -53,8 +58,12 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
             );
           }
         }
-      } catch {
-        /* ignore malformed peer frames */
+      } catch (error) {
+        reportMalformedPeerFrame(malformedFrameStateRef.current, {
+          channel: 'session-story',
+          sessionId: sessionId ?? undefined,
+          error,
+        });
       }
     };
     return () => {

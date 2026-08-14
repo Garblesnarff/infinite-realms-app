@@ -3,6 +3,10 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  reportClientFailure: vi.fn(),
+}));
+
 import { useSceneWebSocket } from '../useSceneWebSocket';
 
 // Mock dependencies BEFORE importing the module under test
@@ -17,6 +21,10 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
     debug: vi.fn(),
   },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { reportClientFailure: mocks.reportClientFailure },
 }));
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,7 +70,7 @@ describe('useSceneWebSocket', () => {
     renderHook(() => useSceneWebSocket({ sceneId }));
 
     expect(global.WebSocket).toHaveBeenCalledWith(
-      expect.stringContaining(`ws?token=${mockSession.access_token}&sessionId=scene:${sceneId}`)
+      expect.stringContaining(`ws?token=${mockSession.access_token}&sessionId=scene:${sceneId}`),
     );
     expect(mockWsInstance.onopen).toBeDefined();
     expect(mockWsInstance.onmessage).toBeDefined();
@@ -84,7 +92,7 @@ describe('useSceneWebSocket', () => {
     expect(result.current.isConnected).toBe(true);
     expect(result.current.connectionState).toBe('connected');
     expect(mockWsInstance.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'scene:join', sceneId })
+      JSON.stringify({ type: 'scene:join', sceneId }),
     );
   });
 
@@ -102,7 +110,7 @@ describe('useSceneWebSocket', () => {
 
     const tokenUpdateMessage = {
       type: 'token:update',
-      data: { tokenId: 'token-1', positionX: 100, positionY: 100 }
+      data: { tokenId: 'token-1', positionX: 100, positionY: 100 },
     };
     act(() => {
       mockWsInstance.onmessage({ data: JSON.stringify(tokenUpdateMessage) });
@@ -191,7 +199,7 @@ describe('useSceneWebSocket', () => {
     });
 
     expect(mockWsInstance.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'scene:leave', sceneId })
+      JSON.stringify({ type: 'scene:leave', sceneId }),
     );
     expect(mockWsInstance.close).toHaveBeenCalled();
     expect(result.current.connectionState).toBe('disconnected');
@@ -253,7 +261,11 @@ describe('useSceneWebSocket', () => {
     act(() => {
       mockWsInstance.onmessage({ data: 'invalid json' });
     });
-    // Should not throw, just log error (already mocked)
+    expect(mocks.reportClientFailure).toHaveBeenCalledWith(
+      'malformed_ws_frame',
+      undefined,
+      expect.stringContaining('channel=scene; count=1;'),
+    );
   });
 
   it('should warn when sending message while disconnected', () => {

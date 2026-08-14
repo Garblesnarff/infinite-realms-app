@@ -28,6 +28,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'scene_state_fetch_failed',
   'combat_intent_failed',
   'stale_client_detected',
+  'malformed_ws_frame',
 ] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 

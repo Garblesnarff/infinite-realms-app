@@ -2,6 +2,10 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  reportClientFailure: vi.fn(),
+}));
+
 // Mock dependencies BEFORE importing the module under test
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -10,6 +14,10 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
     debug: vi.fn(),
   },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { reportClientFailure: mocks.reportClientFailure },
 }));
 
 import { useFogWebSocket } from '../useFogWebSocket';
@@ -79,7 +87,7 @@ describe('useFogWebSocket', () => {
 
     expect(result.current.isConnected).toBe(true);
     expect(mockWsInstance.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'scene:join', sceneId, data: {} })
+      JSON.stringify({ type: 'scene:join', sceneId, data: {} }),
     );
   });
 
@@ -98,7 +106,10 @@ describe('useFogWebSocket', () => {
       mockWsInstance.onmessage({ data: JSON.stringify(revealMessage) });
     });
 
-    expect(mockCallbacks.onReveal).toHaveBeenCalledWith(revealMessage.data.areas, revealMessage.data.userId);
+    expect(mockCallbacks.onReveal).toHaveBeenCalledWith(
+      revealMessage.data.areas,
+      revealMessage.data.userId,
+    );
   });
 
   it('should handle incoming fog:conceal messages', () => {
@@ -116,7 +127,10 @@ describe('useFogWebSocket', () => {
       mockWsInstance.onmessage({ data: JSON.stringify(concealMessage) });
     });
 
-    expect(mockCallbacks.onConceal).toHaveBeenCalledWith(concealMessage.data.areas, concealMessage.data.userId);
+    expect(mockCallbacks.onConceal).toHaveBeenCalledWith(
+      concealMessage.data.areas,
+      concealMessage.data.userId,
+    );
   });
 
   it('should queue messages when disconnected and flush on connect', () => {
@@ -141,7 +155,7 @@ describe('useFogWebSocket', () => {
         type: 'fog:reveal',
         sceneId,
         data: { areas: revealData, userId: 'user-456' },
-      })
+      }),
     );
   });
 
@@ -180,7 +194,7 @@ describe('useFogWebSocket', () => {
     });
 
     expect(mockWsInstance.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'scene:leave', sceneId, data: {} })
+      JSON.stringify({ type: 'scene:leave', sceneId, data: {} }),
     );
     expect(mockWsInstance.close).toHaveBeenCalled();
     expect(result.current.isConnected).toBe(false);
@@ -215,7 +229,7 @@ describe('useFogWebSocket', () => {
         type: 'fog:conceal',
         sceneId,
         data: { areas: concealData, userId: 'user-456' },
-      })
+      }),
     );
   });
 
@@ -260,7 +274,11 @@ describe('useFogWebSocket', () => {
     act(() => {
       mockWsInstance.onmessage({ data: 'invalid json' });
     });
-    // Should not throw, just log error
+    expect(mocks.reportClientFailure).toHaveBeenCalledWith(
+      'malformed_ws_frame',
+      undefined,
+      expect.stringContaining('channel=fog; count=1;'),
+    );
   });
 
   it('should handle messages with missing data or areas', () => {
@@ -278,7 +296,9 @@ describe('useFogWebSocket', () => {
   });
 
   it('should handle WebSocket onclose without autoConnect', () => {
-    const { result } = renderHook(() => useFogWebSocket({ url, token, sceneId, autoConnect: false }, mockCallbacks));
+    const { result } = renderHook(() =>
+      useFogWebSocket({ url, token, sceneId, autoConnect: false }, mockCallbacks),
+    );
 
     // For manual connect since autoConnect is false
     act(() => {
@@ -308,7 +328,7 @@ describe('useFogWebSocket', () => {
       ({ callbacks }) => useFogWebSocket({ url, token, sceneId }, callbacks),
       {
         initialProps: { callbacks: mockCallbacks },
-      }
+      },
     );
 
     expect(global.WebSocket).toHaveBeenCalledTimes(1);
@@ -334,7 +354,10 @@ describe('useFogWebSocket', () => {
       mockWsInstance.onmessage({ data: JSON.stringify(revealMessage) });
     });
 
-    expect(newCallbacks.onReveal).toHaveBeenCalledWith(revealMessage.data.areas, revealMessage.data.userId);
+    expect(newCallbacks.onReveal).toHaveBeenCalledWith(
+      revealMessage.data.areas,
+      revealMessage.data.userId,
+    );
     expect(mockCallbacks.onReveal).not.toHaveBeenCalled();
   });
 
@@ -343,7 +366,7 @@ describe('useFogWebSocket', () => {
       ({ callbacks }) => useFogWebSocket({ url, token, sceneId }, callbacks),
       {
         initialProps: { callbacks: mockCallbacks },
-      }
+      },
     );
 
     const firstReturn = result.current;

@@ -192,7 +192,8 @@ export type ClientFailureKind =
   | 'lore_injection_failed'
   | 'scene_state_fetch_failed'
   | 'combat_intent_failed'
-  | 'stale_client_detected';
+  | 'stale_client_detected'
+  | 'malformed_ws_frame';
 
 export type NarrativeSceneStateResponse = {
   scene_state: string | null;
