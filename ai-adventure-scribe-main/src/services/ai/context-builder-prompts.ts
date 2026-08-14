@@ -54,31 +54,25 @@ Your response will be synthesized into voice. Structure your narration into logi
 
 **Return ONLY these two sections, in this exact order:**
 1. **Narrative**: 3-4 paragraphs with a complete opening scene
-2. **Action Options**: 3-5 lettered choices (default to exactly 3 unless a 4th or 5th option is clearly distinct and useful)
+2. **options JSON field**: populate with 3-5 player-facing choices (default to exactly 3 unless a 4th or 5th option is clearly distinct and useful)
 
 <opening_rules>
 - Do NOT include \`\`\`ROLL_REQUESTS_V1
-- Do NOT include XML tags, <memories>, <world_updates>, VISUAL PROMPT, JSON, or code fences
-- Do NOT end with a prose question like "What do you do?" before the options
-- The LAST lines of the response must be the option lines
-- Every option line must use this exact format: A. **Action Name**, short description
+- Do NOT include VISUAL PROMPT or code fences
+- Do NOT end with a prose question like "What do you do?" before populating the options field
+- Populate the \`options\` JSON field; each element must use the \`A. **Bold Action**, description\` format
+- Keep player-facing choices out of the narrative \`text\` field
 - If you include an [ASSET:type:key] tag, it MUST be immediately followed by the visible entity name
 </opening_rules>
 
-<opening_examples>
-A. **Join the kitchen line**, step in beside Balthazar and prove you can keep pace.
-B. **Introduce yourself to the staff**, learn who matters before the rush hits.
-C. **Survey the dining room**, get your bearings and spot tonight's first problem.
-</opening_examples>
 </opening_response_structure>`;
   }
 
   static buildResponseStructureSection(): string {
     const responseOrder = `1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
 2. **roll_requests field** (if a dice roll is needed): populate it based on the narrative you just wrote - it is a JSON array field, not text in the narrative
-3. **Action Options**: 2-3 lettered choices (A/B/C format)
-4. **Memory/World tags**: XML extraction tags (parsed by engine, hidden from player)
-5. **VISUAL PROMPT** (optional): Single line for image generation`;
+3. **options JSON field**: populate it with player-facing choices in the required format
+4. **VISUAL PROMPT** (optional): Single line for image generation`;
 
     const diceFormat = `<dice_roll_format>
 <title>MANDATORY: DICE ROLL FORMAT</title>
@@ -115,40 +109,14 @@ ${responseOrder}
 
 ${diceFormat}
 
-<player_choice_generation>
+<options_field>
 <title>ACTION OPTIONS FORMATTING</title>
 
-You MUST format choices as lettered options with bold action names for the game UI to render clickable buttons.
-
-Format: A. **Action Name**, brief description of what this choice involves
-
-Examples:
-- A. **Approach cautiously**, moving carefully to avoid detection while gathering information.
-- B. **Charge forward boldly**, relying on speed and surprise to overcome obstacles.
-- C. **Attempt to negotiate**, using your diplomatic skills to find a peaceful solution.
-
-Include 2-3 options at the end of every response unless resolving a specific combat action.
-When brainstorming options internally, vary skill usage (physical/mental/social/magical), risk level, and creativity. Include at least one unconventional option.
-</player_choice_generation>
-
-<memory_extraction>
-**After your narrative, dice rolls, and options, include these XML tags to track story state:**
-
-<memories>
-- Key facts, events, or decisions from this scene
-- Important NPC relationships or revelations
-- Player character actions and their consequences
-</memories>
-
-<world_updates>
-- npc: NPC Name | Brief description or status change | Current location
-- location: Location Name | Description or change | Status (e.g., discovered, changed, destroyed)
-- quest: Quest Name | Status update or new development
-</world_updates>
-
-Only include tags that have content. If no world updates occurred, omit the <world_updates> tag entirely.
-These tags are parsed by the game engine and will NOT be shown to the player.
-</memory_extraction>
+Populate the \`options\` JSON field with 2-3 player-facing choices when appropriate. Each element
+must use the \`A. **Bold Action**, description\` format. Keep options out of the narrative \`text\`
+field. Use an empty array when resolving a specific combat action or roll request and no player
+choice is appropriate.
+</options_field>
 
 <visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
@@ -169,15 +137,15 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
 **THIS IS THE FIRST MESSAGE OF A NEW SESSION.**
 
 - Do NOT request a roll
-- Do NOT output XML or metadata blocks
-- End with 3-5 clickable options
-- The response should feel complete before the options begin
+- Do NOT output metadata blocks
+- Populate the \`options\` JSON field with 3-5 choices; each element must use the \`A. **Bold Action**, description\` format
+- The response should feel complete before populating the options field
 - After every [ASSET:type:key] tag, write the visible entity name immediately
 </opening_final_reminders>`;
   }
 
   static buildFinalRemindersSection(): string {
-    const reminderBlock = `**RESPONSE ORDER: Narrative (text) → roll_requests field → Options → Memory tags**
+    const reminderBlock = `**RESPONSE ORDER: Narrative (text) → roll_requests field → \`options\` field → VISUAL PROMPT (optional)**
 
 **DICE ROLLS ARE MANDATORY** for uncertain actions (skill checks, saves, ability checks).
 **EVERY COMBAT ATTACK MUST BE DECLARED** as a \`"type": "attack"\` entry naming attacker and target;
@@ -185,7 +153,7 @@ the engine resolves it. An attack you only narrate never happens.
 Populate the \`roll_requests\` JSON array field - it is a structured field, NOT a code block or
 text marker inside \`text\`. Without it, the dice UI breaks and the player cannot proceed!
 
-**OPTIONS**: Use A. **Bold Action**, description format for clickable buttons.`;
+**OPTIONS**: Populate the \`options\` JSON field; each element must use the \`A. **Bold Action**, description\` format. Keep options out of the \`text\` field.`;
 
     return `
 <final_reminders>

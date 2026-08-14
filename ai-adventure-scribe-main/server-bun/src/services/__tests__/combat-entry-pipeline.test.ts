@@ -61,9 +61,14 @@ function stubDeps(): { deps: CombatEntryGateDeps; startedAt: number[] } {
 describe('applyCombatEntryGate', () => {
   it('seats the encounter and rewrites the envelope before the turn is returned', async () => {
     const { deps, startedAt } = stubDeps();
+    const options = [
+      'A. **Press the attack**, keep the Ifrit off balance.',
+      'B. **Circle wide**, look for a better angle.',
+    ];
     const returned = await applyCombatEntryGate({
       result: {
         text: dmEnvelope({
+          options,
           roll_requests: [
             {
               type: 'attack',
@@ -88,6 +93,7 @@ describe('applyCombatEntryGate', () => {
     const envelope = JSON.parse(returned.text) as Record<string, unknown>;
     expect(envelope.combat_transition).toBe('start');
     expect(envelope.scene_spec).toBeTruthy();
+    expect(envelope.options).toEqual(options);
     expect(envelope.combat_entry).toMatchObject({
       entered: true,
       encounterId: 'encounter-1',

@@ -160,6 +160,36 @@ describe('useAIResponse', () => {
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });
 
+  it('appends structured options without a client repair call', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { llmApiClient } = await import('@/infrastructure/api');
+    const options = [
+      'A. **Study the map**, search for a safer route.',
+      'B. **Ask the guide**, learn what danger lies ahead.',
+    ];
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: {},
+      character: {},
+    } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: 'The road divides beneath the ruined watchtower.',
+      options,
+      combatDetection: { isCombat: false },
+    });
+
+    const { result } = renderHook(() => useAIResponse());
+    const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+    expect(response.text).toBe(
+      `The road divides beneath the ruined watchtower.\n\n${options.join('\n')}`,
+    );
+    expect(llmApiClient.generateText).not.toHaveBeenCalled();
+  });
+
   it('should handle structured responses with narration segments and dice rolls', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { voiceConsistencyService } = await import('@/services/voice-consistency-service');

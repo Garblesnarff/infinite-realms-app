@@ -78,6 +78,7 @@ export type DMHandoutAction = {
 
 export type DMResponse = {
   text: string;
+  options?: string[];
   narration_segments: Array<{
     type: 'dm' | 'character' | 'transition';
     text: string;
@@ -226,6 +227,7 @@ const handoutActionSchema = {
 
 const baseProperties = {
   text: { type: 'string' },
+  options: { type: 'array', items: { type: 'string' } },
   narration_segments: {
     type: 'array',
     items: {
@@ -387,6 +389,9 @@ const isHandoutAction = (value: unknown): value is DMHandoutAction => {
     : action.key === null && typeof action.body === 'string';
 };
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
 export function parseDmResponse(
   value: unknown,
 ): { success: true; data: DMResponse } | { success: false; issues: string[] } {
@@ -395,6 +400,8 @@ export function parseDmResponse(
   const response = value as Record<string, unknown>;
   if (typeof response.text !== 'string')
     return { success: false, issues: ['text must be a string'] };
+  if (response.options !== undefined && !isStringArray(response.options))
+    return { success: false, issues: ['options must be an array of strings'] };
   if (!Array.isArray(response.map_actions) || !response.map_actions.every(isMapAction))
     return { success: false, issues: ['map_actions contains an invalid action'] };
   if (!Array.isArray(response.handout_actions) || !response.handout_actions.every(isHandoutAction))

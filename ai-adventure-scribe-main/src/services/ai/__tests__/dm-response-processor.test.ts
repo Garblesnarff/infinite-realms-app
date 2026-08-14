@@ -640,6 +640,22 @@ describe('processDMResponse', () => {
   // caller (ai-service.ts passes result.roll_requests straight into
   // processRollRequests as existingRequests - see src/hooks/use-ai-response.ts).
   describe('Structured roll_requests pass-through', () => {
+    it('should carry structured options from the parsed JSON response through to the result', async () => {
+      const options = [
+        'A. **Press the attack**, keep the Ifrit off balance.',
+        'B. **Circle wide**, look for a better angle.',
+      ];
+      const rawResponse = JSON.stringify({
+        text: 'The Ifrit hisses as the flames close in.',
+        narration_segments: [],
+        options,
+      });
+
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+
+      expect(result.options).toEqual(options);
+    });
+
     it('should carry structured roll_requests from the parsed JSON response through to the result', async () => {
       const rawResponse = JSON.stringify({
         text: 'You crouch low, scanning the dining room for anything out of place.',

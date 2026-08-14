@@ -333,7 +333,11 @@ export const useAIResponse = (): {
           result.combat_transition !== 'start' &&
           processedRolls.playerRollRequests.length === 0
         ) {
-          finalResponseText = await ensureActionOptions(finalResponseText);
+          if (result.options?.length) {
+            finalResponseText = `${finalResponseText.trim()}\n\n${result.options.join('\n')}`;
+          } else {
+            finalResponseText = await ensureActionOptions(finalResponseText);
+          }
         }
 
         // Format the response as an EnhancedChatMessage

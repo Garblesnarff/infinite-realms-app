@@ -100,7 +100,7 @@ describe('ContextBuilder opening prompt isolation', () => {
     expect(prompt).not.toContain('REMEMBER: Always respond in the JSON format');
   });
 
-  it('keeps normal roll and memory rules for non-opening responses', async () => {
+  it('keeps normal roll and options rules for non-opening responses', async () => {
     const prompt = await ContextBuilder.build({
       context: minimalContext,
       message: 'I search the room.',
@@ -113,7 +113,10 @@ describe('ContextBuilder opening prompt isolation', () => {
 
     expect(prompt).toContain('CRITICAL: WHEN TO REQUEST DICE ROLLS');
     expect(prompt).toContain('MANDATORY: DICE ROLL FORMAT');
-    expect(prompt).toContain('<memory_extraction>');
+    // #1799 replaced the <memory_extraction> XML block with the structured
+    // options field; the non-opening prompt still carries the full block set.
+    expect(prompt).toContain('<options_field>');
+    expect(prompt).not.toContain('<memory_extraction>');
     expect(prompt).not.toContain('OPENING RESPONSE CONTRACT');
   });
 });
