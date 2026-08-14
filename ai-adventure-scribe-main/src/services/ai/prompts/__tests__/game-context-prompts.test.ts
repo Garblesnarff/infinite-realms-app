@@ -100,6 +100,9 @@ vi.mock('@/utils/character-converter', () => ({
 // Now import the module under test
 import { GameContextPrompts } from '../game-context-prompts';
 
+import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
+
 describe('GameContextPrompts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -298,23 +301,47 @@ describe('GameContextPrompts', () => {
       expect(result).toContain('Found the lost fork.');
     });
 
-    it(
-      'should infer starterCampaignId from campaign name if missing',
-      { timeout: 15000 },
-      async () => {
-        const contextWithoutId = {
+    it('omits starter lore for a custom campaign with no starter campaign id', async () => {
+      const contextWithoutId = {
+        ...mockContext,
+        starterCampaignId: undefined,
+      };
+
+      const result = await GameContextPrompts.buildGameContextSection(contextWithoutId, []);
+
+      expect(mockLoreKeeper.getCampaignOverview).not.toHaveBeenCalled();
+      expect(result).toContain('<game_context>');
+      expect(result).not.toContain('<starter_campaign_lore>');
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(userDataApi.reportClientFailure).not.toHaveBeenCalled();
+    });
+
+    it('reports a missing id for an explicitly identified starter playthrough without throwing', async () => {
+      const result = await GameContextPrompts.buildGameContextSection(
+        {
           ...mockContext,
+          campaignDetails: { ...mockContext.campaignDetails, type: 'starter' },
           starterCampaignId: undefined,
-        };
+          sessionId: 'starter-session',
+          campaignId: 'campaign-1',
+        },
+        [],
+      );
 
-        const result = await GameContextPrompts.buildGameContextSection(contextWithoutId, []);
+      expect(result).toContain('<game_context>');
+      expect(result).not.toContain('<starter_campaign_lore>');
+      expect(logger.error).toHaveBeenCalledWith(
+        '[ContextBuilder] Missing required starter_campaign_id',
+        { sessionId: 'starter-session', campaignId: 'campaign-1' },
+      );
+      expect(userDataApi.reportClientFailure).toHaveBeenCalledWith(
+        'missing_starter_campaign_id',
+        'starter-session',
+        'Missing required starter_campaign_id for AI game context',
+      );
+    });
 
-        expect(mockLoreKeeper.getCampaignOverview).toHaveBeenCalledWith('the-eternal-feast');
-        expect(result).toContain('<starter_campaign_lore>');
-      },
-    );
-
-    it('infers the Academy id that exists in a starter_campaigns row', async () => {
+    it('uses the explicit Academy starter campaign id from session context', async () => {
       mockLoreKeeper.getCampaignOverview.mockImplementation(async (campaignId: string) => {
         if (campaignId !== academyStarterCampaignRow.id) return null;
         return {
@@ -331,6 +358,7 @@ describe('GameContextPrompts', () => {
             name: academyStarterCampaignRow.title,
             description: 'A school for magical cooks.',
           },
+          starterCampaignId: academyStarterCampaignRow.id,
         } as any,
         [],
       );
@@ -349,9 +377,8 @@ describe('GameContextPrompts', () => {
       const result = await GameContextPrompts.buildGameContextSection(minimalContext, []);
 
       expect(result).toContain('<game_context>');
-      expect(result).not.toContain('<campaign_details>');
-      expect(result).not.toContain('<starter_campaign_lore>');
       expect(result).toContain('<character_details>');
+      expect(result).not.toContain('<starter_campaign_lore>');
     });
 
     it('should gracefully handle lore fetching errors', async () => {

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { GameLoadingOverlay, GameLayout } from './game-content';
@@ -20,8 +20,9 @@ import { useInitialGreeting } from '@/hooks/use-initial-greeting';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useStaleClientCheck } from '@/hooks/use-stale-client-check';
 import logger from '@/lib/logger';
-import { inferStarterCampaignSlug } from '@/services/starter-campaign-slugs';
+import { userDataApi } from '@/services/user-data-api';
 import { handleAsyncError } from '@/utils/error-handler';
+import { hasStarterPlaythroughSignal } from '@/utils/starter-playthrough';
 
 type GameAIResponse = ChatMessage;
 
@@ -38,7 +39,6 @@ const GameContent: React.FC = () => {
   const forceNew = searchParams.get('new') === 'true';
   const specificSessionId = searchParams.get('session') || undefined;
   const starterCampaignIdFromParams = searchParams.get('starterCampaign') || undefined;
-
   const { state: campaignState } = useCampaign();
 
   // BUG FIX: page refresh was creating a new session instead of resuming.
@@ -75,6 +75,22 @@ const GameContent: React.FC = () => {
     characterIdFromParams,
     campaignIdFromParams,
   );
+
+  const isStarterPlaythrough =
+    Boolean(starterCampaignIdFromParams) ||
+    hasStarterPlaythroughSignal(campaignState.campaign) ||
+    hasStarterPlaythroughSignal(sessionData);
+  const missingStarterCampaignId = Boolean(
+    sessionId && sessionData && !sessionData.starter_campaign_id && isStarterPlaythrough,
+  );
+
+  useEffect(() => {
+    if (!missingStarterCampaignId || !sessionId) return;
+
+    const message = 'Missing required starter_campaign_id for game session';
+    logger.error('[GameContent] Missing required starter_campaign_id', { sessionId });
+    userDataApi.reportClientFailure('missing_starter_campaign_id', sessionId, message);
+  }, [missingStarterCampaignId, sessionId]);
 
   const [combatMode, setCombatMode] = useState(false);
   const [showSceneBlurb, setShowSceneBlurb] = useLocalStorage('ui:sceneBlurb', true);
@@ -130,15 +146,20 @@ const GameContent: React.FC = () => {
     );
   }
 
-  // Infer starter campaign ID from URL params, session data, or campaign name
-  const inferredStarterCampaignId = campaignState?.campaign?.name
-    ? inferStarterCampaignSlug(campaignState.campaign.name)
-    : undefined;
-  const effectiveStarterCampaignId =
-    starterCampaignIdFromParams ||
-    sessionData?.starter_campaign_id ||
-    inferredStarterCampaignId ||
-    null;
+  if (missingStarterCampaignId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center p-10 max-w-md">
+          <div className="text-destructive mb-4">
+            This game session is missing its required starter campaign link.
+          </div>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const effectiveStarterCampaignId = sessionData.starter_campaign_id || null;
 
   return (
     <GameProviders

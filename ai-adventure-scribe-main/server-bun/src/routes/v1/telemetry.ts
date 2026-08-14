@@ -29,6 +29,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'combat_intent_failed',
   'stale_client_detected',
   'malformed_ws_frame',
+  'missing_starter_campaign_id',
 ] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 

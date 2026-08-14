@@ -112,4 +112,15 @@ describe('POST /v1/telemetry/client-failure', () => {
     );
     expect(response.status).toBe(204);
   });
+
+  it('accepts missing starter campaign id reports', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'missing_starter_campaign_id',
+        sessionId: 'sess-1',
+        error: 'Missing required starter_campaign_id for game session',
+      }),
+    );
+    expect(response.status).toBe(204);
+  });
 });

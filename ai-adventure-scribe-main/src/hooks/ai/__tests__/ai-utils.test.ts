@@ -33,7 +33,7 @@ describe('ai-utils', () => {
       const messages: any[] = [{ id: '1', text: 'Hello', role: 'user' }];
       const latestMessage: any = {
         text: 'What do I see?',
-        context: { intent: 'explore', emotion: 'curious' }
+        context: { intent: 'explore', emotion: 'curious' },
       };
 
       const result = formatDMTask(messages, latestMessage);
@@ -94,7 +94,11 @@ describe('ai-utils', () => {
 
     it('should return null if campaign_id or character_id is missing', async () => {
       vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
-        id: 'session-123', campaign_id: null, character_id: 'char-789', campaign: {}, character: {},
+        id: 'session-123',
+        campaign_id: null,
+        character_id: 'char-789',
+        campaign: {},
+        character: {},
       });
 
       const result = await fetchGameContext('session-123');
@@ -102,7 +106,6 @@ describe('ai-utils', () => {
       expect(result).toBeNull();
       expect(logger.error).toHaveBeenCalledWith('No campaign or character IDs found in session');
     });
-
   });
 
   describe('buildAIContext', () => {
@@ -139,6 +142,7 @@ describe('ai-utils', () => {
         sessionId: 'session-123',
         userId: 'user-456',
         starterCampaignId: 'starter-789',
+        isStarterPlaythrough: true,
         campaignDetails: params.campaign,
         characterDetails: params.character,
         gameState: {
@@ -214,7 +218,9 @@ describe('ai-utils', () => {
       expect(result[2].type).toBe('general'); // Normalized
 
       expect(logger.warn).toHaveBeenCalledTimes(2);
-      expect(logger.warn).toHaveBeenCalledWith("[Memory] Invalid memory type detected: invalid-type, defaulting to 'general'");
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[Memory] Invalid memory type detected: invalid-type, defaulting to 'general'",
+      );
     });
 
     it('should return empty array if no memories found', async () => {

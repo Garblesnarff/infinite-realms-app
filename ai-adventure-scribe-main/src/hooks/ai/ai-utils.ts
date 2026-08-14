@@ -10,6 +10,7 @@
  * @author AI Dungeon Master Team
  */
 
+import type { GameContext } from '@/services/ai/shared/types';
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
@@ -18,6 +19,7 @@ import type { Memory } from '@/types/memory';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { isValidMemoryType } from '@/types/memory';
+import { hasStarterPlaythroughSignal } from '@/utils/starter-playthrough';
 
 /**
  * Formats chat messages into a task object for the DM Agent.
@@ -45,9 +47,7 @@ export function formatDMTask(messages: ChatMessage[], latestMessage: ChatMessage
  * @param {string} sessionId - The session ID
  * @returns {Promise<{campaign: Partial<Campaign>, character: Partial<Character>, starterCampaignId?: string} | null>} The game context or null if failed
  */
-export async function fetchGameContext(
-  sessionId: string,
-): Promise<{
+export async function fetchGameContext(sessionId: string): Promise<{
   campaign: Partial<Campaign>;
   character: Partial<Character>;
   starterCampaignId?: string;
@@ -81,6 +81,7 @@ export function buildAIContext(params: {
   sessionId: string;
   userId?: string;
   starterCampaignId?: string;
+  isStarterPlaythrough?: boolean;
   campaign: Record<string, unknown> | Partial<Campaign>;
   character: Record<string, unknown> | Partial<Character>;
   currentPhase: string;
@@ -102,8 +103,11 @@ export function buildAIContext(params: {
 }) {
   const campaignRecord = params.campaign as Record<string, unknown>;
   const characterRecord = params.character as Record<string, unknown>;
+  const isStarterPlaythrough =
+    params.isStarterPlaythrough ??
+    (Boolean(params.starterCampaignId) || hasStarterPlaythroughSignal(params.campaign));
 
-  return {
+  const context: GameContext = {
     campaignId: (campaignRecord.id as string) || '',
     characterId: (characterRecord.id as string) || '',
     sessionId: params.sessionId,
@@ -129,6 +133,9 @@ export function buildAIContext(params: {
       })),
     },
   };
+
+  if (isStarterPlaythrough) context.isStarterPlaythrough = true;
+  return context;
 }
 
 /**

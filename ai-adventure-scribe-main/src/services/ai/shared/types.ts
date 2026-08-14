@@ -39,6 +39,7 @@ export interface GameContext {
   sessionId?: string;
   userId?: string;
   starterCampaignId?: string;
+  isStarterPlaythrough?: boolean;
   campaignDetails?: Record<string, unknown>;
   characterDetails?: Record<string, unknown>;
   gameState?: Record<string, unknown>;

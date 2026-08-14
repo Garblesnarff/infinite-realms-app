@@ -6,7 +6,8 @@ import type { Memory } from '../../memory-manager';
 import type { GameContext } from '../shared/types';
 
 import logger from '@/lib/logger';
-import { inferStarterCampaignSlug } from '@/services/starter-campaign-slugs';
+import { userDataApi } from '@/services/user-data-api';
+import { hasStarterPlaythroughSignal } from '@/utils/starter-playthrough';
 
 /**
  * GameContextPrompts - Handles building the game context sections of the prompt
@@ -35,20 +36,21 @@ DESCRIPTION: ${campaignDescription}
 </campaign_details>`;
     }
 
-    // Lore handling (Async)
-    let starterCampaignId =
-      context.starterCampaignId ||
-      (rawCampaignDetails.starter_campaign_id as string | undefined) ||
-      (rawCampaignDetails.starterCampaignId as string | undefined);
+    // A missing nullable starter link is normal for custom campaigns. Only report a missing link
+    // when the context separately identifies this as a starter playthrough.
+    const starterCampaignId =
+      context.starterCampaignId || (rawCampaignDetails.starter_campaign_id as string | undefined);
+    const isStarterPlaythrough =
+      context.isStarterPlaythrough ??
+      (Boolean(starterCampaignId) || hasStarterPlaythroughSignal(rawCampaignDetails));
 
-    // Fallback: if no starterCampaignId but campaign name matches a starter campaign
-    if (!starterCampaignId && campaignName) {
-      starterCampaignId = inferStarterCampaignSlug(campaignName);
-      if (starterCampaignId) {
-        logger.info(
-          `[ContextBuilder] Inferred starter campaign '${starterCampaignId}' from campaign name`,
-        );
-      }
+    if (isStarterPlaythrough && !starterCampaignId) {
+      const message = 'Missing required starter_campaign_id for AI game context';
+      logger.error('[ContextBuilder] Missing required starter_campaign_id', {
+        sessionId: context.sessionId,
+        campaignId: context.campaignId,
+      });
+      userDataApi.reportClientFailure('missing_starter_campaign_id', context.sessionId, message);
     }
 
     if (starterCampaignId) {

@@ -116,6 +116,7 @@ export interface GameSession {
   end_time?: string;
   summary?: string;
   status: 'active' | 'completed' | 'expired';
+  starter_campaign_id?: string | null;
 }
 
 /**
