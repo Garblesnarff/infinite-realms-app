@@ -8,7 +8,8 @@
     "build": "tsc",
     "ingest": "tsx src/index.ts",
     "ingest:single": "tsx src/index.ts --campaign",
-    "ingest:dry-run": "tsx src/index.ts --dry-run"
+    "ingest:dry-run": "tsx src/index.ts --dry-run",
+    "reingest": "tsx src/index.ts reingest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

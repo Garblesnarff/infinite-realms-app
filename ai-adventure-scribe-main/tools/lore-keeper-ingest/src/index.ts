@@ -13,8 +13,9 @@
  */
 
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
+import { createClient } from '@supabase/supabase-js';
 import { Command } from 'commander';
 import { config } from 'dotenv';
 
@@ -37,8 +38,21 @@ import {
   extractTagline,
   isCampaignComplete,
 } from './parser.js';
+import {
+  readExistingCampaignChunks,
+  reingestCampaignChunks,
+  replaceCampaignRules,
+  upsertStarterCampaignPreservingState,
+} from './reingest-database.js';
+import { isReingestableEntityName, summarizeReingestDiff } from './reingest.js';
 
-import type { IngestOptions, IngestResult } from './types.js';
+import type {
+  CampaignChunk,
+  CampaignRule,
+  IngestOptions,
+  IngestResult,
+  ParsedCampaign,
+} from './types.js';
 
 // Load environment variables
 config({ path: join(process.cwd(), '.env') });
@@ -59,6 +73,16 @@ program
   .option('-l, --list', 'List all campaigns in repo', false)
   .option('--list-ingested', 'List all ingested campaigns', false)
   .action(main);
+
+program
+  .command('reingest')
+  .description('Safely re-ingest campaigns without the legacy delete-first flow')
+  .option('-c, --campaign <slug>', 'Re-ingest one campaign by slug')
+  .option('--apply', 'Write the safe re-ingestion changes (dry-run by default)', false)
+  .option('-v, --verbose', 'Show detailed output', false)
+  .option('-s, --skip-embeddings', 'Skip embedding generation when applying', false)
+  .option('-p, --repo-path <path>', 'Path to the campaign repo', '../../../infinite-realms-clean')
+  .action(reingestCommand);
 
 program.parse();
 
@@ -110,7 +134,7 @@ async function main(options: {
     if (!supabaseUrl || !supabaseKey) {
       console.error('❌ Missing environment variables:');
       if (!supabaseUrl) console.error('  - SUPABASE_URL or VITE_SUPABASE_URL');
-      if (!supabaseKey) console.error('  - SUPABASE_SERVICE_ROLE_KEY');
+      if (!supabaseKey) console.error('  - Supabase service-role credential');
       process.exit(1);
     }
 
@@ -138,7 +162,11 @@ async function main(options: {
       console.log('  No campaigns ingested yet.');
     } else {
       campaigns.forEach((c, i) => {
-        const status = c.isPublished ? '✅ Published' : c.isComplete ? '📝 Complete' : '⏳ Incomplete';
+        const status = c.isPublished
+          ? '✅ Published'
+          : c.isComplete
+            ? '📝 Complete'
+            : '⏳ Incomplete';
         console.log(`  ${i + 1}. ${c.title} (${c.id}) - ${status}`);
       });
     }
@@ -148,11 +176,14 @@ async function main(options: {
 
   // Initialize Gemini for embeddings
   if (!opts.skipEmbeddings && !opts.dryRun) {
-    const googleApiKey = process.env.GOOGLE_AI_API_KEY ||
-                         process.env.VITE_GOOGLE_GEMINI_API_KEY ||
-                         process.env.VITE_GEMINI_API_KEYS?.split(',')[0];
+    const googleApiKey =
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.VITE_GOOGLE_GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEYS?.split(',')[0];
     if (!googleApiKey) {
-      console.error('❌ Missing GOOGLE_AI_API_KEY or VITE_GOOGLE_GEMINI_API_KEY environment variable');
+      console.error(
+        '❌ Missing GOOGLE_AI_API_KEY or VITE_GOOGLE_GEMINI_API_KEY environment variable',
+      );
       console.error('Use --skip-embeddings to skip embedding generation');
       process.exit(1);
     }
@@ -181,7 +212,9 @@ async function main(options: {
       if (result.errors.length > 0) {
         console.log(`⚠️  ${campaignId}: ${result.errors.join(', ')}`);
       } else {
-        console.log(`✅ ${campaignId}: ${result.chunksCreated} chunks, ${result.rulesCreated} rules`);
+        console.log(
+          `✅ ${campaignId}: ${result.chunksCreated} chunks, ${result.rulesCreated} rules`,
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -201,15 +234,15 @@ async function main(options: {
   console.log('\n================================');
   console.log('📊 Ingestion Summary\n');
 
-  const successful = results.filter(r => r.errors.length === 0);
-  const failed = results.filter(r => r.errors.length > 0);
+  const successful = results.filter((r) => r.errors.length === 0);
+  const failed = results.filter((r) => r.errors.length > 0);
 
   console.log(`  Successful: ${successful.length}`);
   console.log(`  Failed:     ${failed.length}`);
 
   if (failed.length > 0) {
     console.log('\n  Errors:');
-    failed.forEach(f => {
+    failed.forEach((f) => {
       console.log(`    - ${f.campaignId}: ${f.errors.join(', ')}`);
     });
   }
@@ -223,13 +256,171 @@ async function main(options: {
   }
 }
 
+interface ReingestCampaign {
+  campaign: ParsedCampaign & { isComplete: boolean };
+  chunks: CampaignChunk[];
+  rules: CampaignRule[];
+}
+
+interface ReingestCommandOptions {
+  campaign?: string;
+  apply: boolean;
+  verbose: boolean;
+  skipEmbeddings: boolean;
+  repoPath: string;
+}
+
+async function reingestCommand(options: ReingestCommandOptions): Promise<void> {
+  try {
+    await runReingestCommand(options);
+  } catch (error) {
+    console.error(`❌ ${error instanceof Error ? error.message : error}`);
+    process.exitCode = 1;
+  }
+}
+
+function createReingestClient() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      'Re-ingestion requires a Supabase URL and service-role credential for its read-only diff and apply paths',
+    );
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+function resolveReingestCampaignDirectories(repoPath: string, campaignSlug?: string): string[] {
+  const directories = listCampaignDirectories(repoPath);
+  if (!campaignSlug) return directories;
+
+  const requestedSlug = campaignSlug.trim().toLowerCase();
+  const matches = directories.filter((directory) => {
+    const directorySlug = directory.split('/').pop()?.toLowerCase();
+    return directory.toLowerCase() === requestedSlug || directorySlug === requestedSlug;
+  });
+
+  if (matches.length === 0) {
+    throw new Error(
+      `Campaign slug not found: ${campaignSlug}. Use the repository campaign directory name or --campaign with a listed slug.`,
+    );
+  }
+  if (matches.length > 1) {
+    throw new Error(`Campaign slug is ambiguous: ${campaignSlug} (${matches.join(', ')})`);
+  }
+
+  return matches;
+}
+
+function loadReingestCampaign(repoPath: string, campaignDirectory: string): ReingestCampaign {
+  const campaignPath = join(repoPath, 'campaign-ideas', campaignDirectory);
+  if (!existsSync(campaignPath)) {
+    throw new Error(`Campaign directory not found: ${campaignPath}`);
+  }
+
+  const files = readCampaignFiles(campaignPath);
+  if (!files.overview || !files.campaignBible) {
+    throw new Error(`Missing overview or campaign bible for ${campaignDirectory}`);
+  }
+
+  const campaign = parseOverview(files.overview, campaignDirectory);
+  campaign.tagline = extractTagline(files.creativeBrief, files.overview);
+  campaign.creativeBrief = files.creativeBrief;
+  campaign.overview = files.overview;
+
+  const { chunks, rules } = chunkCampaignFiles(campaignDirectory, files);
+  const invalidMarkers = chunks.filter((chunk) => !isReingestableEntityName(chunk.entityName));
+  if (invalidMarkers.length > 0) {
+    throw new Error(
+      `Parser emitted section markers for ${campaign.id}: ${invalidMarkers
+        .map((chunk) => chunk.entityName)
+        .join(', ')}`,
+    );
+  }
+
+  return {
+    campaign: { ...campaign, isComplete: isCampaignComplete(files) },
+    chunks,
+    rules,
+  };
+}
+
+async function runReingestCommand(options: ReingestCommandOptions): Promise<void> {
+  const repoPath = resolve(process.cwd(), options.repoPath);
+  const campaignsPath = join(repoPath, 'campaign-ideas');
+  if (!existsSync(campaignsPath)) {
+    throw new Error(`Campaign repo not found at: ${campaignsPath}`);
+  }
+
+  const directories = resolveReingestCampaignDirectories(repoPath, options.campaign);
+  const campaigns = directories.map((directory) => loadReingestCampaign(repoPath, directory));
+  const client = createReingestClient();
+
+  console.log(`🏰 Lore Keeper Safe Re-ingestion (${options.apply ? 'APPLY' : 'DRY RUN'})`);
+  console.log(`Repository: ${repoPath}`);
+  console.log(`Campaigns: ${campaigns.length}\n`);
+
+  for (const { campaign, chunks, rules } of campaigns) {
+    const existingRows = await readExistingCampaignChunks(client, campaign.id);
+    const diff = summarizeReingestDiff(chunks, existingRows);
+    console.log(
+      `${campaign.slug}: entities added=${diff.entitiesAdded}, renamed=${diff.entitiesRenamed}, unchanged=${diff.entitiesUnchanged}, image_url rows preserved=${diff.imageUrlRowsPreserved}`,
+    );
+    if (options.verbose) {
+      console.log(
+        `  chunks=${chunks.length}, rules=${rules.length}, existing_rows=${existingRows.length}`,
+      );
+    }
+  }
+
+  if (!options.apply) {
+    console.log(
+      '\nDRY RUN: no database changes made. Pass --apply to write safe re-ingestion changes.',
+    );
+    return;
+  }
+
+  if (!options.skipEmbeddings) {
+    const googleApiKey =
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.VITE_GOOGLE_GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEYS?.split(',')[0];
+    if (!googleApiKey) {
+      throw new Error(
+        'Missing GOOGLE_AI_API_KEY or VITE_GOOGLE_GEMINI_API_KEY. Use --skip-embeddings to preserve existing embeddings.',
+      );
+    }
+    initOpenAI(googleApiKey);
+  }
+
+  for (const { campaign, chunks, rules } of campaigns) {
+    const embeddings = options.skipEmbeddings
+      ? []
+      : await generateEmbeddings(chunks.map((chunk) => chunk.content));
+    if (!options.skipEmbeddings && embeddings.length !== chunks.length) {
+      throw new Error(`Embedding count mismatch for ${campaign.id}`);
+    }
+
+    await upsertStarterCampaignPreservingState(client, campaign);
+    const result = await reingestCampaignChunks(client, chunks, embeddings);
+    await replaceCampaignRules(client, campaign.id, rules);
+
+    console.log(
+      `${campaign.slug}: applied rows=${result.rowsWritten}, inserted=${result.rowsInserted}, updated=${result.rowsUpdated}, duplicate_rows_removed=${result.duplicateRowsRemoved}, section_marker_rows_removed=${result.sectionMarkerRowsRemoved}`,
+    );
+  }
+}
+
 /**
  * Ingest a single campaign
  */
 async function ingestCampaign(
   campaignId: string,
   repoPath: string,
-  opts: IngestOptions
+  opts: IngestOptions,
 ): Promise<IngestResult> {
   const campaignPath = join(repoPath, 'campaign-ideas', campaignId);
 
@@ -296,8 +487,6 @@ async function ingestCampaign(
       errors: [`Malformed markdown: ${message}`],
     };
   }
-
-
   const isComplete = isCampaignComplete(files);
 
   if (opts.verbose) {
@@ -319,7 +508,7 @@ async function ingestCampaign(
 
   // Estimate embedding cost
   if (!opts.skipEmbeddings && !opts.dryRun) {
-    const { tokens, cost } = estimateCost(chunks.map(c => c.content));
+    const { tokens, cost } = estimateCost(chunks.map((c) => c.content));
     if (opts.verbose) {
       console.log(`  Embedding cost: ~${tokens} tokens (~$${cost.toFixed(4)})`);
     }
@@ -342,7 +531,7 @@ async function ingestCampaign(
   let embeddingsGenerated = 0;
   if (!opts.skipEmbeddings && chunks.length > 0) {
     try {
-      const texts = chunks.map(c => c.content);
+      const texts = chunks.map((c) => c.content);
       embeddings = await generateEmbeddings(texts);
       embeddingsGenerated = embeddings.length;
     } catch (error) {

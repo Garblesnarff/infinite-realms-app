@@ -6,6 +6,8 @@
  * Each chunk should be self-contained and answer a specific question.
  */
 
+import { isSectionMarkerName, normalizeEntityNameForChunkType } from './entity-name.js';
+
 import type { CampaignChunk, CampaignRule, CampaignFiles } from './types.js';
 
 const MAX_CHUNK_SIZE = 2000; // Max characters per chunk
@@ -118,7 +120,7 @@ function chunkWorldBuilding(
 
   sections.forEach(({ name, key }) => {
     const section = extractSection(content, name);
-    if (section && section.length > 100) {
+    if (section && section.length > 100 && !isSectionMarkerName(name)) {
       chunks.push({
         campaignId,
         chunkType: 'world_building',
@@ -204,8 +206,9 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
     }
     if (!nameMatch) return;
 
-    const name = nameMatch[1].trim();
     const tier = determineTier(block, index);
+    const name = normalizeEntityNameForChunkType(nameMatch[1], tier);
+    if (!name || isSectionMarkerName(name)) return;
 
     chunks.push({
       campaignId,
@@ -223,13 +226,18 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
   const tableMatches = npcSection.matchAll(/\|\s*\*\*(.+?)\*\*\s*\|(.+?)\|(.+?)\|(.+?)\|/g);
   for (const match of tableMatches) {
     const [, name, role, location, quirk] = match;
-    if (name && !chunks.some((c) => c.entityName === name.trim())) {
+    const normalizedName = name ? normalizeEntityNameForChunkType(name, 'npc_tier2') : '';
+    if (
+      normalizedName &&
+      !isSectionMarkerName(normalizedName) &&
+      !chunks.some((c) => c.entityName === normalizedName)
+    ) {
       chunks.push({
         campaignId,
         chunkType: 'npc_tier2',
-        entityName: name.trim(),
-        content: `**${name.trim()}** - ${role?.trim() || 'Unknown role'}\n\nLocation: ${location?.trim() || 'Unknown'}\n\nQuirk: ${quirk?.trim() || 'None noted'}`,
-        summary: `${name.trim()}: ${role?.trim() || 'NPC'}`,
+        entityName: normalizedName,
+        content: `**${normalizedName}** - ${role?.trim() || 'Unknown role'}\n\nLocation: ${location?.trim() || 'Unknown'}\n\nQuirk: ${quirk?.trim() || 'None noted'}`,
+        summary: `${normalizedName}: ${role?.trim() || 'NPC'}`,
         metadata: { tier: 'tier2', fromTable: true },
         sourceFile: 'campaign_bible.md',
         sourceSection: 'NPCs',
@@ -293,13 +301,18 @@ function extractFactions(campaignId: string, content: string): CampaignChunk[] {
     const matches = factionSection.matchAll(pattern);
     for (const match of matches) {
       const [, name, details] = match;
-      if (name && !chunks.some((c) => c.entityName === name.trim())) {
+      const normalizedName = name ? normalizeEntityNameForChunkType(name, 'faction') : '';
+      if (
+        normalizedName &&
+        !isSectionMarkerName(normalizedName) &&
+        !chunks.some((c) => c.entityName === normalizedName)
+      ) {
         chunks.push({
           campaignId,
           chunkType: 'faction',
-          entityName: name.trim(),
-          content: cleanContent(`**${name.trim()}**\n\n${details}`),
-          summary: extractFactionSummary(details, name.trim()),
+          entityName: normalizedName,
+          content: cleanContent(`**${normalizedName}**\n\n${details}`),
+          summary: extractFactionSummary(details, normalizedName),
           metadata: extractFactionMetadata(details),
           sourceFile: 'campaign_bible.md',
           sourceSection: 'Factions',
@@ -375,13 +388,15 @@ function extractLocations(campaignId: string, content: string): CampaignChunk[] 
 
     for (const locMatch of locMatches) {
       const [, locName, locDetails] = locMatch;
+      const normalizedName = normalizeEntityNameForChunkType(locName, 'location');
+      if (!normalizedName || isSectionMarkerName(normalizedName)) continue;
       chunks.push({
         campaignId,
         chunkType: 'location',
-        entityName: locName.trim(),
+        entityName: normalizedName,
         parentEntity: zoneName.trim(),
-        content: cleanContent(`**${locName.trim()}**\n\n${locDetails}`),
-        summary: `Location in ${zoneName.trim()}: ${locName.trim()}`,
+        content: cleanContent(`**${normalizedName}**\n\n${locDetails}`),
+        summary: `Location in ${zoneName.trim()}: ${normalizedName}`,
         metadata: { zone: zoneName.trim() },
         sourceFile: 'campaign_bible.md',
         sourceSection: `Locations > ${zoneName.trim()}`,
@@ -390,12 +405,18 @@ function extractLocations(campaignId: string, content: string): CampaignChunk[] 
   }
 
   // Bullet point locations (Eternal Feast style): *   **Location Name:** Description
-  const bulletLocationPattern = /\*\s+\*\*(.+?)\*\*:?\s*(.+?)(?=\n\*\s+\*\*|\n##|\n\[TAG|$)/g;
+  const bulletLocationPattern =
+    /^\s*\*\s+\*\*(.+?)\*\*:?\s*(.+?)(?=^\s*\*\s+\*\*|^#{2,6}\s|^\s*\[TAG|^\s*---\s*$|$)/gms;
   const bulletMatches = locationSection.matchAll(bulletLocationPattern);
 
   for (const match of bulletMatches) {
     const [, locName, locDetails] = match;
-    if (!chunks.some((c) => c.entityName === locName.trim())) {
+    const normalizedName = normalizeEntityNameForChunkType(locName, 'location');
+    if (
+      normalizedName &&
+      !isSectionMarkerName(normalizedName) &&
+      !chunks.some((c) => c.entityName === normalizedName)
+    ) {
       // Extract sensory details
       const smell = locDetails.match(/\*\*Smell:\*\*\s*(.+?)(?:\.|$)/i)?.[1];
       const sound = locDetails.match(/\*\*Sound:\*\*\s*(.+?)(?:\.|$)/i)?.[1];
@@ -403,9 +424,9 @@ function extractLocations(campaignId: string, content: string): CampaignChunk[] 
       chunks.push({
         campaignId,
         chunkType: 'location',
-        entityName: locName.trim(),
-        content: cleanContent(`**${locName.trim()}**\n\n${locDetails}`),
-        summary: `Location: ${locName.trim()}`,
+        entityName: normalizedName,
+        content: cleanContent(`**${normalizedName}**\n\n${locDetails}`),
+        summary: `Location: ${normalizedName}`,
         metadata: {
           ...(smell && { smell: smell.trim() }),
           ...(sound && { sound: sound.trim() }),
