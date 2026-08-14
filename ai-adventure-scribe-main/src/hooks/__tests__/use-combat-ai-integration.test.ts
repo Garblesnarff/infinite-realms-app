@@ -36,11 +36,6 @@ vi.mock('@/contexts/CombatContext', () => ({
   })),
 }));
 
-vi.mock('@/utils/combatDetection', () => ({
-  detectCombatFromText: vi.fn(),
-  createCombatParticipantsFromDetection: vi.fn(),
-}));
-
 vi.mock('@/utils/diceUtils', () => ({
   rollDice: vi.fn(),
 }));
@@ -62,42 +57,6 @@ describe('useCombatAIIntegration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
-  });
-
-  describe('processDMResponse', () => {
-    it('should handle all detection variations', async () => {
-      const { detectCombatFromText, createCombatParticipantsFromDetection } =
-        await import('@/utils/combatDetection');
-      (createCombatParticipantsFromDetection as any).mockReturnValue([{ name: 'G' }]);
-      const { result } = renderHook(() =>
-        useCombatAIIntegration({ sessionId, characterId, campaignId }),
-      );
-
-      const variations = [
-        { shouldStartCombat: true, confidence: 0.9, enemies: [{ name: 'E' }], isCombat: true },
-        { shouldStartCombat: true, confidence: 0.3, enemies: [{ name: 'E' }], isCombat: true }, // Low confidence
-        { shouldStartCombat: true, confidence: 0.9, enemies: [], isCombat: true }, // No enemies
-        { shouldEndCombat: true, isCombat: false },
-      ];
-
-      for (const v of variations) {
-        (detectCombatFromText as any).mockReturnValue(v);
-        await result.current.processDMResponse({ text: 'Msg' } as any);
-      }
-    });
-
-    it('should handle missing sessionId during start combat', async () => {
-      const { detectCombatFromText } = await import('@/utils/combatDetection');
-      (detectCombatFromText as any).mockReturnValue({
-        shouldStartCombat: true,
-        confidence: 0.9,
-        enemies: [{ name: 'E' }],
-        isCombat: true,
-      });
-      const { result } = renderHook(() => useCombatAIIntegration({ characterId } as any));
-      await result.current.processDMResponse({ text: 'Msg' } as any);
-      expect(mockStartCombat).not.toHaveBeenCalled();
-    });
   });
 
   describe('createCombatActionRoll', () => {

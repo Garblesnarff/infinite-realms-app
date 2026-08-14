@@ -84,7 +84,13 @@ describe('useMessageQueue', () => {
     const message: any = {
       text: 'Hello',
       sender: 'player',
-      context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' },
+      context: {
+        location: 'Tavern',
+        emotion: 'happy',
+        intent: 'greeting',
+        combat_transition: 'start',
+        scene_spec: { width: 10, height: 10 },
+      },
     };
 
     let persistedMessage;
@@ -103,6 +109,8 @@ describe('useMessageQueue', () => {
           emotion: 'happy',
           intent: 'greeting',
           handouts: null,
+          combat_transition: 'start',
+          scene_spec: true,
         }),
         timestamp: expect.any(String),
       }),
@@ -182,7 +190,11 @@ describe('useMessageQueue', () => {
       const p = result.current.messageMutation.mutateAsync({
         text: 'Queued',
         sender: 'player',
-        context: { location: 'Cave' },
+        context: {
+          location: 'Cave',
+          combat_transition: 'start',
+          scene_spec: { width: 10, height: 10 },
+        },
       } as any);
       const handled = p.catch(() => undefined);
       await vi.runAllTimersAsync();
@@ -208,7 +220,11 @@ describe('useMessageQueue', () => {
       expect.arrayContaining([
         expect.objectContaining({
           message: 'Queued',
-          context: expect.objectContaining({ location: 'Cave' }),
+          context: expect.objectContaining({
+            location: 'Cave',
+            combat_transition: 'start',
+            scene_spec: true,
+          }),
         }),
       ]),
     );

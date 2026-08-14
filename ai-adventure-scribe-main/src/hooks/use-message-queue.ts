@@ -81,6 +81,8 @@ export const useMessageQueue = (sessionId: string | null) => {
                 emotion: message.context.emotion || null,
                 intent: message.context.intent || null,
                 handouts: message.context.handouts || null,
+                combat_transition: message.context.combat_transition || null,
+                scene_spec: Boolean(message.context.scene_spec),
               }
             : {};
 
@@ -154,26 +156,31 @@ export const useMessageQueue = (sessionId: string | null) => {
    * Process a batch of queued messages
    * Also generates IDs for each message to ensure they're immediately available
    */
-  const processMessageBatch = useCallback(async (batch: ChatMessage[]) => {
-    if (!sessionId) throw new Error('Session ID is required to save messages');
-    const now = new Date().toISOString();
-    const formattedBatch = batch.map((message) => ({
-      id: message.id || uuidv4(),
-      message: message.text,
-      speaker_type: message.sender,
-      context: message.context
-        ? {
-            location: message.context.location || null,
-            emotion: message.context.emotion || null,
-            intent: message.context.intent || null,
-            handouts: message.context.handouts || null,
-          }
-        : {},
-      timestamp: message.timestamp || now,
-    }));
+  const processMessageBatch = useCallback(
+    async (batch: ChatMessage[]) => {
+      if (!sessionId) throw new Error('Session ID is required to save messages');
+      const now = new Date().toISOString();
+      const formattedBatch = batch.map((message) => ({
+        id: message.id || uuidv4(),
+        message: message.text,
+        speaker_type: message.sender,
+        context: message.context
+          ? {
+              location: message.context.location || null,
+              emotion: message.context.emotion || null,
+              intent: message.context.intent || null,
+              handouts: message.context.handouts || null,
+              combat_transition: message.context.combat_transition || null,
+              scene_spec: Boolean(message.context.scene_spec),
+            }
+          : {},
+        timestamp: message.timestamp || now,
+      }));
 
-    await userDataApi.saveSessionMessages(sessionId, formattedBatch);
-  }, [sessionId]);
+      await userDataApi.saveSessionMessages(sessionId, formattedBatch);
+    },
+    [sessionId],
+  );
 
   /**
    * Retry all queued messages

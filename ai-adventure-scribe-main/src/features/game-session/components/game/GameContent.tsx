@@ -6,14 +6,11 @@ import { GameLoadingOverlay, GameLayout } from './game-content';
 import GameProviders from './GameProviders';
 import { useGameData } from './useGameData';
 
-import type { CharacterState } from '@/contexts/character/types';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 import type { ChatMessage } from '@/types/game';
-import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import { Button } from '@/components/ui/button';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
@@ -26,9 +23,7 @@ import logger from '@/lib/logger';
 import { inferStarterCampaignSlug } from '@/services/starter-campaign-slugs';
 import { handleAsyncError } from '@/utils/error-handler';
 
-interface GameAIResponse extends ChatMessage {
-  combatDetection?: CombatDetectionResult;
-}
+type GameAIResponse = ChatMessage;
 
 /**
  * GameContent Component
@@ -44,7 +39,6 @@ const GameContent: React.FC = () => {
   const specificSessionId = searchParams.get('session') || undefined;
   const starterCampaignIdFromParams = searchParams.get('starterCampaign') || undefined;
 
-  const { state: characterState } = useCharacter();
   const { state: campaignState } = useCampaign();
 
   // BUG FIX: page refresh was creating a new session instead of resuming.
@@ -158,7 +152,6 @@ const GameContent: React.FC = () => {
         characterIdForHandler={characterIdFromParams ?? null}
         sessionData={sessionData}
         updateGameSessionState={updateGameSessionState}
-        characterState={characterState}
         combatMode={combatMode}
         setCombatMode={setCombatMode}
         handleCombatToggle={handleCombatToggle}
@@ -178,7 +171,6 @@ interface GameContentInnerProps {
   characterIdForHandler: string | null;
   sessionData: ExtendedGameSession;
   updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
-  characterState: CharacterState;
   combatMode: boolean;
   setCombatMode: (mode: boolean) => void;
   handleCombatToggle: () => void;
@@ -194,7 +186,6 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   characterIdForHandler,
   sessionData,
   updateGameSessionState,
-  characterState,
   combatMode,
   isDM,
   showSceneBlurb,
@@ -274,26 +265,6 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
           message.text?.substring(0, 100) + '...',
         );
 
-        if (message.combatDetection) {
-          logger.info('Combat detection data found in AI response');
-          const result = await combatAI.processDMResponse(message, characterState.character);
-
-          if (result.combatMessages && result.combatMessages.length > 0) {
-            for (const m of result.combatMessages) {
-              try {
-                await sendMessage(m);
-              } catch (e) {
-                handleAsyncError(e, {
-                  userMessage: 'Failed to send combat message',
-                  logLevel: 'warn',
-                  showToast: false,
-                  context: { location: 'GameContent.onAIResponseWithCombat.sendCombatMessage' },
-                });
-              }
-            }
-          }
-        }
-
         await handleAIResponse(message);
       } catch (error) {
         handleAsyncError(error, {
@@ -302,7 +273,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
         });
       }
     },
-    [combatAI, characterState, handleAIResponse, sendMessage],
+    [handleAIResponse],
   );
 
   React.useEffect(() => {

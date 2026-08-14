@@ -19,7 +19,7 @@ interface ProcessDMResponseParams {
   turnCount?: number;
   voiceContext: SessionVoiceContext | null;
   isFirstMessage: boolean;
-  combatDetection: CombatDetectionResult;
+  combatDetection?: CombatDetectionResult;
   roll_requests?: unknown[];
   dice_rolls?: unknown[];
 }
@@ -42,6 +42,16 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     roll_requests,
     dice_rolls,
   } = params;
+
+  const baseCombatDetection: CombatDetectionResult = combatDetection ?? {
+    isCombat: context.gameState?.isInCombat === true,
+    confidence: context.gameState?.isInCombat === true ? 1 : 0,
+    combatType: context.gameState?.isInCombat === true ? 'initiative' : 'none',
+    shouldStartCombat: false,
+    shouldEndCombat: false,
+    enemies: [],
+    combatActions: [],
+  };
 
   let structuredResponse: Record<string, any> | null = null;
   try {
@@ -288,13 +298,13 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
       isCombat:
-        transition === 'start' ? true : transition === 'end' ? false : combatDetection.isCombat,
-      confidence: combatDetection.confidence,
-      combatType: combatDetection.combatType,
+        transition === 'start' ? true : transition === 'end' ? false : baseCombatDetection.isCombat,
+      confidence: baseCombatDetection.confidence,
+      combatType: baseCombatDetection.combatType,
       shouldStartCombat: transition === 'start',
       shouldEndCombat: transition === 'end',
-      enemies: structuredEnemies.length ? structuredEnemies : combatDetection.enemies || [],
-      combatActions: combatDetection.combatActions || [],
+      enemies: structuredEnemies.length ? structuredEnemies : baseCombatDetection.enemies || [],
+      combatActions: baseCombatDetection.combatActions || [],
     },
   };
 

@@ -364,9 +364,14 @@ describe('useAIResponse', () => {
     });
 
     const { result } = renderHook(() => useAIResponse());
-    await result.current.getAIResponse(mockMessages as any, mockSessionId);
+    const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
 
     expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
+    // #1779 part 4: even though the client no longer starts combat, the envelope's
+    // entry signals still have to reach the transcript for auditability.
+    expect(response.context).toEqual(
+      expect.objectContaining({ combat_transition: 'start', scene_spec: true }),
+    );
 
     vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({ ok: true } as any);
     (AIService.chatWithDM as any).mockResolvedValue({

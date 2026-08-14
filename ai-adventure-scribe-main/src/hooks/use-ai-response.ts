@@ -340,6 +340,8 @@ export const useAIResponse = (): {
           context: {
             emotion: 'neutral',
             intent: 'response',
+            combat_transition: result.combat_transition ?? 'none',
+            scene_spec: result.scene_spec != null,
             npcRollResults:
               processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
             handouts: deliveredHandouts,

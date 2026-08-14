@@ -3,15 +3,14 @@
  *
  * Bridges combat system with AI agents for seamless D&D experience.
  * Handles combat event notifications, AI responses, dice rolls, and rule validations.
- * Now includes combat detection from DM text and automatic dice roll generation.
+ * Provides combat event notifications, dice rolls, and rule validations.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 
 import type { CombatEvent, CombatAction, CombatParticipant, CombatEncounter } from '@/types/combat';
-import type { ChatMessage } from '@/types/game';
 import type { CombatMessageData } from '@/utils/combat/ai-narration-utils';
-import type { DetectedCombatAction, PlayerCharacterLike } from '@/utils/combatDetection';
+import type { DetectedCombatAction } from '@/utils/combatDetection';
 
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatDetection } from '@/hooks/combat/use-combat-detection';
@@ -34,48 +33,23 @@ export interface UseCombatAIIntegrationReturn {
     participant: CombatParticipant,
   ) => Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }>;
   processCombatEvent: (event: CombatEvent) => Promise<void>;
-  processDMResponse: (
-    dmMessage: ChatMessage,
-    playerCharacter?: PlayerCharacterLike,
-  ) => Promise<{
-    combatDetected: boolean;
-    shouldStartCombat: boolean;
-    shouldEndCombat: boolean;
-    combatMessages: ChatMessage[];
-  }>;
   createCombatActionRoll: (action: DetectedCombatAction) => Promise<CombatMessageData | null>;
   isInCombat: boolean;
   encounter: CombatEncounter | null;
 }
 
-export const useCombatAIIntegration = ({
-  sessionId,
-  characterId: _characterId,
-  campaignId: _campaignId,
-}: CombatAIIntegrationProps): UseCombatAIIntegrationReturn => {
+export const useCombatAIIntegration = (
+  _props: CombatAIIntegrationProps,
+): UseCombatAIIntegrationReturn => {
   const combatContext = useCombat();
 
   if (!combatContext) {
     throw new Error('useCombatAIIntegration must be used within CombatProvider');
   }
 
-  const { state, startCombat, endCombat, addParticipant: _addParticipant } = combatContext;
+  const { state } = combatContext;
 
-  const combatState = useMemo(
-    () => ({
-      isInCombat: state.isInCombat,
-      activeEncounter: state.activeEncounter,
-    }),
-    [state.isInCombat, state.activeEncounter],
-  );
-
-  // Delegate combat detection logic to specialized hook
-  const { processDMResponse, createCombatActionRoll } = useCombatDetection({
-    sessionId,
-    state: combatState,
-    startCombat,
-    endCombat,
-  });
+  const { createCombatActionRoll } = useCombatDetection();
 
   // Kept as a compatibility no-op while the retired combat-event narration path is removed.
   const processCombatEvent = useCallback(async (_event: CombatEvent) => undefined, []);
@@ -124,7 +98,6 @@ export const useCombatAIIntegration = ({
   return {
     validateCombatAction,
     processCombatEvent,
-    processDMResponse,
     createCombatActionRoll,
     isInCombat: state.isInCombat,
     encounter: state.activeEncounter,

@@ -13,7 +13,7 @@ export class ContextBuilder {
     message: string;
     conversationHistory?: ChatMessage[];
     relevantMemories: Memory[];
-    combatDetection: CombatDetectionResult;
+    combatDetection?: CombatDetectionResult;
     voiceContext?: SessionVoiceContext | null;
     isFirstMessage?: boolean;
   }): Promise<string> {

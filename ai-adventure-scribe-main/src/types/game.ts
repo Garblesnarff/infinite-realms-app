@@ -17,6 +17,8 @@ export interface MessageContext {
   location?: string | null;
   emotion?: string | null;
   intent?: string | null;
+  combat_transition?: 'none' | 'start' | 'end' | null;
+  scene_spec?: boolean | null;
   previouslyOn?: boolean;
   handouts?: JournalHandoutEntry[];
   diceRoll?: {

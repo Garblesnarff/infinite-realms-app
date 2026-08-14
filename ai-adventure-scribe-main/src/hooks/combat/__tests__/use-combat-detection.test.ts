@@ -5,10 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCombatDetection } from '../use-combat-detection';
 
 import { createActionDescription, getDamageRollForWeapon } from '@/utils/combat/ai-narration-utils';
-import { detectCombatFromText } from '@/utils/combatDetection';
 import { rollDice } from '@/utils/diceUtils';
 
-vi.mock('@/utils/combatDetection', () => ({ detectCombatFromText: vi.fn() }));
 vi.mock('@/utils/diceUtils', () => ({ rollDice: vi.fn() }));
 vi.mock('@/utils/combat/ai-narration-utils', () => ({
   getDamageRollForWeapon: vi.fn(),
@@ -16,47 +14,9 @@ vi.mock('@/utils/combat/ai-narration-utils', () => ({
 }));
 
 describe('useCombatDetection', () => {
-  const startCombat = vi.fn().mockResolvedValue(undefined);
-  const endCombat = vi.fn().mockResolvedValue(undefined);
-
   beforeEach(() => vi.clearAllMocks());
 
-  const setupHook = () =>
-    renderHook(() =>
-      useCombatDetection({
-        sessionId: 'test-session-id',
-        state: { isInCombat: false, activeEncounter: null },
-        startCombat,
-        endCombat,
-      }),
-    );
-
-  it('keeps legacy prose detection telemetry-only', async () => {
-    vi.mocked(detectCombatFromText).mockReturnValue({
-      isCombat: true,
-      combatType: 'melee',
-      shouldStartCombat: true,
-      shouldEndCombat: false,
-      confidence: 1,
-      enemies: [{ name: 'Orc' }],
-    });
-    const { result } = setupHook();
-
-    const response = await result.current.processDMResponse({
-      text: 'Roll initiative!',
-      sender: 'dm',
-      timestamp: new Date().toISOString(),
-    });
-
-    expect(response).toEqual({
-      combatDetected: true,
-      shouldStartCombat: false,
-      shouldEndCombat: false,
-      combatMessages: [],
-    });
-    expect(startCombat).not.toHaveBeenCalled();
-    expect(endCombat).not.toHaveBeenCalled();
-  });
+  const setupHook = () => renderHook(() => useCombatDetection());
 
   describe('createCombatActionRoll legacy helper', () => {
     it('handles attack rolls', async () => {

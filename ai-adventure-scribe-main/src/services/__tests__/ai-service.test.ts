@@ -9,7 +9,6 @@ import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { detectCombatFromText } from '@/utils/combatDetection';
 
 // Mock dependencies
 vi.mock('@/infrastructure/api', () => ({
@@ -34,10 +33,6 @@ vi.mock('../ai/context-builder', () => ({
 
 vi.mock('../ai/dm-response-processor', () => ({
   processDMResponse: vi.fn(),
-}));
-
-vi.mock('@/utils/combatDetection', () => ({
-  detectCombatFromText: vi.fn(),
 }));
 
 vi.mock('../ai/campaign-generator', () => ({
@@ -101,8 +96,6 @@ describe('AIService', () => {
       const mockMemories = [{ content: 'memory 1' }];
       vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue(mockMemories as any);
 
-      const mockCombatResult = expect.objectContaining({ isCombat: false, confidence: 1 });
-
       const mockPrompt = 'Build prompt';
       vi.mocked(ContextBuilder.build).mockResolvedValue(mockPrompt);
 
@@ -120,13 +113,11 @@ describe('AIService', () => {
         'Hello DM',
         8,
       );
-      expect(detectCombatFromText).not.toHaveBeenCalled();
       expect(ContextBuilder.build).toHaveBeenCalledWith(
         expect.objectContaining({
           context: mockContext,
           message: 'Hello DM',
           relevantMemories: mockMemories,
-          combatDetection: mockCombatResult,
           isFirstMessage: false, // Message is not empty
         }),
       );
@@ -138,7 +129,6 @@ describe('AIService', () => {
       expect(processDMResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           rawResponse: 'AI RAW Response',
-          combatDetection: mockCombatResult,
         }),
       );
       expect(result).toEqual(mockProcessedResponse);

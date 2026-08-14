@@ -15,7 +15,6 @@ import { dmResponseSchema } from '../../server-bun/src/services/dm/dm-response-s
 import type { AIResponse, ChatMessage, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
 import type { SessionVoiceContext } from './voice-consistency-service';
-import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
@@ -110,22 +109,6 @@ export class AIService {
         // TEMPORARILY DISABLED for option button testing
         const voiceContext: SessionVoiceContext | null = null;
 
-        // Combat state is authoritative. The model may request an explicit transition
-        // in its structured response, but prose never starts or ends combat.
-        const authoritativeCombat = params.context.gameState?.isInCombat === true;
-        const combatDetection = {
-          isCombat: authoritativeCombat,
-          confidence: 1,
-          combatType: authoritativeCombat ? 'active' : 'none',
-          shouldStartCombat: false,
-          shouldEndCombat: false,
-          enemies: [],
-          combatActions: [],
-        } as CombatDetectionResult;
-        logger.info(
-          `⚔️ Authoritative combat state: ${combatDetection.isCombat ? 'ACTIVE' : 'INACTIVE'}`,
-        );
-
         // Use OpenRouter API
         logger.info(`Using OpenRouter API for chat`);
 
@@ -149,7 +132,6 @@ export class AIService {
             message: params.message,
             conversationHistory: params.conversationHistory,
             relevantMemories,
-            combatDetection,
             voiceContext,
             isFirstMessage,
           }),
@@ -254,7 +236,6 @@ export class AIService {
           turnCount: params.turnCount,
           voiceContext,
           isFirstMessage,
-          combatDetection,
         });
       } catch (providerError) {
         logger.error('LLM API failed:', providerError);

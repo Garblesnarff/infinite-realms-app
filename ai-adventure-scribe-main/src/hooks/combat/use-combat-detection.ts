@@ -1,54 +1,13 @@
 import { useCallback } from 'react';
 
-import type { CombatParticipant, CombatEncounter } from '@/types/combat';
-import type { ChatMessage } from '@/types/game';
 import type { CombatMessageData } from '@/utils/combat/ai-narration-utils';
-import type { DetectedCombatAction, PlayerCharacterLike } from '@/utils/combatDetection';
+import type { DetectedCombatAction } from '@/utils/combatDetection';
 import type { DiceRoll } from '@/utils/diceUtils';
 
 import { getDamageRollForWeapon, createActionDescription } from '@/utils/combat/ai-narration-utils';
-import { detectCombatFromText } from '@/utils/combatDetection';
 import { rollDice } from '@/utils/diceUtils';
 
-interface UseCombatDetectionProps {
-  sessionId?: string;
-  state: {
-    isInCombat: boolean;
-    activeEncounter: CombatEncounter | null;
-  };
-  startCombat: (sessionId: string, participants: Partial<CombatParticipant>[]) => Promise<void>;
-  endCombat: () => Promise<void>;
-}
-
-export const useCombatDetection = ({
-  sessionId: _sessionId,
-  state: _state,
-  startCombat: _startCombat,
-  endCombat: _endCombat,
-}: UseCombatDetectionProps) => {
-  // Legacy prose detection is telemetry-only. Structured combat_transition is
-  // the sole authority for starting or ending combat.
-  const processDMResponse = useCallback(
-    async (
-      dmMessage: ChatMessage,
-      _playerCharacter?: PlayerCharacterLike,
-    ): Promise<{
-      combatDetected: boolean;
-      shouldStartCombat: boolean;
-      shouldEndCombat: boolean;
-      combatMessages: ChatMessage[];
-    }> => {
-      const detection = detectCombatFromText(dmMessage.text || '');
-      return {
-        combatDetected: detection.isCombat,
-        shouldStartCombat: false,
-        shouldEndCombat: false,
-        combatMessages: [],
-      };
-    },
-    [],
-  );
-
+export const useCombatDetection = () => {
   // Create dice roll for a detected combat action
   const createCombatActionRoll = useCallback(
     async (action: DetectedCombatAction): Promise<CombatMessageData | null> => {
@@ -118,7 +77,6 @@ export const useCombatDetection = ({
   );
 
   return {
-    processDMResponse,
     createCombatActionRoll,
   };
 };
