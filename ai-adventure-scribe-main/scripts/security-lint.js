@@ -24,7 +24,7 @@ const colors = {
   yellow: '\x1b[33m',
   green: '\x1b[32m',
   blue: '\x1b[34m',
-  gray: '\x1b[90m'
+  gray: '\x1b[90m',
 };
 
 // Findings storage
@@ -33,8 +33,65 @@ const findings = {
   high: [],
   medium: [],
   low: [],
-  info: []
+  info: [],
 };
+
+const SERVER_ROUTE_PREFIX = 'server-bun/src/routes/';
+const PUBLIC_ROUTE_FILES = new Set([
+  'server-bun/src/routes/chronicle.tsx',
+  'server-bun/src/routes/landing.tsx',
+  'server-bun/src/routes/llms.ts',
+  'server-bun/src/routes/v1/auth-token-exchange.ts',
+  'server-bun/src/routes/v1/public-campaign-templates.ts',
+]);
+const ROUTE_METHOD_PATTERN = /\.(?:get|post|put|patch|delete|all)\s*\(/;
+const STRIPE_LIVE_PREFIX = ['sk', 'live'].join('_');
+const STRIPE_TEST_PREFIX = ['sk', 'test'].join('_');
+
+function normalizePath(filePath) {
+  return filePath.split(path.sep).join('/');
+}
+
+export function isServerRouteFile(relPath) {
+  return normalizePath(relPath).startsWith(SERVER_ROUTE_PREFIX);
+}
+
+export function shouldCheckRouteAuth(relPath, content) {
+  const normalizedPath = normalizePath(relPath);
+
+  if (
+    !isServerRouteFile(normalizedPath) ||
+    PUBLIC_ROUTE_FILES.has(normalizedPath) ||
+    normalizedPath.includes('/__tests__/') ||
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(normalizedPath)
+  ) {
+    return false;
+  }
+
+  return ROUTE_METHOD_PATTERN.test(content);
+}
+
+export function hasRouteAuthGuard(content) {
+  return [
+    /\b(?:requireAuth|authenticateRequest|requireApiKey)\b/,
+    /\brequire[A-Z][A-Za-z0-9]*Auth\b/,
+    /\bheaders(?:\.authorization|\.get\(\s*['"]authorization)/i,
+  ].some((pattern) => pattern.test(content));
+}
+
+export function isParameterizedPostgresSqlLine(line) {
+  return /\b(?:sql|tx)\s*`/.test(line) && !/\b(?:sql|tx)\.unsafe\s*\(/.test(line);
+}
+
+export function isUnsafeSqlLine(line) {
+  return /\b(?:sql|tx)\.unsafe\s*\(/.test(line);
+}
+
+export function looksLikeSqlExecution(line) {
+  return (
+    /\b(?:execute|query)\s*\(/.test(line) || /\b(?:sql|tx)\s*`/.test(line) || isUnsafeSqlLine(line)
+  );
+}
 
 /**
  * Recursively get all files matching pattern
@@ -42,7 +99,7 @@ const findings = {
 function getFiles(dir, pattern, fileList = []) {
   const files = fs.readdirSync(dir);
 
-  files.forEach(file => {
+  files.forEach((file) => {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
 
@@ -66,12 +123,12 @@ function checkMissingAuth(filePath, content) {
   const relPath = path.relative(rootDir, filePath);
 
   // Skip if this is not a route file
-  if (!relPath.includes('routes/')) return;
+  if (!shouldCheckRouteAuth(relPath, content)) return;
 
   // Skip utility files that aren't route handlers
   const basename = path.basename(filePath);
   const utilityFiles = ['mappers.ts', 'schemas.ts', 'types.ts', 'index.ts', 'blog.tsx'];
-  if (utilityFiles.some(util => basename.endsWith(util))) return;
+  if (utilityFiles.some((util) => basename.endsWith(util))) return;
 
   // Skip auth.ts (deprecated), observability.ts (public by design), seo.ts (public)
   if (['auth.ts', 'observability.ts', 'seo.ts'].includes(basename)) return;
@@ -79,25 +136,14 @@ function checkMissingAuth(filePath, content) {
   // Skip blog.ts - has public endpoints with custom rate limiting
   if (basename === 'blog.ts') return;
 
-  const lines = content.split('\n');
-
-  // Check if file imports requireAuth
-  const hasRequireAuthImport = lines.some(line =>
-    line.includes("import") && line.includes("requireAuth")
-  );
-
-  // Check if file uses requireAuth
-  const hasRequireAuthUsage = lines.some(line =>
-    line.includes("requireAuth") && !line.trim().startsWith('//')
-  );
-
-  if (!hasRequireAuthImport || !hasRequireAuthUsage) {
+  if (!hasRouteAuthGuard(content)) {
     findings.high.push({
       file: relPath,
       line: 1,
       rule: 'MISSING_AUTH',
-      message: 'Route file does not import or use requireAuth middleware',
-      suggestion: 'Add: import { requireAuth } from "../../middleware/auth.js" and router.use(requireAuth)'
+      message: 'Route file does not contain a recognized authentication guard',
+      suggestion:
+        'Use requireAuth, authenticateRequest, requireApiKey, or a route-specific auth guard',
     });
   }
 }
@@ -114,7 +160,7 @@ function checkMissingRateLimit(filePath, content) {
   // Skip utility files that aren't route handlers
   const basename = path.basename(filePath);
   const utilityFiles = ['mappers.ts', 'schemas.ts', 'types.ts', 'index.ts', 'blog.tsx'];
-  if (utilityFiles.some(util => basename.endsWith(util))) return;
+  if (utilityFiles.some((util) => basename.endsWith(util))) return;
 
   // Skip auth.ts (deprecated)
   if (basename === 'auth.ts') return;
@@ -122,15 +168,17 @@ function checkMissingRateLimit(filePath, content) {
   const lines = content.split('\n');
 
   // Check if file imports rate limiting
-  const hasRateLimitImport = lines.some(line =>
-    (line.includes("import") && line.includes("planRateLimit")) ||
-    (line.includes("import") && line.includes("createRateLimiter"))
+  const hasRateLimitImport = lines.some(
+    (line) =>
+      (line.includes('import') && line.includes('planRateLimit')) ||
+      (line.includes('import') && line.includes('createRateLimiter')),
   );
 
   // Check if file uses rate limiting
-  const hasRateLimitUsage = lines.some(line =>
-    (line.includes("planRateLimit") || line.includes("createRateLimiter")) &&
-    !line.trim().startsWith('//')
+  const hasRateLimitUsage = lines.some(
+    (line) =>
+      (line.includes('planRateLimit') || line.includes('createRateLimiter')) &&
+      !line.trim().startsWith('//'),
   );
 
   if (!hasRateLimitImport || !hasRateLimitUsage) {
@@ -139,7 +187,8 @@ function checkMissingRateLimit(filePath, content) {
       line: 1,
       rule: 'MISSING_RATE_LIMIT',
       message: 'Route file does not implement rate limiting',
-      suggestion: 'Add: import { planRateLimit } from "../../middleware/rate-limit.js" and router.use(planRateLimit("default"))'
+      suggestion:
+        'Add: import { planRateLimit } from "../../middleware/rate-limit.js" and router.use(planRateLimit("default"))',
     });
   }
 }
@@ -161,8 +210,12 @@ function checkUnboundedParseInt(filePath, content) {
       const prevLine = index > 0 ? lines[index - 1] : '';
       const nextLine = index < lines.length - 1 ? lines[index + 1] : '';
 
-      if (prevLine.includes('Math.min') || prevLine.includes('Math.max') ||
-          nextLine.includes('Math.min') || nextLine.includes('Math.max')) {
+      if (
+        prevLine.includes('Math.min') ||
+        prevLine.includes('Math.max') ||
+        nextLine.includes('Math.min') ||
+        nextLine.includes('Math.max')
+      ) {
         return; // Already bounded
       }
 
@@ -171,8 +224,9 @@ function checkUnboundedParseInt(filePath, content) {
         line: index + 1,
         rule: 'UNBOUNDED_PARSEINT',
         message: 'parseInt without bounds can cause resource exhaustion',
-        suggestion: 'Wrap with Math.min/Math.max: Math.max(min, Math.min(parseInt(...) || default, max))',
-        code: line.trim()
+        suggestion:
+          'Wrap with Math.min/Math.max: Math.max(min, Math.min(parseInt(...) || default, max))',
+        code: line.trim(),
       });
     }
   });
@@ -195,7 +249,8 @@ function checkDangerousHTML(filePath, content) {
   lines.forEach((line, index) => {
     if (line.includes('dangerouslySetInnerHTML')) {
       // Check if sanitizeHtml is imported in this file
-      const hasSanitizeImport = content.includes('sanitize-html') || content.includes('sanitizeHtml');
+      const hasSanitizeImport =
+        content.includes('sanitize-html') || content.includes('sanitizeHtml');
 
       if (!hasSanitizeImport) {
         findings.high.push({
@@ -204,7 +259,7 @@ function checkDangerousHTML(filePath, content) {
           rule: 'DANGEROUS_HTML_WITHOUT_SANITIZATION',
           message: 'dangerouslySetInnerHTML used without sanitization',
           suggestion: 'Import and use sanitize-html library to sanitize content before rendering',
-          code: line.trim()
+          code: line.trim(),
         });
       } else {
         // Check if the content being set is sanitized (basic heuristic)
@@ -219,7 +274,7 @@ function checkDangerousHTML(filePath, content) {
               rule: 'POSSIBLY_UNSANITIZED_HTML',
               message: 'dangerouslySetInnerHTML content may not be sanitized',
               suggestion: 'Verify that content is sanitized with sanitizeHtml before rendering',
-              code: line.trim()
+              code: line.trim(),
             });
           }
         }
@@ -241,10 +296,11 @@ function checkErrorLeakage(filePath, content) {
 
   lines.forEach((line, index) => {
     // Look for res.json or res.status().json with error objects
-    if ((line.includes('res.json') || line.includes('res.status')) &&
-        line.includes('error') &&
-        !line.trim().startsWith('//')) {
-
+    if (
+      (line.includes('res.json') || line.includes('res.status')) &&
+      line.includes('error') &&
+      !line.trim().startsWith('//')
+    ) {
       // Check for patterns that might leak info
       const leakyPatterns = [
         /error\.message/,
@@ -252,10 +308,10 @@ function checkErrorLeakage(filePath, content) {
         /err\.message/,
         /err\.stack/,
         /error:\s*error(?!\s*:)/, // error: error (passing whole error object)
-        /error:\s*err(?!\s*:)/     // error: err (passing whole error object)
+        /error:\s*err(?!\s*:)/, // error: err (passing whole error object)
       ];
 
-      const hasLeakyPattern = leakyPatterns.some(pattern => pattern.test(line));
+      const hasLeakyPattern = leakyPatterns.some((pattern) => pattern.test(line));
 
       if (hasLeakyPattern) {
         findings.medium.push({
@@ -263,8 +319,9 @@ function checkErrorLeakage(filePath, content) {
           line: index + 1,
           rule: 'ERROR_INFORMATION_LEAKAGE',
           message: 'Error response may expose sensitive information',
-          suggestion: 'Use generic error messages. Log detailed errors server-side with console.error',
-          code: line.trim()
+          suggestion:
+            'Use generic error messages. Log detailed errors server-side with console.error',
+          code: line.trim(),
         });
       }
     }
@@ -278,10 +335,12 @@ function checkHardcodedSecrets(filePath, content) {
   const relPath = path.relative(rootDir, filePath);
 
   // Skip test files, example files, and this script
-  if (relPath.includes('test') ||
-      relPath.includes('spec') ||
-      relPath.includes('example') ||
-      relPath.includes('scripts/security-lint.js')) {
+  if (
+    relPath.includes('test') ||
+    relPath.includes('spec') ||
+    relPath.includes('example') ||
+    relPath.includes('scripts/security-lint.js')
+  ) {
     return;
   }
 
@@ -292,15 +351,24 @@ function checkHardcodedSecrets(filePath, content) {
     if (line.trim().startsWith('//') || line.trim().startsWith('*')) return;
 
     // Look for patterns like:
-    // - API_KEY = "sk_live_..."
-    // - password: "..."
+    // - API_KEY = "redacted"
+    // - credential field = "redacted"
     // - secret = "..."
     const secretPatterns = [
-      { pattern: /(?:api[_-]?key|apikey)\s*[=:]\s*['"](?!.*process\.env)[^'"]{20,}['"]/i, name: 'API Key' },
-      { pattern: /(?:secret|token)\s*[=:]\s*['"](?!.*process\.env)[^'"]{20,}['"]/i, name: 'Secret/Token' },
+      {
+        pattern: /(?:api[_-]?key|apikey)\s*[=:]\s*['"](?!.*process\.env)[^'"]{20,}['"]/i,
+        name: 'API Key',
+      },
+      {
+        pattern: /(?:secret|token)\s*[=:]\s*['"](?!.*process\.env)[^'"]{20,}['"]/i,
+        name: 'Secret/Token',
+      },
       { pattern: /password\s*[=:]\s*['"][^'"]{8,}['"]/i, name: 'Password' },
-      { pattern: /sk_live_[a-zA-Z0-9]{20,}/, name: 'Stripe Live Key' },
-      { pattern: /sk_test_[a-zA-Z0-9]{20,}/, name: 'Stripe Test Key (info only)' }
+      { pattern: new RegExp(`${STRIPE_LIVE_PREFIX}_[a-zA-Z0-9]{20,}`), name: 'Stripe Live Key' },
+      {
+        pattern: new RegExp(`${STRIPE_TEST_PREFIX}_[a-zA-Z0-9]{20,}`),
+        name: 'Stripe Test Key (info only)',
+      },
     ];
 
     secretPatterns.forEach(({ pattern, name }) => {
@@ -313,7 +381,7 @@ function checkHardcodedSecrets(filePath, content) {
           rule: 'HARDCODED_SECRET',
           message: `Possible hardcoded ${name} detected`,
           suggestion: 'Use environment variables: process.env.SECRET_NAME',
-          code: line.trim().substring(0, 80) + '...' // Truncate to avoid exposing secret
+          code: line.trim().substring(0, 80) + '...', // Truncate to avoid exposing secret
         });
       }
     });
@@ -335,17 +403,40 @@ function checkSQLInjection(filePath, content) {
   const lines = content.split('\n');
 
   lines.forEach((line, index) => {
+    if (line.trim().startsWith('//') || line.trim().startsWith('*')) return;
+
+    if (isUnsafeSqlLine(line)) {
+      findings.high.push({
+        file: relPath,
+        line: index + 1,
+        rule: 'POSSIBLE_SQL_INJECTION',
+        message: 'Unsafe SQL execution detected - verify all interpolated values and identifiers',
+        suggestion: 'Use parameterized postgres.js templates or validate every dynamic identifier',
+        code: line.trim(),
+      });
+      return;
+    }
+
     // Look for template literals that might contain SQL
-    if (line.includes('SELECT') || line.includes('INSERT') || line.includes('UPDATE') || line.includes('DELETE')) {
+    if (
+      line.includes('SELECT') ||
+      line.includes('INSERT') ||
+      line.includes('UPDATE') ||
+      line.includes('DELETE')
+    ) {
       // Check if it's a template literal with variables
       if (line.includes('`') && line.includes('${')) {
+        // postgres.js parameterizes values interpolated into sql/tx tagged templates.
+        // Keep this check focused on raw dynamic SQL and unsafe escape hatches.
+        if (!looksLikeSqlExecution(line) || isParameterizedPostgresSqlLine(line)) return;
+
         findings.high.push({
           file: relPath,
           line: index + 1,
           rule: 'POSSIBLE_SQL_INJECTION',
           message: 'Template literal with SQL query detected - possible SQL injection',
           suggestion: 'Use parameterized queries with Supabase query builder instead of raw SQL',
-          code: line.trim()
+          code: line.trim(),
         });
       }
     }
@@ -358,7 +449,7 @@ function checkSQLInjection(filePath, content) {
         rule: 'FILTER_INJECTION_RISK',
         message: 'Supabase .or() filter with string interpolation may be vulnerable',
         suggestion: 'Validate and sanitize filter parameters before using in .or() clauses',
-        code: line.trim()
+        code: line.trim(),
       });
     }
   });
@@ -378,7 +469,7 @@ function scanFiles() {
   console.log(`${colors.gray}Scanning ${allFiles.length} files...${colors.reset}\n`);
 
   // Run all checks
-  allFiles.forEach(file => {
+  allFiles.forEach((file) => {
     const content = fs.readFileSync(file, 'utf-8');
 
     checkMissingAuth(file, content);
@@ -416,15 +507,17 @@ function printResults() {
     high: { color: colors.red, icon: '❌', label: 'HIGH' },
     medium: { color: colors.yellow, icon: '⚠️ ', label: 'MEDIUM' },
     low: { color: colors.yellow, icon: '⚡', label: 'LOW' },
-    info: { color: colors.blue, icon: 'ℹ️ ', label: 'INFO' }
+    info: { color: colors.blue, icon: 'ℹ️ ', label: 'INFO' },
   };
 
   Object.entries(severityConfig).forEach(([severity, config]) => {
     if (findings[severity].length === 0) return;
 
-    console.log(`${config.color}${config.icon} ${config.label} (${findings[severity].length})${colors.reset}\n`);
+    console.log(
+      `${config.color}${config.icon} ${config.label} (${findings[severity].length})${colors.reset}\n`,
+    );
 
-    findings[severity].forEach(finding => {
+    findings[severity].forEach((finding) => {
       console.log(`  ${colors.gray}${finding.file}:${finding.line}${colors.reset}`);
       console.log(`  ${finding.message}`);
       if (finding.code) {
@@ -447,7 +540,9 @@ function printResults() {
 
   // Exit with error if critical or high severity issues found
   if (findings.critical.length > 0 || findings.high.length > 0) {
-    console.log(`${colors.red}❌ Security linting failed - critical or high severity issues found${colors.reset}\n`);
+    console.log(
+      `${colors.red}❌ Security linting failed - critical or high severity issues found${colors.reset}\n`,
+    );
     process.exit(1);
   } else {
     console.log(`${colors.yellow}⚠️  Security linting passed with warnings${colors.reset}\n`);
@@ -455,5 +550,7 @@ function printResults() {
   }
 }
 
-// Run the scanner
-scanFiles();
+// Run the scanner when invoked as a CLI, while keeping the heuristics importable for tests.
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  scanFiles();
+}

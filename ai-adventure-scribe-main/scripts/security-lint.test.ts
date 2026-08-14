@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'bun:test';
+
+import {
+  hasRouteAuthGuard,
+  isParameterizedPostgresSqlLine,
+  isServerRouteFile,
+  isUnsafeSqlLine,
+  looksLikeSqlExecution,
+  shouldCheckRouteAuth,
+} from './security-lint.js';
+
+describe('security-lint heuristics', () => {
+  it('only applies route auth checks to server route handlers', () => {
+    expect(isServerRouteFile('server-bun/src/routes/v1/billing.ts')).toBe(true);
+    expect(isServerRouteFile('src/routes/ProtectedAppRoutes.tsx')).toBe(false);
+    expect(
+      shouldCheckRouteAuth('server-bun/src/routes/v1/__tests__/billing.test.ts', '.post('),
+    ).toBe(false);
+    expect(
+      shouldCheckRouteAuth(
+        'server-bun/src/routes/v1/session-list-handler.ts',
+        'export function x() {}',
+      ),
+    ).toBe(false);
+    expect(
+      shouldCheckRouteAuth('server-bun/src/routes/v1/public-campaign-templates.ts', '.get('),
+    ).toBe(false);
+  });
+
+  it('recognizes manual request guards used by the server routes', () => {
+    expect(hasRouteAuthGuard('const { user } = await authenticateRequest(request);')).toBe(true);
+    expect(hasRouteAuthGuard('const auth = await requireBlogAdminAuth(request);')).toBe(true);
+    expect(hasRouteAuthGuard('.use(requireApiKey)')).toBe(true);
+    expect(hasRouteAuthGuard('if (!headers.authorization) return unauthorized();')).toBe(true);
+  });
+
+  it('trusts parameterized postgres templates but keeps unsafe SQL actionable', () => {
+    const safeLine = 'await sql`SELECT * FROM users WHERE id = ${userId}`;';
+    const rawLine = 'await db.execute(`SELECT * FROM users WHERE id = ${userId}`);';
+    const unsafeLine = 'await sql.unsafe(query);';
+
+    expect(looksLikeSqlExecution(safeLine)).toBe(true);
+    expect(isParameterizedPostgresSqlLine(safeLine)).toBe(true);
+    expect(looksLikeSqlExecution(rawLine)).toBe(true);
+    expect(isParameterizedPostgresSqlLine(rawLine)).toBe(false);
+    expect(isUnsafeSqlLine(unsafeLine)).toBe(true);
+  });
+});
