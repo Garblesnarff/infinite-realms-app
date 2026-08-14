@@ -1,7 +1,18 @@
+/**
+ * #1779: the headless client, like the browser client, no longer starts combat.
+ *
+ * The server's turn-pipeline entry gate creates the encounter and rolls initiative before the
+ * DM response comes back, so what this file now pins is the reaction: a `start` envelope makes
+ * the client treat the fight as live, fetch the board the server already built, and emit map
+ * state — without ever issuing a combat-start request of its own.
+ *
+ * The former "refused combat start" test is gone with the code path it covered: there is no
+ * client-issued start left to be refused. Entry failures are now server-side and surface as
+ * `combat_entry_failed` telemetry (see `combat-entry-gate.test.ts`).
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AIService } from '../../src/services/ai-service';
-import { CombatStartError } from '../../src/services/combat/combat-start-failure';
 import { HeadlessGameClient } from '../../src/services/headless-game-client';
 import { userDataApi } from '../../src/services/user-data-api';
 import fixture from '../fixtures/combat-start.json';
@@ -42,8 +53,17 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const mapFetch = () =>
+  vi.fn(
+    async () =>
+      new Response(JSON.stringify(fixture.map), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+  ) as unknown as typeof fetch;
+
 describe('fixture headless structured combat bridge', () => {
-  it('starts server combat, creates the map, emits map state, and resolves initiative', async () => {
+  it('reads the server-seated encounter, emits map state, and resolves initiative', async () => {
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
       id: 'fixture-session',
       campaign_id: 'campaign-1',
@@ -55,32 +75,14 @@ describe('fixture headless structured combat bridge', () => {
         abilityScores: { dexterity: { score: 16, modifier: 3 } },
       },
     } as never);
-    vi.mocked(userDataApi.startStructuredCombat).mockResolvedValue(
-      new Response(JSON.stringify({ encounter: { id: 'encounter-1' } }), { status: 201 }),
-    );
     vi.mocked(AIService.chatWithDM).mockResolvedValue(fixture.response as never);
-    globalThis.fetch = vi.fn(
-      async () =>
-        new Response(JSON.stringify(fixture.map), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-    ) as unknown as typeof fetch;
+    globalThis.fetch = mapFetch();
 
     const client = new HeadlessGameClient('fixture-session');
     const events = await client.play('I draw my sword.');
 
-    expect(userDataApi.startStructuredCombat).toHaveBeenCalledWith(
-      'fixture-session',
-      expect.objectContaining({
-        participants: [
-          expect.objectContaining({ characterId: 'pc-1', name: 'Rook', initiativeModifier: 3 }),
-          expect.objectContaining({ name: 'Goblin 1', monsterId: 'srd:goblin' }),
-          expect.objectContaining({ name: 'Goblin 2', monsterId: 'srd:goblin' }),
-        ],
-        sceneSpec: fixture.response.scene_spec,
-      }),
-    );
+    // Entry is the server's decision, made before this response existed.
+    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'roll_request' }),
@@ -92,7 +94,7 @@ describe('fixture headless structured combat bridge', () => {
     if (!roll.skipped) expect(roll.result.expression).toContain('1d20+3');
   });
 
-  it('reports a refused combat start with the DM envelope, response body, and telemetry', async () => {
+  it('treats a server-reported combat_entry as the fight being live', async () => {
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
       id: 'fixture-session',
       campaign_id: 'campaign-1',
@@ -100,40 +102,26 @@ describe('fixture headless structured combat bridge', () => {
       campaign: {},
       character: { id: 'pc-1', name: 'Rook' },
     } as never);
-    vi.mocked(userDataApi.startStructuredCombat).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: 'Failed to start combat encounter',
-          stage: 'map_generation',
-          detail: 'tactical map write failed',
-        }),
-        { status: 500 },
-      ),
-    );
-    vi.mocked(AIService.chatWithDM).mockImplementation((async (request: {
-      onProviderResponse?: (metadata: { provider: string; model: string }) => void;
-    }) => {
-      request.onProviderResponse?.({ provider: 'openrouter', model: 'mistral-small-creative' });
-      return fixture.response;
-    }) as never);
+    // No transition on the envelope at all — only the server's own report of what it did.
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      ...fixture.response,
+      combat_transition: 'none',
+      combat_entry: {
+        entered: true,
+        encounterId: 'encounter-1',
+        trigger: 'attack_roll_request',
+        detail: 'roll_request attack: strike the goblin',
+        sceneSpecSynthesized: true,
+      },
+    } as never);
+    globalThis.fetch = mapFetch();
 
     const client = new HeadlessGameClient('fixture-session');
-    const failure = await client.play('I draw my sword.').then(
-      () => null,
-      (error: CombatStartError & { provider?: string; model?: string }) => error,
-    );
+    const events = await client.play('I punch the nearest living thing.');
 
-    expect(failure).toBeInstanceOf(CombatStartError);
-    expect(failure).toMatchObject({
-      status: 500,
-      stage: 'map_generation',
-      detail: 'tactical map write failed',
-      category: 'transport',
-      provider: 'openrouter',
-      model: 'mistral-small-creative',
-    });
-    // The full DM envelope travels with the failure so a transcript can record what was tried.
-    expect(failure!.envelope).toEqual(fixture.response);
-    expect(failure!.responseBody).toContain('tactical map write failed');
+    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
+    expect(events).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'map_state' })]),
+    );
   });
 });

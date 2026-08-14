@@ -71,6 +71,17 @@ export interface AIResponse {
   dice_rolls?: unknown[];
   combat_transition?: 'none' | 'start' | 'end';
   scene_spec?: unknown | null;
+  /**
+   * #1779: the server's deterministic entry gate seated an encounter during this turn.
+   * Present only on the turn combat was entered; the client reacts to it, never decides it.
+   */
+  combat_entry?: {
+    entered: true;
+    encounterId: string;
+    trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request';
+    detail: string;
+    sceneSpecSynthesized: boolean;
+  };
   map_actions?: DMMapAction[];
   handout_actions?: DMHandoutAction[];
   combat_actions?: DMCombatAction[];

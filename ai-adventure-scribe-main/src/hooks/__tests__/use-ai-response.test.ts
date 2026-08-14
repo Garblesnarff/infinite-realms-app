@@ -332,7 +332,13 @@ describe('useAIResponse', () => {
     );
   });
 
-  it('delegates structured combat start and end responses to userDataApi', async () => {
+  /**
+   * #1779: the client no longer starts combat. The server's turn-pipeline entry gate creates
+   * the encounter before the turn returns, so a `start` envelope must produce NO
+   * `startStructuredCombat` call — only a re-read of authoritative state. Ending combat is
+   * still a client-issued transition and is unchanged.
+   */
+  it('never issues a combat start, and still delegates combat end to userDataApi', async () => {
     const { AIService } = await import('@/services/ai-service');
 
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
@@ -348,19 +354,19 @@ describe('useAIResponse', () => {
       combat_transition: 'start',
       scene_spec: { width: 10, height: 10 },
       combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
+      combat_entry: {
+        entered: true,
+        encounterId: 'encounter-1',
+        trigger: 'combat_transition',
+        detail: 'combat_transition="start"',
+        sceneSpecSynthesized: false,
+      },
     });
 
     const { result } = renderHook(() => useAIResponse());
     await result.current.getAIResponse(mockMessages as any, mockSessionId);
 
-    expect(userDataApi.startStructuredCombat).toHaveBeenCalledWith(mockSessionId, {
-      participants: [
-        { encounterId: '', characterId: 'ch', name: 'Rook', initiativeModifier: 0 },
-        // monsterId is what lets the server resolve a real SRD stat block.
-        { encounterId: '', name: 'Goblin', initiativeModifier: 0, monsterId: 'srd:goblin' },
-      ],
-      sceneSpec: { width: 10, height: 10 },
-    });
+    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
 
     vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({ ok: true } as any);
     (AIService.chatWithDM as any).mockResolvedValue({

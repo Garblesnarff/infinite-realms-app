@@ -7,6 +7,7 @@ import {
   DM_PROMPT_TOKEN_BUDGET,
   selectRecentMessagesWithinTokenBudget,
 } from './ai/shared/token-budget';
+import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
 import { MemoryManager } from './memory-manager';
 import { fetchSceneState } from './narrative/scene-state-client';
 import { dmResponseSchema } from '../../server-bun/src/services/dm/dm-response-schema';
@@ -224,6 +225,15 @@ export class AIService {
           promptMetrics = undefined;
         }
 
+        // #1779: the player seat travels with the turn so the SERVER can create the encounter
+        // and roll initiative before this call returns. Entry stopped being a client decision
+        // resting on one model-authored string; the client only reacts to what comes back.
+        const entryPlayer = buildCombatEntryPlayer(params.context.characterDetails);
+        const combatEntry =
+          params.context.sessionId && entryPlayer
+            ? { sessionId: params.context.sessionId, player: entryPlayer }
+            : undefined;
+
         const rawResponse = await llmApiClient.generateText({
           prompt: fullPrompt,
           temperature: 0.9,
@@ -232,6 +242,7 @@ export class AIService {
           onStream: params.onStream,
           onResponseMetadata: params.onProviderResponse,
           metrics: promptMetrics,
+          combatEntry,
         });
 
         return processDMResponse({

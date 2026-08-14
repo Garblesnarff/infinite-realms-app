@@ -7,16 +7,14 @@ import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/u
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import logger from '@/lib/logger';
-import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
-import { notifyRetryableCombatStartFailure } from '@/services/combat/combat-start-toast';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
-import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { userDataApi } from '@/services/user-data-api';
 
 export interface HandleDmActionsParams {
   sessionId: string;
   result: any;
-  characterRecord: Record<string, unknown>;
+  /** Retained for callers; combat entry no longer builds a participant here (#1779). */
+  characterRecord?: Record<string, unknown>;
   activeEncounter: any;
   isInCombat: boolean;
   refreshCombatState: () => Promise<any>;
@@ -44,7 +42,6 @@ export async function handleDmActionsAndTransitions(
 ): Promise<HandleDmActionsResult> {
   const {
     sessionId,
-    characterRecord,
     refreshCombatState,
     aiContext,
     conversationHistory,
@@ -59,26 +56,22 @@ export async function handleDmActionsAndTransitions(
   let narrationSegments = result.narrationSegments;
   let deliveredHandouts: JournalHandoutEntry[] | undefined;
 
-  // A structured start is server-authoritative: the same transaction creates
-  // combat participants (whose IDs become tactical entity IDs) and the map.
-  if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
-    const envelope = result as Parameters<typeof startStructuredCombatTransition>[2];
-    const attemptStart = async (): Promise<void> => {
-      const startResponse = await startStructuredCombatTransition(
-        sessionId,
-        characterRecord,
-        envelope,
-      );
-      if (startResponse?.ok) {
-        return;
-      }
-      // The failure is recoverable: the map simply was not created, so let the player
-      // retry the same start instead of stranding the scene mid-transition.
-      const failure = await combatStartErrorFromResponse(startResponse ?? null, envelope);
-      logger.warn('Server refused structured combat start', failure.toTranscriptDetail());
-      notifyRetryableCombatStartFailure(failure, attemptStart);
-    };
-    await attemptStart();
+  // #1779: combat entry is NOT decided here any more.
+  //
+  // This used to BE the entry gate — `combat_transition === 'start' && scene_spec` — one
+  // unconstrained model-authored string, evaluated in the browser, with no engine-side
+  // predicate behind it. Prod session 5ebaffab put four consecutive hostile actions through it
+  // and never entered combat once. The decision now lives server-side in the turn pipeline
+  // (`services/combat/combat-entry-gate.ts`), which creates the encounter and rolls initiative
+  // BEFORE this turn's narration is returned and rewrites the envelope it hands back. By the
+  // time a response reaches this handler the encounter already exists; the client's only job
+  // is to re-read authoritative state, which the refresh below already does.
+  if (result.combat_entry?.entered) {
+    logger.info('Server combat entry gate seated an encounter for this turn', {
+      encounterId: result.combat_entry.encounterId,
+      trigger: result.combat_entry.trigger,
+      sceneSpecSynthesized: result.combat_entry.sceneSpecSynthesized,
+    });
   }
 
   if (sessionId && result.combat_transition === 'end') {
@@ -91,7 +84,16 @@ export async function handleDmActionsAndTransitions(
   // A transition just moved the board. Re-read rather than wait for the broadcast to land
   // in a later render: a start that also carries combat_actions has to resolve them on this
   // turn, and the resolution prompt below has to be told the fight is on.
-  if (sessionId && (result.combat_transition === 'start' || result.combat_transition === 'end')) {
+  //
+  // `combat_entry` is checked alongside the transition so a gated entry refreshes even if the
+  // envelope rewrite were ever to change shape — the server's own report of what it did is the
+  // more authoritative of the two signals.
+  if (
+    sessionId &&
+    (result.combat_entry?.entered ||
+      result.combat_transition === 'start' ||
+      result.combat_transition === 'end')
+  ) {
     activeEncounter = await refreshCombatState();
     isInCombat = activeEncounter?.phase === 'active';
     aiContext.gameState.isInCombat = isInCombat;

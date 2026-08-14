@@ -279,6 +279,9 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     dice_rolls,
     combat_transition: transition || 'none',
     scene_spec: structuredResponse?.scene_spec ?? null,
+    // #1779: present only when the server's entry gate seated the encounter during this turn.
+    // It is the audit record of a decision the client no longer makes.
+    combat_entry: structuredResponse?.combat_entry ?? undefined,
     map_actions: structuredResponse?.map_actions || [],
     handout_actions: structuredResponse?.handout_actions || [],
     combat_actions: structuredResponse?.combat_actions || [],

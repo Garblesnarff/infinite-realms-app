@@ -46,6 +46,38 @@ const dexterityModifier = (character: Record<string, unknown>): number => {
   return 0;
 };
 
+/**
+ * The player seat the server's combat entry gate needs (#1779).
+ *
+ * Sent alongside every DM turn so the server can create the encounter and roll initiative
+ * BEFORE the turn's narration comes back. The character record never leaves the client whole:
+ * only the four values a participant row is built from travel with the turn.
+ */
+export type CombatEntryPlayerPayload = {
+  characterId: string | null;
+  name: string;
+  initiativeModifier: number;
+  hpCurrent?: number;
+  hpMax?: number;
+};
+
+export function buildCombatEntryPlayer(
+  character: Record<string, unknown> | undefined | null,
+): CombatEntryPlayerPayload | null {
+  if (!character) return null;
+  const name = typeof character.name === 'string' && character.name.trim() ? character.name : null;
+  if (!name) return null;
+  const hpCurrent = numeric(character.currentHitPoints ?? character.current_hit_points, 0);
+  const hpMax = numeric(character.maxHitPoints ?? character.max_hit_points, 0);
+  return {
+    characterId: typeof character.id === 'string' ? character.id : null,
+    name,
+    initiativeModifier: dexterityModifier(character),
+    ...(hpCurrent > 0 ? { hpCurrent } : {}),
+    ...(hpMax > 0 ? { hpMax } : {}),
+  };
+}
+
 export function buildStructuredCombatStartPayload(
   character: Record<string, unknown>,
   response: StructuredCombatResponse,
@@ -69,9 +101,10 @@ export function buildStructuredCombatStartPayload(
     const count = Math.max(1, Math.floor(numeric(combatant.count, 1)));
     // The SRD id is what lets the server resolve a real stat block instead of a 10/10/30
     // placeholder. Dropping it here was silently reducing every DM-authored enemy to filler.
-    const monsterId = typeof combatant.monster_id === 'string' && combatant.monster_id.trim()
-      ? combatant.monster_id.trim()
-      : undefined;
+    const monsterId =
+      typeof combatant.monster_id === 'string' && combatant.monster_id.trim()
+        ? combatant.monster_id.trim()
+        : undefined;
     for (let index = 0; index < count; index += 1) {
       participants.push({
         encounterId: '',

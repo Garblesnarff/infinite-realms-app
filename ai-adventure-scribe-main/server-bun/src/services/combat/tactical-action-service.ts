@@ -1,3 +1,5 @@
+import { mapActionTarget } from './combat-entry-gate.js';
+import { trackCombatEvent } from './combat-events.js';
 import {
   loadActiveTacticalMap,
   loadLatestTacticalMapRow,
@@ -111,12 +113,30 @@ export async function applyDmTacticalActions(
       // An unresolvable entity means the DM and the board disagree about who exists; that is
       // the failure that silently froze an entire encounter, so it is logged at error level
       // with the roster attached rather than warned about and forgotten.
-      const unknownEntity = (result.refusal as { reason?: string }).reason === 'unknown_entity';
-      combatLogger[unknownEntity ? 'error' : 'warn'](
-        { sessionId, action, refusal: result.refusal, alert: unknownEntity },
+      const refusalReason = (result.refusal as { reason?: string }).reason;
+      const unknownEntity = refusalReason === 'unknown_entity';
+      // #1779 §3: `no_active_map` is never again a silent null. The engine refusing a DM shove
+      // because there is no board IS the engine watching the model fight outside an encounter —
+      // the 03:25:10 signal that went unreported for a whole session. The deterministic entry
+      // gate should have seated an encounter before this batch ran, so arriving here means the
+      // gate did not fire, and that deserves a combat_integrity event rather than a routine
+      // "dropped invalid DM map action" warning nobody reads.
+      const noActiveMap = refusalReason === 'no_active_map';
+      if (noActiveMap) {
+        trackCombatEvent('tactical_action_without_encounter', {
+          sessionId,
+          action: action.action,
+          entityId: mapActionTarget(action),
+        });
+      }
+      const loud = unknownEntity || noActiveMap;
+      combatLogger[loud ? 'error' : 'warn'](
+        { sessionId, action, refusal: result.refusal, alert: loud },
         unknownEntity
           ? '[tactical] DM map action named an entity that is not on the board'
-          : '[tactical] dropped invalid DM map action',
+          : noActiveMap
+            ? '[tactical] DM map action with no active encounter — combat entry gate did not fire'
+            : '[tactical] dropped invalid DM map action',
       );
       if (unknownEntity) {
         // Loud, not just logged (#1680): this was previously an `alert: unknownEntity`

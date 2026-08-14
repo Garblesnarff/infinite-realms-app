@@ -40,6 +40,21 @@ export interface GenerateTextParams {
    * the caller didn't compute it or computation failed.
    */
   metrics?: Record<string, number>;
+  /**
+   * #1779: session + player seat for the server-side combat entry gate. When present, the
+   * server may create the encounter and roll initiative before this call returns, and the
+   * returned envelope comes back rewritten with `combat_transition: "start"`.
+   */
+  combatEntry?: {
+    sessionId: string;
+    player: {
+      characterId: string | null;
+      name: string;
+      initiativeModifier: number;
+      hpCurrent?: number;
+      hpMax?: number;
+    };
+  };
 }
 
 export interface GenerateImageParams {
@@ -69,7 +84,10 @@ class LlmApiClient {
   private static readonly OFFLINE_RESET_MS = 30_000;
 
   private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
-    if (this.useOfflineFallback && Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS) {
+    if (
+      this.useOfflineFallback &&
+      Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS
+    ) {
       this.useOfflineFallback = false;
     }
     if (this.useOfflineFallback) {
@@ -88,7 +106,12 @@ class LlmApiClient {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        let body: { error?: string; message?: string; retryable?: boolean; retry_after?: number } | null = null;
+        let body: {
+          error?: string;
+          message?: string;
+          retryable?: boolean;
+          retry_after?: number;
+        } | null = null;
         try {
           body = text ? (JSON.parse(text) as typeof body) : null;
         } catch {
@@ -97,12 +120,15 @@ class LlmApiClient {
         const retryable = body?.retryable ?? (res.status === 429 || res.status >= 500);
         const message = body?.error || body?.message || text || res.statusText;
         const headerRetryAfter = Number(res.headers?.get('retry-after'));
-        const retryAfterSeconds = body?.retry_after ?? (Number.isFinite(headerRetryAfter) ? headerRetryAfter : undefined);
+        const retryAfterSeconds =
+          body?.retry_after ?? (Number.isFinite(headerRetryAfter) ? headerRetryAfter : undefined);
         throw new ApiClientError(
           `API ${res.status}: ${message}`,
           res.status,
           retryable,
-          retryAfterSeconds && retryAfterSeconds > 0 ? Math.ceil(retryAfterSeconds * 1000) : undefined,
+          retryAfterSeconds && retryAfterSeconds > 0
+            ? Math.ceil(retryAfterSeconds * 1000)
+            : undefined,
         );
       }
       return res;
@@ -134,6 +160,7 @@ class LlmApiClient {
           responseSchema: params.responseSchema,
           requestType: params.requestType || 'user',
           metrics: params.metrics,
+          combatEntry: params.combatEntry,
         }),
       });
 
@@ -176,7 +203,11 @@ class LlmApiClient {
         }
         return raw;
       }
-      const data = await res.json() as { text?: string; provider?: 'openrouter' | 'gemini'; model?: string };
+      const data = (await res.json()) as {
+        text?: string;
+        provider?: 'openrouter' | 'gemini';
+        model?: string;
+      };
       params.onResponseMetadata?.({ provider: data.provider, model: data.model });
       return data?.text ?? '';
     } catch (err: any) {
@@ -187,13 +218,21 @@ class LlmApiClient {
 
       if (preferredProvider === 'openrouter' && (isConfigErr || retryableProviderFailure)) {
         const res = await makeReq('gemini');
-        const data = await res.json() as { text?: string; provider?: 'openrouter' | 'gemini'; model?: string };
+        const data = (await res.json()) as {
+          text?: string;
+          provider?: 'openrouter' | 'gemini';
+          model?: string;
+        };
         params.onResponseMetadata?.({ provider: data.provider, model: data.model });
         return data?.text ?? '';
       }
       if (preferredProvider === 'gemini' && (isGeminiConfigErr || retryableProviderFailure)) {
         const res = await makeReq('openrouter');
-        const data = await res.json() as { text?: string; provider?: 'openrouter' | 'gemini'; model?: string };
+        const data = (await res.json()) as {
+          text?: string;
+          provider?: 'openrouter' | 'gemini';
+          model?: string;
+        };
         params.onResponseMetadata?.({ provider: data.provider, model: data.model });
         return data?.text ?? '';
       }
@@ -207,7 +246,8 @@ class LlmApiClient {
       body: JSON.stringify({
         prompt: params.prompt,
         model: params.model,
-        referenceImages: params.referenceImages || (params.referenceImage ? [params.referenceImage] : undefined),
+        referenceImages:
+          params.referenceImages || (params.referenceImage ? [params.referenceImage] : undefined),
         quality: params.quality,
       }),
     });

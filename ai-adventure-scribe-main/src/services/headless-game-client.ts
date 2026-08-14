@@ -14,8 +14,6 @@ import {
   executeStructuredCombatActionWithBoundary,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
-import { combatStartErrorFromResponse } from '@/services/combat/combat-start-failure';
-import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 import { extractHeadlessOptions } from '@/services/headless-game-options';
 import { userDataApi } from '@/services/user-data-api';
@@ -188,17 +186,10 @@ export class HeadlessGameClient {
     if (response.roll_requests !== undefined && !Array.isArray(response.roll_requests)) {
       throw new ContractViolationError('DM response roll_requests field is not an array');
     }
-    if (response.combat_transition === 'start' && response.scene_spec) {
-      const startResponse = await startStructuredCombatTransition(
-        this.sessionId,
-        this.character,
-        response as Parameters<typeof startStructuredCombatTransition>[2],
-      );
-      if (!startResponse?.ok) {
-        // Carries the DM envelope and the server's body so the transcript records what was
-        // actually attempted, not just a status code.
-        throw await combatStartErrorFromResponse(startResponse, response);
-      }
+    // #1779: entry is the server's decision, made inside the turn pipeline before this
+    // response came back. The headless client no longer starts combat — it reads what the
+    // gate already did, exactly as the browser client now does.
+    if (response.combat_entry?.entered || response.combat_transition === 'start') {
       this.combatActive = true;
     } else if (response.combat_transition === 'end') {
       const endResponse = await userDataApi.endTacticalMap(this.sessionId);

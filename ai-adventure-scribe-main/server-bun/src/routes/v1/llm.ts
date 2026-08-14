@@ -15,6 +15,10 @@ import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
+import {
+  applyCombatEntryGate,
+  type CombatEntryContext,
+} from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
 import {
   createUpstreamModelErrorBody,
@@ -82,6 +86,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         requestType: rawRequestType = 'user',
         responseSchema,
         metrics,
+        combatEntry,
       } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
@@ -155,6 +160,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider,
         responseSchema,
       });
+      // #1779: the deterministic entry gate. Runs after contract enforcement so it judges the
+      // accepted dialect, and before the response is returned so the encounter and its
+      // initiative exist BEFORE the player ever sees this turn's narration. Combat entry is
+      // no longer a client decision resting on one model-authored string.
+      result = await applyCombatEntryGate({
+        result,
+        userId,
+        combatEntry: combatEntry as CombatEntryContext | undefined,
+      });
 
       if (result.error) {
         const upstreamError = toUpstreamModelError(result);
@@ -211,6 +225,21 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // Permissive on keys (log-only, never stored) so new sections don't require a
         // schema change; values must be numbers.
         metrics: t.Optional(t.Record(t.String(), t.Number())),
+        // #1779: the session and player identity the combat entry gate needs to seat an
+        // encounter server-side. Optional — absent (non-DM generations, older clients) simply
+        // means the gate does not run for that call.
+        combatEntry: t.Optional(
+          t.Object({
+            sessionId: t.String({ minLength: 1, maxLength: 255 }),
+            player: t.Object({
+              characterId: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+              name: t.String({ minLength: 1, maxLength: 200 }),
+              initiativeModifier: t.Number({ minimum: -100, maximum: 100 }),
+              hpCurrent: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
+              hpMax: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
+            }),
+          }),
+        ),
       }),
     },
   )
