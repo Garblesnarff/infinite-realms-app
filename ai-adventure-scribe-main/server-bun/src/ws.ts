@@ -21,6 +21,7 @@ import {
   type WSConnection,
   type FoundryMessage,
 } from './services/collaboration/room-manager.js';
+import { decodeWsFrame } from './services/collaboration/ws-frame.js';
 import { verifySessionAccess } from './services/combat/combat-authorization.js';
 import { verifyWorkOSToken } from './services/workos.js';
 
@@ -67,7 +68,7 @@ function checkMessageRateLimit(ws: WSConnection): { allowed: boolean; abusive: b
 /**
  * Handle incoming WebSocket messages
  */
-async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
+async function handleMessage(ws: WSConnection, rawMessage: unknown) {
   const { user, roomId, requestId } = ws.data;
 
   // Flood control: cap message throughput per connection before doing any
@@ -101,7 +102,11 @@ async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
   }
 
   try {
-    const msg = JSON.parse(rawMessage.toString());
+    // Elysia has already deserialized JSON frames for us; decodeWsFrame accepts
+    // that object as-is and only parses when the frame is still text or binary.
+    // Re-parsing the object here stringified it to "[object Object]" and failed
+    // on every message (#1788).
+    const msg = decodeWsFrame(rawMessage) as any;
 
     // Handle legacy chat messages
     if (msg.type === 'chat') {
