@@ -10,16 +10,14 @@ const {
   getCharacter,
   getCampaign,
   generateOpeningMessage,
-} = vi.hoisted(
-  () => ({
-    listSessionMessages: vi.fn(),
-    listMemories: vi.fn(),
-    updateMemoryContent: vi.fn(),
-    getCharacter: vi.fn(),
-    getCampaign: vi.fn(),
-    generateOpeningMessage: vi.fn(),
-  }),
-);
+} = vi.hoisted(() => ({
+  listSessionMessages: vi.fn(),
+  listMemories: vi.fn(),
+  updateMemoryContent: vi.fn(),
+  getCharacter: vi.fn(),
+  getCampaign: vi.fn(),
+  generateOpeningMessage: vi.fn(),
+}));
 
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
@@ -32,6 +30,15 @@ vi.mock('@/services/user-data-api', () => ({
 }));
 vi.mock('@/services/ai-service', () => ({
   AIService: { generateOpeningMessage },
+}));
+vi.mock('@/infrastructure/api', () => ({
+  llmApiClient: {
+    generateText: vi
+      .fn()
+      .mockResolvedValue(
+        'A. **Look around**, survey your surroundings.\nB. **Press on**, continue toward your goal.\nC. **Call out**, announce your presence.',
+      ),
+  },
 }));
 vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -74,7 +81,9 @@ describe('useInitialGreeting fallback recovery', () => {
     await waitFor(() =>
       expect(onGreetingGenerated).toHaveBeenCalledWith(
         expect.objectContaining({
-          text: 'The real opening scene unfolds beneath a copper sky as the first watch bell echoes across the valley.',
+          text: expect.stringContaining(
+            'The real opening scene unfolds beneath a copper sky as the first watch bell echoes across the valley.',
+          ),
         }),
       ),
     );
@@ -86,9 +95,7 @@ describe('useInitialGreeting fallback recovery', () => {
       total: 1,
       messages: [{ speaker_type: 'dm', message: '{' }],
     });
-    listMemories.mockResolvedValue([
-      { id: 'opening-memory', content: 'Opening Scene: {' },
-    ]);
+    listMemories.mockResolvedValue([{ id: 'opening-memory', content: 'Opening Scene: {' }]);
     updateMemoryContent.mockResolvedValue(undefined);
     getCharacter.mockResolvedValue({ id: 'character-id', name: 'Hero', class: 'Bard', level: 1 });
     getCampaign.mockResolvedValue({ id: 'campaign-id', name: 'The Eternal Feast' });
@@ -104,7 +111,7 @@ describe('useInitialGreeting fallback recovery', () => {
         sessionData: { turn_count: 0 },
         characterId: 'character-id',
         campaignId: 'campaign-id',
-        messages: [{ sender: 'dm', text: '{', context: {} } as any],
+        messages: [{ sender: 'dm', text: '{', context: {} }],
         messagesLoading: false,
         onGreetingGenerated,
         onMemoryCreated,
