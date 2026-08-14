@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
+import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
@@ -222,7 +223,10 @@ export const useMessageHandlerLogic = ({
         if (onAIResponse) {
           try {
             logger.info('[Combat Flow] Processing AI response for combat detection');
-            await onAIResponse(sanitizedAiResponseMessage);
+            await onAIResponse({
+              ...sanitizedAiResponseMessage,
+              text: stripEngineGeneratedLines(sanitizedAiResponseMessage.text),
+            });
           } catch (combatError) {
             handleAsyncError(combatError, {
               userMessage: 'Failed to process combat response',

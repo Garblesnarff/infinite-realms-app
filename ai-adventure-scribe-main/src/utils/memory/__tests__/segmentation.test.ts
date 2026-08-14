@@ -265,6 +265,20 @@ describe('sanitizeForMemoryExtraction — asset tag stripping (issue #341)', () 
   });
 });
 
+describe('sanitizeForMemoryExtraction — engine transcript lines (#1808)', () => {
+  it('strips engine lines while preserving the narrative input', () => {
+    const persistedMessage =
+      '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT. 3 damage.\n\n' +
+      'The ward shatters and the corridor falls silent.';
+
+    const cleanInput = sanitizeForMemoryExtraction(persistedMessage);
+
+    expect(cleanInput).not.toContain('⚙️ Engine:');
+    expect(cleanInput).toContain('The ward shatters and the corridor falls silent.');
+    expect(persistedMessage).toContain('⚙️ Engine:');
+  });
+});
+
 describe('stripBrainstorming', () => {
   it('strips numbered probability scenarios', () => {
     const input =

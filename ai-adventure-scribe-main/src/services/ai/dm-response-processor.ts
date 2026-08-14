@@ -8,6 +8,7 @@ import type { ChatMessage, NarrationSegment, GameContext, AIResponse } from './s
 import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import logger from '@/lib/logger';
+import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 
 interface ProcessDMResponseParams {
@@ -237,7 +238,10 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
               : (segment.type as string),
       }));
 
-      await voiceConsistencyService.processVoiceAssignments(context.sessionId, normalizedSegments);
+      await voiceConsistencyService.processVoiceAssignments(
+        context.sessionId,
+        stripEngineGeneratedLinesFromSegments(normalizedSegments),
+      );
       logger.info('🎪 Processed voice assignments for character consistency');
     } catch (voiceError) {
       logger.warn('Voice assignment processing failed (non-fatal):', voiceError);

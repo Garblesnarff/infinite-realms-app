@@ -12,17 +12,22 @@ import React from 'react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // ------- hoisted mock factories (must be accessible inside vi.mock factories) -------
-const { mockExtractMemories, mockGetAIResponse, mockSendMessage, mockValidateSession } = vi.hoisted(
-  () => ({
-    mockExtractMemories: vi.fn().mockResolvedValue(undefined),
-    mockGetAIResponse: vi.fn().mockResolvedValue({
-      text: 'The goblin snarls.',
-      rollRequests: [],
-    }),
-    mockSendMessage: vi.fn().mockResolvedValue(undefined),
-    mockValidateSession: vi.fn().mockResolvedValue(true),
+const {
+  mockExtractMemories,
+  mockGetAIResponse,
+  mockOnAIResponse,
+  mockSendMessage,
+  mockValidateSession,
+} = vi.hoisted(() => ({
+  mockExtractMemories: vi.fn().mockResolvedValue(undefined),
+  mockGetAIResponse: vi.fn().mockResolvedValue({
+    text: 'The goblin snarls.',
+    rollRequests: [],
   }),
-);
+  mockOnAIResponse: vi.fn().mockResolvedValue(undefined),
+  mockSendMessage: vi.fn().mockResolvedValue(undefined),
+  mockValidateSession: vi.fn().mockResolvedValue(true),
+}));
 
 // ------- module mocks (hoisted to top by Vitest; must appear before imports) -------
 vi.mock('@/contexts/MemoryContext', () => ({
@@ -119,7 +124,10 @@ function makeUpdateStateMock() {
   return vi.fn().mockResolvedValue(undefined);
 }
 
-function renderHandler(sessionId: string) {
+function renderHandler(
+  sessionId: string,
+  onAIResponse?: (message: { text: string }) => Promise<void>,
+) {
   const ref: HandlerRef = { send: async () => {} };
   const updateGameSessionState = makeUpdateStateMock();
 
@@ -130,6 +138,7 @@ function renderHandler(sessionId: string) {
       characterId="char-1"
       turnCount={0}
       updateGameSessionState={updateGameSessionState}
+      onAIResponse={onAIResponse}
     >
       {({ handleSendMessage }) => {
         ref.send = handleSendMessage;
@@ -241,5 +250,26 @@ describe('session-continuity regression', () => {
       expect.any(Array),
       'session-B', // not stale "session-A"
     );
+  });
+
+  it('persists engine lines but strips them from the combat callback input', async () => {
+    const engineLine = '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT. 3 damage.';
+    const narrative = 'The ward shatters and the corridor falls silent.';
+    mockGetAIResponse.mockResolvedValue({
+      text: `${engineLine}\n\n${narrative}`,
+      rollRequests: [],
+    });
+
+    const { ref } = renderHandler('session-engine-lines', mockOnAIResponse);
+
+    await act(async () => {
+      await ref.send('I inspect the ward.');
+    });
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: expect.stringContaining(engineLine) }),
+    );
+    await waitFor(() => expect(mockOnAIResponse).toHaveBeenCalled());
+    expect(mockOnAIResponse).toHaveBeenLastCalledWith(expect.objectContaining({ text: narrative }));
   });
 });

@@ -18,7 +18,7 @@ import {
   type DetectedCombatAction,
 } from '@/utils/combat/detection/types';
 import { getDiceRollRequirements, shouldEndCombat } from '@/utils/combat/detection/utils';
-
+import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
 export {
   type PlayerCharacterLike,
@@ -35,7 +35,8 @@ export {
  * Detect combat scenarios from DM text
  */
 export function detectCombatFromText(text: string, _context?: unknown): CombatDetectionResult {
-  const lowerText = text.toLowerCase();
+  const cleanText = stripEngineGeneratedLines(text);
+  const lowerText = cleanText.toLowerCase();
   let combatScore = 0;
   let combatType: CombatDetectionResult['combatType'] = 'none';
   const enemies: DetectedEnemy[] = [];
@@ -102,7 +103,7 @@ export function detectCombatFromText(text: string, _context?: unknown): CombatDe
   }
 
   // Detect combat actions in the text
-  combatActions = detectCombatActions(text);
+  combatActions = detectCombatActions(cleanText);
   if (combatActions.length > 0) {
     combatScore += 0.3 * combatActions.length;
     hasDirectCombatCue = true;

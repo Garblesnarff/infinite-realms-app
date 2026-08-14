@@ -20,6 +20,7 @@ import { voiceProfileService, type VoiceProfile } from './voice-profile-service'
 import type { VoiceConfig } from './voice/voice-types';
 
 import logger from '@/lib/logger';
+import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 
 export { type VoiceProfile };
 
@@ -115,7 +116,8 @@ export class VoiceConsistencyService {
       voice_category?: string;
     }>,
   ): Promise<VoiceAssignment[]> {
-    logger.info('🎪 Processing voice assignments for', segments.length, 'segments');
+    const cleanSegments = stripEngineGeneratedLinesFromSegments(segments);
+    logger.info('🎪 Processing voice assignments for', cleanSegments.length, 'segments');
 
     const assignments: VoiceAssignment[] = [];
     const existingMappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
@@ -128,7 +130,7 @@ export class VoiceConsistencyService {
       { characterName: string; voiceCategory: string; voiceId: string; count: number }
     >();
 
-    for (const segment of segments) {
+    for (const segment of cleanSegments) {
       if (!segment.character) {
         // Narration - use narrator voice
         assignments.push({

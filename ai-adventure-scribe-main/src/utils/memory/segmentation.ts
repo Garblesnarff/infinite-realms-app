@@ -15,6 +15,7 @@ const DEFAULT_OPTIONS: SegmentationOptions = {
 
 // Import the enhanced sentence segmenter
 import { stripAssetTags } from '@/lib/utils';
+import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { cleanupPlainNarrativeText } from '@/utils/narrative-text-cleanup';
 import { SentenceSegmenter } from '@/utils/sentence-segmenter';
 
@@ -182,7 +183,7 @@ const finalizePlainText = (content: string): string => cleanupPlainNarrativeText
  *
  * Strips: code blocks, ROLL_REQUESTS_V1, roll scaffolding,
  *         VISUAL PROMPT blocks, A/B/C option menus, separator lines,
- *         [ASSET:*] tags.
+ *         [ASSET:*] tags, and engine-generated transcript lines.
  */
 /**
  * Strip verbalized AI brainstorming/sampling artifacts.
@@ -202,7 +203,8 @@ export const stripBrainstorming = (content: string): string =>
     .trim();
 
 export const sanitizeForMemoryExtraction = (content: string): string => {
-  let text = stripCodeBlocks(content); // existing: ROLL_REQUESTS_V1, code blocks, roll markers
+  let text = stripEngineGeneratedLines(content);
+  text = stripCodeBlocks(text); // existing: ROLL_REQUESTS_V1, code blocks, roll markers
   text = stripVisualPromptBlocks(text);
   text = stripOptionMenus(text);
   text = stripSeparatorLines(text);

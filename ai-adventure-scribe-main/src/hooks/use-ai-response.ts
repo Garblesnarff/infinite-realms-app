@@ -24,6 +24,7 @@ import {
 import { MemoryManager } from '@/services/memory-manager';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
+import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
 
 // Voice narration types
@@ -297,7 +298,10 @@ export const useAIResponse = (): {
             'narration segments',
           );
           try {
-            await voiceConsistencyService.processVoiceAssignments(sessionId, narrationSegments);
+            await voiceConsistencyService.processVoiceAssignments(
+              sessionId,
+              stripEngineGeneratedLinesFromSegments(narrationSegments),
+            );
             logger.info('Processed voice assignments successfully');
           } catch (voiceError) {
             logger.warn('Warning: Failed to process voice assignments:', voiceError);

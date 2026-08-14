@@ -160,9 +160,7 @@ describe('processDMResponse', () => {
     it('should parse valid JSON structured responses', async () => {
       const jsonResponse = JSON.stringify({
         text: 'The dragon roars.',
-        narration_segments: [
-          { type: 'narration', text: 'The dragon roars.' }
-        ]
+        narration_segments: [{ type: 'narration', text: 'The dragon roars.' }],
       });
 
       const params = {
@@ -192,7 +190,8 @@ describe('processDMResponse', () => {
     });
 
     it('should handle malformed JSON with nested quotes and newlines', async () => {
-      const malformedJson = 'Some garbage {"text": "Recovered \\"text\\" with \\n newlines"} more garbage';
+      const malformedJson =
+        'Some garbage {"text": "Recovered \\"text\\" with \\n newlines"} more garbage';
       const params = {
         ...defaultParams,
         rawResponse: malformedJson,
@@ -223,8 +222,8 @@ describe('processDMResponse', () => {
         narration_segments: [
           { type: 'dm', text: 'Narration' },
           { type: 'character', text: 'Dialogue' },
-          { type: 'other', text: 'Other' }
-        ]
+          { type: 'other', text: 'Other' },
+        ],
       });
 
       const params = {
@@ -235,14 +234,32 @@ describe('processDMResponse', () => {
 
       await processDMResponse(params);
 
-      expect(voiceConsistencyService.processVoiceAssignments).toHaveBeenCalledWith(
-        'session-123',
-        [
-          expect.objectContaining({ type: 'narration', text: 'Narration' }),
-          expect.objectContaining({ type: 'dialogue', text: 'Dialogue' }),
-          expect.objectContaining({ type: 'other', text: 'Other' })
-        ]
-      );
+      expect(voiceConsistencyService.processVoiceAssignments).toHaveBeenCalledWith('session-123', [
+        expect.objectContaining({ type: 'narration', text: 'Narration' }),
+        expect.objectContaining({ type: 'dialogue', text: 'Dialogue' }),
+        expect.objectContaining({ type: 'other', text: 'Other' }),
+      ]);
+    });
+
+    it('keeps engine lines in the response while excluding them from voice input', async () => {
+      const engineLine = '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT. 3 damage.';
+      const narrative = 'The ward shatters and the corridor falls silent.';
+      const jsonResponse = JSON.stringify({
+        text: `${engineLine}\n\n${narrative}`,
+        narration_segments: [{ type: 'narration', text: `${engineLine}\n\n${narrative}` }],
+      });
+
+      const result = await processDMResponse({
+        ...defaultParams,
+        rawResponse: jsonResponse,
+        voiceContext,
+      });
+
+      expect(result.text).toContain(engineLine);
+      expect(result.narrationSegments?.[0]?.text).toContain(engineLine);
+      expect(voiceConsistencyService.processVoiceAssignments).toHaveBeenCalledWith('session-123', [
+        { type: 'narration', text: narrative },
+      ]);
     });
 
     it('should handle JSON with extra text around it', async () => {
@@ -259,7 +276,8 @@ describe('processDMResponse', () => {
     });
 
     it('should handle JSON with trailing commas', async () => {
-      const trailingCommaJson = '{"text": "Hello", "narration_segments": [{"type": "dm", "text": "Hi",},],}';
+      const trailingCommaJson =
+        '{"text": "Hello", "narration_segments": [{"type": "dm", "text": "Hi",},],}';
       const params = {
         ...defaultParams,
         rawResponse: trailingCommaJson,
@@ -291,9 +309,7 @@ describe('processDMResponse', () => {
     it('should handle narrationSegments (camelCase) in structured response', async () => {
       const jsonResponse = JSON.stringify({
         text: 'Hello',
-        narrationSegments: [
-          { type: 'narration', text: 'Hi' }
-        ]
+        narrationSegments: [{ type: 'narration', text: 'Hi' }],
       });
 
       const params = {
@@ -321,7 +337,7 @@ describe('processDMResponse', () => {
 
       expect(result.text).toBe('Clean narrative');
       expect(MemoryManager.saveMemories).toHaveBeenCalledWith([
-        expect.objectContaining({ content: 'Met a mysterious stranger' })
+        expect.objectContaining({ content: 'Met a mysterious stranger' }),
       ]);
     });
 
@@ -337,7 +353,7 @@ describe('processDMResponse', () => {
         worldUpdates: {
           npcs: [mockNpc],
           locations: [mockLocation],
-          quests: [mockQuest]
+          quests: [mockQuest],
         },
       });
 
@@ -361,7 +377,7 @@ describe('processDMResponse', () => {
         worldUpdates: {
           npcs: [{ name: 'Failed NPC' }],
           locations: [],
-          quests: []
+          quests: [],
         },
       });
 
@@ -518,7 +534,9 @@ describe('processDMResponse', () => {
       });
 
       (MemoryManager.extractMemories as any).mockRejectedValue(new Error('Extraction failed'));
-      (WorldBuilderService.respondToPlayerAction as any).mockRejectedValue(new Error('World building failed'));
+      (WorldBuilderService.respondToPlayerAction as any).mockRejectedValue(
+        new Error('World building failed'),
+      );
 
       const result = await processDMResponse(defaultParams);
 
@@ -530,9 +548,7 @@ describe('processDMResponse', () => {
     it('should normalize asset tags in both text and segments', async () => {
       const jsonResponse = JSON.stringify({
         text: 'Text with [Asset:123]',
-        narration_segments: [
-          { type: 'narration', text: 'Segment with [Asset:456]' }
-        ]
+        narration_segments: [{ type: 'narration', text: 'Segment with [Asset:456]' }],
       });
 
       const params = {
@@ -552,9 +568,7 @@ describe('processDMResponse', () => {
       const voiceContext = { voiceId: 'v1' } as any;
       const jsonResponse = JSON.stringify({
         text: 'A dragon appeared',
-        narration_segments: [
-          { type: 'narration', text: 'A dragon appeared' }
-        ]
+        narration_segments: [{ type: 'narration', text: 'A dragon appeared' }],
       });
 
       (getCachedAssets as any).mockReturnValue([{ id: '1', name: 'dragon' }]);
@@ -574,9 +588,21 @@ describe('processDMResponse', () => {
   describe('Combat Detection', () => {
     it('uses structured transitions and actions instead of prose inference', async () => {
       const rawResponse = JSON.stringify({
-        text: 'The goblin reaches for its blade.', narration_segments: [], roll_requests: [],
-        combat_transition: 'start', combatants: [],
-        combat_actions: [{ actor_id: 'goblin-1', action_type: 'dodge', target_ids: [], weapon_id: null, spell_id: null, movement_feet: 0 }],
+        text: 'The goblin reaches for its blade.',
+        narration_segments: [],
+        roll_requests: [],
+        combat_transition: 'start',
+        combatants: [],
+        combat_actions: [
+          {
+            actor_id: 'goblin-1',
+            action_type: 'dodge',
+            target_ids: [],
+            weapon_id: null,
+            spell_id: null,
+            movement_feet: 0,
+          },
+        ],
       });
       const result = await processDMResponse({ ...defaultParams, rawResponse });
       expect(result.combatDetection?.shouldStartCombat).toBe(true);
@@ -589,21 +615,23 @@ describe('processDMResponse', () => {
         confidence: 0.9,
         combatType: 'encounter',
         enemies: ['Orc'],
-        combatActions: []
+        combatActions: [],
       } as any;
 
       const params = {
         ...defaultParams,
-        combatDetection
+        combatDetection,
       };
 
       const result = await processDMResponse(params);
 
-      expect(result.combatDetection).toEqual(expect.objectContaining({
-        isCombat: true,
-        confidence: 0.9,
-        enemies: ['Orc']
-      }));
+      expect(result.combatDetection).toEqual(
+        expect.objectContaining({
+          isCombat: true,
+          confidence: 0.9,
+          enemies: ['Orc'],
+        }),
+      );
     });
   });
 
@@ -614,7 +642,7 @@ describe('processDMResponse', () => {
   describe('Structured roll_requests pass-through', () => {
     it('should carry structured roll_requests from the parsed JSON response through to the result', async () => {
       const rawResponse = JSON.stringify({
-        text: "You crouch low, scanning the dining room for anything out of place.",
+        text: 'You crouch low, scanning the dining room for anything out of place.',
         narration_segments: [],
         roll_requests: [
           {

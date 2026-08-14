@@ -10,6 +10,7 @@ import { useAIResponse } from '@/hooks/use-ai-response';
 import logger from '@/lib/logger';
 import { parseDiceCommand } from '@/utils/diceCommandParser';
 import { rollDice } from '@/utils/diceUtils';
+import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
 import { checkSafetyCommands, processSafetyCommand } from '@/utils/safetyCommands';
 
@@ -159,7 +160,10 @@ export const useMessageCommandHandler = ({
 
       if (onAIResponse) {
         try {
-          await onAIResponse(aiResponseMessage);
+          await onAIResponse({
+            ...aiResponseMessage,
+            text: stripEngineGeneratedLines(aiResponseMessage.text),
+          });
         } catch (combatError) {
           handleAsyncError(combatError, {
             userMessage: 'Failed to process combat response after dice roll',

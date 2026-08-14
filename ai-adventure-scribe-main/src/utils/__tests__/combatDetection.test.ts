@@ -89,6 +89,14 @@ describe('combatDetection', () => {
       expect(result.isCombat).toBe(true);
       expect(result.shouldStartCombat).toBe(true);
     });
+
+    it('should ignore engine transcript lines while detecting narrative combat cues', () => {
+      const engineLine = '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT. 3 damage.';
+      const result = detectCombatFromText(`${engineLine}\n\nThe corridor falls silent.`);
+
+      expect(result.isCombat).toBe(false);
+      expect(result.combatActions).toBeUndefined();
+    });
   });
 
   describe('detectPlayerCombatAction', () => {
