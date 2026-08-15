@@ -1,4 +1,20 @@
 name: Claude Code
+#
+# DO NOT remove the `if:` guard on the job below.
+#
+# GitHub cannot filter `issue_comment` by body at the `on:` level, so a workflow
+# *run* is created for every comment on every issue and PR. The guard is what
+# stops that run from doing anything: the job only executes when a human has
+# explicitly written `@claude`.
+#
+# That distinction matters because this repo is private and Actions minutes are
+# metered. Measured over the last 100 runs: 31 were this workflow and **all 31
+# were `skipped` with zero duration** -- start and finish timestamps identical.
+# Skipped jobs are not billed, so the runs are noise in the Actions tab, not
+# cost. Automated status comments from our own agents are the bulk of them.
+#
+# If someone later "optimises" this by dropping the guard, every agent status
+# comment starts a real Claude run against a real token. Leave it.
 
 on:
   issue_comment:

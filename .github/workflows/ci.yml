@@ -1,5 +1,16 @@
 name: CI
 
+# Runs on the self-hosted runner (hetzner-nbg1-prod) rather than GitHub-hosted
+# minutes. This repo is private, so Actions minutes are metered and billed --
+# ci.yml has already been disabled once after exhausting the monthly allowance
+# (see db-guards.yml), and in August 2026 the whole account stopped running
+# jobs mid-session with "recent account payments have failed".
+#
+# The runner is a systemd service on the production box under a dedicated
+# unprivileged `ghrunner` user, capped at 4 of 8 cores and 6G, with a CPU
+# weight far below the game server so a CI run yields to live traffic.
+# See docs/ci-self-hosted-runner.md.
+
 on:
   push:
   pull_request:
@@ -7,27 +18,55 @@ on:
 permissions:
   contents: read
 
+# One in-flight run per ref. Pushing three times in a minute used to start
+# three full matrices that all raced to finish; now the older ones are
+# cancelled the moment a newer commit arrives. On a single self-hosted runner
+# this matters more than it did on GitHub's fleet, because runs queue rather
+# than run in parallel.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: ai-adventure-scribe-main
 
 jobs:
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bunx tsc --noEmit
-      - run: bunx vitest run
+      # The runner is deliberately CPU-capped (4 of 8 cores, CPUWeight 20) so a
+      # test run cannot starve the game server, which makes this suite roughly
+      # 2.4x slower than unconstrained. Three timing-sensitive tests flaked at
+      # vitest's 5s default on the first self-hosted run; raising the ceiling is
+      # the right trade against loosening the cap that protects production.
+      - run: bunx vitest run --testTimeout=20000 --hookTimeout=20000
       - run: bun run build
 
   server-vitest:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
+          restore-keys: |
+            bun-server-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: ai-adventure-scribe-main/server-bun
@@ -35,13 +74,13 @@ jobs:
         working-directory: ai-adventure-scribe-main/server-bun
 
   security-lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - run: node scripts/security-lint.js
 
   gitleaks:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
       pull-requests: write
@@ -55,23 +94,35 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
 
-  # Playwright E2E tests spin up their own servers (ports 8891/8892, see
-  # ai-adventure-scribe-main/playwright.config.ts) and require server-bun env
-  # vars (DATABASE_URL, CORS_ORIGIN, WORKOS_API_KEY, WORKOS_CLIENT_ID) that
-  # are not yet wired into CI secrets. continue-on-error keeps this from
-  # blocking merges until those secrets are configured -- see workflow README.
-  e2e:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: ai-adventure-scribe-main/server-bun
-      - run: bun run e2e
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          CORS_ORIGIN: http://localhost:8891
-          WORKOS_API_KEY: ${{ secrets.WORKOS_API_KEY }}
-          WORKOS_CLIENT_ID: ${{ secrets.WORKOS_CLIENT_ID }}
+  # ---------------------------------------------------------------------------
+  # e2e is DISABLED -- see issue #1817.
+  #
+  # This job has never produced a successful run. The Playwright suite boots its
+  # own servers (ports 8891/8892, see ai-adventure-scribe-main/playwright.config.ts)
+  # and server-bun needs DATABASE_URL, WORKOS_API_KEY and WORKOS_CLIENT_ID, none
+  # of which were ever added as repository secrets -- so the server could not
+  # start and the job failed on every push since it was added. `continue-on-error`
+  # hid that behind a permanently-red check, which cost minutes on every run and
+  # trained reviewers to ignore red.
+  #
+  # It is commented out rather than deleted so re-enabling is a one-step change
+  # once #1817 provides a database. On the self-hosted runner that database must
+  # be a throwaway instance -- NOT the production Postgres, which lives on the
+  # same box as the runner.
+  #
+  # The suite still runs locally with `bun run e2e`.
+  #
+  # e2e:
+  #   runs-on: self-hosted
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: oven-sh/setup-bun@v2
+  #     - run: bun install --frozen-lockfile
+  #     - run: bun install --frozen-lockfile
+  #       working-directory: ai-adventure-scribe-main/server-bun
+  #     - run: bun run e2e
+  #       env:
+  #         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  #         CORS_ORIGIN: http://localhost:8891
+  #         WORKOS_API_KEY: ${{ secrets.WORKOS_API_KEY }}
+  #         WORKOS_CLIENT_ID: ${{ secrets.WORKOS_CLIENT_ID }}
