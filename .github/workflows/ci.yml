@@ -18,13 +18,25 @@ on:
 permissions:
   contents: read
 
-# One in-flight run per ref. Pushing three times in a minute used to start
+# One in-flight run per branch. Pushing three times in a minute used to start
 # three full matrices that all raced to finish; now the older ones are
 # cancelled the moment a newer commit arrives. On a single self-hosted runner
 # this matters more than it did on GitHub's fleet, because runs queue rather
 # than run in parallel.
+#
+# Keyed on the BRANCH NAME, not the ref. A branch with an open PR fires both
+# `push` and `pull_request`; keyed on `github.ref` those are different groups
+# (`refs/heads/<branch>` vs `refs/pull/<n>/merge`), so the whole matrix ran
+# twice per commit and the second copy queued behind the first on the single
+# runner.
+#
+# The fallback must be `ref_name`, not `ref`: `head_ref` is the bare branch name
+# ("my-branch") while `ref` is fully qualified ("refs/heads/my-branch"), so
+# `head_ref || ref` still yields two different strings for the same branch and
+# does not deduplicate. `ref_name` is the bare name on push, so the two events
+# collapse to one group.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 defaults:
