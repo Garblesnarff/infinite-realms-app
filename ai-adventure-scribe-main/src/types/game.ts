@@ -34,6 +34,11 @@ export interface MessageContext {
     naturalRoll?: number;
     critical?: boolean;
     label?: string;
+    requestType?: string;
+    description?: string;
+    dc?: number;
+    ac?: number;
+    success?: boolean;
     timestamp: string;
   };
   combatData?: {

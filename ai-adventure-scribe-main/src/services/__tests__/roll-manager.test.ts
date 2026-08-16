@@ -74,12 +74,18 @@ describe('RollManager (flag‑gated)', () => {
     });
   });
 
-  it.skip('writes result and computes success vs DC', async () => {
+  it.skip('writes the supplied authoritative success value', async () => {
     (import.meta as any).env.VITE_ENABLE_ROLL_HISTORY = 'true';
     const { RollManager } = await import('@/services/roll-manager');
-    await RollManager.recordRollResult({ sessionId: 's1', kind: 'check', resultTotal: 15, dc: 12 });
+    await RollManager.recordRollResult({
+      sessionId: 's1',
+      kind: 'check',
+      resultTotal: 15,
+      dc: 12,
+      success: false,
+    });
     const last = supabaseMock.inserts.at(-1);
-    expect(last).toMatchObject({ kind: 'check', result_total: 15, dc: 12, success: true });
+    expect(last).toMatchObject({ kind: 'check', result_total: 15, dc: 12, success: false });
   });
 
   it.skip('prunes beyond cap', async () => {

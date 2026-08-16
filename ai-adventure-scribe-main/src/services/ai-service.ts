@@ -10,6 +10,7 @@ import {
 import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
 import { MemoryManager } from './memory-manager';
 import { fetchSceneState } from './narrative/scene-state-client';
+import { SessionStateService } from './session-state-service';
 import { dmResponseSchema } from '../../server-bun/src/services/dm/dm-response-schema';
 
 import type { AIResponse, ChatMessage, GameContext } from './ai/shared/types';
@@ -126,7 +127,8 @@ export class AIService {
         // over unescaped content — and main's post-#1687 ContextBuilder returns one opaque
         // string anyway. The fetch is awaited concurrently with the context build, so
         // ground truth costs no extra wall-clock on the turn path.
-        const [contextPrompt, sceneStateBlock] = await Promise.all([
+        const shouldLoadRollOutcome = /[✓✗]/u.test(params.message);
+        const [contextPrompt, sceneStateBlock, latestRollOutcome] = await Promise.all([
           ContextBuilder.build({
             context: params.context,
             message: params.message,
@@ -138,6 +140,9 @@ export class AIService {
           params.context.sessionId
             ? fetchSceneState(params.context.sessionId)
             : Promise.resolve(null),
+          shouldLoadRollOutcome && params.context.sessionId
+            ? SessionStateService.getLatestRollOutcome(params.context.sessionId)
+            : Promise.resolve(null),
         ]);
 
         // Rendered verbatim from the fact ledger; never assembled or interpreted client-side.
@@ -147,7 +152,10 @@ export class AIService {
 
         // Execute chat via llmApiClient
         // Build combined prompt from context, history, and message
-        const stateEnvelope = JSON.stringify(params.context.gameState || { isInCombat: false });
+        const stateEnvelope = JSON.stringify({
+          ...(params.context.gameState || { isInCombat: false }),
+          ...(latestRollOutcome ? { lastRollOutcome: latestRollOutcome } : {}),
+        });
         const playerInput =
           params.message || 'Begin the adventure. Generate the opening scene for this campaign.';
         const resolutionOnly = params.context.gameState?.resolutionOnly === true;

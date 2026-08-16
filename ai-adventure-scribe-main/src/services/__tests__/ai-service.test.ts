@@ -7,6 +7,7 @@ import { processDMResponse } from '../ai/dm-response-processor';
 import { AIService } from '../ai-service';
 import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
+import { SessionStateService } from '../session-state-service';
 
 import { llmApiClient } from '@/infrastructure/api';
 
@@ -44,6 +45,12 @@ vi.mock('../narrative/scene-state-client', () => ({
   fetchSceneState: vi.fn(),
 }));
 
+vi.mock('../session-state-service', () => ({
+  SessionStateService: {
+    getLatestRollOutcome: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/logger', () => ({
   default: {
     info: vi.fn(),
@@ -56,6 +63,7 @@ vi.mock('@/lib/logger', () => ({
 describe('AIService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(SessionStateService.getLatestRollOutcome).mockResolvedValue(null);
   });
 
   describe('generateCampaignDescription', () => {
@@ -237,6 +245,26 @@ describe('AIService', () => {
 
       expect(fetchSceneState).not.toHaveBeenCalled();
       expect(lastPrompt()).not.toContain('<scene_state>');
+    });
+
+    it('puts the persisted roll outcome in the immutable game-state envelope', async () => {
+      vi.mocked(fetchSceneState).mockResolvedValue(null);
+      vi.mocked(SessionStateService.getLatestRollOutcome).mockResolvedValue({
+        success: false,
+        total: 13,
+        dc: 15,
+        requestType: 'skill_check',
+        description: 'Acrobatics Check',
+        timestamp: '2026-08-15T00:01:00.000Z',
+      });
+
+      // The persisted value is authoritative even if transcript decoration disagrees.
+      await AIService.chatWithDM(buildParams('Acrobatics Check: 13 ✓'));
+
+      expect(SessionStateService.getLatestRollOutcome).toHaveBeenCalledWith('session-1');
+      expect(lastPrompt()).toContain(
+        '"lastRollOutcome":{"success":false,"total":13,"dc":15,"requestType":"skill_check"',
+      );
     });
 
     it('counts the block in the scene_state prompt-metrics section (#1689)', async () => {

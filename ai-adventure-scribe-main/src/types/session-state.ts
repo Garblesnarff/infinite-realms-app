@@ -30,8 +30,18 @@ export interface SessionStatePayload {
   quests: QuestState[];
   lastUpdate: string; // ISO string
   // Optional free-form logs to aid debugging/analysis
-  combatLog?: Array<{ timestamp: string; entry: string }>;
+  combatLog?: Array<{ timestamp: string; entry: unknown }>;
   conversation?: ConversationSnapshot;
+}
+
+export interface PersistedRollOutcome {
+  success: boolean;
+  total: number;
+  dc?: number;
+  ac?: number;
+  requestType?: string;
+  description?: string;
+  timestamp: string;
 }
 
 export interface ConversationSnapshot {

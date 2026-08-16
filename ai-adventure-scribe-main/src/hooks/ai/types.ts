@@ -55,6 +55,11 @@ export interface DiceRollContext {
   disadvantage?: boolean;
   keptResults?: number[];
   results?: number[];
+  requestType?: string;
+  description?: string;
+  dc?: number;
+  ac?: number;
+  success?: boolean;
 }
 
 /**

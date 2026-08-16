@@ -114,10 +114,6 @@ export const RollManager = {
   async recordRollResult(e: RollResultEntry) {
     if (!flagEnabled()) return;
     try {
-      let success: boolean | null = null;
-      if (typeof e.dc === 'number') success = e.resultTotal >= e.dc;
-      if (typeof e.ac === 'number') success = e.resultTotal >= e.ac;
-
       const payload: RollHistoryInsert = {
         session_id: e.sessionId,
         kind: e.kind,
@@ -125,7 +121,7 @@ export const RollManager = {
         result_natural: e.resultNatural ?? null,
         dc: e.dc ?? null,
         ac: e.ac ?? null,
-        success,
+        success: e.success ?? null,
         meta: e.meta ?? {},
       };
       await supabase.from('roll_history').insert(payload);

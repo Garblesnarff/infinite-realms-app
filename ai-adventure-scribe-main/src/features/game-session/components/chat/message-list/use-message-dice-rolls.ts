@@ -7,7 +7,10 @@ import type { DiceRollRequest } from '@/utils/diceRolls';
 import type { MutableRefObject } from 'react';
 
 import { useGame } from '@/contexts/GameContext';
-import { formatDiceRoll as formatDiceRollUtil } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
+import {
+  formatDiceRoll as formatDiceRollUtil,
+  getDiceRollOutcome,
+} from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
 import { settleCombatAttackRoll } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
 import { rollDice } from '@/utils/diceUtils';
@@ -157,7 +160,9 @@ export function useMessageDiceRolls({
 
         completeDiceRoll(roll.id, rollResult);
 
-        const formattedRoll = formatDiceRoll({ ...roll, result: rollResult });
+        const completedRoll = { ...roll, result: rollResult };
+        const formattedRoll = formatDiceRoll(completedRoll);
+        const outcome = getDiceRollOutcome(completedRoll);
 
         // A combat attack die belongs to a resolution already waiting on it. Hand it back and
         // stop: sending it to the DM as a new player message would put the same attack through
@@ -191,6 +196,11 @@ export function useMessageDiceRolls({
               total: rollResult.total,
               naturalRoll: rollResult.naturalRoll,
               critical: rollResult.critical,
+              requestType: roll.requestType,
+              description: roll.description,
+              dc: roll.dc,
+              ac: roll.ac,
+              success: outcome?.success,
               timestamp: new Date().toISOString(),
             },
           },
@@ -286,10 +296,32 @@ export function useMessageDiceRolls({
 
         completeDiceRoll(roll.id, { total: numericResult });
 
-        const formattedRoll = formatDiceRoll({
+        const completedRoll = {
           ...roll,
           result: { total: numericResult },
-        });
+        };
+        const formattedRoll = formatDiceRoll(completedRoll);
+        const outcome = getDiceRollOutcome(completedRoll);
+        const diceRollContext: DiceRollContext = {
+          intent: 'dice_roll',
+          diceRoll: {
+            formula: roll.rollConfig.abilityModifier
+              ? `${roll.rollConfig.count}d${roll.rollConfig.dieType}+${roll.rollConfig.abilityModifier}`
+              : `${roll.rollConfig.count}d${roll.rollConfig.dieType}${roll.rollConfig.modifier >= 0 ? '+' : ''}${roll.rollConfig.modifier}`,
+            count: roll.rollConfig.count,
+            dieType: roll.rollConfig.dieType,
+            modifier: roll.rollConfig.modifier,
+            advantage: roll.rollConfig.advantage,
+            disadvantage: roll.rollConfig.disadvantage,
+            total: numericResult,
+            requestType: roll.requestType,
+            description: roll.description,
+            dc: roll.dc,
+            ac: roll.ac,
+            success: outcome?.success,
+            timestamp: new Date().toISOString(),
+          },
+        };
 
         // Same diversion as the rolled path: a hand-entered attack die is still the player's
         // die for an attack already mid-resolution, and still must not reach the DM as a
@@ -304,6 +336,7 @@ export function useMessageDiceRolls({
             text: formattedRoll,
             sender: 'player',
             timestamp: new Date().toISOString(),
+            context: diceRollContext,
           };
           await onSendMessage(playerMessage);
           logger.info(
@@ -314,26 +347,13 @@ export function useMessageDiceRolls({
             logger.info(
               '[useMessageDiceRolls] Triggering AI response after manual roll(s) complete',
             );
-            await onSendFullMessage(formattedRoll, {
-              intent: 'dice_roll',
-              diceRoll: {
-                formula: roll.rollConfig.abilityModifier
-                  ? `${roll.rollConfig.count}d${roll.rollConfig.dieType}+${roll.rollConfig.abilityModifier}`
-                  : `${roll.rollConfig.count}d${roll.rollConfig.dieType}${roll.rollConfig.modifier >= 0 ? '+' : ''}${roll.rollConfig.modifier}`,
-                count: roll.rollConfig.count,
-                dieType: roll.rollConfig.dieType,
-                modifier: roll.rollConfig.modifier,
-                advantage: roll.rollConfig.advantage,
-                disadvantage: roll.rollConfig.disadvantage,
-                total: numericResult,
-                timestamp: new Date().toISOString(),
-              },
-            });
+            await onSendFullMessage(formattedRoll, diceRollContext);
           } else {
             const playerMessage: ChatMessage = {
               text: formattedRoll,
               sender: 'player',
               timestamp: new Date().toISOString(),
+              context: diceRollContext,
             };
             await onSendMessage(playerMessage);
           }

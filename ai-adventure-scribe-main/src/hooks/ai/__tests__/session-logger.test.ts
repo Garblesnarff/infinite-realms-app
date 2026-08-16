@@ -60,6 +60,10 @@ describe('session-logger', () => {
         advantage: false,
         disadvantage: false,
         results: [10],
+        requestType: 'skill_check',
+        description: 'Athletics Check',
+        dc: 16,
+        success: false,
       };
 
       await logDiceRollResult(sessionId, diceRoll);
@@ -75,6 +79,8 @@ describe('session-logger', () => {
           kind: 'check',
           resultTotal: 15,
           resultNatural: 10,
+          dc: 16,
+          success: false,
         }),
       );
     });
@@ -219,17 +225,23 @@ describe('session-logger', () => {
 
       // Verify RollManager.recordRollRequest was called for each request
       expect(mockRecordRollRequest).toHaveBeenCalledTimes(2);
-      expect(mockRecordRollRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({
-        kind: 'check',
-        purpose: 'Stealth',
-        formula: '1d20+2'
-      }));
-      expect(mockRecordRollRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
-        kind: 'save',
-        purpose: 'Dexterity',
-        formula: '1d20+3',
-        dc: 15
-      }));
+      expect(mockRecordRollRequest).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          kind: 'check',
+          purpose: 'Stealth',
+          formula: '1d20+2',
+        }),
+      );
+      expect(mockRecordRollRequest).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          kind: 'save',
+          purpose: 'Dexterity',
+          formula: '1d20+3',
+          dc: 15,
+        }),
+      );
     });
 
     it('should return early if no requests', async () => {

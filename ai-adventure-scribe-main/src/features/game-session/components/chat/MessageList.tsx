@@ -31,6 +31,11 @@ export interface DiceRollContext {
     total: number;
     naturalRoll?: number;
     critical?: boolean;
+    requestType?: string;
+    description?: string;
+    dc?: number;
+    ac?: number;
+    success?: boolean;
     timestamp?: string;
   };
 }

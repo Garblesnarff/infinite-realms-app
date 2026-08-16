@@ -9,7 +9,6 @@ import { useGame } from '@/contexts/GameContext';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 
-
 // Mock dependencies
 vi.mock('@/contexts/GameContext', () => ({
   useGame: vi.fn(),
@@ -210,7 +209,12 @@ describe('useMessageDiceRolls', () => {
     it('should format DC success correctly', async () => {
       const rollWithDC = { ...activeRoll, dc: 14 };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithDC);
-      (rollDice as any).mockReturnValue({ total: 15, naturalRoll: 13, results: [13], keptResults: [13] });
+      (rollDice as any).mockReturnValue({
+        total: 15,
+        naturalRoll: 13,
+        results: [13],
+        keptResults: [13],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -225,14 +229,26 @@ describe('useMessageDiceRolls', () => {
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('✓'),
-        expect.anything(),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({
+            success: true,
+            dc: 14,
+            requestType: 'skill_check',
+            description: 'Stealth Check',
+          }),
+        }),
       );
     });
 
     it('should format critical miss on attacks', async () => {
       const attackRoll = { ...activeRoll, requestType: 'attack' };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
-      (rollDice as any).mockReturnValue({ total: 3, naturalRoll: 1, results: [1], keptResults: [1] });
+      (rollDice as any).mockReturnValue({
+        total: 3,
+        naturalRoll: 1,
+        results: [1],
+        keptResults: [1],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -254,7 +270,12 @@ describe('useMessageDiceRolls', () => {
     it('should format AC success correctly', async () => {
       const rollWithAC = { ...activeRoll, requestType: 'attack', ac: 15 };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithAC);
-      (rollDice as any).mockReturnValue({ total: 16, naturalRoll: 14, results: [14], keptResults: [14] });
+      (rollDice as any).mockReturnValue({
+        total: 16,
+        naturalRoll: 14,
+        results: [14],
+        keptResults: [14],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -276,14 +297,14 @@ describe('useMessageDiceRolls', () => {
     it('should format advantage and negative modifier', async () => {
       const rollWithAdv = {
         ...activeRoll,
-        rollConfig: { ...activeRoll.rollConfig, advantage: true, modifier: -1 }
+        rollConfig: { ...activeRoll.rollConfig, advantage: true, modifier: -1 },
       };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithAdv);
       (rollDice as any).mockReturnValue({
         total: 9,
         naturalRoll: 10,
         results: [10, 5],
-        keptResults: [10]
+        keptResults: [10],
       });
 
       const { result } = renderHook(() =>
@@ -310,14 +331,14 @@ describe('useMessageDiceRolls', () => {
     it('should format disadvantage', async () => {
       const rollWithDis = {
         ...activeRoll,
-        rollConfig: { ...activeRoll.rollConfig, disadvantage: true }
+        rollConfig: { ...activeRoll.rollConfig, disadvantage: true },
       };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithDis);
       (rollDice as any).mockReturnValue({
         total: 7,
         naturalRoll: 5,
         results: [10, 5],
-        keptResults: [5]
+        keptResults: [5],
       });
 
       const { result } = renderHook(() =>
@@ -340,7 +361,12 @@ describe('useMessageDiceRolls', () => {
     it('should format DC failure correctly', async () => {
       const rollWithDC = { ...activeRoll, dc: 18 };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithDC);
-      (rollDice as any).mockReturnValue({ total: 15, naturalRoll: 13, results: [13], keptResults: [13] });
+      (rollDice as any).mockReturnValue({
+        total: 15,
+        naturalRoll: 13,
+        results: [13],
+        keptResults: [13],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -355,14 +381,21 @@ describe('useMessageDiceRolls', () => {
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('✗'),
-        expect.anything(),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({ success: false, dc: 18 }),
+        }),
       );
     });
 
     it('should format critical hits on attacks', async () => {
       const attackRoll = { ...activeRoll, requestType: 'attack' };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
-      (rollDice as any).mockReturnValue({ total: 22, naturalRoll: 20, results: [20], keptResults: [20] });
+      (rollDice as any).mockReturnValue({
+        total: 22,
+        naturalRoll: 20,
+        results: [20],
+        keptResults: [20],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -388,7 +421,12 @@ describe('useMessageDiceRolls', () => {
 
       mockUseGame.state.diceRollQueue.pendingRolls = [roll1, roll2] as any;
       mockUseGame.getCurrentDiceRoll.mockReturnValue(roll1);
-      (rollDice as any).mockReturnValue({ total: 10, naturalRoll: 8, results: [8], keptResults: [8] });
+      (rollDice as any).mockReturnValue({
+        total: 10,
+        naturalRoll: 8,
+        results: [8],
+        keptResults: [8],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -414,7 +452,12 @@ describe('useMessageDiceRolls', () => {
 
       mockUseGame.state.diceRollQueue.pendingRolls = [roll1, roll2] as any;
       mockUseGame.getCurrentDiceRoll.mockReturnValue(roll2);
-      (rollDice as any).mockReturnValue({ total: 10, naturalRoll: 8, results: [8], keptResults: [8] });
+      (rollDice as any).mockReturnValue({
+        total: 10,
+        naturalRoll: 8,
+        results: [8],
+        keptResults: [8],
+      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -450,6 +493,7 @@ describe('useMessageDiceRolls', () => {
     });
 
     it('should process a manual result', async () => {
+      mockUseGame.getCurrentDiceRoll.mockReturnValue({ ...activeRoll, dc: 16 });
       const { result } = renderHook(() =>
         useMessageDiceRolls({
           onSendMessage: mockOnSendMessage,
@@ -464,7 +508,9 @@ describe('useMessageDiceRolls', () => {
       expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('Stealth Check: 18'),
-        expect.anything(),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({ success: true, dc: 16 }),
+        }),
       );
     });
 
@@ -608,7 +654,7 @@ describe('useMessageDiceRolls', () => {
     it('should handle object result in handleManualResult', async () => {
       mockUseGame.getCurrentDiceRoll.mockReturnValue({
         id: 'roll-1',
-        rollConfig: { dieType: 20, count: 1, modifier: 0 }
+        rollConfig: { dieType: 20, count: 1, modifier: 0 },
       });
 
       const { result } = renderHook(() =>

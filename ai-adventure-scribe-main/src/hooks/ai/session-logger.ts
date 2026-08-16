@@ -32,8 +32,13 @@ export async function logDiceRollResult(
     kind: 'check',
     resultTotal: Number(diceRoll.total) || 0,
     resultNatural: typeof diceRoll.naturalRoll === 'number' ? diceRoll.naturalRoll : undefined,
+    dc: diceRoll.dc,
+    ac: diceRoll.ac,
+    success: diceRoll.success,
     meta: {
       formula: diceRoll.formula,
+      requestType: diceRoll.requestType,
+      description: diceRoll.description,
       advantage: !!diceRoll.advantage,
       disadvantage: !!diceRoll.disadvantage,
       kept: diceRoll.keptResults,

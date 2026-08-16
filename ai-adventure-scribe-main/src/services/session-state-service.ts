@@ -1,4 +1,4 @@
-import type { SessionStatePayload } from '@/types/session-state';
+import type { PersistedRollOutcome, SessionStatePayload } from '@/types/session-state';
 
 import { userDataApi } from '@/services/user-data-api';
 import { createDefaultSessionState } from '@/types/session-state';
@@ -88,6 +88,37 @@ export class SessionStateService {
     event: { kind: string; payload: any },
   ): Promise<void> {
     await this.appendCombatLog(sessionId, { kind: event.kind, payload: event.payload });
+  }
+
+  /** Read the newest persisted roll result that has an authoritative outcome. */
+  static async getLatestRollOutcome(sessionId: string): Promise<PersistedRollOutcome | null> {
+    const state = await this.getState(sessionId);
+    const entries = state.combatLog || [];
+
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const logEntry = entries[index];
+      const event = logEntry?.entry;
+      if (!event || typeof event !== 'object') continue;
+
+      const candidate = event as { kind?: unknown; payload?: unknown };
+      if (candidate.kind !== 'roll_result' || !candidate.payload) continue;
+      if (typeof candidate.payload !== 'object') return null;
+
+      const payload = candidate.payload as Record<string, unknown>;
+      if (typeof payload.success !== 'boolean' || typeof payload.total !== 'number') return null;
+
+      return {
+        success: payload.success,
+        total: payload.total,
+        dc: typeof payload.dc === 'number' ? payload.dc : undefined,
+        ac: typeof payload.ac === 'number' ? payload.ac : undefined,
+        requestType: typeof payload.requestType === 'string' ? payload.requestType : undefined,
+        description: typeof payload.description === 'string' ? payload.description : undefined,
+        timestamp: logEntry.timestamp,
+      };
+    }
+
+    return null;
   }
 }
 

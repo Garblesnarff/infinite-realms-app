@@ -1,5 +1,34 @@
 import type { DiceRollRequest } from '@/utils/diceRolls';
 
+export interface DiceRollOutcome {
+  success: boolean;
+  target: number;
+  targetType: 'dc' | 'ac';
+}
+
+/** Derive the machine-readable outcome from the same target used by the UI. */
+export function getDiceRollOutcome(roll: DiceRollRequest): DiceRollOutcome | undefined {
+  if (!roll.result) return undefined;
+
+  if (typeof roll.dc === 'number') {
+    return {
+      success: roll.result.total >= roll.dc,
+      target: roll.dc,
+      targetType: 'dc',
+    };
+  }
+
+  if (typeof roll.ac === 'number' && roll.requestType === 'attack') {
+    return {
+      success: roll.result.total >= roll.ac,
+      target: roll.ac,
+      targetType: 'ac',
+    };
+  }
+
+  return undefined;
+}
+
 /**
  * Format a single dice roll with enhanced context for both AI and human readability.
  * Returns formats like: "Stealth Check: 15 (nat 13+2) vs DC 13 ✓"
@@ -12,7 +41,7 @@ export function formatDiceRoll(roll: DiceRollRequest): string {
     return `${roll.description}: pending`;
   }
 
-  const { result, rollConfig, requestType, dc, ac } = roll;
+  const { result, rollConfig, requestType } = roll;
   const total = result.total;
   const nat = result.naturalRoll ?? total - rollConfig.modifier;
   const modifier = rollConfig.modifier;
@@ -39,11 +68,10 @@ export function formatDiceRoll(roll: DiceRollRequest): string {
     formatted += ' [DIS]';
   }
 
-  // Add success/failure indicator (DC/AC hidden from players, but AI DM still receives it)
-  if (dc !== undefined) {
-    formatted += total >= dc ? ' ✓' : ' ✗';
-  } else if (ac !== undefined && requestType === 'attack') {
-    formatted += total >= ac ? ' ✓' : ' ✗';
+  // Render the same authoritative boolean that is persisted with the roll event.
+  const outcome = getDiceRollOutcome(roll);
+  if (outcome) {
+    formatted += outcome.success ? ' ✓' : ' ✗';
   }
 
   // Add critical indicators

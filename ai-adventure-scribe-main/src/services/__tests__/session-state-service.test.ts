@@ -92,4 +92,38 @@ describe('SessionStateService', () => {
     await SessionStateService.appendRollEvent(sessionId, { kind: 'attack', payload: { roll: 15 } });
     expect(append).toHaveBeenCalledWith(sessionId, { kind: 'attack', payload: { roll: 15 } });
   });
+
+  it('returns the newest persisted machine-readable roll outcome', async () => {
+    vi.spyOn(SessionStateService, 'getState').mockResolvedValue({
+      ...createDefaultSessionState(sessionId),
+      combatLog: [
+        {
+          timestamp: '2026-08-15T00:00:00.000Z',
+          entry: { kind: 'roll_result', payload: { total: 18 } },
+        },
+        {
+          timestamp: '2026-08-15T00:01:00.000Z',
+          entry: {
+            kind: 'roll_result',
+            payload: {
+              total: 13,
+              dc: 15,
+              success: false,
+              requestType: 'skill_check',
+              description: 'Acrobatics Check',
+            },
+          },
+        },
+      ],
+    });
+
+    await expect(SessionStateService.getLatestRollOutcome(sessionId)).resolves.toEqual({
+      total: 13,
+      dc: 15,
+      success: false,
+      requestType: 'skill_check',
+      description: 'Acrobatics Check',
+      timestamp: '2026-08-15T00:01:00.000Z',
+    });
+  });
 });
