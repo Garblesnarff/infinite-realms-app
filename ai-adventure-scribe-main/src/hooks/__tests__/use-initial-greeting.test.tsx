@@ -176,6 +176,31 @@ describe('useInitialGreeting', () => {
     );
   });
 
+  it('should carry schema-generated options into the initial greeting', async () => {
+    const greetingText =
+      'A copper dawn spills across the valley as the first watch bell echoes from the distant keep.';
+    const options = [
+      'A. **Study the valley**, search for signs of danger.',
+      'B. **Follow the bell**, head toward the distant keep.',
+      'C. **Call out**, announce your arrival to anyone nearby.',
+    ];
+    (AIService.generateOpeningMessage as any).mockResolvedValue({
+      text: greetingText,
+      options,
+    });
+
+    renderHook(() => useInitialGreeting(defaultProps));
+
+    await waitFor(() =>
+      expect(onGreetingGenerated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sender: 'dm',
+          text: `${greetingText}\n\n${options.join('\n')}`,
+        }),
+      ),
+    );
+  });
+
   it('should handle dialogue_history check error', async () => {
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'dialogue_history') {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 
+import type { AIResponse } from '@/services/ai-service';
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
@@ -48,7 +49,10 @@ const storedMessageText = (message: Record<string, unknown> | undefined): string
 const isShortStoredGreeting = (message: Record<string, unknown> | undefined): boolean =>
   storedMessageText(message).length > 0 && storedMessageText(message).length < GREETING_MIN_LENGTH;
 
-const replaceOpeningSceneMemory = async (sessionId: string, greetingText: string): Promise<boolean> => {
+const replaceOpeningSceneMemory = async (
+  sessionId: string,
+  greetingText: string,
+): Promise<boolean> => {
   try {
     const memories = await userDataApi.listMemories(sessionId, { limit: 200 });
     const openingScene = memories.find(
@@ -194,7 +198,7 @@ export const useInitialGreeting = ({
       }
 
       // Generate AI response using AIService
-      const openingText = await AIService.generateOpeningMessage({
+      const openingResponse = (await AIService.generateOpeningMessage({
         context: {
           campaignId: campaignId as string,
           characterId: characterId as string,
@@ -207,7 +211,9 @@ export const useInitialGreeting = ({
           // continuity instead of only seeing it as a display message afterward.
           previousSessionRecap: previouslyOnText ?? undefined,
         },
-      });
+      })) as AIResponse | string;
+      const openingText =
+        typeof openingResponse === 'string' ? openingResponse : openingResponse.text;
       if (typeof openingText !== 'string' || openingText.trim().length < GREETING_MIN_LENGTH) {
         throw new Error('Opening message was too short to be a valid scene');
       }
@@ -221,9 +227,20 @@ export const useInitialGreeting = ({
       const displayText =
         openingRollRequests.length > 0 ? truncateAtRollRequest(openingText) : openingText;
 
-      // The opening contract requires clickable options; repair if the model skipped them.
+      // The greeting uses the same schema-constrained response as ordinary turns. Preserve
+      // those contextual options in the text path used by the existing message renderer.
+      const structuredOptions =
+        typeof openingResponse === 'string' || !Array.isArray(openingResponse.options)
+          ? []
+          : openingResponse.options.filter(
+              (option): option is string => typeof option === 'string' && option.trim().length > 0,
+            );
       const displayTextWithOptions =
-        openingRollRequests.length > 0 ? displayText : await ensureActionOptions(displayText);
+        openingRollRequests.length > 0
+          ? displayText
+          : structuredOptions.length > 0
+            ? `${displayText.trim()}\n\n${structuredOptions.join('\n')}`
+            : await ensureActionOptions(displayText);
 
       // Create chat message from AI response (string only; narration is handled elsewhere)
       const greetingMessage: ChatMessage = {

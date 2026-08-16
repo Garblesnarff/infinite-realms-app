@@ -262,7 +262,7 @@ export class AIService {
    * Generate an opening message for a new campaign session
    * Uses chatWithDM with empty message/history to trigger first message flow
    */
-  static async generateOpeningMessage(params: { context: GameContext }): Promise<string> {
+  static async generateOpeningMessage(params: { context: GameContext }): Promise<AIResponse> {
     const response = await AIService.chatWithDM({
       message: '',
       context: params.context,
@@ -270,9 +270,9 @@ export class AIService {
     });
 
     if (typeof response === 'string') {
-      return response;
+      return { text: response };
     }
-    return response.text || 'Welcome to your adventure!';
+    return response.text ? response : { ...response, text: 'Welcome to your adventure!' };
   }
 
   /**

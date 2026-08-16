@@ -284,11 +284,15 @@ describe('AIService', () => {
   });
 
   describe('generateOpeningMessage', () => {
-    it('should call chatWithDM with empty message and return text', async () => {
+    it('should call chatWithDM with empty message and preserve structured options', async () => {
       const mockContext: any = { sessionId: '123-opening' };
+      const options = [
+        'A. **Study the gate**, look for a way through.',
+        'B. **Call out**, see who answers.',
+      ];
       const spy = vi
         .spyOn(AIService, 'chatWithDM')
-        .mockResolvedValue({ text: 'Opening scene' } as any);
+        .mockResolvedValue({ text: 'Opening scene', options } as any);
 
       const result = await AIService.generateOpeningMessage({ context: mockContext });
 
@@ -297,7 +301,7 @@ describe('AIService', () => {
         context: mockContext,
         conversationHistory: [],
       });
-      expect(result).toBe('Opening scene');
+      expect(result).toEqual({ text: 'Opening scene', options });
     });
 
     it('should handle string response from chatWithDM (legacy/fallback)', async () => {
@@ -306,7 +310,7 @@ describe('AIService', () => {
 
       const result = await AIService.generateOpeningMessage({ context: mockContext });
 
-      expect(result).toBe('Opening scene');
+      expect(result).toEqual({ text: 'Opening scene' });
     });
   });
 });
