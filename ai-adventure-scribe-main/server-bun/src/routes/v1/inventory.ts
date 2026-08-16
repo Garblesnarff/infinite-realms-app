@@ -20,6 +20,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { InventoryAttunementService } from '../../services/inventory/inventory-attunement-service.js';
 import { InventoryConsumableService } from '../../services/inventory/inventory-consumable-service.js';
 import { InventoryService } from '../../services/inventory-service.js';
+import { parseBoundedQueryInteger } from '../../utils/bounded-query-integer.js';
 
 import type { GetInventoryOptions, ItemType } from '../../types/inventory.js';
 
@@ -56,7 +57,7 @@ function mapInventoryError(
   set: any,
   error: unknown,
   fallbackMessage: string,
-  notFoundMessage: string = 'Not found'
+  notFoundMessage: string = 'Not found',
 ): { error: string } {
   if (error instanceof AppError) {
     if (error.statusCode === 404) {
@@ -110,7 +111,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         const inventory = await InventoryService.getInventory(
           params.id,
           (user as any).userId,
-          options
+          options,
         );
         return inventory;
       } catch (error) {
@@ -123,7 +124,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         itemType: t.Optional(t.String()),
         equipped: t.Optional(t.String()),
       }),
-    }
+    },
   )
 
   /**
@@ -139,7 +140,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
             ...(body as any),
             characterId: params.id,
           },
-          (user as any).userId
+          (user as any).userId,
         );
 
         set.status = 201;
@@ -151,7 +152,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
     },
     {
       body: createInventoryItemSchema,
-    }
+    },
   )
 
   /**
@@ -166,7 +167,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
           params.itemId,
           params.id,
           (user as any).userId,
-          body as any
+          body as any,
         );
 
         if (!item) {
@@ -182,7 +183,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
     },
     {
       body: updateInventoryItemSchema,
-    }
+    },
   )
 
   /**
@@ -194,7 +195,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       const deleted = await InventoryService.removeItem(
         params.itemId,
         params.id,
-        (user as any).userId
+        (user as any).userId,
       );
 
       if (!deleted) {
@@ -239,7 +240,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
             sessionId,
             context,
           },
-          (user as any).userId
+          (user as any).userId,
         );
 
         return {
@@ -253,7 +254,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
     },
     {
       body: useConsumableSchema,
-    }
+    },
   )
 
   // ==========================================
@@ -284,7 +285,11 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .post('/:id/attune/:itemId', async ({ params, set, user }) => {
     try {
-      const result = await InventoryAttunementService.attuneItem(params.id, params.itemId, (user as any).userId);
+      const result = await InventoryAttunementService.attuneItem(
+        params.id,
+        params.itemId,
+        (user as any).userId,
+      );
 
       if (!result.success) {
         set.status = 400;
@@ -313,7 +318,11 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .delete('/:id/attune/:itemId', async ({ params, set, user }) => {
     try {
-      const item = await InventoryAttunementService.unattuneItem(params.itemId, params.id, (user as any).userId);
+      const item = await InventoryAttunementService.unattuneItem(
+        params.itemId,
+        params.id,
+        (user as any).userId,
+      );
 
       if (!item) {
         set.status = 404;
@@ -333,7 +342,10 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get('/:id/attuned', async ({ params, set, user }) => {
     try {
-      const items = await InventoryAttunementService.getAttunedItems(params.id, (user as any).userId);
+      const items = await InventoryAttunementService.getAttunedItems(
+        params.id,
+        (user as any).userId,
+      );
       return { items };
     } catch (error) {
       logger.error({ msg: 'ATTUNED_ITEMS error', error });
@@ -351,7 +363,11 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .post('/:id/inventory/:itemId/equip', async ({ params, set, user }) => {
     try {
-      const result = await InventoryService.equipItem(params.id, params.itemId, (user as any).userId);
+      const result = await InventoryService.equipItem(
+        params.id,
+        params.itemId,
+        (user as any).userId,
+      );
 
       if (!result.success) {
         set.status = 400;
@@ -371,7 +387,11 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .post('/:id/inventory/:itemId/unequip', async ({ params, set, user }) => {
     try {
-      const item = await InventoryService.unequipItem(params.itemId, params.id, (user as any).userId);
+      const item = await InventoryService.unequipItem(
+        params.itemId,
+        params.id,
+        (user as any).userId,
+      );
 
       if (!item) {
         set.status = 404;
@@ -404,12 +424,15 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         }
       }
 
-      const history = await InventoryConsumableService.getUsageHistory({
-        characterId: params.id,
-        itemId: query.itemId as string | undefined,
-        sessionId,
-        limit: query.limit ? parseInt(query.limit as string) : undefined,
-      }, (user as any).userId);
+      const history = await InventoryConsumableService.getUsageHistory(
+        {
+          characterId: params.id,
+          itemId: query.itemId as string | undefined,
+          sessionId,
+          limit: parseBoundedQueryInteger(query.limit, { min: 1, max: 100 }),
+        },
+        (user as any).userId,
+      );
 
       return { history };
     } catch (error) {
