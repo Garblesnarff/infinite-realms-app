@@ -13,6 +13,7 @@
 
 import { and, eq, exists, or, desc, sql } from 'drizzle-orm';
 
+import { parseBoundedSpellLevel } from './spell-level-parser.js';
 import { SpellSlotMechanics } from './spell-slot-mechanics.js';
 import { db } from '../../../../db/client';
 import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../../db/schema/index';
@@ -228,12 +229,19 @@ export class SpellSlotDataAccess {
       throw new NotFoundError('Character', characterId);
     }
 
-    const insertData = Object.entries(slots).map(([level, total]) => ({
-      characterId,
-      spellLevel: parseInt(level),
-      totalSlots: total as number,
-      usedSlots: 0,
-    }));
+    const insertData = Object.entries(slots).map(([level, total]) => {
+      const spellLevel = parseBoundedSpellLevel(level, 1, 9);
+      if (spellLevel === null) {
+        throw new Error(`Invalid calculated spell slot level: ${level}`);
+      }
+
+      return {
+        characterId,
+        spellLevel,
+        totalSlots: total as number,
+        usedSlots: 0,
+      };
+    });
 
     if (insertData.length > 0) {
       await db.insert(characterSpellSlots).values(insertData);

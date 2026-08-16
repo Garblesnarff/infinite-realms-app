@@ -23,6 +23,7 @@ import { Elysia, t } from 'elysia';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { parseBoundedSpellLevel } from '../../services/spell-slots/spell-level-parser.js';
 import { SpellSlotsService } from '../../services/spell-slots-service.js';
 
 import type { ClassName } from '../../types/spell-slots.js';
@@ -34,10 +35,15 @@ const calculateSpellSlotsQuery = t.Object({
 
 const calculateMulticlassSchema = t.Object({
   // Optional retains the route's existing missing-array validation response.
-  classes: t.Optional(t.Array(t.Object({
-    className: t.String({ minLength: 1, maxLength: 100 }),
-    level: t.Number({ minimum: 1, maximum: 20 }),
-  }), { minItems: 1, maxItems: 20 })),
+  classes: t.Optional(
+    t.Array(
+      t.Object({
+        className: t.String({ minLength: 1, maxLength: 100 }),
+        level: t.Number({ minimum: 1, maximum: 20 }),
+      }),
+      { minItems: 1, maxItems: 20 },
+    ),
+  ),
 });
 
 const canUpcastQuery = t.Object({
@@ -50,7 +56,7 @@ function mapSpellSlotsError(
   set: any,
   error: unknown,
   fallbackMessage: string,
-  notFoundMessage: string = 'Not found'
+  notFoundMessage: string = 'Not found',
 ): { error: string; details?: string } {
   if (error instanceof AppError) {
     if (error.statusCode === 404) {
@@ -67,7 +73,10 @@ function mapSpellSlotsError(
   }
 
   set.status = 500;
-  return { error: fallbackMessage, details: error instanceof Error ? error.message : 'Unknown error' };
+  return {
+    error: fallbackMessage,
+    details: error instanceof Error ? error.message : 'Unknown error',
+  };
 }
 
 // Utility spell slot routes (not character-specific)
@@ -78,119 +87,131 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
    * GET /v1/spell-slots/calculate
    * Calculate spell slots for preview (doesn't save to database)
    */
-  .get('/calculate', async ({ query, set }) => {
-    try {
-      const { className, level } = query;
+  .get(
+    '/calculate',
+    async ({ query, set }) => {
+      try {
+        const { className, level } = query;
 
-      if (!className) {
-        set.status = 400;
-        return { error: 'className is required' };
+        if (!className) {
+          set.status = 400;
+          return { error: 'className is required' };
+        }
+
+        if (!level) {
+          set.status = 400;
+          return { error: 'level is required' };
+        }
+
+        const parsedLevel = parseBoundedSpellLevel(level, 1, 20);
+
+        if (parsedLevel === null) {
+          set.status = 400;
+          return { error: 'level must be between 1 and 20' };
+        }
+
+        const calculation = SpellSlotsService.calculateSpellSlots(
+          className as ClassName,
+          parsedLevel,
+        );
+
+        return calculation;
+      } catch (error) {
+        logger.error({ msg: 'SPELL_SLOTS_CALC error', error });
+        return mapSpellSlotsError(set, error, 'Failed to calculate spell slots');
       }
-
-      if (!level) {
-        set.status = 400;
-        return { error: 'level is required' };
-      }
-
-      const parsedLevel = parseInt(level, 10);
-
-      if (isNaN(parsedLevel) || parsedLevel < 1 || parsedLevel > 20) {
-        set.status = 400;
-        return { error: 'level must be between 1 and 20' };
-      }
-
-      const calculation = SpellSlotsService.calculateSpellSlots(
-        className as ClassName,
-        parsedLevel
-      );
-
-      return calculation;
-    } catch (error) {
-      logger.error({ msg: 'SPELL_SLOTS_CALC error', error });
-      return mapSpellSlotsError(set, error, 'Failed to calculate spell slots');
-    }
-  }, { query: calculateSpellSlotsQuery })
+    },
+    { query: calculateSpellSlotsQuery },
+  )
 
   /**
    * POST /v1/spell-slots/calculate-multiclass
    * Calculate multiclass spell slots for preview
    */
-  .post('/calculate-multiclass', async ({ body, set }) => {
-    try {
-      const { classes } = body;
+  .post(
+    '/calculate-multiclass',
+    async ({ body, set }) => {
+      try {
+        const { classes } = body;
 
-      if (!classes || !Array.isArray(classes) || classes.length === 0) {
-        set.status = 400;
-        return { error: 'classes array is required' };
-      }
-
-      for (const classInfo of classes) {
-        if (!classInfo.className) {
+        if (!classes || !Array.isArray(classes) || classes.length === 0) {
           set.status = 400;
-          return { error: 'className is required for each class' };
+          return { error: 'classes array is required' };
         }
 
-        if (!classInfo.level || classInfo.level < 1 || classInfo.level > 20) {
-          set.status = 400;
-          return { error: 'level must be between 1 and 20 for each class' };
-        }
-      }
+        for (const classInfo of classes) {
+          if (!classInfo.className) {
+            set.status = 400;
+            return { error: 'className is required for each class' };
+          }
 
-      const calculation = SpellSlotsService.calculateMulticlassSpellSlots(
-        classes as Array<{ className: ClassName; level: number }>,
-      );
-      return calculation;
-    } catch (error) {
-      logger.error({ msg: 'SPELL_SLOTS_MULTICLASS error', error });
-      return mapSpellSlotsError(set, error, 'Failed to calculate multiclass spell slots');
-    }
-  }, { body: calculateMulticlassSchema })
+          if (!classInfo.level || classInfo.level < 1 || classInfo.level > 20) {
+            set.status = 400;
+            return { error: 'level must be between 1 and 20 for each class' };
+          }
+        }
+
+        const calculation = SpellSlotsService.calculateMulticlassSpellSlots(
+          classes as Array<{ className: ClassName; level: number }>,
+        );
+        return calculation;
+      } catch (error) {
+        logger.error({ msg: 'SPELL_SLOTS_MULTICLASS error', error });
+        return mapSpellSlotsError(set, error, 'Failed to calculate multiclass spell slots');
+      }
+    },
+    { body: calculateMulticlassSchema },
+  )
 
   /**
    * GET /v1/spell-slots/can-upcast
    * Check if a spell can be upcast
    */
-  .get('/can-upcast', async ({ query, set }) => {
-    try {
-      const { spellName, baseLevel, targetLevel } = query;
+  .get(
+    '/can-upcast',
+    async ({ query, set }) => {
+      try {
+        const { spellName, baseLevel, targetLevel } = query;
 
-      if (!spellName) {
-        set.status = 400;
-        return { error: 'spellName is required' };
+        if (!spellName) {
+          set.status = 400;
+          return { error: 'spellName is required' };
+        }
+
+        if (baseLevel === undefined) {
+          set.status = 400;
+          return { error: 'baseLevel is required' };
+        }
+
+        if (targetLevel === undefined) {
+          set.status = 400;
+          return { error: 'targetLevel is required' };
+        }
+
+        const parsedBaseLevel = parseBoundedSpellLevel(baseLevel, 0, 9);
+        const parsedTargetLevel = parseBoundedSpellLevel(targetLevel, 1, 9);
+
+        if (parsedBaseLevel === null) {
+          set.status = 400;
+          return { error: 'baseLevel must be between 0 and 9' };
+        }
+
+        if (parsedTargetLevel === null) {
+          set.status = 400;
+          return { error: 'targetLevel must be between 1 and 9' };
+        }
+
+        const validation = SpellSlotsService.canUpcast(
+          spellName,
+          parsedBaseLevel,
+          parsedTargetLevel,
+        );
+
+        return validation;
+      } catch (error) {
+        logger.error({ msg: 'SPELL_SLOTS_UPCAST error', error });
+        return mapSpellSlotsError(set, error, 'Failed to check upcast');
       }
-
-      if (baseLevel === undefined) {
-        set.status = 400;
-        return { error: 'baseLevel is required' };
-      }
-
-      if (targetLevel === undefined) {
-        set.status = 400;
-        return { error: 'targetLevel is required' };
-      }
-
-      const parsedBaseLevel = parseInt(baseLevel, 10);
-      const parsedTargetLevel = parseInt(targetLevel, 10);
-
-      if (isNaN(parsedBaseLevel) || parsedBaseLevel < 0 || parsedBaseLevel > 9) {
-        set.status = 400;
-        return { error: 'baseLevel must be between 0 and 9' };
-      }
-
-      if (isNaN(parsedTargetLevel) || parsedTargetLevel < 1 || parsedTargetLevel > 9) {
-        set.status = 400;
-        return { error: 'targetLevel must be between 1 and 9' };
-      }
-
-      const validation = SpellSlotsService.canUpcast(
-        spellName,
-        parsedBaseLevel,
-        parsedTargetLevel
-      );
-
-      return validation;
-    } catch (error) {
-      logger.error({ msg: 'SPELL_SLOTS_UPCAST error', error });
-      return mapSpellSlotsError(set, error, 'Failed to check upcast');
-    }
-  }, { query: canUpcastQuery });
+    },
+    { query: canUpcastQuery },
+  );
