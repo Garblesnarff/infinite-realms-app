@@ -44,7 +44,7 @@ const PUBLIC_ROUTE_FILES = new Set([
   'server-bun/src/routes/v1/auth-token-exchange.ts',
   'server-bun/src/routes/v1/public-campaign-templates.ts',
 ]);
-const ROUTE_METHOD_PATTERN = /\.(?:get|post|put|patch|delete|all)\s*\(/;
+const ROUTE_METHOD_PATTERN = /\.(?:get|post|put|patch|delete|all)\s*\(\s*['"`]/;
 const STRIPE_LIVE_PREFIX = ['sk', 'live'].join('_');
 const STRIPE_TEST_PREFIX = ['sk', 'test'].join('_');
 
@@ -69,6 +69,26 @@ export function shouldCheckRouteAuth(relPath, content) {
   }
 
   return ROUTE_METHOD_PATTERN.test(content);
+}
+
+export function shouldCheckRouteRateLimit(relPath, content) {
+  const normalizedPath = normalizePath(relPath);
+  const basename = path.posix.basename(normalizedPath);
+
+  if (
+    !isServerRouteFile(normalizedPath) ||
+    basename.startsWith('._') ||
+    normalizedPath.includes('/__tests__/') ||
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(normalizedPath)
+  ) {
+    return false;
+  }
+
+  return ROUTE_METHOD_PATTERN.test(content);
+}
+
+export function hasRouteRateLimit(content) {
+  return /\b(?:planRateLimit|createSimpleRateLimit|createRateLimiter)\s*\(/.test(content);
 }
 
 export function hasRouteAuthGuard(content) {
@@ -109,7 +129,9 @@ function getFiles(dir, pattern, fileList = []) {
         getFiles(filePath, pattern, fileList);
       }
     } else if (pattern.test(file)) {
-      fileList.push(filePath);
+      // Ignore macOS AppleDouble sidecar files that can appear on external
+      // volumes; they are metadata, not source files.
+      if (!file.startsWith('._')) fileList.push(filePath);
     }
   });
 
@@ -154,34 +176,9 @@ function checkMissingAuth(filePath, content) {
 function checkMissingRateLimit(filePath, content) {
   const relPath = path.relative(rootDir, filePath);
 
-  // Skip if this is not a route file
-  if (!relPath.includes('routes/')) return;
+  if (!shouldCheckRouteRateLimit(relPath, content)) return;
 
-  // Skip utility files that aren't route handlers
-  const basename = path.basename(filePath);
-  const utilityFiles = ['mappers.ts', 'schemas.ts', 'types.ts', 'index.ts', 'blog.tsx'];
-  if (utilityFiles.some((util) => basename.endsWith(util))) return;
-
-  // Skip auth.ts (deprecated)
-  if (basename === 'auth.ts') return;
-
-  const lines = content.split('\n');
-
-  // Check if file imports rate limiting
-  const hasRateLimitImport = lines.some(
-    (line) =>
-      (line.includes('import') && line.includes('planRateLimit')) ||
-      (line.includes('import') && line.includes('createRateLimiter')),
-  );
-
-  // Check if file uses rate limiting
-  const hasRateLimitUsage = lines.some(
-    (line) =>
-      (line.includes('planRateLimit') || line.includes('createRateLimiter')) &&
-      !line.trim().startsWith('//'),
-  );
-
-  if (!hasRateLimitImport || !hasRateLimitUsage) {
+  if (!hasRouteRateLimit(content)) {
     findings.medium.push({
       file: relPath,
       line: 1,

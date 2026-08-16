@@ -7,6 +7,8 @@ import {
   isUnsafeSqlLine,
   looksLikeSqlExecution,
   shouldCheckRouteAuth,
+  shouldCheckRouteRateLimit,
+  hasRouteRateLimit,
 } from './security-lint.js';
 
 describe('security-lint heuristics', () => {
@@ -32,6 +34,52 @@ describe('security-lint heuristics', () => {
     expect(hasRouteAuthGuard('const auth = await requireBlogAdminAuth(request);')).toBe(true);
     expect(hasRouteAuthGuard('.use(requireApiKey)')).toBe(true);
     expect(hasRouteAuthGuard('if (!headers.authorization) return unauthorized();')).toBe(true);
+  });
+
+  it('only applies rate-limit checks to executable server route handlers', () => {
+    expect(
+      shouldCheckRouteRateLimit(
+        'server-bun/src/routes/v1/billing.ts',
+        "new Elysia().post('/checkout', handler)",
+      ),
+    ).toBe(true);
+    expect(
+      shouldCheckRouteRateLimit(
+        'server-bun/src/routes/v1/session-list-handler.ts',
+        'export function list() {}',
+      ),
+    ).toBe(false);
+    expect(
+      shouldCheckRouteRateLimit(
+        'server-bun/src/routes/v1/blog/helpers.ts',
+        'await supabase.from("posts").delete().eq("id", postId)',
+      ),
+    ).toBe(false);
+    expect(
+      shouldCheckRouteRateLimit(
+        'server-bun/src/routes/v1/__tests__/billing.test.ts',
+        "new Elysia().post('/checkout', handler)",
+      ),
+    ).toBe(false);
+    expect(
+      shouldCheckRouteRateLimit(
+        'src/routes/ProtectedAppRoutes.tsx',
+        "new Elysia().get('/app', handler)",
+      ),
+    ).toBe(false);
+    expect(
+      shouldCheckRouteRateLimit(
+        'server-bun/src/routes/v1/._billing.ts',
+        "new Elysia().post('/checkout', handler)",
+      ),
+    ).toBe(false);
+  });
+
+  it('recognizes both plan-aware and simple rate-limit middleware calls', () => {
+    expect(hasRouteRateLimit("app.use(planRateLimit('default'))")).toBe(true);
+    expect(hasRouteRateLimit('app.use(createSimpleRateLimit({ max: 5 }))')).toBe(true);
+    expect(hasRouteRateLimit('const limiter = createRateLimiter(options)')).toBe(true);
+    expect(hasRouteRateLimit('import { planRateLimit } from "./rate-limit"')).toBe(false);
   });
 
   it('trusts parameterized postgres templates but keeps unsafe SQL actionable', () => {
