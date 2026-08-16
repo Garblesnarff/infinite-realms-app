@@ -106,35 +106,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
 
-  # ---------------------------------------------------------------------------
-  # e2e is DISABLED -- see issue #1817.
+  # Keep the check visible and truthfully skipped until its test harness is
+  # self-contained. The old job was never green: it expected an unconfigured
+  # DATABASE_URL and WorkOS credentials, then hid every startup failure behind
+  # continue-on-error. A missing check made that history invisible again.
   #
-  # This job has never produced a successful run. The Playwright suite boots its
-  # own servers (ports 8891/8892, see ai-adventure-scribe-main/playwright.config.ts)
-  # and server-bun needs DATABASE_URL, WORKOS_API_KEY and WORKOS_CLIENT_ID, none
-  # of which were ever added as repository secrets -- so the server could not
-  # start and the job failed on every push since it was added. `continue-on-error`
-  # hid that behind a permanently-red check, which cost minutes on every run and
-  # trained reviewers to ignore red.
+  # Re-enable only after both blockers are removed:
+  #   1. provision a job-scoped throwaway Postgres (never the production DB);
+  #   2. make the auth-role specs use a local test verifier instead of fetching
+  #      WorkOS JWKS with repository credentials.
   #
-  # It is commented out rather than deleted so re-enabling is a one-step change
-  # once #1817 provides a database. On the self-hosted runner that database must
-  # be a throwaway instance -- NOT the production Postgres, which lives on the
-  # same box as the runner.
-  #
-  # The suite still runs locally with `bun run e2e`.
-  #
-  # e2e:
-  #   runs-on: self-hosted
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: oven-sh/setup-bun@v2
-  #     - run: bun install --frozen-lockfile
-  #     - run: bun install --frozen-lockfile
-  #       working-directory: ai-adventure-scribe-main/server-bun
-  #     - run: bun run e2e
-  #       env:
-  #         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  #         CORS_ORIGIN: http://localhost:8891
-  #         WORKOS_API_KEY: ${{ secrets.WORKOS_API_KEY }}
-  #         WORKOS_CLIENT_ID: ${{ secrets.WORKOS_CLIENT_ID }}
+  # The suite remains locally runnable with `bun run e2e`. See issue #1817.
+  e2e:
+    name: e2e (skipped — harness blocked by #1817)
+    if: ${{ false }}
+    runs-on: self-hosted
+    steps:
+      - name: Document the intentional skip
+        run: echo "E2E is intentionally skipped; see issue #1817."
