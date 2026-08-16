@@ -29,11 +29,29 @@ export interface PlanRateConfig {
   perUser?: { windowMs: number; maxByPlan: Record<PlanName, number> };
 }
 
-// Helper to get environment variable with fallback
-function getEnvInt(key: string, fallback: number): number {
-  const val = process.env[key];
-  return val ? parseInt(val, 10) : fallback;
+const RATE_WINDOW_BOUNDS = { min: 1_000, max: 86_400_000 } as const;
+const RATE_MAX_BOUNDS = { min: 1, max: 100_000 } as const;
+
+// Read an integer setting without allowing malformed or extreme values to
+// disable rate limiting or create unbounded in-memory windows.
+export function getBoundedEnvInt(
+  key: string,
+  fallback: number,
+  bounds: { min: number; max: number },
+): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) return fallback;
+
+  return Math.max(bounds.min, Math.min(parsed, bounds.max));
 }
+
+const getRateWindow = (key: string, fallback: number): number =>
+  getBoundedEnvInt(key, fallback, RATE_WINDOW_BOUNDS);
+const getRateMax = (key: string, fallback: number): number =>
+  getBoundedEnvInt(key, fallback, RATE_MAX_BOUNDS);
 
 // Build limits from environment variables with fallback to hardcoded defaults
 function buildLimits(): Record<string, PlanRateConfig> {
@@ -41,57 +59,57 @@ function buildLimits(): Record<string, PlanRateConfig> {
     llm: {
       key: 'llm',
       perIp: {
-        windowMs: getEnvInt('RATE_LIMIT_LLM_IP_WINDOW', 60_000),
+        windowMs: getRateWindow('RATE_LIMIT_LLM_IP_WINDOW', 60_000),
         maxByPlan: {
-          free: getEnvInt('RATE_LIMIT_LLM_IP_FREE', 20),
-          pro: getEnvInt('RATE_LIMIT_LLM_IP_PRO', 120),
-          enterprise: getEnvInt('RATE_LIMIT_LLM_IP_ENTERPRISE', 600),
+          free: getRateMax('RATE_LIMIT_LLM_IP_FREE', 20),
+          pro: getRateMax('RATE_LIMIT_LLM_IP_PRO', 120),
+          enterprise: getRateMax('RATE_LIMIT_LLM_IP_ENTERPRISE', 600),
         },
       },
       perUser: {
-        windowMs: getEnvInt('RATE_LIMIT_LLM_USER_WINDOW', 60_000),
+        windowMs: getRateWindow('RATE_LIMIT_LLM_USER_WINDOW', 60_000),
         maxByPlan: {
-          free: getEnvInt('RATE_LIMIT_LLM_USER_FREE', 10),
-          pro: getEnvInt('RATE_LIMIT_LLM_USER_PRO', 60),
-          enterprise: getEnvInt('RATE_LIMIT_LLM_USER_ENTERPRISE', 300),
+          free: getRateMax('RATE_LIMIT_LLM_USER_FREE', 10),
+          pro: getRateMax('RATE_LIMIT_LLM_USER_PRO', 60),
+          enterprise: getRateMax('RATE_LIMIT_LLM_USER_ENTERPRISE', 300),
         },
       },
     },
     images: {
       key: 'images',
       perIp: {
-        windowMs: getEnvInt('RATE_LIMIT_IMAGES_IP_WINDOW', 60_000),
+        windowMs: getRateWindow('RATE_LIMIT_IMAGES_IP_WINDOW', 60_000),
         maxByPlan: {
-          free: getEnvInt('RATE_LIMIT_IMAGES_IP_FREE', 10),
-          pro: getEnvInt('RATE_LIMIT_IMAGES_IP_PRO', 60),
-          enterprise: getEnvInt('RATE_LIMIT_IMAGES_IP_ENTERPRISE', 300),
+          free: getRateMax('RATE_LIMIT_IMAGES_IP_FREE', 10),
+          pro: getRateMax('RATE_LIMIT_IMAGES_IP_PRO', 60),
+          enterprise: getRateMax('RATE_LIMIT_IMAGES_IP_ENTERPRISE', 300),
         },
       },
       perUser: {
-        windowMs: getEnvInt('RATE_LIMIT_IMAGES_USER_WINDOW', 60_000),
+        windowMs: getRateWindow('RATE_LIMIT_IMAGES_USER_WINDOW', 60_000),
         maxByPlan: {
-          free: getEnvInt('RATE_LIMIT_IMAGES_USER_FREE', 5),
-          pro: getEnvInt('RATE_LIMIT_IMAGES_USER_PRO', 30),
-          enterprise: getEnvInt('RATE_LIMIT_IMAGES_USER_ENTERPRISE', 150),
+          free: getRateMax('RATE_LIMIT_IMAGES_USER_FREE', 5),
+          pro: getRateMax('RATE_LIMIT_IMAGES_USER_PRO', 30),
+          enterprise: getRateMax('RATE_LIMIT_IMAGES_USER_ENTERPRISE', 150),
         },
       },
     },
     default: {
       key: 'global',
       perIp: {
-        windowMs: getEnvInt('RATE_LIMIT_DEFAULT_IP_WINDOW', 60_000),
+        windowMs: getRateWindow('RATE_LIMIT_DEFAULT_IP_WINDOW', 60_000),
         maxByPlan: {
-          free: getEnvInt('RATE_LIMIT_DEFAULT_IP_FREE', 60),
-          pro: getEnvInt('RATE_LIMIT_DEFAULT_IP_PRO', 600),
-          enterprise: getEnvInt('RATE_LIMIT_DEFAULT_IP_ENTERPRISE', 2000),
+          free: getRateMax('RATE_LIMIT_DEFAULT_IP_FREE', 60),
+          pro: getRateMax('RATE_LIMIT_DEFAULT_IP_PRO', 600),
+          enterprise: getRateMax('RATE_LIMIT_DEFAULT_IP_ENTERPRISE', 2000),
         },
       },
       perUser: {
-        windowMs: getEnvInt('RATE_LIMIT_DEFAULT_USER_WINDOW', 60_000),
+        windowMs: getRateWindow('RATE_LIMIT_DEFAULT_USER_WINDOW', 60_000),
         maxByPlan: {
-          free: getEnvInt('RATE_LIMIT_DEFAULT_USER_FREE', 60),
-          pro: getEnvInt('RATE_LIMIT_DEFAULT_USER_PRO', 600),
-          enterprise: getEnvInt('RATE_LIMIT_DEFAULT_USER_ENTERPRISE', 2000),
+          free: getRateMax('RATE_LIMIT_DEFAULT_USER_FREE', 60),
+          pro: getRateMax('RATE_LIMIT_DEFAULT_USER_PRO', 600),
+          enterprise: getRateMax('RATE_LIMIT_DEFAULT_USER_ENTERPRISE', 2000),
         },
       },
     },
@@ -138,7 +156,8 @@ function getClientIp(request: Request): string {
   // Only trust proxy-provided IP headers when explicitly enabled.
   // This prevents client-side header spoofing in deployments where
   // proxy sanitization is not guaranteed.
-  const trustProxy = process.env.TRUST_PROXY_HEADERS === 'true' || process.env.TRUST_PROXY_HEADERS === '1';
+  const trustProxy =
+    process.env.TRUST_PROXY_HEADERS === 'true' || process.env.TRUST_PROXY_HEADERS === '1';
 
   if (trustProxy) {
     const forwardedFor = request.headers.get('x-forwarded-for');
@@ -203,82 +222,84 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
     };
   }
 
-  return new Elysia({ name: `rate-limit-${cfg.key}` })
-    // 'scoped' is REQUIRED: Elysia plugin hooks are local by default, meaning a
-    // hook-only plugin never applies to the routes of the instance that .use()s
-    // it. Without this, the limiter silently never fires (prod bug, 2026-07-14).
-    .onBeforeHandle({ as: 'scoped' }, ({ request, set, user }) => {
-      try {
-        const ip = getClientIp(request);
-        const userId = user?.userId || null;
-        const plan = getUserPlan(user, request.headers);
+  return (
+    new Elysia({ name: `rate-limit-${cfg.key}` })
+      // 'scoped' is REQUIRED: Elysia plugin hooks are local by default, meaning a
+      // hook-only plugin never applies to the routes of the instance that .use()s
+      // it. Without this, the limiter silently never fires (prod bug, 2026-07-14).
+      .onBeforeHandle({ as: 'scoped' }, ({ request, set, user }) => {
+        try {
+          const ip = getClientIp(request);
+          const userId = user?.userId || null;
+          const plan = getUserPlan(user, request.headers);
 
-        // Per-IP rate limiting
-        const ipKey = `${cfg.key}:ip:${ip}`;
-        const ipRes = memoryStore.incr(ipKey, cfg.perIp.windowMs);
-        const ipMax = computeMax(cfg.perIp, plan);
+          // Per-IP rate limiting
+          const ipKey = `${cfg.key}:ip:${ip}`;
+          const ipRes = memoryStore.incr(ipKey, cfg.perIp.windowMs);
+          const ipMax = computeMax(cfg.perIp, plan);
 
-        if (ipRes.count > ipMax) {
-          const retryAfterSec = Math.ceil(ipRes.resetMs / 1000);
-          set.status = 429;
-          set.headers['Retry-After'] = String(Math.max(retryAfterSec, 1));
-
-          logger.warn(`Rate limit exceeded for IP ${ip}: ${ipRes.count}/${ipMax}`);
-
-          return {
-            error: {
-              name: 'RateLimitError',
-              message: 'Too many requests from this IP, please try again later',
-              code: 'RATE_LIMIT_EXCEEDED',
-              statusCode: 429,
-              details: {
-                scope: 'ip',
-                limit: ipMax,
-                window: cfg.perIp.windowMs / 1000,
-                retryAfter: Math.max(retryAfterSec, 1),
-              },
-            },
-          };
-        }
-
-        // Per-user rate limiting (if configured and user is authenticated)
-        if (cfg.perUser && userId) {
-          const userKey = `${cfg.key}:user:${userId}`;
-          const uRes = memoryStore.incr(userKey, cfg.perUser.windowMs);
-          const uMax = computeMax(cfg.perUser, plan);
-
-          if (uRes.count > uMax) {
-            const retryAfterSec = Math.ceil(uRes.resetMs / 1000);
+          if (ipRes.count > ipMax) {
+            const retryAfterSec = Math.ceil(ipRes.resetMs / 1000);
             set.status = 429;
             set.headers['Retry-After'] = String(Math.max(retryAfterSec, 1));
 
-            logger.warn(`Rate limit exceeded for user ${userId}: ${uRes.count}/${uMax}`);
+            logger.warn(`Rate limit exceeded for IP ${ip}: ${ipRes.count}/${ipMax}`);
 
             return {
               error: {
                 name: 'RateLimitError',
-                message: 'Too many requests from this user, please try again later',
+                message: 'Too many requests from this IP, please try again later',
                 code: 'RATE_LIMIT_EXCEEDED',
                 statusCode: 429,
                 details: {
-                  scope: 'user',
-                  limit: uMax,
-                  window: cfg.perUser.windowMs / 1000,
+                  scope: 'ip',
+                  limit: ipMax,
+                  window: cfg.perIp.windowMs / 1000,
                   retryAfter: Math.max(retryAfterSec, 1),
                 },
               },
             };
           }
-        }
 
-        // Rate limit passed, continue
-        return;
-      } catch (error) {
-        // Fail-open on limiter errors
-        logger.error({ error: error }, 'Rate limiter error, failing open:');
-        return;
-      }
-    });
+          // Per-user rate limiting (if configured and user is authenticated)
+          if (cfg.perUser && userId) {
+            const userKey = `${cfg.key}:user:${userId}`;
+            const uRes = memoryStore.incr(userKey, cfg.perUser.windowMs);
+            const uMax = computeMax(cfg.perUser, plan);
+
+            if (uRes.count > uMax) {
+              const retryAfterSec = Math.ceil(uRes.resetMs / 1000);
+              set.status = 429;
+              set.headers['Retry-After'] = String(Math.max(retryAfterSec, 1));
+
+              logger.warn(`Rate limit exceeded for user ${userId}: ${uRes.count}/${uMax}`);
+
+              return {
+                error: {
+                  name: 'RateLimitError',
+                  message: 'Too many requests from this user, please try again later',
+                  code: 'RATE_LIMIT_EXCEEDED',
+                  statusCode: 429,
+                  details: {
+                    scope: 'user',
+                    limit: uMax,
+                    window: cfg.perUser.windowMs / 1000,
+                    retryAfter: Math.max(retryAfterSec, 1),
+                  },
+                },
+              };
+            }
+          }
+
+          // Rate limit passed, continue
+          return;
+        } catch (error) {
+          // Fail-open on limiter errors
+          logger.error({ error: error }, 'Rate limiter error, failing open:');
+          return;
+        }
+      })
+  );
 }
 
 /**
@@ -290,42 +311,44 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
 export function createSimpleRateLimit(options: { windowMs: number; max: number; key?: string }) {
   const { windowMs, max, key = 'simple' } = options;
 
-  return new Elysia({ name: `simple-rate-limit-${key}` })
-    // 'scoped' is REQUIRED — see comment in planRateLimit above.
-    .onBeforeHandle({ as: 'scoped' }, ({ request, set }) => {
-      try {
-        const ip = getClientIp(request);
-        const bucketKey = `${key}:${ip}`;
-        const result = memoryStore.incr(bucketKey, windowMs);
+  return (
+    new Elysia({ name: `simple-rate-limit-${key}` })
+      // 'scoped' is REQUIRED — see comment in planRateLimit above.
+      .onBeforeHandle({ as: 'scoped' }, ({ request, set }) => {
+        try {
+          const ip = getClientIp(request);
+          const bucketKey = `${key}:${ip}`;
+          const result = memoryStore.incr(bucketKey, windowMs);
 
-        if (result.count > max) {
-          const retryAfterSec = Math.ceil(result.resetMs / 1000);
-          set.status = 429;
-          set.headers['Retry-After'] = String(Math.max(retryAfterSec, 1));
+          if (result.count > max) {
+            const retryAfterSec = Math.ceil(result.resetMs / 1000);
+            set.status = 429;
+            set.headers['Retry-After'] = String(Math.max(retryAfterSec, 1));
 
-          logger.warn(`Simple rate limit exceeded for IP ${ip}: ${result.count}/${max}`);
+            logger.warn(`Simple rate limit exceeded for IP ${ip}: ${result.count}/${max}`);
 
-          return {
-            error: {
-              name: 'RateLimitError',
-              message: 'Too many requests, please try again later',
-              code: 'RATE_LIMIT_EXCEEDED',
-              statusCode: 429,
-              details: {
-                scope: 'ip',
-                limit: max,
-                window: windowMs / 1000,
-                retryAfter: Math.max(retryAfterSec, 1),
+            return {
+              error: {
+                name: 'RateLimitError',
+                message: 'Too many requests, please try again later',
+                code: 'RATE_LIMIT_EXCEEDED',
+                statusCode: 429,
+                details: {
+                  scope: 'ip',
+                  limit: max,
+                  window: windowMs / 1000,
+                  retryAfter: Math.max(retryAfterSec, 1),
+                },
               },
-            },
-          };
-        }
+            };
+          }
 
-        return;
-      } catch (error) {
-        // Fail-open on errors
-        logger.error({ error: error }, 'Simple rate limiter error, failing open:');
-        return;
-      }
-    });
+          return;
+        } catch (error) {
+          // Fail-open on errors
+          logger.error({ error: error }, 'Simple rate limiter error, failing open:');
+          return;
+        }
+      })
+  );
 }
