@@ -25,6 +25,14 @@ import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 
 const TRAILING_JOINER_PATTERN =
   /\b(?:a|an|the|to|of|for|with|into|onto|from|under|over|through|your|their|my)\s*$/i;
+const MAX_ACTION_OPTION_NUMBER = 100;
+
+function parseActionOptionNumber(value: string): number | null {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 1 && number <= MAX_ACTION_OPTION_NUMBER
+    ? number
+    : null;
+}
 
 function buildOptionSeparator(boldText: string, cleanDescription: string): string {
   if (!cleanDescription) {
@@ -88,7 +96,8 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
   numberedRegex.lastIndex = 0; // Reset regex
   while ((match = numberedRegex.exec(messageContent)) !== null) {
     const [_fullMatch, numberStr, boldText, description] = match;
-    const number = parseInt(numberStr, 10);
+    const number = parseActionOptionNumber(numberStr);
+    if (number === null) continue;
 
     // Clean up the description text; don't add ", " before em-dashes or parentheticals
     const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
@@ -142,7 +151,8 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
     numberedFallbackRegex.lastIndex = 0;
     while ((match = numberedFallbackRegex.exec(messageContent)) !== null) {
       const [_fullMatch, numberStr, fullText] = match;
-      const number = parseInt(numberStr, 10);
+      const number = parseActionOptionNumber(numberStr);
+      if (number === null) continue;
 
       options.push({
         id: `option-${number}`,

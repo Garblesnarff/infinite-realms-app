@@ -71,6 +71,28 @@ describe('parseMessageOptions', () => {
       expect(result.options[0].text).toBe('Go left into the forest');
     });
 
+    it('accepts bounded option numbers in bold and fallback formats', () => {
+      const bold = parseMessageOptions('Choose:\n100. **Take the final path**');
+      const fallback = parseMessageOptions('Choose:\n100. Take the final path');
+
+      expect(bold.options[0]).toMatchObject({ id: 'option-100', number: 100 });
+      expect(fallback.options[0]).toMatchObject({ id: 'option-100', number: 100 });
+    });
+
+    it.each([
+      '0. **Zero is not an option**',
+      '101. **Too many options**',
+      '9007199254740992. **Unsafe integer**',
+      '0. Zero is not an option',
+      '101. Too many options',
+      '9007199254740992. Unsafe integer',
+    ])('rejects an out-of-range numbered option: %s', (option) => {
+      const result = parseMessageOptions(`Choose:\n${option}`);
+
+      expect(result.hasOptions).toBe(false);
+      expect(result.options).toEqual([]);
+    });
+
     it('should fallback to lettered options without bolding', () => {
       const content = 'Choose your path:\nA. Go left\nB. Go right';
       const result = parseMessageOptions(content);
