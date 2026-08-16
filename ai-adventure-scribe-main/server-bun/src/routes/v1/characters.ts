@@ -158,8 +158,12 @@ function parseSpellString(value: string | string[] | null): string[] {
 /**
  * Map character object from database/service (camelCase) to API (snake_case)
  * for backward compatibility with frontend.
+ *
+ * Exported for `__tests__/character-api-shape.test.ts`, which pins the fields
+ * the frontend needs to reconstruct a character sheet — a field silently
+ * missing here is invisible until a stat comes out wrong (issue #1827).
  */
-function mapCharacterToApi(
+export function mapCharacterToApi(
   character: Character & { stats?: CharacterStats },
 ): Record<string, unknown> | null {
   if (!character) return null;
@@ -177,6 +181,11 @@ function mapCharacterToApi(
     background: character.background,
     skill_proficiencies: character.skillProficiencies,
     expertise_proficiencies: character.expertiseProficiencies,
+    // Both columns are accepted on create and update (see characterSchema) but
+    // were never returned, so no client could read back a character's tool or
+    // saving-throw proficiencies — the saving-throw half of issue #1827.
+    tool_proficiencies: character.toolProficiencies,
+    saving_throw_proficiencies: character.savingThrowProficiencies,
     languages: character.languages,
     image_url: character.imageUrl,
     avatar_url: character.avatarUrl,

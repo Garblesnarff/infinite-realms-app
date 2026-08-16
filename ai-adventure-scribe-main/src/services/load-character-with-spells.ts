@@ -15,6 +15,10 @@ import type {
 
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import {
+  parseOptionalProficiencyList,
+  parseSavingThrowProficiencies,
+} from '@/utils/character/parse-proficiency-list';
 import { convertSpellIdsToFrontend } from '@/utils/spell-id-mapping';
 
 /**
@@ -158,6 +162,16 @@ export async function loadCharacterWithSpells(
       experience: characterData.experience_points || 0,
       alignment: characterData.alignment || '',
       description: characterData.description || '',
+      // Proficiencies drive the proficiency bonus on every skill check and
+      // saving throw. Without them the sheet reports raw ability modifiers
+      // (issue #1827).
+      skillProficiencies: parseOptionalProficiencyList(characterData.skill_proficiencies),
+      expertiseProficiencies: parseOptionalProficiencyList(characterData.expertise_proficiencies),
+      toolProficiencies: parseOptionalProficiencyList(characterData.tool_proficiencies),
+      savingThrowProficiencies: parseSavingThrowProficiencies(
+        characterData.saving_throw_proficiencies,
+      ),
+      languages: parseOptionalProficiencyList(characterData.languages),
       personalityTraits: [],
       ideals: [],
       bonds: [],

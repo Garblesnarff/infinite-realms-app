@@ -93,10 +93,28 @@ export const SUBRACE_SKILL_PROFICIENCIES_MAP: Record<string, readonly string[]> 
 /**
  * ⚡ Bolt: Static map of saving throw proficiencies for each class.
  * Moved outside to avoid redundant re-allocation on every call.
+ *
+ * Fallback only — used when a character has no persisted
+ * `savingThrowProficiencies`, which is the case for every template-derived
+ * character, since starter seeding never writes that column.
+ *
+ * Kept honest against `src/data/classes/*` by
+ * `src/utils/__tests__/class-saving-throw-map.test.ts`, which fails if this map
+ * and the class dataset disagree. Until 2026-08 this listed only
+ * Fighter/Wizard/Rogue/Cleric, so the other eight classes silently resolved to
+ * "no save proficiencies" (issue #1827).
  */
 export const CLASS_SAVING_THROW_PROFICIENCIES_MAP: Record<string, readonly string[]> = {
-  Fighter: ['strength', 'constitution'],
-  Wizard: ['intelligence', 'wisdom'],
-  Rogue: ['dexterity', 'intelligence'],
+  Barbarian: ['strength', 'constitution'],
+  Bard: ['dexterity', 'charisma'],
   Cleric: ['wisdom', 'charisma'],
+  Druid: ['intelligence', 'wisdom'],
+  Fighter: ['strength', 'constitution'],
+  Monk: ['strength', 'dexterity'],
+  Paladin: ['wisdom', 'charisma'],
+  Ranger: ['strength', 'dexterity'],
+  Rogue: ['dexterity', 'intelligence'],
+  Sorcerer: ['constitution', 'charisma'],
+  Warlock: ['wisdom', 'charisma'],
+  Wizard: ['intelligence', 'wisdom'],
 } as const;

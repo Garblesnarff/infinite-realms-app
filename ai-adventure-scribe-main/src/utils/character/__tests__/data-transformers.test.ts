@@ -223,5 +223,41 @@ describe('data-transformers', () => {
       expect(character.cantrips).toEqual(['mage-hand', 'light']);
       expect(character.knownSpells).toEqual(['shield', 'magic-missile']);
     });
+
+    // Issue #1827: the character sheet page hydrates through this transformer,
+    // which dropped every proficiency column — so the sheet showed bare
+    // ability modifiers on skills and saves.
+    describe('proficiency columns', () => {
+      const monkRow: CharacterRow = {
+        ...mockCharacterRow,
+        class: 'Monk',
+        background: 'Sage',
+        skill_proficiencies: 'Arcana,History,Acrobatics,Athletics',
+        saving_throw_proficiencies: 'strength,dexterity',
+        tool_proficiencies: 'Flute',
+        expertise_proficiencies: null,
+        languages: ['Common', 'Giant'],
+      };
+
+      it('hydrates the persisted proficiencies', () => {
+        const character = transformCharacterData(monkRow, mockStats, []);
+
+        expect(character.skillProficiencies).toEqual([
+          'Arcana',
+          'History',
+          'Acrobatics',
+          'Athletics',
+        ]);
+        expect(character.savingThrowProficiencies).toEqual(['strength', 'dexterity']);
+        expect(character.toolProficiencies).toEqual(['Flute']);
+        expect(character.languages).toEqual(['Common', 'Giant']);
+      });
+
+      it('leaves an empty column undefined so the class fallback still applies', () => {
+        const character = transformCharacterData(monkRow, mockStats, []);
+
+        expect(character.expertiseProficiencies).toBeUndefined();
+      });
+    });
   });
 });

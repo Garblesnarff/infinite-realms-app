@@ -14,6 +14,10 @@ import type {
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import {
+  parseOptionalProficiencyList,
+  parseSavingThrowProficiencies,
+} from '@/utils/character/parse-proficiency-list';
 
 /**
  * Load character details by game session ID.
@@ -74,6 +78,15 @@ export async function loadCharacterBySession(
         : undefined,
       experience: characterData.experience_points || 0,
       alignment: characterData.alignment || '',
+      // See load-character-with-spells.ts — the proficiency columns carry the
+      // proficiency bonus for skills and saves (issue #1827).
+      skillProficiencies: parseOptionalProficiencyList(characterData.skill_proficiencies),
+      expertiseProficiencies: parseOptionalProficiencyList(characterData.expertise_proficiencies),
+      toolProficiencies: parseOptionalProficiencyList(characterData.tool_proficiencies),
+      savingThrowProficiencies: parseSavingThrowProficiencies(
+        characterData.saving_throw_proficiencies,
+      ),
+      languages: parseOptionalProficiencyList(characterData.languages),
       personalityTraits: [],
       ideals: [],
       bonds: [],

@@ -1,6 +1,10 @@
 import type { Character, AbilityScores } from '@/types/character';
 
 import logger from '@/lib/logger';
+import {
+  parseOptionalProficiencyList,
+  parseSavingThrowProficiencies,
+} from '@/utils/character/parse-proficiency-list';
 
 // ===========================
 // Types
@@ -58,6 +62,11 @@ export interface CharacterRow {
   known_spells?: string | null;
   prepared_spells?: string | null;
   ritual_spells?: string | null;
+  skill_proficiencies?: string | string[] | null;
+  expertise_proficiencies?: string | string[] | null;
+  tool_proficiencies?: string | string[] | null;
+  saving_throw_proficiencies?: string | string[] | null;
+  languages?: string | string[] | null;
   character_stats?: CharacterStatsRow | CharacterStatsRow[] | null;
   character_equipment?: CharacterEquipmentRow[] | null;
 }
@@ -202,6 +211,15 @@ export const transformCharacterData = (
   equipment: equipmentData?.map((item) => item.item_name) || [],
   experience: characterData.experience_points || 0,
   alignment: characterData.alignment || '',
+  // Proficiencies carry the proficiency bonus onto skills and saves. Dropping
+  // them here made the sheet report bare ability modifiers (issue #1827).
+  skillProficiencies: parseOptionalProficiencyList(characterData.skill_proficiencies),
+  expertiseProficiencies: parseOptionalProficiencyList(characterData.expertise_proficiencies),
+  toolProficiencies: parseOptionalProficiencyList(characterData.tool_proficiencies),
+  savingThrowProficiencies: parseSavingThrowProficiencies(
+    characterData.saving_throw_proficiencies,
+  ),
+  languages: parseOptionalProficiencyList(characterData.languages),
   // Vision and Stealth
   visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
   obscurement: characterData.obscurement || 'clear',

@@ -141,11 +141,25 @@ export const calculateSavingThrowModifiers = (
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
 
   const className = character.class?.name || 'none';
-  let profSet = savingThrowSetCache.get(className);
+
+  // Character creation persists the class's save proficiencies on the
+  // character. Prefer them: the class fallback map below only covers four of
+  // the twelve classes, so a Monk (or Barbarian, Bard, Druid, Paladin, Ranger,
+  // Sorcerer, Warlock) resolved to an empty set and lost its proficiency bonus
+  // on every saving throw (issue #1827).
+  const persisted = character.savingThrowProficiencies ?? [];
+  const cacheKey =
+    persisted.length > 0 ? `chosen:${[...persisted].sort().join('|')}` : `class:${className}`;
+
+  let profSet = savingThrowSetCache.get(cacheKey);
 
   if (!profSet) {
-    profSet = new Set(getClassSavingThrowProficiencies(character.class));
-    savingThrowSetCache.set(className, profSet);
+    profSet = new Set(
+      persisted.length > 0
+        ? persisted.map((ability) => String(ability).toLowerCase())
+        : getClassSavingThrowProficiencies(character.class),
+    );
+    savingThrowSetCache.set(cacheKey, profSet);
   }
 
   const savingThrows: SavingThrowModifiers = {};
