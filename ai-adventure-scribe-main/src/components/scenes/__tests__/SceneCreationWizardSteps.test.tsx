@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -17,7 +17,7 @@ describe('SceneCreationWizard Steps Accessibility', () => {
           gridSize={5}
           gridColor="#000000"
           onUpdate={onUpdate}
-        />
+        />,
       );
 
       // Check Grid Type RadioGroup
@@ -37,19 +37,29 @@ describe('SceneCreationWizard Steps Accessibility', () => {
       expect(screen.getByLabelText(/Grid color picker/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Grid color hex code/i)).toBeInTheDocument();
     });
+
+    it('bounds grid-size updates to the supported range', () => {
+      const onUpdate = vi.fn();
+      render(
+        <StepGridSettings
+          gridType={GridType.SQUARE}
+          gridSize={5}
+          gridColor="#000000"
+          onUpdate={onUpdate}
+        />,
+      );
+
+      const input = screen.getByLabelText(/Grid Size \(feet per square\) \*/i);
+      fireEvent.change(input, { target: { value: '5000' } });
+
+      expect(onUpdate).toHaveBeenLastCalledWith({ gridSize: 50 });
+    });
   });
 
   describe('StepDimensions', () => {
     it('renders with accessible labels and IDs', () => {
       const onUpdate = vi.fn();
-      render(
-        <StepDimensions
-          width={20}
-          height={20}
-          gridSize={5}
-          onUpdate={onUpdate}
-        />
-      );
+      render(<StepDimensions width={20} height={20} gridSize={5} onUpdate={onUpdate} />);
 
       // Check width and height inputs
       const widthInput = screen.getByLabelText(/Width \(squares\) \*/i);
@@ -69,8 +79,25 @@ describe('SceneCreationWizard Steps Accessibility', () => {
       const presetGroup = screen.getByRole('group', { name: /Quick dimension presets/i });
       expect(presetGroup).toBeInTheDocument();
 
-      const smallPreset = screen.getByRole('button', { name: /Set dimensions to Small \(15×15\)/i });
+      const smallPreset = screen.getByRole('button', {
+        name: /Set dimensions to Small \(15×15\)/i,
+      });
       expect(smallPreset).toBeInTheDocument();
+    });
+
+    it('bounds dimension updates to the supported range', () => {
+      const onUpdate = vi.fn();
+      render(<StepDimensions width={20} height={20} gridSize={5} onUpdate={onUpdate} />);
+
+      fireEvent.change(screen.getByLabelText(/Width \(squares\) \*/i), {
+        target: { value: '999999' },
+      });
+      fireEvent.change(screen.getByLabelText(/Height \(squares\) \*/i), {
+        target: { value: '-12' },
+      });
+
+      expect(onUpdate).toHaveBeenNthCalledWith(1, { width: 100 });
+      expect(onUpdate).toHaveBeenNthCalledWith(2, { height: 1 });
     });
   });
 });

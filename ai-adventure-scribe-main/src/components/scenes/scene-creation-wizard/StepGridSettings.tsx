@@ -1,5 +1,7 @@
 import React, { useId } from 'react';
 
+import { readBoundedInteger } from './bounded-number-input';
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -79,7 +81,7 @@ export const StepGridSettings: React.FC<StepGridSettingsProps> = ({
           min="1"
           max="50"
           value={gridSize}
-          onChange={(e) => onUpdate({ gridSize: parseInt(e.target.value) || 1 })}
+          onChange={(e) => onUpdate({ gridSize: readBoundedInteger(e.target.value, 1, 50) })}
         />
         <p className="text-xs text-muted-foreground">
           Common values: 5ft (standard), 10ft (large scale)

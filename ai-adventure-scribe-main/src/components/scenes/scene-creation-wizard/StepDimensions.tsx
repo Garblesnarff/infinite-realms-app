@@ -1,5 +1,7 @@
 import React, { useId } from 'react';
 
+import { readBoundedInteger } from './bounded-number-input';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +33,7 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
             min="1"
             max="100"
             value={width}
-            onChange={(e) => onUpdate({ width: parseInt(e.target.value) || 1 })}
+            onChange={(e) => onUpdate({ width: readBoundedInteger(e.target.value, 1, 100) })}
           />
           <p className="text-xs text-muted-foreground">1 - 100 squares</p>
         </div>
@@ -44,7 +46,7 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
             min="1"
             max="100"
             value={height}
-            onChange={(e) => onUpdate({ height: parseInt(e.target.value) || 1 })}
+            onChange={(e) => onUpdate({ height: readBoundedInteger(e.target.value, 1, 100) })}
           />
           <p className="text-xs text-muted-foreground">1 - 100 squares</p>
         </div>
@@ -57,8 +59,7 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
           <strong>
             {width} × {height}
           </strong>{' '}
-          squares ({width * gridSize} ×{' '}
-          {height * gridSize} feet)
+          squares ({width * gridSize} × {height * gridSize} feet)
         </p>
       </div>
 
