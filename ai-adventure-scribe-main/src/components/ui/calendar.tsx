@@ -8,15 +8,23 @@ import { cn } from '@/lib/utils';
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
-function Calendar({ className, classNames, showOutsideDays = true, style, ...props }: CalendarProps) {
+function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  style,
+  ...props
+}: CalendarProps): React.ReactElement {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn('p-3', className)}
-      style={{
-        ...style,
-        '--calendar-cell-z-index': Z_INDEX.CARD_HOVER,
-      } as React.CSSProperties}
+      style={
+        {
+          ...style,
+          '--calendar-cell-z-index': Z_INDEX.CARD_HOVER,
+        } as React.CSSProperties
+      }
       classNames={{
         months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
         month: 'space-y-4',
