@@ -5,6 +5,7 @@
  * This is needed because the frontend uses local spell data with kebab-case IDs,
  * but the database uses UUIDs for spell references.
  */
+import { getSpellById } from '@/data/spells/api';
 import logger from '@/lib/logger';
 
 // Mapping from kebab-case IDs (frontend) to database UUIDs
@@ -99,16 +100,19 @@ export function convertSpellIdsToDatabase(spellIds: string[]): string[] {
 }
 
 /**
- * Convert database UUIDs to frontend spell IDs
- * @param uuids Array of database UUID spell IDs
+ * Convert database spell identifiers to frontend spell IDs
+ * @param spellIds Array of UUIDs or canonical frontend spell slugs
  * @returns Array of kebab-case spell IDs for frontend
  */
-export function convertSpellIdsToFrontend(uuids: string[]): string[] {
-  return uuids
-    .map((uuid) => {
-      const kebabId = REVERSE_SPELL_ID_MAPPING[uuid];
+export function convertSpellIdsToFrontend(spellIds: string[]): string[] {
+  return spellIds
+    .map((spellId) => {
+      // The character-spells API returns canonical frontend slugs in `id`.
+      // Keep UUID translation for older records, but do not discard a slug
+      // that already resolves in the complete frontend spell catalog.
+      const kebabId = REVERSE_SPELL_ID_MAPPING[spellId] ?? getSpellById(spellId)?.id;
       if (!kebabId) {
-        logger.warn(`No frontend mapping found for spell UUID: ${uuid}`);
+        logger.warn(`No frontend mapping found for spell identifier: ${spellId}`);
         return null;
       }
       return kebabId;

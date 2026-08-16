@@ -94,22 +94,22 @@ export async function loadCharacterWithSpells(
           apiSpells: spellData.spells.length,
         });
 
-        // Convert database UUID spell IDs back to frontend kebab-case IDs
-        // The API returns the canonical spell UUID in `id`; retain the two
-        // legacy aliases while older deployments roll forward.
+        // Normalize API spell identifiers to frontend kebab-case IDs. Current
+        // responses use canonical slugs in `id`; legacy records may use UUIDs
+        // or either of the older field aliases.
         const getApiSpellId = (spell: CharacterSpellData): string | undefined =>
           spell.id ||
           (spell as CharacterSpellData & { spell_id?: string }).spell_id ||
           (spell as CharacterSpellData & { spellId?: string }).spellId;
-        const cantripUUIDs = spellData.cantrips
+        const cantripIds = spellData.cantrips
           .map(getApiSpellId)
           .filter((id): id is string => Boolean(id));
-        const spellUUIDs = spellData.spells
+        const spellIds = spellData.spells
           .map(getApiSpellId)
           .filter((id): id is string => Boolean(id));
 
-        const apiCantrips = convertSpellIdsToFrontend(cantripUUIDs);
-        const apiKnownSpells = convertSpellIdsToFrontend(spellUUIDs);
+        const apiCantrips = convertSpellIdsToFrontend(cantripIds);
+        const apiKnownSpells = convertSpellIdsToFrontend(spellIds);
 
         // Merge API data with database data (prefer API data if available)
         if (apiCantrips.length > 0) {

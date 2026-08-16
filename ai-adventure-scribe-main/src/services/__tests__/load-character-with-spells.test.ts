@@ -16,7 +16,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('loadCharacterWithSpells API spell shape', () => {
-  it('reads the canonical spell UUID from the API record id field', async () => {
+  it('reads the canonical spell identifier from the API record id field', async () => {
     getCharacter.mockResolvedValue({
       id: 'character-id',
       name: 'Seeded Bard',
@@ -30,15 +30,15 @@ describe('loadCharacterWithSpells API spell shape', () => {
       character_stats: [{ charisma: 16 }],
     });
     getCharacterSpells.mockResolvedValue({
-      cantrips: [{ id: 'uuid-vicious-mockery', name: 'Vicious Mockery', level: 0 }],
-      spells: [{ id: 'uuid-healing-word', name: 'Healing Word', level: 1 }],
+      cantrips: [{ id: 'vicious-mockery', name: 'Vicious Mockery', level: 0 }],
+      spells: [{ id: 'healing-word', name: 'Healing Word', level: 1 }],
     });
 
     const result = await loadCharacterWithSpells('character-id');
 
-    expect(convertSpellIdsToFrontend).toHaveBeenNthCalledWith(1, ['uuid-vicious-mockery']);
-    expect(convertSpellIdsToFrontend).toHaveBeenNthCalledWith(2, ['uuid-healing-word']);
-    expect(result?.cantrips).toEqual(['frontend-uuid-vicious-mockery']);
-    expect(result?.knownSpells).toEqual(['frontend-uuid-healing-word']);
+    expect(convertSpellIdsToFrontend).toHaveBeenNthCalledWith(1, ['vicious-mockery']);
+    expect(convertSpellIdsToFrontend).toHaveBeenNthCalledWith(2, ['healing-word']);
+    expect(result?.cantrips).toEqual(['frontend-vicious-mockery']);
+    expect(result?.knownSpells).toEqual(['frontend-healing-word']);
   });
 });

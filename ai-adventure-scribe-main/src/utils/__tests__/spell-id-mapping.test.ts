@@ -8,6 +8,7 @@ import {
   SPELL_ID_MAPPING,
 } from '../spell-id-mapping';
 
+import { allSpells } from '@/data/spellOptions';
 import logger from '@/lib/logger';
 
 // Mock the logger
@@ -56,6 +57,28 @@ describe('spell-id-mapping', () => {
   });
 
   describe('convertSpellIdsToFrontend', () => {
+    it('preserves the exact standard SRD slugs returned by every class API', () => {
+      const warningSlugs = [
+        'acid-splash',
+        'chill-touch',
+        'dancing-lights',
+        'alarm',
+        'light',
+        'bane',
+        'guidance',
+      ];
+
+      expect(convertSpellIdsToFrontend(warningSlugs)).toEqual(warningSlugs);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('preserves every canonical frontend spell slug', () => {
+      const canonicalSlugs = allSpells.map((spell) => spell.id);
+
+      expect(convertSpellIdsToFrontend(canonicalSlugs)).toEqual(canonicalSlugs);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
     it('should convert valid database UUIDs to kebab-case IDs', () => {
       const fireballUuid = SPELL_ID_MAPPING['fireball'];
       const shieldUuid = SPELL_ID_MAPPING['shield'];
@@ -79,7 +102,7 @@ describe('spell-id-mapping', () => {
       expect(result).toHaveLength(1);
       expect(result).toContain('fireball');
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(`No frontend mapping found for spell UUID: ${invalidUuid}`),
+        expect.stringContaining(`No frontend mapping found for spell identifier: ${invalidUuid}`),
       );
     });
 
