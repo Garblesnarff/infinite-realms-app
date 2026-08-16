@@ -8,6 +8,7 @@
 import { logger } from '../lib/logger';
 
 import { llmApiClient } from '@/infrastructure/api';
+import { parseBoundedInteger } from '@/utils/bounded-integer';
 
 interface GeminiImageGenerationRequest {
   prompt: string;
@@ -38,7 +39,16 @@ export class GeminiImageService {
       localStorage.setItem('gemini-image-last-usage-date', today);
       localStorage.setItem('gemini-image-usage-today', '0');
     } else {
-      this.usageToday = parseInt(localStorage.getItem('gemini-image-usage-today') || '0', 10);
+      const storedUsage = localStorage.getItem('gemini-image-usage-today');
+      this.usageToday =
+        storedUsage === null
+          ? 0
+          : parseBoundedInteger(storedUsage, {
+              fallback: this.DAILY_FREE_LIMIT,
+              min: 0,
+              max: this.DAILY_FREE_LIMIT,
+              outOfRange: 'fallback',
+            });
     }
 
     return this.usageToday < this.DAILY_FREE_LIMIT;
@@ -48,7 +58,7 @@ export class GeminiImageService {
    * Record successful usage
    */
   private recordUsage(): void {
-    this.usageToday++;
+    this.usageToday = Math.min(this.usageToday + 1, this.DAILY_FREE_LIMIT);
     localStorage.setItem('gemini-image-usage-today', this.usageToday.toString());
   }
 

@@ -6,6 +6,7 @@ import {
   getImageGenerationCap,
   incrementImageGenerationCap,
   hasImageGenerationTriggered,
+  MAX_IMAGE_GENERATIONS_PER_SESSION,
   markImageGenerationTriggered,
 } from './image-generation-session-cap';
 
@@ -15,12 +16,18 @@ import type { ChatMessage } from '@/types/game';
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { generateSceneImage } from '@/services/scene-image-generator';
+import { parseBoundedInteger } from '@/utils/bounded-integer';
 import { handleAsyncError } from '@/utils/error-handler';
 import { generateImageLabel } from '@/utils/image-label-generator';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 
 const env = import.meta.env as Record<string, string | undefined>;
+const IMAGE_MAX = parseBoundedInteger(env.VITE_DM_IMAGE_MAX_PER_SESSION, {
+  fallback: 3,
+  min: 0,
+  max: MAX_IMAGE_GENERATIONS_PER_SESSION,
+});
 
 interface UseImageGenerationProps {
   sessionId?: string;
@@ -53,7 +60,6 @@ export const useImageGeneration = ({
   // Env flags
   const AUTO = String(env.VITE_DM_AUTO_IMAGE ?? 'false').toLowerCase();
   const isAuto = ['1', 'true', 'yes', 'on'].includes(AUTO);
-  const MAX = Number.parseInt(String(env.VITE_DM_IMAGE_MAX_PER_SESSION ?? '3'));
 
   const handleGenerateScene = useCallback(
     async (message: ChatMessage & { id?: string; timestamp?: string }) => {
@@ -163,7 +169,7 @@ export const useImageGeneration = ({
   // Auto-generate on DM-suggested imageRequests
   useEffect(() => {
     if (!isAuto || !sessionId) return;
-    if (getImageGenerationCap(sessionId) >= (Number.isFinite(MAX) ? MAX : 3)) return;
+    if (getImageGenerationCap(sessionId) >= IMAGE_MAX) return;
 
     // ⚡ Bolt: Using a single backward for loop to find the last DM message
     // instead of creating multiple intermediate arrays via map/reverse.
