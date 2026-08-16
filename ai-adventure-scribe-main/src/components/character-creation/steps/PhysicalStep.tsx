@@ -1,6 +1,12 @@
 import { Ruler, Weight, User, Eye, Palette, Sparkles } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
+import {
+  MAX_CHARACTER_AGE,
+  MIN_CHARACTER_AGE,
+  parseCharacterAge,
+} from './character-creation-input-bounds';
+
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,7 +31,7 @@ const PhysicalStep: React.FC = () => {
   };
 
   const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    dispatch({ type: 'SET_AGE', payload: parseInt(e.target.value) });
+    dispatch({ type: 'SET_AGE', payload: parseCharacterAge(e.target.value) });
   };
 
   const handleHeightChange = (value: number[]) => {
@@ -129,7 +135,9 @@ const PhysicalStep: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label id={genderLabelId} className="text-sm font-medium mb-3 block">Gender</Label>
+              <Label id={genderLabelId} className="text-sm font-medium mb-3 block">
+                Gender
+              </Label>
               <RadioGroup
                 defaultValue={state.character.gender}
                 onValueChange={handleGenderChange}
@@ -158,6 +166,9 @@ const PhysicalStep: React.FC = () => {
               <Input
                 id={ageId}
                 type="number"
+                min={MIN_CHARACTER_AGE}
+                max={MAX_CHARACTER_AGE}
+                step={1}
                 value={state.character.age || ''}
                 onChange={handleAgeChange}
                 className="text-lg"

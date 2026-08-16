@@ -1,6 +1,7 @@
 import { Package, Coins, TrendingUp } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
+import { parseStartingGoldDice } from './character-creation-input-bounds';
 import { EquipmentPackagePreview } from './equipment-selection/EquipmentPackagePreview';
 import {
   getStartingEquipmentPackage,
@@ -14,7 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { startingGoldByClass, EQUIPMENT_LOOKUP, getStartingEquipmentChoices } from '@/data/equipmentOptions';
+import {
+  startingGoldByClass,
+  EQUIPMENT_LOOKUP,
+  getStartingEquipmentChoices,
+} from '@/data/equipmentOptions';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -81,12 +86,12 @@ const StartingEquipmentSelection: React.FC = () => {
     if (!goldData) return;
 
     // Simple dice roll simulation - in a real app you'd use proper dice rolling
-    const numDice = parseInt(goldData.dice.split('d')[0]);
-    const dieSize = parseInt(goldData.dice.split('d')[1]);
+    const dice = parseStartingGoldDice(goldData.dice);
+    if (!dice) return;
 
     let total = 0;
-    for (let i = 0; i < numDice; i++) {
-      total += Math.floor(Math.random() * dieSize) + 1;
+    for (let i = 0; i < dice.count; i++) {
+      total += Math.floor(Math.random() * dice.sides) + 1;
     }
 
     const finalAmount = total * goldData.multiplier;
@@ -104,7 +109,9 @@ const StartingEquipmentSelection: React.FC = () => {
    */
   const applyEquipment = (): void => {
     if (method === 'package') {
-      const chosen = srdEquipment.choices.flatMap((choice, index) => choice.alternatives[choiceSelections[index] ?? 0]?.items ?? []);
+      const chosen = srdEquipment.choices.flatMap(
+        (choice, index) => choice.alternatives[choiceSelections[index] ?? 0]?.items ?? [],
+      );
       const selectedItems = srdEquipment.choices.length
         ? [...srdEquipment.fixed, ...chosen]
         : startingEquipment.map((equipment) => ({ equipment, quantity: 1 }));
@@ -242,10 +249,17 @@ const StartingEquipmentSelection: React.FC = () => {
                 id={`equipment-choice-${index}`}
                 className="w-full rounded-md border bg-background p-2"
                 value={choiceSelections[index] ?? 0}
-                onChange={(event) => setChoiceSelections((current) => ({ ...current, [index]: Number(event.target.value) }))}
+                onChange={(event) =>
+                  setChoiceSelections((current) => ({
+                    ...current,
+                    [index]: Number(event.target.value),
+                  }))
+                }
               >
                 {choice.alternatives.map((alternative, optionIndex) => (
-                  <option key={`${alternative.label}-${optionIndex}`} value={optionIndex}>{alternative.label}</option>
+                  <option key={`${alternative.label}-${optionIndex}`} value={optionIndex}>
+                    {alternative.label}
+                  </option>
                 ))}
               </select>
             </div>
