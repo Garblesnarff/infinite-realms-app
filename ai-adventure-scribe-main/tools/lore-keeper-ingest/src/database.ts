@@ -4,6 +4,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+import { embeddingProvenance } from '../../../shared/embedding-limits.js';
+
 import type { CampaignChunk, CampaignRule, ParsedCampaign } from './types.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -38,33 +40,31 @@ export async function upsertStarterCampaign(
   campaign: ParsedCampaign & {
     isComplete: boolean;
     isPublished: boolean;
-  }
+  },
 ): Promise<void> {
   const client = getClient();
 
-  const { error } = await client
-    .from('starter_campaigns')
-    .upsert(
-      {
-        id: campaign.id,
-        slug: campaign.slug,
-        title: campaign.title,
-        tagline: campaign.tagline,
-        genre: campaign.genre,
-        sub_genre: campaign.subGenre,
-        tone: campaign.tone,
-        difficulty: campaign.difficulty,
-        level_range: campaign.levelRange,
-        estimated_sessions: campaign.estimatedSessions,
-        premise: campaign.premise,
-        creative_brief: campaign.creativeBrief,
-        overview: campaign.overview,
-        is_complete: campaign.isComplete,
-        is_published: campaign.isPublished,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' }
-    );
+  const { error } = await client.from('starter_campaigns').upsert(
+    {
+      id: campaign.id,
+      slug: campaign.slug,
+      title: campaign.title,
+      tagline: campaign.tagline,
+      genre: campaign.genre,
+      sub_genre: campaign.subGenre,
+      tone: campaign.tone,
+      difficulty: campaign.difficulty,
+      level_range: campaign.levelRange,
+      estimated_sessions: campaign.estimatedSessions,
+      premise: campaign.premise,
+      creative_brief: campaign.creativeBrief,
+      overview: campaign.overview,
+      is_complete: campaign.isComplete,
+      is_published: campaign.isPublished,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
 
   if (error) {
     throw new Error(`Failed to upsert campaign ${campaign.id}: ${error.message}`);
@@ -190,24 +190,30 @@ function dedupeChunkRows(rows: CampaignChunkRow[]): CampaignChunkRow[] {
  */
 export async function insertCampaignChunks(
   chunks: CampaignChunk[],
-  embeddings: (number[] | null)[] = []
+  embeddings: (number[] | null)[] = [],
 ): Promise<number> {
   const client = getClient();
 
   // Prepare data with embeddings
-  const chunksWithEmbeddings: CampaignChunkRow[] = chunks.map((chunk, i) => ({
-    campaign_id: chunk.campaignId,
-    chunk_type: chunk.chunkType,
-    entity_name: chunk.entityName,
-    parent_entity: chunk.parentEntity,
-    content: chunk.content,
-    summary: chunk.summary,
-    embedding: embeddings[i] ? formatEmbedding(embeddings[i]!) : null,
-    metadata: chunk.metadata,
-    source_file: chunk.sourceFile,
-    source_section: chunk.sourceSection,
-    sequence_order: chunk.sequenceOrder,
-  }));
+  const chunksWithEmbeddings: CampaignChunkRow[] = chunks.map((chunk, i) => {
+    const embedding = embeddings[i];
+
+    return {
+      campaign_id: chunk.campaignId,
+      chunk_type: chunk.chunkType,
+      entity_name: chunk.entityName,
+      parent_entity: chunk.parentEntity,
+      content: chunk.content,
+      summary: chunk.summary,
+      embedding: embedding ? formatEmbedding(embedding) : null,
+      // Stamp which model produced the vector, but only when one is actually written —
+      // a null-embedding row must not claim provenance it doesn't have.
+      metadata: embedding ? { ...chunk.metadata, ...embeddingProvenance() } : chunk.metadata,
+      source_file: chunk.sourceFile,
+      source_section: chunk.sourceSection,
+      sequence_order: chunk.sequenceOrder,
+    };
+  });
 
   const deduped = dedupeChunkRows(chunksWithEmbeddings);
 
@@ -240,7 +246,7 @@ export async function insertCampaignRules(rules: CampaignRule[]): Promise<number
 
   const client = getClient();
 
-  const rulesData = rules.map(rule => ({
+  const rulesData = rules.map((rule) => ({
     campaign_id: rule.campaignId,
     rule_type: rule.ruleType,
     condition: rule.condition,
@@ -262,9 +268,7 @@ export async function insertCampaignRules(rules: CampaignRule[]): Promise<number
 /**
  * Get a starter campaign by ID
  */
-export async function getStarterCampaign(
-  campaignId: string
-): Promise<ParsedCampaign | null> {
+export async function getStarterCampaign(campaignId: string): Promise<ParsedCampaign | null> {
   const client = getClient();
 
   const { data, error } = await client
@@ -312,7 +316,7 @@ export async function listStarterCampaigns(): Promise<
     throw new Error(`Failed to list campaigns: ${error.message}`);
   }
 
-  return (data || []).map(c => ({
+  return (data || []).map((c) => ({
     id: c.id,
     title: c.title,
     isComplete: c.is_complete,

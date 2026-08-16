@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 
 import { reingestCampaignChunks } from './reingest-database.js';
+import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from '../../../shared/embedding-limits.js';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -109,4 +110,74 @@ test('removes an unlinked section marker while retaining parsed rows', async () 
   assert.equal(result.rowsInserted, 1);
   assert.equal(result.sectionMarkerRowsRemoved, 1);
   assert.deepEqual(calls.deleted, ['faction-marker']);
+});
+
+test('stamps the embedding model on rows whose vector is rewritten', async () => {
+  const { client, calls } = fakeClient([
+    {
+      id: 'legacy-library',
+      campaign_id: 'academy-of-arcane-gastronomy',
+      chunk_type: 'location',
+      entity_name: 'The Academy Library',
+      metadata: { embeddingModel: 'text-embedding-004', embeddingDimensions: 768 },
+      source_file: 'campaign_bible.md',
+      source_section: 'Locations',
+      created_at: '2026-08-13T00:00:00.000Z',
+    },
+  ]);
+
+  await reingestCampaignChunks(
+    client,
+    [
+      {
+        campaignId: 'academy-of-arcane-gastronomy',
+        chunkType: 'location',
+        entityName: 'The Academy Library',
+        content: 'The cleaned library chunk.',
+        metadata: {},
+        sourceFile: 'campaign_bible.md',
+        sourceSection: 'Locations',
+      },
+    ],
+    [[0.1, 0.2, 0.3]],
+  );
+
+  assert.deepEqual(calls.updates[0]?.payload.metadata, {
+    embeddingModel: EMBEDDING_MODEL,
+    embeddingDimensions: EMBEDDING_DIMENSIONS,
+  });
+});
+
+test('leaves the existing embedding stamp alone when embeddings are skipped', async () => {
+  const { client, calls } = fakeClient([
+    {
+      id: 'legacy-library',
+      campaign_id: 'academy-of-arcane-gastronomy',
+      chunk_type: 'location',
+      entity_name: 'The Academy Library',
+      metadata: { embeddingModel: 'text-embedding-004', embeddingDimensions: 768 },
+      source_file: 'campaign_bible.md',
+      source_section: 'Locations',
+      created_at: '2026-08-13T00:00:00.000Z',
+    },
+  ]);
+
+  await reingestCampaignChunks(client, [
+    {
+      campaignId: 'academy-of-arcane-gastronomy',
+      chunkType: 'location',
+      entityName: 'The Academy Library',
+      content: 'The cleaned library chunk.',
+      metadata: {},
+      sourceFile: 'campaign_bible.md',
+      sourceSection: 'Locations',
+    },
+  ]);
+
+  // The row keeps its old vector, so it must keep the stamp describing that vector.
+  assert.equal(calls.updates[0]?.payload.embedding, undefined);
+  assert.deepEqual(calls.updates[0]?.payload.metadata, {
+    embeddingModel: 'text-embedding-004',
+    embeddingDimensions: 768,
+  });
 });

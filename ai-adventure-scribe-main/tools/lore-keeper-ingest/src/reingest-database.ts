@@ -11,6 +11,7 @@ import {
   isReingestableEntityName,
   mergeMetadataPreservingImageUrl,
 } from './reingest.js';
+import { embeddingProvenance } from '../../../shared/embedding-limits.js';
 
 import type { ExistingCampaignChunk } from './reingest.js';
 import type { CampaignChunk, CampaignRule, ParsedCampaign } from './types.js';
@@ -73,7 +74,10 @@ function chunkPayload(
     parent_entity: chunk.parentEntity || null,
     content: chunk.content,
     summary: chunk.summary || null,
-    metadata,
+    // Re-stamp provenance only when this write also replaces the vector. Under
+    // `--skip-embeddings` the row keeps its existing embedding, so the merged metadata must
+    // keep the existing stamp rather than claim the current model.
+    metadata: embedding ? { ...metadata, ...embeddingProvenance() } : metadata,
     source_file: chunk.sourceFile,
     source_section: chunk.sourceSection || null,
     sequence_order: chunk.sequenceOrder ?? null,

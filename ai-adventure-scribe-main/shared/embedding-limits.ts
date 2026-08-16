@@ -16,6 +16,25 @@ export const EMBEDDING_MODEL = 'gemini-embedding-001';
 export const EMBEDDING_DIMENSIONS = 768;
 
 /**
+ * Provenance stamped into `campaign_chunks.metadata` alongside every embedding we write.
+ *
+ * Vectors from different models (or different truncation widths) are not comparable, so a
+ * model change means the corpus must be re-embedded wholesale rather than topped up. Without a
+ * stamp there is no way to tell from the database which rows carry which model — after the
+ * #1815 migration the only available evidence was "every vector changed", which is a diff
+ * against a hand-made backup table rather than something queryable. See #1816.
+ *
+ * Only set this on a row whose embedding is being written in the same statement: a row that
+ * keeps its existing vector (e.g. `reingest --skip-embeddings`) must keep its existing stamp.
+ */
+export function embeddingProvenance(): {
+  embeddingModel: string;
+  embeddingDimensions: number;
+} {
+  return { embeddingModel: EMBEDDING_MODEL, embeddingDimensions: EMBEDDING_DIMENSIONS };
+}
+
+/**
  * Scale a vector to unit length.
  *
  * Google only normalizes the full 3072-dimension output; truncated widths come back
