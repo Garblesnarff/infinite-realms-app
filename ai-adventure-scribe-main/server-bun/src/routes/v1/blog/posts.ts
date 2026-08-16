@@ -29,6 +29,7 @@ import {
 } from './helpers.js';
 import { mapBlogPost } from './mappers.js';
 import { blogListQuerySchema, blogPostInputSchema, blogPostUpdateSchema } from './schemas.js';
+import { buildIlikeOrFilter } from '../../../lib/postgrest-filters.js';
 import { supabaseService } from '../../../lib/supabase.js';
 import { canManagePost } from '../../../middleware/blog-author.js';
 
@@ -55,7 +56,10 @@ export const blogPostRoutes = new Elysia()
       let selectString = BLOG_POST_SUMMARY_SELECT;
       if (category) {
         selectString = selectString
-          .replace(/categories:blog_post_categories\s*\(/, 'categories:blog_post_categories!inner (')
+          .replace(
+            /categories:blog_post_categories\s*\(/,
+            'categories:blog_post_categories!inner (',
+          )
           .replace(/category:blog_categories\s*\(/, 'category:blog_categories!inner (');
       }
       if (tag) {
@@ -87,10 +91,8 @@ export const blogPostRoutes = new Elysia()
       }
 
       if (search) {
-        const sanitized = search.trim().toLowerCase();
-        if (sanitized.length > 0) {
-          dbQuery = dbQuery.or(`title.ilike.%${sanitized}%,summary.ilike.%${sanitized}%`);
-        }
+        const searchFilter = buildIlikeOrFilter(['title', 'summary'], search);
+        if (searchFilter) dbQuery = dbQuery.or(searchFilter);
       }
 
       const { data, error, count } = await dbQuery
