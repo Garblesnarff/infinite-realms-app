@@ -2,6 +2,7 @@ import type { CharacterState } from './types';
 import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
+import { parseSpellSlotLevel } from '@/utils/spell-slot-level';
 
 /**
  * Handles the UPDATE_CHARACTER action logic.
@@ -28,12 +29,7 @@ export function handleUpdateCharacter(
     logger.debug('Action payload:', payload);
 
     // Special logging for spell-related updates
-    if (
-      payload.cantrips ||
-      payload.knownSpells ||
-      payload.preparedSpells ||
-      payload.ritualSpells
-    ) {
+    if (payload.cantrips || payload.knownSpells || payload.preparedSpells || payload.ritualSpells) {
       logger.debug('[CharacterContext] Spell update detected:', {
         incomingCantrips: payload.cantrips,
         incomingKnownSpells: payload.knownSpells,
@@ -74,10 +70,7 @@ export function handleUpdateCharacter(
   // Additional logging for spell updates - include both property naming conventions
   if (
     hasChanges &&
-    (payload.cantrips ||
-      payload.knownSpells ||
-      payload.preparedSpells ||
-      payload.ritualSpells)
+    (payload.cantrips || payload.knownSpells || payload.preparedSpells || payload.ritualSpells)
   ) {
     logger.debug('[CharacterContext] Final spell state after update:', {
       finalCantrips: updatedCharacter.cantrips,
@@ -117,8 +110,7 @@ export function handleUpdateSpellSlots(
 
   // Validate spell slot structure
   for (const [level, slots] of Object.entries(payload)) {
-    const levelNum = parseInt(level, 10);
-    if (isNaN(levelNum) || levelNum < 0 || levelNum > 9) {
+    if (parseSpellSlotLevel(level) === null) {
       logger.error('Invalid spell slot level:', level);
       return {
         ...state,

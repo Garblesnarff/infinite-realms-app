@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { parseSpellSlotLevel } from '@/utils/spell-slot-level';
 
 interface SpellSlotsSectionProps {
   spellSlots: Record<string, { total: number; used: number }>;
@@ -60,11 +61,13 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
                                 ? 'bg-muted border-border'
                                 : 'bg-infinite-purple border-infinite-purple'
                             }`}
-                            onClick={() =>
-                              isUsed
-                                ? restoreSpellSlot(parseInt(level))
-                                : consumeSpellSlot(parseInt(level))
-                            }
+                            onClick={() => {
+                              const spellSlotLevel = parseSpellSlotLevel(level);
+                              if (spellSlotLevel === null) return;
+
+                              if (isUsed) restoreSpellSlot(spellSlotLevel);
+                              else consumeSpellSlot(spellSlotLevel);
+                            }}
                             aria-label={`Level ${level} spell slot ${
                               isUsed ? 'expended' : 'available'
                             }`}

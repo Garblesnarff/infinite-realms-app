@@ -9,7 +9,6 @@ import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
 
-
 // Mock logger
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -183,7 +182,7 @@ describe('characterReducer', () => {
     const stateWithCharacter = { ...initialState, character: mockCharacter };
     const spellSlots = {
       1: { max: 4, current: 2 },
-      2: { max: 2, current: 2 }
+      2: { max: 2, current: 2 },
     };
     const action = { type: 'UPDATE_SPELL_SLOTS' as const, payload: spellSlots };
     const state = characterReducer(stateWithCharacter, action);
@@ -194,7 +193,10 @@ describe('characterReducer', () => {
 
   it('should return error on invalid UPDATE_SPELL_SLOTS payload', () => {
     const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = { type: 'UPDATE_SPELL_SLOTS' as const, payload: { 1: { max: -1, current: 0 } } as any };
+    const action = {
+      type: 'UPDATE_SPELL_SLOTS' as const,
+      payload: { 1: { max: -1, current: 0 } } as any,
+    };
     const state = characterReducer(stateWithCharacter, action);
 
     expect(state.error).toBe('Invalid spell slot structure');
@@ -210,11 +212,28 @@ describe('characterReducer', () => {
 
   it('should return error on invalid spell slot level in UPDATE_SPELL_SLOTS', () => {
     const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = { type: 'UPDATE_SPELL_SLOTS' as const, payload: { 'invalid': { max: 4, current: 4 } } as any };
+    const action = {
+      type: 'UPDATE_SPELL_SLOTS' as const,
+      payload: { invalid: { max: 4, current: 4 } } as any,
+    };
     const state = characterReducer(stateWithCharacter, action);
 
     expect(state.error).toBe('Invalid spell slot level');
   });
+
+  it.each(['1slot', '1.5', '10', '9007199254740992'])(
+    'should reject the malformed spell slot level %j',
+    (level) => {
+      const action = {
+        type: 'UPDATE_SPELL_SLOTS' as const,
+        payload: { [level]: { max: 4, current: 4 } } as any,
+      };
+
+      const state = characterReducer(initialState, action);
+
+      expect(state.error).toBe('Invalid spell slot level');
+    },
+  );
 
   it('should handle UPDATE_CONCENTRATION', () => {
     const stateWithCharacter = { ...initialState, character: mockCharacter };
@@ -250,15 +269,24 @@ describe('characterReducer', () => {
   });
 
   it('should log spell updates during UPDATE_CHARACTER', () => {
-    const stateWithCharacter = { ...initialState, character: { ...mockCharacter, knownSpells: undefined } as any };
+    const stateWithCharacter = {
+      ...initialState,
+      character: { ...mockCharacter, knownSpells: undefined } as any,
+    };
     const action = {
       type: 'UPDATE_CHARACTER' as const,
-      payload: { knownSpells: [{ id: 'spell-1', name: 'Magic Missile' }] as any }
+      payload: { knownSpells: [{ id: 'spell-1', name: 'Magic Missile' }] as any },
     };
     characterReducer(stateWithCharacter, action);
 
-    expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Spell update detected'), expect.anything());
-    expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Final spell state after update'), expect.anything());
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Spell update detected'),
+      expect.anything(),
+    );
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Final spell state after update'),
+      expect.anything(),
+    );
   });
 
   it('should handle RESET', () => {
@@ -266,7 +294,7 @@ describe('characterReducer', () => {
       ...initialState,
       character: mockCharacter,
       isDirty: true,
-      currentStep: 5
+      currentStep: 5,
     };
     const action = { type: 'RESET' as const };
     const state = characterReducer(dirtyState, action);

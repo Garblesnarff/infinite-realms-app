@@ -7,6 +7,7 @@ import logger from '@/lib/logger';
 import { characterSpellService } from '@/services/characterSpellApi';
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 import { getCharacterSpells } from '@/utils/spell-lookup';
+import { parseSpellSlotLevel } from '@/utils/spell-slot-level';
 
 export interface SpellSlots {
   [key: number]: { total: number; used: number };
@@ -109,21 +110,21 @@ export const useSpells = (character: Character): UseSpellsReturn => {
 
   // Spellcasting ability (would be determined by class)
   const spellcastingAbility = 'intelligence'; // Example: Wizard
-  const spellcastingMod = useMemo(() =>
-    character.abilityScores?.[spellcastingAbility]?.modifier || 0,
-    [character.abilityScores, spellcastingAbility]
+  const spellcastingMod = useMemo(
+    () => character.abilityScores?.[spellcastingAbility]?.modifier || 0,
+    [character.abilityScores, spellcastingAbility],
   );
-  const proficiencyBonus = useMemo(() =>
-    calculateProficiencyBonus(character.level || 1),
-    [character.level]
+  const proficiencyBonus = useMemo(
+    () => calculateProficiencyBonus(character.level || 1),
+    [character.level],
   );
-  const spellAttackBonus = useMemo(() =>
-    spellcastingMod + proficiencyBonus,
-    [spellcastingMod, proficiencyBonus]
+  const spellAttackBonus = useMemo(
+    () => spellcastingMod + proficiencyBonus,
+    [spellcastingMod, proficiencyBonus],
   );
-  const spellSaveDC = useMemo(() =>
-    8 + spellcastingMod + proficiencyBonus,
-    [spellcastingMod, proficiencyBonus]
+  const spellSaveDC = useMemo(
+    () => 8 + spellcastingMod + proficiencyBonus,
+    [spellcastingMod, proficiencyBonus],
   );
 
   const consumeSpellSlot = useCallback((level: number) => {
@@ -160,20 +161,15 @@ export const useSpells = (character: Character): UseSpellsReturn => {
     setSpellSlots((prev) => {
       const restored = { ...prev };
       Object.keys(restored).forEach((level) => {
-        restored[parseInt(level)].used = 0;
+        const spellSlotLevel = parseSpellSlotLevel(level);
+        if (spellSlotLevel !== null) restored[spellSlotLevel].used = 0;
       });
       return restored;
     });
   }, []);
 
-  const cantrips = useMemo(() =>
-    spells.filter((spell) => spell.level === 0),
-    [spells]
-  );
-  const leveledSpells = useMemo(() =>
-    spells.filter((spell) => spell.level > 0),
-    [spells]
-  );
+  const cantrips = useMemo(() => spells.filter((spell) => spell.level === 0), [spells]);
+  const leveledSpells = useMemo(() => spells.filter((spell) => spell.level > 0), [spells]);
 
   return {
     spells,
