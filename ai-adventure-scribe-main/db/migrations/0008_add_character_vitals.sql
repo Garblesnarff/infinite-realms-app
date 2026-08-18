@@ -1,0 +1,29 @@
+-- 0008_add_character_vitals -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- Why this file exists
+-- --------------------
+-- The DDL for character-scoped vitals (issue #1826, C0.5 PR1) is authored by
+-- hand in supabase/migrations/20260818_add_character_vitals.sql, which is the
+-- authoritative statement of the change: it carries the `vital_state` CHECK
+-- constraint, the RLS enable and the anon/authenticated REVOKE that drizzle-kit
+-- cannot express from db/schema/*.ts.
+--
+-- This file and meta/0008_snapshot.json exist only to advance the drizzle
+-- snapshot chain so that `bun run db:check-drift`
+-- (scripts/check-schema-drift.sh, wired into the `schema-drift` CI job) sees
+-- db/schema/game.ts and db/migrations/ back in agreement. Only the snapshot
+-- matters -- the same arrangement as 0004_schema_baseline.sql.
+--
+-- The generated DDL is NOT kept here because the replay in
+-- scripts/test-migrations.sh merges db/migrations/ and supabase/migrations/
+-- into one history. Keeping it would break that replay twice over: drizzle's
+-- statements are not idempotent, so they collide with the hand-written
+-- migration whichever order the two land in; and a bare drizzle index prefix
+-- sorts before every date-named migration, so this file would replay against a
+-- database in which supabase/migrations/20251112_01_add_combat_system_unified.sql
+-- has not yet created `conditions_library` -- the table its FK points at. With
+-- no DDL in it the file is safe at any point in the replay and needs no
+-- ORDER_OVERRIDES entry in scripts/test-migrations.sh.
+--
+-- To regenerate the equivalent DDL for inspection:
+--   git stash -- db/migrations/meta/0008_snapshot.json && bunx drizzle-kit generate

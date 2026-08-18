@@ -14,6 +14,7 @@ import { TRPCError } from '@trpc/server';
 import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
 import { CharacterSpellService } from './character/character-spell-service.js';
+import { CharacterVitalsService } from './character-vitals-service.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
@@ -270,36 +271,17 @@ export class CharacterService {
     }
   }
 
+  /**
+   * Apply damage to a character's hit points.
+   *
+   * @deprecated Use CharacterVitalsService.applyDamage directly. That service is the
+   * single writer for character HP, consciousness and death-save state (#1826 C0.5 PR1);
+   * this delegate exists only so callers that still reach for CharacterService keep
+   * working. The old implementation here wrote hit points and nothing else, which is how
+   * a character could reach 0 HP and keep adventuring.
+   */
   static async applyDamage(characterId: string, userId: string, amount: number) {
-    const [updated] = await db
-      .update(characterStats)
-      .set({
-        currentHitPoints: sql`greatest(0, ${characterStats.currentHitPoints} - greatest(0, ${amount} - coalesce(${characterStats.temporaryHitPoints}, 0)))`,
-        temporaryHitPoints: sql`greatest(0, coalesce(${characterStats.temporaryHitPoints}, 0) - ${amount})`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(characterStats.characterId, characterId),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(characters)
-              .where(
-                and(
-                  eq(characters.id, characterStats.characterId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-                ),
-              ),
-          ),
-        ),
-      )
-      .returning({
-        currentHitPoints: characterStats.currentHitPoints,
-        temporaryHitPoints: characterStats.temporaryHitPoints,
-      });
-    if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
-    return updated;
+    return CharacterVitalsService.applyDamage(characterId, userId, amount);
   }
 
   /**

@@ -19,6 +19,7 @@ import {
   pgEnum,
 } from 'drizzle-orm/pg-core';
 
+import { conditionsLibrary } from './combat';
 import { characterHitDice } from './rest';
 
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
@@ -152,6 +153,15 @@ export const characters = pgTable(
 );
 
 /**
+ * The four states a character's body can be in.
+ *
+ * `is_conscious` alone cannot tell "unconscious and rolling death saves" apart from
+ * "unconscious but stable" or "dead", and those have to be distinguishable before
+ * anything downstream can react to a character dropping outside combat (#1826).
+ */
+export type VitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
+
+/**
  * Character Stats Table
  * Stores ability scores and related statistics for characters
  */
@@ -174,11 +184,61 @@ export const characterStats = pgTable(
     temporaryHitPoints: integer('temporary_hit_points').default(0),
     initiativeBonus: integer('initiative_bonus').default(0),
     speed: integer('speed').default(30),
+    // Character-scoped vitals (#1826). These mirror the columns on
+    // `combat_participant_status`, which only exist for the duration of an encounter —
+    // a character who drops on a failed check outside combat has no participant row and
+    // therefore, before these columns, no way to be unconscious at all.
+    isConscious: boolean('is_conscious').default(true).notNull(),
+    deathSavesSuccesses: integer('death_saves_successes').default(0).notNull(),
+    deathSavesFailures: integer('death_saves_failures').default(0).notNull(),
+    vitalState: text('vital_state').$type<VitalState>().default('standing').notNull(),
+    diedAt: timestamp('died_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   },
   (table) => ({
     characterIdIdx: index('idx_character_stats_character_id').on(table.characterId),
+  }),
+);
+
+/**
+ * Character Conditions Table
+ * Conditions applied to a character, in or out of combat.
+ *
+ * The combat-scoped sibling (`combat_participant_conditions`) keys on a participant row
+ * that only exists inside an encounter, and counts duration in rounds. Outside combat
+ * there is no participant and there are no rounds, so this table keys on the character
+ * and measures duration against the clock.
+ */
+export const characterConditions = pgTable(
+  'character_conditions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    conditionId: uuid('condition_id')
+      .notNull()
+      .references(() => conditionsLibrary.id, { onDelete: 'cascade' }),
+
+    // Duration tracking
+    durationType: text('duration_type'), // 'minutes' | 'hours' | 'until_save' | 'permanent'
+    durationValue: integer('duration_value'),
+
+    // Timing
+    appliedAt: timestamp('applied_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+
+    // Source and state
+    sourceDescription: text('source_description'),
+    isActive: boolean('is_active').default(true),
+
+    // Timestamp
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+  },
+  (table) => ({
+    characterIdx: index('idx_character_conditions_character').on(table.characterId),
+    activeIdx: index('idx_character_conditions_active').on(table.isActive),
   }),
 );
 
@@ -287,6 +347,7 @@ export const charactersRelations = relations(characters, ({ one, many }) => ({
     references: [characterStats.characterId],
   }),
   hitDice: many(characterHitDice),
+  conditions: many(characterConditions),
 }));
 
 export const campaignsRelations = relations(campaigns, ({ many }) => ({
@@ -300,6 +361,17 @@ export const characterStatsRelations = relations(characterStats, ({ one }) => ({
   }),
 }));
 
+export const characterConditionsRelations = relations(characterConditions, ({ one }) => ({
+  character: one(characters, {
+    fields: [characterConditions.characterId],
+    references: [characters.id],
+  }),
+  condition: one(conditionsLibrary, {
+    fields: [characterConditions.conditionId],
+    references: [conditionsLibrary.id],
+  }),
+}));
+
 // Type exports
 export type Campaign = InferSelectModel<typeof campaigns>;
 export type NewCampaign = InferInsertModel<typeof campaigns>;
@@ -307,6 +379,8 @@ export type Character = InferSelectModel<typeof characters>;
 export type NewCharacter = InferInsertModel<typeof characters>;
 export type CharacterStats = InferSelectModel<typeof characterStats>;
 export type NewCharacterStats = InferInsertModel<typeof characterStats>;
+export type CharacterCondition = InferSelectModel<typeof characterConditions>;
+export type NewCharacterCondition = InferInsertModel<typeof characterConditions>;
 export type GameSession = InferSelectModel<typeof gameSessions>;
 export type NewGameSession = InferInsertModel<typeof gameSessions>;
 export type DialogueHistory = InferSelectModel<typeof dialogueHistory>;

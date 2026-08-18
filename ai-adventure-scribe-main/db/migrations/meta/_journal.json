@@ -57,6 +57,13 @@
       "when": 1786334086443,
       "tag": "0007_narrative_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787092722941,
+      "tag": "0008_add_character_vitals",
+      "breakpoints": true
     }
   ]
 }

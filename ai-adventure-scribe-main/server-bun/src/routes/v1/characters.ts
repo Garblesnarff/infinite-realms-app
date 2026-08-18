@@ -26,6 +26,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
+import { CharacterVitalsService } from '../../services/character-vitals-service.js';
 
 import type { Character, CharacterStats } from '../../../../db/schema/index';
 
@@ -476,10 +477,17 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     },
   )
 
+  /**
+   * POST /v1/characters/:id/damage
+   *
+   * The out-of-combat damage path. Routed to CharacterVitalsService rather than
+   * CharacterService because hit points alone are not the whole story: a character this
+   * endpoint reduces to 0 must also come out of the scene unconscious and dying (#1826).
+   */
   .post(
     '/:id/damage',
     async ({ params, body, user }) =>
-      CharacterService.applyDamage(params.id, user!.userId, body.amount),
+      CharacterVitalsService.applyDamage(params.id, user!.userId, body.amount),
     { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
   )
 
