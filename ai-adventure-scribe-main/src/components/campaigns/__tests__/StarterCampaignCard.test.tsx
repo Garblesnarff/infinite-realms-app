@@ -38,4 +38,17 @@ describe('StarterCampaignCard artwork fallback', () => {
     );
     expect(screen.getByRole('status')).toHaveTextContent('Artwork coming soon');
   });
+
+  it('renders the shared title overlay for the campaign title', () => {
+    render(
+      <MemoryRouter>
+        <StarterCampaignCard campaign={campaign} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Campaign')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Academy of Arcane Gastronomy' }),
+    ).toBeInTheDocument();
+  });
 });

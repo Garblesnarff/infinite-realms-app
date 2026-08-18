@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import type { StarterCampaign } from '@/hooks/use-starter-campaigns';
 
 import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
+import { CampaignTitleOverlay } from '@/components/campaigns/CampaignTitleOverlay';
 import { Badge } from '@/components/ui/badge';
 import { Z_INDEX } from '@/constants/z-index';
 
@@ -141,10 +142,7 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campai
 
         {/* Content - Bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-6" style={{ zIndex: Z_INDEX.DROPDOWN }}>
-          {/* Title */}
-          <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">
-            {campaign.title}
-          </h3>
+          <CampaignTitleOverlay title={campaign.title} className="mb-3" />
 
           {/* Tagline */}
           {campaign.tagline && (

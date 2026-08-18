@@ -9,6 +9,8 @@ import CharacterSelectionModal from './character-selection-modal';
 
 import type { CampaignCardData } from './campaign-card-types';
 
+import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
+import { CampaignTitleOverlay } from '@/components/campaigns/CampaignTitleOverlay';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignImageHotLoading } from '@/hooks/use-image-hot-loading';
@@ -38,6 +40,7 @@ const CampaignCardComponent = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [artworkFailed, setArtworkFailed] = useState(false);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Use hot loading hook for background image
@@ -107,24 +110,40 @@ const CampaignCardComponent = ({
     }
   }, [campaign.id, toast, queryClient]);
 
-  // Use hot loaded image, fallback to coverImage, then default
+  // Use hot loaded image, fallback to coverImage, then the honest placeholder.
+  // The old "/card-background.jpeg" fallback baked in "The Lost Temple" art
+  // and must never be used as generic campaign artwork (see #1741).
   const resolvedImage = useMemo(() => {
     // Priority: hot loaded image > static cover image > default background
     if (hasImage && hotLoadedImage && hotLoadedImage !== '/campaign-background-placeholder.png') {
-      return hotLoadedImage;
+      return new URL(hotLoadedImage, import.meta.url).href;
     }
 
     if (coverImage) {
       return new URL(coverImage, import.meta.url).href;
     }
 
-    // If we don't have an image and it's loading, show placeholder
+    // If we don't have an image and it's loading, show the hook's own
+    // in-flight placeholder.
     if (imageLoading || !hasImage) {
-      return hotLoadedImage || '/campaign-background-placeholder.png'; // This will be the placeholder
+      return hotLoadedImage || CAMPAIGN_ARTWORK_PLACEHOLDER;
     }
 
-    return new URL('/card-background.jpeg', import.meta.url).href;
+    return CAMPAIGN_ARTWORK_PLACEHOLDER;
   }, [hotLoadedImage, hasImage, imageLoading, coverImage]);
+
+  // Reset the failure flag whenever there's a new image worth trying.
+  React.useEffect(() => {
+    setArtworkFailed(false);
+  }, [resolvedImage]);
+
+  const displayedImage = artworkFailed ? CAMPAIGN_ARTWORK_PLACEHOLDER : resolvedImage;
+  const hasNoArtwork = !imageLoading && displayedImage === CAMPAIGN_ARTWORK_PLACEHOLDER;
+
+  const handleImageError = useCallback(() => {
+    if (displayedImage === CAMPAIGN_ARTWORK_PLACEHOLDER) return;
+    setArtworkFailed(true);
+  }, [displayedImage]);
 
   const goToCampaign = useCallback(
     () => navigate(`/app/campaigns/${campaign.id}`),
@@ -148,7 +167,7 @@ const CampaignCardComponent = ({
 
       {/* Hero / thumbnail area */}
       <div
-        className="campaign-hero featured flex items-end p-4 cursor-pointer h-full w-full bg-cover bg-center bg-no-repeat filter sepia-[0.1] relative bg-gray-500 overflow-hidden transition-all duration-700 ease-out group-hover:scale-[1.02] group-hover:brightness-110 rounded-sm"
+        className="campaign-hero featured flex items-end p-4 cursor-pointer h-full w-full filter sepia-[0.1] relative bg-gray-500 overflow-hidden transition-all duration-700 ease-out group-hover:scale-[1.02] group-hover:brightness-110 rounded-sm"
         role="link"
         tabIndex={0}
         aria-label={`Open campaign ${campaign.name}`}
@@ -161,17 +180,16 @@ const CampaignCardComponent = ({
             goToCampaign();
           }
         }}
-        style={
-          resolvedImage
-            ? {
-                backgroundImage: `url(${resolvedImage})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center center',
-                backgroundColor: '#6b7280',
-              }
-            : { backgroundColor: '#6b7280' }
-        }
+        style={{ backgroundColor: '#6b7280' }}
       >
+        <img
+          src={displayedImage}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+          onError={handleImageError}
+        />
+
         {/* Loading overlay for image generation */}
         {imageLoading && !hasImage && (
           <div className="absolute inset-0 bg-gradient-to-br from-infinite-purple/20 via-infinite-dark/40 to-infinite-purple/20 backdrop-blur-sm flex items-center justify-center">
@@ -183,6 +201,20 @@ const CampaignCardComponent = ({
         )}
         {/* Overlay and popup for all cards */}
         <div className="featured-overlay bg-gradient-to-b from-infinite-purple/80 via-transparent to-infinite-dark/90" />
+        {hasNoArtwork && (
+          <div
+            className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-3 py-1 text-xs font-medium text-gray-200 backdrop-blur-sm"
+            role="status"
+            style={{ zIndex: Z_INDEX.DROPDOWN }}
+          >
+            {artworkFailed ? 'Artwork unavailable' : 'Artwork coming soon'}
+          </div>
+        )}
+        <CampaignTitleOverlay
+          title={campaign.name}
+          className="absolute inset-x-4 bottom-20 md:bottom-4"
+          style={{ zIndex: Z_INDEX.DROPDOWN }}
+        />
         <CampaignCardHoverPopup
           campaign={campaign}
           isHovered={isHovered}

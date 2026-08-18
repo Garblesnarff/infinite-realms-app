@@ -153,10 +153,11 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {campaigns.map((campaign, i) => {
-        // prefer explicit mapping; fall back to default test image for the first card
-        const mapped = getCoverFor(campaign.name);
-        const cover = mapped ?? (i === 0 ? '/card-background.jpeg' : undefined);
+      {campaigns.map((campaign) => {
+        // Prefer an explicit legacy mapping only; never fall back by list
+        // position. A positional fallback previously leaked the retired
+        // "card-background.jpeg" (Lost Temple) art onto unrelated campaigns.
+        const cover = getCoverFor(campaign.name);
         return (
           <MemoizedCampaignCard
             key={campaign.id}
