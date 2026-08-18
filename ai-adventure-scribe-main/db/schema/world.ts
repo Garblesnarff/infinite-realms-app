@@ -17,6 +17,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { campaigns, gameSessions } from './game';
+import { vector } from './lore-keeper';
 
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
@@ -129,7 +130,12 @@ export const memories = pgTable(
     importance: integer('importance').default(5), // 1-10 scale
     content: text('content').notNull(),
     context: jsonb('context'),
-    embedding: text('embedding'), // Vector embedding for semantic search
+    // pgvector embedding for semantic search. 768 dimensions, matching
+    // campaign_chunks.embedding (gemini-embedding-001, normalized) so memories
+    // and campaign lore are comparable vectors. Typed `text` until #1822 found
+    // the column had never held a vector in production; the database side is
+    // supabase/migrations/20260818_memories_embedding_vector768.sql.
+    embedding: vector('embedding'),
     narrativeWeight: integer('narrative_weight').default(5),
     emotionalTone: text('emotional_tone'),
     storyArc: text('story_arc'),

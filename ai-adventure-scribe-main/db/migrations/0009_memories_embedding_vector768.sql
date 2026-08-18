@@ -1,0 +1,40 @@
+-- 0009_memories_embedding_vector768 -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- Why this file exists
+-- --------------------
+-- The DDL that retypes memories.embedding to vector(768) (issue #1822,
+-- substrate PR1) is authored by hand in
+-- supabase/migrations/20260818_memories_embedding_vector768.sql, which is the
+-- authoritative statement of the change: it also drops and recreates
+-- match_memories at the new dimension and re-applies the
+-- REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated that recreating a
+-- function silently resets.
+--
+-- This file and meta/0009_snapshot.json exist only to advance the drizzle
+-- snapshot chain so that `bun run db:check-drift`
+-- (scripts/check-schema-drift.sh, wired into the `schema-drift` CI job) sees
+-- db/schema/world.ts and db/migrations/ back in agreement. Only the snapshot
+-- matters -- the same arrangement as 0004_schema_baseline.sql and
+-- 0008_add_character_vitals.sql.
+--
+-- The generated DDL is NOT kept here, for two reasons.
+--
+-- First, AGENTS.md rule 5: one migration tree owns each table's DDL, and
+-- memories is owned by supabase/migrations/. Keeping the ALTER here would put
+-- the same table's DDL in both trees.
+--
+-- Second, it would not replay as generated. drizzle-kit emits a bare
+--
+--     ALTER TABLE "memories" ALTER COLUMN "embedding" SET DATA TYPE vector(768);
+--
+-- which fails against the text column the drizzle baseline
+-- (0001_parched_rictor.sql) actually creates -- confirmed against PostgreSQL 16
+-- + pgvector as "column embedding cannot be cast automatically to type vector",
+-- and confirmed against production by the introspection posted to #1822. Making
+-- it replay would need both CREATE EXTENSION IF NOT EXISTS vector (this file's
+-- bare index prefix sorts it ahead of every date-named migration, so nothing has
+-- installed pgvector yet) and USING NULL::vector(768). Both of those already
+-- live in the supabase migration, which sorts later and does the real work.
+--
+-- To regenerate the equivalent DDL for inspection:
+--   git stash -- db/migrations/meta/0009_snapshot.json && bunx drizzle-kit generate

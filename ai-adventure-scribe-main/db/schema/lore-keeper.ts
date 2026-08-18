@@ -25,8 +25,14 @@ import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**
  * Custom vector type for pgvector embeddings
+ *
+ * Exported so memories.embedding can reuse the exact same type rather than
+ * declaring a second one: 768 dimensions is the corpus standard
+ * (gemini-embedding-001, normalized), which is what makes memory vectors and
+ * campaign lore vectors comparable at all. See db/schema/world.ts and
+ * supabase/migrations/20260818_memories_embedding_vector768.sql (issue #1822).
  */
-const vector = customType<{ data: number[]; driverData: string }>({
+export const vector = customType<{ data: number[]; driverData: string }>({
   dataType() {
     return 'vector(768)';
   },
