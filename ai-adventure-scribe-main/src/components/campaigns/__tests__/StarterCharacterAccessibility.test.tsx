@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -75,6 +75,36 @@ describe('StarterCharacterCard Accessibility', () => {
     expect(button).toBeInTheDocument();
     expect(button).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('falls back when a linked portrait fails to load', () => {
+    render(
+      <StarterCharacterCard
+        template={mockTemplate}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    fireEvent.error(screen.getByRole('img', { name: mockTemplate.name }));
+
+    expect(
+      screen.getByRole('img', { name: `${mockTemplate.name} portrait unavailable` }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an honest "coming soon" fallback when no portrait is linked yet', () => {
+    render(
+      <StarterCharacterCard
+        template={{ ...mockTemplate, portraitUrl: null }}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('img', { name: `${mockTemplate.name} portrait coming soon` }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('StarterCharacterDetails Accessibility', () => {
@@ -102,6 +132,20 @@ describe('StarterCharacterDetails Accessibility', () => {
     });
     expect(charismaGroup).toBeInTheDocument();
     expect(charismaGroup).not.toHaveAttribute('title');
+  });
+
+  it('falls back when the details portrait fails to load', () => {
+    render(
+      <TooltipProvider>
+        <StarterCharacterDetails template={mockTemplate} />
+      </TooltipProvider>,
+    );
+
+    fireEvent.error(screen.getByRole('img', { name: mockTemplate.name }));
+
+    expect(
+      screen.getByRole('img', { name: `${mockTemplate.name} portrait unavailable` }),
+    ).toBeInTheDocument();
   });
 
   it('correctly calculates modifiers with getModifier', () => {

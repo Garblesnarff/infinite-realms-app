@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { getClassIcon } from './StarterCharacterCard';
+import { StarterCharacterPortrait } from './StarterCharacterPortrait';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
@@ -35,17 +36,14 @@ export const StarterCharacterDetails: React.FC<StarterCharacterDetailsProps> = (
       <div className="bg-card/70 rounded-xl p-6 border border-border">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-infinite-purple/30 to-infinite-gold/30 flex items-center justify-center border-2 border-infinite-gold/50">
-            {template.portraitUrl ? (
-              <img
-                src={template.portraitUrl}
-                alt={template.name}
-                className="w-full h-full rounded-full object-cover"
-              />
-            ) : (
+          <StarterCharacterPortrait
+            name={template.name}
+            portraitUrl={template.portraitUrl}
+            className="h-16 w-16 rounded-full border-2 border-infinite-gold/50 bg-gradient-to-br from-infinite-purple/30 to-infinite-gold/30"
+            fallback={
               <div className="text-2xl text-infinite-gold">{getClassIcon(template.class)}</div>
-            )}
-          </div>
+            }
+          />
           <div>
             <h2 className="text-2xl font-bold text-foreground">{template.name}</h2>
             <p className="text-infinite-gold">

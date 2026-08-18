@@ -1,6 +1,8 @@
 import { User, Sword, Heart, BookOpen, Wand2 } from 'lucide-react';
 import React from 'react';
 
+import { StarterCharacterPortrait } from './StarterCharacterPortrait';
+
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
 /**
@@ -57,18 +59,15 @@ export const StarterCharacterCard: React.FC<StarterCharacterCardProps> = ({
           : 'border-border bg-card hover:border-infinite-gold/40 hover:bg-secondary/10'
       }`}
     >
-      {/* Portrait Placeholder */}
-      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-infinite-purple/30 to-infinite-gold/30 flex items-center justify-center mb-3 border-2 border-border">
-        {template.portraitUrl ? (
-          <img
-            src={template.portraitUrl}
-            alt={template.name}
-            className="w-full h-full rounded-full object-cover"
-          />
-        ) : (
+      {/* Portrait, with an explicit fallback for missing or unavailable artwork */}
+      <StarterCharacterPortrait
+        name={template.name}
+        portraitUrl={template.portraitUrl}
+        className="mb-3 h-24 w-24 rounded-full border-2 border-border bg-gradient-to-br from-infinite-purple/30 to-infinite-gold/30"
+        fallback={
           <div className="text-3xl text-muted-foreground">{getClassIcon(template.class)}</div>
-        )}
-      </div>
+        }
+      />
 
       {/* Name and Class */}
       <h3 className="text-lg font-bold text-foreground text-center">{template.name}</h3>
