@@ -199,20 +199,25 @@ export function resolveCombatantStats(
     };
   }
 
-  if (monsterId) {
-    // The bottom of the ladder. Name the consequence, not just the cause: a reader must be
-    // able to see that a boss was downgraded, not merely that a lookup missed.
-    logger.warn({
-      msg: 'Unresolved monster on combat start; falling back to generic NPC stats',
-      campaignId: campaignIndex.campaignId || null,
-      monsterId,
-      combatantName: name,
-      armorClass: GENERIC_NPC_STATS.armorClass,
-      maxHp: GENERIC_NPC_STATS.maxHp,
-      consequence: `combatant fights at generic NPC stats (AC ${GENERIC_NPC_STATS.armorClass}, ${GENERIC_NPC_STATS.maxHp} HP)`,
-      ...context,
-    });
-  }
+  // The bottom of the ladder. Name the consequence, not just the cause: a reader must be
+  // able to see that a boss was downgraded, not merely that a lookup missed.
+  //
+  // No longer gated on `monsterId` (#1858). The gate assumed that a combatant with only a
+  // narrative name was never meant to be a real creature, so its downgrade was not worth
+  // reporting — but the Brigade Warriors arrived name-only, fought at verbatim
+  // GENERIC_NPC_STATS (AC 12 / 11 HP) with a NULL attack profile, and nothing in the log
+  // said so. Landing on the generic rung is worth a line however the combatant got here.
+  // Logging only: the `null` return, and every caller's behaviour, is unchanged.
+  logger.warn({
+    msg: 'Unresolved monster on combat start; falling back to generic NPC stats',
+    campaignId: campaignIndex.campaignId || null,
+    monsterId,
+    combatantName: name,
+    armorClass: GENERIC_NPC_STATS.armorClass,
+    maxHp: GENERIC_NPC_STATS.maxHp,
+    consequence: `combatant fights at generic NPC stats (AC ${GENERIC_NPC_STATS.armorClass}, ${GENERIC_NPC_STATS.maxHp} HP)`,
+    ...context,
+  });
 
   return null;
 }

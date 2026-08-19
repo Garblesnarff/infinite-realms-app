@@ -189,9 +189,9 @@ export function findSrdMonster(
 /**
  * Resolves an SRD stat block for a combatant.
  *
- * Returns `null` when nothing matched. When a `monsterId` *was* supplied but did not
- * resolve, the miss is logged at warn level: the caller still falls back to a generic
- * NPC, but the fallback is never silent.
+ * Returns `null` when nothing matched. The miss is logged at warn level unless the caller
+ * suppresses it: the caller still falls back to a generic NPC, but the fallback is never
+ * silent.
  */
 export function resolveSrdMonsterStats(
   monsterId?: string | null,
@@ -202,10 +202,14 @@ export function resolveSrdMonsterStats(
   const match = matchSrdMonster(monsterId, name);
 
   if (!match) {
-    if (monsterId && !options.suppressFallbackWarn) {
+    if (!options.suppressFallbackWarn) {
       // The old warn named only the cause ("unresolved id"), which reads as a lookup miss.
       // The consequence is what matters in play: a creature the DM chose deliberately is
       // now AC 12 / 11 HP. Say so, so the log shows a boss was downgraded.
+      //
+      // No longer gated on `monsterId` (#1858). A combatant identified only by name lands on
+      // exactly the same generic stat line as an unresolved id does — the Brigade Warriors
+      // fought at AC 12 / 11 HP with a NULL attack profile — and used to do it silently.
       logger.warn({
         msg: 'Unresolved SRD monster id on combat start; falling back to generic NPC stats',
         monsterId,

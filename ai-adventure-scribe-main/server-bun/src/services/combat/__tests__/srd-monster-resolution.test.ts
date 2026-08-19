@@ -88,8 +88,24 @@ describe('resolveSrdMonsterStats', () => {
     expect(String(payload.consequence)).toContain('11 HP');
   });
 
-  test('a narrative name with no id and no SRD analog resolves to nothing and does not warn', () => {
+  test('a narrative name with no id and no SRD analog warns about the generic fallback too', () => {
+    // #1858: this warn used to be gated on `monsterId`, so a name-only combatant dropped to
+    // AC 12 / 11 HP without a line in the log — which is how the Brigade Warriors fought an
+    // entire encounter at generic stats unnoticed.
     expect(resolveSrdMonsterStats(null, 'doorkeeper')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toMatchObject({
+      monsterId: null,
+      combatantName: 'doorkeeper',
+      armorClass: GENERIC_NPC_STATS.armorClass,
+      maxHp: GENERIC_NPC_STATS.maxHp,
+    });
+  });
+
+  test('a caller that owns the ladder can still suppress the warn', () => {
+    expect(
+      resolveSrdMonsterStats(null, 'doorkeeper', {}, { suppressFallbackWarn: true }),
+    ).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });
 });

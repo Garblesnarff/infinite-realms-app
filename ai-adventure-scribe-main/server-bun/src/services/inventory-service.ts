@@ -11,6 +11,7 @@
  * @module server-bun/services/inventory-service
  */
 
+import { syncArmorClassAfterEquipmentChange } from './character/character-armor-class.js';
 import { InventoryAttunementService } from './inventory/inventory-attunement-service.js';
 import { InventoryConsumableService } from './inventory/inventory-consumable-service.js';
 import { InventoryDataAccess } from './inventory/inventory-data-access.js';
@@ -177,6 +178,10 @@ export class InventoryService {
       return { success: false, error: 'Failed to equip item' };
     }
 
+    // Armour class is stored, not computed on read, so putting armour on has to rewrite it or
+    // the character keeps fighting at the AC they had before they got dressed (#1858).
+    await syncArmorClassAfterEquipmentChange(characterId);
+
     return result;
   }
 
@@ -192,7 +197,10 @@ export class InventoryService {
     characterId: string,
     userId: string,
   ): Promise<InventoryItem | null> {
-    return this.updateItem(itemId, characterId, userId, { isEquipped: false });
+    const item = await this.updateItem(itemId, characterId, userId, { isEquipped: false });
+    // Taking armour off is an equipment change like any other; the stored AC follows it down.
+    if (item) await syncArmorClassAfterEquipmentChange(characterId);
+    return item;
   }
 
   // ==========================================

@@ -1,4 +1,6 @@
 /* eslint-disable max-lines */
+import { computeArmorClass } from '../../../shared/armor-class';
+
 import type { CharacterClass } from '@/types/character';
 
 import { classes } from '@/data/classes';
@@ -312,7 +314,9 @@ export function buildStarterCharacterSeed(
       ...abilityScores,
       max_hit_points: hitPoints,
       current_hit_points: hitPoints,
-      armor_class: 10 + getModifier(abilityScores.dexterity),
+      // The equipment built two lines up decides this. It used to be `10 + DEX`, which is how
+      // 76 characters ended up wearing armour that did nothing (#1858).
+      armor_class: computeArmorClass(equipment, getModifier(abilityScores.dexterity)),
     },
     equipment,
     ...(inventoryItems.length > 0 ? { inventory_items: inventoryItems } : {}),

@@ -177,10 +177,18 @@ describe('falling through the ladder', () => {
     });
   });
 
-  test('a name with no id never triggers the generic warn', () => {
-    // No id supplied is not evidence of a downgrade; a purely narrative combatant is fine.
+  test('a name with no id still warns when it lands on the generic rung', () => {
+    // #1858: the warn used to be gated on `monsterId`, on the theory that a purely narrative
+    // combatant is not a downgrade worth reporting. But a name-only combatant gets verbatim
+    // GENERIC_NPC_STATS exactly like a missed id does — the Brigade Warriors fought an entire
+    // encounter at AC 12 / 11 HP with no attack profile, and the log said nothing.
     expect(resolveCombatantStats(EMPTY_INDEX, null, 'Hostile Patron')).toBeNull();
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toMatchObject({
+      combatantName: 'Hostile Patron',
+      armorClass: 12,
+      maxHp: 11,
+    });
   });
 });
 

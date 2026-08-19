@@ -13,6 +13,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
+import { syncArmorClassAfterEquipmentChange } from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { db } from '../../../db/client';
@@ -23,9 +24,27 @@ import {
   characterStats,
   characters,
 } from '../../../db/schema/index';
+import {
+  abilityScoreModifier,
+  computeArmorClass,
+  type ArmorClassEquipmentItem,
+} from '../../../shared/armor-class';
 import { InternalServerError } from '../lib/errors.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
+
+/**
+ * Narrow the loose equipment records the route accepts down to the three fields the armour
+ * class rule reads. Written here rather than trusting the shape because the body is validated
+ * for storage, not for arithmetic.
+ */
+function toArmorClassItems(equipment: Array<Record<string, unknown>>): ArmorClassEquipmentItem[] {
+  return equipment.map((item) => ({
+    item_name: typeof item.item_name === 'string' ? item.item_name : null,
+    item_type: typeof item.item_type === 'string' ? item.item_type : null,
+    equipped: Boolean(item.equipped),
+  }));
+}
 
 export class CharacterService {
   /**
@@ -147,6 +166,20 @@ export class CharacterService {
         await tx.insert(characterStats).values({
           ...stats,
           characterId: character.id,
+          // The equipment lands in this same transaction, so the armour class is derived from
+          // the payload rather than by re-reading rows that are not committed yet. Callers
+          // send `10 + DEX` (the starter seeder used to, the character wizard still does),
+          // which is how equipped armour stopped counting for 76 characters (#1858). A create
+          // that carries no equipment keeps whatever AC the caller sent — a hand-set NPC AC is
+          // not ours to overwrite.
+          ...(equipment?.length
+            ? {
+                armorClass: computeArmorClass(
+                  toArmorClassItems(equipment),
+                  abilityScoreModifier(stats.dexterity ?? 10),
+                ),
+              }
+            : {}),
         });
       }
 
@@ -269,6 +302,12 @@ export class CharacterService {
     if (Array.from(result as Iterable<{ character_id: string }>).length === 0) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
     }
+
+    // The character sheet computes its armour class from ability scores alone, so every save
+    // would otherwise write `10 + DEX` over an equipment-derived value — the same defect the
+    // seeder had (#1858). Re-derive from the stored equipment and let the rule have the last
+    // word. Characters who own no armour or shield are left exactly as the caller sent them.
+    await syncArmorClassAfterEquipmentChange(characterId);
   }
 
   /**

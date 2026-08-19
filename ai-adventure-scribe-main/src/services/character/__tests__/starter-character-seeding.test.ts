@@ -111,6 +111,29 @@ describe('starter-character-seeding', () => {
     );
   });
 
+  it('computes armour class from the equipment it just built, not 10 + DEX', () => {
+    // #1858: The Faithful shipped at AC 10 in Scale Mail and a Shield. Scale Mail 14, DEX +0
+    // (capped at +2 for medium armour anyway), shield +2 — the sheet says 16.
+    const seed = buildStarterCharacterSeed(clericTemplate, 'campaign-id');
+    const stats = seed.stats as { armor_class: number };
+
+    expect(stats.armor_class).toBe(16);
+  });
+
+  it('still falls back to 10 + DEX for a template that carries no armour', () => {
+    const seed = buildStarterCharacterSeed(
+      {
+        ...clericTemplate,
+        equipment: ['mace'],
+        ability_scores: { ...clericTemplate.ability_scores, dexterity: 16 },
+      },
+      'campaign-id',
+    );
+    const stats = seed.stats as { armor_class: number };
+
+    expect(stats.armor_class).toBe(13);
+  });
+
   it('keeps both starter creation call sites on the shared helper', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/StarterCharacterSelectionPage.tsx'),
