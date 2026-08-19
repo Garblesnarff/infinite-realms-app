@@ -1,35 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryService } from '../MemoryService';
-import * as featureFlags from '@/config/featureFlags';
 import type { MemoryType } from '@/types/memory';
 import { llmApiClient } from '@/infrastructure/api';
 
-// MemoryRepository (src/agents/services/memory/MemoryRepository.ts) was migrated from
-// supabase.from('memories')...insert() and supabase.rpc() to
-// userDataApi.createMemories()/listMemories()/matchMemories() (real fetch() calls to the
-// Bun server). Only invokeEmbedding() (still supabase.functions.invoke('generate-embedding'))
-// remains on supabase. The mocks below cover the userDataApi/supabase surface actually
-// exercised by MemoryService.saveMemories()/extractMemories() in the tests that remain here.
-const { mockInsert: baseMockInsert, mockFunctionsInvoke: baseMockFunctionsInvoke } = vi.hoisted(
-  () => ({
-    mockInsert: vi.fn(async () => []),
-    mockFunctionsInvoke: vi.fn(),
-  }),
-);
-
-// Mock Supabase client (only functions.invoke is still used by MemoryRepository)
-vi.mock('@/integrations/supabase/client', () => {
-  return {
-    supabase: {
-      from: vi.fn(() => ({
-        insert: vi.fn(async () => ({ data: null, error: null })),
-      })),
-      functions: {
-        invoke: baseMockFunctionsInvoke,
-      },
-    },
-  };
-});
+// MemoryRepository (src/agents/services/memory/MemoryRepository.ts) writes through
+// userDataApi.createMemories() (a real fetch() to the Bun server). It no longer touches
+// supabase at all: invokeEmbedding() and its 'generate-embedding' edge function call were
+// removed in #1822 once the server took ownership of embedding a memory after inserting it.
+const { mockInsert: baseMockInsert } = vi.hoisted(() => ({
+  mockInsert: vi.fn(async () => []),
+}));
 
 // Mock userDataApi - MemoryRepository's real backing store as of the REST API
 // migration (see src/agents/services/memory/MemoryRepository.ts).
@@ -91,14 +71,11 @@ vi.mock('@/infrastructure/api', () => ({
 
 describe('Memory Service Integration', () => {
   let mockInsert: any;
-  let mockFunctionsInvoke: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
 
     mockInsert = baseMockInsert;
-    mockFunctionsInvoke = baseMockFunctionsInvoke;
     vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
       JSON.stringify({
         memories: [
@@ -122,11 +99,6 @@ describe('Memory Service Integration', () => {
 
   describe('Memory Importance Scoring', () => {
     it('should normalize importance to 1-5 range', async () => {
-      mockFunctionsInvoke.mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      });
-
       mockInsert.mockResolvedValue({
         data: null,
         error: null,
@@ -164,11 +136,6 @@ describe('Memory Service Integration', () => {
 
   describe('Memory Extraction from Conversation', () => {
     it('should extract memories from conversation context', async () => {
-      mockFunctionsInvoke.mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      });
-
       mockInsert.mockResolvedValue({
         data: null,
         error: null,
@@ -236,11 +203,6 @@ describe('Memory Service Integration', () => {
     });
 
     it('normalizes types again at the memory write boundary', async () => {
-      mockFunctionsInvoke.mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      });
-
       await MemoryService.saveMemories([
         {
           session_id: 'session-123',
@@ -256,14 +218,11 @@ describe('Memory Service Integration', () => {
       expect(mockInsert).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ type: 'event' })]),
       );
+      // The browser sends content, not vectors (#1822).
+      expect(mockInsert.mock.calls[0][0][0]).not.toHaveProperty('embedding');
     });
 
-    it('should save extracted memories with embeddings', async () => {
-      mockFunctionsInvoke.mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      });
-
+    it('should save extracted memories', async () => {
       mockInsert.mockResolvedValue({
         data: null,
         error: null,

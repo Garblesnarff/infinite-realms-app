@@ -24,6 +24,10 @@ const ALLOWED_MEMORY_TYPES = [
 const isAllowedMemoryType = (value: string) =>
   ALLOWED_MEMORY_TYPES.includes(value as (typeof ALLOWED_MEMORY_TYPES)[number]);
 
+// No `embedding` field: the server owns embeddings now (#1822). A client-supplied vector was
+// how the browser was expected to fill this column, and in nine months of production it never
+// once did. Accepting one again would also let a caller write a vector of any width or model
+// into a column whose whole value is that every row in it is comparable.
 const memorySchema = t.Object({
   id: t.Optional(t.String()),
   campaign_id: t.Optional(t.String()),
@@ -36,7 +40,6 @@ const memorySchema = t.Object({
   narrative_weight: t.Optional(t.Number({ minimum: 1, maximum: 10 })),
   context: t.Optional(t.Unknown()),
   metadata: t.Optional(t.Unknown()),
-  embedding: t.Optional(t.Nullable(t.String())),
   emotional_tone: t.Optional(t.Nullable(t.String())),
   story_arc: t.Optional(t.Nullable(t.String())),
   prose_quality: t.Optional(t.Boolean()),
@@ -108,6 +111,8 @@ export const memoryRoutes = new Elysia({ prefix: '/v1/memories' })
         };
       }
 
+      // Rows come back with a null embedding: MemoryService.insert() fires the embedding
+      // write after the INSERT commits rather than making this response wait on it.
       const inserted = await MemoryService.insert(
         payload.map((memory) => ({
           id: memory.id,
@@ -121,7 +126,6 @@ export const memoryRoutes = new Elysia({ prefix: '/v1/memories' })
           narrativeWeight: memory.narrative_weight,
           context: memory.context,
           metadata: memory.metadata,
-          embedding: memory.embedding,
           emotionalTone: memory.emotional_tone,
           storyArc: memory.story_arc,
           proseQuality: memory.prose_quality,

@@ -29,48 +29,46 @@ export interface MemoryContext {
 }
 
 const repository = new MemoryRepository();
-const importanceService = new MemoryImportanceService(repository);
+const importanceService = new MemoryImportanceService();
 
 export class MemoryService {
-  // ===== Static utilities (shared) =====
-  static async generateEmbedding(content: string): Promise<string | null> {
-    return importanceService.embedQuery(content);
-  }
-
   static async saveMemories(
     memories: Array<Omit<Memory, 'id' | 'created_at' | 'updated_at'>>,
   ): Promise<void> {
     if (!memories?.length) return;
-    const toInsert = await Promise.all(
-      memories.map(async (m) => {
-        const rawImportance = (m as unknown as Record<string, unknown>).importance;
-        const type = normalizeMemoryType(
-          (m as unknown as Record<string, unknown>).type ?? 'general',
-        );
-        const category = (m as unknown as Record<string, unknown>).category ?? 'general';
-        const evaluated = await importanceService.evaluate(m.content, type, String(category));
-        const importance = typeof rawImportance === 'number' ? rawImportance : evaluated.importance;
-        return {
-          ...m,
-          type,
-          importance: Math.max(1, Math.min(5, importance)),
-          embedding: evaluated.embedding,
-        };
-      }),
-    );
+    // No embedding is attached here on purpose: the server generates it from the content it
+    // receives (#1822). What the browser sends is what the memory is.
+    const toInsert = memories.map((m) => {
+      const rawImportance = (m as unknown as Record<string, unknown>).importance;
+      const type = normalizeMemoryType(
+        (m as unknown as Record<string, unknown>).type ?? 'general',
+      );
+      const category = (m as unknown as Record<string, unknown>).category ?? 'general';
+      const evaluated = importanceService.evaluate(m.content, type, String(category));
+      const importance = typeof rawImportance === 'number' ? rawImportance : evaluated.importance;
+      return {
+        ...m,
+        type,
+        importance: Math.max(1, Math.min(5, importance)),
+      };
+    });
     await repository.insertMemories(toInsert as Array<Record<string, any>>);
   }
 
+  /**
+   * Recall for the DM's next turn: the session's most important memories.
+   *
+   * This is what live play has always actually done. The similarity branch that used to sit
+   * in front of it embedded the query in the browser behind a flag that was off in
+   * production, against a column that had never held a vector (#1822) — it could not have
+   * returned a match. Similarity recall comes back in PR3, where the server embeds the query
+   * and matches against the vectors PR2 finally writes.
+   */
   static async getRelevantMemories(
     sessionId: string,
-    query: string,
+    _query: string,
     limit = 10,
   ): Promise<Memory[]> {
-    const queryEmbedding = await importanceService.embedQuery(query);
-    if (queryEmbedding) {
-      const matches = await repository.matchMemories(sessionId, queryEmbedding, limit, 0.7);
-      if (matches.length) return matches as Memory[];
-    }
     return repository.loadTopMemories(sessionId, limit);
   }
 

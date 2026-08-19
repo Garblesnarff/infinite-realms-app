@@ -1,16 +1,11 @@
 import { Elysia, t } from 'elysia';
 
-import {
-  EMBEDDING_DIMENSIONS,
-  EMBEDDING_MAX_INPUT_CHARS,
-  EMBEDDING_MODEL,
-  normalizeEmbedding,
-} from '../../../../shared/embedding-limits.js';
+import { EMBEDDING_MAX_INPUT_CHARS } from '../../../../shared/embedding-limits.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
+import { EmbeddingError, generateEmbedding } from '../../services/embedding-service.js';
 
-const TEXT_TIMEOUT_MS = 60_000;
 const VOICE_TIMEOUT_MS = 120_000;
 
 export const aiProxyRoutes = new Elysia({ prefix: '/v1/ai-proxy' })
@@ -32,37 +27,18 @@ export const aiProxyRoutes = new Elysia({ prefix: '/v1/ai-proxy' })
         set.status = 429;
         return { error: 'AI quota exceeded' };
       }
-      const apiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-      if (!apiKey) {
-        set.status = 503;
-        return { error: 'Embedding service unavailable' };
+      // Generation moved to services/embedding-service.ts (#1822) so the memory write path
+      // can embed in-process instead of calling this endpoint. Auth, quota and the exact
+      // status codes below are unchanged; the route is now the HTTP face of that function.
+      try {
+        return { embedding: await generateEmbedding(body.text, 'RETRIEVAL_QUERY') };
+      } catch (embeddingError) {
+        if (embeddingError instanceof EmbeddingError) {
+          set.status = embeddingError.status;
+          return { error: embeddingError.message };
+        }
+        throw embeddingError;
       }
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(TEXT_TIMEOUT_MS),
-          body: JSON.stringify({
-            content: { parts: [{ text: body.text.slice(0, EMBEDDING_MAX_INPUT_CHARS) }] },
-            taskType: 'RETRIEVAL_QUERY',
-            outputDimensionality: EMBEDDING_DIMENSIONS,
-          }),
-        },
-      );
-      if (!response.ok) {
-        set.status = response.status >= 500 ? 503 : 502;
-        return { error: 'Embedding request failed' };
-      }
-      const data = (await response.json()) as { embedding?: { values?: number[] } };
-      const values = data.embedding?.values;
-      if (!Array.isArray(values) || values.length !== EMBEDDING_DIMENSIONS) {
-        set.status = 502;
-        return {
-          error: `Invalid embedding response: expected ${EMBEDDING_DIMENSIONS} values`,
-        };
-      }
-      return { embedding: normalizeEmbedding(values) };
     },
     { body: t.Object({ text: t.String({ minLength: 1, maxLength: EMBEDDING_MAX_INPUT_CHARS }) }) },
   )

@@ -3,9 +3,7 @@ import { useCallback, useMemo } from 'react';
 
 import type { Memory } from '@/types/memory';
 
-import { isSemanticMemoriesEnabled } from '@/config/featureFlags';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { isValidMemoryType } from '@/types/memory';
@@ -19,32 +17,6 @@ const MAX_SEGMENTS_PER_MESSAGE = 1;
 export const useMemoryCreation = (sessionId: string | null) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const generateEmbedding = async (text: string) => {
-    if (!isSemanticMemoriesEnabled()) {
-      logger.debug('[Memory Creation] Semantic memories disabled; skipping embedding');
-      return null;
-    }
-
-    try {
-      logger.info('[Memory Creation] Starting embedding generation for text:', text);
-
-      const { data, error } = await supabase.functions.invoke('generate-embedding', {
-        body: { text },
-      });
-
-      if (error) throw error;
-
-      if (!data?.embedding) {
-        throw new Error('Invalid embedding format received from API');
-      }
-
-      return data.embedding;
-    } catch (error) {
-      logger.error('[Memory Creation] Error generating embedding:', error);
-      throw error;
-    }
-  };
 
   const validateMemory = (
     memory: Partial<Memory>,
@@ -86,19 +58,20 @@ export const useMemoryCreation = (sessionId: string | null) => {
       }
 
       const validatedMemory = validation.processedMemory;
-      const embedding = await generateEmbedding(validatedMemory.content!);
 
+      // The memory is sent as bare content. Embedding it was the browser's job until #1822
+      // found that the flag gating it had been off since before the first memory row, so the
+      // call this hook used to make had never run in production. The server embeds the row
+      // after the insert commits and is the only place that can be held to doing it.
       logger.info('[Memory Creation] Inserting memory into database:', {
         ...validatedMemory,
         session_id: sessionId,
-        embedding,
       });
 
       const [data] = await userDataApi.createMemories([
         {
           ...validatedMemory,
           session_id: sessionId,
-          embedding: embedding ?? null,
           metadata: validatedMemory.metadata || {},
         },
       ]);
@@ -116,7 +89,6 @@ export const useMemoryCreation = (sessionId: string | null) => {
         type: validatedType,
         content: data.content,
         importance: data.importance || 0,
-        embedding: typeof data.embedding === 'string' ? JSON.parse(data.embedding) : data.embedding,
         metadata: data.metadata,
         created_at: data.created_at || new Date().toISOString(),
         session_id: data.session_id,

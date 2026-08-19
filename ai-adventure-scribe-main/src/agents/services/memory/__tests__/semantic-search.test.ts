@@ -1,28 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRepository } from '../MemoryRepository';
 import { MemoryService } from '../MemoryService';
-import * as featureFlags from '@/config/featureFlags';
 
 // MemoryRepository.matchMemories()/loadTopMemories() (see
-// src/agents/services/memory/MemoryRepository.ts) were migrated from
-// supabase.rpc('match_memories', ...) / supabase.from('memories')...select() to
-// userDataApi.matchMemories()/userDataApi.listMemories() (real fetch() calls to the Bun
-// server). Only invokeEmbedding() (still supabase.functions.invoke('generate-embedding'))
-// remains on supabase. The client-side Postgres-error-code branching that used to live in
-// matchMemories() (missing-function 42883, schema-cache-not-ready PGRST202, raw HTTP 404 ->
-// swallow the error and return []) no longer exists in the current source: it just awaits
+// src/agents/services/memory/MemoryRepository.ts) call userDataApi.matchMemories()/
+// userDataApi.listMemories() (real fetch() calls to the Bun server) and no longer touch
+// supabase at all — the browser's embedding call was removed in #1822.
+//
+// That also removed the query side of semantic recall: nothing in the browser produces a
+// query vector any more, so MemoryService.getRelevantMemories() returns the session's most
+// important memories, which is what it has always actually returned in production (the
+// embedding flag was off for the entire life of the memories table). matchMemories() is
+// still exercised directly here because PR3 re-wires it to a server-generated query vector.
+//
+// The client-side Postgres-error-code branching that used to live in matchMemories()
+// (missing-function 42883, schema-cache-not-ready PGRST202, raw HTTP 404 -> swallow the
+// error and return []) no longer exists in the current source: it just awaits
 // userDataApi.matchMemories() with no try/catch, so any failure now propagates as a
 // rejection instead of being swallowed. Tests covering that removed graceful-fallback
-// behavior are skipped below with TODOs; everything else was migrated to mock userDataApi
-// instead of supabase.rpc/from.
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    functions: {
-      invoke: vi.fn(),
-    },
-  },
-}));
-
+// behavior are skipped below with TODOs.
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     matchMemories: vi.fn(),
@@ -46,7 +42,6 @@ vi.mock('@/utils/memory/importance', () => ({
 }));
 
 // Import after mocking
-import { supabase } from '@/integrations/supabase/client';
 import { userDataApi } from '@/services/user-data-api';
 
 describe('Semantic Search', () => {
@@ -62,12 +57,8 @@ describe('Semantic Search', () => {
   });
 
   describe('RPC Function Integration', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
     it('should call userDataApi.matchMemories with correct parameters', async () => {
-      const mockEmbedding = JSON.stringify(Array(1536).fill(0.5));
+      const mockEmbedding = JSON.stringify(Array(768).fill(0.5));
       vi.mocked(userDataApi.matchMemories).mockResolvedValue([]);
 
       await repository.matchMemories('session-123', mockEmbedding, 10, 0.7);
@@ -78,15 +69,6 @@ describe('Semantic Search', () => {
         10,
         0.7,
       );
-    });
-
-    it('should return empty array when semantic search is disabled', async () => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(false);
-
-      const result = await repository.matchMemories('session-123', 'embedding', 10, 0.7);
-
-      expect(result).toEqual([]);
-      expect(userDataApi.matchMemories).not.toHaveBeenCalled();
     });
 
     // TODO(vitest-config-audit, 2026-07-14): matchMemories() (see
@@ -142,10 +124,6 @@ describe('Semantic Search', () => {
   });
 
   describe('Similarity Scoring and Ranking', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
     it('should return memories ranked by similarity score', async () => {
       const mockMemories = [
         {
@@ -253,71 +231,14 @@ describe('Semantic Search', () => {
     });
   });
 
-  describe('Query Embedding Generation', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
-    it('should generate query embedding before search', async () => {
-      const mockQueryEmbedding = JSON.stringify(Array(1536).fill(0.5));
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: { embedding: mockQueryEmbedding },
-        error: null,
-      } as any);
-
-      vi.mocked(userDataApi.matchMemories).mockResolvedValue([]);
-      vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
-
-      await MemoryService.getRelevantMemories('session-123', 'find the magical sword', 10);
-
-      // Verify embedding was generated
-      expect(supabase.functions.invoke).toHaveBeenCalledWith('generate-embedding', {
-        body: { text: 'find the magical sword' },
-      });
-
-      // Verify userDataApi.matchMemories was called with the embedding
-      expect(userDataApi.matchMemories).toHaveBeenCalledWith(
-        'session-123',
-        mockQueryEmbedding,
-        10,
-        0.7,
-      );
-    });
-
-    it('should handle query embedding generation failure', async () => {
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: null,
-        error: { message: 'Failed to generate embedding' } as any,
-      } as any);
-
-      // Mock fallback query (repository.loadTopMemories() -> userDataApi.listMemories())
-      const mockFallbackData = [
-        {
-          id: '1',
-          content: 'Fallback memory',
-          importance: 4,
-          session_id: 'session-123',
-          type: 'event',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          metadata: null,
-        },
-      ];
-
-      vi.mocked(userDataApi.listMemories).mockResolvedValue(mockFallbackData);
-
-      const result = await MemoryService.getRelevantMemories('session-123', 'query', 10);
-
-      // Should fall back to loadTopMemories
-      expect(result).toHaveLength(1);
-      expect(userDataApi.matchMemories).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Fallback Behavior', () => {
-    it('should fall back to top memories when semantic search is disabled', async () => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(false);
-
+  describe('Recall without a query vector', () => {
+    // The browser used to embed the query here (supabase.functions.invoke
+    // ('generate-embedding')) and hand the vector to matchMemories(). #1822 found that call
+    // was gated off in production for the entire life of the memories table, against a column
+    // that had never held a vector, so it could not have matched anything. Recall is now
+    // openly what it has always been in practice — the session's most important memories —
+    // until PR3 embeds the query server-side.
+    it('returns the top memories for the session and asks for no similarity match', async () => {
       const mockMemories = [
         {
           id: '1',
@@ -333,56 +254,19 @@ describe('Semantic Search', () => {
 
       vi.mocked(userDataApi.listMemories).mockResolvedValue(mockMemories);
 
-      const result = await MemoryService.getRelevantMemories('session-123', 'query', 10);
+      const result = await MemoryService.getRelevantMemories('session-123', 'find the sword', 10);
 
       expect(result).toHaveLength(1);
-      expect(supabase.functions.invoke).not.toHaveBeenCalled();
+      expect(userDataApi.listMemories).toHaveBeenCalledWith('session-123', {
+        limit: 10,
+        top: true,
+      });
       expect(userDataApi.matchMemories).not.toHaveBeenCalled();
-    });
-
-    it('should fall back when no semantic matches found', async () => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      } as any);
-
-      vi.mocked(userDataApi.matchMemories).mockResolvedValue([]); // No matches
-
-      const mockMemories = [
-        {
-          id: '1',
-          content: 'Fallback memory',
-          importance: 4,
-          session_id: 'session-123',
-          type: 'event',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-          metadata: null,
-        },
-      ];
-
-      vi.mocked(userDataApi.listMemories).mockResolvedValue(mockMemories);
-
-      const result = await MemoryService.getRelevantMemories('session-123', 'query', 10);
-
-      expect(result).toHaveLength(1);
     });
   });
 
   describe('Empty and No Results Scenarios', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
     it('should return empty array when no memories exist', async () => {
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      } as any);
-
-      vi.mocked(userDataApi.matchMemories).mockResolvedValue([]);
       vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
 
       const result = await MemoryService.getRelevantMemories('session-123', 'query', 10);
@@ -391,12 +275,6 @@ describe('Semantic Search', () => {
     });
 
     it('should handle empty query string', async () => {
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0)) },
-        error: null,
-      } as any);
-
-      vi.mocked(userDataApi.matchMemories).mockResolvedValue([]);
       vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
 
       const result = await MemoryService.getRelevantMemories('session-123', '', 10);
@@ -412,11 +290,6 @@ describe('Semantic Search', () => {
     // implementation. Needs product/eng review: either add a `?? []` guard back to
     // matchMemories(), or delete this test as describing removed/unreachable behavior.
     it.skip('should handle null data from RPC', async () => {
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      } as any);
-
       vi.mocked(userDataApi.matchMemories).mockResolvedValue(null as any);
 
       const result = await repository.matchMemories('session-123', 'embedding', 10, 0.7);
@@ -426,10 +299,6 @@ describe('Semantic Search', () => {
   });
 
   describe('Session Isolation', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
     it('should only return memories from the specified session', async () => {
       const sessionAMemory = {
         id: '1',
@@ -454,29 +323,6 @@ describe('Semantic Search', () => {
   });
 
   describe('Different Threshold Values', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
-    it('should use default threshold of 0.7', async () => {
-      vi.mocked(supabase.functions.invoke).mockResolvedValue({
-        data: { embedding: JSON.stringify(Array(1536).fill(0.5)) },
-        error: null,
-      } as any);
-
-      vi.mocked(userDataApi.matchMemories).mockResolvedValue([]);
-      vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
-
-      await MemoryService.getRelevantMemories('session-123', 'query', 10);
-
-      expect(userDataApi.matchMemories).toHaveBeenCalledWith(
-        'session-123',
-        expect.any(String),
-        10,
-        0.7,
-      );
-    });
-
     it('should accept custom threshold values', async () => {
       vi.mocked(userDataApi.matchMemories).mockResolvedValue([]);
 

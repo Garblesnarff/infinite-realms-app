@@ -1,10 +1,57 @@
 import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 
 import { CampaignService } from './campaign-service.js';
+import { generateEmbedding } from './embedding-service.js';
 import { SessionService } from './session-service.js';
 import { db } from '../../../db/client';
-import { memories, type NewMemory } from '../../../db/schema/index';
+import { memories, type Memory, type NewMemory } from '../../../db/schema/index';
+import { alert } from '../lib/alerting.js';
 import { NotFoundError } from '../lib/errors.js';
+
+/**
+ * Generate a memory's embedding and write it onto the row that already exists.
+ *
+ * Deliberately not awaited by `insert()`. The row is durable the moment the INSERT commits;
+ * the vector is an enrichment, and a player's turn must not wait on Google to get its
+ * confirmation. This is the same fire-and-forget contract as `alert()` in lib/alerting.ts:
+ * it never throws into its caller and it never hands the caller a promise worth awaiting.
+ *
+ * The consequence is a race by design — for the few hundred milliseconds between the INSERT
+ * and this UPDATE the row exists with a null embedding and cannot be matched by similarity.
+ * That is the correct trade for a memory system that writes on every turn, and it is why the
+ * failure case pages instead of passing silently: nine months of null embeddings (#1822) were
+ * invisible precisely because nothing was told when a write produced no vector (#1816).
+ *
+ * `updatedAt` is left alone on purpose. The memory's content did not change; only the
+ * system's index of it did, and bumping the timestamp would make an internal write look like
+ * an edit to anything reading recency.
+ */
+export async function attachEmbedding(
+  memoryId: string,
+  content: string,
+  sessionId?: string,
+): Promise<void> {
+  try {
+    const embedding = await generateEmbedding(content, 'RETRIEVAL_DOCUMENT');
+    await db.update(memories).set({ embedding }).where(eq(memories.id, memoryId));
+  } catch (error) {
+    alert('memory_embedding_failed', {
+      sessionId,
+      error: `memory=${memoryId} ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+}
+
+/**
+ * Embed a batch one row at a time rather than all at once: a 50-memory insert would
+ * otherwise open 50 simultaneous connections to Google. Sequential is slower and nobody is
+ * waiting on it. `attachEmbedding` never rejects, so neither does this.
+ */
+async function attachEmbeddingsInOrder(rows: Memory[]): Promise<void> {
+  for (const row of rows) {
+    await attachEmbedding(row.id, row.content, row.sessionId ?? undefined);
+  }
+}
 
 export class MemoryService {
   static async list(
@@ -73,7 +120,15 @@ export class MemoryService {
       }),
     ]);
 
-    return db.insert(memories).values(records).returning();
+    const inserted = await db.insert(memories).values(records).returning();
+
+    // The write is done; embedding happens after it and off the caller's clock. Explicitly
+    // voided so it can never be awaited by accident and can never surface as an unhandled
+    // rejection — see attachEmbedding above for why this is not a bug to be "fixed" by
+    // awaiting it.
+    void attachEmbeddingsInOrder(inserted);
+
+    return inserted;
   }
 
   static async getById(memoryId: string, userId: string) {

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRepository } from '../MemoryRepository';
-import * as featureFlags from '@/config/featureFlags';
 import { MEMORY_SELECT_COLUMNS } from '@/types/memory';
+
+// Memories are written as bare content: the embedding is generated server-side after the
+// insert commits (#1822), so no fixture here carries a vector and no test flips a feature
+// flag to decide whether one is produced.
 
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => {
@@ -13,9 +16,6 @@ vi.mock('@/integrations/supabase/client', () => {
         update: vi.fn(),
       })),
       rpc: vi.fn(),
-      functions: {
-        invoke: vi.fn(),
-      },
     },
   };
 });
@@ -97,7 +97,6 @@ describe('Memory Repository', () => {
   let mockGte: any;
   let mockSingle: any;
   let mockRpc: any;
-  let mockFunctionsInvoke: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -113,7 +112,6 @@ describe('Memory Repository', () => {
     mockGte = vi.fn();
     mockSingle = vi.fn();
     mockRpc = vi.fn();
-    mockFunctionsInvoke = vi.fn();
 
     // Setup default mock chains
     mockSelect.mockReturnThis();
@@ -137,7 +135,6 @@ describe('Memory Repository', () => {
       single: mockSingle,
     } as any);
     vi.mocked(supabase.rpc).mockImplementation(mockRpc as any);
-    vi.mocked(supabase.functions.invoke).mockImplementation(mockFunctionsInvoke as any);
   });
 
   afterEach(() => {
@@ -161,7 +158,6 @@ describe('Memory Repository', () => {
           type: 'quest',
           content: 'Find the ancient artifact',
           importance: 5,
-          embedding: JSON.stringify(Array(1536).fill(0.5)),
           metadata: { category: 'main_quest' },
         };
 
@@ -183,7 +179,6 @@ describe('Memory Repository', () => {
             type: 'event',
             content: `Event ${i}`,
             importance: 3,
-            embedding: JSON.stringify(Array(1536).fill(0.5)),
             metadata: null,
           }));
 
@@ -209,7 +204,6 @@ describe('Memory Repository', () => {
           type: 'quest',
           content: 'Test',
           importance: 3,
-          embedding: null,
           metadata: null,
         };
 
@@ -230,7 +224,6 @@ describe('Memory Repository', () => {
           type: 'quest',
           content: 'Duplicate content',
           importance: 3,
-          embedding: null,
           metadata: null,
         };
 
@@ -302,12 +295,8 @@ describe('Memory Repository', () => {
   });
 
   describe('RPC Function Calls', () => {
-    beforeEach(() => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-    });
-
     it('should call match_memories RPC with correct parameters', async () => {
-      const mockEmbedding = JSON.stringify(Array(1536).fill(0.5));
+      const mockEmbedding = JSON.stringify(Array(768).fill(0.5));
       mockRpc.mockResolvedValue({
         data: [],
         error: null,
@@ -369,7 +358,6 @@ describe('Memory Repository', () => {
         type: 'event',
         content: 'Test',
         importance: 3,
-        embedding: null,
         metadata: null,
       };
 
@@ -390,7 +378,6 @@ describe('Memory Repository', () => {
         type: 'event',
         content: 'Test',
         importance: 3,
-        embedding: 'invalid json',
         metadata: null,
       };
 
@@ -411,14 +398,19 @@ describe('Memory Repository', () => {
         type: 'event',
         content: 'Test',
         importance: 3,
-        embedding: null,
         metadata: null,
       };
 
       await expect(repository.insertMemories([memory])).rejects.toThrow();
     });
 
-    it('should handle RPC function not found errors gracefully', async () => {
+    // Was green for the wrong reason: matchMemories() short-circuited on
+    // isSemanticMemoriesEnabled() and returned [] without ever calling the RPC, so this
+    // asserted a graceful fallback that the code had not contained since the move to
+    // userDataApi. With the flag gone (#1822) the real behavior is visible — a failing match
+    // propagates. See the matching TODOs in semantic-search.test.ts for the open question of
+    // whether graceful degradation should be restored.
+    it('propagates an RPC-function-missing error instead of silently returning nothing', async () => {
       mockRpc.mockResolvedValue({
         data: null,
         error: {
@@ -427,14 +419,10 @@ describe('Memory Repository', () => {
         },
       });
 
-      const results = await repository.matchMemories('session-123', 'embedding', 10, 0.7);
-
-      expect(results).toEqual([]);
+      await expect(repository.matchMemories('session-123', 'embedding', 10, 0.7)).rejects.toThrow();
     });
 
     it('should throw on unexpected RPC errors', async () => {
-      vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
-
       mockRpc.mockResolvedValue({
         data: null,
         error: {
@@ -463,7 +451,6 @@ describe('Memory Repository', () => {
           type: 'event',
           content: `Memory ${i}`,
           importance: 3,
-          embedding: JSON.stringify(Array(1536).fill(0.5)),
           metadata: null,
         }));
 
@@ -490,7 +477,6 @@ describe('Memory Repository', () => {
           type: 'event',
           content: `Memory ${i}`,
           importance: 3,
-          embedding: null,
           metadata: null,
         }));
 

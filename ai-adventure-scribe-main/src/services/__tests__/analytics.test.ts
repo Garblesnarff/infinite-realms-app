@@ -6,7 +6,6 @@ import { analytics } from '../analytics';
 // Mock feature flags
 vi.mock('@/config/featureFlags', () => ({
   featureFlags: {
-    semanticMemories: true,
     worldBuilder: false,
     campaignCharacterFlow: true,
     multiplayerInvites: false,
@@ -93,7 +92,6 @@ describe('analytics service', () => {
       const expectedPayload = {
         timestamp: '2024-05-24T12:00:00.000Z',
         featureFlags: {
-          semanticMemories: true,
           worldBuilder: false,
           campaignCharacterFlow: true,
           multiplayerInvites: false,
