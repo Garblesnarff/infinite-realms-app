@@ -5,6 +5,7 @@ import { formatNarrative } from './formatNarrative';
 import { MessageAssetDisplay } from './MessageAssetDisplay';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
 import { HandoutCard } from '../../handouts/HandoutCard';
+import { EngineOutcomeChip } from '../../game/EngineOutcomeChip';
 
 import type { ChatMessage } from '@/types/game';
 
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
+import { extractEngineGeneratedLines } from '@/utils/engine-lines';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 import { parseAssetTags } from '../../../utils/parse-asset-tags';
 
@@ -61,6 +63,8 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       // 1. Remove roll requests and visual prompt markers from display
       let text = removeRollRequestsFromMessage(displayContent);
       text = text.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '').trim();
+      const { lines: engineLines, fiction } = extractEngineGeneratedLines(text);
+      text = fiction;
 
       // 2. Parse and remove asset tags, extracting referenced assets
       const { cleanContent, assets: assetTags } = parseAssetTags(text);
@@ -72,10 +76,11 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         ...narrative,
         assetTags,
         cleanContent,
+        engineLines,
       };
     }, [displayContent]);
 
-    const { content, charCount, paragraphCount, assetTags, cleanContent } = processed;
+    const { content, charCount, paragraphCount, assetTags, cleanContent, engineLines } = processed;
 
     // Set scene background based on referenced assets (priority: location > scene > monster > npc)
     useEffect(() => {
@@ -115,8 +120,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       }
     }, [assetTags, getAsset, setSceneBackground, isLastInGroup]);
 
-    // Don't render if content is empty after removing roll requests
-    if (!cleanContent || cleanContent.length === 0 || !content) {
+    // Don't render if content is empty after removing roll requests — unless the
+    // engine still has a fact to show as a chip.
+    if ((!cleanContent || cleanContent.length === 0 || !content) && engineLines.length === 0) {
       return null;
     }
     const exceedsClampThreshold = charCount > 800 || paragraphCount > 4;
@@ -147,7 +153,10 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               ◆ Previously on your adventure...
             </div>
           )}
-          <div className={narrativeClass}>{content}</div>
+          {engineLines.map((line) => (
+            <EngineOutcomeChip key={line} line={line} />
+          ))}
+          {content ? <div className={narrativeClass}>{content}</div> : null}
 
           {exceedsClampThreshold && (
             <div className="mt-4 flex justify-end">
