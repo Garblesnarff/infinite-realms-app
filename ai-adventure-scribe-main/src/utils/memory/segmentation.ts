@@ -47,24 +47,25 @@ export const stripCodeBlocks = (content: string): string => {
  * These patterns are transient game mechanics output, not durable memories.
  *
  * Matches the output format of formatDiceRoll() in MessageListContainer.tsx:
- *   "Stealth Check: 15 (nat 13+2) vs DC 13 ✓"
- *   "Attack Roll: 22 (nat 18+4) [ADV] ✓ CRITICAL HIT!"
- *   "Perception Check: 8 (nat 6+2) ✗"
+ *   "Stealth Check: 15 (nat 13+2) vs DC 13 success"
+ *   "Attack Roll: 22 (nat 18+4) [ADV] hit CRITICAL HIT!"
+ *   "Perception Check: 8 (nat 6+2) fail"
  */
 export const stripRollScaffolding = (content: string): string => {
   return (
     content
       // Remove success/failure markers (used exclusively by formatDiceRoll)
       .replace(/[✓✗]/g, '')
+      // Critical markers first so `\bhit\b` does not eat "CRITICAL HIT".
+      .replace(/\bCRITICAL\s+HIT!?/gi, '')
+      .replace(/\bCritical\s+Miss\b/gi, '')
+      .replace(/\b(?:success|fail|hit|miss)\b/gi, '')
       // Remove natural roll notation: (nat 13+2), (nat 18-1), (nat 20)
       .replace(/\(nat\s+\d+[+-]?\d*\)/g, '')
       // Remove advantage/disadvantage tags
       .replace(/\[(?:ADV|DIS)\]/g, '')
       // Remove vs DC/AC comparisons
       .replace(/\bvs\s+(?:DC|AC)\s+\d+/gi, '')
-      // Remove critical hit/miss markers
-      .replace(/\bCRITICAL\s+HIT!?/gi, '')
-      .replace(/\bCritical\s+Miss\b/gi, '')
       // Normalize leftover whitespace
       .replace(/\s{2,}/g, ' ')
       .trim()

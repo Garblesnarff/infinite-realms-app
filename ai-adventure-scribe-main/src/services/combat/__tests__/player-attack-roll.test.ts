@@ -64,6 +64,21 @@ describe('the player attack die', () => {
   });
 
   describe('asking for the die', () => {
+    it('names a substituted weapon in the popup before the die is thrown', async () => {
+      vi.mocked(proposeAuthoritativeAttack).mockResolvedValue({
+        ...LEGAL_PROPOSAL,
+        weaponName: 'Rapier',
+        requestedWeapon: 'punch',
+        weaponSubstituted: true,
+      } as any);
+      vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 16 });
+
+      await ask();
+      expect(vi.mocked(requestPlayerAttackRoll).mock.calls[0][0].weaponName).toBe(
+        'Rapier (not the declared punch)',
+      );
+    });
+
     it('shows the popup the engine’s own numbers, then returns the die', async () => {
       vi.mocked(proposeAuthoritativeAttack).mockResolvedValue(LEGAL_PROPOSAL as any);
       vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 18 });

@@ -51,6 +51,22 @@ export function weaponProfileMatches(
  * Unarmed strike is a real rules fallback, not a fabricated weapon record. It is shared so the
  * "no weapon equipped" answer is the same object wherever the question is asked.
  */
+const UNARMED_CLAIMS = new Set([
+  'unarmedstrike',
+  'unarmed',
+  'punch',
+  'fist',
+  'fists',
+  'kick',
+  'headbutt',
+]);
+
+/** A punch, kick, or explicit unarmed strike — not "whatever is equipped". */
+export function isUnarmedWeaponClaim(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return UNARMED_CLAIMS.has(normalizeWeaponName(value));
+}
+
 export const UNARMED_STRIKE = {
   id: 'unarmed-strike',
   name: 'Unarmed Strike',

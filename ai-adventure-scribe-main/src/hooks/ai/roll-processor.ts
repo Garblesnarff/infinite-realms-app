@@ -138,6 +138,26 @@ export function deduplicateRollRequests(
   return filtered;
 }
 
+function isCombatContext(aiContext: Record<string, unknown>): boolean {
+  const gameState = aiContext.gameState as Record<string, unknown> | undefined;
+  return gameState?.isInCombat === true;
+}
+
+/** Combat attacks resolve through combat_actions; a second popup discards the first roll. */
+export function dropInCombatAttackRequests(
+  rollRequests: RollRequest[],
+  aiContext: Record<string, unknown>,
+): RollRequest[] {
+  if (!isCombatContext(aiContext)) return rollRequests;
+  const kept = rollRequests.filter((request) => request.type !== 'attack');
+  if (kept.length !== rollRequests.length) {
+    logger.info(
+      `[RollProcessor] Dropped ${rollRequests.length - kept.length} in-combat attack roll_request(s); the engine owns those dice`,
+    );
+  }
+  return kept;
+}
+
 /**
  * Process roll requests end-to-end:
  * 1. Parse/augment from AI text
@@ -172,6 +192,10 @@ export async function processRollRequests(params: {
 
   // Step 2: Deduplicate
   rollRequests = deduplicateRollRequests(rollRequests, processedSet);
+
+  // In combat, attacks belong to combat_actions / the engine popup. A leftover attack
+  // roll_request is a second die for the same declaration (#1807).
+  rollRequests = dropInCombatAttackRequests(rollRequests, aiContext);
 
   // Step 3: Suppress all roll requests when responding to a dice result
   if (isDiceRollMessage && rollRequests.length > 0) {

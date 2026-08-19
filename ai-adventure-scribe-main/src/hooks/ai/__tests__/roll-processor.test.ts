@@ -45,6 +45,7 @@ import {
   deduplicateRollRequests,
   parseAndAugmentRollRequests,
   processRollRequests,
+  dropInCombatAttackRequests,
 } from '../roll-processor';
 
 import * as npcRollHandler from '@/services/ai/npc-roll-handler';
@@ -170,6 +171,31 @@ describe('roll-processor', () => {
       expect(augmented).toHaveLength(1);
       expect(augmented[0].type).toBe('damage');
       expect(augmented[0].formula).toBe('1d8+3');
+    });
+  });
+
+  describe('dropInCombatAttackRequests', () => {
+    it('drops attack requests during combat so a second popup cannot discard the first roll', () => {
+      const kept = dropInCombatAttackRequests(
+        [
+          {
+            type: 'attack',
+            formula: '1d20-1',
+            purpose: 'The Storyteller punches Dishwasher Prime',
+          },
+          { type: 'check', formula: '1d20+wis', purpose: 'Perception check' },
+        ],
+        { gameState: { isInCombat: true } },
+      );
+      expect(kept).toHaveLength(1);
+      expect(kept[0].type).toBe('check');
+    });
+
+    it('leaves exploration attacks alone when combat is not active', () => {
+      const requests = [{ type: 'attack', formula: '1d20+4', purpose: 'Longsword attack' }];
+      expect(dropInCombatAttackRequests(requests, { gameState: { isInCombat: false } })).toEqual(
+        requests,
+      );
     });
   });
 

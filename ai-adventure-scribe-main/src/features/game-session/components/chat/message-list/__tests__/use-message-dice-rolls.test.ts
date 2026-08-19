@@ -228,7 +228,7 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
-        expect.stringContaining('✓'),
+        expect.stringContaining('success'),
         expect.objectContaining({
           diceRoll: expect.objectContaining({
             success: true,
@@ -289,7 +289,7 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
-        expect.stringContaining('✓'),
+        expect.stringContaining('hit'),
         expect.anything(),
       );
     });
@@ -380,7 +380,7 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
-        expect.stringContaining('✗'),
+        expect.stringContaining('fail'),
         expect.objectContaining({
           diceRoll: expect.objectContaining({ success: false, dc: 18 }),
         }),

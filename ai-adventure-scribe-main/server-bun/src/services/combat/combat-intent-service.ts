@@ -617,6 +617,8 @@ export async function proposeCombatAttack(
     weaponId: grounding.weaponId,
     expectedVersion: encounter.version,
     targetLabel,
+    requestedWeapon: grounding.requested,
+    weaponSubstituted: !grounding.grounded,
   };
 }
 

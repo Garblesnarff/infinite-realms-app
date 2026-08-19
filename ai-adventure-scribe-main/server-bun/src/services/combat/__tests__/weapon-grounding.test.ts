@@ -83,4 +83,16 @@ describe('grounding a narrated weapon name against the sheet', () => {
       grounded: true,
     });
   });
+
+  test('a punch or unarmed claim is Unarmed Strike even when a rapier is equipped', () => {
+    const rapier = weapon({ id: 'inv-rapier', name: 'Rapier', finesse: true });
+    const sheet = [rapier];
+    for (const claim of ['unarmed-strike', 'unarmed', 'punch', 'fist', 'kick', 'headbutt']) {
+      const result = groundRequestedWeapon(claim, sheet);
+      expect(result.weapon.name).toBe('Unarmed Strike');
+      expect(result.weaponId).toBeUndefined();
+      expect(result.grounded).toBe(true);
+      expect(result.weapon.id).not.toBe('inv-rapier');
+    }
+  });
 });

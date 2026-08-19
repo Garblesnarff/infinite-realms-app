@@ -68,10 +68,14 @@ export function formatDiceRoll(roll: DiceRollRequest): string {
     formatted += ' [DIS]';
   }
 
-  // Render the same authoritative boolean that is persisted with the roll event.
+  // Words, not a glyph: ✓ on "9 vs AC 10" was read as a hit (#1807).
   const outcome = getDiceRollOutcome(roll);
   if (outcome) {
-    formatted += outcome.success ? ' ✓' : ' ✗';
+    if (outcome.targetType === 'ac') {
+      formatted += outcome.success ? ' hit' : ' miss';
+    } else {
+      formatted += outcome.success ? ' success' : ' fail';
+    }
   }
 
   // Add critical indicators

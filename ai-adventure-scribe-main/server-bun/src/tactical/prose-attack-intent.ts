@@ -30,7 +30,7 @@ import type { DMResponse, DMTargetedCombatAction } from '../services/dm/dm-respo
  * only the weapon — which is precisely why the noun family is not optional.
  */
 const ATTACK_VERBS =
-  /\b(?:attacks?|attacking|strikes?|striking|swings?|swinging|slash(?:es|ing)?|stabs?|stabbing|lunges?|lunging|thrusts?|thrusting|hacks?|hacking|slices?|slicing|cleaves?|cleaving|bites?|biting|claws?|clawing|mauls?|mauling|charges?|charging|pounces?|pouncing|snaps? at|swipes?|swiping|parr(?:y|ies|ying)|shoots?|shooting|fires?|firing|looses?|loosing|hurls?|hurling|blasts?|blasting|smash(?:es|ing)?|bashes|bashing|drives? .{0,20}\binto\b)\b/i;
+  /\b(?:attacks?|attacking|strikes?|striking|swings?|swinging|slash(?:es|ing)?|stabs?|stabbing|lunges?|lunging|thrusts?|thrusting|hacks?|hacking|slices?|slicing|cleaves?|cleaving|bites?|biting|claws?|clawing|mauls?|mauling|charges?|charging|pounces?|pouncing|snaps? at|swipes?|swiping|parr(?:y|ies|ying)|shoots?|shooting|fires?|firing|looses?|loosing|hurls?|hurling|blasts?|blasting|smash(?:es|ing)?|bashes|bashing|punch(?:es|ing|ed)?|kicks?|kicking|drives? .{0,20}\binto\b)\b/i;
 
 const ATTACK_NOUNS =
   /\b(?:blade|sword|longsword|shortsword|greatsword|rapier|scimitar|dagger|axe|greataxe|handaxe|mace|hammer|warhammer|maul|spear|glaive|halberd|pike|quarterstaff|staff|club|flail|whip|bow|longbow|shortbow|crossbow|sling|javelin|dart|bolt|arrow|fangs?|talons?|claws?|mandibles?|pincers?|stinger|weapon)\b/i;
@@ -50,7 +50,11 @@ export function hasAttackLanguage(text: string): boolean {
  * request's purpose is one clause about one attack, while narration is a paragraph, and "meets
  * it with a snarl" would hand the engine `snarl` as a weapon id.
  */
+const UNARMED_INTENT =
+  /\b(?:punch(?:es|ing|ed)?|kicks?|kicking|fists?|head-?butts?|unarmed(?:\s+strike)?)\b/i;
+
 function weaponIdFromProse(text: string): string | null {
+  if (UNARMED_INTENT.test(text)) return 'unarmed-strike';
   const match = ATTACK_NOUNS.exec(text);
   if (!match) return null;
   const noun = match[0].toLowerCase();

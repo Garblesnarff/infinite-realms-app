@@ -1,4 +1,7 @@
-import type { ClientCombatIntent, CombatRefusalDetails } from '@/services/combat/combat-action-executor';
+import type {
+  ClientCombatIntent,
+  CombatRefusalDetails,
+} from '@/services/combat/combat-action-executor';
 
 import { getAuthHeaders } from '@/services/auth/TokenService';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
@@ -16,6 +19,8 @@ export interface CombatAttackProposal {
   advantage?: boolean;
   disadvantage?: boolean;
   targetLabel?: string;
+  requestedWeapon?: string | null;
+  weaponSubstituted?: boolean;
 }
 
 /**

@@ -114,6 +114,15 @@ describe("run 9's prose becomes an attack the engine can execute", () => {
     });
   });
 
+  test('a punch is an unarmed strike, not a silent rapier', () => {
+    const inference = inferProseAttackIntent(
+      response({ text: 'The Seeker punches Shadow Roach 1 in the face.' }),
+      promptFor('the-seeker'),
+      true,
+    );
+    expect(inference!.action.weapon_id).toBe('unarmed-strike');
+  });
+
   test('the actor is whose turn it is, never whoever the prose names first', () => {
     // The same paragraph on a roach's turn is the roach acting, not The Seeker.
     const inference = inferProseAttackIntent(

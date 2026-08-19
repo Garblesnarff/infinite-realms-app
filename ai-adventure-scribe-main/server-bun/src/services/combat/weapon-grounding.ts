@@ -17,6 +17,7 @@
  */
 import {
   findCatalogWeapon,
+  isUnarmedWeaponClaim,
   normalizeWeaponName,
   UNARMED_STRIKE,
   weaponProfileMatches,
@@ -63,6 +64,17 @@ export function groundRequestedWeapon(
       weaponId: idFor(fallback),
       grounded: true,
       requested: null,
+    };
+  }
+
+  // Unarmed Strike is a legal Attack while a weapon is equipped (PHB 195). A punch must
+  // not silently become the rapier in the other hand — that is #1807.
+  if (isUnarmedWeaponClaim(requestedWeaponId)) {
+    return {
+      weapon: { ...UNARMED_STRIKE },
+      weaponId: undefined,
+      grounded: true,
+      requested: requestedWeaponId,
     };
   }
 

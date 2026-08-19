@@ -79,10 +79,21 @@ export async function askPlayerForAttackDie(
       logger.info(`[PlayerRoll] proposal illegal (${proposal.refusal}); engine resolves`);
       return { autoRolled: true, movementOnly: false };
     }
+    const resolvedWeapon = proposal.weaponName ?? 'attack';
+    const weaponName =
+      proposal.weaponSubstituted && proposal.requestedWeapon
+        ? `${resolvedWeapon} (not the declared ${proposal.requestedWeapon})`
+        : resolvedWeapon;
+    if (proposal.weaponSubstituted) {
+      logger.info('[PlayerRoll] weapon substitution surfaced before the die', {
+        requested: proposal.requestedWeapon,
+        resolved: resolvedWeapon,
+      });
+    }
     const outcome = await requestPlayerAttackRoll({
       actorLabel,
       targetLabel: proposal.targetLabel ?? targetId,
-      weaponName: proposal.weaponName ?? 'attack',
+      weaponName,
       attackBonus: proposal.attackBonus ?? 0,
       targetAc: proposal.targetAc ?? 10,
       advantage: !!proposal.advantage,

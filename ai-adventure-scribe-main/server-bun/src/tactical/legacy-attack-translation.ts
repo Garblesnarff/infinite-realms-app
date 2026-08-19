@@ -31,7 +31,11 @@ type RollRequest = DMResponse['roll_requests'][number];
 const WEAPON_PHRASE = /\b(?:with|using)\s+(?:my|his|her|their|its|the|a|an)?\s*([a-z][a-z' -]*)/i;
 const WEAPON_STOP = /\s+(?:against|at|on|toward|towards|targeting|vs\.?)\b/i;
 
+const UNARMED_INTENT =
+  /\b(?:punch(?:es|ing|ed)?|kicks?|kicking|fists?|head-?butts?|unarmed(?:\s+strike)?)\b/i;
+
 export function weaponIdFromPurpose(purpose: string): string | null {
+  if (UNARMED_INTENT.test(purpose)) return 'unarmed-strike';
   const match = WEAPON_PHRASE.exec(purpose);
   if (!match) return null;
   const phrase = match[1].split(WEAPON_STOP)[0].trim();

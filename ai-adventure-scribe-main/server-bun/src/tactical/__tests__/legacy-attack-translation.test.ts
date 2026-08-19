@@ -205,6 +205,9 @@ describe('weapon inference', () => {
     ['Attack roll with longsword against the first Shadow Roach', 'longsword'],
     ['Attack roll with my heavy crossbow at Shadow Roach 2', 'heavy-crossbow'],
     ['Attack roll against Shadow Roach 1', null],
+    ['The Storyteller punches Dishwasher Prime', 'unarmed-strike'],
+    ['I attempt one final punch on Dishwasher prime', 'unarmed-strike'],
+    ['kick the nearest living thing', 'unarmed-strike'],
   ])('%p yields %p', (purpose, expected) => {
     expect(weaponIdFromPurpose(purpose)).toBe(expected as string | null);
   });
