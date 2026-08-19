@@ -13,6 +13,10 @@ import {
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
 import { SKILLS_MAP, calculateProficiencyBonus } from '@/utils/character/basic-math';
+import {
+  buildProficiencyKeySet,
+  canonicalProficiencyKey,
+} from '@/utils/character/parse-proficiency-list';
 
 export interface SkillModifiers {
   [skill: string]: { modifier: number; proficient: boolean; expertise: boolean };
@@ -44,31 +48,34 @@ export const calculateSkillModifiers = (
 
   // Character creation persists the complete set (class choices, background,
   // race, and other bonuses). Prefer it whenever it is available.
+  // Both sides of the membership test are canonicalised (lowercase,
+  // non-alphanumerics dropped) so the two writers' disagreeing cases both
+  // resolve against the TitleCase SKILLS_MAP keys. See #1847.
   const chosenProficiencies = character.skillProficiencies;
-  const expertiseSet = new Set(character.expertiseProficiencies ?? []);
+  const expertiseSet = buildProficiencyKeySet(character.expertiseProficiencies);
   const cacheKey = chosenProficiencies
-    ? `chosen:${[...chosenProficiencies].sort().join('|')}`
+    ? `chosen:${[...buildProficiencyKeySet(chosenProficiencies)].sort().join('|')}`
     : `${character.class?.name || 'none'}:${character.race?.name || 'none'}:${character.subrace?.name || 'none'}`;
   let profSet = combinedProficiencySetCache.get(cacheKey);
 
   if (!profSet) {
-    const newSet = new Set<string>();
-    if (chosenProficiencies) {
-      chosenProficiencies.forEach((p) => newSet.add(p));
-    } else {
-      getClassSkillProficiencies(character.class).forEach((p) => newSet.add(p));
-      getRaceSkillProficiencies(character.race, character.subrace).forEach((p) => newSet.add(p));
-    }
-    profSet = newSet;
+    const sources = chosenProficiencies
+      ? chosenProficiencies
+      : [
+          ...getClassSkillProficiencies(character.class),
+          ...getRaceSkillProficiencies(character.race, character.subrace),
+        ];
+    profSet = buildProficiencyKeySet(sources);
     combinedProficiencySetCache.set(cacheKey, profSet);
   }
 
   const skillMods: SkillModifiers = {};
 
   Object.entries(SKILLS_MAP).forEach(([skill, ability]) => {
+    const skillKey = canonicalProficiencyKey(skill);
     const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
-    const proficient = profSet?.has(skill) ?? false;
-    const expertise = proficient && expertiseSet.has(skill);
+    const proficient = profSet?.has(skillKey) ?? false;
+    const expertise = proficient && expertiseSet.has(skillKey);
 
     skillMods[skill] = {
       modifier: abilityMod + (proficient ? pb : 0) + (expertise ? pb : 0),

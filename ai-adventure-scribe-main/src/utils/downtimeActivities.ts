@@ -14,6 +14,7 @@ import type {
   DowntimeResult,
 } from '@/types/downtimeActivities';
 
+import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 import { rollDice } from '@/utils/diceUtils';
 
 export { commonDowntimeActivities };
@@ -72,7 +73,7 @@ export function checkDowntimePrerequisites(
   // Check skill requirements
   if (activity.skillRequirements && activity.skillRequirements.length > 0) {
     const hasSkills = activity.skillRequirements.every((skill) =>
-      character.skillProficiencies?.includes(skill),
+      hasProficiency(character.skillProficiencies, skill),
     );
 
     if (!hasSkills) {
@@ -255,4 +256,3 @@ export function getAvailableDowntimeActivities(
     (activity) => checkDowntimePrerequisites(character, activity).canPerform,
   );
 }
-

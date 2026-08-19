@@ -16,6 +16,7 @@ import type {
 } from '@/types/environmentalHazards';
 
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
+import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 import { rollDice, rollSavingThrow } from '@/utils/diceUtils';
 
 /**
@@ -47,19 +48,19 @@ export function detectHazard(
   switch (hazard.detectSkill) {
     case 'perception':
       skillModifier = character.abilityScores?.wisdom?.modifier || 0;
-      if (character.skillProficiencies?.includes('Perception')) {
+      if (hasProficiency(character.skillProficiencies, 'Perception')) {
         skillModifier += calculateProficiencyBonus(character.level || 1);
       }
       break;
     case 'investigation':
       skillModifier = character.abilityScores?.intelligence?.modifier || 0;
-      if (character.skillProficiencies?.includes('Investigation')) {
+      if (hasProficiency(character.skillProficiencies, 'Investigation')) {
         skillModifier += calculateProficiencyBonus(character.level || 1);
       }
       break;
     case 'survival':
       skillModifier = character.abilityScores?.wisdom?.modifier || 0;
-      if (character.skillProficiencies?.includes('Survival')) {
+      if (hasProficiency(character.skillProficiencies, 'Survival')) {
         skillModifier += calculateProficiencyBonus(character.level || 1);
       }
       break;

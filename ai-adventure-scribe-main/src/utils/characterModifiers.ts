@@ -20,6 +20,7 @@ import {
   SKILL_ALIASES,
   type AbilityName,
 } from '@/utils/character/basic-modifiers';
+import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 
 // Re-export basic modifier definitions and helpers
 export {
@@ -58,9 +59,7 @@ export function calculateSkillModifier(character: Character, skillName: string):
 
   const abilityMod = getAbilityModifier(character, ability);
   const proficient = isSkillProficient(character, skillName);
-  const expertise = character.expertiseProficiencies?.some(
-    (entry) => entry.toLowerCase() === actualSkill,
-  );
+  const expertise = hasProficiency(character.expertiseProficiencies, actualSkill);
   const proficiencyBonus = proficient ? getProficiencyBonus(character) * (expertise ? 2 : 1) : 0;
 
   return abilityMod + proficiencyBonus;

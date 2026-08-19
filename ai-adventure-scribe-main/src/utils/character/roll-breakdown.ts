@@ -17,9 +17,9 @@ import {
   isSkillProficient,
   isSaveProficient,
 } from './basic-modifiers';
+import { hasProficiency } from './parse-proficiency-list';
 
 import type { Character } from '@/types/character';
-
 
 /**
  * Generate dice formula with character modifiers
@@ -126,9 +126,7 @@ export function calculateRollWithBreakdown(
       usedAbility = skillAbility;
       abilityMod = getAbilityModifier(character, skillAbility);
       isProficient = isSkillProficient(character, skillName);
-      const hasExpertise = character.expertiseProficiencies?.some(
-        (entry) => entry.toLowerCase() === actualSkill,
-      );
+      const hasExpertise = hasProficiency(character.expertiseProficiencies, actualSkill);
       proficiencyBonus = isProficient ? getProficiencyBonus(character) * (hasExpertise ? 2 : 1) : 0;
       breakdown.push(
         `${skillAbility.slice(0, 3).toUpperCase()} ${abilityMod >= 0 ? '+' : ''}${abilityMod}`,

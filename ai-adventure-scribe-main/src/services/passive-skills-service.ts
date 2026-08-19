@@ -1,6 +1,7 @@
-import type { Character} from '@/types/character';
+import type { Character } from '@/types/character';
 
 import { getProficiencyBonus } from '@/data/levelProgression';
+import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 
 /**
  * PassiveSkillsService
@@ -68,7 +69,7 @@ export function calculatePassivePerception(character: Character): number {
 
   const wisdomScore = character.abilityScores.wisdom.score;
   const proficiencyBonus = getProficiencyBonus(character.level);
-  const isProficient = character.skillProficiencies?.includes('Perception') || false;
+  const isProficient = hasProficiency(character.skillProficiencies, 'Perception');
 
   return calculatePassiveSkill(wisdomScore, proficiencyBonus, isProficient);
 }
@@ -83,7 +84,7 @@ export function calculatePassiveInsight(character: Character): number {
 
   const wisdomScore = character.abilityScores.wisdom.score;
   const proficiencyBonus = getProficiencyBonus(character.level);
-  const isProficient = character.skillProficiencies?.includes('Insight') || false;
+  const isProficient = hasProficiency(character.skillProficiencies, 'Insight');
 
   return calculatePassiveSkill(wisdomScore, proficiencyBonus, isProficient);
 }
@@ -98,7 +99,7 @@ export function calculatePassiveInvestigation(character: Character): number {
 
   const intelligenceScore = character.abilityScores.intelligence.score;
   const proficiencyBonus = getProficiencyBonus(character.level);
-  const isProficient = character.skillProficiencies?.includes('Investigation') || false;
+  const isProficient = hasProficiency(character.skillProficiencies, 'Investigation');
 
   return calculatePassiveSkill(intelligenceScore, proficiencyBonus, isProficient);
 }

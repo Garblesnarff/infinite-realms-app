@@ -40,6 +40,33 @@ function calculateAbilityModifier(score: number): number {
 }
 
 /**
+ * Case-insensitive skill-proficiency test.
+ *
+ * `skill_proficiencies` is a free-text CSV column whose two writers disagree on
+ * case: the creation wizard persists TitleCase (`Perception`), starter-template
+ * seeding persists lowercase / snake_case (`perception`, `sleight_of_hand`).
+ * Comparing the raw strings left every template-derived character without their
+ * proficiency bonus (#1847), so both sides are canonicalised here — lowercased
+ * with non-alphanumerics dropped.
+ *
+ * Inlined rather than imported: this is Deno, and it cannot reach `@/` paths.
+ * Mirrors canonicalProficiencyKey/hasProficiency in
+ * src/utils/character/parse-proficiency-list.ts.
+ */
+function canonicalProficiencyKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function hasSkillProficiency(
+  skillProficiencies: string[] | undefined,
+  skill: string,
+): boolean {
+  const target = canonicalProficiencyKey(skill);
+  if (target.length === 0) return false;
+  return (skillProficiencies || []).some((entry) => canonicalProficiencyKey(entry) === target);
+}
+
+/**
  * Check if character has the Observant feat
  * Observant grants +5 to Passive Perception and Passive Investigation (PHB p.168)
  * @param character - Character context
@@ -85,7 +112,7 @@ function calculatePassivePerception(character: CharacterContext): number {
 
   const wisdomScore = character.abilityScores.wisdom.score;
   const proficiencyBonus = getProficiencyBonus(character.level);
-  const isProficient = character.skillProficiencies?.includes('Perception') || false;
+  const isProficient = hasSkillProficiency(character.skillProficiencies, 'Perception');
   const observantBonus = hasObservantFeat(character) ? 5 : 0;
 
   return calculatePassiveSkill(wisdomScore, proficiencyBonus, isProficient, observantBonus);
@@ -106,7 +133,7 @@ function calculatePassiveInsight(character: CharacterContext): number {
 
   const wisdomScore = character.abilityScores.wisdom.score;
   const proficiencyBonus = getProficiencyBonus(character.level);
-  const isProficient = character.skillProficiencies?.includes('Insight') || false;
+  const isProficient = hasSkillProficiency(character.skillProficiencies, 'Insight');
 
   return calculatePassiveSkill(wisdomScore, proficiencyBonus, isProficient);
 }
@@ -126,7 +153,7 @@ function calculatePassiveInvestigation(character: CharacterContext): number {
 
   const intelligenceScore = character.abilityScores.intelligence.score;
   const proficiencyBonus = getProficiencyBonus(character.level);
-  const isProficient = character.skillProficiencies?.includes('Investigation') || false;
+  const isProficient = hasSkillProficiency(character.skillProficiencies, 'Investigation');
   const observantBonus = hasObservantFeat(character) ? 5 : 0;
 
   return calculatePassiveSkill(intelligenceScore, proficiencyBonus, isProficient, observantBonus);

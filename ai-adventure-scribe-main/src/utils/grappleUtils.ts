@@ -6,6 +6,7 @@
 
 import type { CombatParticipant, Condition, DiceRoll } from '@/types/combat';
 
+import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { rollDice } from '@/utils/diceUtils';
 
@@ -82,9 +83,7 @@ function getSkillModifier(
 ): number {
   const ability = skill === 'Athletics' ? 'strength' : 'dexterity';
   const abilityModifier = participant.abilityScores?.[ability]?.modifier ?? 0;
-  const proficient = participant.skillProficiencies?.some(
-    (entry) => entry.toLowerCase() === skill.toLowerCase(),
-  );
+  const proficient = hasProficiency(participant.skillProficiencies, skill);
   return abilityModifier + (proficient ? calculateProficiencyBonus(participant.level || 1) : 0);
 }
 

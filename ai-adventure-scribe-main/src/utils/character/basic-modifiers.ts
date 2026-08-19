@@ -11,10 +11,16 @@
 import type { Character } from '@/types/character';
 
 import { calculateProficiencyBonus as calculateBasicProficiencyBonus } from '@/utils/character/basic-math';
+import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 
 // D&D 5e ability names
 export type AbilityName =
-  'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma';
+  | 'strength'
+  | 'dexterity'
+  | 'constitution'
+  | 'intelligence'
+  | 'wisdom'
+  | 'charisma';
 
 // D&D 5e skills and their associated abilities
 export const SKILL_ABILITIES: Record<string, AbilityName> = {
@@ -97,9 +103,11 @@ export function isSkillProficient(character: Character, skillName: string): bool
   const normalizedSkill = skillName.toLowerCase();
   const actualSkill = SKILL_ALIASES[normalizedSkill] || normalizedSkill;
 
-  // Check if skill is in character's skill proficiencies
+  // Check if skill is in character's skill proficiencies. Canonicalised on both
+  // sides so `sleight_of_hand` (template seeding) matches `Sleight of Hand`
+  // (creation wizard) — see #1847.
   if (character.skillProficiencies) {
-    return character.skillProficiencies.some((skill) => skill.toLowerCase() === actualSkill);
+    return hasProficiency(character.skillProficiencies, actualSkill);
   }
 
   return false;
