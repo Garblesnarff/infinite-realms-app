@@ -14,6 +14,7 @@ import {
   formatNPCRollsSystemMessage,
 } from '@/services/ai/npc-roll-handler';
 import { executeAllNPCRolls } from '@/services/combat/npc-auto-roller';
+import { encounterParticipantsFromContext } from '@/services/combat/roll-routing';
 import { rollStateManager } from '@/services/combat/rollStateManager';
 import { DiceEngine } from '@/services/dice/DiceEngine';
 import {
@@ -183,7 +184,10 @@ export async function processRollRequests(params: {
   let npcRollContinuationText = '';
 
   if (rollRequests.length > 0) {
-    const { npcRolls, playerRolls } = await executeAllNPCRolls(rollRequests);
+    const { npcRolls, playerRolls } = await executeAllNPCRolls(
+      rollRequests,
+      encounterParticipantsFromContext(aiContext),
+    );
     npcRollResults = npcRolls;
     rollRequests = playerRolls;
 

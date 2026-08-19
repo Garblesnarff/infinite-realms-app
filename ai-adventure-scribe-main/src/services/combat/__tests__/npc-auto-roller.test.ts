@@ -101,15 +101,26 @@ describe('npc-auto-roller', () => {
 
   describe('executeAllNPCRolls', () => {
     it('should partition mixed roll requests correctly', async () => {
+      const roster = [
+        { id: 'player-1', name: 'Player 1', participantType: 'player' },
+        { id: 'npc-1', name: 'NPC 1', participantType: 'enemy' },
+        { id: 'npc-2', name: 'NPC 2', participantType: 'enemy' },
+      ];
       const requests: RollRequest[] = [
         {
           type: 'attack',
           formula: '1d20+5',
-          purpose: 'NPC 1',
-          autoExecute: true,
+          purpose: 'NPC 1 attacks Player 1',
+          autoExecute: false,
           actorName: 'NPC 1',
         },
-        { type: 'attack', formula: '1d20+3', purpose: 'Player 1', autoExecute: false },
+        {
+          type: 'attack',
+          formula: '1d20+3',
+          purpose: 'Player 1 attacks NPC 1',
+          autoExecute: false,
+          actorName: 'Player 1',
+        },
         {
           type: 'damage',
           formula: '1d8+2',
@@ -124,13 +135,36 @@ describe('npc-auto-roller', () => {
 
       (DiceEngine.roll as any).mockReturnValueOnce(mockRoll1).mockReturnValueOnce(mockRoll2);
 
-      const result = await executeAllNPCRolls(requests);
+      const result = await executeAllNPCRolls(requests, roster);
 
       expect(result.npcRolls).toHaveLength(2);
       expect(result.playerRolls).toHaveLength(1);
       expect(result.npcRolls[0].request.actorName).toBe('NPC 1');
       expect(result.npcRolls[1].request.actorName).toBe('NPC 2');
-      expect(result.playerRolls[0].purpose).toBe('Player 1');
+      expect(result.playerRolls[0].purpose).toBe('Player 1 attacks NPC 1');
+    });
+
+    it('auto-executes a monster attack the model did not mark autoExecute', async () => {
+      (DiceEngine.roll as any).mockReturnValue({ total: 6, naturalRoll: 2, critical: false });
+
+      const result = await executeAllNPCRolls(
+        [
+          {
+            type: 'attack',
+            formula: '1d20+4',
+            purpose: 'Brigade Warrior 2 attacks The Faithful',
+            autoExecute: false,
+          },
+        ],
+        [
+          { id: 'faithful-id', name: 'The Faithful', participantType: 'player' },
+          { id: 'brigade-2', name: 'Brigade Warrior 2', participantType: 'enemy' },
+        ],
+      );
+
+      expect(result.playerRolls).toHaveLength(0);
+      expect(result.npcRolls).toHaveLength(1);
+      expect(result.npcRolls[0].request.autoExecute).toBe(true);
     });
 
     it('should continue processing even if one NPC roll fails', async () => {

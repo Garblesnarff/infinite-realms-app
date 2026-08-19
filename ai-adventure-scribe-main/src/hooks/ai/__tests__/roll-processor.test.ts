@@ -126,8 +126,7 @@ describe('roll-processor', () => {
     // it previously only ever activated as a fallback for empty
     // existingRequests, so this asserts that fallback path stays a fallback.
     it('should use structured existingRequests as-is and skip legacy text parsing entirely', () => {
-      const responseText =
-        'You crouch low, scanning the dining room for anything out of place.';
+      const responseText = 'You crouch low, scanning the dining room for anything out of place.';
       const structuredRequest = {
         type: 'check',
         formula: '1d20+wis',
@@ -314,6 +313,57 @@ describe('roll-processor', () => {
         type: 'check',
         purpose: 'Stealth check to avoid detection',
       });
+    });
+
+    it('passes the encounter roster so NPC attacks can be classified without autoExecute', async () => {
+      const params = {
+        responseText: 'Brigade Warrior 2 lunges.',
+        existingRequests: [
+          {
+            type: 'attack',
+            formula: '1d20+4',
+            purpose: 'Brigade Warrior 2 attacks The Faithful',
+            autoExecute: false,
+          },
+        ],
+        isDiceRollMessage: false,
+        processedSet: new Set<string>(),
+        aiContext: {
+          gameState: {
+            participants: [
+              { id: 'faithful-id', name: 'The Faithful', type: 'player' },
+              { id: 'brigade-2', name: 'Brigade Warrior 2', type: 'enemy' },
+            ],
+          },
+        },
+        sessionId: 'session-123',
+        characterId: 'player-1',
+      };
+
+      (npcAutoRoller.executeAllNPCRolls as any).mockResolvedValue({
+        npcRolls: [{ request: params.existingRequests[0], result: { total: 6 } }],
+        playerRolls: [],
+      });
+      (npcRollHandler.continueNarrativeWithNPCRolls as any).mockResolvedValue({
+        success: true,
+        narrative: 'The warrior swings and misses.',
+      });
+
+      const result = await processRollRequests(params as any);
+
+      expect(npcAutoRoller.executeAllNPCRolls).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'attack',
+            purpose: 'Brigade Warrior 2 attacks The Faithful',
+          }),
+        ]),
+        [
+          { id: 'faithful-id', name: 'The Faithful', participantType: 'player' },
+          { id: 'brigade-2', name: 'Brigade Warrior 2', participantType: 'enemy' },
+        ],
+      );
+      expect(result.playerRollRequests).toHaveLength(0);
     });
 
     it('should track player attacks in rollStateManager', async () => {

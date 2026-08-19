@@ -7,6 +7,10 @@
 import type { RollRequest } from '@/types/roll-request';
 
 import logger from '@/lib/logger';
+import {
+  shouldAutoExecuteRoll,
+  type EncounterParticipantRef,
+} from '@/services/combat/roll-routing';
 import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 
 export interface AutoRollResult {
@@ -72,6 +76,7 @@ export async function executeNPCRoll(request: RollRequest): Promise<AutoRollResu
  */
 export async function executeAllNPCRolls(
   requests: RollRequest[],
+  participants?: EncounterParticipantRef[],
 ): Promise<{ npcRolls: AutoRollResult[]; playerRolls: RollRequest[] }> {
   const npcRolls: AutoRollResult[] = [];
   const playerRolls: RollRequest[] = [];
@@ -81,9 +86,10 @@ export async function executeAllNPCRolls(
   });
 
   for (const request of requests) {
-    if (request.autoExecute) {
+    if (shouldAutoExecuteRoll(request, participants)) {
+      const npcRequest = { ...request, autoExecute: true };
       try {
-        const result = await executeNPCRoll(request);
+        const result = await executeNPCRoll(npcRequest);
         npcRolls.push(result);
       } catch (error) {
         logger.error('[NPCAutoRoller] Failed to auto-execute NPC roll, skipping:', error);
