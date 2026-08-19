@@ -11,6 +11,12 @@
  * character-scoped columns added in the same PR, so a character can be unconscious
  * whether or not a fight is running.
  *
+ * Combat writes through here too. `CombatHPService` calls `mirrorFromCombat` inside its own
+ * transaction, so `combat_participant_status` is a synchronous write-through cache of the
+ * character record rather than a second, independent owner of a character's hit points. That
+ * is what closes the mirror bug: the participant row used to absorb every hit of a fight and
+ * then vanish with the encounter, leaving the sheet at whatever it said when combat started.
+ *
  * The arithmetic is not re-implemented here: damage and healing go through
  * `HPMechanics`, the same pure functions combat uses, so the two paths cannot drift.
  *
@@ -31,7 +37,17 @@ import type { HPStatusInput } from './combat/hp-mechanics.js';
 import type { VitalState } from '../../../db/schema/index';
 
 /** The transaction handle Drizzle hands to `db.transaction`'s callback. */
-type VitalsTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type VitalsTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * 5E: three failures kill, three successes stabilise.
+ *
+ * Spelled here rather than imported from `services/combat/death-saves-service.ts`, which owns
+ * the same two thresholds: that module pulls in the encounter service and the initiative
+ * service behind it, and this one has no business depending on the combat graph — combat
+ * depends on it.
+ */
+const DEATH_SAVE_LIMIT = 3;
 
 /** A character's full vital state, as read from or written to `character_stats`. */
 export interface CharacterVitals {
@@ -54,6 +70,34 @@ export interface VitalsWrite {
   vitalState: VitalState;
   deathSavesSuccesses: number;
   deathSavesFailures: number;
+  /**
+   * Left `undefined` by every out-of-combat path, and then not written at all. Only the
+   * combat mirror below has a reason to stamp it, and only on the transition into `dead`.
+   */
+  diedAt?: Date | null;
+}
+
+/**
+ * What combat resolved, in character-record terms.
+ *
+ * Deliberately not a damage or healing request: by the time combat calls the mirror it has
+ * already run `HPMechanics` against the participant row — with that row's resistances, the
+ * per-hit cap and the crit rules — and the character record's job is to record that outcome,
+ * not to recompute it and risk landing somewhere else.
+ */
+export interface CombatResolvedVitals {
+  currentHitPoints: number;
+  /** Omitted by the paths that do not touch temporary hit points (healing, death saves). */
+  temporaryHitPoints?: number;
+  isConscious: boolean;
+  deathSavesSuccesses: number;
+  deathSavesFailures: number;
+  /**
+   * Set only where the counters cannot express the state combat reached. A successful Medicine
+   * check clears both counters, which is indistinguishable from "dying, nothing rolled yet"
+   * unless the state is named outright.
+   */
+  vitalState?: VitalState;
 }
 
 function toHpStatusInput(vitals: CharacterVitals): HPStatusInput {
@@ -158,18 +202,59 @@ export function computeVitalsAfterHeal(current: CharacterVitals, amount: number)
 }
 
 /**
- * Read a character's vitals, locking the row when the caller is about to write it.
+ * The body state a combat-resolved outcome leaves the character in.
  *
- * 🛡️ Sentinel: ownership lives in this statement's WHERE clause, not in a separate
- * check, so there is no window between "may I" and "I did". A character the caller does
- * not own reads as absent, which is what the caller reports.
+ * Reads the same way `vitalStateOf` in the combat engine does, from hit points and the two
+ * counters, so a character's sheet and their place in the turn order cannot disagree about
+ * whether they are dying.
  */
-async function loadOwnedVitals(
+function vitalStateAfterCombat(
+  current: CharacterVitals,
+  resolved: CombatResolvedVitals,
+): VitalState {
+  if (resolved.vitalState) return resolved.vitalState;
+  // Death is terminal here. Combat's healing math has no concept of it —
+  // `calculateHealingResult` will happily put a dead participant back on 1 HP — so the mirror
+  // records the hit points combat wrote without quietly resurrecting anyone. Raising the dead
+  // is PR3.
+  if (current.vitalState === 'dead') return 'dead';
+  if (resolved.currentHitPoints > 0) return 'standing';
+  if (resolved.deathSavesFailures >= DEATH_SAVE_LIMIT) return 'dead';
+  if (resolved.deathSavesSuccesses >= DEATH_SAVE_LIMIT) return 'stabilized';
+  return 'dying';
+}
+
+/**
+ * Read a character's vitals, optionally scoped to an owner, locking the row when the caller is
+ * about to write it.
+ *
+ * 🛡️ Sentinel: when `userId` is given, ownership lives in this statement's WHERE clause, not in
+ * a separate check, so there is no window between "may I" and "I did". A character the caller
+ * does not own reads as absent, which is what the caller reports.
+ *
+ * `userId` is omitted only by the combat mirror, which has no user to check against — a
+ * monster's turn runs server-side with no caller at all — and whose authorization is enforced
+ * by the participant statement sharing its transaction. See `mirrorFromCombat`.
+ */
+async function loadVitals(
   tx: VitalsTx,
   characterId: string,
-  userId: string,
-  forUpdate: boolean,
+  options: { userId?: string; forUpdate: boolean },
 ): Promise<CharacterVitals | null> {
+  const ownedByCaller = options.userId
+    ? exists(
+        tx
+          .select({ one: sql`1` })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterStats.characterId),
+              or(eq(characters.userId, options.userId), eq(characters.ownerId, options.userId)),
+            ),
+          ),
+      )
+    : undefined;
+
   const query = tx
     .select({
       characterId: characterStats.characterId,
@@ -183,25 +268,10 @@ async function loadOwnedVitals(
       diedAt: characterStats.diedAt,
     })
     .from(characterStats)
-    .where(
-      and(
-        eq(characterStats.characterId, characterId),
-        exists(
-          tx
-            .select({ one: sql`1` })
-            .from(characters)
-            .where(
-              and(
-                eq(characters.id, characterStats.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-              ),
-            ),
-        ),
-      ),
-    )
+    .where(and(eq(characterStats.characterId, characterId), ownedByCaller))
     .limit(1);
 
-  const [row] = await (forUpdate ? query.for('update') : query);
+  const [row] = await (options.forUpdate ? query.for('update') : query);
   if (!row) return null;
 
   return {
@@ -238,6 +308,9 @@ async function writeVitals(
       vitalState: next.vitalState,
       deathSavesSuccesses: next.deathSavesSuccesses,
       deathSavesFailures: next.deathSavesFailures,
+      // Absent unless the caller has a reason to move it, so no path can clear a death
+      // timestamp by omission.
+      ...(next.diedAt === undefined ? {} : { diedAt: next.diedAt }),
       updatedAt: new Date(),
     })
     .where(eq(characterStats.characterId, characterId))
@@ -273,7 +346,7 @@ export class CharacterVitalsService {
    */
   static async getVitals(characterId: string, userId: string): Promise<CharacterVitals> {
     return db.transaction(async (tx) => {
-      const current = await loadOwnedVitals(tx, characterId, userId, false);
+      const current = await loadVitals(tx, characterId, { userId, forUpdate: false });
       if (!current) throw notFound();
       return current;
     });
@@ -292,7 +365,7 @@ export class CharacterVitalsService {
     amount: number,
   ): Promise<CharacterVitals> {
     return db.transaction(async (tx) => {
-      const current = await loadOwnedVitals(tx, characterId, userId, true);
+      const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
       if (!current) throw notFound();
 
       return writeVitals(
@@ -314,7 +387,7 @@ export class CharacterVitalsService {
     amount: number,
   ): Promise<CharacterVitals> {
     return db.transaction(async (tx) => {
-      const current = await loadOwnedVitals(tx, characterId, userId, true);
+      const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
       if (!current) throw notFound();
 
       return writeVitals(
@@ -323,6 +396,51 @@ export class CharacterVitalsService {
         current.maxHitPoints,
         computeVitalsAfterHeal(current, amount),
       );
+    });
+  }
+
+  /**
+   * Record a combat-resolved outcome on the character record, inside the caller's transaction.
+   *
+   * Server-internal: the only caller is `CombatHPService`, which opens the transaction, calls
+   * this first, and then writes the participant mirror into the same one. Both writes commit
+   * together or neither does.
+   *
+   * 🛡️ Sentinel: this method takes no `userId` and performs no ownership check of its own, and
+   * that is deliberate rather than an omission. Two reasons. The `characterId` never comes from
+   * a request — it is read off the `combat_participants` row the encounter seeded — and half of
+   * the combat write paths run with no caller at all (a monster's turn). Authorization is the
+   * job of the participant UPDATE that follows this call in the same transaction: it carries
+   * the encounter ownership filter and throws when it matches nothing, which rolls this write
+   * back before it can commit. Ordering matters for that reason and no other.
+   *
+   * Returns null when the character has no `character_stats` row — a data gap that predates
+   * this path — so the caller can log it. Failing the write instead would turn a missing row
+   * into a failed attack mid-fight.
+   */
+  static async mirrorFromCombat(
+    tx: VitalsTx,
+    characterId: string,
+    resolved: CombatResolvedVitals,
+  ): Promise<CharacterVitals | null> {
+    const current = await loadVitals(tx, characterId, { forUpdate: true });
+    if (!current) return null;
+
+    const vitalState = vitalStateAfterCombat(current, resolved);
+
+    return writeVitals(tx, characterId, current.maxHitPoints, {
+      currentHitPoints: resolved.currentHitPoints,
+      // Healing and death saves do not touch temporary hit points, and a mirror that
+      // defaulted them to 0 would silently strip a buff combat still believes in.
+      temporaryHitPoints: resolved.temporaryHitPoints ?? current.temporaryHitPoints,
+      isConscious: resolved.isConscious,
+      vitalState,
+      deathSavesSuccesses: resolved.deathSavesSuccesses,
+      deathSavesFailures: resolved.deathSavesFailures,
+      // Stamped once, on the transition into death, and never cleared here. The death ledger
+      // proper is PR3; a `vital_state` of 'dead' with no timestamp beside it would be a row
+      // that cannot say when it happened.
+      ...(vitalState === 'dead' && current.diedAt === null ? { diedAt: new Date() } : {}),
     });
   }
 }

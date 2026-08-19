@@ -6,11 +6,21 @@
  * for D&D 5E combat encounters. Implements all D&D 5E rules for damage resistance,
  * vulnerability, temporary hit points, and death saving throws.
  *
+ * `combat_participant_status` is a write-through cache of the character record, not an
+ * independent owner of a player's hit points. Every write path below that touches a
+ * participant with a `character_id` writes `character_stats` first, in the same transaction,
+ * and then mirrors the result onto the participant row. Before that, a fight's damage lived
+ * and died with the encounter: participants were seeded from the sheet at `startCombat` and
+ * `concludeEncounter` never synced anything back, so a character could be beaten to 1 HP,
+ * win, and walk away at full health (#1826). Write-through removes the drift window entirely,
+ * which is why there is no sync step at the end of a fight to get wrong.
+ *
  * @module server/services/combat-hp-service
  */
 
 import { and, eq, exists, or, sql } from 'drizzle-orm';
 
+import { CharacterVitalsService } from './character-vitals-service.js';
 import { db } from '../../../db/client';
 import {
   combatParticipantStatus,
@@ -32,6 +42,7 @@ import {
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
 
+import type { CombatResolvedVitals } from './character-vitals-service.js';
 import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
 import type {
   DamageResult,
@@ -40,6 +51,35 @@ import type {
   StabilizationResult,
   ApplyDamageOptions,
 } from '../types/combat.js';
+
+/**
+ * The columns one combat write touches on `combat_participant_status`.
+ *
+ * Partial on purpose: each path writes exactly the columns it wrote before write-through
+ * existed. Filling in the rest with their current values would read the same in the table and
+ * quite different in a diff.
+ */
+interface ParticipantStatusPatch {
+  currentHp?: number;
+  tempHp?: number;
+  isConscious?: boolean;
+  deathSavesSuccesses?: number;
+  deathSavesFailures?: number;
+}
+
+/** Either the connection pool or an open transaction. Both run the participant UPDATE. */
+type StatusWriter = Pick<typeof db, 'update'>;
+
+/** One combat outcome, in both the shapes it has to be stored in. */
+interface WriteThroughRequest {
+  participantId: string;
+  encounterId: string;
+  /** Null for NPCs and monsters, which have no character record to be the source of truth. */
+  characterId: string | null;
+  userId?: string;
+  status: ParticipantStatusPatch;
+  character: CombatResolvedVitals;
+}
 
 /**
  * Combat HP Service
@@ -75,6 +115,72 @@ export class CombatHPService {
           ),
         ),
     );
+  }
+
+  /**
+   * The participant-status write, exactly as it has always been: one atomic UPDATE carrying
+   * the ownership filter, and a NotFoundError when it matches nothing.
+   *
+   * Takes its writer rather than reaching for `db` so the write-through path can hand it the
+   * open transaction. When it throws inside one, the character write that preceded it goes
+   * with it.
+   */
+  private static async updateParticipantStatus(
+    writer: StatusWriter,
+    participantId: string,
+    encounterId: string,
+    patch: ParticipantStatusPatch,
+    userId?: string,
+  ): Promise<void> {
+    const updated = await writer
+      .update(combatParticipantStatus)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+        ),
+      )
+      .returning();
+
+    if (userId && (!updated || updated.length === 0)) {
+      throw new NotFoundError('Participant', participantId);
+    }
+  }
+
+  /**
+   * Persist one combat outcome: the character record first as the source of truth, the
+   * participant row second as its mirror, both in a single transaction.
+   *
+   * A participant with no `character_id` — every NPC and monster — takes the untransacted
+   * single-statement path it always took. There is no second row to keep in step, and a
+   * goblin's hit points have never outlived the encounter.
+   */
+  private static async writeThrough(request: WriteThroughRequest): Promise<void> {
+    const { participantId, encounterId, characterId, userId, status, character } = request;
+
+    if (!characterId) {
+      await this.updateParticipantStatus(db, participantId, encounterId, status, userId);
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      const mirrored = await CharacterVitalsService.mirrorFromCombat(tx, characterId, character);
+      if (!mirrored) {
+        // The participant points at a character with no stats row. The fight continues on the
+        // participant row alone -- the pre-write-through behaviour -- but it is said out loud,
+        // because from here on a divergent character sheet has exactly one explanation.
+        logger.warn({
+          msg: 'COMBAT_HP_MIRROR_SKIPPED',
+          reason: 'no character_stats row',
+          encounterId,
+          participantId,
+          characterId,
+        });
+      }
+
+      await this.updateParticipantStatus(tx, participantId, encounterId, status, userId);
+    });
   }
 
   /**
@@ -156,32 +262,34 @@ export class CombatHPService {
     //      reported as failed, and (since resolveAttack claims the actor's
     //      action first) the actor stranded with a spent action forever.
     //
-    // The HP update is now awaited on its own, and the log is a plain insert
-    // issued afterwards under a catch. Ordering matters: the log is deliberately
-    // NOT inside a transaction with the HP update, because a failed INSERT
+    // The HP write is now awaited on its own -- as of PR2 of #1826 that is one
+    // transaction covering the character record and its participant mirror -- and
+    // the log is a plain insert issued afterwards under a catch. Ordering matters:
+    // the log is deliberately NOT inside that transaction, because a failed INSERT
     // aborts the enclosing Postgres transaction, and a "best-effort" write that
     // can still roll back the gameplay state it is describing is not
     // best-effort at all.
-    const updateResult = await db
-      .update(combatParticipantStatus)
-      .set({
+    await this.writeThrough({
+      participantId,
+      encounterId,
+      characterId: participant.characterId ?? null,
+      userId,
+      status: {
         currentHp: result.newCurrentHp,
         tempHp: result.newTempHp,
         isConscious: result.isConscious,
         deathSavesFailures: result.newDeathSavesFailures,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(combatParticipantStatus.participantId, participantId),
-          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
-        ),
-      )
-      .returning();
-
-    if (userId && (!updateResult || updateResult.length === 0)) {
-      throw new NotFoundError('Participant', participantId);
-    }
+      },
+      character: {
+        currentHitPoints: result.newCurrentHp,
+        temporaryHitPoints: result.newTempHp,
+        isConscious: result.isConscious,
+        // Damage never adds successes; carrying the participant's count keeps the two rows
+        // saying the same thing about a character already rolling saves.
+        deathSavesSuccesses: status.deathSavesSuccesses,
+        deathSavesFailures: result.newDeathSavesFailures,
+      },
+    });
 
     // Telemetry only. The ownership check the old insert-select carried in its
     // WHERE clause is redundant here: the UPDATE above ran under the same
@@ -233,7 +341,11 @@ export class CombatHPService {
     }
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
+    const { participant, status } = await getParticipantWithFullContext(
+      participantId,
+      encounterId,
+      userId,
+    );
 
     // Delegate to HPMechanics
     const result = HPMechanics.calculateHealingResult(participantId, status, healingAmount);
@@ -242,27 +354,27 @@ export class CombatHPService {
     const deathSavesSuccesses = result.wasRevived ? 0 : status.deathSavesSuccesses;
     const deathSavesFailures = result.wasRevived ? 0 : status.deathSavesFailures;
 
-    // 🛡️ Sentinel: Atomic update with ownership check
-    const [updated] = await db
-      .update(combatParticipantStatus)
-      .set({
+    // 🛡️ Sentinel: Atomic update with ownership check, now carrying the character record with it.
+    await this.writeThrough({
+      participantId,
+      encounterId,
+      characterId: participant.characterId ?? null,
+      userId,
+      status: {
         currentHp: result.newCurrentHp,
         isConscious: result.isConscious,
         deathSavesSuccesses,
         deathSavesFailures,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(combatParticipantStatus.participantId, participantId),
-          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
-        ),
-      )
-      .returning();
-
-    if (userId && !updated) {
-      throw new NotFoundError('Participant', participantId);
-    }
+      },
+      character: {
+        currentHitPoints: result.newCurrentHp,
+        // 5E: healing restores hit points and never tops up the temporary pool, so the
+        // character's temp HP is left exactly where it was.
+        isConscious: result.isConscious,
+        deathSavesSuccesses,
+        deathSavesFailures,
+      },
+    });
 
     return result;
   }
@@ -291,6 +403,10 @@ export class CombatHPService {
     const newTempHp = Math.max(oldTempHp, tempHpAmount);
 
     // 🛡️ Sentinel: Atomic update with ownership check
+    //
+    // Not write-through. PR2 of #1826 covers the four paths that move hit points, and this is
+    // not one of them: temporary hit points granted in a fight are spent in that fight, and the
+    // next damage write mirrors whatever survives to the character record anyway.
     const [updated] = await db
       .update(combatParticipantStatus)
       .set({
@@ -333,7 +449,11 @@ export class CombatHPService {
     const roll = Math.floor(Math.random() * 20) + 1;
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
+    const { participant, status } = await getParticipantWithFullContext(
+      participantId,
+      encounterId,
+      userId,
+    );
 
     if (status.isConscious) {
       throw new BusinessLogicError('Cannot roll death save for conscious participant', {
@@ -344,27 +464,27 @@ export class CombatHPService {
     // Delegate logic to HPMechanics
     const result = HPMechanics.resolveDeathSave(participantId, status, roll);
 
-    // 🛡️ Sentinel: Atomic update with ownership check
-    const [updated] = await db
-      .update(combatParticipantStatus)
-      .set({
+    // 🛡️ Sentinel: Atomic update with ownership check, now carrying the character record with it.
+    // The progression rules are untouched: what the character row records is whatever
+    // HPMechanics just decided.
+    await this.writeThrough({
+      participantId,
+      encounterId,
+      characterId: participant.characterId ?? null,
+      userId,
+      status: {
         currentHp: result.newCurrentHp,
         deathSavesSuccesses: result.successes,
         deathSavesFailures: result.failures,
         isConscious: result.wasRevived,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(combatParticipantStatus.participantId, participantId),
-          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
-        ),
-      )
-      .returning();
-
-    if (userId && !updated) {
-      throw new NotFoundError('Participant', participantId);
-    }
+      },
+      character: {
+        currentHitPoints: result.newCurrentHp,
+        isConscious: result.wasRevived,
+        deathSavesSuccesses: result.successes,
+        deathSavesFailures: result.failures,
+      },
+    });
 
     return result;
   }
@@ -433,7 +553,11 @@ export class CombatHPService {
     userId?: string,
   ): Promise<StabilizationResult> {
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
+    const { participant, status } = await getParticipantWithFullContext(
+      participantId,
+      encounterId,
+      userId,
+    );
 
     // Can only stabilize unconscious creatures at 0 HP
     if (status.isConscious || status.currentHp > 0) {
@@ -449,30 +573,29 @@ export class CombatHPService {
     const result = HPMechanics.resolveStabilization(participantId, roll, modifier);
 
     if (result.success) {
-      // 🛡️ Sentinel: Atomic update with ownership check
+      // 🛡️ Sentinel: Atomic update with ownership check, now carrying the character record with it.
       // Stabilize: clear death saves, mark as stable (still unconscious at 0 HP)
-      const [updated] = await db
-        .update(combatParticipantStatus)
-        .set({
+      await this.writeThrough({
+        participantId,
+        encounterId,
+        characterId: participant.characterId ?? null,
+        userId,
+        status: {
           deathSavesSuccesses: 0,
           deathSavesFailures: 0,
           // Note: isConscious stays false, currentHp stays 0
           // The creature is stable but still unconscious
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(combatParticipantStatus.participantId, participantId),
-            userId
-              ? this.getEncounterOwnershipFilter(participantId, encounterId, userId)
-              : sql`true`,
-          ),
-        )
-        .returning();
-
-      if (userId && !updated) {
-        throw new NotFoundError('Participant', participantId);
-      }
+        },
+        character: {
+          currentHitPoints: status.currentHp,
+          isConscious: status.isConscious,
+          deathSavesSuccesses: 0,
+          deathSavesFailures: 0,
+          // Named outright: cleared counters at 0 HP are indistinguishable from "dying, has
+          // not rolled yet", and a stabilised character is precisely the one who stops rolling.
+          vitalState: 'stabilized',
+        },
+      });
     }
 
     return result;

@@ -24,6 +24,8 @@ vi.mock('../../../../db/client', () => {
     leftJoin: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
+    // SELECT ... FOR UPDATE, used by the character-record read the write-through locks.
+    for: vi.fn().mockReturnThis(),
     orderBy: vi.fn().mockReturnThis(),
     returning: vi.fn().mockReturnThis(),
     insert: vi.fn().mockReturnThis(),
@@ -34,20 +36,23 @@ vi.mock('../../../../db/client', () => {
       return Promise.resolve(mockState.results).then(resolve);
     })
   };
-  return {
-    db: {
-      select: vi.fn(() => mockQueryBuilder),
-      insert: vi.fn(() => mockQueryBuilder),
-      update: vi.fn(() => mockQueryBuilder),
-      delete: vi.fn(() => mockQueryBuilder),
-      query: {
-        combatParticipants: {
-          findFirst: vi.fn(),
-        }
-      },
-      execute: vi.fn()
-    }
+  const db = {
+    select: vi.fn(() => mockQueryBuilder),
+    insert: vi.fn(() => mockQueryBuilder),
+    update: vi.fn(() => mockQueryBuilder),
+    delete: vi.fn(() => mockQueryBuilder),
+    // The write-through composes the character_stats write and the participant mirror into a
+    // single transaction. Handing the callback this same object keeps both statements
+    // countable through `db.update`.
+    transaction: vi.fn(async (callback: any) => callback(db)),
+    query: {
+      combatParticipants: {
+        findFirst: vi.fn(),
+      }
+    },
+    execute: vi.fn()
   };
+  return { db };
 });
 
 describe('CombatHPService', () => {
@@ -58,9 +63,18 @@ describe('CombatHPService', () => {
   const mockParticipant = {
     id: mockParticipantId,
     encounterId: mockEncounterId,
+    // No character record: an NPC or monster, whose participant row is its only vitals row.
+    characterId: null,
     damageImmunities: [],
     damageResistances: [],
     damageVulnerabilities: [],
+  };
+
+  // A player character's participant, which the write-through mirrors onto `character_stats`.
+  const mockPlayerParticipant = {
+    ...mockParticipant,
+    characterId: 'char-321',
+    participantType: 'player',
   };
 
   const mockStatus = {
@@ -164,6 +178,30 @@ describe('CombatHPService', () => {
         expect(result.newCurrentHp).toBe(10);
         expect(db.update).toHaveBeenCalled();
         expect(db.insert).toHaveBeenCalled();
+        // No character record to mirror into, so no transaction is opened.
+        expect(db.transaction).not.toHaveBeenCalled();
+      });
+
+      it('should write the character record and the participant mirror in one transaction', async () => {
+        mockState.results = [{
+          participant: mockPlayerParticipant,
+          status: mockStatus,
+          currentRound: 1
+        }];
+
+        const result = await CombatHPService.applyDamage(
+          mockParticipantId,
+          mockEncounterId,
+          { damageAmount: 6, damageType: 'slashing' },
+          mockUserId
+        );
+
+        expect(result.newCurrentHp).toBe(14);
+        // Two UPDATEs -- character_stats first, combat_participant_status second -- inside one
+        // transaction. This shared query-builder mock cannot tell the payloads apart;
+        // combat-hp-write-through.test.ts asserts what each row actually receives.
+        expect(db.transaction).toHaveBeenCalledTimes(1);
+        expect(db.update).toHaveBeenCalledTimes(2);
       });
     });
 
