@@ -71,7 +71,6 @@ import { logger } from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { isValidUUID } from '@/utils/validation';
 
-
 describe('useCharacterData', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = '550e8400-e29b-41d4-a716-446655440000'; // Valid v4 UUID
@@ -187,7 +186,7 @@ describe('useCharacterData', () => {
 
     renderHook(() => useCharacterData(mockCharacterId));
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/characters'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/app/characters'));
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Error',

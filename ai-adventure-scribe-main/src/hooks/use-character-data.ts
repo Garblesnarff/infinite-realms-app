@@ -42,6 +42,18 @@ import {
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
 
 /**
+ * Columns actually present on `character_equipment`.
+ *
+ * NOTE: there is no `description` column on this table — the generated types in
+ * `@/integrations/supabase/types/database.ts` claim otherwise and are stale (they
+ * also omit nine magic-item columns that do exist). Selecting it returned Postgres
+ * 42703 on every character load. Verify against `db/schema/inventory.ts`, not the
+ * generated types. See #1859.
+ */
+const CHARACTER_EQUIPMENT_COLUMNS =
+  'id, item_name, item_type, quantity, equipped, is_magic, magic_bonus, magic_properties, requires_attunement, is_attuned, attunement_requirements, magic_item_type, magic_item_rarity, magic_effects';
+
+/**
  * Custom hook for fetching and managing character data
  * Handles data fetching, error states, and loading states
  * @param characterId - UUID of the character to fetch
@@ -108,12 +120,20 @@ export const useCharacterData = (characterId: string | undefined) => {
         userDataApi.getCharacter(characterId!),
         supabase
           .from('character_equipment')
-          .select(
-            'id, item_name, item_type, description, quantity, equipped, is_magic, magic_bonus, magic_properties, requires_attunement, is_attuned, attunement_requirements, magic_item_type, magic_item_rarity, magic_effects',
-          )
+          .select(CHARACTER_EQUIPMENT_COLUMNS)
           .eq('character_id', characterId!),
       ]);
-      if (equipmentResult.error) throw equipmentResult.error;
+
+      // Equipment is supplementary to the character record. Throwing here discarded the
+      // character payload that had already been fetched successfully in the same
+      // Promise.all, so one bad column name took down the entire page. Degrade instead,
+      // matching use-character-save.ts which logs and continues. See #1859.
+      if (equipmentResult.error) {
+        logger.warn('Character equipment query failed; rendering without equipment', {
+          characterId,
+          error: equipmentResult.error,
+        });
+      }
 
       if (!characterData) {
         toast({
@@ -133,7 +153,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         : characterRecord.character_stats;
 
       // ⚡ Bolt: equipmentData is now pre-fetched via the joined query
-      const equipmentData = equipmentResult.data;
+      const equipmentData = equipmentResult.error ? null : equipmentResult.data;
 
       // Transform and set character data
       const transformedCharacter = transformCharacterData(
@@ -150,7 +170,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         description: 'Failed to load character data. Please try again.',
         variant: 'destructive',
       });
-      navigate('/characters');
+      navigate('/app/characters');
     } finally {
       setLoading(false);
     }
