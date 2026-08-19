@@ -44,11 +44,10 @@ import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
 /**
  * Columns actually present on `character_equipment`.
  *
- * NOTE: there is no `description` column on this table — the generated types in
- * `@/integrations/supabase/types/database.ts` claim otherwise and are stale (they
- * also omit nine magic-item columns that do exist). Selecting it returned Postgres
- * 42703 on every character load. Verify against `db/schema/inventory.ts`, not the
- * generated types. See #1859.
+ * NOTE: there is no `description` column on this table. A stale generated type
+ * used to claim otherwise and a select of that name returned Postgres 42703 on
+ * every character load (#1859). Types were regenerated; still prefer
+ * `db/schema/inventory.ts` if they ever drift again.
  */
 const CHARACTER_EQUIPMENT_COLUMNS =
   'id, item_name, item_type, quantity, equipped, is_magic, magic_bonus, magic_properties, requires_attunement, is_attuned, attunement_requirements, magic_item_type, magic_item_rarity, magic_effects';
@@ -182,9 +181,12 @@ export const useCharacterData = (characterId: string | undefined) => {
     fetchCharacter();
   }, [fetchCharacter]);
 
-  return useMemo(() => ({
-    character,
-    loading,
-    refetch: fetchCharacter,
-  }), [character, loading, fetchCharacter]);
+  return useMemo(
+    () => ({
+      character,
+      loading,
+      refetch: fetchCharacter,
+    }),
+    [character, loading, fetchCharacter],
+  );
 };
