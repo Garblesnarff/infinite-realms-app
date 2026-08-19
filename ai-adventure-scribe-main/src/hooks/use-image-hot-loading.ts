@@ -246,7 +246,7 @@ export const useCharacterImageHotLoading = (characterId: string, createdAt?: str
     tableName: 'characters',
     recordId: characterId,
     imageField: 'background_image',
-    fallbackImage: '/character-background-placeholder.png',
+    fallbackImage: '/card-placeholder.svg',
     createdAt,
   });
 };

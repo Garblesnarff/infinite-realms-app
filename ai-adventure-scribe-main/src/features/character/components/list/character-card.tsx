@@ -3,6 +3,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import CampaignSelectionModal from './campaign-selection-modal';
+import { resolveCharacterCardArtwork } from './character-card-artwork';
 import CharacterCardHoverContent from './CharacterCardHoverContent';
 
 import type { Character } from '@/types/character';
@@ -123,24 +124,17 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
     }
   }, [character.id, toast, onDelete, user?.id]);
 
-  // Use hot loaded background image, fallback to default
-  const resolvedBackgroundImage = useMemo(() => {
-    // Priority: hot loaded image > character background image > default background
-    if (hasImage && hotLoadedImage !== '/character-background-placeholder.png') {
-      return hotLoadedImage;
-    }
-
-    if (character.background_image) {
-      return character.background_image;
-    }
-
-    // If we don't have an image and it's loading, show placeholder
-    if (imageLoading || !hasImage) {
-      return hotLoadedImage; // This will be the placeholder
-    }
-
-    return new URL('/card-background.jpeg', import.meta.url).href;
-  }, [hotLoadedImage, hasImage, imageLoading, character.background_image]);
+  const artwork = useMemo(
+    () =>
+      resolveCharacterCardArtwork({
+        backgroundImage: character.background_image,
+        hotLoadedImage,
+        hasImage,
+        imageLoading,
+      }),
+    [hotLoadedImage, hasImage, imageLoading, character.background_image],
+  );
+  const resolvedBackgroundImage = artwork.url;
 
   return (
     <Card
@@ -185,13 +179,22 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
             : undefined
         }
       >
-        {/* Loading overlay for image generation */}
-        {imageLoading && !hasImage && (
+        {artwork.showGenerating && (
           <div className="absolute inset-0 bg-gradient-to-br from-infinite-purple/20 via-infinite-dark/40 to-infinite-purple/20 backdrop-blur-sm flex items-center justify-center">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-infinite-gold mb-2"></div>
               <div className="text-xs text-infinite-gold font-medium">Generating image...</div>
             </div>
+          </div>
+        )}
+
+        {artwork.artworkUnavailable && (
+          <div
+            className="absolute top-4 right-4 rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-medium text-gray-200/90 backdrop-blur-sm"
+            role="status"
+            style={{ zIndex: Z_INDEX.DROPDOWN }}
+          >
+            Artwork coming soon
           </div>
         )}
 
