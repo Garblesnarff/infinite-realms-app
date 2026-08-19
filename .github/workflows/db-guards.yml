@@ -1,10 +1,15 @@
 # Database schema guards.
 #
 # Deliberately a separate workflow from ci.yml, with `paths:` filters, so it
-# burns Actions minutes only on pushes that actually touch the database layer
-# -- a handful of pushes a month rather than every one. (This repo is private,
-# so Actions minutes are metered; ci.yml was disabled after exhausting the
-# monthly allowance.)
+# runs only on pushes that actually touch the database layer -- a handful of
+# pushes a month rather than every one.
+#
+# Runs on the self-hosted runner (hetzner-nbg1-prod), same as ci.yml. Until
+# 2026-08-19 both jobs were `runs-on: ubuntu-latest` and had therefore not
+# executed at all since the Actions billing failure: every run died in ~3s with
+# "The job was not started because recent account payments have failed or your
+# spending limit needs to be increased". The guards were red-by-default and
+# guarding nothing. See docs/ci-self-hosted-runner.md.
 #
 # The same two checks also run locally: check-schema-drift.sh from the husky
 # pre-commit hook whenever db/schema/*.ts is staged, and test-migrations.sh
@@ -34,6 +39,15 @@ on:
 permissions:
   contents: read
 
+# One in-flight run per branch. Same rationale and same keying as ci.yml: a
+# branch with an open PR fires both `push` and `pull_request`, and on a single
+# self-hosted runner the duplicate queues behind the first rather than running
+# beside it. `ref_name` (bare branch name) is required for the two events to
+# collapse into one group -- `ref` is fully qualified and would not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: ai-adventure-scribe-main
@@ -44,43 +58,57 @@ jobs:
   # over) all came from that exact omission going unnoticed until a 500 in
   # production -- see 17ebfd47. Offline: no database, ~1 minute.
   schema-drift:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Check schema.ts against migrations
         run: bash scripts/check-schema-drift.sh
 
   # Replays the migration history into a throwaway PostgreSQL database, so a
   # migration that cannot apply is caught here and not on the production box.
+  #
+  # This job used a GitHub `services:` container when it ran (or rather, failed
+  # to run) on ubuntu-latest. That does not port to this runner:
+  #
+  #   * `services:` needs Docker, and the runner user `ghrunner` is deliberately
+  #     NOT in the `docker` group -- membership is root-equivalent on this box
+  #     and would undo the hardening the runner exists behind.
+  #   * the old mapping `5432:5432` is already taken on the host by
+  #     supabase-pooler.
+  #
+  # Instead a dedicated, CI-only pgvector instance runs on 127.0.0.1:55432,
+  # started and owned by root rather than by the runner. It is empty, its data
+  # dir is a tmpfs, and it holds nothing from production -- the job only needs
+  # psql (installed on the host) and a loopback socket. Provisioning is
+  # documented in docs/ci-self-hosted-runner.md.
   migration-replay:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        # pgvector image so the embedding migrations are exercised rather than
-        # skipped (plain postgres has no vector type).
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - name: Ensure psql is available
+      - name: Check psql and the CI database are available
         run: |
           if ! command -v psql >/dev/null 2>&1; then
-            sudo apt-get update && sudo apt-get install -y postgresql-client
+            # No sudo on this runner by design, so this cannot self-heal.
+            echo "::error::psql not on PATH on the runner host. Install postgresql-client."
+            exit 1
           fi
           psql --version
+          if ! pg_isready -h 127.0.0.1 -p 55432 -U postgres; then
+            echo "::error::CI PostgreSQL is not accepting connections on 127.0.0.1:55432."
+            echo "On the runner host: docker start ci-postgres"
+            echo "See docs/ci-self-hosted-runner.md."
+            exit 1
+          fi
       - name: Replay migrations
         run: bash scripts/test-migrations.sh
         env:
-          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/postgres

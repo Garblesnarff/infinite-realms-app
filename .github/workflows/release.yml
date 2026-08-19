@@ -1,5 +1,13 @@
 name: Release & Changelog
 
+# Runs on the self-hosted runner (hetzner-nbg1-prod), same as ci.yml and
+# db-guards.yml. Until 2026-08-19 this was `runs-on: ubuntu-latest` and had
+# therefore not executed since the Actions billing failure: every push to main
+# produced a run that died in ~3s with "The job was not started because recent
+# account payments have failed or your spending limit needs to be increased".
+# No release PR was being opened and no changelog was being generated.
+# See docs/ci-self-hosted-runner.md.
+
 on:
   push:
     branches:
@@ -7,6 +15,14 @@ on:
     paths:
       - "ai-adventure-scribe-main/**"
   workflow_dispatch:
+
+# Releases serialise rather than cancel. `cancel-in-progress: true` (as ci.yml
+# uses) is wrong here: killing release-please mid-run can leave a tag pushed
+# with no release, or a half-updated manifest. On a single runner a second
+# push to main simply waits for the first release to finish.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -19,7 +35,7 @@ defaults:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Create or update release PR
