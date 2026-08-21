@@ -1,0 +1,20 @@
+-- 0010_combat_participant_ac_nullable -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- Why this file exists
+-- --------------------
+-- The DDL that makes combat_participants.armor_class nullable (issue #1871) is
+-- authored by hand in
+-- supabase/migrations/20260819_combat_participant_ac_nullable.sql, which is the
+-- authoritative statement of the change.
+--
+-- This file and meta/0010_snapshot.json exist only to advance the drizzle
+-- snapshot chain so that `bun run db:check-drift`
+-- (scripts/check-schema-drift.sh, wired into the `schema-drift` CI job) sees
+-- db/schema/combat.ts and db/migrations/ back in agreement. Only the snapshot
+-- matters -- the same arrangement as 0008_add_character_vitals.sql and
+-- 0009_memories_embedding_vector768.sql.
+--
+-- The generated DDL is NOT kept here because the replay in
+-- scripts/test-migrations.sh merges db/migrations/ and supabase/migrations/
+-- into one history. Keeping it would collide with the hand-written supabase
+-- migration. With no DDL in it the file is safe at any point in the replay.

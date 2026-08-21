@@ -97,8 +97,9 @@ export const combatParticipants = pgTable(
     turnOrder: integer('turn_order').notNull(),
     isActive: boolean('is_active').notNull().default(true),
 
-    // Combat statistics
-    armorClass: integer('armor_class').notNull().default(10),
+    // Combat statistics. NULL armor_class means unset — AC 10 is a legal unarmored
+    // value and must never be used as an in-band sentinel (#1871).
+    armorClass: integer('armor_class'),
     maxHp: integer('max_hp').notNull().default(10),
     speed: integer('speed').notNull().default(30),
 

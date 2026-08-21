@@ -29,7 +29,7 @@ export interface CombatPersistenceParticipant {
   initiativeModifier: number;
   turnOrder: number;
   isActive: boolean;
-  armorClass: number;
+  armorClass: number | null;
   maxHp: number;
   speed: number;
   damageResistances: string[];

@@ -13,6 +13,7 @@ import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { resolveCombatantStats } from './combatant-stat-resolution.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
+import { seatParticipantArmorClass } from './participant-armor-class.js';
 import { scaleMonsterForParty } from './party-scaling.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
 import { db } from '../../../../db/client';
@@ -177,11 +178,12 @@ export class CombatEncounterService {
           !input.characterId && !input.npcId
             ? resolveCombatantStats(campaignIndex, input.monsterId, input.name, { sessionId })
             : null;
-        // Characters and NPCs keep their historical 10/10/30 defaults. Only a combatant with
-        // no database row at all falls through to SRD or generic-NPC numbers.
+        // Characters and NPCs keep historical HP/speed placeholders. AC 10 is a legal
+        // unarmored value, so a missing AC source writes NULL rather than inventing 10
+        // (#1871). Monsters still fall through to SRD or generic-NPC numbers.
         const fallback =
           input.characterId || input.npcId
-            ? { armorClass: 10, maxHp: 10, speed: 30 }
+            ? { maxHp: 10, speed: 30 }
             : (monster ?? GENERIC_NPC_STATS);
         const dexterity = Number(
           character?.stats?.dexterity ?? npcStats.dexterity ?? npcStats.dex ?? 10,
@@ -195,9 +197,19 @@ export class CombatEncounterService {
             (Number.isFinite(input.initiativeModifier) ? input.initiativeModifier : undefined) ??
             Math.floor((dexterity - 10) / 2),
         );
-        const armorClass = Number(
-          character?.stats?.armorClass ?? npcStats.armorClass ?? npcStats.ac ?? fallback.armorClass,
-        );
+        const armorClass = seatParticipantArmorClass({
+          characterArmorClass: character?.stats?.armorClass ?? null,
+          npcArmorClass:
+            npcStats.armorClass != null
+              ? Number(npcStats.armorClass)
+              : npcStats.ac != null
+                ? Number(npcStats.ac)
+                : null,
+          monsterArmorClass:
+            input.characterId || input.npcId
+              ? null
+              : (monster?.armorClass ?? GENERIC_NPC_STATS.armorClass),
+        });
         const rawMaxHp = Number(
           character?.stats?.maxHitPoints ??
             npcStats.maxHp ??

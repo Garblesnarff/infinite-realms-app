@@ -1776,7 +1776,7 @@ export type Database = {
       initiative_modifier: number
       turn_order: number
       is_active: boolean
-      armor_class: number
+      armor_class: number | null
       max_hp: number
       speed: number
       damage_resistances: Json | null
@@ -1804,7 +1804,7 @@ export type Database = {
       initiative_modifier?: number
       turn_order: number
       is_active?: boolean
-      armor_class?: number
+      armor_class?: number | null
       max_hp?: number
       speed?: number
       damage_resistances?: Json | null
@@ -1832,7 +1832,7 @@ export type Database = {
       initiative_modifier?: number
       turn_order?: number
       is_active?: boolean
-      armor_class?: number
+      armor_class?: number | null
       max_hp?: number
       speed?: number
       damage_resistances?: Json | null

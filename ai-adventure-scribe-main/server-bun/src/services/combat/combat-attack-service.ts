@@ -37,6 +37,7 @@ import {
 } from './data-access.js';
 import { healthConditionForCombat } from './health-condition.js';
 import { checkHit, checkAutoCrit } from './hit-check.js';
+import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
@@ -220,10 +221,10 @@ export class CombatAttackService {
         loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
       ]);
     const { participant: targetParticipant, stats: targetStats } = targetData;
-    const baseTargetAc =
-      targetParticipant.armorClass !== 10
-        ? targetParticipant.armorClass
-        : targetStats?.armorClass || 10;
+    const baseTargetAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
+      participantId: targetParticipant.id,
+      encounterId,
+    });
     const from = tacticalMap?.entities.find((entity) => entity.id === attackerId);
     const to = tacticalMap?.entities.find((entity) => entity.id === targetId);
     const geometry =
@@ -550,10 +551,10 @@ export class CombatAttackService {
       const targetData = allParticipantDataMap.get(targetId);
       if (!targetData) throw new NotFoundError('Target participant', targetId);
       const targetConditions = await getActiveConditionNames(targetId);
-      const targetAc =
-        targetData.participant.armorClass !== 10
-          ? targetData.participant.armorClass
-          : targetData.stats?.armorClass || 10;
+      const targetAc = resolveParticipantArmorClass(targetData.participant.armorClass, {
+        participantId: targetData.participant.id,
+        encounterId,
+      });
       const from = tacticalMap?.entities.find((entity) => entity.id === casterId);
       const to = tacticalMap?.entities.find((entity) => entity.id === targetId);
       const rules = resolveAttackRules({
@@ -671,13 +672,14 @@ export class CombatAttackService {
           };
         }
 
-        // Determine target AC: Use combat participant AC (allows for temporary modifications)
-        // with fallback to base creature stats if participant AC is the default 10.
+        // Stored participant AC, including a real 10. NULL is unset and falls back to
+        // generic 12 — never an in-band sentinel (#1871).
         const targetAC =
           spellRules.get(targetId)?.targetAc ??
-          (targetParticipant.armorClass !== 10
-            ? targetParticipant.armorClass
-            : targetStats?.armorClass || 10);
+          resolveParticipantArmorClass(targetParticipant.armorClass, {
+            participantId: targetParticipant.id,
+            encounterId,
+          });
 
         // Aggregate resistances using the extracted module
         const defenses = aggregateResistances(targetParticipant, targetStats);

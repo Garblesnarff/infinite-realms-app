@@ -4,10 +4,6 @@ import { decideAttackApproach, describeResolvedAttack } from './combat-approach-
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
-import { groundRequestedWeapon } from './weapon-grounding.js';
-import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
-import { CombatInitiativeService } from '../combat-initiative-service.js';
-import { resolveAttackRules } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
 import {
@@ -22,6 +18,11 @@ import {
   vitalStateOf,
   type VitalsInput,
 } from './death-saves-service.js';
+import { groundRequestedWeapon } from './weapon-grounding.js';
+import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
+import { CombatInitiativeService } from '../combat-initiative-service.js';
+import { resolveAttackRules } from './combat-rules.js';
+import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
@@ -942,7 +943,10 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         strength: profile.scores.str ?? 10,
         dexterity: profile.scores.dex ?? 10,
         level: profile.level,
-        baseTargetAc: target.armorClass,
+        baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
+          participantId: target.id,
+          encounterId,
+        }),
         weapon,
         attackerConditions,
         targetConditions: await getActiveConditionNames(target.id),
