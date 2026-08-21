@@ -56,6 +56,7 @@ export interface StarterTemplate {
   adapted_backstory: string | null;
   campaign_hook: string | null;
   portrait_url: string | null;
+  card_image_url: string | null;
   portrait_prompt: string | null;
   display_order: number;
 }

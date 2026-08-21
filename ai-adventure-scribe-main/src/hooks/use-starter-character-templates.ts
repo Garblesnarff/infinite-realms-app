@@ -41,6 +41,7 @@ export interface StarterCharacterTemplate {
   adaptedBackstory: string | null;
   campaignHook: string | null;
   portraitUrl: string | null;
+  cardImageUrl: string | null;
   portraitPrompt: string | null;
   displayOrder: number;
 }
@@ -90,6 +91,7 @@ function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate 
     adaptedBackstory: row.adapted_backstory as string | null,
     campaignHook: row.campaign_hook as string | null,
     portraitUrl: row.portrait_url as string | null,
+    cardImageUrl: row.card_image_url as string | null,
     portraitPrompt: row.portrait_prompt as string | null,
     displayOrder: (row.display_order as number) || 0,
   };

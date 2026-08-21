@@ -29,6 +29,8 @@ export interface StarterCharacterTemplateLike {
   equipment?: StarterTemplateEquipmentInput[];
   portraitUrl?: string | null;
   portrait_url?: string | null;
+  cardImageUrl?: string | null;
+  card_image_url?: string | null;
   abilityScores?: Record<string, number>;
   ability_scores?: Record<string, number>;
   /** Optional forward-compatible curated spell shape. */
@@ -284,6 +286,8 @@ export function buildStarterCharacterSeed(
   const level = Math.max(1, template.level || 1);
   const portraitUrl =
     getTemplateValue<string | null>(template, 'portraitUrl', 'portrait_url') || null;
+  const cardImageUrl =
+    getTemplateValue<string | null>(template, 'cardImageUrl', 'card_image_url') || null;
   const spellSeed = buildStarterSpellSeed(template, abilityScores);
   const skills = template.skills || [];
   const languages = template.languages || [];
@@ -305,6 +309,7 @@ export function buildStarterCharacterSeed(
     languages,
     image_url: portraitUrl,
     avatar_url: portraitUrl,
+    background_image: cardImageUrl,
     cantrips: spellSeed.cantrips.join(', '),
     known_spells: spellSeed.knownSpells.join(', '),
     prepared_spells: spellSeed.preparedSpells.join(', '),

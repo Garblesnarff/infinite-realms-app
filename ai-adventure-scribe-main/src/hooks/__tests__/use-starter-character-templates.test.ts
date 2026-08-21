@@ -62,6 +62,7 @@ describe('useStarterCharacterTemplates', () => {
         adapted_backstory: 'A ranger from the north.',
         campaign_hook: 'You meet in a tavern.',
         portrait_url: 'http://example.com/aragorn.jpg',
+        card_image_url: 'http://example.com/aragorn-card.jpg',
         portrait_prompt: 'A heroic human fighter.',
         display_order: 1,
       },
@@ -80,6 +81,7 @@ describe('useStarterCharacterTemplates', () => {
     expect(template.name).toBe('Aragorn');
     expect(template.abilityScores.strength).toBe(16);
     expect(template.personality.traits).toEqual(['Brave']);
+    expect(template.cardImageUrl).toBe('http://example.com/aragorn-card.jpg');
     expect(result.current.error).toBeNull();
   });
 

@@ -6,6 +6,8 @@
  * The manifest is the source of truth for the local file, campaign, entity,
  * asset type, and real image format. The command is intentionally a dry run
  * unless --apply is supplied.
+ * Character-card manifest rows must use the starter template_key as the entity
+ * slug; display names are not stable identifiers for this template-scoped asset.
  *
  * Usage:
  *   bun scripts/upload-campaign-assets.ts <source-dir>
@@ -34,10 +36,12 @@ export type CampaignAssetType =
   | 'monster'
   | 'location'
   | 'item'
+  | 'faction'
   | 'scene'
   | 'card'
   | 'banner'
-  | 'portrait';
+  | 'portrait'
+  | 'character_card';
 
 export interface ManifestAsset {
   filePath: string;
@@ -96,7 +100,12 @@ interface SupabaseConfig {
 
 interface DatabaseTarget {
   table: 'campaign_chunks' | 'starter_campaigns' | 'starter_character_templates';
-  column: 'metadata.image_url' | 'cover_image_url' | 'banner_image_url' | 'portrait_url';
+  column:
+    | 'metadata.image_url'
+    | 'cover_image_url'
+    | 'banner_image_url'
+    | 'portrait_url'
+    | 'card_image_url';
 }
 
 interface RunOptions {
@@ -113,12 +122,16 @@ const TYPE_ALIASES: Record<string, CampaignAssetType> = {
   monster: 'monster',
   location: 'location',
   item: 'item',
+  faction: 'faction',
+  factions: 'faction',
   scene: 'scene',
   card: 'card',
   banner: 'banner',
   portrait: 'portrait',
   portraits: 'portrait',
   character: 'portrait',
+  character_card: 'character_card',
+  'character-card': 'character_card',
 };
 
 const FORMAT_ALIASES: Record<string, string> = {
@@ -148,13 +161,14 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const CHUNK_TYPES_BY_ASSET_TYPE: Record<
-  Extract<CampaignAssetType, 'npc' | 'monster' | 'location' | 'item' | 'scene'>,
+  Extract<CampaignAssetType, 'npc' | 'monster' | 'location' | 'item' | 'faction' | 'scene'>,
   string[]
 > = {
   npc: ['npc_tier1', 'npc_tier2', 'npc_tier3'],
   monster: ['monster', 'encounter'],
   location: ['location'],
   item: ['item'],
+  faction: ['faction'],
   // The current enum has no dedicated scene value. Keep the aliases here so
   // manifests can link scene art to the scene-like chunks already in the DB.
   scene: ['scene', 'encounter', 'session_outline'],
@@ -252,7 +266,7 @@ export function normalizeAssetType(value: string): CampaignAssetType {
   const type = TYPE_ALIASES[normalized];
   if (!type) {
     throw new Error(
-      `Unsupported asset type "${value}"; expected npc, monster, location, item, scene, card, banner, or portrait`,
+      `Unsupported asset type "${value}"; expected npc, monster, location, item, faction, scene, card, banner, portrait, or character_card`,
     );
   }
   return type;
@@ -268,7 +282,11 @@ export function normalizeImageExtension(value: string): string {
 }
 
 /** Parse the reconciliation manifest into validated, canonical rows. */
-export function parseManifestCsv(text: string, campaignFilter?: string): ManifestAsset[] {
+export function parseManifestCsv(
+  text: string,
+  campaignFilter?: string,
+  onRowError?: (error: unknown, manifestLine: number) => void,
+): ManifestAsset[] {
   const rows = parseCsv(text);
   if (rows.length < 2)
     throw new Error('Manifest CSV must contain a header and at least one asset row');
@@ -316,24 +334,32 @@ export function parseManifestCsv(text: string, campaignFilter?: string): Manifes
     return rowCampaign === normalizedCampaignFilter ? [{ row, manifestLine: rowIndex + 2 }] : [];
   });
 
-  return selectedRows.map(({ row, manifestLine }) => {
-    const filePath = row[filePathIndex]?.trim();
-    const campaignSlug = row[campaignSlugIndex]?.trim();
-    const type = row[typeIndex]?.trim();
-    const entitySlug = row[entitySlugIndex]?.trim();
-    const realImageFormat = row[realFormatIndex]?.trim();
+  return selectedRows.flatMap(({ row, manifestLine }) => {
+    try {
+      const filePath = row[filePathIndex]?.trim();
+      const campaignSlug = row[campaignSlugIndex]?.trim();
+      const type = row[typeIndex]?.trim();
+      const entitySlug = row[entitySlugIndex]?.trim();
+      const realImageFormat = row[realFormatIndex]?.trim();
 
-    if (!filePath || !campaignSlug || !type || !entitySlug || !realImageFormat) {
-      throw new Error(`Manifest row ${manifestLine} has an empty required field`);
+      if (!filePath || !campaignSlug || !type || !entitySlug || !realImageFormat) {
+        throw new Error(`Manifest row ${manifestLine} has an empty required field`);
+      }
+
+      return [
+        {
+          filePath,
+          campaignSlug: normalizeManifestSlug(campaignSlug, 'campaign slug'),
+          type: normalizeAssetType(type),
+          entitySlug: normalizeManifestSlug(entitySlug, 'entity slug'),
+          realImageFormat: normalizeImageExtension(realImageFormat),
+        },
+      ];
+    } catch (error) {
+      if (!onRowError) throw error;
+      onRowError(error, manifestLine);
+      return [];
     }
-
-    return {
-      filePath,
-      campaignSlug: normalizeManifestSlug(campaignSlug, 'campaign slug'),
-      type: normalizeAssetType(type),
-      entitySlug: normalizeManifestSlug(entitySlug, 'entity slug'),
-      realImageFormat: normalizeImageExtension(realImageFormat),
-    };
   });
 }
 
@@ -346,6 +372,9 @@ export function getDatabaseTarget(type: CampaignAssetType): DatabaseTarget {
   }
   if (type === 'portrait') {
     return { table: 'starter_character_templates', column: 'portrait_url' };
+  }
+  if (type === 'character_card') {
+    return { table: 'starter_character_templates', column: 'card_image_url' };
   }
   return { table: 'campaign_chunks', column: 'metadata.image_url' };
 }
@@ -493,7 +522,9 @@ async function findCharacterTemplates(
 }
 
 function chunkMatchesAssetType(chunk: ChunkRow, type: CampaignAssetType): boolean {
-  if (type === 'card' || type === 'banner' || type === 'portrait') return false;
+  if (type === 'card' || type === 'banner' || type === 'portrait' || type === 'character_card') {
+    return false;
+  }
   return CHUNK_TYPES_BY_ASSET_TYPE[type].includes(chunk.chunk_type);
 }
 
@@ -522,12 +553,13 @@ async function linkAsset(
     return 1;
   }
 
-  if (asset.type === 'portrait') {
-    const matches = (templates || []).filter(
-      (template) =>
-        slugForLookup(template.template_key) === asset.entitySlug ||
-        slugForLookup(template.name) === asset.entitySlug,
-    );
+  if (asset.type === 'portrait' || asset.type === 'character_card') {
+    const matches = (templates || []).filter((template) => {
+      const templateKeyMatches = slugForLookup(template.template_key) === asset.entitySlug;
+      // Character cards intentionally require template_key: names can collide across campaigns.
+      if (asset.type === 'character_card') return templateKeyMatches;
+      return templateKeyMatches || slugForLookup(template.name) === asset.entitySlug;
+    });
     if (matches.length === 0) {
       throw new Error(
         `No starter_character_templates row for ${campaign.slug}/${asset.entitySlug}`,
@@ -535,14 +567,13 @@ async function linkAsset(
     }
 
     for (const template of matches) {
+      const column = asset.type === 'portrait' ? 'portrait_url' : 'card_image_url';
       const { error } = await client
         .from('starter_character_templates')
-        .update({ portrait_url: asset.publicUrl })
+        .update({ [column]: asset.publicUrl })
         .eq('id', template.id);
       if (error) {
-        throw new Error(
-          `Could not update portrait_url for ${template.name}: ${errorMessage(error)}`,
-        );
+        throw new Error(`Could not update ${column} for ${template.name}: ${errorMessage(error)}`);
       }
     }
     return matches.length;
@@ -603,9 +634,21 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
   const sourceDir = resolve(options.sourceDir);
   const manifestPath = join(sourceDir, MANIFEST_PATH);
   const manifestText = await readFile(manifestPath, 'utf8');
-  const manifest = parseManifestCsv(manifestText, options.campaignFilter);
+  const summary: UploadSummary = {
+    total: 0,
+    planned: 0,
+    uploaded: 0,
+    skipped: 0,
+    linked: 0,
+    failed: 0,
+  };
+  const manifest = parseManifestCsv(manifestText, options.campaignFilter, (error, manifestLine) => {
+    summary.failed += 1;
+    console.error(`Failed manifest row ${manifestLine}: ${errorMessage(error)}`);
+  });
+  summary.total = manifest.length + summary.failed;
 
-  if (manifest.length === 0) {
+  if (summary.total === 0) {
     throw new Error(
       options.campaignFilter
         ? `No manifest rows found for campaign "${options.campaignFilter}"`
@@ -617,22 +660,14 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
     throw new Error('An authenticated Supabase client and URL are required with --apply');
   }
 
-  const summary: UploadSummary = {
-    total: manifest.length,
-    planned: 0,
-    uploaded: 0,
-    skipped: 0,
-    linked: 0,
-    failed: 0,
-  };
   const campaignCache = new Map<string, CampaignRow>();
   const chunkCache = new Map<string, ChunkRow[]>();
   const templateCache = new Map<string, CharacterTemplateRow[]>();
   const storage = options.client?.storage.from(BUCKET_NAME);
 
   for (const manifestAsset of manifest) {
-    const asset = buildCampaignAsset(manifestAsset, sourceDir, options.supabaseUrl);
     try {
+      const asset = buildCampaignAsset(manifestAsset, sourceDir, options.supabaseUrl);
       const fileStats = await stat(asset.localPath);
       if (!fileStats.isFile())
         throw new Error(`Manifest path is not a file: ${manifestAsset.filePath}`);
@@ -666,11 +701,19 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
         summary.uploaded += 1;
       }
 
-      if (asset.type !== 'card' && asset.type !== 'banner' && asset.type !== 'portrait') {
+      if (
+        asset.type !== 'card' &&
+        asset.type !== 'banner' &&
+        asset.type !== 'portrait' &&
+        asset.type !== 'character_card'
+      ) {
         if (!chunkCache.has(campaign.id))
           chunkCache.set(campaign.id, await findChunks(client, campaign.id));
       }
-      if (asset.type === 'portrait' && !templateCache.has(campaign.id)) {
+      if (
+        (asset.type === 'portrait' || asset.type === 'character_card') &&
+        !templateCache.has(campaign.id)
+      ) {
         templateCache.set(campaign.id, await findCharacterTemplates(client, campaign.id));
       }
 

@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildCampaignAsset,
   getDatabaseTarget,
+  normalizeAssetType,
   normalizeImageExtension,
   parseCliArgs,
   parseManifestCsv,
@@ -23,6 +24,8 @@ describe('upload-campaign-assets', () => {
         'renders/chef.png,academy-of-arcane-gastronomy,npc,chef,JPEG',
         'renders/card.png,academy-of-arcane-gastronomy,card,cover,image/png',
         'renders/apprentice.png,academy-of-arcane-gastronomy,portraits,the-apprentice,.webp',
+        'renders/faction.png,academy-of-arcane-gastronomy,faction,the-collective,image/png',
+        'renders/card-character.png,academy-of-arcane-gastronomy,character_card,the-apprentice,png',
       ].join('\n'),
     );
 
@@ -47,6 +50,20 @@ describe('upload-campaign-assets', () => {
         type: 'portrait',
         entitySlug: 'the-apprentice',
         realImageFormat: 'webp',
+      },
+      {
+        filePath: 'renders/faction.png',
+        campaignSlug: 'academy-of-arcane-gastronomy',
+        type: 'faction',
+        entitySlug: 'the-collective',
+        realImageFormat: 'png',
+      },
+      {
+        filePath: 'renders/card-character.png',
+        campaignSlug: 'academy-of-arcane-gastronomy',
+        type: 'character_card',
+        entitySlug: 'the-apprentice',
+        realImageFormat: 'png',
       },
     ]);
 
@@ -97,6 +114,10 @@ describe('upload-campaign-assets', () => {
       table: 'campaign_chunks',
       column: 'metadata.image_url',
     });
+    expect(getDatabaseTarget('faction')).toEqual({
+      table: 'campaign_chunks',
+      column: 'metadata.image_url',
+    });
     expect(getDatabaseTarget('scene')).toEqual({
       table: 'campaign_chunks',
       column: 'metadata.image_url',
@@ -113,6 +134,11 @@ describe('upload-campaign-assets', () => {
       table: 'starter_character_templates',
       column: 'portrait_url',
     });
+    expect(getDatabaseTarget('character_card')).toEqual({
+      table: 'starter_character_templates',
+      column: 'card_image_url',
+    });
+    expect(normalizeAssetType('character_card')).toBe('character_card');
   });
 
   it('defaults to a dry run and requires an explicit apply flag for mutations', () => {
@@ -207,4 +233,132 @@ describe('upload-campaign-assets', () => {
       },
     ]);
   });
+
+  it('links faction chunks and character cards to their distinct database targets', async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), 'campaign-asset-upload-'));
+    await mkdir(join(sourceDir, '_manifest'));
+    await mkdir(join(sourceDir, 'renders'));
+    await writeFile(join(sourceDir, 'renders', 'faction.png'), 'faction image');
+    await writeFile(join(sourceDir, 'renders', 'apprentice-card.png'), 'card image');
+    await writeFile(
+      join(sourceDir, '_manifest', 'asset-upload-manifest.csv'),
+      [
+        'file path,campaign slug,type,entity slug,real image format',
+        'renders/faction.png,academy-of-arcane-gastronomy,faction,the-collective,png',
+        'renders/apprentice-card.png,academy-of-arcane-gastronomy,character_card,the-apprentice,png',
+      ].join('\n'),
+    );
+
+    const updates: Array<{ table: string; values: Record<string, unknown> }> = [];
+    const storage = {
+      list: vi.fn().mockResolvedValue({ data: [], error: null }),
+      upload: vi.fn().mockResolvedValue({ error: null }),
+    };
+    const client = {
+      storage: { from: vi.fn(() => storage) },
+      from: vi.fn((table: string) => {
+        if (table === 'starter_campaigns') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { id: 'campaign-1', slug: 'academy-of-arcane-gastronomy' },
+                  error: null,
+                }),
+              })),
+            })),
+          };
+        }
+
+        const rows =
+          table === 'campaign_chunks'
+            ? [
+                {
+                  id: 'chunk-1',
+                  campaign_id: 'campaign-1',
+                  chunk_type: 'faction',
+                  entity_name: 'The Collective',
+                  metadata: { source: 'bible' },
+                },
+              ]
+            : [
+                {
+                  id: 'template-1',
+                  starter_campaign_id: 'campaign-1',
+                  template_key: 'the-apprentice',
+                  name: 'Different Display Name',
+                },
+              ];
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          })),
+          update: vi.fn((values: Record<string, unknown>) => ({
+            eq: vi.fn().mockImplementation(async () => {
+              updates.push({ table, values });
+              return { error: null };
+            }),
+          })),
+        };
+      }),
+    } as unknown as SupabaseClient;
+
+    const summary = await runUpload({
+      sourceDir,
+      dryRun: false,
+      force: false,
+      supabaseUrl: 'https://test.supabase.co',
+      client,
+    });
+
+    expect(summary).toMatchObject({ total: 2, uploaded: 2, linked: 2, failed: 0 });
+    expect(updates).toEqual([
+      {
+        table: 'campaign_chunks',
+        values: {
+          metadata: {
+            source: 'bible',
+            image_url:
+              'https://test.supabase.co/storage/v1/object/public/campaign-images/starter/academy-of-arcane-gastronomy/faction/the-collective.png',
+          },
+        },
+      },
+      {
+        table: 'starter_character_templates',
+        values: {
+          card_image_url:
+            'https://test.supabase.co/storage/v1/object/public/campaign-images/starter/academy-of-arcane-gastronomy/character_card/the-apprentice.png',
+        },
+      },
+    ]);
+  });
+});
+
+it('counts an invalid row as failed and continues with later valid rows', async () => {
+  const sourceDir = await mkdtemp(join(tmpdir(), 'campaign-asset-upload-'));
+  await mkdir(join(sourceDir, '_manifest'));
+  await mkdir(join(sourceDir, 'renders'));
+  await writeFile(join(sourceDir, 'renders', 'chef.png'), 'fake image');
+  await writeFile(
+    join(sourceDir, '_manifest', 'asset-upload-manifest.csv'),
+    [
+      'file path,campaign slug,type,entity slug,real image format',
+      'renders/bad.png,academy-of-arcane-gastronomy,unknown,broken,png',
+      'renders/chef.png,academy-of-arcane-gastronomy,npc,chef,png',
+    ].join('\n'),
+  );
+
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const summary = await runUpload({
+      sourceDir,
+      dryRun: true,
+      force: false,
+    });
+
+    expect(summary).toMatchObject({ total: 2, planned: 1, failed: 1 });
+  } finally {
+    consoleError.mockRestore();
+  }
 });

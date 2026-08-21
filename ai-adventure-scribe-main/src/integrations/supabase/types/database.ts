@@ -3186,6 +3186,7 @@ export type Database = {
       display_order: number | null
       created_at: string | null
       updated_at: string | null
+      card_image_url: string | null
       }
       Insert: {
       id?: string
@@ -3210,6 +3211,7 @@ export type Database = {
       display_order?: number | null
       created_at?: string | null
       updated_at?: string | null
+      card_image_url?: string | null
       }
       Update: {
       id?: string
@@ -3234,6 +3236,7 @@ export type Database = {
       display_order?: number | null
       created_at?: string | null
       updated_at?: string | null
+      card_image_url?: string | null
       }
       Relationships: []
     }

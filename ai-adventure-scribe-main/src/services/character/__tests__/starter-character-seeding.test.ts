@@ -27,6 +27,7 @@ const clericTemplate = {
   skills: ['insight'],
   languages: ['Common'],
   portrait_url: '/images/the-faithful.png',
+  card_image_url: '/images/the-faithful-card.png',
 };
 
 describe('starter-character-seeding', () => {
@@ -104,6 +105,7 @@ describe('starter-character-seeding', () => {
 
     expect(seed.image_url).toBe('/images/the-faithful.png');
     expect(seed.avatar_url).toBe('/images/the-faithful.png');
+    expect(seed.background_image).toBe('/images/the-faithful-card.png');
     expect(seed.cantrips).toBeTruthy();
     expect(seed.known_spells).toBeTruthy();
     expect(seed.equipment).toEqual(
