@@ -2,10 +2,18 @@ import { type Dispatch, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { GameAction } from './game-reducer';
+import type { Character } from '@/types/character';
 import type { DiceRollRequest, DiceRollRequestType, DamageType } from '@/types/combat';
 
+import { useCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
 import { throttle } from '@/lib/utils';
+import {
+  calculateRollWithBreakdown,
+  SKILL_ABILITIES,
+  SKILL_ALIASES,
+  type AbilityName,
+} from '@/utils/characterModifiers';
 
 /**
  * Shape of a roll request from AI responses, before conversion
@@ -39,6 +47,10 @@ export const useAiRollProcessor = (
   processAiResponse: (rollRequests: AiRollRequest[]) => void;
   throttledProcessAiResponse: (rollRequests: AiRollRequest[]) => void;
 } => {
+  const { state: characterState } = useCharacter();
+  const character = characterState.character;
+  // The current game session has one player character; participantId remains metadata until party-scoped lookup exists.
+
   /**
    * Process AI response and extract dice roll requests with deduplication
    * Enhanced with batch tracking for multi-roll scenarios
@@ -77,6 +89,7 @@ export const useAiRollProcessor = (
       rollRequests.forEach((request: AiRollRequest) => {
         try {
           // Convert AI request format to our internal format
+          const parsedFormula = parseRollFormula(request.formula);
           const rollRequest: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'> = {
             requestType: request.type as DiceRollRequestType,
             participantId: request.participantId,
@@ -87,7 +100,7 @@ export const useAiRollProcessor = (
               modifier: 0,
               advantage: request.advantage || false,
               disadvantage: request.disadvantage || false,
-              ...parseRollFormula(request.formula),
+              ...buildCharacterDerivedRollConfig(request, parsedFormula, character),
             },
             batchId, // Assign batch ID
             dc: request.dc, // Extract DC for skill checks and saves
@@ -130,7 +143,7 @@ export const useAiRollProcessor = (
 
       dispatch({ type: 'SET_AI_RESPONSE', payload: { rollRequests: processedRollRequests } });
     },
-    [dispatch, requestDiceRoll],
+    [character, dispatch, requestDiceRoll],
   );
 
   /**
@@ -146,6 +159,83 @@ export const useAiRollProcessor = (
     throttledProcessAiResponse,
   };
 };
+
+const SKILL_TERMS = Array.from(
+  new Set([...Object.keys(SKILL_ABILITIES), ...Object.keys(SKILL_ALIASES)]),
+).sort((a, b) => b.length - a.length);
+
+const ABILITY_TERMS: ReadonlyArray<[AbilityName, string[]]> = [
+  ['strength', ['strength', 'str']],
+  ['dexterity', ['dexterity', 'dex']],
+  ['constitution', ['constitution', 'con']],
+  ['intelligence', ['intelligence', 'int']],
+  ['wisdom', ['wisdom', 'wis']],
+  ['charisma', ['charisma', 'cha']],
+];
+
+function containsTerm(text: string, term: string): boolean {
+  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  return new RegExp(`(?:^|[^a-z])${escapedTerm}(?:$|[^a-z])`, 'i').test(text);
+}
+
+function findDeclaredSkill(request: AiRollRequest): string | undefined {
+  const text = `${request.purpose || ''} ${request.formula || ''}`;
+  const term = SKILL_TERMS.find((candidate) => containsTerm(text, candidate));
+  return term ? SKILL_ALIASES[term] || term : undefined;
+}
+
+function findDeclaredAbility(request: AiRollRequest): AbilityName | undefined {
+  const text = `${request.purpose || ''} ${request.formula || ''}`;
+  for (const [ability, terms] of ABILITY_TERMS) {
+    if (terms.some((term) => containsTerm(text, term))) return ability;
+  }
+  return undefined;
+}
+
+/**
+ * Build the modifier for a player ability/skill check from the loaded character record.
+ *
+ * The DM request supplies the dice shape and the declared action context, but never an
+ * authoritative modifier. Numeric formula modifiers are retained only as a no-character
+ * fallback; a loaded character always wins so prose such as "using proficiency" cannot change
+ * the result.
+ */
+function buildCharacterDerivedRollConfig(
+  request: AiRollRequest,
+  parsedFormula: Partial<DiceRollRequest['rollConfig']>,
+  character: Character | null,
+): Partial<DiceRollRequest['rollConfig']> {
+  if (!character || !['check', 'skill_check'].includes(request.type)) {
+    return parsedFormula;
+  }
+
+  try {
+    const skillName = findDeclaredSkill(request);
+    const calculation = skillName
+      ? calculateRollWithBreakdown(character, 'skill', undefined, skillName)
+      : (() => {
+          const ability = findDeclaredAbility(request);
+          return ability ? calculateRollWithBreakdown(character, 'check', ability) : null;
+        })();
+
+    if (!calculation) {
+      logger.warn('roll_modifier_prose_fallback', {
+        purpose: request.purpose || request.description || '',
+      });
+      return parsedFormula;
+    }
+
+    return {
+      ...parsedFormula,
+      modifier: calculation.totalModifier,
+      // Do not let the UI resolve the model's symbolic modifier a second time.
+      abilityModifier: undefined,
+    };
+  } catch (error) {
+    logger.warn('Failed to derive roll modifier from character record:', request, error);
+    return parsedFormula;
+  }
+}
 
 /**
  * Parse a dice formula string to extract die type, count, and modifier
