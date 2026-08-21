@@ -51,3 +51,16 @@ export function normalizeEmbedding(values: number[]): number[] {
 
   return values.map((value) => value / magnitude);
 }
+
+/**
+ * Free-tier ceiling for embedding calls, in ITEMS per minute — not HTTP requests.
+ *
+ * Google counts each item of a `batchEmbedContents` call separately, against the quota metric
+ * `generativelanguage.googleapis.com/embed_content_free_tier_requests`
+ * (`EmbedContentRequestsPerMinutePerUserPerProjectPerModel-FreeTier`). A single 100-item batch
+ * therefore spends a whole minute's allowance in one request, and the next request 429s.
+ *
+ * Any caller that embeds more than this many items in a minute must pace itself. Raising the
+ * project to a paid tier lifts the ceiling; update this constant if that happens.
+ */
+export const EMBEDDING_FREE_TIER_ITEMS_PER_MIN = 100;
