@@ -876,9 +876,11 @@ describe('useSpellSelection Hook', () => {
         result.current.toggleSpell('color-spray');
       });
 
-      await waitFor(() => expect(result.current.validation.valid).toBe(true));
-      expect(result.current.canProceed).toBe(true);
-      expect(result.current.validation.errors).toHaveLength(0);
+      await waitFor(() => {
+        expect(result.current.validation.valid).toBe(true);
+        expect(result.current.canProceed).toBe(true);
+        expect(result.current.validation.errors).toHaveLength(0);
+      });
     });
 
     it('should invalidate incomplete spell selection', async () => {
@@ -892,9 +894,11 @@ describe('useSpellSelection Hook', () => {
         result.current.toggleSpell('magic-missile');
       });
 
-      await waitFor(() => expect(result.current.canProceed).toBe(false));
-      expect(result.current.validation.valid).toBe(false);
-      expect(result.current.validation.errors.length).toBeGreaterThan(0);
+      await waitFor(() => {
+        expect(result.current.canProceed).toBe(false);
+        expect(result.current.validation.valid).toBe(false);
+        expect(result.current.validation.errors.length).toBeGreaterThan(0);
+      });
     });
 
     it('should provide helpful warnings', async () => {
@@ -916,10 +920,12 @@ describe('useSpellSelection Hook', () => {
         result.current.toggleSpell('color-spray');
       });
 
-      await waitFor(() => expect(result.current.validation.warnings.length).toBeGreaterThan(0));
-      expect(
-        result.current.validation.warnings.some((warning) => warning.includes('spellbook')),
-      ).toBe(true);
+      await waitFor(() => {
+        expect(result.current.validation.warnings.length).toBeGreaterThan(0);
+        expect(
+          result.current.validation.warnings.some((warning) => warning.includes('spellbook')),
+        ).toBe(true);
+      });
     });
   });
 
