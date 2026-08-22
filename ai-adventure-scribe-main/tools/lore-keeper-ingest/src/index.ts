@@ -91,6 +91,22 @@ export function resolveGeminiApiKey(): string | undefined {
   return process.env.VITE_GEMINI_API_KEYS?.split(',')[0] || undefined;
 }
 
+export function resolveCampaignRepoPath(repoPath: string): string {
+  const resolvedRepoPath = resolve(process.cwd(), repoPath);
+  const campaignsPath = join(resolvedRepoPath, 'campaign-ideas');
+  const campaignDirectories = existsSync(campaignsPath)
+    ? listCampaignDirectories(resolvedRepoPath)
+    : [];
+
+  if (campaignDirectories.length === 0) {
+    throw new Error(
+      `Campaign repo path is invalid: ${resolvedRepoPath}. It must contain campaign-ideas/ with at least one campaign directory. Pass a valid path with --repo-path.`,
+    );
+  }
+
+  return resolvedRepoPath;
+}
+
 /**
  * Build the CLI.
  *
@@ -165,14 +181,12 @@ async function main(options: {
   console.log('🏰 Lore Keeper Campaign Ingestion');
   console.log('================================\n');
 
-  // Resolve repo path
-  const repoPath = join(process.cwd(), opts.repoPath);
-  const campaignsPath = join(repoPath, 'campaign-ideas');
-
-  if (!existsSync(campaignsPath)) {
-    console.error(`❌ Campaign repo not found at: ${campaignsPath}`);
-    console.error('\nMake sure the infinite-realms-clean repo is cloned and the path is correct.');
-    console.error('You can specify a custom path with --repo-path');
+  // Resolve and validate repo path before any ingestion work starts.
+  let repoPath: string;
+  try {
+    repoPath = resolveCampaignRepoPath(opts.repoPath);
+  } catch (error) {
+    console.error(`❌ ${error instanceof Error ? error.message : error}`);
     process.exit(1);
   }
 
@@ -403,11 +417,7 @@ function loadReingestCampaign(repoPath: string, campaignDirectory: string): Rein
 }
 
 async function runReingestCommand(options: ReingestCommandOptions): Promise<void> {
-  const repoPath = resolve(process.cwd(), options.repoPath);
-  const campaignsPath = join(repoPath, 'campaign-ideas');
-  if (!existsSync(campaignsPath)) {
-    throw new Error(`Campaign repo not found at: ${campaignsPath}`);
-  }
+  const repoPath = resolveCampaignRepoPath(options.repoPath);
 
   const directories = resolveReingestCampaignDirectories(repoPath, options.campaign);
   const campaigns = directories.map((directory) => loadReingestCampaign(repoPath, directory));

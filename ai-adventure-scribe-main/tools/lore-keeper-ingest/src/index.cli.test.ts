@@ -129,6 +129,29 @@ test('an unknown campaign slug errors instead of falling through to every campai
   assert.doesNotMatch(reported, /Campaigns: 2/);
 });
 
+test('reingest exits loudly when the repo has no campaign directories', async () => {
+  const repoPath = mkdtempSync(join(tmpdir(), 'lore-keeper-empty-repo-'));
+  createdRepos.push(repoPath);
+  mkdirSync(join(repoPath, 'campaign-ideas'), { recursive: true });
+
+  const program = buildProgram();
+  const errors: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => void errors.push(args.join(' '));
+
+  try {
+    await program.parseAsync(['reingest', '--repo-path', repoPath], { from: 'user' });
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(process.exitCode, 1);
+  const reported = errors.join('\n');
+  assert.ok(reported.includes(repoPath));
+  assert.match(reported, /campaign-ideas\/ with at least one campaign directory/);
+  assert.match(reported, /--repo-path/);
+});
+
 test('the legacy option-only invocation still routes to the default ingest command', async () => {
   const program = buildProgram();
   let captured: Record<string, unknown> | undefined;
