@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 
-import { alert } from '../alerting.js';
+import { alert, logAlertingConfiguration } from '../alerting.js';
 import { logger } from '../logger.js';
 
 const warnCalls: unknown[] = [];
@@ -116,6 +116,76 @@ describe('alert()', () => {
       expect(() => alert('narrative_fact_write_failed', { error: 'x' })).not.toThrow();
     } finally {
       warnShouldThrow = false;
+    }
+  });
+});
+
+describe('logAlertingConfiguration()', () => {
+  const originalWebhookUrl = process.env.SLACK_ALERT_WEBHOOK_URL;
+  const infoCalls: unknown[] = [];
+  const localWarnCalls: unknown[] = [];
+  let localWarnShouldThrow = false;
+
+  // The outer describe restores its own warn spy in afterAll, which runs before this
+  // block's tests, so the spies are installed per-test rather than once at describe time.
+  let infoSpy: ReturnType<typeof spyOn>;
+  let localWarnSpy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    localWarnCalls.length = 0;
+    infoCalls.length = 0;
+    infoSpy = spyOn(logger, 'info').mockImplementation((...args: unknown[]) => {
+      infoCalls.push(args[0]);
+    });
+    localWarnSpy = spyOn(logger, 'warn').mockImplementation((...args: unknown[]) => {
+      if (localWarnShouldThrow) throw new Error('logger exploded');
+      localWarnCalls.push(args[0]);
+    });
+  });
+
+  afterEach(() => {
+    if (originalWebhookUrl === undefined) {
+      delete process.env.SLACK_ALERT_WEBHOOK_URL;
+    } else {
+      process.env.SLACK_ALERT_WEBHOOK_URL = originalWebhookUrl;
+    }
+    infoSpy.mockRestore();
+    localWarnSpy.mockRestore();
+  });
+
+  it('logs a configured line at info when the webhook URL is set', () => {
+    process.env.SLACK_ALERT_WEBHOOK_URL = 'https://hooks.example.test/webhook';
+
+    logAlertingConfiguration();
+
+    expect(infoCalls).toEqual([{ msg: 'Slack alerting: configured' }]);
+    expect(localWarnCalls).toHaveLength(0);
+  });
+
+  it('warns loudly when the webhook URL is missing', () => {
+    delete process.env.SLACK_ALERT_WEBHOOK_URL;
+
+    logAlertingConfiguration();
+
+    expect(localWarnCalls).toEqual([{ msg: 'Slack alerting: DISABLED (no webhook URL)' }]);
+    expect(infoCalls).toHaveLength(0);
+  });
+
+  it('treats an empty webhook URL as disabled', () => {
+    process.env.SLACK_ALERT_WEBHOOK_URL = '';
+
+    logAlertingConfiguration();
+
+    expect(localWarnCalls).toEqual([{ msg: 'Slack alerting: DISABLED (no webhook URL)' }]);
+  });
+
+  it('never throws even if the logger throws', () => {
+    delete process.env.SLACK_ALERT_WEBHOOK_URL;
+    localWarnShouldThrow = true;
+    try {
+      expect(() => logAlertingConfiguration()).not.toThrow();
+    } finally {
+      localWarnShouldThrow = false;
     }
   });
 });

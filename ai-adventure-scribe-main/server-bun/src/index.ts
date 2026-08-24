@@ -1,4 +1,5 @@
 import { createApp } from './app';
+import { logAlertingConfiguration } from './lib/alerting.js';
 import { logger } from './lib/logger';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
@@ -74,6 +75,7 @@ app.listen(PORT, () => {
   logger.info({
     msg: `Swagger documentation available at http://localhost:${PORT}/swagger`,
   });
+  logAlertingConfiguration();
   startModelHealthChecks();
 });
 

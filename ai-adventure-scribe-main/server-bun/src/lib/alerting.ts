@@ -98,3 +98,23 @@ export function alert(kind: string, detail: AlertDetail = {}): void {
     }
   }
 }
+
+/**
+ * Log whether Slack alerting is actually wired up, once, at startup.
+ *
+ * `postToWebhook()` returns silently when the URL is missing, so a misconfigured process
+ * is indistinguishable in the logs from one that simply never had to alert. This makes the
+ * dead-alert state visible in pm2 logs at boot instead of at the moment an alert is needed.
+ * Warn (not info) when disabled, so it stands out. See issue #1888.
+ */
+export function logAlertingConfiguration(): void {
+  try {
+    if (process.env.SLACK_ALERT_WEBHOOK_URL) {
+      logger.info({ msg: 'Slack alerting: configured' });
+    } else {
+      logger.warn({ msg: 'Slack alerting: DISABLED (no webhook URL)' });
+    }
+  } catch {
+    // Same contract as alert(): the alerting module must never throw into its caller.
+  }
+}
