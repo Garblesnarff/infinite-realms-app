@@ -391,7 +391,7 @@ export interface Character {
   created_at?: string;
   updated_at?: string;
   // Character stats from character_stats table
-  character_stats?: {
+  character_stats?: Array<{
     strength?: number;
     dexterity?: number;
     constitution?: number;
@@ -401,7 +401,7 @@ export interface Character {
     max_hit_points?: number;
     current_hit_points?: number;
     armor_class?: number;
-  };
+  }>;
 }
 
 // Helper function to transform Character object for Supabase

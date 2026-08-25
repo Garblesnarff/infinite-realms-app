@@ -29,6 +29,10 @@ const CharacterCardHoverContent = ({
   onViewDetails,
   onDelete,
 }: CharacterCardHoverContentProps): JSX.Element => {
+  const stats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+
   // Calculate ability score modifier
   const getModifier = (score: number): number => {
     return Math.floor((score - 10) / 2);
@@ -103,43 +107,37 @@ const CharacterCardHoverContent = ({
                 <div className="flex justify-between items-center bg-secondary/20 px-2 py-1 rounded">
                   <span className="font-medium">STR</span>
                   <span>
-                    {character.character_stats?.strength || 10} (
-                    {formatModifier(character.character_stats?.strength || 10)})
+                    {stats?.strength || 10} ({formatModifier(stats?.strength || 10)})
                   </span>
                 </div>
                 <div className="flex justify-between items-center bg-secondary/20 px-2 py-1 rounded">
                   <span className="font-medium">INT</span>
                   <span>
-                    {character.character_stats?.intelligence || 10} (
-                    {formatModifier(character.character_stats?.intelligence || 10)})
+                    {stats?.intelligence || 10} ({formatModifier(stats?.intelligence || 10)})
                   </span>
                 </div>
                 <div className="flex justify-between items-center bg-secondary/20 px-2 py-1 rounded">
                   <span className="font-medium">DEX</span>
                   <span>
-                    {character.character_stats?.dexterity || 10} (
-                    {formatModifier(character.character_stats?.dexterity || 10)})
+                    {stats?.dexterity || 10} ({formatModifier(stats?.dexterity || 10)})
                   </span>
                 </div>
                 <div className="flex justify-between items-center bg-secondary/20 px-2 py-1 rounded">
                   <span className="font-medium">WIS</span>
                   <span>
-                    {character.character_stats?.wisdom || 10} (
-                    {formatModifier(character.character_stats?.wisdom || 10)})
+                    {stats?.wisdom || 10} ({formatModifier(stats?.wisdom || 10)})
                   </span>
                 </div>
                 <div className="flex justify-between items-center bg-secondary/20 px-2 py-1 rounded">
                   <span className="font-medium">CON</span>
                   <span>
-                    {character.character_stats?.constitution || 10} (
-                    {formatModifier(character.character_stats?.constitution || 10)})
+                    {stats?.constitution || 10} ({formatModifier(stats?.constitution || 10)})
                   </span>
                 </div>
                 <div className="flex justify-between items-center bg-secondary/20 px-2 py-1 rounded">
                   <span className="font-medium">CHA</span>
                   <span>
-                    {character.character_stats?.charisma || 10} (
-                    {formatModifier(character.character_stats?.charisma || 10)})
+                    {stats?.charisma || 10} ({formatModifier(stats?.charisma || 10)})
                   </span>
                 </div>
               </div>
@@ -147,17 +145,15 @@ const CharacterCardHoverContent = ({
 
             {/* Combat Stats */}
             <div className="flex items-center gap-4 text-xs text-foreground mb-4 bg-accent/10 px-3 py-2 rounded">
-              {character.character_stats?.max_hit_points && (
+              {stats?.max_hit_points && (
                 <span className="flex items-center gap-1">
                   <span className="font-medium">HP:</span>{' '}
-                  {character.character_stats.current_hit_points ||
-                    character.character_stats.max_hit_points}
-                  /{character.character_stats.max_hit_points}
+                  {stats.current_hit_points ?? stats.max_hit_points}/{stats.max_hit_points}
                 </span>
               )}
-              {character.character_stats?.armor_class && (
+              {stats?.armor_class && (
                 <span className="flex items-center gap-1">
-                  <span className="font-medium">AC:</span> {character.character_stats.armor_class}
+                  <span className="font-medium">AC:</span> {stats.armor_class}
                 </span>
               )}
               <span className="flex items-center gap-1">
