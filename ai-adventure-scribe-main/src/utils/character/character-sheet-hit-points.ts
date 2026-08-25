@@ -15,8 +15,11 @@ export interface CharacterSheetHitPoints {
  * persisted stats row. Nullish checks intentionally preserve a stored zero.
  */
 export const getCharacterSheetHitPoints = (character: Character): CharacterSheetHitPoints => {
-  const maximum = character.character_stats?.max_hit_points ?? calculateHitPoints(character);
-  const current = character.character_stats?.current_hit_points ?? maximum;
+  const stats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const maximum = stats?.max_hit_points ?? calculateHitPoints(character);
+  const current = stats?.current_hit_points ?? maximum;
 
   return { current, maximum };
 };

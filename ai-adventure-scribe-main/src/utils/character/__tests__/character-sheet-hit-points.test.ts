@@ -45,4 +45,16 @@ describe('getCharacterSheetHitPoints', () => {
 
     expect(getCharacterSheetHitPoints(character)).toEqual({ current: 0, maximum: 10 });
   });
+
+  it('accepts both normalized sheet stats and roster join arrays', () => {
+    const sheetCharacter: Character = {
+      character_stats: { current_hit_points: 4, max_hit_points: 10 },
+    };
+    const rosterCharacter: Character = {
+      character_stats: [{ current_hit_points: 4, max_hit_points: 10 }],
+    };
+
+    expect(getCharacterSheetHitPoints(sheetCharacter)).toEqual({ current: 4, maximum: 10 });
+    expect(getCharacterSheetHitPoints(rosterCharacter)).toEqual({ current: 4, maximum: 10 });
+  });
 });
