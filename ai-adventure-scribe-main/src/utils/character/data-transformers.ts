@@ -1,5 +1,15 @@
-import type { Character, AbilityScores } from '@/types/character';
+import type {
+  AbilityScores,
+  Character,
+  CharacterBackground,
+  CharacterClass,
+  CharacterRace,
+  Subrace,
+} from '@/types/character';
 
+import { backgrounds } from '@/data/backgroundOptions';
+import { classes } from '@/data/classes';
+import { races } from '@/data/races';
 import logger from '@/lib/logger';
 import {
   parseOptionalProficiencyList,
@@ -17,6 +27,9 @@ export interface CharacterStatsRow {
   intelligence: number;
   wisdom: number;
   charisma: number;
+  armor_class?: number | null;
+  max_hit_points?: number | null;
+  current_hit_points?: number | null;
 }
 
 export interface CharacterEquipmentRow {
@@ -43,6 +56,7 @@ export interface CharacterRow {
   name: string;
   description?: string | null;
   race: string;
+  subrace?: string | null;
   class: string;
   level: number;
   background?: string | null;
@@ -74,6 +88,66 @@ export interface CharacterRow {
 // ===========================
 // Helper Functions
 // ===========================
+
+type NamedCharacterData = {
+  id: string;
+  name: string;
+};
+
+/**
+ * Database rows hold display names, while the static records expose both ids and display names.
+ * Normalize both forms so `Half-Orc`, `half-orc`, and `Half Orc` resolve to the same record.
+ */
+const normalizeCharacterDataKey = (value: string | null | undefined): string =>
+  (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+const findCharacterData = <T extends NamedCharacterData>(
+  options: readonly T[],
+  storedName: string | null | undefined,
+): T | undefined => {
+  const key = normalizeCharacterDataKey(storedName);
+  if (!key) return undefined;
+
+  return options.find(
+    (option) =>
+      normalizeCharacterDataKey(option.id) === key ||
+      normalizeCharacterDataKey(option.name) === key,
+  );
+};
+
+const resolveCharacterData = <T extends NamedCharacterData>(
+  kind: 'race' | 'class' | 'background' | 'subrace',
+  options: readonly T[],
+  storedName: string | null | undefined,
+): T | null => {
+  if (!normalizeCharacterDataKey(storedName)) return null;
+
+  const resolved = findCharacterData(options, storedName);
+  if (resolved) return resolved;
+
+  logger.warn('Character data lookup failed', { kind, storedName });
+  return null;
+};
+
+const resolveRace = (storedName: string | null | undefined): CharacterRace | null =>
+  resolveCharacterData('race', races, storedName);
+
+const resolveClass = (storedName: string | null | undefined): CharacterClass | null =>
+  resolveCharacterData('class', classes, storedName);
+
+const resolveBackground = (storedName: string | null | undefined): CharacterBackground | null =>
+  resolveCharacterData('background', backgrounds, storedName);
+
+const resolveSubrace = (
+  race: CharacterRace | null,
+  storedName: string | null | undefined,
+): Subrace | null => {
+  if (!race || !normalizeCharacterDataKey(storedName)) return null;
+  return resolveCharacterData('subrace', race.subraces || [], storedName);
+};
 
 export const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {
   if (!raw) return fallback;
@@ -159,106 +233,95 @@ export const transformCharacterData = (
   characterData: CharacterRow,
   statsData: CharacterStatsRow | null,
   equipmentData: CharacterEquipmentRow[] | null,
-): Character => ({
-  id: characterData.id,
-  user_id: characterData.user_id,
-  name: characterData.name,
-  description: characterData.description,
-  race: {
-    id: 'stored',
-    name: characterData.race,
-    description: '',
-    abilityScoreIncrease: {},
-    speed: 30,
-    traits: [],
-    languages: [],
-  },
-  class: {
-    id: 'stored',
-    name: characterData.class,
-    description: '',
-    hitDie: 8,
-    primaryAbility: 'strength',
-    savingThrowProficiencies: [],
-    skillChoices: [],
-    numSkillChoices: 2,
-    classFeatures: [],
-    armorProficiencies: [],
-    weaponProficiencies: [],
-  },
-  level: characterData.level,
-  background: {
-    id: 'stored',
-    name: characterData.background || '',
-    description: '',
-    skillProficiencies: [],
-    toolProficiencies: [],
-    languages: 0,
-    equipment: [],
-    feature: {
-      name: '',
-      description: '',
+): Character => {
+  const race = resolveRace(characterData.race);
+
+  return {
+    id: characterData.id,
+    user_id: characterData.user_id,
+    name: characterData.name,
+    description: characterData.description,
+    race,
+    subrace: resolveSubrace(race, characterData.subrace),
+    class: resolveClass(characterData.class),
+    level: characterData.level,
+    background: resolveBackground(characterData.background),
+    // character_stats is the server-authoritative source for combat HP. Keep
+    // it on the hydrated character so the sheet cannot replace stored values
+    // with a fresh formula.
+    character_stats: statsData
+      ? {
+          strength: statsData.strength,
+          dexterity: statsData.dexterity,
+          constitution: statsData.constitution,
+          intelligence: statsData.intelligence,
+          wisdom: statsData.wisdom,
+          charisma: statsData.charisma,
+          armor_class: statsData.armor_class,
+          max_hit_points: statsData.max_hit_points,
+          current_hit_points: statsData.current_hit_points,
+        }
+      : undefined,
+    abilityScores: transformAbilityScores(statsData) || {
+      strength: { score: 10, modifier: 0, savingThrow: false },
+      dexterity: { score: 10, modifier: 0, savingThrow: false },
+      constitution: { score: 10, modifier: 0, savingThrow: false },
+      intelligence: { score: 10, modifier: 0, savingThrow: false },
+      wisdom: { score: 10, modifier: 0, savingThrow: false },
+      charisma: { score: 10, modifier: 0, savingThrow: false },
     },
-  },
-  abilityScores: transformAbilityScores(statsData) || {
-    strength: { score: 10, modifier: 0, savingThrow: false },
-    dexterity: { score: 10, modifier: 0, savingThrow: false },
-    constitution: { score: 10, modifier: 0, savingThrow: false },
-    intelligence: { score: 10, modifier: 0, savingThrow: false },
-    wisdom: { score: 10, modifier: 0, savingThrow: false },
-    charisma: { score: 10, modifier: 0, savingThrow: false },
-  },
-  equipment: equipmentData?.map((item) => item.item_name) || [],
-  experience: characterData.experience_points || 0,
-  alignment: characterData.alignment || '',
-  // Proficiencies carry the proficiency bonus onto skills and saves. Dropping
-  // them here made the sheet report bare ability modifiers (issue #1827).
-  skillProficiencies: parseOptionalProficiencyList(characterData.skill_proficiencies),
-  expertiseProficiencies: parseOptionalProficiencyList(characterData.expertise_proficiencies),
-  toolProficiencies: parseOptionalProficiencyList(characterData.tool_proficiencies),
-  savingThrowProficiencies: parseSavingThrowProficiencies(
-    characterData.saving_throw_proficiencies,
-  ),
-  languages: parseOptionalProficiencyList(characterData.languages),
-  // Vision and Stealth
-  visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
-  obscurement: characterData.obscurement || 'clear',
-  isHidden: characterData.is_hidden || false,
-  stealthCheckBonus: characterData.stealth_check_bonus || 0,
-  // Magic Items
-  inventory:
-    equipmentData?.map((item) => ({
-      itemId: item.id,
-      itemType: item.item_type,
-      description: item.description || undefined,
-      quantity: item.quantity || 1,
-      equipped: item.equipped || false,
-      // Magic item properties
-      isMagic: item.is_magic || false,
-      magicBonus: item.magic_bonus || 0,
-      magicProperties: parseJsonField<string[]>(item.magic_properties, []),
-      requiresAttunement: item.requires_attunement || false,
-      isAttuned: item.is_attuned || false,
-      attunementRequirements: item.attunement_requirements || '',
-      magicItemType: item.magic_item_type || '',
-      magicItemRarity: item.magic_item_rarity || 'common',
-      magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
-    })) || [],
-  // AI-generated fields
-  avatar_url: characterData.avatar_url,
-  image_url: characterData.image_url,
-  appearance: characterData.appearance,
-  personality_traits: characterData.personality_traits,
-  backstory_elements: characterData.backstory_elements,
-  background_image: characterData.background_image || undefined,
-  // Legacy fields
-  personalityTraits: [],
-  ideals: [],
-  bonds: [],
-  flaws: [],
-  // Spell data supports both JSON arrays and legacy comma-separated strings.
-  cantrips: parseSpellListField(characterData.cantrips),
-  knownSpells: parseSpellListField(characterData.known_spells),
-  preparedSpells: parseSpellListField(characterData.prepared_spells),
-  ritualSpells: parseSpellListField(characterData.ritual_spells),
-});
+    equipment: equipmentData?.map((item) => item.item_name) || [],
+    experience: characterData.experience_points || 0,
+    alignment: characterData.alignment || '',
+    // Proficiencies carry the proficiency bonus onto skills and saves. Dropping
+    // them here made the sheet report bare ability modifiers (issue #1827).
+    skillProficiencies: parseOptionalProficiencyList(characterData.skill_proficiencies),
+    expertiseProficiencies: parseOptionalProficiencyList(characterData.expertise_proficiencies),
+    toolProficiencies: parseOptionalProficiencyList(characterData.tool_proficiencies),
+    savingThrowProficiencies: parseSavingThrowProficiencies(
+      characterData.saving_throw_proficiencies,
+    ),
+    languages: parseOptionalProficiencyList(characterData.languages),
+    // Vision and Stealth
+    visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
+    obscurement: characterData.obscurement || 'clear',
+    isHidden: characterData.is_hidden || false,
+    stealthCheckBonus: characterData.stealth_check_bonus || 0,
+    // Magic Items
+    inventory:
+      equipmentData?.map((item) => ({
+        itemId: item.id,
+        itemType: item.item_type,
+        description: item.description || undefined,
+        quantity: item.quantity || 1,
+        equipped: item.equipped || false,
+        // Magic item properties
+        isMagic: item.is_magic || false,
+        magicBonus: item.magic_bonus || 0,
+        magicProperties: parseJsonField<string[]>(item.magic_properties, []),
+        requiresAttunement: item.requires_attunement || false,
+        isAttuned: item.is_attuned || false,
+        attunementRequirements: item.attunement_requirements || '',
+        magicItemType: item.magic_item_type || '',
+        magicItemRarity: item.magic_item_rarity || 'common',
+        magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
+      })) || [],
+    // AI-generated fields
+    avatar_url: characterData.avatar_url,
+    image_url: characterData.image_url,
+    appearance: characterData.appearance,
+    personality_traits: characterData.personality_traits,
+    backstory_elements: characterData.backstory_elements,
+    background_image: characterData.background_image || undefined,
+    // Legacy fields
+    personalityTraits: [],
+    ideals: [],
+    bonds: [],
+    flaws: [],
+    // Spell data supports both JSON arrays and legacy comma-separated strings.
+    cantrips: parseSpellListField(characterData.cantrips),
+    knownSpells: parseSpellListField(characterData.known_spells),
+    preparedSpells: parseSpellListField(characterData.prepared_spells),
+    ritualSpells: parseSpellListField(characterData.ritual_spells),
+  };
+};

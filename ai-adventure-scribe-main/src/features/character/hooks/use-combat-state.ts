@@ -17,6 +17,7 @@ export interface CombatState {
  */
 export const useCombatState = (
   maxHp: number,
+  initialCurrentHp: number = maxHp,
 ): {
   combatState: CombatState;
   setCombatState: Dispatch<SetStateAction<CombatState>>;
@@ -30,7 +31,7 @@ export const useCombatState = (
   updateDeathSave: (type: 'success' | 'failure', increment: boolean) => void;
 } => {
   const [combatState, setCombatState] = useState<CombatState>({
-    currentHp: maxHp,
+    currentHp: initialCurrentHp,
     tempHp: 0,
     deathSaves: { successes: 0, failures: 0 },
     conditions: [],

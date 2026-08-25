@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombatState } from '@/features/character/hooks/use-combat-state';
 import { useCharacterStats } from '@/hooks/use-character-stats';
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 interface MainTabProps {
   character: Character;
@@ -31,8 +32,9 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
 
   const stats = useCharacterStats(character);
 
-  // Use centralized calculations from useCharacterStats
-  const maxHp = stats?.hitPoints ?? 1;
+  // Stored character_stats HP is authoritative for an existing character;
+  // formula math remains available through the helper for preview/legacy data.
+  const { current: currentHp, maximum: maxHp } = getCharacterSheetHitPoints(character);
 
   const {
     combatState,
@@ -44,7 +46,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
     applyHealing,
     resetDeathSaves,
     updateDeathSave,
-  } = useCombatState(maxHp);
+  } = useCombatState(maxHp, currentHp);
 
   const proficiencyBonus = stats?.proficiencyBonus ?? 2;
   const armorClass = stats?.armorClass ?? 10;

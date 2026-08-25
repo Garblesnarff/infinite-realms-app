@@ -1,7 +1,7 @@
 /**
  * CLASS_SAVING_THROW_PROFICIENCIES_MAP is the fallback used when a character
- * has no persisted saving-throw proficiencies. It duplicates data that already
- * lives in `src/data/classes/*`, so this test fails the moment the two drift.
+ * has no persisted saving-throw proficiencies. It is derived from the shared
+ * SRD table, so this test fails if that table drifts from `src/data/classes/*`.
  *
  * It listed only four of the twelve classes until 2026-08, which is half of
  * issue #1827: a Monk resolved to "no save proficiencies".

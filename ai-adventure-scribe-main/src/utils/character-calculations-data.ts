@@ -1,3 +1,5 @@
+import { SRD_CLASS_TABLE } from '../../shared/srd-class-data';
+
 import type { Character } from '@/types/character';
 
 /**
@@ -91,30 +93,17 @@ export const SUBRACE_SKILL_PROFICIENCIES_MAP: Record<string, readonly string[]> 
 } as const;
 
 /**
- * ⚡ Bolt: Static map of saving throw proficiencies for each class.
- * Moved outside to avoid redundant re-allocation on every call.
+ * Saving throw fallback for each SRD class.
  *
  * Fallback only — used when a character has no persisted
  * `savingThrowProficiencies`, which is the case for every template-derived
  * character, since starter seeding never writes that column.
  *
- * Kept honest against `src/data/classes/*` by
- * `src/utils/__tests__/class-saving-throw-map.test.ts`, which fails if this map
- * and the class dataset disagree. Until 2026-08 this listed only
- * Fighter/Wizard/Rogue/Cleric, so the other eight classes silently resolved to
- * "no save proficiencies" (issue #1827).
+ * The source table lives in `shared/srd-class-data.ts` so scripts and server-side repairs can
+ * reuse the same SRD values. `src/utils/__tests__/class-saving-throw-map.test.ts` also keeps the
+ * table aligned with the richer frontend class records.
  */
-export const CLASS_SAVING_THROW_PROFICIENCIES_MAP: Record<string, readonly string[]> = {
-  Barbarian: ['strength', 'constitution'],
-  Bard: ['dexterity', 'charisma'],
-  Cleric: ['wisdom', 'charisma'],
-  Druid: ['intelligence', 'wisdom'],
-  Fighter: ['strength', 'constitution'],
-  Monk: ['strength', 'dexterity'],
-  Paladin: ['wisdom', 'charisma'],
-  Ranger: ['strength', 'dexterity'],
-  Rogue: ['dexterity', 'intelligence'],
-  Sorcerer: ['constitution', 'charisma'],
-  Warlock: ['wisdom', 'charisma'],
-  Wizard: ['intelligence', 'wisdom'],
-} as const;
+export const CLASS_SAVING_THROW_PROFICIENCIES_MAP: Record<string, readonly string[]> =
+  Object.fromEntries(
+    SRD_CLASS_TABLE.map(({ name, savingThrowProficiencies }) => [name, savingThrowProficiencies]),
+  );

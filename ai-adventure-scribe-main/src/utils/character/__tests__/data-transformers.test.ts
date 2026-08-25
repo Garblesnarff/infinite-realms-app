@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
+import { SRD_CLASS_TABLE } from '../../../../shared/srd-class-data';
 import {
   parseJsonField,
   parseSpellListField,
@@ -7,8 +8,14 @@ import {
   transformCharacterData,
   type CharacterRow,
   type CharacterStatsRow,
-  type CharacterEquipmentRow
+  type CharacterEquipmentRow,
 } from '../data-transformers';
+
+import { backgrounds } from '@/data/backgroundOptions';
+import { classes } from '@/data/classes';
+import { races } from '@/data/races';
+import logger from '@/lib/logger';
+import { calculateHitPoints } from '@/utils/character/basic-math';
 
 // Mock logger to avoid console noise during tests
 vi.mock('@/lib/logger', () => ({
@@ -19,8 +26,6 @@ vi.mock('@/lib/logger', () => ({
     debug: vi.fn(),
   },
 }));
-
-import logger from '@/lib/logger';
 
 describe('data-transformers', () => {
   describe('parseJsonField', () => {
@@ -35,7 +40,10 @@ describe('data-transformers', () => {
       const fallback = { error: true };
       const result = parseJsonField(input, fallback);
       expect(result).toEqual(fallback);
-      expect(logger.warn).toHaveBeenCalledWith('Failed to parse character JSON field', expect.objectContaining({ raw: input }));
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to parse character JSON field',
+        expect.objectContaining({ raw: input }),
+      );
     });
 
     it('should return fallback for null or undefined input', () => {
@@ -89,7 +97,7 @@ describe('data-transformers', () => {
         strength: 15, // +2
         dexterity: 14, // +2
         constitution: 10, // +0
-        intelligence: 8,  // -1
+        intelligence: 8, // -1
         wisdom: 12, // +1
         charisma: 20, // +5
       };
@@ -111,7 +119,7 @@ describe('data-transformers', () => {
       id: 'char-123',
       user_id: 'user-456',
       name: 'Grog',
-      race: 'Goliath',
+      race: 'Forest Giant',
       class: 'Barbarian',
       level: 5,
       experience_points: 6500,
@@ -138,7 +146,7 @@ describe('data-transformers', () => {
         item_name: 'Greatsword',
         quantity: 1,
         equipped: true,
-        is_magic: false
+        is_magic: false,
       },
       {
         id: 'item-2',
@@ -152,8 +160,8 @@ describe('data-transformers', () => {
         is_attuned: true,
         magic_item_type: 'ring',
         magic_item_rarity: 'rare',
-        magic_effects: '{"ac": 1}'
-      }
+        magic_effects: '{"ac": 1}',
+      },
     ];
 
     it('should transform full database data into a Character object', () => {
@@ -163,14 +171,18 @@ describe('data-transformers', () => {
           id: 'item-3',
           item_name: 'Dagger',
           // quantity, equipped missing
-        }
+        },
       ];
-      const character = transformCharacterData(mockCharacterRow, mockStats, equipmentWithMissingFields);
+      const character = transformCharacterData(
+        mockCharacterRow,
+        mockStats,
+        equipmentWithMissingFields,
+      );
 
       expect(character.id).toBe('char-123');
       expect(character.name).toBe('Grog');
-      expect(character.race.name).toBe('Goliath');
-      expect(character.class.name).toBe('Barbarian');
+      expect(character.race?.name).toBe('Forest Giant');
+      expect(character.class?.name).toBe('Barbarian');
       expect(character.level).toBe(5);
       expect(character.abilityScores.strength.score).toBe(18);
       expect(character.abilityScores.strength.modifier).toBe(4);
@@ -179,18 +191,167 @@ describe('data-transformers', () => {
 
       // Check inventory mapping
       expect(character.inventory).toHaveLength(3);
-      const ring = character.inventory.find(i => i.itemId === 'item-2');
+      const ring = character.inventory.find((i) => i.itemId === 'item-2');
       expect(ring?.isMagic).toBe(true);
       expect(ring?.magicBonus).toBe(1);
       expect(ring?.magicProperties).toEqual(['warding']);
       expect(ring?.magicEffects).toEqual({ ac: 1 });
       expect(ring?.isAttuned).toBe(true);
 
-      const dagger = character.inventory.find(i => i.itemId === 'item-3');
+      const dagger = character.inventory.find((i) => i.itemId === 'item-3');
       expect(dagger?.quantity).toBe(1);
       expect(dagger?.equipped).toBe(false);
 
       expect(character.visionTypes).toEqual(['darkvision']);
+    });
+
+    describe('canonical race, class, and background hydration', () => {
+      it('covers the same twelve classes as the frontend class records', () => {
+        expect(SRD_CLASS_TABLE.map((entry) => entry.name).sort()).toEqual(
+          classes.map((entry) => entry.name).sort(),
+        );
+      });
+
+      for (const expectedClass of SRD_CLASS_TABLE) {
+        it(`hydrates the full ${expectedClass.name} class record`, () => {
+          const character = transformCharacterData(
+            {
+              ...mockCharacterRow,
+              race: 'Human',
+              class: expectedClass.name,
+              level: 1,
+            },
+            mockStats,
+            [],
+          );
+
+          expect(character.class).toMatchObject({
+            id: expectedClass.id,
+            name: expectedClass.name,
+            hitDie: expectedClass.hitDie,
+            primaryAbility: expectedClass.primaryAbility,
+            savingThrowProficiencies: [...expectedClass.savingThrowProficiencies],
+          });
+        });
+      }
+
+      for (const expectedRace of races) {
+        it(`hydrates the full ${expectedRace.name} race record`, () => {
+          const character = transformCharacterData(
+            {
+              ...mockCharacterRow,
+              race: expectedRace.name,
+              class: 'Wizard',
+            },
+            mockStats,
+            [],
+          );
+
+          expect(character.race).toMatchObject({
+            id: expectedRace.id,
+            name: expectedRace.name,
+            speed: expectedRace.speed,
+            abilityScoreIncrease: expectedRace.abilityScoreIncrease,
+            traits: expectedRace.traits,
+            languages: expectedRace.languages,
+          });
+        });
+      }
+
+      it('hydrates a stored subrace from the selected race', () => {
+        const character = transformCharacterData(
+          {
+            ...mockCharacterRow,
+            race: 'dwarf',
+            subrace: 'hill-dwarf',
+            class: 'Wizard',
+          },
+          mockStats,
+          [],
+        );
+
+        expect(character.race?.id).toBe('dwarf');
+        expect(character.subrace).toMatchObject({
+          id: 'hill-dwarf',
+          name: 'Hill Dwarf',
+          abilityScoreIncrease: { wisdom: 1 },
+        });
+      });
+
+      it('hydrates the full background record', () => {
+        const sage = backgrounds.find((background) => background.id === 'sage');
+        const character = transformCharacterData(
+          {
+            ...mockCharacterRow,
+            race: 'Human',
+            class: 'Wizard',
+            background: 'Sage',
+          },
+          mockStats,
+          [],
+        );
+
+        expect(character.background).toBe(sage);
+        expect(character.background).toMatchObject({
+          id: 'sage',
+          skillProficiencies: ['Arcana', 'History'],
+          feature: { name: 'Researcher' },
+        });
+      });
+
+      it('does not fabricate mechanics when a stored lookup is unknown', () => {
+        vi.clearAllMocks();
+
+        const character = transformCharacterData(
+          {
+            ...mockCharacterRow,
+            race: 'Unknown Race',
+            class: 'Unknown Class',
+            background: 'Unknown Background',
+          },
+          mockStats,
+          [],
+        );
+
+        expect(character.race).toBeNull();
+        expect(character.class).toBeNull();
+        expect(character.background).toBeNull();
+        expect(logger.warn).toHaveBeenCalledTimes(3);
+      });
+    });
+
+    describe('preview hit-point math', () => {
+      it('calculates Wizard d6 plus CON at level 1 without treating it as sheet HP', () => {
+        const character = transformCharacterData(
+          {
+            ...mockCharacterRow,
+            race: 'Human',
+            class: 'Wizard',
+            level: 1,
+          },
+          { ...mockStats, constitution: 10 },
+          [],
+        );
+
+        expect(character.class?.hitDie).toBe(6);
+        expect(calculateHitPoints(character)).toBe(6);
+      });
+
+      it('calculates Barbarian d12 plus CON at level 1 without treating it as sheet HP', () => {
+        const character = transformCharacterData(
+          {
+            ...mockCharacterRow,
+            race: 'Human',
+            class: 'Barbarian',
+            level: 1,
+          },
+          { ...mockStats, constitution: 10 },
+          [],
+        );
+
+        expect(character.class?.hitDie).toBe(12);
+        expect(calculateHitPoints(character)).toBe(12);
+      });
     });
 
     it('should handle missing stats and equipment with defaults', () => {

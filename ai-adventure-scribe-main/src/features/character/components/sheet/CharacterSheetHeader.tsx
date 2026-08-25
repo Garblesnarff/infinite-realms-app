@@ -5,6 +5,7 @@ import type { Character } from '@/types/character';
 
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 interface CharacterSheetHeaderProps {
   character: Character;
@@ -43,6 +44,7 @@ function calculateArmorClass(character: Character): number {
 
 export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ character }) => {
   const portraitUrl = character.image_url ?? character.avatar_url;
+  const { maximum: maxHitPoints } = getCharacterSheetHitPoints(character);
 
   return (
     <IRPanel className="mb-6 p-4">
@@ -82,13 +84,7 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           <div className="text-center">
             <div className="flex items-center gap-1 text-red-600">
               <Heart className="w-4 h-4" />
-              <span className="font-bold">
-                {Math.max(
-                  1,
-                  (character.level || 1) * (character.class?.hitDie || 8) +
-                    (character.abilityScores?.constitution?.modifier || 0) * (character.level || 1),
-                )}
-              </span>
+              <span className="font-bold">{maxHitPoints}</span>
             </div>
             <div className="text-xs text-muted-foreground">HP</div>
           </div>
