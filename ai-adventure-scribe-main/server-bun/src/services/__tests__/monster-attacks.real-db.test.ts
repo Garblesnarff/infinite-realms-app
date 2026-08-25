@@ -19,10 +19,12 @@
  * another; a mocked `db` returns whatever the test author assumed that round-trip does, which
  * is precisely the assumption worth testing.
  *
- * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
+ * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts. This suite refuses every
+ * target except the dedicated CI Postgres at 127.0.0.1:55432 because it deletes stale fixtures
+ * before setup.
  */
 import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, like } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -30,6 +32,7 @@ import {
   hasRealDb,
   importWithRealDb,
   realDb,
+  realDbUrl,
   testId,
 } from './fixtures/real-db.js';
 import {
@@ -46,6 +49,52 @@ import {
 } from '../../../../db/schema/index';
 
 type LogPayload = Record<string, unknown>;
+
+const DEDICATED_REAL_DB_HOST = '127.0.0.1';
+const DEDICATED_REAL_DB_PORT = '55432';
+const MONSTER_ATTACK_FIXTURE_OWNER_PREFIX = 'monster-attack-user-';
+const MONSTER_ATTACK_FIXTURE_OWNER_PATTERN = `${MONSTER_ATTACK_FIXTURE_OWNER_PREFIX}%`;
+
+/**
+ * This suite writes and deletes fixture rows, so a loopback-only allowlist is safer than trying
+ * to recognize every possible production hostname. Keep the check before realDb() and before
+ * importing the combat services: a misconfigured URL must fail before fixture cleanup can run.
+ */
+export function assertSafeMonsterAttackDatabase(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(
+      '[monster-attacks] refusing real-DB fixtures: invalid URL; use the dedicated Postgres at 127.0.0.1:55432',
+    );
+  }
+
+  const isPostgres = parsed.protocol === 'postgres:' || parsed.protocol === 'postgresql:';
+  if (
+    !isPostgres ||
+    parsed.hostname !== DEDICATED_REAL_DB_HOST ||
+    parsed.port !== DEDICATED_REAL_DB_PORT
+  ) {
+    const target = parsed.hostname ? `${parsed.hostname}:${parsed.port || '(default)'}` : 'unknown';
+    throw new Error(
+      `[monster-attacks] refusing real-DB fixtures against ${target}; use the dedicated Postgres at 127.0.0.1:55432`,
+    );
+  }
+}
+
+export function monsterAttackFixtureOwner(runMarker: string): string {
+  return `${MONSTER_ATTACK_FIXTURE_OWNER_PREFIX}${runMarker}`;
+}
+
+type RealDb = ReturnType<typeof realDb>;
+
+/** Remove rows left by a crashed prior run before this run inserts anything. */
+export async function preCleanMonsterAttackFixtures(db: RealDb): Promise<void> {
+  await db.delete(characters).where(like(characters.userId, MONSTER_ATTACK_FIXTURE_OWNER_PATTERN));
+}
+
+if (hasRealDb) assertSafeMonsterAttackDatabase(realDbUrl);
 
 const emitted: LogPayload[] = [];
 const profileLogs: LogPayload[] = [];
@@ -90,9 +139,36 @@ const { clearCampaignMonsterCache } = await importWithRealDb(
 
 if (!hasRealDb) {
   console.warn(
-    '[monster-attacks] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.',
+    '[monster-attacks] SKIPPED: set TEST_DATABASE_URL to the dedicated Postgres at 127.0.0.1:55432 to run these.',
   );
 }
+
+test('refuses a non-dedicated database target before fixture cleanup', () => {
+  expect(() =>
+    assertSafeMonsterAttackDatabase('postgres://prod.example.test:5432/postgres'),
+  ).toThrow('refusing real-DB fixtures');
+});
+
+test('accepts the dedicated CI database target', () => {
+  expect(() =>
+    assertSafeMonsterAttackDatabase('postgres://postgres:postgres@127.0.0.1:55432/postgres'),
+  ).not.toThrow();
+});
+
+test('gives each run a stable owner prefix for startup pre-clean', () => {
+  expect(monsterAttackFixtureOwner('run-123')).toBe('monster-attack-user-run-123');
+  expect(MONSTER_ATTACK_FIXTURE_OWNER_PATTERN).toBe('monster-attack-user-%');
+});
+
+test('pre-clean issues one character deletion before fixture setup', async () => {
+  const where = mock(() => Promise.resolve());
+  const deleteFrom = mock(() => ({ where }));
+
+  await preCleanMonsterAttackFixtures({ delete: deleteFrom } as unknown as RealDb);
+
+  expect(deleteFrom).toHaveBeenCalledWith(characters);
+  expect(where).toHaveBeenCalledTimes(1);
+});
 
 /**
  * The Stone Golem's printed line, quoted from `src/data/srd/monsters.json` so a drift in the
@@ -146,7 +222,7 @@ const PARTY_SIZE = 4;
 
 describeWithDb('monsters attack with their own numbers', () => {
   const db = hasRealDb ? realDb() : (null as never);
-  const userId = testId('monster-attack-user');
+  const userId = monsterAttackFixtureOwner(testId('run'));
   const starterCampaignId = testId('bible');
 
   let campaignId: string;
@@ -166,6 +242,8 @@ describeWithDb('monsters attack with their own numbers', () => {
   };
 
   beforeAll(async () => {
+    await preCleanMonsterAttackFixtures(db);
+
     [{ id: campaignId }] = await db
       .insert(campaigns)
       .values({ userId, name: testId('camp') })
