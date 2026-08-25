@@ -135,6 +135,11 @@ const characterSchema = t.Object({
 
 const updateCharacterSchema = t.Partial(characterSchema);
 
+const omitUndefined = <T extends Record<string, unknown>>(record: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+
 /**
  * Parse spell strings stored in the database
  * Handles comma-separated values, JSON arrays, and null values
@@ -494,7 +499,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   .put(
     '/:id/stats',
     async ({ params, body, user }) => {
-      await CharacterService.upsertStats(params.id, user!.userId, {
+      const stats = omitUndefined({
         strength: body.strength,
         dexterity: body.dexterity,
         constitution: body.constitution,
@@ -508,6 +513,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         initiativeBonus: body.initiative_bonus,
         speed: body.speed,
       });
+      await CharacterService.upsertStats(params.id, user!.userId, stats);
       return { ok: true };
     },
     {
