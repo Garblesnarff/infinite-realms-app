@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.11.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.1...v0.11.2) (2026-08-25)
+
+
+### Bug Fixes
+
+* **character:** accept both character_stats shapes ([#1900](https://github.com/Garblesnarff/infinite-realms-production/issues/1900)) ([#1902](https://github.com/Garblesnarff/infinite-realms-production/issues/1902)) ([82efd9d](https://github.com/Garblesnarff/infinite-realms-production/commit/82efd9df071dd0b10131acc8e1ac718466d6f4d7))
+* **character:** preserve stored HP on sheet edits ([#1897](https://github.com/Garblesnarff/infinite-realms-production/issues/1897)) ([#1903](https://github.com/Garblesnarff/infinite-realms-production/issues/1903)) ([412eddd](https://github.com/Garblesnarff/infinite-realms-production/commit/412eddd6c773f0e1043cdabde4a4bb3d87ccc0b7))
+
+
+### Tests
+
+* **real-db:** guard monster attack fixtures ([#1901](https://github.com/Garblesnarff/infinite-realms-production/issues/1901)) ([#1904](https://github.com/Garblesnarff/infinite-realms-production/issues/1904)) ([d179827](https://github.com/Garblesnarff/infinite-realms-production/commit/d179827b0117b9d6657b385a2b29f0b7738ae4e9))
+
 ## [0.11.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.0...v0.11.1) (2026-08-25)
 
 
