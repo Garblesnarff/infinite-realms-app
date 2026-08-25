@@ -38,6 +38,7 @@ export const elf: CharacterRace = {
       description: 'Stealthy and swift inhabitants of the forest.',
       backgroundImage: '/images/races/subraces/wood-elf-elf-sub-race-card-background.png',
       abilityScoreIncrease: { wisdom: 1 },
+      speed: 35,
       traits: ['Fleet of Foot', 'Mask of the Wild'],
     },
     {

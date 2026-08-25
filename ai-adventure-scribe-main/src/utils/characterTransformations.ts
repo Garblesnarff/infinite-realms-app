@@ -1,3 +1,5 @@
+import { findSrdClass } from '../../shared/srd-class-data';
+
 import type { Character, AbilityScores } from '@/types/character';
 
 /**
@@ -10,12 +12,18 @@ import type { Character, AbilityScores } from '@/types/character';
 export const transformAbilityScoresForStorage = (
   abilityScores: AbilityScores,
   characterId: string,
+  characterClass: string | null | undefined,
 ) => {
   // Calculate base armor class (10 + dexterity modifier)
   const baseArmorClass = 10 + (abilityScores.dexterity.modifier || 0);
 
-  // Calculate base hit points (we'll use constitution modifier + 8 for level 1)
-  const baseHitPoints = 8 + (abilityScores.constitution.modifier || 0);
+  const classData = findSrdClass(characterClass);
+  if (!classData) {
+    throw new Error(`Unsupported SRD class "${characterClass || ''}"; refusing HP initialization.`);
+  }
+
+  // Level-1 HP is the class hit die plus the Constitution modifier.
+  const baseHitPoints = classData.hitDie + (abilityScores.constitution.modifier || 0);
 
   return {
     character_id: characterId,

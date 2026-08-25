@@ -10,7 +10,6 @@ import {
 
 import type { AbilityScores, Character } from '@/types/character';
 
-
 describe('characterTransformations', () => {
   describe('transformAbilityScoresForStorage', () => {
     it('should correctly transform ability scores and calculate base AC and HP', () => {
@@ -24,7 +23,7 @@ describe('characterTransformations', () => {
       };
       const characterId = 'test-char-id';
 
-      const result = transformAbilityScoresForStorage(abilityScores, characterId);
+      const result = transformAbilityScoresForStorage(abilityScores, characterId, 'Cleric');
 
       expect(result).toEqual({
         character_id: characterId,
@@ -49,9 +48,43 @@ describe('characterTransformations', () => {
         wisdom: { score: 10 },
         charisma: { score: 10 },
       };
-      const result = transformAbilityScoresForStorage(abilityScores, 'id');
+      const result = transformAbilityScoresForStorage(abilityScores, 'id', 'Wizard');
       expect(result.armor_class).toBe(10);
-      expect(result.max_hit_points).toBe(8);
+      expect(result.max_hit_points).toBe(6);
+    });
+
+    it.each([
+      ['Wizard', 7],
+      ['Fighter', 11],
+      ['Barbarian', 13],
+    ])('stores level-1 %s HP from the shared hit die', (characterClass, expectedMaxHitPoints) => {
+      const abilityScores: AbilityScores = {
+        strength: { score: 10, modifier: 0, savingThrow: false },
+        dexterity: { score: 10, modifier: 0, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 10, modifier: 0, savingThrow: false },
+      };
+
+      const result = transformAbilityScoresForStorage(abilityScores, 'id', characterClass);
+
+      expect(result.max_hit_points).toBe(expectedMaxHitPoints);
+    });
+
+    it('throws for an unsupported class instead of fabricating HP', () => {
+      const abilityScores: AbilityScores = {
+        strength: { score: 10, modifier: 0, savingThrow: false },
+        dexterity: { score: 10, modifier: 0, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 10, modifier: 0, savingThrow: false },
+      };
+
+      expect(() => transformAbilityScoresForStorage(abilityScores, 'id', 'Artificer')).toThrow(
+        'Unsupported SRD class "Artificer"; refusing HP initialization.',
+      );
     });
   });
 
@@ -77,9 +110,9 @@ describe('characterTransformations', () => {
             requiresAttunement: false,
             magicItemType: 'weapon',
             magicItemRarity: 'uncommon',
-            magicEffects: { attackBonus: 1, damageBonus: 1 } as any
-          }
-        ]
+            magicEffects: { attackBonus: 1, damageBonus: 1 } as any,
+          },
+        ],
       };
       const characterId = 'char-123';
 
@@ -105,14 +138,14 @@ describe('characterTransformations', () => {
     });
 
     it('should use default values for missing equipment properties', () => {
-       const character: Partial<Character> = {
+      const character: Partial<Character> = {
         inventory: [
           {
             itemId: 'Bread',
             quantity: 5,
-            equipped: false
-          }
-        ]
+            equipped: false,
+          },
+        ],
       };
       const result = transformEquipmentForStorage(character as Character, 'id');
       expect(result[0].is_magic).toBe(false);
@@ -126,9 +159,9 @@ describe('characterTransformations', () => {
       const character: Partial<Character> = {
         classLevels: [
           { classId: 'fighter', className: 'Fighter', level: 2, hitDie: 10, features: [] },
-          { classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] }
+          { classId: 'wizard', className: 'Wizard', level: 1, hitDie: 6, features: [] },
         ],
-        totalLevel: 3
+        totalLevel: 3,
       };
 
       const result = transformMulticlassingForStorage(character as Character);
@@ -145,10 +178,8 @@ describe('characterTransformations', () => {
 
     it('should transform multiclassing from storage', () => {
       const dbData = {
-        class_levels: JSON.stringify([
-          { classId: 'rogue', level: 3 }
-        ]),
-        total_level: 3
+        class_levels: JSON.stringify([{ classId: 'rogue', level: 3 }]),
+        total_level: 3,
       };
 
       const result = transformMulticlassingFromStorage(dbData);

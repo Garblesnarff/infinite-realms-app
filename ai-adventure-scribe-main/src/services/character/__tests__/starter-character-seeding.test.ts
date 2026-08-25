@@ -244,6 +244,24 @@ describe('starter-character-seeding', () => {
     expect(spells.cantrips.every((id) => id.length > 0)).toBe(true);
   });
 
+  it.each([
+    ['Cleric', 10],
+    ['Fighter', 12],
+  ])('stores level-1 %s HP from the shared hit die', (characterClass, expectedMaxHitPoints) => {
+    const seed = buildStarterCharacterSeed(
+      { ...clericTemplate, class: characterClass },
+      'campaign-id',
+    );
+
+    expect((seed.stats as { max_hit_points: number }).max_hit_points).toBe(expectedMaxHitPoints);
+  });
+
+  it('throws for an unsupported class instead of fabricating HP', () => {
+    expect(() =>
+      buildStarterCharacterSeed({ ...clericTemplate, class: 'Artificer' }, 'campaign-id'),
+    ).toThrow('Unsupported SRD class "Artificer"; refusing HP initialization.');
+  });
+
   it('sets both portrait fields and the server-facing spell/equipment fields', () => {
     const seed = buildStarterCharacterSeed(clericTemplate, 'campaign-id');
 

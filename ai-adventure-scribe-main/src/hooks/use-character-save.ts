@@ -179,6 +179,7 @@ export const useCharacterSave = (): {
         const statsData = transformAbilityScoresForStorage(
           character.abilityScores!,
           '00000000-0000-0000-0000-000000000000', // Temporary ID, will be replaced
+          character.class?.name,
         );
 
         // Transform equipment data if present
@@ -219,6 +220,7 @@ export const useCharacterSave = (): {
         const statsData = transformAbilityScoresForStorage(
           character.abilityScores!,
           characterData.id,
+          character.class?.name,
         );
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { computeArmorClass } from '../../../shared/armor-class';
+import { findSrdClass } from '../../../shared/srd-class-data';
 
 import type { CharacterClass } from '@/types/character';
 
@@ -119,6 +120,14 @@ export function getAbilityScores(template: StarterCharacterTemplateLike): Record
 
 function getModifier(score: number): number {
   return Math.floor((score - 10) / 2);
+}
+
+function getClassHitDie(className: string): number {
+  const classData = findSrdClass(className);
+  if (!classData) {
+    throw new Error(`Unsupported SRD class "${className}"; refusing HP initialization.`);
+  }
+  return classData.hitDie;
 }
 
 function findClass(className: string): CharacterClass | undefined {
@@ -336,7 +345,7 @@ export function buildStarterCharacterSeed(
   const languages = template.languages || [];
   const equipment = transformStarterEquipment(template.equipment || []);
   const inventoryItems = transformStarterInventory(template.equipment || []);
-  const hitPoints = 10 + getModifier(abilityScores.constitution);
+  const hitPoints = getClassHitDie(template.class) + getModifier(abilityScores.constitution);
 
   return {
     name: template.name,
