@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.11.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.0...v0.11.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **character:** render stored roster hover stats ([#1898](https://github.com/Garblesnarff/infinite-realms-production/issues/1898)) ([2b24d77](https://github.com/Garblesnarff/infinite-realms-production/commit/2b24d7709ad609b6ec2ef1728641ae5cbfb52b57))
+* **character:** write class-based level-1 HP ([#1893](https://github.com/Garblesnarff/infinite-realms-production/issues/1893)) ([91361ba](https://github.com/Garblesnarff/infinite-realms-production/commit/91361ba0f1a87dfdfa601e66f4ea4df74812291c))
+
 ## [0.11.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.10.4...v0.11.0) (2026-08-25)
 
 
