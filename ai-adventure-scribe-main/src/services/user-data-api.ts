@@ -194,7 +194,8 @@ export type ClientFailureKind =
   | 'combat_intent_failed'
   | 'stale_client_detected'
   | 'malformed_ws_frame'
-  | 'missing_starter_campaign_id';
+  | 'missing_starter_campaign_id'
+  | 'invalid_ability_score_key';
 
 export type NarrativeSceneStateResponse = {
   scene_state: string | null;

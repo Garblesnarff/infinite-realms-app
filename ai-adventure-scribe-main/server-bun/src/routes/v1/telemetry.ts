@@ -30,6 +30,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'stale_client_detected',
   'malformed_ws_frame',
   'missing_starter_campaign_id',
+  'invalid_ability_score_key',
 ] as const;
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 

@@ -1,14 +1,31 @@
+/* eslint-disable max-lines */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildStarterCharacterSeed,
   buildStarterSpellSeed,
+  getAbilityScores,
   transformStarterInventory,
   transformStarterEquipment,
 } from '../starter-character-seeding';
+
+import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
+
+vi.mock('@/lib/logger', () => ({
+  default: {
+    error: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    reportClientFailure: vi.fn(),
+  },
+}));
 
 const clericTemplate = {
   name: 'The Faithful',
@@ -30,7 +47,134 @@ const clericTemplate = {
   card_image_url: '/images/the-faithful-card.png',
 };
 
+const academyTemplates = [
+  {
+    name: 'The Apprentice',
+    race: 'Human',
+    class: 'Wizard',
+    background: 'Sage',
+    level: 1,
+    ability_scores: { STR: 8, DEX: 12, CON: 12, INT: 16, WIS: 12, CHA: 10 },
+    skills: ['Arcana', 'History', 'Investigation', 'Insight'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    name: 'The Kitchen Hand',
+    race: 'Halfling',
+    class: 'Rogue',
+    background: 'Urchin',
+    level: 1,
+    ability_scores: { STR: 8, DEX: 16, CON: 12, INT: 12, WIS: 10, CHA: 14 },
+    skills: ['Stealth', 'Sleight of Hand', 'Acrobatics', 'Perception'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    name: 'The Gourmand',
+    race: 'Dwarf',
+    class: 'Fighter',
+    background: 'Folk Hero',
+    level: 1,
+    ability_scores: { STR: 16, DEX: 12, CON: 16, INT: 8, WIS: 10, CHA: 10 },
+    skills: ['Athletics', 'Survival', 'Intimidation', 'Perception'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    name: 'The Herbalist',
+    race: 'Half-Elf',
+    class: 'Druid',
+    background: 'Hermit',
+    level: 1,
+    ability_scores: { STR: 10, DEX: 12, CON: 12, INT: 12, WIS: 16, CHA: 12 },
+    skills: ['Nature', 'Medicine', 'Survival', 'Perception'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    name: 'The Sous Chef',
+    race: 'Tiefling',
+    class: 'Sorcerer',
+    background: 'Entertainer',
+    level: 1,
+    ability_scores: { STR: 8, DEX: 12, CON: 14, INT: 10, WIS: 10, CHA: 16 },
+    skills: ['Arcana', 'Persuasion', 'Deception', 'Performance'],
+    languages: [],
+    equipment: [],
+  },
+] as const;
+
 describe('starter-character-seeding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(academyTemplates)(
+    'normalizes the real uppercase Academy template shape for $name',
+    (template) => {
+      const seed = buildStarterCharacterSeed(template, 'academy-of-arcane-gastronomy');
+
+      expect(seed.stats).toMatchObject({
+        strength: template.ability_scores.STR,
+        dexterity: template.ability_scores.DEX,
+        constitution: template.ability_scores.CON,
+        intelligence: template.ability_scores.INT,
+        wisdom: template.ability_scores.WIS,
+        charisma: template.ability_scores.CHA,
+      });
+      expect(seed.stats).not.toHaveProperty('STR');
+      expect(seed.stats).not.toHaveProperty('INT');
+    },
+  );
+
+  it('normalizes full ability names without regard to casing', () => {
+    expect(
+      getAbilityScores({
+        ...academyTemplates[0],
+        ability_scores: {
+          sTrEnGtH: 8,
+          DeXtErItY: 12,
+          CoNsTiTuTiOn: 12,
+          InTeLlIgEnCe: 16,
+          WiSdOm: 12,
+          ChArIsMa: 10,
+        },
+      }),
+    ).toEqual({
+      strength: 8,
+      dexterity: 12,
+      constitution: 12,
+      intelligence: 16,
+      wisdom: 12,
+      charisma: 10,
+    });
+  });
+
+  it('logs, reports telemetry, and throws for an unrecognized ability score key', () => {
+    const template = {
+      ...academyTemplates[0],
+      ability_scores: { ...academyTemplates[0].ability_scores, LUCK: 18 },
+    };
+
+    expect(() => buildStarterCharacterSeed(template, 'academy-of-arcane-gastronomy')).toThrow(
+      'Unrecognized ability score key "LUCK"',
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      '[StarterCharacterSeeding] Unrecognized ability score key',
+      expect.objectContaining({
+        templateName: 'The Apprentice',
+        key: 'LUCK',
+        keys: expect.arrayContaining(['STR', 'INT', 'LUCK']),
+      }),
+    );
+    expect(userDataApi.reportClientFailure).toHaveBeenCalledWith(
+      'invalid_ability_score_key',
+      undefined,
+      expect.stringContaining('LUCK'),
+    );
+  });
+
   it('transforms known equipment and preserves campaign items as trinket records', () => {
     const equipment = transformStarterEquipment([
       'mace',

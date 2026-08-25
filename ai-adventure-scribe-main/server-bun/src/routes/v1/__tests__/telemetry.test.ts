@@ -123,4 +123,14 @@ describe('POST /v1/telemetry/client-failure', () => {
     );
     expect(response.status).toBe(204);
   });
+
+  it('accepts invalid ability score key reports', async () => {
+    const response = await app.handle(
+      authedRequest({
+        kind: 'invalid_ability_score_key',
+        error: 'Unrecognized ability score key "LUCK" in starter template "The Apprentice".',
+      }),
+    );
+    expect(response.status).toBe(204);
+  });
 });
