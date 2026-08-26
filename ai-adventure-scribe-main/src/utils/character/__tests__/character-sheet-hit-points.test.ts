@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { calculateHitPoints } from '../basic-math';
@@ -6,7 +10,32 @@ import { transformCharacterData } from '../data-transformers';
 
 import type { Character } from '@/types/character';
 
+const testDirectory = dirname(fileURLToPath(import.meta.url));
+/*
+ * MulticlassManager is intentionally omitted: it is a mutation-preview surface, so its
+ * multiclass-aware formula must reflect add-class/level-up changes before stored HP catches up.
+ * Add every new existing-character display consumer here; the eventual stronger guard is an
+ * ESLint no-restricted-imports rule scoped to display directories.
+ */
+const EXISTING_CHARACTER_DISPLAY_CONSUMERS = [
+  '../../../features/game-session/components/game/CompactCharacterHeader.tsx',
+  '../../../features/game-session/components/game/StatsBar.tsx',
+  '../../../features/game-session/components/game/FloatingActionPanel.tsx',
+  '../../../features/game-session/components/game/overhaul/useOverhaulViewModel.ts',
+  '../../../features/character/components/sheet/CharacterSheetHeader.tsx',
+  '../../../features/character/components/sheet/tabs/MainTab.tsx',
+] as const;
+
 describe('getCharacterSheetHitPoints', () => {
+  it('keeps existing-character display consumers on the stored HP helper', () => {
+    for (const relativePath of EXISTING_CHARACTER_DISPLAY_CONSUMERS) {
+      const source = readFileSync(resolve(testDirectory, relativePath), 'utf8');
+
+      expect(source, relativePath).toContain('getCharacterSheetHitPoints');
+      expect(source, relativePath).not.toContain('calculateHitPoints');
+    }
+  });
+
   it('displays stored current and max HP when they disagree with preview math', () => {
     const character = transformCharacterData(
       {

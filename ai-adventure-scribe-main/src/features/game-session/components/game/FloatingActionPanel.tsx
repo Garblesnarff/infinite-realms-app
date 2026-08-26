@@ -8,6 +8,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCharacterStats } from '@/hooks/use-character-stats';
 import logger from '@/lib/logger';
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 interface FloatingActionPanelProps {
   isVisible: boolean;
@@ -28,19 +29,32 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
     // ⚡ Bolt: Use memoized character stats to avoid redundant D&D 5e calculations
     const stats = useCharacterStats(character);
 
+    const sheetHitPoints = useMemo(
+      () => (character ? getCharacterSheetHitPoints(character) : { current: 0, maximum: 0 }),
+      [character],
+    );
+
     const [isExpanded, setIsExpanded] = useState(false);
 
     // ⚡ Bolt: Memoize derived stats to ensure they only update when stats object changes
     const displayStats = useMemo(() => {
-      if (!stats) return { maxHp: 0, armorClass: 10, proficiency: 2 };
+      if (!stats) {
+        return {
+          currentHp: sheetHitPoints.current,
+          maxHp: sheetHitPoints.maximum,
+          armorClass: 10,
+          proficiency: 2,
+        };
+      }
       return {
-        maxHp: stats.hitPoints,
+        currentHp: sheetHitPoints.current,
+        maxHp: sheetHitPoints.maximum,
         armorClass: stats.armorClass,
         proficiency: stats.proficiencyBonus,
       };
-    }, [stats]);
+    }, [sheetHitPoints, stats]);
 
-    const { maxHp, armorClass, proficiency } = displayStats;
+    const { currentHp, maxHp, armorClass, proficiency } = displayStats;
 
     const handleQuickRoll = useCallback((type: string): void => {
       // This would integrate with your dice rolling system
@@ -133,11 +147,13 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
             >
               <div
                 role="group"
-                aria-label={`Hit Points: ${maxHp}`}
+                aria-label={`Hit Points: ${currentHp} out of ${maxHp}`}
                 className="p-2 rounded-lg bg-red-500/10 border border-red-400/20"
               >
                 <Heart aria-hidden="true" className="h-4 w-4 mx-auto text-red-400 mb-1" />
-                <div className="text-xs font-bold text-card-foreground">{maxHp}</div>
+                <div className="text-xs font-bold text-card-foreground">
+                  {currentHp}/{maxHp}
+                </div>
                 <div className="text-[10px] text-muted-foreground">HP</div>
               </div>
               <div

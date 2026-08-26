@@ -17,6 +17,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 const ABILITY_ORDER: { key: string; label: string }[] = [
@@ -79,7 +80,7 @@ const prettify = (id: string): string =>
 
 const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
 
-function buildCharacterSheet(character: Character | null): CharacterSheetVM {
+export function buildCharacterSheet(character: Character | null): CharacterSheetVM {
   const empty: CharacterSheetVM = {
     name: 'No Character',
     subtitle: '',
@@ -116,11 +117,7 @@ function buildCharacterSheet(character: Character | null): CharacterSheetVM {
   const level = character.level ?? 1;
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
   const xpMax = getExperienceForLevel(Math.min(20, level + 1)) || xpCurrent;
-  const hpMax = stats.hitPoints;
-  const hpCurrent = Math.min(
-    hpMax,
-    Math.max(0, character.hitPoints?.current ?? character.hitPoints?.maximum ?? hpMax),
-  );
+  const { current: hpCurrent, maximum: hpMax } = getCharacterSheetHitPoints(character);
 
   const abilityScores = ABILITY_ORDER.map((a) => {
     const score =

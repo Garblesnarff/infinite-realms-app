@@ -44,7 +44,8 @@ function calculateArmorClass(character: Character): number {
 
 export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ character }) => {
   const portraitUrl = character.image_url ?? character.avatar_url;
-  const { maximum: maxHitPoints } = getCharacterSheetHitPoints(character);
+  const { current: currentHitPoints, maximum: maxHitPoints } =
+    getCharacterSheetHitPoints(character);
 
   return (
     <IRPanel className="mb-6 p-4">
@@ -84,7 +85,9 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           <div className="text-center">
             <div className="flex items-center gap-1 text-red-600">
               <Heart className="w-4 h-4" />
-              <span className="font-bold">{maxHitPoints}</span>
+              <span className="font-bold">
+                {currentHitPoints}/{maxHitPoints}
+              </span>
             </div>
             <div className="text-xs text-muted-foreground">HP</div>
           </div>

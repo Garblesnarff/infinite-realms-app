@@ -53,8 +53,8 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    // HP: 10 + 2 = 12
-    expect(getStatValue('HP')).toBe('12');
+    // HP fallback: 10 + 2 = 12
+    expect(getStatValue('HP')).toBe('12/12');
 
     // AC: 10 + 3 = 13
     expect(getStatValue('AC')).toBe('13');
@@ -64,6 +64,34 @@ describe('StatsBar', () => {
 
     // INIT: +3
     expect(getStatValue('INIT')).toBe('+3');
+  });
+
+  it('displays stored current/max HP when it differs from preview math', () => {
+    const mockCharacter = {
+      level: 1,
+      class: { name: 'Fighter', hitDie: 10 },
+      abilityScores: {
+        strength: { modifier: 0 },
+        dexterity: { modifier: 3 },
+        constitution: { modifier: 2 },
+        intelligence: { modifier: 0 },
+        wisdom: { modifier: 0 },
+        charisma: { modifier: 0 },
+      },
+      character_stats: {
+        current_hit_points: 7,
+        max_hit_points: 20,
+      },
+    };
+
+    (useCharacter as any).mockReturnValue({
+      state: { character: mockCharacter },
+    });
+
+    render(<StatsBar />);
+
+    // Preview math would be 12; the stored sheet values are authoritative.
+    expect(getStatValue('HP')).toBe('7/20');
   });
 
   it('displays negative initiative correctly', () => {
@@ -110,8 +138,8 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    // HP: 12 + 3 = 15
-    expect(getStatValue('HP')).toBe('15');
+    // HP fallback: 12 + 3 = 15
+    expect(getStatValue('HP')).toBe('15/15');
     // AC: 10 + 2 (DEX) + 3 (CON) = 15
     expect(getStatValue('AC')).toBe('15');
   });
@@ -142,7 +170,7 @@ describe('StatsBar', () => {
   });
 
   it('verifies fixed HP calculation for level 2', () => {
-    // Standard 5e (and calculateAllCharacterStats): (10 + 2) + (6 + 2) = 20
+    // Standard 5e fallback: (10 + 2) + (6 + 2) = 20
     const mockCharacter = {
       level: 2,
       class: { name: 'Fighter', hitDie: 10 },
@@ -162,7 +190,7 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    expect(getStatValue('HP')).toBe('20');
+    expect(getStatValue('HP')).toBe('20/20');
   });
 
   it('verifies fixed AC calculation with shield', () => {

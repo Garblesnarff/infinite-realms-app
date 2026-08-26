@@ -421,6 +421,23 @@ describe('character-calculations', () => {
       expect(stats.speed).toBe(30);
     });
 
+    it('should preserve stored maximum HP for an existing character', () => {
+      const stats = calculateAllCharacterStats({
+        level: 5,
+        class: { name: 'Fighter', hitDie: 10 } as any,
+        abilityScores: {
+          constitution: { modifier: 2 },
+          dexterity: { modifier: 0 },
+        } as any,
+        character_stats: {
+          current_hit_points: 7,
+          max_hit_points: 20,
+        },
+      } as Character);
+
+      expect(stats.hitPoints).toBe(20);
+    });
+
     it('should use subrace speed if available', () => {
       const character: Partial<Character> = {
         race: { speed: 30 } as any,

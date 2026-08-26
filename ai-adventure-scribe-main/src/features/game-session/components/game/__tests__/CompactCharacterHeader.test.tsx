@@ -113,6 +113,34 @@ describe('CompactCharacterHeader', () => {
     expect(screen.getByLabelText('INT: -1')).toBeInTheDocument();
   });
 
+  it('renders stored current/max HP when it differs from preview math', async () => {
+    const mockCharacter = {
+      id: 'char-stored-hp',
+      name: 'The Apprentice',
+      level: 5,
+      race: { name: 'Human' },
+      class: { name: 'Barbarian', hitDie: 12 },
+      abilityScores: {
+        dexterity: { modifier: 2 },
+        constitution: { modifier: 3 },
+      },
+      character_stats: {
+        current_hit_points: 7,
+        max_hit_points: 20,
+      },
+    };
+
+    (useCharacter as any).mockReturnValue({
+      state: { character: mockCharacter },
+    });
+
+    render(<CompactCharacterHeader />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Hit Points: 7 out of 20')).toBeInTheDocument();
+    });
+  });
+
   it('calculates Monk Unarmored Defense correctly (no shield)', () => {
     const mockCharacter = {
       id: 'char-monk',

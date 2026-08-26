@@ -40,6 +40,10 @@ describe('FloatingActionPanel', () => {
     level: 5,
     race: { name: 'Dwarf' },
     class: { name: 'Fighter' },
+    character_stats: {
+      current_hit_points: 31,
+      max_hit_points: 45,
+    },
   };
 
   const mockStats = {
@@ -102,7 +106,7 @@ describe('FloatingActionPanel', () => {
     expect(screen.getByText('Dwarf Fighter')).toBeDefined();
 
     // Verify stats
-    expect(screen.getByLabelText(/hit points: 45/i)).toBeDefined();
+    expect(screen.getByLabelText(/hit points: 31 out of 45/i)).toBeDefined();
     expect(screen.getByLabelText(/armor class: 18/i)).toBeDefined();
     expect(screen.getByLabelText(/proficiency bonus: \+3/i)).toBeDefined();
   });
@@ -177,8 +181,8 @@ describe('FloatingActionPanel', () => {
       <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
     );
 
-    // Should use default values: maxHp: 0, armorClass: 10, proficiency: 2
-    expect(screen.getByLabelText(/hit points: 0/i)).toBeDefined();
+    // HP remains on the stored sheet while derived stat calculations are absent.
+    expect(screen.getByLabelText(/hit points: 31 out of 45/i)).toBeDefined();
     expect(screen.getByLabelText(/armor class: 10/i)).toBeDefined();
     expect(screen.getByLabelText(/proficiency bonus: \+2/i)).toBeDefined();
   });

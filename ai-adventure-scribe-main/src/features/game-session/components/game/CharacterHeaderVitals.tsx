@@ -5,6 +5,7 @@ import type { CombatHP } from './use-combat-hp';
 
 interface CharacterHeaderVitalsProps {
   combatHP: CombatHP | null;
+  currentHp: number;
   maxHp: number;
   armorClass: number;
   proficiency: number;
@@ -17,6 +18,7 @@ interface CharacterHeaderVitalsProps {
  */
 export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = React.memo(({
   combatHP,
+  currentHp,
   maxHp,
   armorClass,
   proficiency,
@@ -27,7 +29,7 @@ export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = React
       aria-label={
         combatHP
           ? `Hit Points: ${combatHP.current_hp} out of ${combatHP.max_hp}${combatHP.temp_hp > 0 ? ` plus ${combatHP.temp_hp} temporary` : ''}`
-          : `Hit Points: ${maxHp}`
+          : `Hit Points: ${currentHp} out of ${maxHp}`
       }
     >
       {combatHP ? (
@@ -79,7 +81,7 @@ export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = React
           <span className="font-semibold" aria-hidden="true">
             HP:
           </span>
-          <span aria-hidden="true">{maxHp}</span>
+          <span aria-hidden="true">{currentHp}/{maxHp}</span>
         </>
       )}
     </div>

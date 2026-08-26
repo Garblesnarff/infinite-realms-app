@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 const DEFAULT_BACKGROUND_IMAGE = new URL('/card-background.jpeg', import.meta.url).href;
@@ -28,12 +29,9 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
   const { state: characterState } = useCharacter();
 
   // ⚡ Bolt: Wrap character initialization in useMemo to avoid re-calculating dependency objects
-  const character = useMemo(
-    () => (characterState.character || {}) as Record<string, unknown>,
-    [characterState.character],
-  );
+  const character = characterState.character;
 
-  const combatHP = useCombatHP(character?.id as string | undefined);
+  const combatHP = useCombatHP(character?.id);
 
   // Debug logging
   useEffect(() => {
@@ -48,17 +46,21 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
 
   // ⚡ Bolt: Memoize all derived stats to prevent recalculation on every render.
   // Using centralized calculateAllCharacterStats for consistency and correctness.
-  const stats = useMemo(() => {
-    if (!characterState.character) return null;
+  const sheetHitPoints = useMemo(() => {
+    if (!character) return null;
+    return getCharacterSheetHitPoints(character);
+  }, [character]);
 
-    const charStats = calculateAllCharacterStats(characterState.character);
+  const stats = useMemo(() => {
+    if (!character) return null;
+
+    const charStats = calculateAllCharacterStats(character);
 
     return {
-      maxHp: charStats.hitPoints,
       armorClass: charStats.armorClass,
       proficiency: charStats.proficiencyBonus,
     };
-  }, [characterState.character]);
+  }, [character]);
 
   const handleShortRest = useCallback(() => {
     logger.info('Short rest initiated');
@@ -69,11 +71,11 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
   }, []);
 
   const backgroundImage = useMemo(
-    () => character.background_image || DEFAULT_BACKGROUND_IMAGE,
-    [character.background_image],
+    () => character?.background_image || DEFAULT_BACKGROUND_IMAGE,
+    [character?.background_image],
   );
 
-  if (!characterState.character) {
+  if (!character || !sheetHitPoints) {
     return (
       <Card className="p-4 text-center text-muted-foreground">
         <p>No character loaded</p>
@@ -81,7 +83,8 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
     );
   }
 
-  const { maxHp, armorClass, proficiency } = stats!;
+  const { current: currentHp, maximum: maxHp } = sheetHitPoints;
+  const { armorClass, proficiency } = stats!;
 
   return (
     <Card
@@ -126,6 +129,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
         {/* HP and AC */}
         <CharacterHeaderVitals
           combatHP={combatHP}
+          currentHp={currentHp}
           maxHp={maxHp}
           armorClass={armorClass}
           proficiency={proficiency}

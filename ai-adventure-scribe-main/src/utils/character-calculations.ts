@@ -19,6 +19,7 @@ import {
   calculateArmorClass,
   calculateCarryingCapacity,
 } from '@/utils/character/basic-math';
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 /**
  * Comprehensive D&D 5e character calculations utility
@@ -291,7 +292,9 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
 
   return {
     proficiencyBonus: pb,
-    hitPoints: calculateHitPoints(character),
+    // Existing-character displays must honor server-authoritative character_stats;
+    // the helper falls back to preview math only when no stored HP exists.
+    hitPoints: getCharacterSheetHitPoints(character).maximum,
     hitDie: `1d${character.class?.hitDie || 8}`,
     armorClass: calculateArmorClass(character),
     initiative: character.abilityScores?.dexterity?.modifier || 0,
