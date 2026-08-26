@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.11.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.3...v0.11.4) (2026-08-26)
+
+
+### Bug Fixes
+
+* **character:** unify starter ability score normalization ([#1919](https://github.com/Garblesnarff/infinite-realms-production/issues/1919)) ([7239d38](https://github.com/Garblesnarff/infinite-realms-production/commit/7239d382c6545b8dc9bbf4507b867e1d78ef9a8d))
+* **combat:** hide player-facing tracker controls ([#1923](https://github.com/Garblesnarff/infinite-realms-production/issues/1923)) ([3b7e4a5](https://github.com/Garblesnarff/infinite-realms-production/commit/3b7e4a5b564128682b87ae7106e6c3ef54012693))
+* **game-ui:** use stored HP for existing-character displays ([#1922](https://github.com/Garblesnarff/infinite-realms-production/issues/1922)) ([e5847a6](https://github.com/Garblesnarff/infinite-realms-production/commit/e5847a6dd2d22d75309e0f1a6af9efda6ec3d4b8))
+
 ## [0.11.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.2...v0.11.3) (2026-08-26)
 
 
