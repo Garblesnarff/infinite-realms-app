@@ -11,6 +11,7 @@ import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 
 import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
+import { abilityModifier } from './combat-rules.js';
 import { resolveCombatantStats } from './combatant-stat-resolution.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
 import { seatParticipantArmorClass } from './participant-armor-class.js';
@@ -188,14 +189,21 @@ export class CombatEncounterService {
         const dexterity = Number(
           character?.stats?.dexterity ?? npcStats.dexterity ?? npcStats.dex ?? 10,
         );
+        const dexterityInitiativeModifier = Number.isFinite(dexterity)
+          ? abilityModifier(dexterity)
+          : 0;
         const initiativeModifier = Number(
-          character?.stats?.initiativeBonus ??
-            npcStats.initiativeModifier ??
-            monster?.initiativeModifier ??
-            // The client already computed the PC's DEX modifier; honour it rather than
-            // silently zeroing initiative when no character_stats row exists.
-            (Number.isFinite(input.initiativeModifier) ? input.initiativeModifier : undefined) ??
-            Math.floor((dexterity - 10) / 2),
+          input.characterId
+            ? // Player initiative is server-authoritative: derive it from the same joined
+              // character_stats row that supplies AC and HP. The client field is intentionally
+              // not a fallback because a caller can otherwise alter turn order.
+              dexterityInitiativeModifier
+            : (npcStats.initiativeModifier ??
+                monster?.initiativeModifier ??
+                (Number.isFinite(input.initiativeModifier)
+                  ? input.initiativeModifier
+                  : undefined) ??
+                dexterityInitiativeModifier),
         );
         const armorClass = seatParticipantArmorClass({
           characterArmorClass: character?.stats?.armorClass ?? null,
