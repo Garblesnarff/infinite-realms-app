@@ -85,6 +85,127 @@ jobs:
       - run: bun test --isolate
         working-directory: ai-adventure-scribe-main/server-bun
 
+  # The real-database suites, which `server-vitest` above cannot run.
+  #
+  # `bun test` there has no DATABASE_URL, so `hasRealDb` in
+  # server-bun/src/services/__tests__/fixtures/real-db.ts is false and every
+  # `*.real-db.test.ts` block degrades to `describe.skip` -- silently, on every
+  # run since they were written (#1906). A green server-vitest badge has been
+  # overstating what was tested: #1904's DB-safety guard, the combat engine's
+  # write paths, and the Drizzle insert-select class that the mocked-`db` unit
+  # tests are structurally blind to have none of them ever executed in CI.
+  #
+  # Two things this job does that are less obvious than they look:
+  #
+  #   1. It provisions schema. The dedicated CI Postgres on 127.0.0.1:55432 is
+  #      an empty tmpfs instance -- db-guards.yml's migration-replay creates a
+  #      throwaway database and drops it again, leaving nothing behind, and a
+  #      container restart wipes it regardless. So the replay runs here too,
+  #      with KEEP_TEST_DB=1, and the suites point at what it leaves.
+  #
+  #   2. It sets DATABASE_URL, not just TEST_DATABASE_URL. The suites import the
+  #      real services, which import db/client.ts, which THROWS at module load
+  #      when DATABASE_URL is unset. Setting only TEST_DATABASE_URL un-skips the
+  #      blocks and then dies before the first assertion. Both must be set, and
+  #      to the same scratch database, or the fixtures write to one database and
+  #      assert against another. #1904's guard allowlists exactly
+  #      127.0.0.1:55432, which this satisfies.
+  #
+  # The file list is explicit rather than a glob, and that is deliberate. Two
+  # suites do NOT pass against a real database on main today --
+  # solo-survivability (7 failures) and monster-attacks (2, on a genuine
+  # participant_type CHECK violation that also reproduces in production) -- and
+  # a whole-suite `bun test` with a database configured fails 54 tests, because
+  # `mock.module('.../db/client', () => ({ db: {} }))` in the route smoke tests
+  # leaks across files and hands the real-DB suites an empty `db`. Enabling the
+  # honest subset now beats waiting on all three. Add files here as they harden;
+  # the tail of that work is tracked on #1906.
+  server-real-db:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Check psql and the CI database are available
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            echo "::error::psql not on PATH on the runner host. Install postgresql-client."
+            exit 1
+          fi
+          if ! pg_isready -h 127.0.0.1 -p 55432 -U postgres; then
+            echo "::error::CI PostgreSQL is not accepting connections on 127.0.0.1:55432."
+            echo "On the runner host: docker start ci-postgres"
+            echo "See docs/ci-self-hosted-runner.md."
+            exit 1
+          fi
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
+          restore-keys: |
+            bun-server-${{ runner.os }}-
+      # Three installs, matching server-vitest plus the app workspace: the
+      # suites import db/schema/*.ts, whose drizzle-orm resolves out of
+      # ai-adventure-scribe-main/node_modules.
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: ai-adventure-scribe-main
+      - run: bun install --frozen-lockfile
+        working-directory: ai-adventure-scribe-main/server-bun
+      - name: Replay migrations into a scratch database
+        id: provision
+        working-directory: ai-adventure-scribe-main
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/postgres
+          KEEP_TEST_DB: '1'
+        run: |
+          set -o pipefail
+          bash scripts/test-migrations.sh 2>&1 | tee /tmp/replay-$GITHUB_RUN_ID.log
+          name="$(grep -o 'test_migrations_[0-9_]*' /tmp/replay-$GITHUB_RUN_ID.log | head -1)"
+          if [ -z "$name" ]; then
+            echo "::error::could not determine the scratch database name from the replay output."
+            exit 1
+          fi
+          echo "db=$name" >> "$GITHUB_OUTPUT"
+      - name: Run the real-database suites
+        working-directory: ai-adventure-scribe-main/server-bun
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/${{ steps.provision.outputs.db }}
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/${{ steps.provision.outputs.db }}
+        # The skip is the whole bug: a real-DB block whose database is missing
+        # reports `0 fail` and exits 0. A job that can silently skip the tests
+        # it exists to run is the thing #1906 is about, so assert out loud that
+        # nothing skipped rather than trusting the exit code.
+        run: |
+          set -o pipefail
+          bun test \
+            src/services/__tests__/attack-telemetry.real-db.test.ts \
+            src/services/__tests__/combat-hp-write-through.real-db.test.ts \
+            src/services/__tests__/encounter-ending-reason.real-db.test.ts \
+            src/services/__tests__/encounter-lifecycle.real-db.test.ts \
+            src/services/__tests__/npc-turn-auto-advance.real-db.test.ts \
+            src/services/__tests__/turn-cycle-tolerance.real-db.test.ts \
+            src/services/__tests__/insert-select-writes-land.test.ts \
+            src/services/__tests__/combat-damage-log-resilience.test.ts \
+            src/services/__tests__/combat-initiative-modifier.real-db.test.ts \
+            2>&1 | tee "/tmp/real-db-$GITHUB_RUN_ID.log"
+          if grep -qE '^ *[1-9][0-9]* skip' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
+            echo "::error::a real-database suite SKIPPED. The database env did not reach the tests."
+            exit 1
+          fi
+          if ! grep -qE '^ *[1-9][0-9]* pass' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
+            echo "::error::no tests reported as passing -- the suites did not run."
+            exit 1
+          fi
+      - name: Drop the scratch database
+        if: always()
+        run: |
+          rm -f "/tmp/replay-$GITHUB_RUN_ID.log" "/tmp/real-db-$GITHUB_RUN_ID.log"
+          db="${{ steps.provision.outputs.db }}"
+          [ -n "$db" ] || exit 0
+          PGPASSWORD=postgres psql -X -q -h 127.0.0.1 -p 55432 -U postgres -d postgres \
+            -c "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE);" || true
+
   security-lint:
     runs-on: self-hosted
     steps:
