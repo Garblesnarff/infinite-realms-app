@@ -57,7 +57,29 @@ A wrongly-closed child is only recoverable if someone notices. Twice now, nobody
 
 ## 7. Board discipline — issue #1855 is the control room
 
-Any session that **starts, finishes, or blocks** a work item must **edit the #1855 body** to reflect it before ending: move items between sections, update status, and refresh the `Last updated` line.
+**Only the board maintainer edits the #1855 body.** Other sessions do not edit it, and do not comment on it.
 
-- Decisions only Rob can make get moved to the **NEEDS ROB** section, and the corresponding issue gets the `needs-rob` label.
-- **Never comment on #1855 — edit the body.** Comments are not the board; a board that has to be reconstructed by reading a comment thread is not a board.
+- **Report status where the work is**: in your own PR description, or on the issue you are working. Rob reads #1855 and the `needs-rob` label; the maintainer folds your PR/issue updates onto the board.
+- **Decisions only Rob can make** go on the issue with the `needs-rob` label. The maintainer lifts them into the board's NEEDS ROB section.
+- **Never comment on #1855.** Comments are not the board. The one sanctioned exception is a full-body archive snapshot taken immediately before a restructure.
+
+### The edit procedure (maintainer only)
+
+Never retype the body into a `--body` flag, and never edit it in the web UI. Both have lost content: on 2026-08-24 an in-place retype blanked the body and reconstructed it from memory, destroying NEEDS ROB item 2 (recovered 2026-08-26 from `userContentEdits`). Always round-trip through a file:
+
+```bash
+gh issue view 1855 --json body --jq .body > /tmp/board.md
+$EDITOR /tmp/board.md
+gh issue edit 1855 --body-file /tmp/board.md
+```
+
+To recover a lost revision:
+
+```bash
+gh api graphql -f query='query { repository(owner:"Garblesnarff", name:"infinite-realms-production") {
+  issue(number:1855) { userContentEdits(last:100) { nodes { editedAt editor { login } diff } } } } }'
+```
+
+### Board shape
+
+Keep the body **under 8k characters**, one line per item, **15 words maximum**, each line leading with its issue or PR link. All detail lives in the linked issue. Sections, in order: **NEEDS ROB**, **IN FLIGHT**, **SPECCED**, **STANDING WARNINGS**, **RECENTLY SHIPPED** (last 7 days, then dropped). A board that does not fit on a screen stops being read, and a board that can only be edited by a full retype gets corrupted.
