@@ -12,10 +12,12 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     listStarterCharacterTemplates: vi.fn(),
     getStarterCharacterTemplate: vi.fn(),
+    reportClientFailure: vi.fn(),
   },
 }));
 
 import {
+  mapTemplateRow,
   useStarterCharacterTemplates,
   useStarterCharacterTemplate,
 } from '../use-starter-character-templates';
@@ -139,8 +141,24 @@ describe('useStarterCharacterTemplates', () => {
     expect(result.current.error?.message).toBe('Failed to fetch character templates');
   });
 
-  it('should provide default values for missing data', async () => {
+  it('skips malformed rows while retaining valid templates', async () => {
     const mockData = [
+      {
+        id: 'valid',
+        starter_campaign_id: mockCampaignId,
+        template_key: 'fighter',
+        name: 'Valid Fighter',
+        race: 'Human',
+        class: 'Fighter',
+        ability_scores: {
+          strength: 16,
+          dexterity: 14,
+          constitution: 15,
+          intelligence: 10,
+          wisdom: 12,
+          charisma: 14,
+        },
+      },
       {
         id: '2',
         starter_campaign_id: mockCampaignId,
@@ -159,10 +177,43 @@ describe('useStarterCharacterTemplates', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    const template = result.current.templates[0];
-    expect(template.abilityScores.strength).toBe(10);
-    expect(template.personality.traits).toEqual([]);
-    expect(template.level).toBe(1);
+    expect(result.current.templates).toHaveLength(1);
+    expect(result.current.templates[0].name).toBe('Valid Fighter');
+    expect(result.current.error).toBeNull();
+    expect(userDataApi.reportClientFailure).toHaveBeenCalledTimes(1);
+    expect(userDataApi.reportClientFailure).toHaveBeenCalledWith(
+      'invalid_ability_score_key',
+      undefined,
+      expect.stringContaining('Missing ability score key "strength"'),
+    );
+  });
+
+  it('maps the same uppercase template shape as the starter seeder', () => {
+    const row = {
+      name: 'The Apprentice',
+      class: 'Wizard',
+      ability_scores: { STR: 8, DEX: 12, CON: 12, INT: 16, WIS: 12, CHA: 10 },
+    };
+
+    expect(mapTemplateRow(row).abilityScores).toEqual({
+      strength: 8,
+      dexterity: 12,
+      constitution: 12,
+      intelligence: 16,
+      wisdom: 12,
+      charisma: 10,
+    });
+  });
+
+  it('refuses an unknown-key template loudly', () => {
+    expect(() =>
+      mapTemplateRow({ name: 'Broken', class: 'Wizard', ability_scores: { LUCK: 18 } }),
+    ).toThrow('Unrecognized ability score key "LUCK"');
+    expect(userDataApi.reportClientFailure).toHaveBeenCalledWith(
+      'invalid_ability_score_key',
+      undefined,
+      expect.stringContaining('LUCK'),
+    );
   });
 });
 
@@ -179,6 +230,14 @@ describe('useStarterCharacterTemplate', () => {
       name: 'Legolas',
       race: 'Elf',
       class: 'Ranger',
+      ability_scores: {
+        strength: 10,
+        dexterity: 16,
+        constitution: 12,
+        intelligence: 10,
+        wisdom: 14,
+        charisma: 10,
+      },
     };
 
     vi.mocked(userDataApi.getStarterCharacterTemplate).mockResolvedValueOnce(mockData);

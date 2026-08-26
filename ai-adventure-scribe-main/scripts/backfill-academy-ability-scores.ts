@@ -6,9 +6,9 @@
  * defaults even though their source template carries authored scores.
  *
  * Discovery is deliberately relationship-based: a character must be linked to a starter session,
- * match that campaign's source template by name and class, have six stored 10s, and have a source
- * template with at least one non-default score. This scans every starter campaign; the historical
- * Academy count is only an operator warning, never a scope filter.
+ * match that campaign's source template by name and class, and have stored scores that diverge
+ * from the source template. This scans every starter campaign; the historical Academy count is
+ * only an operator warning, never a scope filter.
  *
  * The command is manual and dry-run by default. Dry-run prints the complete old -> new row for
  * scores, AC, and level-1 HP. `--apply` requires DATABASE_URL and updates all derived fields for
@@ -176,10 +176,6 @@ function scoresEqual(left: AbilityScores, right: AbilityScores): boolean {
   return ABILITY_SCORE_NAMES.every((name) => left[name] === right[name]);
 }
 
-function isDefaultScores(scores: AbilityScores): boolean {
-  return ABILITY_SCORE_NAMES.every((name) => scores[name] === 10);
-}
-
 function formatScores(scores: AbilityScores): string {
   return ABILITY_SCORE_NAMES.map((name) => `${name}=${scores[name]}`).join(', ');
 }
@@ -201,8 +197,8 @@ function targetKey(campaignId: string, templateKey: string): string {
 }
 
 /**
- * Find every safe candidate across starter campaigns. The all-10 and non-default-template checks
- * are applied here so widening the scan cannot turn unrelated hand-built rows into repairs.
+ * Find every safe candidate across starter campaigns by the authoritative template relationship.
+ * The score divergence check prevents unrelated hand-built rows from entering the repair.
  */
 export function findAffectedCharacters(
   sessions: StarterSessionRow[],
@@ -219,8 +215,7 @@ export function findAffectedCharacters(
 
     const character = charactersById.get(session.character_id);
     const characterStats = statsByCharacterId.get(session.character_id);
-    if (!character || !characterStats || !isDefaultScores(scoresFromStats(characterStats)))
-      continue;
+    if (!character || !characterStats) continue;
 
     const template = templates.find(
       (candidate) =>
@@ -228,7 +223,8 @@ export function findAffectedCharacters(
         candidate.name === character.name &&
         sameClass(character.class, candidate.class),
     );
-    if (!template || isDefaultScores(scoresFromTemplate(template))) continue;
+    if (!template || scoresEqual(scoresFromStats(characterStats), scoresFromTemplate(template)))
+      continue;
 
     const target = {
       characterId: session.character_id,
@@ -320,14 +316,9 @@ export function planAbilityScoreBackfill(
 
     const previous = scoresFromStats(stats);
     const abilityScores = scoresFromTemplate(template);
-    if (!isDefaultScores(previous)) {
+    if (scoresEqual(previous, abilityScores)) {
       throw new Error(
-        `Target ${target.characterId} no longer has the known six-10 defect (${formatScores(previous)}); refusing repair.`,
-      );
-    }
-    if (isDefaultScores(abilityScores)) {
-      throw new Error(
-        `Starter source template ${target.templateKey} carries only default scores; refusing repair.`,
+        `Target ${target.characterId} no longer diverges from its source template; refusing repair.`,
       );
     }
     if (stats.max_hit_points === null || stats.current_hit_points === null) {

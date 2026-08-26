@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import { normalizeAbilityScores } from './ability-score-normalization';
 import { computeArmorClass } from '../../../shared/armor-class';
 import { findSrdClass } from '../../../shared/srd-class-data';
 
@@ -12,8 +13,6 @@ import {
   getSpellSlotsByLevel,
 } from '@/data/spellcastingFeatures';
 import { getClassSpells } from '@/data/spells/api';
-import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
 import { getSpellcastingInfo } from '@/utils/spell-validation';
 
 export interface StarterCharacterTemplateLike {
@@ -45,32 +44,6 @@ export type CreateStarterCharacter = (
   payload: StarterCharacterCreatePayload,
 ) => Promise<{ id: string }>;
 
-const DEFAULT_ABILITY_SCORES = {
-  strength: 10,
-  dexterity: 10,
-  constitution: 10,
-  intelligence: 10,
-  wisdom: 10,
-  charisma: 10,
-};
-
-type AbilityScoreName = keyof typeof DEFAULT_ABILITY_SCORES;
-
-const ABILITY_SCORE_KEY_ALIASES: Record<string, AbilityScoreName> = {
-  strength: 'strength',
-  str: 'strength',
-  dexterity: 'dexterity',
-  dex: 'dexterity',
-  constitution: 'constitution',
-  con: 'constitution',
-  intelligence: 'intelligence',
-  int: 'intelligence',
-  wisdom: 'wisdom',
-  wis: 'wisdom',
-  charisma: 'charisma',
-  cha: 'charisma',
-};
-
 export interface StarterTemplateEquipment {
   name: string;
   description?: string | null;
@@ -87,35 +60,10 @@ function getTemplateValue<T>(
 }
 
 export function getAbilityScores(template: StarterCharacterTemplateLike): Record<string, number> {
-  const rawAbilityScores =
-    getTemplateValue<Record<string, number>>(template, 'abilityScores', 'ability_scores') || {};
-  const abilityScores: Record<string, number> = { ...DEFAULT_ABILITY_SCORES };
-
-  for (const [rawKey, value] of Object.entries(rawAbilityScores)) {
-    const lookupKey = rawKey.trim().toLowerCase();
-    const normalizedKey = Object.prototype.hasOwnProperty.call(ABILITY_SCORE_KEY_ALIASES, lookupKey)
-      ? ABILITY_SCORE_KEY_ALIASES[lookupKey]
-      : undefined;
-    if (!normalizedKey) {
-      const message = `Unrecognized ability score key "${rawKey}" in starter template "${template.name}".`;
-      logger.error('[StarterCharacterSeeding] Unrecognized ability score key', {
-        templateName: template.name,
-        templateClass: template.class,
-        key: rawKey,
-        keys: Object.keys(rawAbilityScores),
-      });
-      userDataApi.reportClientFailure(
-        'invalid_ability_score_key',
-        undefined,
-        `${message} keys=${Object.keys(rawAbilityScores).join(',')}`,
-      );
-      throw new Error(message);
-    }
-
-    abilityScores[normalizedKey] = value;
-  }
-
-  return abilityScores;
+  return normalizeAbilityScores(getTemplateValue(template, 'abilityScores', 'ability_scores'), {
+    templateName: template.name,
+    templateClass: template.class,
+  });
 }
 
 function getModifier(score: number): number {

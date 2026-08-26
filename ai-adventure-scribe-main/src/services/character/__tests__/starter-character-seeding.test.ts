@@ -12,6 +12,9 @@ import {
   transformStarterEquipment,
 } from '../starter-character-seeding';
 
+import type { StarterCharacterTemplateLike } from '../starter-character-seeding';
+
+import { mapTemplateRow } from '@/hooks/use-starter-character-templates';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -128,6 +131,20 @@ describe('starter-character-seeding', () => {
     },
   );
 
+  it('produces identical seeded ability scores from both template entry paths', () => {
+    const rawTemplate = academyTemplates[0] as unknown as StarterCharacterTemplateLike;
+    const mappedTemplate = mapTemplateRow({
+      ...rawTemplate,
+      id: 'template-1',
+      starter_campaign_id: 'academy-of-arcane-gastronomy',
+      template_key: 'the-apprentice',
+    });
+
+    expect(buildStarterCharacterSeed(rawTemplate, 'academy').stats).toMatchObject(
+      buildStarterCharacterSeed(mappedTemplate, 'academy').stats as Record<string, unknown>,
+    );
+  });
+
   it('normalizes full ability names without regard to casing', () => {
     expect(
       getAbilityScores({
@@ -161,7 +178,7 @@ describe('starter-character-seeding', () => {
       'Unrecognized ability score key "LUCK"',
     );
     expect(logger.error).toHaveBeenCalledWith(
-      '[StarterCharacterSeeding] Unrecognized ability score key',
+      '[AbilityScoreNormalization] Invalid starter ability scores',
       expect.objectContaining({
         templateName: 'The Apprentice',
         key: 'LUCK',

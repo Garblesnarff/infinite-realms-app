@@ -125,7 +125,7 @@ const BASE_INPUT = {
 };
 
 describe('starter ability-score backfill discovery', () => {
-  it('scans every starter campaign but keeps the all-10/non-default-template guard', () => {
+  it('scans every starter campaign by template-vs-character score divergence', () => {
     const targets = findAffectedCharacters(SESSIONS, CHARACTERS, STATS, TEMPLATES);
 
     expect(targets).toEqual([
@@ -138,6 +138,19 @@ describe('starter ability-score backfill discovery', () => {
       },
     ]);
     expect(targets).toHaveLength(EXPECTED_AFFECTED_CHARACTER_COUNT);
+  });
+
+  it('repairs a divergent non-default character, not only six stored 10s', () => {
+    const partiallyDivergent = STATS.map((row) =>
+      row.character_id === 'apprentice-1' ? { ...row, strength: 8, intelligence: 10 } : row,
+    );
+    const targets = findAffectedCharacters(SESSIONS, CHARACTERS, partiallyDivergent, TEMPLATES);
+
+    expect(targets).toContainEqual({
+      characterId: 'apprentice-1',
+      starterCampaignId: 'academy',
+      templateKey: 'the-apprentice',
+    });
   });
 });
 

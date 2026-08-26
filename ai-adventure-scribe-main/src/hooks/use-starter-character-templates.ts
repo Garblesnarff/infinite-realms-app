@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
 
+import { normalizeAbilityScores } from '@/services/character/ability-score-normalization';
 import { userDataApi } from '@/services/user-data-api';
 
 export interface StarterCharacterTemplate {
@@ -56,8 +57,11 @@ interface UseStarterCharacterTemplatesResult {
 /**
  * Map database row to StarterCharacterTemplate interface
  */
-function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate {
-  const abilityScores = (row.ability_scores as Record<string, number>) || {};
+export function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate {
+  const abilityScores = normalizeAbilityScores(row.ability_scores, {
+    templateName: row.name as string,
+    templateClass: row.class as string,
+  });
   const personality = (row.personality as Record<string, string[]>) || {};
 
   return {
@@ -71,14 +75,7 @@ function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate 
     class: row.class as string,
     background: row.background as string | null,
     level: (row.level as number) || 1,
-    abilityScores: {
-      strength: abilityScores.strength || 10,
-      dexterity: abilityScores.dexterity || 10,
-      constitution: abilityScores.constitution || 10,
-      intelligence: abilityScores.intelligence || 10,
-      wisdom: abilityScores.wisdom || 10,
-      charisma: abilityScores.charisma || 10,
-    },
+    abilityScores,
     personality: {
       traits: personality.traits || [],
       ideals: personality.ideals || [],
@@ -125,7 +122,14 @@ export function useStarterCharacterTemplates(
       setError(null);
       try {
         const data = await userDataApi.listStarterCharacterTemplates(campaignId!);
-        const mapped = data.map(mapTemplateRow);
+        const mapped = data.flatMap((row) => {
+          try {
+            return [mapTemplateRow(row)];
+          } catch {
+            // mapTemplateRow reports the malformed row; keep valid templates renderable.
+            return [];
+          }
+        });
         setTemplates(mapped);
       } catch (err) {
         setTemplates([]);
