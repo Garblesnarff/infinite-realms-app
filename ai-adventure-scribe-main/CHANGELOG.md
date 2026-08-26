@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.11.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.2...v0.11.3) (2026-08-26)
+
+
+### Bug Fixes
+
+* **ai:** validate complete asset names and guard bare asset tags ([#1909](https://github.com/Garblesnarff/infinite-realms-production/issues/1909)) ([c458935](https://github.com/Garblesnarff/infinite-realms-production/commit/c458935f0df952d2cece4e0fe540f475333d1762))
+* **combat:** derive player initiative from dexterity ([#1911](https://github.com/Garblesnarff/infinite-realms-production/issues/1911)) ([81a6b7a](https://github.com/Garblesnarff/infinite-realms-production/commit/81a6b7a03ca63b8ea61727506f501f93a42a07e7))
+
 ## [0.11.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.1...v0.11.2) (2026-08-25)
 
 
