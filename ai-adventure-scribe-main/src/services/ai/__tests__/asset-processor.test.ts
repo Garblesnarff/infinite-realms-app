@@ -1,11 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { insertAssetTags } from '../asset-processor';
+import { applyAssetPostProcessing, insertAssetTags } from '../asset-processor';
 
 import type { AssetInfo } from '../asset-processor';
 
+import logger from '@/lib/logger';
+
+vi.mock('@/lib/logger', () => ({
+  default: {
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 const DIABOLO: AssetInfo = { type: 'npc', key: 'lord-diabolo', name: 'Lord Diabolo' };
 const ZARA: AssetInfo = { type: 'npc', key: 'zara', name: 'Zara' };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('insertAssetTags — emphasis edge cases', () => {
   it('inserts tag before plain name (no emphasis)', () => {
@@ -48,5 +61,47 @@ describe('insertAssetTags — emphasis edge cases', () => {
   it('returns unchanged text when assets list is empty', () => {
     const text = 'Some narrative text.';
     expect(insertAssetTags(text, [])).toBe(text);
+  });
+
+  it('drops an unrecoverable asset tag and logs the defect', () => {
+    const result = insertAssetTags('[ASSET:npc:orphan]', []);
+
+    expect(result).toBe('');
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[Asset Post-Processing] Dropped asset tag without visible entity name',
+      {
+        tag: '[ASSET:npc:orphan]',
+      },
+    );
+  });
+
+  it('repairs a bare asset tag before applying the output guard', () => {
+    const result = insertAssetTags(
+      'The room is empty. [ASSET:location:the-grand-kitchen] is quiet.',
+      [],
+    );
+
+    expect(result).toBe(
+      'The room is empty. The Grand Kitchen [ASSET:location:the-grand-kitchen] is quiet.',
+    );
+  });
+
+  it('guards bare tags when no campaign assets are cached', () => {
+    const result = applyAssetPostProcessing({ text: '[ASSET:npc:orphan]' });
+
+    expect(result.text).toBe('');
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[Asset Post-Processing] Dropped asset tag without visible entity name',
+      {
+        tag: '[ASSET:npc:orphan]',
+      },
+    );
+  });
+
+  it('keeps asset tags when visible text follows them', () => {
+    const result = insertAssetTags('[ASSET:npc:zara] Zara enters the hall.', []);
+
+    expect(result).toBe('[ASSET:npc:zara] Zara enters the hall.');
+    expect(result).toMatch(/\[ASSET:[^\]]+\]\s+\S/);
   });
 });

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { normalizeAssetTagKeysInContent, normalizeAssetTagsInContent } from '../normalize-asset-tags';
+import {
+  normalizeAssetTagKeysInContent,
+  normalizeAssetTagsInContent,
+} from '../normalize-asset-tags';
+
+const GRAND_KITCHEN_TAG = '[ASSET:location:the-grand-kitchen]';
 
 describe('normalize-asset-tags', () => {
   describe('normalizeAssetTagKeysInContent', () => {
@@ -33,10 +38,47 @@ describe('normalize-asset-tags', () => {
       expect(result).toBe('I meet [ASSET:npc:remy-the-manager] Remy The Manager.');
     });
 
-    it('does not prepend name if the first word is already prepended', () => {
-      const input = 'Remy [ASSET:npc:remy-"the-manager"] is here.';
+    it('does not treat only the first word after a tag as the full name', () => {
+      const input = 'I meet [ASSET:npc:remy-"the-manager"] Remy is here.';
       const result = normalizeAssetTagKeysInContent(input);
-      expect(result).toBe('Remy [ASSET:npc:remy-the-manager] is here.');
+      expect(result).toBe('I meet Remy The Manager [ASSET:npc:remy-the-manager] Remy is here.');
+    });
+
+    it('does not treat a leading article and unrelated text as the full name', () => {
+      const input = `${GRAND_KITCHEN_TAG} the soup arrived.`;
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(`The Grand Kitchen ${GRAND_KITCHEN_TAG} the soup arrived.`);
+    });
+
+    it('repairs both exact the-prefixed reproductions without duplicating the article', () => {
+      const shadowsInput =
+        `Your attempt to slip through the shadows of the ${GRAND_KITCHEN_TAG} ` +
+        'is clumsy; you stumble against a stack of copper bowls…';
+      const outsideInput =
+        `You are safely outside the ${GRAND_KITCHEN_TAG}, ` +
+        'your heart hammering against your ribs.';
+
+      expect(normalizeAssetTagsInContent(shadowsInput)).toBe(
+        `Your attempt to slip through the shadows of the Grand Kitchen ${GRAND_KITCHEN_TAG} ` +
+          'is clumsy; you stumble against a stack of copper bowls…',
+      );
+      expect(normalizeAssetTagsInContent(outsideInput)).toBe(
+        `You are safely outside the Grand Kitchen ${GRAND_KITCHEN_TAG}, ` +
+          'your heart hammering against your ribs.',
+      );
+    });
+
+    it('continues to repair the single-word salty asset', () => {
+      const input = 'You approach the [ASSET:npc:salty] and he flinches.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe('You approach the Salty [ASSET:npc:salty] and he flinches.');
+    });
+
+    it('preserves the academy library name when it follows the tag', () => {
+      const input =
+        'the towering doors of [ASSET:location:the-academy-library] The Academy Library';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
     });
 
     it('does not prepend name if it is a standalone tag (no other content)', () => {
@@ -82,7 +124,8 @@ describe('normalize-asset-tags', () => {
     });
 
     it('handles mixed content and multiple emphasis types', () => {
-      const input = 'The **[ASSET:npc:remy-the-manager]** and *[ASSET:location:bone-cathedral]* are here.';
+      const input =
+        'The **[ASSET:npc:remy-the-manager]** and *[ASSET:location:bone-cathedral]* are here.';
       const result = normalizeAssetTagsInContent(input);
       expect(result).toContain('Remy The Manager [ASSET:npc:remy-the-manager]');
       expect(result).toContain('Bone Cathedral [ASSET:location:bone-cathedral]');

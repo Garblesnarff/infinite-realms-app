@@ -1,10 +1,54 @@
 import { generateAssetKey } from './asset-key';
 
-function deriveAssetDisplayName(normalizedKey: string): string {
+const LEADING_ARTICLE_PATTERN = /^(?:the|an|a)\s+/i;
+
+export function deriveAssetDisplayName(normalizedKey: string): string {
   return normalizedKey
     .split('-')
     .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
     .join(' ');
+}
+
+function normalizeLeadingArticle(value: string): string {
+  return value.replace(LEADING_ARTICLE_PATTERN, '').trim();
+}
+
+function startsWithWholeName(value: string, name: string): boolean {
+  if (!value.startsWith(name)) return false;
+
+  const nextCharacter = value[name.length];
+  return !nextCharacter || !/[a-zA-Z0-9]/.test(nextCharacter);
+}
+
+function endsWithWholeName(value: string, name: string): boolean {
+  if (!value.endsWith(name)) return false;
+
+  const previousCharacter = value[value.length - name.length - 1];
+  return !previousCharacter || !/[a-zA-Z0-9]/.test(previousCharacter);
+}
+
+/**
+ * Check whether the full asset name is already visible immediately before or
+ * after a tag. Leading articles are optional on either side of the match.
+ */
+export function isAssetNamePresentAroundTag(
+  content: string,
+  tagStart: number,
+  tagLength: number,
+  derivedName: string,
+): boolean {
+  const normalizedName = normalizeLeadingArticle(derivedName).toLowerCase();
+  if (!normalizedName) return false;
+
+  const beforeTag = content.slice(0, tagStart).replace(/[\s"'`*_]+$/, '');
+  const afterTag = content.slice(tagStart + tagLength).replace(/^[^a-zA-Z]+/, '');
+  const normalizedBeforeTag = normalizeLeadingArticle(beforeTag).toLowerCase();
+  const normalizedAfterTag = normalizeLeadingArticle(afterTag).toLowerCase();
+
+  return (
+    endsWithWholeName(normalizedBeforeTag, normalizedName) ||
+    startsWithWholeName(normalizedAfterTag, normalizedName)
+  );
 }
 
 /**
@@ -25,21 +69,19 @@ export function normalizeAssetTagKeysInContent(content: string): string {
     }
 
     const beforeTag = wholeString.slice(0, offset).replace(/[\s"'`*_]+$/, '');
-    const firstWord = derivedName.split(' ')[0].toLowerCase();
     const afterTag = wholeString.slice(offset + fullMatch.length).replace(/^[^a-zA-Z]+/, '');
-    const lastWordBeforeTag = beforeTag.match(/([a-zA-Z]+)$/)?.[1]?.toLowerCase();
-    const nameAlreadyPresent = afterTag.toLowerCase().startsWith(firstWord);
-    const nameAlreadyPrepended = beforeTag.toLowerCase().endsWith(derivedName.toLowerCase());
-    const firstWordAlreadyPrepended = lastWordBeforeTag === firstWord;
+    const nameAlreadyPresent = isAssetNamePresentAroundTag(
+      wholeString,
+      offset,
+      fullMatch.length,
+      derivedName,
+    );
     const isStandaloneTag = beforeTag.length === 0 && afterTag.length === 0;
 
-    if (
-      !nameAlreadyPresent &&
-      !nameAlreadyPrepended &&
-      !firstWordAlreadyPrepended &&
-      !isStandaloneTag
-    ) {
-      return `${derivedName} ${normalizedTag}`;
+    if (!nameAlreadyPresent && !isStandaloneTag) {
+      const precedingArticle = /(?:^|\s)(?:the|an|a)$/i.test(beforeTag);
+      const nameToInsert = precedingArticle ? normalizeLeadingArticle(derivedName) : derivedName;
+      return `${nameToInsert} ${normalizedTag}`;
     }
 
     return normalizedTag;

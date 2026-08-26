@@ -2,6 +2,11 @@ import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { generateAssetKey } from '@/utils/asset-key';
+import {
+  deriveAssetDisplayName,
+  isAssetNamePresentAroundTag,
+  normalizeAssetTagsInContent,
+} from '@/utils/normalize-asset-tags';
 
 // Asset type definition for post-processing
 export interface AssetInfo {
@@ -29,6 +34,27 @@ let preparedAssetsCache: {
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const ASSET_TAG_PATTERN = /\[ASSET:[^\]]+\]/gi;
+const ASSET_TAG_KEY_PATTERN = /^\[ASSET:[^:\]]+:([^\]]+)\]$/i;
+
+/**
+ * Drop asset tags that do not have their derived entity name next to them.
+ * Normalize first so repairable bare tags are retained rather than dropped.
+ */
+function guardAssetTags(text: string): string {
+  const normalizedText = normalizeAssetTagsInContent(text);
+
+  return normalizedText.replace(ASSET_TAG_PATTERN, (tag, offset, wholeText) => {
+    const keyMatch = tag.match(ASSET_TAG_KEY_PATTERN);
+    const derivedName = keyMatch ? deriveAssetDisplayName(generateAssetKey(keyMatch[1])) : '';
+
+    if (isAssetNamePresentAroundTag(wholeText, offset, tag.length, derivedName)) return tag;
+
+    logger.warn('[Asset Post-Processing] Dropped asset tag without visible entity name', { tag });
+    return '';
+  });
 }
 
 /**
@@ -65,9 +91,9 @@ function getPreparedAssets(assets: AssetInfo[]): PreparedAsset[] {
  * e.g., "The Unwashed Dish" matches, but "dish" alone does NOT.
  */
 export function insertAssetTags(text: string, assets: AssetInfo[]): string {
-  if (!assets || assets.length === 0) return text;
-
   let result = text;
+
+  if (!assets || assets.length === 0) return guardAssetTags(result);
 
   // ⚡ Bolt: Use prepared assets to skip redundant sorting and regex compilation.
   const preparedAssets = getPreparedAssets(assets);
@@ -108,7 +134,7 @@ export function insertAssetTags(text: string, assets: AssetInfo[]): string {
     }
   }
 
-  return result;
+  return guardAssetTags(result);
 }
 
 /**
@@ -116,7 +142,15 @@ export function insertAssetTags(text: string, assets: AssetInfo[]): string {
  * Uses cached assets from fetchCampaignAssetsForPrompt
  */
 export function applyAssetPostProcessing<T extends { text: string }>(response: T): T {
-  if (!cachedAssets || !cachedAssets.assets.length) return response;
+  if (!cachedAssets || !cachedAssets.assets.length) {
+    const processedText = guardAssetTags(response.text);
+    if (processedText === response.text) return response;
+
+    return {
+      ...response,
+      text: processedText,
+    };
+  }
   const processedText = insertAssetTags(response.text, cachedAssets.assets);
   if (processedText !== response.text) {
     logger.info(
