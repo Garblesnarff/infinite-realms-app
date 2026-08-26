@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -100,7 +100,7 @@ describe('CombatSummary', () => {
     expect(screen.getByText('Init: 20')).toBeInTheDocument();
     expect(screen.getByText('Init: 10')).toBeInTheDocument();
     expect(screen.getByText('HP: 10/10')).toBeInTheDocument();
-    expect(screen.getByText('HP: 5/7')).toBeInTheDocument();
+    expect(screen.queryByText('HP: 5/7')).toBeNull();
     expect(screen.getByText('AC: 15')).toBeInTheDocument();
     expect(screen.getByText('AC: 12')).toBeInTheDocument();
     expect(screen.getByText('Prone')).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('CombatSummary', () => {
     expect(npcItem?.className).toContain('bg-red-50');
   });
 
-  it('calls nextTurn and endCombat when buttons are clicked', () => {
+  it('does not expose client-authoritative combat controls', () => {
     const mockEncounter = {
       currentRound: 1,
       participants: [],
@@ -127,11 +127,8 @@ describe('CombatSummary', () => {
 
     render(<CombatSummary />);
 
-    fireEvent.click(screen.getByText('Next Turn'));
-    expect(mockNextTurn).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByText('End Combat'));
-    expect(mockEndCombat).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Next Turn' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'End Combat' })).toBeNull();
   });
 
   it('renders recent actions correctly', () => {

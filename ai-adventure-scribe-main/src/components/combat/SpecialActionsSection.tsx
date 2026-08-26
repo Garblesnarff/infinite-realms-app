@@ -17,6 +17,7 @@ interface SpecialActionsSectionProps {
     additionalData?: unknown,
   ) => void;
   onRollInitiative: (participantId: string) => void;
+  showInitiativeRoll?: boolean;
   onTwoWeaponAttack: (participantId: string, targetId?: string) => void;
   onEnhancedAttack: (
     participantId: string,
@@ -34,17 +35,20 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
     selectedEnemyId,
     onCombatAction,
     onRollInitiative,
+    showInitiativeRoll = false,
     onTwoWeaponAttack,
     onEnhancedAttack,
   }) => {
     return (
       <div className="flex gap-2 flex-wrap">
-        <DiceRoller
-          dice="1d20"
-          label="Initiative"
-          modifier={0}
-          onRoll={() => onRollInitiative(currentParticipant.id)}
-        />
+        {showInitiativeRoll && (
+          <DiceRoller
+            dice="1d20"
+            label="Initiative"
+            modifier={0}
+            onRoll={() => onRollInitiative(currentParticipant.id)}
+          />
+        )}
         <Button
           variant="outline"
           size="sm"

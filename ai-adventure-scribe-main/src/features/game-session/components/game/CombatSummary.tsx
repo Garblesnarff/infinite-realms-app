@@ -3,7 +3,6 @@ import React from 'react';
 
 import type { CombatParticipant } from '@/types/combat';
 
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
@@ -39,9 +38,11 @@ const ParticipantListItem = React.memo(
         </div>
         <div className="space-y-1 mt-1">
           <div className="flex items-center justify-between text-xs">
-            <span>
-              HP: {participant.currentHitPoints}/{participant.maxHitPoints}
-            </span>
+            {isPlayer && (
+              <span>
+                HP: {participant.currentHitPoints}/{participant.maxHitPoints}
+              </span>
+            )}
             <span className="text-muted-foreground">AC: {participant.armorClass}</span>
           </div>
           <Progress
@@ -88,12 +89,12 @@ ParticipantListItem.displayName = 'ParticipantListItem';
  *
  * Dependencies:
  * - CombatContext for combat state and actions
- * - ui/card, ui/button, ui/scroll-area, ui/progress for styling
+ * - ui/card, ui/scroll-area, ui/progress for styling
  *
  * Usage: Render in combat tab; updates live during combat
  */
 export const CombatSummary: React.FC = React.memo(() => {
-  const { state, nextTurn, endCombat } = useCombat();
+  const { state } = useCombat();
   const { activeEncounter, isInCombat } = state;
 
   if (!isInCombat || !activeEncounter) {
@@ -120,14 +121,6 @@ export const CombatSummary: React.FC = React.memo(() => {
         <div className="flex items-center gap-2">
           <Sword className="w-4 h-4 text-destructive" />
           <h3 className="font-semibold">Combat Round {activeEncounter.currentRound}</h3>
-        </div>
-        <div className="flex gap-1">
-          <Button size="sm" variant="outline" onClick={nextTurn}>
-            Next Turn
-          </Button>
-          <Button size="sm" variant="destructive" onClick={endCombat}>
-            End Combat
-          </Button>
         </div>
       </div>
 

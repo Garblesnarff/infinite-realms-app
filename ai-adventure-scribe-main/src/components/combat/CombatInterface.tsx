@@ -181,6 +181,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
                 onRacialTraitUse={handleRacialTraitUse}
                 onDeathSave={handleDeathSave}
                 showNextTurnButton={isDM}
+                showInitiativeRoll={isDM}
               />
             )}
 

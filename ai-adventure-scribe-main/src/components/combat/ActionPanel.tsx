@@ -48,6 +48,7 @@ interface ActionPanelProps {
   onRacialTraitUse: (participantId: string, traitName: string) => void;
   onDeathSave: (participantId: string) => void;
   showNextTurnButton?: boolean;
+  showInitiativeRoll?: boolean;
 }
 
 /**
@@ -69,7 +70,8 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
     onClassFeatureUse,
     onRacialTraitUse,
     onDeathSave,
-    showNextTurnButton = true,
+    showNextTurnButton = false,
+    showInitiativeRoll = false,
   }) => {
     const currentParticipant = activeEncounter.participants.find(
       (p) => p.id === currentParticipantId,
@@ -153,6 +155,7 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
               selectedEnemyId={selectedEnemyId}
               onCombatAction={onCombatAction}
               onRollInitiative={onRollInitiative}
+              showInitiativeRoll={showInitiativeRoll}
               onTwoWeaponAttack={onTwoWeaponAttack}
               onEnhancedAttack={onEnhancedAttack}
             />

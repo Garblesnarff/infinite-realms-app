@@ -7,7 +7,7 @@
  * Designed to feel like a physical initiative tracker at the table.
  */
 
-import { ChevronRight, Dices, Plus } from 'lucide-react';
+import { Dices, Plus } from 'lucide-react';
 import React from 'react';
 
 import { ParticipantRow } from '@/components/combat/ParticipantRow';
@@ -38,7 +38,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
   className = '',
   onAddParticipant,
 }) => {
-  const { state, nextTurn, rollInitiative } = useCombat();
+  const { state } = useCombat();
   const { getAssetImageUrl } = useCampaignAssetsContext();
   const { activeEncounter, isInCombat } = state;
 
@@ -108,40 +108,6 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
               <TooltipContent>Add participant</TooltipContent>
             </Tooltip>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={rollInitiative}
-                className="flex-1 min-w-[140px] sm:flex-none"
-                aria-label="Roll initiative for all participants"
-              >
-                <Dices className="mr-2 h-4 w-4" aria-hidden="true" />
-                Roll Initiative
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Roll initiative for all participants</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                onClick={nextTurn}
-                className="flex-1 min-w-[140px]"
-                aria-label="Advance to the next participant's turn"
-              >
-                <ChevronRight className="mr-2 h-4 w-4" aria-hidden="true" />
-                Next Turn
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Advance to the next participant's turn</TooltipContent>
-          </Tooltip>
         </div>
       </CardHeader>
 

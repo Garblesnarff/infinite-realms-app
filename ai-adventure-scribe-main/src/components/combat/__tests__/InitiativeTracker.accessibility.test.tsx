@@ -92,17 +92,21 @@ describe('InitiativeTracker Accessibility', () => {
     expect(screen.getByLabelText(/Armor Class: 13/i)).toBeDefined();
   });
 
-  it('renders combat control buttons with descriptive aria-labels', () => {
+  it('hides client-authoritative combat controls and numeric enemy HP', () => {
     render(
       <TooltipProvider>
         <InitiativeTracker />
       </TooltipProvider>
     );
 
-    const rollButton = screen.getByRole('button', { name: /Roll initiative for all participants/i });
-    expect(rollButton).toBeDefined();
-
-    const nextButton = screen.getByRole('button', { name: /Advance to the next participant's turn/i });
-    expect(nextButton).toBeDefined();
+    expect(
+      screen.queryByRole('button', { name: /Roll initiative for all participants/i }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Advance to the next participant's turn/i }),
+    ).toBeNull();
+    expect(screen.getByLabelText('Orc Health bar')).toBeDefined();
+    expect(screen.queryByText('15/15')).toBeNull();
+    expect(screen.getByText('40/40')).toBeDefined();
   });
 });

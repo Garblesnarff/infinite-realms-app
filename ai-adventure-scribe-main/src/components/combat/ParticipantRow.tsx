@@ -67,6 +67,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
     const _isUnconscious =
       participant.currentHitPoints === 0 && participant.deathSaves.failures < 3;
     const needsDeathSave = participant.currentHitPoints === 0 && !isDead;
+    const isPlayer = participant.participantType === 'player';
 
     // Look up portrait from campaign assets
     const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
@@ -213,14 +214,20 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
               className="h-2 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
               tabIndex={0}
               indicatorClassName={getHPColor(hpPercent)}
-              aria-label={`${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`}
+              aria-label={
+                isPlayer
+                  ? `${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`
+                  : `${participant.name} Health bar`
+              }
             />
-            <span className="min-w-[4rem] text-right text-sm font-medium">
-              {participant.currentHitPoints}/{participant.maxHitPoints}
-              {participant.temporaryHitPoints > 0 && (
-                <span className="text-blue-500">+{participant.temporaryHitPoints}</span>
-              )}
-            </span>
+            {isPlayer && (
+              <span className="min-w-[4rem] text-right text-sm font-medium">
+                {participant.currentHitPoints}/{participant.maxHitPoints}
+                {participant.temporaryHitPoints > 0 && (
+                  <span className="text-blue-500">+{participant.temporaryHitPoints}</span>
+                )}
+              </span>
+            )}
           </div>
 
           {/* Death Saves */}
