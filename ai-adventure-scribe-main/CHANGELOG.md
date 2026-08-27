@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.11.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.4...v0.11.5) (2026-08-27)
+
+
+### Bug Fixes
+
+* **security:** keep ElevenLabs TTS key server-side ([#1927](https://github.com/Garblesnarff/infinite-realms-production/issues/1927)) ([77edb0e](https://github.com/Garblesnarff/infinite-realms-production/commit/77edb0efe6cb8a297b6c702a59f1176de5a14d7b))
+
 ## [0.11.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.3...v0.11.4) (2026-08-26)
 
 
