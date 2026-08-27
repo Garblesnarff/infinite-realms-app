@@ -1,7 +1,7 @@
 import { type VoiceSegment, ELEVENLABS_MODEL } from '../voice-routing';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { getAuthHeaders } from '@/services/auth/TokenService';
 
 /**
  * Voice Audio Service
@@ -63,7 +63,7 @@ export class VoiceAudioService {
   /**
    * Generate audio for a single segment with caching
    */
-  static async generateAudio(segment: VoiceSegment, _apiKey: string): Promise<VoiceSegment> {
+  static async generateAudio(segment: VoiceSegment): Promise<VoiceSegment> {
     const cacheKey = VoiceAudioService.generateCacheKey(segment.voiceId, segment.text);
 
     // Check cache first
@@ -88,7 +88,6 @@ export class VoiceAudioService {
     );
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const apiBase = import.meta.env.VITE_API_URL || '';
       const response = await fetch(
         `${apiBase}/v1/ai-proxy/voice/${encodeURIComponent(segment.voiceId)}`,
@@ -97,7 +96,7 @@ export class VoiceAudioService {
           headers: {
             Accept: 'audio/mpeg',
             'Content-Type': 'application/json',
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            ...getAuthHeaders(),
           },
           body: JSON.stringify({
             text: segment.text,

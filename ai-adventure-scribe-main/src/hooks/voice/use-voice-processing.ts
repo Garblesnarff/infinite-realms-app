@@ -16,9 +16,11 @@ import { VoiceDirector } from '@/services/voice-director';
 interface VoiceProcessingProps {
   state: ProgressiveVoiceState;
   setState: React.Dispatch<React.SetStateAction<ProgressiveVoiceState>>;
-  toast: (props: { title: string; description: string; variant?: 'default' | 'destructive' }) => void;
-  apiKeyRef: React.MutableRefObject<string | null>;
-  waitForApiKey: (timeout?: number) => Promise<string | null>;
+  toast: (props: {
+    title: string;
+    description: string;
+    variant?: 'default' | 'destructive';
+  }) => void;
   playAudioSegment: (segment: VoiceSegment, index: number) => Promise<void>;
   initializeAudioContext: () => HTMLAudioElement | null;
   stopPlayback: () => void;
@@ -30,13 +32,11 @@ export const useVoiceProcessing = ({
   state,
   setState,
   toast,
-  apiKeyRef,
-  waitForApiKey,
   playAudioSegment,
   initializeAudioContext,
   stopPlayback,
   baseResumePlayback,
-  currentAudio
+  currentAudio,
 }: VoiceProcessingProps) => {
   // Audio management
   const abortController = React.useRef<AbortController | null>(null);
@@ -83,7 +83,7 @@ export const useVoiceProcessing = ({
           // Generate audio for this segment (if not already generated)
           let segmentWithAudio = segment;
           if (!segment.audioUrl) {
-            segmentWithAudio = await VoiceDirector.generateAudio(segment, apiKeyRef.current!);
+            segmentWithAudio = await VoiceDirector.generateAudio(segment);
 
             // Update segment with audio
             setState((prev) => ({
@@ -123,7 +123,7 @@ export const useVoiceProcessing = ({
 
       logger.info('🏁 Progressive processing complete');
     },
-    [playAudioSegment, apiKeyRef, setState],
+    [playAudioSegment, setState],
   );
 
   /**
@@ -139,22 +139,6 @@ export const useVoiceProcessing = ({
 
       if (!state.isVoiceEnabled || !aiSegments?.length || state.isProcessing) {
         logger.info('🚫 Voice not enabled, no segments, or already processing');
-        return;
-      }
-
-      // Wait for API key if it's not available yet (max 3 seconds)
-      const currentApiKey = await waitForApiKey(3000);
-      if (!currentApiKey) {
-        setState((prev) => ({
-          ...prev,
-          error: 'API key timeout - could not retrieve ElevenLabs API key',
-        }));
-        toast({
-          title: 'API Key Timeout',
-          description:
-            'ElevenLabs API key could not be retrieved. Please check your configuration.',
-          variant: 'destructive',
-        });
         return;
       }
 
@@ -230,8 +214,7 @@ export const useVoiceProcessing = ({
       stopPlayback,
       processSegmentsProgressively,
       currentAudio,
-      waitForApiKey,
-      setState
+      setState,
     ],
   );
 
@@ -289,12 +272,21 @@ export const useVoiceProcessing = ({
       const remainingSegments = state.segments.slice(state.currentSegmentIndex);
       await processSegmentsProgressively(remainingSegments, state.currentSegmentIndex);
     }
-  }, [state.segments, state.currentSegmentIndex, baseResumePlayback, processSegmentsProgressively, setState]);
+  }, [
+    state.segments,
+    state.currentSegmentIndex,
+    baseResumePlayback,
+    processSegmentsProgressively,
+    setState,
+  ]);
 
-  return React.useMemo(() => ({
-    speakAISegments,
-    speakPlainText,
-    resumePlayback,
-    abortController
-  }), [speakAISegments, speakPlainText, resumePlayback]);
+  return React.useMemo(
+    () => ({
+      speakAISegments,
+      speakPlainText,
+      resumePlayback,
+      abortController,
+    }),
+    [speakAISegments, speakPlainText, resumePlayback],
+  );
 };

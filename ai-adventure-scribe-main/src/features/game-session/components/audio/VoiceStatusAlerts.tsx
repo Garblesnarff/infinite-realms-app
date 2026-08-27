@@ -7,10 +7,8 @@ import { Button } from '@/components/ui/button';
 interface VoiceStatusAlertsProps {
   error?: string;
   isProcessing: boolean;
-  apiKey: string | null;
   hasUserInteracted: boolean;
   isPlaying: boolean;
-  retryApiKeyFetch: () => void;
   handleRetry: () => void;
 }
 
@@ -22,10 +20,8 @@ interface VoiceStatusAlertsProps {
 export const VoiceStatusAlerts: React.FC<VoiceStatusAlertsProps> = ({
   error,
   isProcessing,
-  apiKey,
   hasUserInteracted,
   isPlaying,
-  retryApiKeyFetch,
   handleRetry,
 }) => {
   return (
@@ -36,38 +32,14 @@ export const VoiceStatusAlerts: React.FC<VoiceStatusAlertsProps> = ({
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             {error}{' '}
-            {error.includes('API Key') && (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={retryApiKeyFetch}
-                className="h-auto p-0 text-destructive underline"
-              >
-                Retry API key fetch
-              </Button>
-            )}
-            {!error.includes('API Key') && (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={handleRetry}
-                className="h-auto p-0 text-destructive underline"
-              >
-                Click to retry
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* API Key Status Alert */}
-      {!apiKey && !error && (
-        <Alert variant="default">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            🔑 <strong>Retrieving API key...</strong>
-            <br />
-            ElevenLabs API key is being loaded. If this persists, click the 🔄 button to retry.
+            <Button
+              variant="link"
+              size="sm"
+              onClick={handleRetry}
+              className="h-auto p-0 text-destructive underline"
+            >
+              Click to retry
+            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -79,8 +51,8 @@ export const VoiceStatusAlerts: React.FC<VoiceStatusAlertsProps> = ({
           <AlertDescription>
             🎙️ <strong>Welcome to Voice Narration!</strong>
             <br />
-            Click the ▶ Play button or the 🧪 Test button to start audio. Once you interact,
-            future AI responses will auto-play (if enabled).
+            Click the ▶ Play button or the 🧪 Test button to start audio. Once you interact, future
+            AI responses will auto-play (if enabled).
           </AlertDescription>
         </Alert>
       )}

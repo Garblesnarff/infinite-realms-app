@@ -1,8 +1,8 @@
 import React from 'react';
 
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { getAuthHeaders } from '@/services/auth/TokenService';
 import { handleAsyncError } from '@/utils/error-handler';
 
 interface VoiceSettings {
@@ -12,7 +12,6 @@ interface VoiceSettings {
 
 interface AudioPlayerProps {
   text: string;
-  apiKey: string;
   audioRef: React.MutableRefObject<HTMLAudioElement | null>;
   volume: number;
   isMuted: boolean;
@@ -21,7 +20,6 @@ interface AudioPlayerProps {
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   text,
-  apiKey: _apiKey,
   audioRef,
   volume,
   isMuted,
@@ -41,13 +39,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         similarity_boost: 0.75,
       };
 
-      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${API_URL}/${VOICE_ID}`, {
         method: 'POST',
         headers: {
           Accept: 'audio/mpeg',
           'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           text,

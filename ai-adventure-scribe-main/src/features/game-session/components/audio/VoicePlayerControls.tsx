@@ -23,7 +23,6 @@ import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
 
-
 interface VoicePlayerControlsProps {
   text: string;
   narrationSegments?: NarrationSegment[];
@@ -31,8 +30,6 @@ interface VoicePlayerControlsProps {
   isProcessing: boolean;
   isPlaying: boolean;
   stopPlayback: () => void;
-  apiKey?: string;
-  retryApiKeyFetch: () => void;
   error?: string;
   isMuted: boolean;
   volume: number;
@@ -49,7 +46,6 @@ interface VoicePlayerControlsProps {
   clearCharacterVoiceMappings: () => void;
 }
 
-
 /**
  * VoicePlayerControls Component
  * Extracted controls for the ProgressiveVoicePlayer
@@ -61,8 +57,6 @@ export const VoicePlayerControls: React.FC<VoicePlayerControlsProps> = ({
   isProcessing,
   isPlaying,
   stopPlayback,
-  apiKey,
-  retryApiKeyFetch,
   error,
   isMuted,
   volume,
@@ -155,7 +149,6 @@ export const VoicePlayerControls: React.FC<VoicePlayerControlsProps> = ({
     [setVolume],
   );
 
-
   return (
     <div className="flex items-center gap-3">
       <Tooltip>
@@ -192,25 +185,6 @@ export const VoicePlayerControls: React.FC<VoicePlayerControlsProps> = ({
         </TooltipTrigger>
         <TooltipContent>Stop</TooltipContent>
       </Tooltip>
-
-      {/* Retry API Key Button */}
-      {!apiKey && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={retryApiKeyFetch}
-              className="h-10 w-10 p-0 border-orange-300 text-orange-600 hover:bg-orange-50"
-              aria-label="Retry API key fetch"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Retry API key fetch</TooltipContent>
-        </Tooltip>
-      )}
 
       {/* Test Audio Button */}
       <Tooltip>
@@ -308,10 +282,8 @@ export const VoicePlayerControls: React.FC<VoicePlayerControlsProps> = ({
       <VoiceStatusAlerts
         error={error}
         isProcessing={isProcessing}
-        apiKey={apiKey ?? null}
         hasUserInteracted={hasUserInteracted}
         isPlaying={isPlaying}
-        retryApiKeyFetch={retryApiKeyFetch}
         handleRetry={handleRetry}
       />
     </div>

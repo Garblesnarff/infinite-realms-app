@@ -30,7 +30,6 @@ vi.mock('@/lib/logger', () => ({
 describe('useVoiceProcessing', () => {
   const mockSetState = vi.fn();
   const mockToast = vi.fn();
-  const mockWaitForApiKey = vi.fn();
   const mockPlayAudioSegment = vi.fn();
   const mockInitializeAudioContext = vi.fn();
   const mockStopPlayback = vi.fn();
@@ -47,8 +46,6 @@ describe('useVoiceProcessing', () => {
     } as any,
     setState: mockSetState,
     toast: mockToast,
-    apiKeyRef: { current: 'test-api-key' } as any,
-    waitForApiKey: mockWaitForApiKey,
     playAudioSegment: mockPlayAudioSegment,
     initializeAudioContext: mockInitializeAudioContext,
     stopPlayback: mockStopPlayback,
@@ -58,7 +55,6 @@ describe('useVoiceProcessing', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockWaitForApiKey.mockResolvedValue('test-api-key');
     // Ensure default state for each test
     defaultProps.state = {
       isVoiceEnabled: true,
@@ -113,24 +109,6 @@ describe('useVoiceProcessing', () => {
 
     expect(VoiceDirector.processPlainText).toHaveBeenCalledWith(text);
     expect(mockPlayAudioSegment).toHaveBeenCalled();
-  });
-
-  it('should handle API key timeout', async () => {
-    mockWaitForApiKey.mockResolvedValue(null);
-
-    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
-
-    await act(async () => {
-      await result.current.speakAISegments([{ type: 'dm', text: 'test' }] as any);
-    });
-
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'API Key Timeout',
-        variant: 'destructive',
-      }),
-    );
-    expect(mockSetState).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it('should handle errors during processing and continue with next segment', async () => {
@@ -248,7 +226,7 @@ describe('useVoiceProcessing', () => {
       await result.current.speakAISegments([{ type: 'dm', text: 'test' }] as any);
     });
 
-    expect(mockWaitForApiKey).not.toHaveBeenCalled();
+    expect(VoiceDirector.generateAudio).not.toHaveBeenCalled();
   });
 
   it('should handle audio generation returning error in segment', async () => {
@@ -289,8 +267,9 @@ describe('useVoiceProcessing', () => {
 
     const { result } = renderHook(() => useVoiceProcessing(defaultProps));
 
-    const firstCall = act(async () => {
-      await result.current.speakAISegments(aiSegments1 as any);
+    let firstCall: Promise<void>;
+    act(() => {
+      firstCall = result.current.speakAISegments(aiSegments1 as any);
     });
 
     // Short delay to ensure it starts
@@ -305,7 +284,6 @@ describe('useVoiceProcessing', () => {
     // This checks that VoiceDirector.generateAudio was called for the second request
     expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Second Request' }),
-      'test-api-key',
     );
   });
 
@@ -329,8 +307,9 @@ describe('useVoiceProcessing', () => {
 
     const { result } = renderHook(() => useVoiceProcessing(defaultProps));
 
-    const firstCall = act(async () => {
-      await result.current.speakAISegments(aiSegments1 as any);
+    let firstCall: Promise<void>;
+    act(() => {
+      firstCall = result.current.speakAISegments(aiSegments1 as any);
     });
 
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -345,11 +324,9 @@ describe('useVoiceProcessing', () => {
     expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(1);
     expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: '1.1' }),
-      expect.any(String),
     );
     expect(VoiceDirector.generateAudio).not.toHaveBeenCalledWith(
       expect.objectContaining({ text: '1.2' }),
-      expect.any(String),
     );
   });
 });

@@ -1,7 +1,4 @@
-import {
-  Users,
-  AlertCircle,
-} from 'lucide-react';
+import { Users, AlertCircle } from 'lucide-react';
 import React from 'react';
 
 import { VoicePlaybackStatus } from './VoicePlaybackStatus';
@@ -26,7 +23,6 @@ interface ProgressiveVoicePlayerProps {
   className?: string;
 }
 
-
 /**
  * ProgressiveVoicePlayer Component
  *
@@ -48,14 +44,12 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
     isMuted,
     isVoiceEnabled,
     error,
-    apiKey,
     speakAISegments,
     speakPlainText,
     stopPlayback,
     setVolume,
     toggleMute,
     toggleVoiceEnabled,
-    retryApiKeyFetch,
     getCharacterVoiceMappings,
     clearCharacterVoiceMappings,
     initializeAudioContext,
@@ -90,7 +84,6 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
     if (!isPlaying && !isProcessing) return 0;
     return ((currentSegmentIndex + 1) / segments.length) * 100;
   };
-
 
   if (!isEnabled || !text) {
     return null;
@@ -151,8 +144,6 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             isProcessing={isProcessing}
             isPlaying={isPlaying}
             stopPlayback={stopPlayback}
-            apiKey={apiKey}
-            retryApiKeyFetch={retryApiKeyFetch}
             error={error}
             isMuted={isMuted}
             volume={volume}

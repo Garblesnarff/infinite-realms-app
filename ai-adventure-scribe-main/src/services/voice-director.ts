@@ -17,7 +17,14 @@ import { VoiceAudioService } from './voice/voice-audio-service';
 import { VoiceDialogueParser } from './voice/voice-dialogue-parser';
 import { type VoicePool } from './voice/voice-pools';
 import { cleanSegmentText } from './voice/voice-utils';
-import { type AISegment, type VoiceConfig, type VoiceSegment, assignVoice, clearCharacterVoiceMappings as clearMappings, getCharacterVoiceMappings as getMappings } from './voice-routing';
+import {
+  type AISegment,
+  type VoiceConfig,
+  type VoiceSegment,
+  assignVoice,
+  clearCharacterVoiceMappings as clearMappings,
+  getCharacterVoiceMappings as getMappings,
+} from './voice-routing';
 
 import logger from '@/lib/logger';
 
@@ -85,8 +92,8 @@ export class VoiceDirector {
   /**
    * Generate audio for a single segment with caching - Delegated to VoiceAudioService
    */
-  static async generateAudio(segment: VoiceSegment, apiKey: string): Promise<VoiceSegment> {
-    return VoiceAudioService.generateAudio(segment, apiKey);
+  static async generateAudio(segment: VoiceSegment): Promise<VoiceSegment> {
+    return VoiceAudioService.generateAudio(segment);
   }
 
   /**

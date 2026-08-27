@@ -1,5 +1,4 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import React from 'react';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 import { VoiceButton } from '../VoiceButton';
@@ -24,7 +23,7 @@ describe('Audio Components Accessibility and UX', () => {
       const { rerender } = render(
         <TooltipProvider>
           <VolumeButton isMuted={true} isSpeaking={false} onToggleMute={onToggleMute} />
-        </TooltipProvider>
+        </TooltipProvider>,
       );
 
       const button = screen.getByRole('button', { name: /unmute voice/i });
@@ -38,7 +37,7 @@ describe('Audio Components Accessibility and UX', () => {
       rerender(
         <TooltipProvider>
           <VolumeButton isMuted={false} isSpeaking={true} onToggleMute={onToggleMute} />
-        </TooltipProvider>
+        </TooltipProvider>,
       );
 
       const updatedButton = screen.getByRole('button', { name: /mute voice/i });
@@ -53,7 +52,7 @@ describe('Audio Components Accessibility and UX', () => {
       const { rerender } = render(
         <TooltipProvider>
           <VoiceButton isMuted={true} isSpeaking={false} onToggleMute={onToggleMute} />
-        </TooltipProvider>
+        </TooltipProvider>,
       );
 
       const button = screen.getByRole('button', { name: /unmute/i });
@@ -67,7 +66,7 @@ describe('Audio Components Accessibility and UX', () => {
       rerender(
         <TooltipProvider>
           <VoiceButton isMuted={false} isSpeaking={true} onToggleMute={onToggleMute} />
-        </TooltipProvider>
+        </TooltipProvider>,
       );
 
       const updatedButton = screen.getByRole('button', { name: /mute/i });
@@ -82,7 +81,7 @@ describe('Audio Components Accessibility and UX', () => {
       render(
         <TooltipProvider>
           <VolumeSlider volume={0.8} onVolumeChange={onVolumeChange} />
-        </TooltipProvider>
+        </TooltipProvider>,
       );
 
       const sliderRoot = screen.getByLabelText(/adjust volume/i);
@@ -114,9 +113,8 @@ describe('Audio Components Accessibility and UX', () => {
             speakAISegments={vi.fn()}
             speakPlainText={vi.fn()}
             clearCharacterVoiceMappings={vi.fn()}
-            retryApiKeyFetch={vi.fn()}
           />
-        </TooltipProvider>
+        </TooltipProvider>,
       );
 
       const sliderRoot = screen.getByLabelText(/adjust playback volume/i);

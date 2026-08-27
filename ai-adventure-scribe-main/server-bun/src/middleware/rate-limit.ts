@@ -29,6 +29,11 @@ export interface PlanRateConfig {
   perUser?: { windowMs: number; maxByPlan: Record<PlanName, number> };
 }
 
+interface RateLimitUser {
+  userId?: string;
+  plan?: string;
+}
+
 const RATE_WINDOW_BOUNDS = { min: 1_000, max: 86_400_000 } as const;
 const RATE_MAX_BOUNDS = { min: 1, max: 100_000 } as const;
 
@@ -72,6 +77,25 @@ function buildLimits(): Record<string, PlanRateConfig> {
           free: getRateMax('RATE_LIMIT_LLM_USER_FREE', 10),
           pro: getRateMax('RATE_LIMIT_LLM_USER_PRO', 60),
           enterprise: getRateMax('RATE_LIMIT_LLM_USER_ENTERPRISE', 300),
+        },
+      },
+    },
+    voice: {
+      key: 'voice',
+      perIp: {
+        windowMs: getRateWindow('RATE_LIMIT_VOICE_IP_WINDOW', 60_000),
+        maxByPlan: {
+          free: getRateMax('RATE_LIMIT_VOICE_IP_FREE', 20),
+          pro: getRateMax('RATE_LIMIT_VOICE_IP_PRO', 120),
+          enterprise: getRateMax('RATE_LIMIT_VOICE_IP_ENTERPRISE', 600),
+        },
+      },
+      perUser: {
+        windowMs: getRateWindow('RATE_LIMIT_VOICE_USER_WINDOW', 60_000),
+        maxByPlan: {
+          free: getRateMax('RATE_LIMIT_VOICE_USER_FREE', 10),
+          pro: getRateMax('RATE_LIMIT_VOICE_USER_PRO', 60),
+          enterprise: getRateMax('RATE_LIMIT_VOICE_USER_ENTERPRISE', 300),
         },
       },
     },
@@ -179,7 +203,7 @@ function getClientIp(request: Request): string {
 /**
  * Get user plan from context (set by auth middleware)
  */
-function getUserPlan(user: any, headers: Headers): PlanName {
+function getUserPlan(user: RateLimitUser | undefined, headers: Headers): PlanName {
   // Allow overriding via header for tests
   const hdr = headers.get('x-plan')?.toLowerCase();
   if (hdr && process.env.NODE_ENV !== 'production') return hdr;
@@ -227,8 +251,11 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
       // 'scoped' is REQUIRED: Elysia plugin hooks are local by default, meaning a
       // hook-only plugin never applies to the routes of the instance that .use()s
       // it. Without this, the limiter silently never fires (prod bug, 2026-07-14).
-      .onBeforeHandle({ as: 'scoped' }, ({ request, set, user }) => {
+      .onBeforeHandle({ as: 'scoped' }, (context) => {
         try {
+          const { request, set } = context;
+          // `user` is supplied by requireAuth when this plugin is attached to a protected route.
+          const user = (context as unknown as { user?: RateLimitUser }).user;
           const ip = getClientIp(request);
           const userId = user?.userId || null;
           const plan = getUserPlan(user, request.headers);

@@ -1,4 +1,3 @@
-
 /**
  * Progressive Voice Hook
  *
@@ -19,7 +18,6 @@ import React from 'react';
 import { useLocalStorage } from './use-local-storage';
 import { useToast } from './use-toast';
 import { useVoiceAudioControl } from './use-voice-audio-control';
-import { useVoiceApiKey } from './voice/use-voice-api-key';
 import { useVoiceProcessing } from './voice/use-voice-processing';
 
 import type { VoiceSegment } from '@/services/voice-routing';
@@ -131,36 +129,20 @@ export const useProgressiveVoice = () => {
     setState((prev) => ({ ...prev, volume, isMuted }));
   }, [volume, isMuted]);
 
-  // ElevenLabs API key management
-  const {
-    apiKey,
-    apiKeyRef,
-    error: apiKeyError,
-    retryApiKeyFetch,
-    waitForApiKey,
-  } = useVoiceApiKey();
-
   const voiceProcessingStopPlayback = React.useCallback(() => {
     baseStopPlayback(state.segments);
   }, [state.segments, baseStopPlayback]);
 
   // Voice processing orchestration
-  const {
-    speakAISegments,
-    speakPlainText,
-    resumePlayback,
-    abortController
-  } = useVoiceProcessing({
+  const { speakAISegments, speakPlainText, resumePlayback, abortController } = useVoiceProcessing({
     state,
     setState,
     toast,
-    apiKeyRef,
-    waitForApiKey,
     playAudioSegment,
     initializeAudioContext,
     stopPlayback: voiceProcessingStopPlayback,
     baseResumePlayback,
-    currentAudio
+    currentAudio,
   });
 
   /**
@@ -210,14 +192,6 @@ export const useProgressiveVoice = () => {
     });
   }, [state.isVoiceEnabled, stopPlayback, toast, setIsVoiceEnabled]);
 
-  /**
-   * Manual API key retry function
-   */
-  const handleRetryApiKeyFetch = React.useCallback(async () => {
-    setState((prev) => ({ ...prev, error: undefined }));
-    await retryApiKeyFetch();
-  }, [retryApiKeyFetch]);
-
   // Cleanup on unmount
   React.useEffect(() => {
     const currentAbortController = abortController.current;
@@ -229,60 +203,57 @@ export const useProgressiveVoice = () => {
     };
   }, [stopPlayback, abortController]);
 
-  return React.useMemo(() => ({
-    // State
-    segments: state.segments,
-    currentSegmentIndex: state.currentSegmentIndex,
-    isPlaying: state.isPlaying,
-    isPaused: state.isPaused,
-    isProcessing: state.isProcessing,
-    volume: state.volume,
-    isMuted: state.isMuted,
-    isVoiceEnabled: state.isVoiceEnabled,
-    error: state.error || apiKeyError,
-    apiKey, // Expose API key state for debugging
+  return React.useMemo(
+    () => ({
+      // State
+      segments: state.segments,
+      currentSegmentIndex: state.currentSegmentIndex,
+      isPlaying: state.isPlaying,
+      isPaused: state.isPaused,
+      isProcessing: state.isProcessing,
+      volume: state.volume,
+      isMuted: state.isMuted,
+      isVoiceEnabled: state.isVoiceEnabled,
+      error: state.error,
 
-    // Actions
-    speakAISegments, // Main function for AI-generated segments
-    speakPlainText, // Fallback for plain text
-    pausePlayback, // Pause without losing state
-    resumePlayback, // Resume from pause
-    stopPlayback, // Stop completely
-    setVolume: handleSetVolume,
-    toggleMute,
-    toggleVoiceEnabled,
-    retryApiKeyFetch: handleRetryApiKeyFetch, // Manual API key retry
+      // Actions
+      speakAISegments, // Main function for AI-generated segments
+      speakPlainText, // Fallback for plain text
+      pausePlayback, // Pause without losing state
+      resumePlayback, // Resume from pause
+      stopPlayback, // Stop completely
+      setVolume: handleSetVolume,
+      toggleMute,
+      toggleVoiceEnabled,
+      // Voice management utilities
+      getCharacterVoiceMappings: VoiceDirector.getCharacterVoiceMappings,
+      clearCharacterVoiceMappings: VoiceDirector.clearCharacterVoiceMappings,
+      getAvailableVoiceCategories: VoiceDirector.getAvailableVoiceCategories,
+      initializeAudioContext, // Initialize audio context during user interaction
 
-    // Voice management utilities
-    getCharacterVoiceMappings: VoiceDirector.getCharacterVoiceMappings,
-    clearCharacterVoiceMappings: VoiceDirector.clearCharacterVoiceMappings,
-    getAvailableVoiceCategories: VoiceDirector.getAvailableVoiceCategories,
-    initializeAudioContext, // Initialize audio context during user interaction
-
-    // Audio cache management
-    clearAudioCache: VoiceDirector.clearAudioCache,
-    getAudioCacheStats: VoiceDirector.getAudioCacheStats,
-  }), [
-    state.segments,
-    state.currentSegmentIndex,
-    state.isPlaying,
-    state.isPaused,
-    state.isProcessing,
-    state.volume,
-    state.isMuted,
-    state.isVoiceEnabled,
-    state.error,
-    apiKeyError,
-    apiKey,
-    speakAISegments,
-    speakPlainText,
-    pausePlayback,
-    resumePlayback,
-    stopPlayback,
-    handleSetVolume,
-    toggleMute,
-    toggleVoiceEnabled,
-    handleRetryApiKeyFetch,
-    initializeAudioContext,
-  ]);
+      // Audio cache management
+      clearAudioCache: VoiceDirector.clearAudioCache,
+      getAudioCacheStats: VoiceDirector.getAudioCacheStats,
+    }),
+    [
+      state.segments,
+      state.currentSegmentIndex,
+      state.isPlaying,
+      state.isPaused,
+      state.isProcessing,
+      state.volume,
+      state.isMuted,
+      state.isVoiceEnabled,
+      state.error,
+      speakAISegments,
+      speakPlainText,
+      pausePlayback,
+      resumePlayback,
+      stopPlayback,
+      handleSetVolume,
+      toggleMute,
+      toggleVoiceEnabled,
+      initializeAudioContext,
+    ],
+  );
 };

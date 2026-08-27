@@ -3,14 +3,6 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // 1. Mock dependencies BEFORE everything
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    functions: {
-      invoke: vi.fn(),
-    },
-  },
-}));
-
 // 2. Mock VoiceDirector with explicit static methods
 vi.mock('@/services/voice-director', () => {
   return {
@@ -25,7 +17,7 @@ vi.mock('@/services/voice-director', () => {
       clearAudioCache: vi.fn(),
       getAudioCacheStats: vi.fn(),
       validateSegments: vi.fn(),
-    }
+    },
   };
 });
 
@@ -46,11 +38,9 @@ vi.mock('../lib/logger', () => ({
 }));
 
 vi.mock('../use-voice-audio-control');
-vi.mock('../voice/use-voice-api-key');
 
 import { useProgressiveVoice } from '../use-progressive-voice';
 import { useVoiceAudioControl } from '../use-voice-audio-control';
-import { useVoiceApiKey } from '../voice/use-voice-api-key';
 
 import { VoiceDirector } from '@/services/voice-director';
 
@@ -61,14 +51,15 @@ describe('useProgressiveVoice', () => {
   const mockStopPlayback = vi.fn();
   const mockToggleMute = vi.fn();
   const mockHandleSetVolume = vi.fn();
-  const mockRetryApiKeyFetch = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     // Setup useVoiceAudioControl mock
     (useVoiceAudioControl as any).mockReturnValue({
-      volume: 1, isMuted: false, currentAudio: { current: null },
+      volume: 1,
+      isMuted: false,
+      currentAudio: { current: null },
       initializeAudioContext: vi.fn(),
       playAudioSegment: mockPlayAudioSegment,
       pausePlayback: mockPausePlayback,
@@ -78,21 +69,17 @@ describe('useProgressiveVoice', () => {
       toggleMute: mockToggleMute,
     });
 
-    // Setup useVoiceApiKey mock
-    (useVoiceApiKey as any).mockReturnValue({
-      apiKey: 'key', apiKeyRef: { current: 'key' }, error: undefined,
-      retryApiKeyFetch: mockRetryApiKeyFetch,
-      waitForApiKey: vi.fn().mockResolvedValue('key'),
-    });
-
     // Setup VoiceDirector mock implementations
     (VoiceDirector.validateAISegments as any).mockImplementation((s: any) => s);
     (VoiceDirector.processAISegments as any).mockImplementation((s: any) =>
-      s.map((seg: any) => ({ ...seg, voiceId: 'v1', voiceName: 'V' }))
+      s.map((seg: any) => ({ ...seg, voiceId: 'v1', voiceName: 'V' })),
     );
-    (VoiceDirector.generateAudio as any).mockImplementation(async (s: any) => ({ ...s, audioUrl: 'blob' }));
+    (VoiceDirector.generateAudio as any).mockImplementation(async (s: any) => ({
+      ...s,
+      audioUrl: 'blob',
+    }));
     (VoiceDirector.processPlainText as any).mockImplementation((text: string) => [
-      { type: 'character', text, character: 'DM' }
+      { type: 'character', text, character: 'DM' },
     ]);
   });
 
@@ -106,20 +93,6 @@ describe('useProgressiveVoice', () => {
     expect(mockPlayAudioSegment).toHaveBeenCalled();
   });
 
-  it('should handle API key timeout', async () => {
-    (useVoiceApiKey as any).mockReturnValue({
-      apiKey: null, apiKeyRef: { current: null }, error: undefined,
-      retryApiKeyFetch: vi.fn(),
-      waitForApiKey: vi.fn().mockResolvedValue(null),
-    });
-    const { result } = renderHook(() => useProgressiveVoice());
-    await act(async () => {
-      await result.current.speakAISegments([{ type: 'dm', text: 'test' }]);
-    });
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'API Key Timeout' }));
-    expect(result.current.error).toBe('API key timeout - could not retrieve ElevenLabs API key');
-  });
-
   it('should continue to next segment if one fails audio generation', async () => {
     (VoiceDirector.generateAudio as any)
       .mockImplementationOnce(async () => ({ error: 'Failed', text: 'Fail' }))
@@ -130,7 +103,7 @@ describe('useProgressiveVoice', () => {
     await act(async () => {
       await result.current.speakAISegments([
         { type: 'dm', text: 'Fail' },
-        { type: 'dm', text: 'Succeed' }
+        { type: 'dm', text: 'Succeed' },
       ]);
     });
 
@@ -152,10 +125,14 @@ describe('useProgressiveVoice', () => {
   it('should handle pausePlayback and resumePlayback', async () => {
     const { result } = renderHook(() => useProgressiveVoice());
 
-    act(() => { result.current.pausePlayback(); });
+    act(() => {
+      result.current.pausePlayback();
+    });
     expect(mockPausePlayback).toHaveBeenCalled();
 
-    await act(async () => { await result.current.resumePlayback(); });
+    await act(async () => {
+      await result.current.resumePlayback();
+    });
     expect(mockResumePlayback).toHaveBeenCalled();
   });
 
@@ -184,21 +161,15 @@ describe('useProgressiveVoice', () => {
   it('should handle toggleMute and setVolume', () => {
     const { result } = renderHook(() => useProgressiveVoice());
 
-    act(() => { result.current.toggleMute(); });
+    act(() => {
+      result.current.toggleMute();
+    });
     expect(mockToggleMute).toHaveBeenCalled();
 
-    act(() => { result.current.setVolume(0.5); });
-    expect(mockHandleSetVolume).toHaveBeenCalledWith(0.5);
-  });
-
-  it('should handle retryApiKeyFetch', async () => {
-    const { result } = renderHook(() => useProgressiveVoice());
-
-    await act(async () => {
-      await result.current.retryApiKeyFetch();
+    act(() => {
+      result.current.setVolume(0.5);
     });
-
-    expect(mockRetryApiKeyFetch).toHaveBeenCalled();
+    expect(mockHandleSetVolume).toHaveBeenCalledWith(0.5);
   });
 
   it('should toggle voice enabled state', async () => {

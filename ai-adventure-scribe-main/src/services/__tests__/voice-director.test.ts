@@ -156,7 +156,7 @@ describe('VoiceDirector', () => {
 
     it('should delegate generateAudio', async () => {
       const segment: any = { voiceId: 'v1', text: 'test' };
-      const result = await VoiceDirector.generateAudio(segment, 'key');
+      const result = await VoiceDirector.generateAudio(segment);
       expect(result.audioUrl).toBe('mock-url');
     });
 
