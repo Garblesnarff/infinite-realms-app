@@ -1,0 +1,11 @@
+-- 0011_session_companions -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- The authoritative DDL for session_companions is authored by hand in
+-- supabase/migrations/20260827_create_session_companions.sql and is manually
+-- applied after this PR merges. Do not apply this file or the Supabase file
+-- from the issue worktree.
+--
+-- This numbered file exists only to advance the Drizzle snapshot chain. The
+-- migration replay in scripts/test-migrations.sh merges both migration trees;
+-- keeping the generated CREATE TABLE here would collide with the authoritative
+-- Supabase migration and make replay order-dependent.

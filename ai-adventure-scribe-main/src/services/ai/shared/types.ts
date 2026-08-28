@@ -18,6 +18,8 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   narrationSegments?: NarrationSegment[];
+  speakerType?: 'player' | 'dm' | 'system' | 'companion';
+  speakerName?: string;
 }
 
 /**

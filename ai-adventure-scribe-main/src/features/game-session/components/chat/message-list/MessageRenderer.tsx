@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { CompanionMessage } from './CompanionMessage';
 import { DMMessage } from './DMMessage';
 import { DynamicOptionsSection } from './DynamicOptionsSection';
 import { PlayerMessage } from './PlayerMessage';
@@ -24,6 +25,7 @@ interface MessageRendererProps {
   isLastInGroup: boolean;
   isPlayer: boolean;
   isDM: boolean;
+  isCompanion: boolean;
   expandedMessages: Set<string>;
   setExpandedMessages: React.Dispatch<React.SetStateAction<Set<string>>>;
   imageByMessage: Record<string, { url: string; prompt: string }>;
@@ -47,6 +49,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     isLastInGroup,
     isPlayer,
     isDM,
+    isCompanion,
     expandedMessages,
     setExpandedMessages,
     imageByMessage,
@@ -80,7 +83,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
 
     // Image presence (persisted or ephemeral) for DM messages
     const hasMessageImages = isDM && Array.isArray(message.images) && message.images.length > 0;
-    const firstMessageImgUrl = hasMessageImages ? message.images[0]?.url : undefined;
+    const firstMessageImgUrl = hasMessageImages ? message.images?.[0]?.url : undefined;
     const ephemeralImgUrl = isDM && !hasMessageImages ? imageByMessage[messageId]?.url : undefined;
 
     return (
@@ -148,6 +151,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             imageError={genErrorByMessage[messageId]}
             onGenerateImage={() => onGenerateScene(message)}
           />
+        ) : isCompanion ? (
+          <CompanionMessage message={message} displayText={displayText} />
         ) : (
           <PlayerMessage
             message={message}
@@ -182,6 +187,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       prev.isLastInGroup === next.isLastInGroup &&
       prev.isPlayer === next.isPlayer &&
       prev.isDM === next.isDM &&
+      prev.isCompanion === next.isCompanion &&
       prev.characterName === next.characterName &&
       prev.onGenerateScene === next.onGenerateScene &&
       prev.onOptionSelect === next.onOptionSelect;

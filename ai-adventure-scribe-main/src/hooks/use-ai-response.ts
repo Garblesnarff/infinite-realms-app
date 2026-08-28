@@ -181,10 +181,18 @@ export const useAIResponse = (): {
         // Build conversation history for AIService
         const conversationHistory = messages.slice(0, -1).map((msg) => ({
           id: `msg_${Date.now()}_${Math.random()}`,
-          role: msg.sender === 'player' ? ('user' as const) : ('assistant' as const),
-          content: msg.text,
+          role:
+            msg.sender === 'player' || msg.sender === 'companion'
+              ? ('user' as const)
+              : ('assistant' as const),
+          content:
+            msg.sender === 'companion'
+              ? `Companion ${msg.speakerName ?? msg.characterName ?? 'Unknown'} (in-world speech): ${msg.text}`
+              : msg.text,
           timestamp: new Date(),
           narrationSegments: msg.narrationSegments,
+          speakerType: msg.sender,
+          speakerName: msg.speakerName ?? msg.characterName,
         }));
 
         // Create AI context with combat awareness

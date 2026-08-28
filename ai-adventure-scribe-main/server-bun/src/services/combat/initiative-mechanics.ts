@@ -7,12 +7,7 @@
 
 import type { CombatParticipant } from '../../../../db/schema/index';
 
-/**
- * Roll a d20
- */
-export function rollD20(): number {
-  return Math.floor(Math.random() * 20) + 1;
-}
+export { rollD20 } from '../../lib/dice.js';
 
 export class InitiativeMechanics {
   /**
@@ -26,7 +21,7 @@ export class InitiativeMechanics {
    * Sort participants by initiative (descending), then by modifier (descending) for ties
    */
   static sortParticipants<T extends { initiative: number; initiativeModifier: number }>(
-    participants: T[]
+    participants: T[],
   ): T[] {
     return [...participants].sort((a, b) => {
       if (b.initiative !== a.initiative) {
@@ -42,7 +37,7 @@ export class InitiativeMechanics {
   static calculateNextTurn(
     currentTurnOrder: number,
     totalParticipants: number,
-    currentRound: number
+    currentRound: number,
   ): {
     nextTurnOrder: number;
     newRound: boolean;
@@ -74,7 +69,7 @@ export class InitiativeMechanics {
   static getTurnOrderEntries(
     activeParticipants: CombatParticipant[],
     currentTurnOrder: number,
-    currentParticipantId: string | null
+    currentParticipantId: string | null,
   ) {
     return activeParticipants.map((participant, index) => ({
       participant,

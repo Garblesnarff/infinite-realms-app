@@ -10,7 +10,12 @@ import type { DialogueHistory } from '../../../../db/schema/index';
 
 const messageSchema = t.Object({
   id: t.Optional(t.String()),
-  speaker_type: t.String({ minLength: 1, maxLength: 32 }),
+  speaker_type: t.Union([
+    t.Literal('player'),
+    t.Literal('dm'),
+    t.Literal('system'),
+    t.Literal('companion'),
+  ]),
   speaker_id: t.Optional(t.String()),
   message: t.String({ minLength: 1, maxLength: 100_000 }),
   context: t.Optional(t.Record(t.String(), t.Unknown())),
@@ -47,12 +52,7 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
     '/:id/messages',
     async ({ params, query, user }) => {
       const [result, session] = await Promise.all([
-        SessionMessageService.getRecentMessages(
-          params.id,
-          user!.userId,
-          query.limit,
-          query.offset,
-        ),
+        SessionMessageService.getRecentMessages(params.id, user!.userId, query.limit, query.offset),
         SessionService.getSessionById(params.id, user!.userId),
       ]);
       const character = session.characterId
@@ -80,11 +80,7 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
     },
   )
   .get('/:id/messages/:messageId', async ({ params, user }) => ({
-    exists: await SessionMessageService.messageExists(
-      params.id,
-      params.messageId,
-      user!.userId,
-    ),
+    exists: await SessionMessageService.messageExists(params.id, params.messageId, user!.userId),
   }))
   .post(
     '/:id/messages',

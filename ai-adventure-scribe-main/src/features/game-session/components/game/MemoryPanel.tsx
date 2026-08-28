@@ -25,6 +25,7 @@ import { useCampaignJournal } from '@/hooks/use-campaign-journal';
 import { analytics } from '@/services/analytics';
 
 interface MemoryPanelProps {
+  sessionId?: string;
   sessionData: ExtendedGameSession | null;
   updateGameSessionState: (newState: Partial<ExtendedGameSession>) => Promise<void>;
   combatMode: boolean;
@@ -41,7 +42,7 @@ interface GameSidePanelProps extends MemoryPanelProps {
  * Provides filtering, sorting, and collapsible functionality
  */
 export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
-  ({ sessionData, updateGameSessionState, combatMode, isCollapsed, onToggle }) => {
+  ({ sessionId, sessionData, updateGameSessionState, combatMode, isCollapsed, onToggle }) => {
     // Get contexts
     const { memories = [], isLoading: memoriesLoading } = useMemoryContext();
     const { state: characterState } = useCharacter();
@@ -154,6 +155,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
               </SheetTrigger>
               <SheetContent side="right" className="w-[80vw] max-w-sm p-0">
                 <GameSidePanelContent
+                  sessionId={sessionId}
                   sessionData={sessionData}
                   updateGameSessionState={updateGameSessionState}
                   combatMode={combatMode}
@@ -231,6 +233,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
 
     return (
       <DesktopGameSidePanel
+        sessionId={sessionId}
         panelRef={panelRef}
         panelWidth={panelWidth}
         dragHandleRef={dragHandleRef}

@@ -17,6 +17,7 @@ import {
   integer,
   boolean,
   pgEnum,
+  unique,
 } from 'drizzle-orm/pg-core';
 
 import { conditionsLibrary } from './combat';
@@ -277,6 +278,36 @@ export const gameSessions = pgTable(
 );
 
 /**
+ * Characters controlled through the WebMCP companion surface for a session.
+ *
+ * The authoritative DDL is applied manually from the matching Supabase migration
+ * after the PR merges. This Drizzle definition keeps the application schema and
+ * sequential snapshot chain in agreement without making the server migration runner
+ * the owner of that DDL.
+ */
+export const sessionCompanions = pgTable(
+  'session_companions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => gameSessions.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    controller: text('controller').notNull().default('webmcp'),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    sessionCharacterUnique: unique('session_companions_session_character_unique').on(
+      table.sessionId,
+      table.characterId,
+    ),
+  }),
+);
+
+/**
  * Dialogue History Table
  * Chat messages during game sessions
  */
@@ -383,5 +414,7 @@ export type CharacterCondition = InferSelectModel<typeof characterConditions>;
 export type NewCharacterCondition = InferInsertModel<typeof characterConditions>;
 export type GameSession = InferSelectModel<typeof gameSessions>;
 export type NewGameSession = InferInsertModel<typeof gameSessions>;
+export type SessionCompanion = InferSelectModel<typeof sessionCompanions>;
+export type NewSessionCompanion = InferInsertModel<typeof sessionCompanions>;
 export type DialogueHistory = InferSelectModel<typeof dialogueHistory>;
 export type NewDialogueHistory = InferInsertModel<typeof dialogueHistory>;

@@ -121,4 +121,19 @@ describe('v1 session message routes API boundaries', () => {
     const json: any = await response.json();
     expect(json.messages).toBeDefined();
   });
+
+  it('rejects non-canonical speaker types on writes', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/valid-session-id/messages', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer valid-user-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ speaker_type: 'npc', message: 'should be rejected' }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+  });
 });

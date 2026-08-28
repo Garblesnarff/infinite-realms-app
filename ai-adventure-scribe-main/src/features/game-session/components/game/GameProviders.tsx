@@ -8,6 +8,7 @@ import { MessageProvider } from '@/contexts/MessageContext';
 import { SceneBackgroundProvider } from '@/contexts/SceneBackgroundContext';
 import { VoiceProvider } from '@/contexts/VoiceContext';
 import { ErrorBoundary } from '@/shared/components/error/ErrorBoundary';
+import { WebMcpCompanionBridge } from '@/webmcp/companion-tools';
 
 interface GameProvidersProps {
   sessionId: string;
@@ -36,7 +37,10 @@ const GameProviders: React.FC<GameProvidersProps> = ({
           <GameProvider characterId={characterId}>
             <MessageProvider sessionId={sessionId}>
               <MemoryProvider sessionId={sessionId}>
-                <VoiceProvider>{children}</VoiceProvider>
+                <VoiceProvider>
+                  <WebMcpCompanionBridge sessionId={sessionId} />
+                  {children}
+                </VoiceProvider>
               </MemoryProvider>
             </MessageProvider>
           </GameProvider>

@@ -180,6 +180,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(({
           {/* Right Character/Memory Panel */}
           <div className={`${isLeftCollapsed ? 'order-2' : 'order-3'}`}>
             <GameRightPanel
+              sessionId={sessionId}
               isCollapsed={isRightCollapsed}
               sessionData={sessionData}
               updateGameSessionState={updateGameSessionState}

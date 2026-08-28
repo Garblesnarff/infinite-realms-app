@@ -4,8 +4,8 @@ import { decideAttackApproach, describeResolvedAttack } from './combat-approach-
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
+import { assertActorTurn } from './combat-intent-turn.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
 import {
   getEquippedWeaponProfile,
   getParticipantAbilityProfile,
@@ -22,6 +22,7 @@ import { groundRequestedWeapon } from './weapon-grounding.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
+import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
@@ -80,6 +81,8 @@ type VersionOptional<T> = T extends { expectedVersion: number }
   ? Omit<T, 'expectedVersion'> & { expectedVersion?: number }
   : T;
 export type SubmittedCombatIntent = VersionOptional<CombatIntent>;
+
+export { assertActorTurn } from './combat-intent-turn.js';
 
 export type EncounterAlreadyConcludedResult = {
   encounterAlreadyConcluded: true;
@@ -236,36 +239,6 @@ type CombatState = Awaited<ReturnType<typeof CombatEncounterService.getCombatSta
  * unresolvable actor is a 404 naming the reference; only a real participant acting out of
  * sequence is a 422 about turns.
  */
-function assertActorTurn(state: CombatState, actorId: string, index: SessionEntityIndex) {
-  const current = state.currentParticipant;
-  const known = state.participants.some((participant) => participant.id === actorId);
-  // The current participant is logged on every refusal because the refusal alone never said
-  // whose turn it actually was, and the slug is logged beside the id because the slug is the
-  // only form the DM ever sees.
-  const currentContext = {
-    encounterId: state.encounter.id,
-    sessionId: state.encounter.sessionId,
-    actorId,
-    currentParticipantId: current?.id ?? null,
-    currentParticipantSlug: index.slugFor(current?.id) ?? null,
-  };
-  if (!known) {
-    logger.warn({ msg: 'COMBAT_INTENT_UNKNOWN_ACTOR', ...currentContext, roster: index.roster() });
-    throw new NotFoundError('Combat participant', actorId);
-  }
-  if (!current || current.id !== actorId) {
-    logger.warn({ msg: 'COMBAT_INTENT_OUT_OF_TURN', ...currentContext });
-    // The roster rides along on the refusal, not just in the log. A caller that is told only
-    // "wrong actor" can do nothing but repeat itself; one told who the board actually holds can
-    // re-choose. This is what the client-side repair loop regenerates against.
-    throw new BusinessLogicError('Actor is not the current-turn participant', {
-      ...currentContext,
-      roster: index.roster(),
-    });
-  }
-  return { actor: current, encounter: state.encounter };
-}
-
 /** `combat_participants` carries the action flags; the service's row type does not name them. */
 type TurnResourceView = { id: string; actionUsed?: boolean | null } & VitalsInput;
 

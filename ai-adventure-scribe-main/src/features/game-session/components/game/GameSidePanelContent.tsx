@@ -16,8 +16,10 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { CompanionPartyStrip } from '@/webmcp/CompanionPartyStrip';
 
 export interface GameSidePanelContentProps {
+  sessionId?: string;
   sessionData: ExtendedGameSession | null;
   updateGameSessionState: (newState: Partial<ExtendedGameSession>) => Promise<void>;
   combatMode: boolean;
@@ -53,6 +55,7 @@ export interface GameSidePanelContentProps {
  */
 export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.memo(
   ({
+    sessionId,
     sessionData,
     updateGameSessionState,
     activeTab,
@@ -107,6 +110,11 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
             <ScrollArea className="h-full">
               <div className="p-4">
                 <CompactCharacterHeader />
+                {sessionId ? (
+                  <div className="mt-3">
+                    <CompanionPartyStrip sessionId={sessionId} />
+                  </div>
+                ) : null}
               </div>
             </ScrollArea>
           )}

@@ -36,6 +36,7 @@ import { campaignsRoutes } from './routes/v1/campaigns';
 import { publicCampaignTemplateRoutes } from './routes/v1/public-campaign-templates';
 import { sessionsRoutes } from './routes/v1/sessions';
 import { sessionMessageRoutes } from './routes/v1/session-messages';
+import { companionRoutes } from './routes/v1/companions';
 import { memoryRoutes } from './routes/v1/memories';
 import { narrativeFactRoutes } from './routes/v1/narrative-facts.js';
 import { personalityRoutes } from './routes/v1/personality';
@@ -315,6 +316,7 @@ export function createApp() {
   app.use(securedGameDataRoutes);
   app.use(worldBuilderRoutes);
   app.use(sessionMessageRoutes);
+  app.use(companionRoutes);
   app.use(memoryRoutes);
   app.use(narrativeFactRoutes);
 

@@ -16,6 +16,7 @@ import { Z_INDEX } from '@/constants/z-index';
  */
 
 interface GameRightPanelProps {
+  sessionId?: string;
   isCollapsed: boolean;
   sessionData: ExtendedGameSession;
   updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
@@ -24,11 +25,12 @@ interface GameRightPanelProps {
 }
 
 export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
-  ({ isCollapsed, sessionData, updateGameSessionState, combatMode, onToggle }) => {
+  ({ sessionId, isCollapsed, sessionData, updateGameSessionState, combatMode, onToggle }) => {
     if (!isCollapsed) {
       return (
         <div className="w-full md:w-auto min-h-0 transition-all duration-300">
           <GameSidePanel
+            sessionId={sessionId}
             sessionData={sessionData}
             updateGameSessionState={updateGameSessionState}
             combatMode={combatMode}

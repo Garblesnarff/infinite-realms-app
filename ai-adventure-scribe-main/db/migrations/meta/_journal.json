@@ -78,6 +78,13 @@
       "when": 1787196430426,
       "tag": "0010_combat_participant_ac_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787841586526,
+      "tag": "0011_session_companions",
+      "breakpoints": true
     }
   ]
 }

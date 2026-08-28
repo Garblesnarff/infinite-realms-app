@@ -24,6 +24,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Z_INDEX } from '@/constants/z-index';
 
 export interface DesktopGameSidePanelProps {
+  sessionId?: string;
   panelRef: React.RefObject<HTMLDivElement>;
   panelWidth: string;
   dragHandleRef: React.RefObject<HTMLDivElement>;
@@ -53,6 +54,7 @@ export interface DesktopGameSidePanelProps {
  */
 export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.memo(
   ({
+    sessionId,
     panelRef,
     panelWidth,
     dragHandleRef,
@@ -206,7 +208,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
               >
                 <TabsContent value="character" className="mt-0 flex-1 border-0 bg-transparent p-0">
                   <div style={{ maxHeight: '78vh', overflow: 'auto' }} className="p-1">
-                    <RightSheetLive />
+                    <RightSheetLive sessionId={sessionId} />
                   </div>
                 </TabsContent>
 

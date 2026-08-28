@@ -13,6 +13,7 @@ import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { abilityModifier } from './combat-rules.js';
 import { resolveCombatantStats } from './combatant-stat-resolution.js';
+import { appendActiveCompanionInputs } from './companion-seating.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
 import { seatParticipantArmorClass } from './participant-armor-class.js';
 import { scaleMonsterForParty } from './party-scaling.js';
@@ -26,10 +27,12 @@ import {
   characters,
   characterStats,
   npcs,
+  sessionCompanions,
   combatParticipantStatus,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../../db/schema/index';
+import { isCompanionsEnabled } from '../../lib/companion-feature.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
@@ -108,6 +111,18 @@ export class CombatEncounterService {
       throw new NotFoundError('Session', sessionId);
     }
 
+    let participantsToSeat = participantInputs;
+    if (isCompanionsEnabled()) {
+      const activeCompanions = await db
+        .select({ characterId: sessionCompanions.characterId, name: characters.name })
+        .from(sessionCompanions)
+        .innerJoin(characters, eq(sessionCompanions.characterId, characters.id))
+        .where(
+          and(eq(sessionCompanions.sessionId, sessionId), eq(sessionCompanions.status, 'active')),
+        );
+      participantsToSeat = appendActiveCompanionInputs(participantInputs, activeCompanions);
+    }
+
     const [encounter] = await db
       .insert(combatEncounters)
       .values({
@@ -130,11 +145,11 @@ export class CombatEncounterService {
     const participantSizes: Record<string, EntitySize> = {};
 
     // Batch insert all participants (single query instead of N queries)
-    if (participantInputs.length > 0) {
-      const characterIds = participantInputs.flatMap((input) =>
+    if (participantsToSeat.length > 0) {
+      const characterIds = participantsToSeat.flatMap((input) =>
         input.characterId ? [input.characterId] : [],
       );
-      const npcIds = participantInputs.flatMap((input) => (input.npcId ? [input.npcId] : []));
+      const npcIds = participantsToSeat.flatMap((input) => (input.npcId ? [input.npcId] : []));
       const [characterRows, npcRows] = await Promise.all([
         characterIds.length
           ? db
@@ -164,11 +179,11 @@ export class CombatEncounterService {
        */
       const partySize = Math.max(
         1,
-        participantInputs.filter((input) => Boolean(input.characterId)).length,
+        participantsToSeat.filter((input) => Boolean(input.characterId)).length,
       );
 
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
-      const participantsWithInitiative = participantInputs.map((input) => {
+      const participantsWithInitiative = participantsToSeat.map((input) => {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
         const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;

@@ -36,6 +36,8 @@ import type { ReactNode } from 'react';
 import { useMessageQueue } from '@/hooks/use-message-queue';
 import { useMessages } from '@/hooks/use-messages';
 import { useSessionStorySocket } from '@/hooks/use-session-story-socket';
+import { getActiveCompanions } from '@/webmcp/companion-api';
+import { useCompanionScene } from '@/webmcp/use-companion-scene';
 
 // Project Types
 
@@ -59,7 +61,17 @@ export const MessageProvider: React.FC<{
   sessionId: string | null;
   children: ReactNode; // Used ReactNode
 }> = ({ sessionId, children }) => {
-  const { data: messages = [], isLoading, isFetching, hasMore, loadMore } = useMessages(sessionId);
+  const { data: companionScene } = useCompanionScene(sessionId);
+  const pollForCompanions = getActiveCompanions(companionScene).length > 0;
+  const {
+    data: messages = [],
+    isLoading,
+    isFetching,
+    hasMore,
+    loadMore,
+  } = useMessages(sessionId, {
+    pollForCompanions,
+  });
   const { messageMutation, queueStatus } = useMessageQueue(sessionId);
   const { mutateAsync } = messageMutation;
   const queryClient = useQueryClient();

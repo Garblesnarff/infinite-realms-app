@@ -11,6 +11,7 @@ import {
   IRThumb,
 } from '@/components/ui/ir-primitives';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { CompanionPartyStrip } from '@/webmcp/CompanionPartyStrip';
 
 const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => {
   const { state } = useCampaign();
@@ -65,9 +66,13 @@ const TwoCol: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="grid grid-cols-2 gap-3">{children}</div>
 );
 
-export const RightSheet: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
+export const RightSheet: React.FC<{ c: CharacterSheetVM; sessionId?: string }> = ({
+  c,
+  sessionId,
+}) => (
   <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
     <SheetHeader c={c} />
+    {sessionId ? <CompanionPartyStrip sessionId={sessionId} /> : null}
     <CoreStats c={c} />
     <AbilityScores c={c} />
 

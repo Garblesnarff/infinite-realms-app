@@ -3,7 +3,7 @@ import type { Memory } from './memory';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
-export type SpeakerType = 'player' | 'dm' | 'system';
+export type SpeakerType = 'player' | 'dm' | 'system' | 'companion';
 
 export type SessionStatus = 'active' | 'expired' | 'ending';
 
@@ -94,6 +94,8 @@ export interface ChatMessage {
   }>;
   options?: ActionOption[];
   characterName?: string;
+  /** Display name supplied by the message speaker, including companions. */
+  speakerName?: string;
   characterAvatar?: string;
   // Optional inline images associated with this message (not persisted server-side yet)
   images?: Array<{

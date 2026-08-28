@@ -36,12 +36,20 @@ export interface UseMessagesReturn {
   addMessage: (message: ChatMessage) => Promise<void>;
 }
 
+export interface UseMessagesOptions {
+  /** Poll history while a companion is active and its speech is not pushed by the server. */
+  pollForCompanions?: boolean;
+}
+
 /**
  * Custom hook for fetching and managing game messages with pagination
  * @param sessionId - Current game session ID
  * @returns Query result containing messages array, loading state, pagination functions
  */
-export const useMessages = (sessionId: string | null): UseMessagesReturn => {
+export const useMessages = (
+  sessionId: string | null,
+  options: UseMessagesOptions = {},
+): UseMessagesReturn => {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -78,6 +86,9 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
           characters: { id: string; name: string; avatar_url: string | null } | null;
         } | null;
         const characterData = sessions?.characters;
+        const context = msg.context as MessageContext;
+        const contextSpeakerName =
+          typeof context?.speaker_name === 'string' ? context.speaker_name : undefined;
 
         return {
           text: msg.message,
@@ -85,12 +96,22 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
           id: msg.id,
           timestamp: msg.timestamp,
           sequenceNumber: typeof msg.sequence_number === 'number' ? msg.sequence_number : undefined,
-          context: msg.context as MessageContext,
+          context,
           images: Array.isArray(msg.images) ? msg.images : undefined,
+          speakerName:
+            typeof msg.speaker_name === 'string'
+              ? msg.speaker_name
+              : contextSpeakerName
+                ? contextSpeakerName
+                : msg.speaker_type === 'player' && characterData
+                  ? characterData.name
+                  : undefined,
           characterName:
             msg.speaker_type === 'player' && characterData ? characterData.name : undefined,
           characterAvatar:
-            msg.speaker_type === 'player' && characterData ? characterData.avatar_url : undefined,
+            msg.speaker_type === 'player' && characterData
+              ? (characterData.avatar_url ?? undefined)
+              : undefined,
         };
       });
 
@@ -114,6 +135,7 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
       return { messages: messages, hasMore: moreAvailable };
     },
     enabled: !!sessionId,
+    refetchInterval: options.pollForCompanions ? 5_000 : false,
   });
 
   // Update allMessages whenever query data changes

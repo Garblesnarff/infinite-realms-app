@@ -41,6 +41,7 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
+import { rollD20 } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
@@ -76,13 +77,6 @@ function isProvidedD20(value: number | undefined): value is number {
 export class CombatAttackService {
   constructor() {
     // No database client needed - using global db instance
-  }
-
-  private rollD20(advantage = false, disadvantage = false): number {
-    const first = Math.floor(Math.random() * 20) + 1;
-    if (advantage === disadvantage) return first;
-    const second = Math.floor(Math.random() * 20) + 1;
-    return advantage ? Math.max(first, second) : Math.min(first, second);
   }
 
   /**
@@ -335,7 +329,7 @@ export class CombatAttackService {
       // here would apply advantage twice.
       const autoRolled = !isProvidedD20(providedD20);
       const attackRoll = autoRolled
-        ? this.rollD20(rules.advantage, rules.disadvantage)
+        ? rollD20(rules.advantage, rules.disadvantage)
         : (providedD20 as number);
 
       const targetAC = rules.targetAc;
@@ -687,7 +681,7 @@ export class CombatAttackService {
         if (spell.attackType) {
           // Spell attack roll
           const attackRules = spellRules.get(targetId);
-          const attackRoll = this.rollD20(attackRules?.advantage, attackRules?.disadvantage);
+          const attackRoll = rollD20(attackRules?.advantage, attackRules?.disadvantage);
           const hitCheckResult = checkHit({
             attackRoll,
             attackBonus: spellAttackBonus,
@@ -799,7 +793,7 @@ export class CombatAttackService {
             explicitBonus ??
             this.abilityModifier(targetProfile.scores[ability]) +
               (proficient ? this.proficiencyBonus(targetProfile.level) : 0);
-          const saveRoll = this.rollD20() + saveBonus;
+          const saveRoll = rollD20() + saveBonus;
           const savedSuccessfully = saveRoll >= saveDC;
 
           if (damageDice && damageType) {

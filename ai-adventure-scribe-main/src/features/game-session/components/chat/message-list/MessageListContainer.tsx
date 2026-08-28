@@ -72,11 +72,17 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         return [];
       }
 
-      const groups: { sender: string; messages: ChatMessage[]; isPlayer: boolean }[] = [];
+      const groups: {
+        sender: string;
+        messages: ChatMessage[];
+        isPlayer: boolean;
+        isCompanion: boolean;
+      }[] = [];
       let currentGroup = {
         sender: messages[0].sender,
         messages: [messages[0]],
         isPlayer: messages[0].sender === 'player',
+        isCompanion: messages[0].sender === 'companion',
       };
 
       for (let i = 1; i < messages.length; i++) {
@@ -89,6 +95,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
             sender: message.sender,
             messages: [message],
             isPlayer: message.sender === 'player',
+            isCompanion: message.sender === 'companion',
           };
         }
       }
@@ -117,7 +124,18 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               className={`flex max-w-[90%] ${group.isPlayer ? 'flex-row-reverse' : 'flex-row'} items-start`}
             >
               {/* Avatar for first message in group */}
-              {!group.isPlayer ? (
+              {group.isCompanion ? (
+                <div className="flex-shrink-0 mr-3 mb-2">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium bg-infinite-teal/20 text-infinite-teal border-2 border-infinite-teal/50"
+                    aria-hidden
+                  >
+                    {(group.messages[0].speakerName || group.messages[0].characterName || 'C')
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                </div>
+              ) : !group.isPlayer ? (
                 <div className="flex-shrink-0 mr-3 mb-2">
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium bg-primary text-primary-foreground"
@@ -161,6 +179,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       isLastInGroup={msgIndex === group.messages.length - 1}
                       isPlayer={group.isPlayer}
                       isDM={message.sender === 'dm'}
+                      isCompanion={group.isCompanion}
                       expandedMessages={expandedMessages}
                       setExpandedMessages={setExpandedMessages}
                       imageByMessage={imageByMessage}
