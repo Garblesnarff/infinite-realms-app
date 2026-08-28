@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { and, asc, desc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
 
 import {
   calculateCompanionRollModifier,
@@ -420,8 +420,12 @@ export function redactCombatState(
     current_turn_name: state.currentParticipant?.name ?? null,
     participants,
     your_companion_participant_id:
-      active.find((participant) => participant.characterId === requestingCompanionCharacterId)
-        ?.id ?? null,
+      active.find(
+        (participant) =>
+          requestingCompanionCharacterId !== null &&
+          participant.characterId !== null &&
+          participant.characterId === requestingCompanionCharacterId,
+      )?.id ?? null,
   };
 }
 
@@ -435,12 +439,21 @@ export class CompanionService {
       const [session] = await tx
         .select({ id: gameSessions.id, mainCharacterId: gameSessions.characterId })
         .from(gameSessions)
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(eq(gameSessions.id, sessionId), sessionOwnerPredicate(userId)))
+        .where(eq(gameSessions.id, sessionId))
         .limit(1)
         .for('update');
       if (!session) throw new NotFoundError('Session', sessionId);
+
+      // Lock only the parent row. PostgreSQL rejects FOR UPDATE on the nullable side of an
+      // outer join, so authorization is deliberately a separate, non-locking statement.
+      const [ownedSession] = await tx
+        .select({ id: gameSessions.id })
+        .from(gameSessions)
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(and(eq(gameSessions.id, sessionId), sessionOwnerPredicate(userId)))
+        .limit(1);
+      if (!ownedSession) throw new NotFoundError('Session', sessionId);
 
       const [character] = await tx
         .select({ id: characters.id })
@@ -452,24 +465,17 @@ export class CompanionService {
         throw new ValidationError('The session main character cannot join as a companion');
       }
 
-      const [existing] = await tx
-        .select()
-        .from(sessionCompanions)
-        .where(
-          and(
-            eq(sessionCompanions.sessionId, sessionId),
-            eq(sessionCompanions.characterId, characterId),
-          ),
-        )
-        .limit(1)
-        .for('update');
-      if (existing?.status === 'active') return existing;
-
+      // The parent lock serializes joins for this session. Excluding the candidate preserves
+      // idempotent re-joins even when the session is already at the cap with this character.
       const activeRows = await tx
         .select({ id: sessionCompanions.id })
         .from(sessionCompanions)
         .where(
-          and(eq(sessionCompanions.sessionId, sessionId), eq(sessionCompanions.status, 'active')),
+          and(
+            eq(sessionCompanions.sessionId, sessionId),
+            eq(sessionCompanions.status, 'active'),
+            ne(sessionCompanions.characterId, characterId),
+          ),
         );
       if (activeRows.length >= MAX_SESSION_COMPANIONS) {
         throw new BusinessLogicError('A session can have at most two active companions', {
@@ -477,20 +483,15 @@ export class CompanionService {
         });
       }
 
-      if (existing) {
-        const [reactivated] = await tx
-          .update(sessionCompanions)
-          .set({ status: 'active', controller: 'webmcp' })
-          .where(eq(sessionCompanions.id, existing.id))
-          .returning();
-        if (reactivated) return reactivated;
-      } else {
-        const [created] = await tx
-          .insert(sessionCompanions)
-          .values({ sessionId, characterId, controller: 'webmcp', status: 'active' })
-          .returning();
-        if (created) return created;
-      }
+      const [upserted] = await tx
+        .insert(sessionCompanions)
+        .values({ sessionId, characterId, controller: 'webmcp', status: 'active' })
+        .onConflictDoUpdate({
+          target: [sessionCompanions.sessionId, sessionCompanions.characterId],
+          set: { status: 'active', controller: 'webmcp' },
+        })
+        .returning();
+      if (upserted) return upserted;
       throw new InternalServerError('Failed to join companion');
     });
   }

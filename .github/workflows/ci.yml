@@ -188,6 +188,7 @@ jobs:
             src/services/__tests__/insert-select-writes-land.test.ts \
             src/services/__tests__/combat-damage-log-resilience.test.ts \
             src/services/__tests__/combat-initiative-modifier.real-db.test.ts \
+            src/services/__tests__/companions.real-db.test.ts \
             2>&1 | tee "/tmp/real-db-$GITHUB_RUN_ID.log"
           if grep -qE '^ *[1-9][0-9]* skip' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
             echo "::error::a real-database suite SKIPPED. The database env did not reach the tests."

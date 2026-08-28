@@ -30,7 +30,10 @@ const fakeDb: any = {
   insert: () => ({
     values: (values: Record<string, unknown>) => {
       insertedValues.push(values);
-      return { returning: async () => [insertedRow] };
+      return {
+        onConflictDoUpdate: () => ({ returning: async () => [insertedRow] }),
+        returning: async () => [insertedRow],
+      };
     },
   }),
 };
@@ -96,7 +99,7 @@ beforeEach(() => {
 
 describe('WebMCP companion service guards and writes', () => {
   it('rejects a non-owner character before checking the companion cap', async () => {
-    selectRows = [[{ id: 'session-1', mainCharacterId: 'character-1' }], []];
+    selectRows = [[{ id: 'session-1', mainCharacterId: 'character-1' }], [{ id: 'session-1' }], []];
 
     await expect(
       CompanionService.join('session-1', 'character-foreign', 'user-1'),
@@ -108,8 +111,8 @@ describe('WebMCP companion service guards and writes', () => {
   it('enforces the two-active-companion cap transactionally', async () => {
     selectRows = [
       [{ id: 'session-1', mainCharacterId: 'character-1' }],
+      [{ id: 'session-1' }],
       [{ id: 'character-3' }],
-      [],
       [{ id: 'companion-1' }, { id: 'companion-2' }],
     ];
 
@@ -366,5 +369,28 @@ describe('WebMCP scene redaction', () => {
     expect(redactCombatState(state, 'character-3').your_companion_participant_id).toBe(
       'participant-2',
     );
+  });
+
+  it('does not identify a null-character monster when no companion is requesting the scene', () => {
+    const combat = redactCombatState(
+      {
+        encounter: { currentRound: 1 },
+        participants: [
+          {
+            id: 'participant-monster',
+            characterId: null,
+            name: 'Ogre',
+            participantType: 'monster',
+            isActive: true,
+            turnOrder: 0,
+            maxHp: 40,
+          },
+        ],
+        currentParticipant: null,
+      } as any,
+      null,
+    );
+
+    expect(combat.your_companion_participant_id).toBeNull();
   });
 });
