@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.12.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.5...v0.12.0) (2026-08-28)
+
+
+### Features
+
+* **webmcp:** add companion party surface ([#1930](https://github.com/Garblesnarff/infinite-realms-production/issues/1930)) ([15cc08e](https://github.com/Garblesnarff/infinite-realms-production/commit/15cc08e6cbc79f25632436eb8639d80a99c57d2a))
+
+
+### Bug Fixes
+
+* **webmcp:** harden companion join and scene smoke regressions ([#1933](https://github.com/Garblesnarff/infinite-realms-production/issues/1933)) ([b70e366](https://github.com/Garblesnarff/infinite-realms-production/commit/b70e36686c9b6b7fe4d1eeda88fce6a6bed98eea))
+
 ## [0.11.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.4...v0.11.5) (2026-08-27)
 
 
