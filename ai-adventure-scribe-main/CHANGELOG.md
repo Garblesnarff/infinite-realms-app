@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.12.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.12.0...v0.12.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* stabilize progressive voice playback and skip engine lines ([#1931](https://github.com/Garblesnarff/infinite-realms-production/issues/1931)) ([71d3b95](https://github.com/Garblesnarff/infinite-realms-production/commit/71d3b958a86fbc89222dc4f8a77b87bc3c3408aa))
+
 ## [0.12.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.11.5...v0.12.0) (2026-08-28)
 
 
