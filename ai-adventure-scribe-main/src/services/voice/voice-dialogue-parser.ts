@@ -15,6 +15,7 @@ import { cleanSegmentText } from './voice-utils';
 import { type AISegment, type VoiceSegment, assignVoice } from '../voice-routing';
 
 import logger from '@/lib/logger';
+import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
 export class VoiceDialogueParser {
   /**
@@ -24,7 +25,11 @@ export class VoiceDialogueParser {
   static processPlainText(text: string): VoiceSegment[] {
     logger.info('📝 VoiceDialogueParser: Processing plain text with dialogue detection');
 
-    const cleanText = cleanSegmentText(text);
+    // Strip engine transcript lines before normalizing whitespace. The
+    // normalizer collapses line boundaries, which would otherwise make the
+    // engine line indistinguishable from the narration that follows it.
+    const textWithoutEngineLines = typeof text === 'string' ? stripEngineGeneratedLines(text) : '';
+    const cleanText = cleanSegmentText(textWithoutEngineLines);
     if (!cleanText) {
       return [];
     }

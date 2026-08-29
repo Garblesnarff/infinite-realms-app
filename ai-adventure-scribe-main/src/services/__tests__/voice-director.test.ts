@@ -77,6 +77,18 @@ describe('VoiceDirector', () => {
       expect(result.length).toBe(0);
     });
 
+    it('should exclude engine transcript lines before creating voice segments', () => {
+      const engineLine = '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT.';
+      const result = VoiceDirector.processAISegments([
+        { type: 'dm', text: `${engineLine}\n\nThe ward shatters.` },
+        { type: 'dm', text: engineLine },
+      ] as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('The ward shatters.');
+      expect(result[0].text).not.toContain('Engine:');
+    });
+
     it('should clean text by removing markdown and extra whitespace', () => {
       const input = [{ type: 'dm', text: '  **Bold** _Italic_   ' }];
       const result = VoiceDirector.processAISegments(input as any);

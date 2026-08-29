@@ -27,6 +27,7 @@ import {
 } from './voice-routing';
 
 import logger from '@/lib/logger';
+import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 
 export type { VoiceSegment, VoicePool, VoiceConfig, AISegment };
 
@@ -36,12 +37,13 @@ export class VoiceDirector {
    * This is the main entry point - replaces the complex parsing chain
    */
   static processAISegments(aiSegments: AISegment[], _sessionId?: string): VoiceSegment[] {
-    logger.info('🎭 VoiceDirector: Processing', aiSegments.length, 'AI segments');
+    const narratableSegments = stripEngineGeneratedLinesFromSegments(aiSegments);
+    logger.info('🎭 VoiceDirector: Processing', narratableSegments.length, 'AI segments');
 
     const voiceSegments: VoiceSegment[] = [];
 
-    for (let i = 0; i < aiSegments.length; i++) {
-      const segment = aiSegments[i];
+    for (let i = 0; i < narratableSegments.length; i++) {
+      const segment = narratableSegments[i];
 
       try {
         // Clean and validate text

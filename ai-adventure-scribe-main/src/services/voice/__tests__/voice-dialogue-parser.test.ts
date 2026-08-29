@@ -30,6 +30,17 @@ describe('VoiceDialogueParser', () => {
       expect(result[0].voiceId).toBeDefined();
     });
 
+    it('should exclude engine transcript lines before creating narration segments', () => {
+      const engineLine = '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT.';
+      const result = VoiceDialogueParser.processPlainText(
+        `${engineLine}\n\nThe ward shatters and the corridor falls silent.`,
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('The ward shatters and the corridor falls silent.');
+      expect(result[0].text).not.toContain('Engine:');
+    });
+
     it('should parse simple dialogue with attribution after the quote (asserting regex limitations)', () => {
       const text = '"I am the fire, I am the death," growled Smaug.';
       const result = VoiceDialogueParser.processPlainText(text);
@@ -45,13 +56,16 @@ describe('VoiceDialogueParser', () => {
     });
 
     it('should parse simple dialogue with attribution before the quote', () => {
-      const text = 'Gimli shouts, "Let them come! There is one dwarf yet in Moria who still draws breath!"';
+      const text =
+        'Gimli shouts, "Let them come! There is one dwarf yet in Moria who still draws breath!"';
       const result = VoiceDialogueParser.processPlainText(text);
 
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('character');
       expect(result[0].character).toBe('Gimli');
-      expect(result[0].text).toBe('Let them come! There is one dwarf yet in Moria who still draws breath!');
+      expect(result[0].text).toBe(
+        'Let them come! There is one dwarf yet in Moria who still draws breath!',
+      );
     });
 
     it('should parse smart quotes (asserting regex post-attribution parsing with non-matched verbs)', () => {
@@ -100,7 +114,8 @@ describe('VoiceDialogueParser', () => {
     });
 
     it('should extract surrounding narration before and after dialogue segments', () => {
-      const text = 'You step into the tavern. Gimli shouts, "A pint of ale!" while slamming his fist on the table.';
+      const text =
+        'You step into the tavern. Gimli shouts, "A pint of ale!" while slamming his fist on the table.';
       const result = VoiceDialogueParser.processPlainText(text);
 
       expect(result).toHaveLength(3);

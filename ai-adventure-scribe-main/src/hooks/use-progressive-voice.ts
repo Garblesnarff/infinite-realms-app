@@ -129,6 +129,11 @@ export const useProgressiveVoice = () => {
     setState((prev) => ({ ...prev, volume, isMuted }));
   }, [volume, isMuted]);
 
+  // Cleanup must not be coupled to the changing segment array. Keeping the
+  // latest callback here lets the unmount effect run once while still
+  // stopping the segments that are current when the hook is disposed.
+  const stopPlaybackRef = React.useRef<() => void>(() => undefined);
+
   const voiceProcessingStopPlayback = React.useCallback(() => {
     baseStopPlayback(state.segments);
   }, [state.segments, baseStopPlayback]);
@@ -145,6 +150,10 @@ export const useProgressiveVoice = () => {
     currentAudio,
   });
 
+  const abortProcessing = React.useCallback(() => {
+    abortController.current?.abort();
+  }, [abortController]);
+
   /**
    * Stop current playback completely
    */
@@ -152,10 +161,12 @@ export const useProgressiveVoice = () => {
     baseStopPlayback(state.segments);
 
     // Abort any ongoing processing
-    if (abortController.current) {
-      abortController.current.abort();
-    }
-  }, [state.segments, baseStopPlayback, abortController]);
+    abortProcessing();
+  }, [state.segments, baseStopPlayback, abortProcessing]);
+
+  React.useEffect(() => {
+    stopPlaybackRef.current = stopPlayback;
+  }, [stopPlayback]);
 
   /**
    * Pause current playback without losing state
@@ -194,14 +205,11 @@ export const useProgressiveVoice = () => {
 
   // Cleanup on unmount
   React.useEffect(() => {
-    const currentAbortController = abortController.current;
     return () => {
-      if (currentAbortController) {
-        currentAbortController.abort();
-      }
-      stopPlayback();
+      abortProcessing();
+      stopPlaybackRef.current();
     };
-  }, [stopPlayback, abortController]);
+  }, [abortProcessing]);
 
   return React.useMemo(
     () => ({
