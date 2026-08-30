@@ -22,7 +22,12 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
   onSelect,
   getModifier,
 }) => {
-  const stats = character.character_stats;
+  // normalizeCharacter wraps stats in an array; older payloads still send an object.
+  const cs = character.character_stats as
+    | Character['character_stats']
+    | NonNullable<Character['character_stats']>[]
+    | undefined;
+  const stats = Array.isArray(cs) ? cs[0] : cs;
   const backgroundImage =
     character.background_image || new URL('/card-background.jpeg', import.meta.url).href;
   const cardTitle = `Select character: ${character.name}, Level ${character.level} ${character.race} ${character.class}`;
