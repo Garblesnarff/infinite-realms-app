@@ -1,4 +1,6 @@
 import {
+  getCanonicalVoiceCategory,
+  getVoiceConfigByCategory,
   getVoicePoolByCategory,
   getVoicePoolByCharacter,
   detectVoiceCategoryFromNPCType,
@@ -15,6 +17,8 @@ export { normalizeCharacterName };
 export {
   type VoicePool,
   VOICE_POOLS,
+  getCanonicalVoiceCategory,
+  getVoiceConfigByCategory,
   getVoicePoolByCategory,
   getVoicePoolByCharacter,
   detectVoiceCategoryFromNPCType,
@@ -86,6 +90,20 @@ export function clearCharacterVoiceMappings(): void {
 }
 
 /**
+ * Seed the runtime map with a persistent assignment before playback starts.
+ * VoiceConsistencyService is the source of the session assignment; the
+ * director must reuse that assignment instead of selecting a second voice.
+ */
+export function setCharacterVoiceMapping(character: string, voice: VoiceConfig): void {
+  const normalizedCharacter = normalizeCharacterName(character);
+  if (!normalizedCharacter) {
+    return;
+  }
+
+  ensureMapInitialized().set(normalizedCharacter, voice);
+}
+
+/**
  * Get current character-to-voice mappings
  */
 export function getCharacterVoiceMappings(): Record<string, string> {
@@ -117,24 +135,23 @@ export function assignVoice(segment: AISegment): VoiceConfig {
       return existingVoice;
     }
 
-    // Assign new voice based on voice category hint or character fingerprint
-    let voicePool: VoiceConfig[];
-
+    // A category is a label, not an ElevenLabs ID. Resolve it directly so
+    // aliases such as "gruff" select their configured voice instead of
+    // falling through to an arbitrary pool member.
+    let selectedVoice: VoiceConfig;
     if (segment.voice_category) {
-      voicePool = getVoicePoolByCategory(segment.voice_category);
+      selectedVoice = getVoiceConfigByCategory(segment.voice_category);
     } else {
-      voicePool = getVoicePoolByCharacter(character);
+      const voicePool = getVoicePoolByCharacter(character);
+      const voiceIndex = hashCharacterName(character) % voicePool.length;
+      selectedVoice = voicePool[voiceIndex];
     }
 
-    // Use character name hash to pick consistent voice from pool
-    const voiceIndex = hashCharacterName(character) % voicePool.length;
-    const selectedVoice = voicePool[voiceIndex];
-
     // Remember this assignment
-    voiceMap.set(character, selectedVoice);
+    setCharacterVoiceMapping(character, selectedVoice);
 
     logger.info(
-      `🎯 New voice assignment: "${character}" -> ${selectedVoice.name} (${segment.voice_category || 'auto'})`,
+      `🎯 New voice assignment: "${character}" -> ${selectedVoice.name} [${selectedVoice.id}] (${segment.voice_category || 'auto'})`,
     );
     return selectedVoice;
   }

@@ -1,30 +1,88 @@
+import { VOICE_CONFIGS } from './voice-constants';
 import { type VoicePool, VOICE_POOLS } from './voice-pools';
 
 import type { VoiceConfig } from '../voice-routing';
+import type { VoiceConfig as VoiceDefinition } from './voice-types';
+
+import logger from '@/lib/logger';
+
+const VOICE_CATEGORY_ALIASES: Record<string, string> = {
+  dm: 'narrator',
+  narrator: 'narrator',
+  hero: 'hero_male',
+  villain: 'villain_male',
+  creature: 'monster',
+  gruff: 'guard',
+};
+
+const VOICE_CATEGORY_POOLS: Record<string, keyof VoicePool> = {
+  narrator: 'dm',
+  hero_male: 'heroes',
+  hero_female: 'heroes',
+  villain_male: 'villains',
+  villain_female: 'villains',
+  monster: 'creatures',
+  goblin: 'creatures',
+  merchant: 'npcs',
+  guard: 'npcs',
+  innkeeper: 'npcs',
+  elder: 'npcs',
+  child: 'npcs',
+  default: 'npcs',
+};
+
+/**
+ * Normalize the category labels emitted by the AI before looking them up.
+ * Category labels are not ElevenLabs voice IDs; they must resolve to a
+ * configured voice before they reach the audio service.
+ */
+export function normalizeVoiceCategory(category: string): string {
+  return category
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+/**
+ * Return the configured category key for an AI category label.
+ */
+export function getCanonicalVoiceCategory(category: string): string | undefined {
+  if (typeof category !== 'string' || !category.trim()) {
+    return undefined;
+  }
+
+  const normalized = normalizeVoiceCategory(category);
+  const canonical = VOICE_CATEGORY_ALIASES[normalized] || normalized;
+  return VOICE_CONFIGS[canonical] ? canonical : undefined;
+}
+
+/**
+ * Resolve a category to a real ElevenLabs voice configuration.
+ * Unknown categories deliberately warn instead of silently becoming narrator.
+ */
+export function getVoiceConfigByCategory(category: string): VoiceDefinition {
+  const canonical = getCanonicalVoiceCategory(category);
+  if (canonical) {
+    return VOICE_CONFIGS[canonical];
+  }
+
+  logger.warn(
+    `⚠️ Unmapped voice category "${String(category)}"; falling back to narrator voice (${VOICE_CONFIGS.narrator.id})`,
+  );
+  return VOICE_CONFIGS.narrator;
+}
 
 /**
  * Get voice pool based on AI's voice category hint
  */
 export function getVoicePoolByCategory(category: string): VoiceConfig[] {
-  const categoryMap: Record<string, keyof VoicePool> = {
-    narrator: 'dm',
-    hero_male: 'heroes',
-    hero_female: 'heroes',
-    hero: 'heroes',
-    villain_male: 'villains',
-    villain_female: 'villains',
-    villain: 'villains',
-    monster: 'creatures',
-    creature: 'creatures',
-    goblin: 'creatures',
-    merchant: 'npcs',
-    guard: 'npcs',
-    innkeeper: 'npcs',
-    elder: 'npcs',
-    child: 'npcs',
-  };
+  const canonical = getCanonicalVoiceCategory(category);
+  const poolKey = canonical ? VOICE_CATEGORY_POOLS[canonical] : undefined;
+  if (!poolKey) {
+    getVoiceConfigByCategory(category);
+    return VOICE_POOLS.dm;
+  }
 
-  const poolKey = categoryMap[category.toLowerCase()] || 'npcs';
   return VOICE_POOLS[poolKey];
 }
 

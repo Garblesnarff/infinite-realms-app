@@ -84,7 +84,7 @@ export class VoiceAudioService {
     }
 
     logger.info(
-      `🎵 Generating NEW audio for ${segment.character}: "${segment.text.substring(0, 50)}..."`,
+      `🎵 Generating NEW audio for ${segment.character} with voice ${segment.voiceId}: "${segment.text.substring(0, 50)}..."`,
     );
 
     try {

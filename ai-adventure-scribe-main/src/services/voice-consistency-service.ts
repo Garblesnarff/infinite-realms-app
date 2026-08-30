@@ -16,11 +16,35 @@ import { VoiceConsistencyRepository } from './voice/voice-consistency-repository
 import { inferVoiceCategory, normalizeCharacterName } from './voice/voice-utils';
 import { VoiceMapper } from './voice-mapper';
 import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
+import { setCharacterVoiceMapping } from './voice-routing';
 
 import type { VoiceConfig } from './voice/voice-types';
 
 import logger from '@/lib/logger';
 import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
+
+const LEGACY_NARRATOR_VOICE_ID = 'bIHbv24MWmeRgasZH58o';
+
+function resolvePersistedVoiceConfig(mapping: {
+  voiceCategory: string;
+  voiceId: string | null;
+}): VoiceConfig {
+  const voiceConfig = VoiceMapper.getVoiceForCategory(mapping.voiceCategory);
+  const persistedVoiceId = mapping.voiceId?.trim();
+
+  // Older assignments stored the narrator ID when an AI label was not found
+  // (notably "gruff"). Do not let that stale fallback overwrite a now-valid
+  // category mapping; retain non-fallback custom IDs for canonical categories.
+  if (
+    !persistedVoiceId ||
+    persistedVoiceId === LEGACY_NARRATOR_VOICE_ID ||
+    persistedVoiceId === VoiceMapper.getNarratorVoice().id
+  ) {
+    return voiceConfig;
+  }
+
+  return { ...voiceConfig, id: persistedVoiceId };
+}
 
 export { type VoiceProfile };
 
@@ -129,6 +153,10 @@ export class VoiceConsistencyService {
       string,
       { characterName: string; voiceCategory: string; voiceId: string; count: number }
     >();
+    const pendingAssignments = new Map<
+      string,
+      { voiceCategory: string; voiceConfig: VoiceConfig }
+    >();
 
     for (const segment of cleanSegments) {
       if (!segment.character) {
@@ -147,12 +175,12 @@ export class VoiceConsistencyService {
 
       if (existingMapping) {
         // Use existing voice assignment
+        const voiceConfig = resolvePersistedVoiceConfig(existingMapping);
+        setCharacterVoiceMapping(cleanCharacter, voiceConfig);
         assignments.push({
           character: cleanCharacter,
           voiceCategory: existingMapping.voiceCategory,
-          voiceConfig:
-            VoiceMapper.getAllVoices()[existingMapping.voiceCategory] ||
-            VoiceMapper.getAllVoices().default,
+          voiceConfig,
           isNewCharacter: false,
         });
 
@@ -160,9 +188,13 @@ export class VoiceConsistencyService {
         updatesNeeded.set(existingMapping.id, (updatesNeeded.get(existingMapping.id) || 0) + 1);
       } else {
         // New character - use AI's voice category assignment or fallback
-        const voiceCategory = segment.voice_category || inferVoiceCategory(cleanCharacter);
-        const voiceConfig =
-          VoiceMapper.getAllVoices()[voiceCategory] || VoiceMapper.getAllVoices().default;
+        const pending = pendingAssignments.get(cleanCharacter);
+        const voiceCategory =
+          pending?.voiceCategory || segment.voice_category || inferVoiceCategory(cleanCharacter);
+        const voiceConfig = pending?.voiceConfig || VoiceMapper.getVoiceForCategory(voiceCategory);
+
+        pendingAssignments.set(cleanCharacter, { voiceCategory, voiceConfig });
+        setCharacterVoiceMapping(cleanCharacter, voiceConfig);
 
         assignments.push({
           character: cleanCharacter,
@@ -172,9 +204,9 @@ export class VoiceConsistencyService {
         });
 
         // ⚡ Bolt: Aggregate increments for new characters in this response.
-        const pending = insertsNeeded.get(cleanCharacter);
-        if (pending) {
-          pending.count++;
+        const pendingInsert = insertsNeeded.get(cleanCharacter);
+        if (pendingInsert) {
+          pendingInsert.count++;
         } else {
           insertsNeeded.set(cleanCharacter, {
             characterName: cleanCharacter,

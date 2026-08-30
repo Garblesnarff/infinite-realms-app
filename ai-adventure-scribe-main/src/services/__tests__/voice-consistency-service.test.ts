@@ -4,8 +4,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { VoiceConsistencyRepository } from '../voice/voice-consistency-repository';
 import { VoiceConsistencyService } from '../voice-consistency-service';
+import { VoiceDirector } from '../voice-director';
 import { VoiceMapper } from '../voice-mapper';
 import { voiceProfileService } from '../voice-profile-service';
+import { clearCharacterVoiceMappings } from '../voice-routing';
 
 import logger from '@/lib/logger';
 
@@ -48,6 +50,7 @@ describe('VoiceConsistencyService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearCharacterVoiceMappings();
     service = new VoiceConsistencyService();
   });
 
@@ -98,14 +101,19 @@ describe('VoiceConsistencyService', () => {
     });
 
     it('should return minimal context when Repository throws or rejects', async () => {
-      vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockRejectedValueOnce(new Error('DB failure'));
+      vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockRejectedValueOnce(
+        new Error('DB failure'),
+      );
 
       const result = await service.getSessionVoiceContext(sessionId);
 
       expect(result.knownCharacters).toEqual({});
       expect(result.availableVoiceCategories).toContain('hero_male');
       expect(result.availableVoiceCategories).not.toContain('default');
-      expect(logger.error).toHaveBeenCalledWith('Error getting session voice context:', expect.any(Error));
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error getting session voice context:',
+        expect.any(Error),
+      );
     });
   });
 
@@ -124,15 +132,24 @@ describe('VoiceConsistencyService', () => {
       ];
 
       vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockResolvedValueOnce(mockMappings);
-      vi.mocked(VoiceConsistencyRepository.updateCharacterUsage).mockResolvedValue(undefined as any);
-      vi.mocked(VoiceConsistencyRepository.saveCharacterVoiceMapping).mockResolvedValue(undefined as any);
+      vi.mocked(VoiceConsistencyRepository.updateCharacterUsage).mockResolvedValue(
+        undefined as any,
+      );
+      vi.mocked(VoiceConsistencyRepository.saveCharacterVoiceMapping).mockResolvedValue(
+        undefined as any,
+      );
 
       // Segments containing narration, existing character, and new character
       const segments = [
         { type: 'narration', text: 'Suddenly, a cold wind blows.' },
         { type: 'dialogue', text: 'I walk in silence.', character: 'Drizzt' },
         { type: 'dialogue', text: 'I walk in silence again.', character: 'Drizzt' },
-        { type: 'dialogue', text: 'By the hammer of Moradin!', character: 'Bruenor', voice_category: 'elder' },
+        {
+          type: 'dialogue',
+          text: 'By the hammer of Moradin!',
+          character: 'Bruenor',
+          voice_category: 'elder',
+        },
       ];
 
       const result = await service.processVoiceAssignments(sessionId, segments);
@@ -152,13 +169,13 @@ describe('VoiceConsistencyService', () => {
       expect(result[1]).toEqual({
         character: 'drizzt',
         voiceCategory: 'hero_male',
-        voiceConfig: VoiceMapper.getAllVoices().hero_male,
+        voiceConfig: { ...VoiceMapper.getAllVoices().hero_male, id: 'voice-drizzt' },
         isNewCharacter: false,
       });
       expect(result[2]).toEqual({
         character: 'drizzt',
         voiceCategory: 'hero_male',
-        voiceConfig: VoiceMapper.getAllVoices().hero_male,
+        voiceConfig: { ...VoiceMapper.getAllVoices().hero_male, id: 'voice-drizzt' },
         isNewCharacter: false,
       });
 
@@ -172,7 +189,10 @@ describe('VoiceConsistencyService', () => {
 
       // Assert updates were aggregated: Drizzt was hit twice, so total count increases by 2: 3 + 2 = 5
       expect(VoiceConsistencyRepository.updateCharacterUsage).toHaveBeenCalledTimes(1);
-      expect(VoiceConsistencyRepository.updateCharacterUsage).toHaveBeenCalledWith('map-id-drizzt', 5);
+      expect(VoiceConsistencyRepository.updateCharacterUsage).toHaveBeenCalledWith(
+        'map-id-drizzt',
+        5,
+      );
 
       // Assert insertions were aggregated: Bruenor was hit once
       expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).toHaveBeenCalledTimes(1);
@@ -185,9 +205,72 @@ describe('VoiceConsistencyService', () => {
       );
     });
 
+    it('should pass normalized category assignments into VoiceDirector playback', async () => {
+      vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockResolvedValueOnce([]);
+      vi.mocked(VoiceConsistencyRepository.saveCharacterVoiceMapping).mockResolvedValue(
+        undefined as any,
+      );
+
+      const segments = [
+        {
+          type: 'dialogue',
+          text: 'The road is clear.',
+          character: 'Veteran',
+          voice_category: 'Narrator',
+        },
+        { type: 'dialogue', text: 'Halt.', character: 'Sergeant Vance', voice_category: 'gruff' },
+      ];
+
+      const assignments = await service.processVoiceAssignments(sessionId, segments);
+      const playbackSegments = VoiceDirector.processAISegments([
+        { type: 'character', text: segments[0].text, character: segments[0].character },
+        { type: 'character', text: segments[1].text, character: segments[1].character },
+      ]);
+
+      expect(assignments.map((assignment) => assignment.voiceConfig.id)).toEqual([
+        VoiceMapper.getVoiceForCategory('narrator').id,
+        VoiceMapper.getVoiceForCategory('guard').id,
+      ]);
+      expect(playbackSegments.map((segment) => segment.voiceId)).toEqual([
+        VoiceMapper.getVoiceForCategory('narrator').id,
+        VoiceMapper.getVoiceForCategory('guard').id,
+      ]);
+      expect(playbackSegments[0].voiceId).not.toBe(playbackSegments[1].voiceId);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('should repair a persisted narrator fallback for a now-mapped gruff category', async () => {
+      vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockResolvedValueOnce([
+        {
+          id: 'map-id-vance',
+          characterName: 'sergeant vance',
+          voiceCategory: 'gruff',
+          voiceId: 'bIHbv24MWmeRgasZH58o',
+          lastUsed: new Date(),
+          appearanceCount: 1,
+        },
+      ]);
+      vi.mocked(VoiceConsistencyRepository.updateCharacterUsage).mockResolvedValue(
+        undefined as any,
+      );
+
+      const result = await service.processVoiceAssignments(sessionId, [
+        { type: 'dialogue', text: 'Halt.', character: 'Sergeant Vance' },
+      ]);
+      const playbackSegments = VoiceDirector.processAISegments([
+        { type: 'character', text: 'Halt.', character: 'Sergeant Vance' },
+      ]);
+
+      expect(result[0].voiceConfig.id).toBe(VoiceMapper.getVoiceForCategory('guard').id);
+      expect(playbackSegments[0].voiceId).toBe(VoiceMapper.getVoiceForCategory('guard').id);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
     it('should fallback to default or inferred voice category for a new character if voice_category is not provided', async () => {
       vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockResolvedValueOnce([]);
-      vi.mocked(VoiceConsistencyRepository.saveCharacterVoiceMapping).mockResolvedValue(undefined as any);
+      vi.mocked(VoiceConsistencyRepository.saveCharacterVoiceMapping).mockResolvedValue(
+        undefined as any,
+      );
 
       const segments = [
         { type: 'dialogue', text: 'Halt!', character: 'Captain of the Guard' }, // should infer 'guard' or something else
@@ -208,7 +291,9 @@ describe('VoiceConsistencyService', () => {
   describe('clearSessionCache', () => {
     it('should print log when clearing session cache', () => {
       service.clearSessionCache(sessionId);
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining(`Cleared voice cache for session: ${sessionId}`));
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(`Cleared voice cache for session: ${sessionId}`),
+      );
     });
   });
 
@@ -281,7 +366,10 @@ describe('VoiceConsistencyService', () => {
 
       const result = await service.upsertVoiceProfile(characterId, partialProfile);
 
-      expect(voiceProfileService.upsertVoiceProfile).toHaveBeenCalledWith(characterId, partialProfile);
+      expect(voiceProfileService.upsertVoiceProfile).toHaveBeenCalledWith(
+        characterId,
+        partialProfile,
+      );
       expect(result).toBe(mockProfile);
     });
 

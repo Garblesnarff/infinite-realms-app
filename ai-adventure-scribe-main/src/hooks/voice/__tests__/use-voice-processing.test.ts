@@ -89,6 +89,54 @@ describe('useVoiceProcessing', () => {
     expect(mockSetState).toHaveBeenCalledWith(expect.any(Function));
   });
 
+  it('should pass each segment voice ID through generation and playback', async () => {
+    const aiSegments = [
+      { type: 'dm', text: 'The road is clear.' },
+      { type: 'character', text: 'Halt.', character: 'Sergeant Vance' },
+    ];
+    const voiceSegments = [
+      { type: 'dm', character: 'DM', text: 'The road is clear.', voiceId: 'narrator-id' },
+      {
+        type: 'character',
+        character: 'Sergeant Vance',
+        text: 'Halt.',
+        voiceId: 'guard-id',
+      },
+    ];
+
+    (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
+    (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.voiceId}.mp3`,
+    }));
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    await act(async () => {
+      await result.current.speakAISegments(aiSegments as any);
+    });
+
+    expect(VoiceDirector.generateAudio).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ voiceId: 'narrator-id' }),
+    );
+    expect(VoiceDirector.generateAudio).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ voiceId: 'guard-id' }),
+    );
+    expect(mockPlayAudioSegment).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ voiceId: 'narrator-id' }),
+      0,
+    );
+    expect(mockPlayAudioSegment).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ voiceId: 'guard-id' }),
+      1,
+    );
+  });
+
   it('should fallback to plain text if segments are not available', async () => {
     const text = 'Fallback text';
     const voiceSegments = [{ character: 'DM', text, voice_category: 'dm' }];

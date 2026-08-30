@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import { VoiceAudioService } from '../voice/voice-audio-service';
+import { VOICE_CONFIGS } from '../voice/voice-constants';
 import { VOICE_POOLS } from '../voice/voice-pools';
 import { VoiceDirector } from '../voice-director';
 import * as routing from '../voice-routing';
@@ -69,6 +70,24 @@ describe('VoiceDirector', () => {
       expect(result[1].character).toBe('Sun');
       expect(result[1].text).toBe('Good morning!');
       expect(result[1].voiceId).toBeDefined();
+    });
+
+    it('should retain distinct voice IDs for narrator and gruff character categories', () => {
+      const result = VoiceDirector.processAISegments([
+        {
+          type: 'character',
+          text: 'The road is clear.',
+          character: 'Veteran',
+          voice_category: 'Narrator',
+        },
+        { type: 'character', text: 'Halt.', character: 'Sergeant Vance', voice_category: 'gruff' },
+      ]);
+
+      expect(result.map((segment) => segment.voiceId)).toEqual([
+        VOICE_CONFIGS.narrator.id,
+        VOICE_CONFIGS.guard.id,
+      ]);
+      expect(result[0].voiceId).not.toBe(result[1].voiceId);
     });
 
     it('should handle empty segments in processAISegments', () => {

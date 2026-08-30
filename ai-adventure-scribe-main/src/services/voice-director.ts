@@ -71,7 +71,7 @@ export class VoiceDirector {
         voiceSegments.push(voiceSegment);
 
         logger.info(
-          `✅ Segment ${i + 1}: "${voiceSegment.character}" -> ${voiceSegment.voiceName} (${cleanText.substring(0, 50)}...)`,
+          `✅ Segment ${i + 1}: "${voiceSegment.character}" -> ${voiceSegment.voiceName} [${voiceSegment.voiceId}] (${cleanText.substring(0, 50)}...)`,
         );
       } catch (error) {
         logger.error(`❌ Error processing segment ${i + 1}:`, error);

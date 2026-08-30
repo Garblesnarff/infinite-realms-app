@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+import { VOICE_CONFIGS } from '../voice/voice-constants';
 import {
   normalizeCharacterName,
   hashCharacterName,
@@ -8,10 +9,13 @@ import {
   ensureMapInitialized,
   clearCharacterVoiceMappings,
   VOICE_POOLS,
+  getVoiceConfigByCategory,
   detectVoiceCategoryFromNPCType,
   getVoicePoolByCharacter,
   getVoicePoolByCategory,
 } from '../voice-routing';
+
+import logger from '@/lib/logger';
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -41,7 +45,7 @@ describe('voice-routing', () => {
     });
 
     it('should remove special characters except hyphens and apostrophes', () => {
-      expect(normalizeCharacterName('Drizzt Do\'Urden!')).toBe("drizzt do'urden");
+      expect(normalizeCharacterName("Drizzt Do'Urden!")).toBe("drizzt do'urden");
       expect(normalizeCharacterName('Bork-Bork?')).toBe('bork-bork');
     });
 
@@ -126,8 +130,20 @@ describe('voice-routing', () => {
       expect(getVoicePoolByCategory('merchant')).toEqual(VOICE_POOLS.npcs);
     });
 
-    it('should fallback to npcs pool for unknown categories', () => {
-      expect(getVoicePoolByCategory('unknown')).toEqual(VOICE_POOLS.npcs);
+    it('should warn and fallback to the narrator pool for unknown categories', () => {
+      expect(getVoicePoolByCategory('unknown')).toEqual(VOICE_POOLS.dm);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Unmapped voice category "unknown"'),
+      );
+    });
+
+    it('should resolve category labels to configured voices', () => {
+      expect(getVoiceConfigByCategory('Narrator')).toBe(VOICE_CONFIGS.narrator);
+      expect(getVoiceConfigByCategory('gruff')).toBe(VOICE_CONFIGS.guard);
+      expect(getVoiceConfigByCategory('totally_unknown')).toBe(VOICE_CONFIGS.narrator);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Unmapped voice category "totally_unknown"'),
+      );
     });
   });
 
@@ -193,11 +209,45 @@ describe('voice-routing', () => {
         type: 'character',
         character: 'New Guy',
         text: 'Hello',
-        voice_category: 'villain'
+        voice_category: 'villain',
       };
       const voice = assignVoice(segment);
-      // 'villain' category maps to villains pool
-      expect(VOICE_POOLS.villains).toContain(voice);
+      // 'villain' category resolves to the configured male villain voice.
+      expect(voice.id).toBe(VOICE_CONFIGS.villain_male.id);
+    });
+
+    it('should resolve narrator and gruff labels to different configured voice IDs', () => {
+      const narratorVoice = assignVoice({
+        type: 'character',
+        character: 'Veteran',
+        text: 'The road is clear.',
+        voice_category: 'Narrator',
+      });
+      const guardVoice = assignVoice({
+        type: 'character',
+        character: 'Sergeant Vance',
+        text: 'Halt.',
+        voice_category: 'gruff',
+      });
+
+      expect(narratorVoice.id).toBe(VOICE_CONFIGS.narrator.id);
+      expect(guardVoice.id).toBe(VOICE_CONFIGS.guard.id);
+      expect(guardVoice.id).not.toBe(narratorVoice.id);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('should warn and use narrator voice for an unmapped category', () => {
+      const voice = assignVoice({
+        type: 'character',
+        character: 'Mystery NPC',
+        text: 'Who am I?',
+        voice_category: 'unmapped_style',
+      });
+
+      expect(voice.id).toBe(VOICE_CONFIGS.narrator.id);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Unmapped voice category "unmapped_style"'),
+      );
     });
 
     it('should fallback to DM voice if no character is provided for character type', () => {

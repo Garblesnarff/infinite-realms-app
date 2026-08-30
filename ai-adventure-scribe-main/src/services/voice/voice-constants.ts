@@ -11,7 +11,7 @@ export const MODEL_ID = 'eleven_flash_v2_5';
 export const VOICE_CONFIGS: Record<string, VoiceConfig> = {
   // Main Narrator - Default DM voice
   narrator: {
-    id: 'bIHbv24MWmeRgasZH58o', // Will - premade voice
+    id: 'T0GKiSwCb51L7pv1sshd', // DM Voice - shared with VoiceDirector's DM pool
     name: 'Will',
     description: 'Main DM narrator voice',
     model: MODEL_ID,
@@ -186,7 +186,7 @@ export const VOICE_CONFIGS: Record<string, VoiceConfig> = {
 
   // Default fallback
   default: {
-    id: 'bIHbv24MWmeRgasZH58o', // Will - same as narrator
+    id: 'T0GKiSwCb51L7pv1sshd', // Same as narrator and VoiceDirector's DM pool
     name: 'Will',
     description: 'Default voice for unknown characters',
     model: MODEL_ID,

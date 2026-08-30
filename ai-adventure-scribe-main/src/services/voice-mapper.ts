@@ -7,6 +7,7 @@
  * @author AI Dungeon Master Team
  */
 
+import { getCanonicalVoiceCategory, getVoiceConfigByCategory } from './voice/voice-classification';
 import { VOICE_CONFIGS, CHARACTER_KEYWORDS } from './voice/voice-constants';
 
 import type { VoiceConfig } from './voice/voice-types';
@@ -71,7 +72,15 @@ export class VoiceMapper {
    * Get voice configuration for narration
    */
   static getNarratorVoice(): VoiceConfig {
-    return VOICE_CONFIGS.narrator;
+    return this.getVoiceForCategory('narrator');
+  }
+
+  /**
+   * Resolve an AI category label to a configured voice.
+   * This is the only category-to-voice lookup used by the consistency path.
+   */
+  static getVoiceForCategory(category: string): VoiceConfig {
+    return getVoiceConfigByCategory(category);
   }
 
   /**
@@ -122,7 +131,9 @@ export class VoiceMapper {
     try {
       const saved = JSON.parse(localStorage.getItem('character-voice-mappings') || '{}');
       const voiceType = saved[character];
-      return voiceType ? VOICE_CONFIGS[voiceType] : null;
+      return voiceType && getCanonicalVoiceCategory(voiceType)
+        ? this.getVoiceForCategory(voiceType)
+        : null;
     } catch (error) {
       logger.warn('Failed to load character voice mapping:', error);
       return null;
@@ -133,11 +144,12 @@ export class VoiceMapper {
    * Update voice configuration for a specific character
    */
   static updateCharacterVoice(character: string, voiceType: string): boolean {
-    if (!VOICE_CONFIGS[voiceType]) {
+    const canonicalVoiceType = getCanonicalVoiceCategory(voiceType);
+    if (!canonicalVoiceType) {
       return false;
     }
 
-    this.saveCharacterVoice(character.toLowerCase().trim(), voiceType);
+    this.saveCharacterVoice(character.toLowerCase().trim(), canonicalVoiceType);
     return true;
   }
 

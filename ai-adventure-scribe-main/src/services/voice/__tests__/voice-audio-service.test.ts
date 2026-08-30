@@ -100,6 +100,28 @@ describe('VoiceAudioService', () => {
       );
     });
 
+    it('should send each segment voice ID to its own proxy URL', async () => {
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+      });
+
+      await VoiceAudioService.generateAudio({
+        ...mockSegment,
+        voiceId: 'narrator-id',
+        text: 'Same text',
+      });
+      await VoiceAudioService.generateAudio({
+        ...mockSegment,
+        voiceId: 'guard-id',
+        text: 'Same text',
+      });
+
+      const requestedUrls = (global.fetch as any).mock.calls.map(([url]: [string]) => url);
+      expect(requestedUrls[0]).toContain('/v1/ai-proxy/voice/narrator-id');
+      expect(requestedUrls[1]).toContain('/v1/ai-proxy/voice/guard-id');
+    });
+
     it('should handle API errors gracefully', async () => {
       const mockResponse = {
         ok: false,
