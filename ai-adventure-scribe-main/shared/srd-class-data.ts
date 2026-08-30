@@ -17,6 +17,26 @@ export const SRD_ABILITY_NAMES = [
 
 export type SrdAbilityName = (typeof SRD_ABILITY_NAMES)[number];
 export type SrdHitDie = 6 | 8 | 10 | 12;
+export type SrdSpellcastingAbility = Extract<
+  SrdAbilityName,
+  'intelligence' | 'wisdom' | 'charisma'
+>;
+export type SrdPreparedSpellFormula =
+  | 'ability-modifier-plus-level'
+  | 'ability-modifier-plus-half-level';
+
+export interface SrdSpellcastingRules {
+  readonly ability: SrdSpellcastingAbility;
+  readonly knownSpellsByLevel?: readonly number[];
+  readonly knownSpellsFormula?: 'wizard-spellbook';
+  readonly preparedSpellsFormula?: SrdPreparedSpellFormula;
+  readonly firstSpellcastingLevel?: number;
+}
+
+export interface SrdSpellQuotas {
+  readonly known: number;
+  readonly prepared: number;
+}
 
 export interface SrdClassData {
   readonly id: string;
@@ -24,6 +44,7 @@ export interface SrdClassData {
   readonly hitDie: SrdHitDie;
   readonly primaryAbility: SrdAbilityName;
   readonly savingThrowProficiencies: readonly SrdAbilityName[];
+  readonly spellcasting?: SrdSpellcastingRules;
 }
 
 export const SRD_CLASS_TABLE = [
@@ -40,6 +61,12 @@ export const SRD_CLASS_TABLE = [
     hitDie: 8,
     primaryAbility: 'charisma',
     savingThrowProficiencies: ['dexterity', 'charisma'],
+    spellcasting: {
+      ability: 'charisma',
+      knownSpellsByLevel: [
+        0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22,
+      ],
+    },
   },
   {
     id: 'cleric',
@@ -47,6 +74,10 @@ export const SRD_CLASS_TABLE = [
     hitDie: 8,
     primaryAbility: 'wisdom',
     savingThrowProficiencies: ['wisdom', 'charisma'],
+    spellcasting: {
+      ability: 'wisdom',
+      preparedSpellsFormula: 'ability-modifier-plus-level',
+    },
   },
   {
     id: 'druid',
@@ -54,6 +85,10 @@ export const SRD_CLASS_TABLE = [
     hitDie: 8,
     primaryAbility: 'wisdom',
     savingThrowProficiencies: ['intelligence', 'wisdom'],
+    spellcasting: {
+      ability: 'wisdom',
+      preparedSpellsFormula: 'ability-modifier-plus-level',
+    },
   },
   {
     id: 'fighter',
@@ -75,6 +110,11 @@ export const SRD_CLASS_TABLE = [
     hitDie: 10,
     primaryAbility: 'strength',
     savingThrowProficiencies: ['wisdom', 'charisma'],
+    spellcasting: {
+      ability: 'charisma',
+      preparedSpellsFormula: 'ability-modifier-plus-half-level',
+      firstSpellcastingLevel: 2,
+    },
   },
   {
     id: 'ranger',
@@ -82,6 +122,11 @@ export const SRD_CLASS_TABLE = [
     hitDie: 10,
     primaryAbility: 'dexterity',
     savingThrowProficiencies: ['strength', 'dexterity'],
+    spellcasting: {
+      ability: 'wisdom',
+      knownSpellsByLevel: [0, 0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11],
+      firstSpellcastingLevel: 2,
+    },
   },
   {
     id: 'rogue',
@@ -96,6 +141,12 @@ export const SRD_CLASS_TABLE = [
     hitDie: 6,
     primaryAbility: 'charisma',
     savingThrowProficiencies: ['constitution', 'charisma'],
+    spellcasting: {
+      ability: 'charisma',
+      knownSpellsByLevel: [
+        0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15,
+      ],
+    },
   },
   {
     id: 'warlock',
@@ -103,6 +154,12 @@ export const SRD_CLASS_TABLE = [
     hitDie: 8,
     primaryAbility: 'charisma',
     savingThrowProficiencies: ['wisdom', 'charisma'],
+    spellcasting: {
+      ability: 'charisma',
+      knownSpellsByLevel: [
+        0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+      ],
+    },
   },
   {
     id: 'wizard',
@@ -110,6 +167,11 @@ export const SRD_CLASS_TABLE = [
     hitDie: 6,
     primaryAbility: 'intelligence',
     savingThrowProficiencies: ['intelligence', 'wisdom'],
+    spellcasting: {
+      ability: 'intelligence',
+      knownSpellsFormula: 'wizard-spellbook',
+      preparedSpellsFormula: 'ability-modifier-plus-level',
+    },
   },
 ] as const satisfies readonly SrdClassData[];
 
@@ -128,4 +190,35 @@ export function findSrdClass(value: string | null | undefined): SrdClassData | u
   return SRD_CLASS_TABLE.find(
     (entry) => normalizeClassKey(entry.id) === key || normalizeClassKey(entry.name) === key,
   );
+}
+
+/** Resolve the SRD known/prepared quotas without depending on UI or display-layer calculations. */
+export function getSrdSpellQuotas(
+  className: string | null | undefined,
+  level: number,
+  abilityModifier: number,
+): SrdSpellQuotas {
+  const spellcasting = findSrdClass(className)?.spellcasting;
+  if (!spellcasting) return { known: 0, prepared: 0 };
+
+  const boundedLevel = Math.min(20, Math.max(1, Math.floor(level)));
+  if (
+    spellcasting.firstSpellcastingLevel !== undefined &&
+    boundedLevel < spellcasting.firstSpellcastingLevel
+  ) {
+    return { known: 0, prepared: 0 };
+  }
+
+  const known =
+    spellcasting.knownSpellsFormula === 'wizard-spellbook'
+      ? 6 + (boundedLevel - 1) * 2
+      : (spellcasting.knownSpellsByLevel?.[boundedLevel] ?? 0);
+  const prepared =
+    spellcasting.preparedSpellsFormula === 'ability-modifier-plus-level'
+      ? Math.max(1, boundedLevel + abilityModifier)
+      : spellcasting.preparedSpellsFormula === 'ability-modifier-plus-half-level'
+        ? Math.max(1, Math.floor(boundedLevel / 2) + abilityModifier)
+        : 0;
+
+  return { known, prepared };
 }

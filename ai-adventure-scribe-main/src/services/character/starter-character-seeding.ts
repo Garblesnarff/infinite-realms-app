@@ -1,18 +1,14 @@
 /* eslint-disable max-lines */
 import { normalizeAbilityScores } from './ability-score-normalization';
 import { computeArmorClass } from '../../../shared/armor-class';
-import { findSrdClass } from '../../../shared/srd-class-data';
+import { findSrdClass, getSrdSpellQuotas } from '../../../shared/srd-class-data';
 
 import type { CharacterClass } from '@/types/character';
 
 import { classes } from '@/data/classes';
 import { normalizeEquipmentLookupKey, resolveEquipmentByName } from '@/data/equipment/resolver';
-import {
-  calculateSpellsKnown,
-  getPactMagicProgression,
-  getSpellSlotsByLevel,
-} from '@/data/spellcastingFeatures';
-import { getClassSpells } from '@/data/spells/api';
+import { getPactMagicProgression, getSpellSlotsByLevel } from '@/data/spellcastingFeatures';
+import { getClassSpells, getSrdClassSpells } from '@/data/spells/api';
 import { getSpellcastingInfo } from '@/utils/spell-validation';
 
 export interface StarterCharacterTemplateLike {
@@ -36,7 +32,18 @@ export interface StarterCharacterTemplateLike {
   abilityScores?: Record<string, number>;
   ability_scores?: Record<string, number>;
   /** Optional forward-compatible curated spell shape. */
-  spells?: { cantrips?: string[]; knownSpells?: string[]; preparedSpells?: string[] };
+  spells?: StarterTemplateSpellLists;
+  cantrips?: string[] | null;
+  knownSpells?: string[] | null;
+  preparedSpells?: string[] | null;
+  known_spells?: string[] | null;
+  prepared_spells?: string[] | null;
+}
+
+export interface StarterTemplateSpellLists {
+  cantrips?: string[];
+  knownSpells?: string[];
+  preparedSpells?: string[];
 }
 
 export type StarterCharacterCreatePayload = Record<string, unknown> & { name: string };
@@ -110,6 +117,47 @@ export interface StarterSpellSeed {
   spellSlots?: Record<string, number>;
 }
 
+export interface StarterSpellQuotas {
+  known: number;
+  prepared: number;
+}
+
+/** Derive the two stored spell quantities from the SRD class rules. */
+export function getStarterSpellQuotas(
+  className: string,
+  level: number,
+  abilityScores: Record<string, number>,
+): StarterSpellQuotas {
+  const characterClass = findClass(className);
+  const srdClass = findSrdClass(className);
+  if (!characterClass || !srdClass?.spellcasting) return { known: 0, prepared: 0 };
+
+  const ability = srdClass.spellcasting.ability;
+  const abilityModifier = getModifier(abilityScores[ability] ?? 10);
+  return getSrdSpellQuotas(className, level, abilityModifier);
+}
+
+function uniqueSpellIds(spellIds: string[]): string[] {
+  return [...new Set(spellIds)];
+}
+
+function selectSpellIds(curated: string[], fallback: string[], quota: number): string[] {
+  return uniqueSpellIds([...curated, ...fallback]).slice(0, quota);
+}
+
+function getTemplateSpellLists(template: StarterCharacterTemplateLike): StarterTemplateSpellLists {
+  return {
+    cantrips: template.spells?.cantrips || template.cantrips || undefined,
+    knownSpells:
+      template.spells?.knownSpells || template.knownSpells || template.known_spells || undefined,
+    preparedSpells:
+      template.spells?.preparedSpells ||
+      template.preparedSpells ||
+      template.prepared_spells ||
+      undefined,
+  };
+}
+
 /**
  * Build class-appropriate spell state from the same class and SRD sources as
  * the character wizard. Prepared casters get a prepared list based on their
@@ -122,41 +170,43 @@ export function buildStarterSpellSeed(
   const level = Math.max(1, template.level || 1);
   const className = template.class || '';
   const characterClass = findClass(className);
-  if (!characterClass?.spellcasting) {
-    return { cantrips: [], knownSpells: [], preparedSpells: [] };
-  }
-
-  const info = getSpellcastingInfo(characterClass, level);
-  const available = getClassSpells(characterClass.name);
+  const info = characterClass ? getSpellcastingInfo(characterClass, level) : null;
   if (!info) return { cantrips: [], knownSpells: [], preparedSpells: [] };
+  const available = getSrdClassSpells(characterClass.name);
+  const authoredAvailable = getClassSpells(characterClass.name);
 
-  const curated = template.spells;
-  const validCantrips = new Set(available.cantrips.map((spell) => spell.id));
-  const validSpells = new Set(available.spells.map((spell) => spell.id));
+  const curated = getTemplateSpellLists(template);
+  const validCantrips = new Set(authoredAvailable.cantrips.map((spell) => spell.id));
   const curatedCantrips = (curated?.cantrips || []).filter((id) => validCantrips.has(id));
-  const curatedKnownSpells = (curated?.knownSpells || []).filter((id) => validSpells.has(id));
   const cantripCount = info.cantripsKnown;
-  const cantrips = (
-    curatedCantrips.length > 0 ? curatedCantrips : available.cantrips.map((spell) => spell.id)
-  ).slice(0, cantripCount);
+  const cantrips = selectSpellIds(
+    curatedCantrips,
+    available.cantrips.map((spell) => spell.id),
+    cantripCount,
+  );
 
-  const ability = characterClass.spellcasting.ability;
-  const abilityModifier = getModifier(abilityScores[ability] || 10);
-  const canPrepareSpells = ['cleric', 'druid', 'paladin', 'wizard'].includes(characterClass.id);
-  const spellCount = canPrepareSpells
-    ? calculateSpellsKnown(characterClass.id, level, abilityModifier)
-    : info.spellsKnown || 0;
+  const quotas = getStarterSpellQuotas(className, level, abilityScores);
   const maxSpellLevel = Math.min(5, Math.ceil(level / 2));
+  const eligibleAuthoredSpells = authoredAvailable.spells.filter(
+    (spell) => spell.level <= maxSpellLevel,
+  );
+  const validSpells = new Set(eligibleAuthoredSpells.map((spell) => spell.id));
   const availableKnownSpells = available.spells
     .filter((spell) => spell.level <= maxSpellLevel)
     .map((spell) => spell.id);
-  const knownSpells = (
-    curatedKnownSpells.length > 0 ? curatedKnownSpells : availableKnownSpells
-  ).slice(0, spellCount);
+  const curatedKnownSpells = (curated?.knownSpells || []).filter((id) => validSpells.has(id));
   const curatedPreparedSpells = (curated?.preparedSpells || []).filter((id) => validSpells.has(id));
-  const preparedSpells = canPrepareSpells
-    ? (curatedPreparedSpells.length > 0 ? curatedPreparedSpells : knownSpells).slice(0, spellCount)
-    : [];
+  const knownCandidates =
+    characterClass.id === 'wizard'
+      ? uniqueSpellIds([...curatedKnownSpells, ...curatedPreparedSpells])
+      : curatedKnownSpells;
+  const knownSpells = selectSpellIds(knownCandidates, availableKnownSpells, quotas.known);
+  const preparedCandidates =
+    characterClass.id === 'wizard'
+      ? curatedPreparedSpells.filter((id) => knownSpells.includes(id))
+      : curatedPreparedSpells;
+  const preparedFallback = characterClass.id === 'wizard' ? knownSpells : availableKnownSpells;
+  const preparedSpells = selectSpellIds(preparedCandidates, preparedFallback, quotas.prepared);
 
   return {
     cantrips,

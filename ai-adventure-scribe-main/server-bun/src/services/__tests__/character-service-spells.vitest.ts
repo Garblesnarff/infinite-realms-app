@@ -77,6 +77,33 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
     });
   });
 
+  it('uses fill-if-empty SQL expressions for the post-create legacy-column sync', async () => {
+    const set = vi.fn().mockReturnThis();
+    (db.update as any).mockReturnValue({
+      set,
+      where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([{ id: mockCharacterId }]),
+    });
+
+    await CharacterSpellService.updateSpells(
+      mockCharacterId,
+      mockUserId,
+      {
+        knownSpells: ['new-known'],
+        preparedSpells: ['new-prepared'],
+      },
+      { fillEmptyOnly: true },
+    );
+
+    const updates = set.mock.calls[0]?.[0] as Record<string, unknown>;
+    for (const column of ['knownSpells', 'preparedSpells']) {
+      const expression = updates[column] as { strings: string[]; values: unknown[] };
+      expect(expression.strings.join(' ')).toContain('IS NULL');
+      expect(expression.strings.join(' ')).toContain('ELSE');
+      expect(expression.values).toContain(column === 'knownSpells' ? 'new-known' : 'new-prepared');
+    }
+  });
+
   it('should throw NotFoundError if character is not found or not owned by user', async () => {
     // 1. Class lookup mock (must succeed for validation to reach ownership check)
     const mockClassSelect = {

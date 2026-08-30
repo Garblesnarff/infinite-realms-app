@@ -45,6 +45,15 @@ export interface StarterCharacterTemplate {
   cardImageUrl: string | null;
   portraitPrompt: string | null;
   displayOrder: number;
+  /** Optional authored spell preferences preserved for the shared starter seeder. */
+  spells?: {
+    cantrips?: string[];
+    knownSpells?: string[];
+    preparedSpells?: string[];
+  } | null;
+  cantrips?: string[] | null;
+  knownSpells?: string[] | null;
+  preparedSpells?: string[] | null;
 }
 
 interface UseStarterCharacterTemplatesResult {
@@ -57,6 +66,23 @@ interface UseStarterCharacterTemplatesResult {
 /**
  * Map database row to StarterCharacterTemplate interface
  */
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : undefined;
+}
+
+function mapAuthoredSpellLists(value: unknown): StarterCharacterTemplate['spells'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const lists = {
+    cantrips: stringArray(raw.cantrips),
+    knownSpells: stringArray(raw.knownSpells ?? raw.known_spells),
+    preparedSpells: stringArray(raw.preparedSpells ?? raw.prepared_spells),
+  };
+  return Object.values(lists).some((list) => list !== undefined) ? lists : undefined;
+}
+
 export function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate {
   const abilityScores = normalizeAbilityScores(row.ability_scores, {
     templateName: row.name as string,
@@ -91,6 +117,10 @@ export function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTe
     cardImageUrl: row.card_image_url as string | null,
     portraitPrompt: row.portrait_prompt as string | null,
     displayOrder: (row.display_order as number) || 0,
+    spells: mapAuthoredSpellLists(row.spells),
+    cantrips: stringArray(row.cantrips),
+    knownSpells: stringArray(row.knownSpells ?? row.known_spells),
+    preparedSpells: stringArray(row.preparedSpells ?? row.prepared_spells),
   };
 }
 

@@ -12,7 +12,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, or, sql, type SQL } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
 import {
@@ -40,20 +40,41 @@ export class CharacterSpellService {
       preparedSpells?: string[];
       ritualSpells?: string[];
     },
+    options: { fillEmptyOnly?: boolean } = {},
   ): Promise<Character | null> {
-    const updates: Partial<NewCharacter> = {};
+    // Legacy spell columns are also populated by the character-create payload. The create-time
+    // selection is authoritative, so this sync may only fill a column that is still NULL/empty.
+    // Keep the condition in SQL so a concurrent create/update cannot be overwritten between a
+    // read and a write.
+    const updates: Partial<Record<keyof NewCharacter, string | SQL<unknown>>> = {};
+
+    const valueForColumn = (column: unknown, value: string): string | SQL<unknown> =>
+      options.fillEmptyOnly
+        ? sql`
+            CASE
+              WHEN ${column} IS NULL OR btrim(${column}) = ''
+                THEN ${value}
+              ELSE ${column}
+            END`
+        : value;
 
     if (spellData.cantrips !== undefined) {
-      updates.cantrips = spellData.cantrips.join(',');
+      updates.cantrips = valueForColumn(characters.cantrips, spellData.cantrips.join(','));
     }
     if (spellData.knownSpells !== undefined) {
-      updates.knownSpells = spellData.knownSpells.join(',');
+      updates.knownSpells = valueForColumn(characters.knownSpells, spellData.knownSpells.join(','));
     }
     if (spellData.preparedSpells !== undefined) {
-      updates.preparedSpells = spellData.preparedSpells.join(',');
+      updates.preparedSpells = valueForColumn(
+        characters.preparedSpells,
+        spellData.preparedSpells.join(','),
+      );
     }
     if (spellData.ritualSpells !== undefined) {
-      updates.ritualSpells = spellData.ritualSpells.join(',');
+      updates.ritualSpells = valueForColumn(
+        characters.ritualSpells,
+        spellData.ritualSpells.join(','),
+      );
     }
 
     // Direct update to characters table with ownership check
@@ -315,11 +336,16 @@ export class CharacterSpellService {
       );
 
     // Update the character table columns directly with aggregated results
-    await this.updateSpells(characterId, userId, {
-      cantrips: spellSummary?.cantrips ? spellSummary.cantrips.split(',') : [],
-      knownSpells: spellSummary?.leveled ? spellSummary.leveled.split(',') : [],
-      preparedSpells: spellSummary?.leveled ? spellSummary.leveled.split(',') : [], // Default all as prepared for now to match current behavior
-    });
+    await this.updateSpells(
+      characterId,
+      userId,
+      {
+        cantrips: spellSummary?.cantrips ? spellSummary.cantrips.split(',') : [],
+        knownSpells: spellSummary?.leveled ? spellSummary.leveled.split(',') : [],
+        preparedSpells: spellSummary?.leveled ? spellSummary.leveled.split(',') : [],
+      },
+      { fillEmptyOnly: true },
+    );
 
     return { success: true, message: 'Character spells saved successfully' };
   }

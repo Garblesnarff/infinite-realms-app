@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildStarterCharacterSeed,
   buildStarterSpellSeed,
+  getStarterSpellQuotas,
   getAbilityScores,
   transformStarterInventory,
   transformStarterEquipment,
@@ -145,6 +146,21 @@ describe('starter-character-seeding', () => {
     );
   });
 
+  it('preserves authored spell preferences when mapping a template row', () => {
+    const mappedTemplate = mapTemplateRow({
+      ...academyTemplates[0],
+      id: 'template-1',
+      starter_campaign_id: 'academy-of-arcane-gastronomy',
+      template_key: 'the-apprentice',
+      spells: { knownSpells: ['shield'], preparedSpells: ['shield'] },
+    });
+
+    expect(mappedTemplate.spells).toEqual({
+      knownSpells: ['shield'],
+      preparedSpells: ['shield'],
+    });
+  });
+
   it('normalizes full ability names without regard to casing', () => {
     expect(
       getAbilityScores({
@@ -256,9 +272,73 @@ describe('starter-character-seeding', () => {
     const spells = buildStarterSpellSeed(clericTemplate);
 
     expect(spells.cantrips).toHaveLength(3);
-    expect(spells.knownSpells).toHaveLength(5);
-    expect(spells.preparedSpells).toEqual(spells.knownSpells);
+    expect(spells.knownSpells).toHaveLength(0);
+    expect(spells.preparedSpells).toHaveLength(5);
     expect(spells.cantrips.every((id) => id.length > 0)).toBe(true);
+  });
+
+  it('keeps the Wizard spellbook quota separate from the prepared quota', () => {
+    const template = {
+      ...clericTemplate,
+      class: 'Wizard',
+      ability_scores: { ...clericTemplate.ability_scores, intelligence: 16 },
+    };
+    const spells = buildStarterSpellSeed(template);
+
+    expect(getStarterSpellQuotas('Wizard', 1, { intelligence: 16 })).toEqual({
+      known: 6,
+      prepared: 4,
+    });
+    expect(spells.knownSpells).toHaveLength(6);
+    expect(spells.preparedSpells).toHaveLength(4);
+    expect(spells.preparedSpells.every((id) => spells.knownSpells.includes(id))).toBe(true);
+  });
+
+  it('uses the SRD fixed known progression for known-spell casters', () => {
+    expect(getStarterSpellQuotas('Bard', 1, { charisma: 16 })).toEqual({
+      known: 4,
+      prepared: 0,
+    });
+    expect(getStarterSpellQuotas('Sorcerer', 1, { charisma: 16 })).toEqual({
+      known: 2,
+      prepared: 0,
+    });
+    expect(getStarterSpellQuotas('Warlock', 1, { charisma: 16 })).toEqual({
+      known: 2,
+      prepared: 0,
+    });
+    expect(getStarterSpellQuotas('Paladin', 1, { charisma: 18 })).toEqual({
+      known: 0,
+      prepared: 0,
+    });
+    expect(getStarterSpellQuotas('Paladin', 2, { charisma: 18 })).toEqual({
+      known: 0,
+      prepared: 5,
+    });
+    expect(getStarterSpellQuotas('Ranger', 2, { wisdom: 16 })).toEqual({
+      known: 2,
+      prepared: 0,
+    });
+    expect(getStarterSpellQuotas('Ranger', 4, { wisdom: 16 })).toEqual({
+      known: 3,
+      prepared: 0,
+    });
+    expect(getStarterSpellQuotas('Ranger', 20, { wisdom: 16 })).toEqual({
+      known: 11,
+      prepared: 0,
+    });
+  });
+
+  it('uses an authored class spell before filling the remainder from SRD defaults', () => {
+    const seed = buildStarterSpellSeed({
+      ...clericTemplate,
+      class: 'Warlock',
+      spells: { knownSpells: ['arms-of-hadar'] },
+    });
+    const fallbackSeed = buildStarterSpellSeed({ ...clericTemplate, class: 'Warlock' });
+
+    expect(seed.knownSpells).toEqual(['arms-of-hadar', expect.any(String)]);
+    expect(fallbackSeed.knownSpells).not.toContain('arms-of-hadar');
   });
 
   it.each([
@@ -286,7 +366,8 @@ describe('starter-character-seeding', () => {
     expect(seed.avatar_url).toBe('/images/the-faithful.png');
     expect(seed.background_image).toBe('/images/the-faithful-card.png');
     expect(seed.cantrips).toBeTruthy();
-    expect(seed.known_spells).toBeTruthy();
+    expect(seed.known_spells).toBe('');
+    expect(seed.prepared_spells).toBeTruthy();
     expect(seed.equipment).toEqual(
       expect.arrayContaining([expect.objectContaining({ item_name: 'Mace', item_type: 'weapon' })]),
     );

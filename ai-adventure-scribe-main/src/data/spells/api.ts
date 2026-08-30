@@ -6,33 +6,42 @@ import type { Spell } from '@/types/character';
 import srdSpellsJson from '@/data/srd/spells.json';
 
 type SrdSpell = Spell & { classes: string[]; legacy_ids?: string[] };
-export const normalizeLegacySpellId = (id: string) =>
+export const normalizeLegacySpellId = (id: string): string =>
   id.replace(
     /-(?:barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)$/,
     '',
   );
 const sourceSpells = [...srdSpellsJson, ...nonSrdSupplementJson];
 
-export const allSpells = sourceSpells.map((spell) => ({
-  ...spell,
-  castingTime: spell.casting_time,
-  range: spell.range_text,
-  verbal: spell.components_verbal,
-  somatic: spell.components_somatic,
-  material: spell.components_material,
-  ...(spell.material_components ? { materialDescription: spell.material_components } : {}),
-  duration:
-    spell.concentration && !spell.duration.toLowerCase().includes('concentration')
-      ? `Concentration, ${spell.duration}`
-      : spell.duration,
-})) as unknown as SrdSpell[];
+const normalizeSpells = (spells: readonly unknown[]): SrdSpell[] =>
+  spells.map((rawSpell) => {
+    const spell = rawSpell as SrdSpell;
+    return {
+      ...spell,
+      castingTime: spell.casting_time,
+      range: spell.range_text,
+      verbal: spell.components_verbal,
+      somatic: spell.components_somatic,
+      material: spell.components_material,
+      ...(spell.material_components ? { materialDescription: spell.material_components } : {}),
+      duration:
+        spell.concentration && !spell.duration.toLowerCase().includes('concentration')
+          ? `Concentration, ${spell.duration}`
+          : spell.duration,
+    };
+  }) as unknown as SrdSpell[];
 
-export const getClassSpells = (className: string): { cantrips: Spell[]; spells: Spell[] } => {
+export const allSpells = normalizeSpells(sourceSpells);
+export const srdSpells = normalizeSpells(srdSpellsJson);
+
+function getClassSpellsFromCatalog(
+  className: string,
+  catalog: readonly SrdSpell[],
+): { cantrips: Spell[]; spells: Spell[] } {
   const normalizedClassName = className.charAt(0).toUpperCase() + className.slice(1).toLowerCase();
   const classKey = normalizedClassName.toLowerCase();
-  const available = allSpells.filter((spell) => spell.classes.includes(classKey));
+  const available = catalog.filter((spell) => spell.classes.includes(classKey));
 
-  // Debug logging for troubleshooting spell loading issues
   if (process.env.NODE_ENV === 'development') {
     logger.debug(
       `🔍 [getClassSpells] Looking up spells for: ${className} -> ${normalizedClassName}`,
@@ -54,7 +63,7 @@ export const getClassSpells = (className: string): { cantrips: Spell[]; spells: 
     logger.debug(`✅ [getClassSpells] ${normalizedClassName} results:`, {
       cantrips: resultCantrips.length,
       spells: resultSpells.length,
-      totalAvailable: allSpells.length,
+      totalAvailable: catalog.length,
     });
   }
 
@@ -62,7 +71,15 @@ export const getClassSpells = (className: string): { cantrips: Spell[]; spells: 
     cantrips: resultCantrips,
     spells: resultSpells,
   };
+}
+
+export const getClassSpells = (className: string): { cantrips: Spell[]; spells: Spell[] } => {
+  return getClassSpellsFromCatalog(className, allSpells);
 };
+
+/** Return only the 2014 SRD spell list for deterministic default loadouts. */
+export const getSrdClassSpells = (className: string): { cantrips: Spell[]; spells: Spell[] } =>
+  getClassSpellsFromCatalog(className, srdSpells);
 
 export const getSpellsBySchool = (school: string): Spell[] =>
   allSpells.filter((spell) => spell.school === school);
