@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.12.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.12.1...v0.12.2) (2026-08-30)
+
+
+### Bug Fixes
+
+* preserve starter spell quotas and repair seeded rows ([#1937](https://github.com/Garblesnarff/infinite-realms-production/issues/1937)) ([66217ac](https://github.com/Garblesnarff/infinite-realms-production/commit/66217aca5877d87c0f12b218f744f6a8e2a89778))
+* prevent asset tag leakage across narration surfaces ([#1947](https://github.com/Garblesnarff/infinite-realms-production/issues/1947)) ([90ab2ca](https://github.com/Garblesnarff/infinite-realms-production/commit/90ab2cacfa1b59a079c5e207239039810e9e5a98))
+* stop the DM reusing a previous turn's action options ([#1944](https://github.com/Garblesnarff/infinite-realms-production/issues/1944)) ([#1945](https://github.com/Garblesnarff/infinite-realms-production/issues/1945)) ([ecaace2](https://github.com/Garblesnarff/infinite-realms-production/commit/ecaace207e888c80f6634457348a99e16437935f))
+* unwrap array character_stats on playable character cards ([#1939](https://github.com/Garblesnarff/infinite-realms-production/issues/1939)) ([#1946](https://github.com/Garblesnarff/infinite-realms-production/issues/1946)) ([ab0b93a](https://github.com/Garblesnarff/infinite-realms-production/commit/ab0b93a5cd924079221a997a109a200754f0b269))
+* **voice:** switch NPC voices per narration segment ([#1948](https://github.com/Garblesnarff/infinite-realms-production/issues/1948)) ([74ba192](https://github.com/Garblesnarff/infinite-realms-production/commit/74ba192a92bb6046b60c5578e73d37ff38f87f23)), closes [#1942](https://github.com/Garblesnarff/infinite-realms-production/issues/1942)
+
 ## [0.12.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.12.0...v0.12.1) (2026-08-29)
 
 
