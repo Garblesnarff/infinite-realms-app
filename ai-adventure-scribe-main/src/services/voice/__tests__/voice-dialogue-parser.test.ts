@@ -41,6 +41,15 @@ describe('VoiceDialogueParser', () => {
       expect(result[0].text).not.toContain('Engine:');
     });
 
+    it('should strip asset tags before creating narration segments', () => {
+      const text = '[ASSET:npc:sergeant-vance] Sergeant Vance steps forward.';
+      const result = VoiceDialogueParser.processPlainText(text);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('Sergeant Vance steps forward.');
+      expect(result[0].text).not.toContain('[ASSET:');
+    });
+
     it('should parse simple dialogue with attribution after the quote (asserting regex limitations)', () => {
       const text = '"I am the fire, I am the death," growled Smaug.';
       const result = VoiceDialogueParser.processPlainText(text);

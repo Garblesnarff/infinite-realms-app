@@ -135,6 +135,42 @@ describe('Memory Service Integration', () => {
   });
 
   describe('Memory Extraction from Conversation', () => {
+    it('strips asset markers from the extraction prompt and persisted memory', async () => {
+      const input = '[ASSET:npc:sergeant-vance] Sergeant Vance steps forward.';
+
+      await MemoryService.extractMemories(
+        {
+          sessionId: 'session-123',
+          campaignId: 'campaign-456',
+          characterId: 'char-789',
+          currentMessage: 'I look toward the guard',
+          recentMessages: [],
+        },
+        'I look toward the guard',
+        input,
+      );
+
+      const extractionPrompt = vi.mocked(llmApiClient.extractMemories).mock.calls[0]?.[0] as string;
+      expect(extractionPrompt).toContain('DM: Sergeant Vance steps forward.');
+      expect(extractionPrompt).not.toContain('[ASSET:');
+
+      await MemoryService.saveMemories([
+        {
+          session_id: 'session-123',
+          type: 'npc',
+          content: input,
+          importance: 4,
+          metadata: {},
+        },
+      ]);
+
+      expect(mockInsert).toHaveBeenLastCalledWith([
+        expect.objectContaining({
+          content: 'Sergeant Vance steps forward.',
+        }),
+      ]);
+    });
+
     it('should extract memories from conversation context', async () => {
       mockInsert.mockResolvedValue({
         data: null,

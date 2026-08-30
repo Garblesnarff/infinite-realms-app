@@ -6,6 +6,7 @@ import {
 } from '../normalize-asset-tags';
 
 const GRAND_KITCHEN_TAG = '[ASSET:location:the-grand-kitchen]';
+const THROAT_OF_BASALT_TAG = '[ASSET:location:the-throat-of-basalt-upper-chasm]';
 
 describe('normalize-asset-tags', () => {
   describe('normalizeAssetTagKeysInContent', () => {
@@ -79,6 +80,11 @@ describe('normalize-asset-tags', () => {
         'the towering doors of [ASSET:location:the-academy-library] The Academy Library';
       const result = normalizeAssetTagKeysInContent(input);
       expect(result).toBe(input);
+    });
+
+    it('preserves a shorter visible name when the asset key has a qualifier', () => {
+      const input = `${THROAT_OF_BASALT_TAG} The Throat of Basalt tastes of stale iron.`;
+      expect(normalizeAssetTagKeysInContent(input)).toBe(input);
     });
 
     it('does not prepend name if it is a standalone tag (no other content)', () => {

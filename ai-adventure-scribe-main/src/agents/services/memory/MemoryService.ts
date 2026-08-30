@@ -1,14 +1,14 @@
-import { llmApiClient } from '@/infrastructure/api';
-import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
+import { MemoryImportanceService } from './MemoryImportanceService';
+import { MemoryRepository } from './MemoryRepository';
 
+import { llmApiClient } from '@/infrastructure/api';
+import { stripAssetTags } from '@/lib/utils';
 import {
   normalizeMemoryType,
   type Memory as UIMemory,
   type MemoryType as UIMemoryType,
 } from '@/types/memory';
-
-import { MemoryImportanceService } from './MemoryImportanceService';
-import { MemoryRepository } from './MemoryRepository';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
 export type Memory = UIMemory;
 export type MemoryType = UIMemoryType;
@@ -39,15 +39,15 @@ export class MemoryService {
     // No embedding is attached here on purpose: the server generates it from the content it
     // receives (#1822). What the browser sends is what the memory is.
     const toInsert = memories.map((m) => {
+      const content = stripAssetTags(m.content);
       const rawImportance = (m as unknown as Record<string, unknown>).importance;
-      const type = normalizeMemoryType(
-        (m as unknown as Record<string, unknown>).type ?? 'general',
-      );
+      const type = normalizeMemoryType((m as unknown as Record<string, unknown>).type ?? 'general');
       const category = (m as unknown as Record<string, unknown>).category ?? 'general';
-      const evaluated = importanceService.evaluate(m.content, type, String(category));
+      const evaluated = importanceService.evaluate(content, type, String(category));
       const importance = typeof rawImportance === 'number' ? rawImportance : evaluated.importance;
       return {
         ...m,
+        content,
         type,
         importance: Math.max(1, Math.min(5, importance)),
       };

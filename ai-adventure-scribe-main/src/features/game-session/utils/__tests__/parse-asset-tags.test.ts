@@ -40,6 +40,31 @@ describe('normalizeAssetTagKeysInContent (issue #339)', () => {
 });
 
 describe('parseAssetTags — malformed key handling (issue #339)', () => {
+  it('renders the inline Sergeant Vance name once while retaining its asset reference', () => {
+    const input = '[ASSET:npc:sergeant-vance] Sergeant Vance steps forward.';
+    const { cleanContent, assets } = parseAssetTags(input);
+
+    expect(cleanContent).toBe('Sergeant Vance steps forward.');
+    expect(cleanContent.match(/Sergeant Vance/g)).toHaveLength(1);
+    expect(cleanContent).not.toContain('[ASSET:');
+    expect(assets).toEqual([
+      {
+        type: 'npc',
+        key: 'sergeant-vance',
+        fullMatch: '[ASSET:npc:sergeant-vance]',
+      },
+    ]);
+  });
+
+  it('does not duplicate a shorter location name after display expansion', () => {
+    const input =
+      '[ASSET:location:the-throat-of-basalt-upper-chasm] The Throat of Basalt tastes of stale iron.';
+    const { cleanContent } = parseAssetTags(input);
+
+    expect(cleanContent).toBe('The Throat of Basalt tastes of stale iron.');
+    expect(cleanContent).not.toContain('The Throat Of Basalt Upper Chasm');
+  });
+
   it('strips a tag with a quoted key from display content', () => {
     const { cleanContent, assets } = parseAssetTags(
       'You meet [ASSET:npc:remy-"the-manager"] at the door.',

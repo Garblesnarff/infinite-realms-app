@@ -231,6 +231,14 @@ describe('stripAssetTags', () => {
 });
 
 describe('sanitizeForMemoryExtraction — asset tag stripping (issue #341)', () => {
+  it('passes the exact Sergeant Vance narration to memory without asset markers', () => {
+    const input = '[ASSET:npc:sergeant-vance] Sergeant Vance steps forward.';
+    const result = sanitizeForMemoryExtraction(input);
+
+    expect(result).toBe('Sergeant Vance steps forward.');
+    expect(result).not.toContain('[ASSET:');
+  });
+
   it('strips [ASSET:*] tags from memory extraction input', () => {
     const input =
       'Lord Diabolo [ASSET:npc:lord-diabolo] steps forward. The cathedral [ASSET:location:bone-cathedral] looms.';

@@ -108,6 +108,17 @@ describe('VoiceDirector', () => {
       expect(result[0].text).not.toContain('Engine:');
     });
 
+    it('should strip asset tags before creating voice segments', () => {
+      const result = VoiceDirector.processAISegments([
+        { type: 'dm', text: '[ASSET:npc:sergeant-vance] Sergeant Vance steps forward.' },
+        { type: 'dm', text: '[ASSET:npc:orphan]' },
+      ] as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('Sergeant Vance steps forward.');
+      expect(result[0].text).not.toContain('[ASSET:');
+    });
+
     it('should clean text by removing markdown and extra whitespace', () => {
       const input = [{ type: 'dm', text: '  **Bold** _Italic_   ' }];
       const result = VoiceDirector.processAISegments(input as any);

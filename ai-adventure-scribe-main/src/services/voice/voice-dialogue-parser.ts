@@ -15,6 +15,7 @@ import { cleanSegmentText } from './voice-utils';
 import { type AISegment, type VoiceSegment, assignVoice } from '../voice-routing';
 
 import logger from '@/lib/logger';
+import { stripAssetTags } from '@/lib/utils';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
 export class VoiceDialogueParser {
@@ -29,7 +30,8 @@ export class VoiceDialogueParser {
     // normalizer collapses line boundaries, which would otherwise make the
     // engine line indistinguishable from the narration that follows it.
     const textWithoutEngineLines = typeof text === 'string' ? stripEngineGeneratedLines(text) : '';
-    const cleanText = cleanSegmentText(textWithoutEngineLines);
+    const textWithoutAssetTags = stripAssetTags(textWithoutEngineLines);
+    const cleanText = cleanSegmentText(textWithoutAssetTags);
     if (!cleanText) {
       return [];
     }

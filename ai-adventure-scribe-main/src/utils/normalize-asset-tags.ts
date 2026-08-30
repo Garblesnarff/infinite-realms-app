@@ -1,6 +1,8 @@
 import { generateAssetKey } from './asset-key';
 
 const LEADING_ARTICLE_PATTERN = /^(?:the|an|a)\s+/i;
+const ASSET_NAME_WORD_PATTERN = /[a-z0-9]+(?:['’-][a-z0-9]+)*/gi;
+const MIN_VISIBLE_NAME_PREFIX_WORDS = 2;
 
 export function deriveAssetDisplayName(normalizedKey: string): string {
   return normalizedKey
@@ -27,9 +29,56 @@ function endsWithWholeName(value: string, name: string): boolean {
   return !previousCharacter || !/[a-zA-Z0-9]/.test(previousCharacter);
 }
 
+function getComparableWords(value: string): string[] {
+  return value.match(ASSET_NAME_WORD_PATTERN)?.map((word) => word.toLowerCase()) ?? [];
+}
+
 /**
- * Check whether the full asset name is already visible immediately before or
- * after a tag. Leading articles are optional on either side of the match.
+ * Match a visible multi-word prefix of a derived name. Asset keys can include
+ * a parenthetical or zone qualifier that the narration intentionally omits,
+ * such as "The Throat of Basalt" for
+ * "the-throat-of-basalt-upper-chasm".
+ */
+function startsWithVisibleNamePrefix(value: string, name: string): boolean {
+  const valueWords = getComparableWords(value);
+  const nameWords = getComparableWords(name);
+  let matchedWords = 0;
+
+  while (
+    matchedWords < valueWords.length &&
+    matchedWords < nameWords.length &&
+    valueWords[matchedWords] === nameWords[matchedWords]
+  ) {
+    matchedWords++;
+  }
+
+  return matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS;
+}
+
+function endsWithVisibleNamePrefix(value: string, name: string): boolean {
+  const valueWords = getComparableWords(value);
+  const nameWords = getComparableWords(name);
+  const maxPrefixLength = Math.min(valueWords.length, nameWords.length);
+
+  for (
+    let prefixLength = maxPrefixLength;
+    prefixLength >= MIN_VISIBLE_NAME_PREFIX_WORDS;
+    prefixLength--
+  ) {
+    const valueSuffix = valueWords.slice(-prefixLength);
+    const namePrefix = nameWords.slice(0, prefixLength);
+    if (valueSuffix.every((word, index) => word === namePrefix[index])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check whether the full asset name, or a visible multi-word prefix of it, is
+ * already visible immediately before or after a tag. Leading articles are
+ * optional on either side of the match.
  */
 export function isAssetNamePresentAroundTag(
   content: string,
@@ -47,7 +96,9 @@ export function isAssetNamePresentAroundTag(
 
   return (
     endsWithWholeName(normalizedBeforeTag, normalizedName) ||
-    startsWithWholeName(normalizedAfterTag, normalizedName)
+    startsWithWholeName(normalizedAfterTag, normalizedName) ||
+    endsWithVisibleNamePrefix(normalizedBeforeTag, normalizedName) ||
+    startsWithVisibleNamePrefix(normalizedAfterTag, normalizedName)
   );
 }
 
