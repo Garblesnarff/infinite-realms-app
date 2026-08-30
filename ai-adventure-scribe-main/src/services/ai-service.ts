@@ -1,6 +1,7 @@
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { ContextBuilder } from './ai/context-builder';
 import { processDMResponse } from './ai/dm-response-processor';
+import { formatConversationHistoryMessage } from './ai/shared/conversation-history';
 import { measurePromptSections } from './ai/shared/prompt-metrics';
 import {
   approximateTokens,
@@ -31,22 +32,7 @@ function keyFor(sessionId: string | undefined, message: string, historyLen: numb
   return `${sessionId || 'nosession'}|${message.slice(0, 256)}|${historyLen}`;
 }
 
-/**
- * Keep the prompt's speaker labels aligned with the persisted speaker type.
- * Companion speech is already explicitly marked as in-world user text, so it
- * must never fall through to the DM label used by legacy two-speaker history.
- */
-export function formatConversationHistoryMessage(message: ChatMessage): string {
-  const speakerType = message.speakerType ?? (message.role === 'user' ? 'player' : 'dm');
-  if (speakerType === 'companion') {
-    const name = message.speakerName || 'Unknown';
-    const prefix = `Companion ${name} (in-world speech): `;
-    return message.content.startsWith(prefix) ? message.content : `${prefix}${message.content}`;
-  }
-
-  const label = speakerType === 'player' ? 'Player' : speakerType === 'system' ? 'System' : 'DM';
-  return `${label}: ${message.content}`;
-}
+export { formatConversationHistoryMessage } from './ai/shared/conversation-history';
 
 export class AIService {
   /**

@@ -190,6 +190,53 @@ describe('useAIResponse', () => {
     expect(llmApiClient.generateText).not.toHaveBeenCalled();
   });
 
+  // #1944: the reported symptom was turn 2 showing turn 1's leftover options, renumbered.
+  // Options are always parsed out of the message they belong to, so an option-less turn must
+  // never inherit the previous turn's menu -- free-text input is available regardless.
+  it("never carries a previous turn's options into a response that has none", async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const firstTurnOptions = [
+      'A. **Climb the ledge**, test the crumbling handholds.',
+      'B. **Skirt the ravine**, take the longer path around.',
+      'C. **Rope the gap**, anchor a line across.',
+    ];
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: {},
+      character: {},
+    } as any);
+
+    (AIService.chatWithDM as any).mockResolvedValueOnce({
+      text: 'The ravine yawns below the ledge.',
+      options: firstTurnOptions,
+      combatDetection: { isCombat: false },
+    });
+    const withOptions = await renderHook(() => useAIResponse()).result.current.getAIResponse(
+      mockMessages as any,
+      mockSessionId,
+    );
+    expect(withOptions.text).toContain('Skirt the ravine');
+
+    (AIService.chatWithDM as any).mockResolvedValueOnce({
+      text: 'Your boot finds purchase and you haul yourself onto the ledge.',
+      combatDetection: { isCombat: false },
+    });
+    const withoutOptions = await renderHook(() => useAIResponse()).result.current.getAIResponse(
+      mockMessages as any,
+      mockSessionId,
+    );
+
+    expect(withoutOptions.text).toContain('you haul yourself onto the ledge');
+    for (const option of firstTurnOptions) {
+      expect(withoutOptions.text).not.toContain(option);
+    }
+    expect(withoutOptions.text).not.toContain('Skirt the ravine');
+    expect(withoutOptions.text).not.toContain('Rope the gap');
+  });
+
   it('should handle structured responses with narration segments and dice rolls', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { voiceConsistencyService } = await import('@/services/voice-consistency-service');

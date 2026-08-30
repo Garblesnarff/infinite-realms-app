@@ -309,6 +309,70 @@ describe('AIService', () => {
     });
   });
 
+  // #1944: turn 2's options were turn 1's leftovers, renumbered. The client has no
+  // replay path -- every menu is parsed from its own message's text -- so the repeat came
+  // from the model, which was being shown the previous menu verbatim in history.
+  describe('stale action options in conversation history (#1944)', () => {
+    const OFFERED_MENU = [
+      'A. **Climb the ledge**, test the crumbling handholds.',
+      'B. **Skirt the ravine**, take the longer path around.',
+      'C. **Rope the gap**, anchor a line across.',
+    ].join('\n');
+
+    beforeEach(() => {
+      vi.mocked(ContextBuilder.build).mockResolvedValue('<game_context>canon</game_context>');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('raw');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'processed' } as any);
+      vi.mocked(fetchSceneState).mockResolvedValue(null);
+      vi.mocked(SessionStateService.getLatestRollOutcome).mockResolvedValue(null as any);
+    });
+
+    const promptFor = async (message: string, history: any[]): Promise<string> => {
+      await AIService.chatWithDM({
+        message,
+        context: { sessionId: 'stale-options-session', gameState: { isInCombat: false } },
+        conversationHistory: history as any,
+      });
+      return vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.prompt as string;
+    };
+
+    it('replays the DM narrative but not the menu it offered', async () => {
+      const prompt = await promptFor('I test the handholds.', [
+        {
+          role: 'assistant',
+          speakerType: 'dm',
+          content: `The ravine yawns below the ledge.\n\n${OFFERED_MENU}`,
+        },
+      ]);
+
+      expect(prompt).toContain('DM: The ravine yawns below the ledge.');
+      expect(prompt).not.toContain('Skirt the ravine');
+      expect(prompt).not.toContain('Rope the gap');
+    });
+
+    it('keeps the option the player actually chose, since that is their action', async () => {
+      const prompt = await promptFor('what happens after the climb?', [
+        {
+          role: 'assistant',
+          speakerType: 'dm',
+          content: `The ravine yawns below the ledge.\n\n${OFFERED_MENU}`,
+        },
+        { role: 'user', speakerType: 'player', content: 'Climb the ledge, test the handholds.' },
+      ]);
+
+      expect(prompt).toContain('Player: Climb the ledge, test the handholds.');
+      expect(prompt).not.toContain('Skirt the ravine');
+    });
+
+    it('leaves an option-free DM turn untouched', async () => {
+      const prompt = await promptFor('and then?', [
+        { role: 'assistant', speakerType: 'dm', content: 'The wind rises off the ravine.' },
+      ]);
+
+      expect(prompt).toContain('DM: The wind rises off the ravine.');
+    });
+  });
+
   describe('generateOpeningMessage', () => {
     it('should call chatWithDM with empty message and preserve structured options', async () => {
       const mockContext: any = { sessionId: '123-opening' };

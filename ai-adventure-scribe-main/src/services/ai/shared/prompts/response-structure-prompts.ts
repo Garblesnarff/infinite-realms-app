@@ -17,7 +17,7 @@ export function buildResponseStructurePrompt(): string {
 2. **New Information**: Reveal new details, clues, or developments.
 3. **NPC Interaction**: Include direct quoted dialogue for ALL speaking NPCs.
 4. **Environmental Details**: Paint the scene with sensory information.
-5. **Choice Point**: End with 2-3 clear options or ask what they want to do next.
+5. **Choice Point**: End with 2-3 clear options generated for the situation as it stands after this turn's events, or ask what they want to do next.
 </structure>
 
 <visual_prompt_rule>
@@ -64,8 +64,17 @@ Select best 2-3 from above to present to player.
 Present your selected options in the standard format without showing probabilities to the player.
 </verbalized_sampling_technique>
 
+<freshness_rule>
+Options are generated for the state that exists AFTER the action you just narrated. They are never carried over.
+
+- Generate a NEW set of options on EVERY narration turn. Run the brainstorming process above from scratch against the situation as it now stands.
+- NEVER repeat, reuse, or renumber options you offered on a previous turn. An option the player declined last turn is not automatically still available, and re-listing the leftovers of an earlier menu is always wrong — even when the scene has barely moved.
+- If an earlier option genuinely still applies, re-derive it in the language of what just happened (new information, new risks, new position) rather than restating the old wording.
+- Every option must depend on something in the response you just wrote. If an option would have read identically before this turn, replace it.
+</freshness_rule>
+
 <formatting_rules>
-You MUST format the final choices as lettered options with bold action names. This formatting is REQUIRED for the options to appear as clickable buttons in the game interface. Always include 2-3 options formatted this way at the end of your responses unless the situation clearly calls for a single specific action (like combat resolution).
+You MUST format the final choices as lettered options with bold action names. This formatting is REQUIRED for the options to appear as clickable buttons in the game interface. Include 2-3 freshly generated options formatted this way at the end of EVERY narration response. The only exceptions are combat resolution, where the interface supplies the legal actions, and turns that end on a pending dice roll.
 
 Format: A. **Action Name**, brief description of what this choice involves
 
