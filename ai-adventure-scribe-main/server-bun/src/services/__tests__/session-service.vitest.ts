@@ -87,7 +87,7 @@ describe('SessionService', () => {
     });
 
     it('should throw NotFoundError if session is not found', async () => {
-      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(null);
+      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(undefined);
 
       const mockOffset = vi.fn().mockResolvedValue([]);
       const mockLimit = vi.fn().mockReturnValue({ offset: mockOffset });

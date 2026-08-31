@@ -9,12 +9,18 @@ import { Elysia } from 'elysia';
 
 import { getBlogRole, type BlogRole } from './blog-author.js';
 
+import type { AuthTokenPayload } from './auth.js';
+
 /**
  * Require blog admin role
  * Returns 403 if user is not an admin
  */
 export const requireBlogAdmin = new Elysia({ name: 'require-blog-admin' })
-  .derive({ as: 'scoped' }, async ({ user, set }) => {
+  .derive({ as: 'scoped' }, async (context) => {
+    // `user` is added by requireAuth in the consuming route, not by this
+    // standalone authorization plugin.
+    const { set } = context;
+    const user = (context as typeof context & { user?: AuthTokenPayload | null }).user;
     if (!user?.userId) {
       set.status = 401;
       return {
@@ -25,7 +31,8 @@ export const requireBlogAdmin = new Elysia({ name: 'require-blog-admin' })
 
     // Development/testing override: allow bypassing Supabase role check
     const devOverrideEnabled =
-      (process.env.BLOG_ADMIN_DEV_OVERRIDE === 'true' || process.env.BLOG_ADMIN_DEV_OVERRIDE === '1') &&
+      (process.env.BLOG_ADMIN_DEV_OVERRIDE === 'true' ||
+        process.env.BLOG_ADMIN_DEV_OVERRIDE === '1') &&
       process.env.NODE_ENV !== 'production';
 
     if (devOverrideEnabled) {

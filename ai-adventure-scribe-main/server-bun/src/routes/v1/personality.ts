@@ -222,7 +222,7 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
 
       rowResponses.forEach((res) => {
         if (res.data) {
-          results[res.type] = res.data as PersonalityRow;
+          results[res.type] = res.data as unknown as PersonalityRow;
         }
         if (res.type === 'traits' && (res as any).data2) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

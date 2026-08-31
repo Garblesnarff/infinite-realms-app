@@ -13,9 +13,29 @@ import { db } from '../../../db/client';
 import { campaigns, type Campaign, type NewCampaign } from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
+export type CampaignListRow = Omit<
+  Campaign,
+  'settingDetails' | 'thematicElements' | 'styleConfig' | 'rulesConfig'
+> &
+  Partial<Pick<Campaign, 'settingDetails' | 'thematicElements' | 'styleConfig' | 'rulesConfig'>>;
+
+type CampaignTemplateRow = Pick<
+  Campaign,
+  | 'id'
+  | 'name'
+  | 'description'
+  | 'genre'
+  | 'tone'
+  | 'campaignLength'
+  | 'difficultyLevel'
+  | 'thumbnailUrl'
+  | 'templateVersion'
+  | 'publishedAt'
+>;
+
 export class CampaignService {
-  static async listPublicTemplates(): Promise<Campaign[]> {
-    return db.query.campaigns.findMany({
+  static async listPublicTemplates(): Promise<CampaignTemplateRow[]> {
+    const templates = await db.query.campaigns.findMany({
       where: and(eq(campaigns.template, true), eq(campaigns.visibility, 'public')),
       // ⚡ Bolt: Exclude heavy JSONB fields by default for discovery templates to reduce payload size and database overhead.
       columns: {
@@ -26,14 +46,27 @@ export class CampaignService {
       },
       orderBy: [desc(campaigns.publishedAt), desc(campaigns.templateVersion)],
     });
+
+    return templates.map((template) => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      genre: template.genre,
+      tone: template.tone,
+      campaignLength: template.campaignLength,
+      difficultyLevel: template.difficultyLevel,
+      thumbnailUrl: template.thumbnailUrl,
+      templateVersion: template.templateVersion,
+      publishedAt: template.publishedAt,
+    }));
   }
 
   /**
    * List all campaigns for a user
    * Optimized to exclude heavy JSONB fields by default for list view
    */
-  static async listForUser(userId: string): Promise<Campaign[]> {
-    return (await db.query.campaigns.findMany({
+  static async listForUser(userId: string): Promise<CampaignListRow[]> {
+    return db.query.campaigns.findMany({
       where: eq(campaigns.userId, userId),
       orderBy: [desc(campaigns.createdAt)],
       columns: {
@@ -58,8 +91,13 @@ export class CampaignService {
         era: true,
         location: true,
         atmosphere: true,
+        publishedAt: true,
+        template: true,
+        visibility: true,
+        templateVersion: true,
+        thumbnailUrl: true,
       },
-    })) as Campaign[];
+    });
   }
 
   /**

@@ -8,10 +8,7 @@
  * @module server/services/inventory/inventory-mechanics
  */
 
-import {
-  ENCUMBRANCE_THRESHOLDS,
-  SPEED_PENALTIES,
-} from '../../types/inventory.js';
+import { ENCUMBRANCE_THRESHOLDS, SPEED_PENALTIES } from '../../types/inventory.js';
 
 import type { EncumbranceLevel, EncumbranceStatus } from '../../types/inventory.js';
 
@@ -32,7 +29,7 @@ export class InventoryMechanics {
     const carryingCapacity = this.calculateCarryingCapacity(strength);
 
     let encumbranceLevel: EncumbranceLevel = 'normal';
-    let speedPenalty = SPEED_PENALTIES.NORMAL;
+    let speedPenalty: number = SPEED_PENALTIES.NORMAL;
 
     // Heavily Encumbered: weight > STR × 10
     if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED) {

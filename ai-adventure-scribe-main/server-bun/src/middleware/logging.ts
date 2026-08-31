@@ -74,15 +74,18 @@ export const loggingPlugin = new Elysia({ name: 'logging' })
     const userAgent = getUserAgent(request);
 
     // Log incoming request
-    logger.info({
-      type: 'request',
-      requestId,
-      method,
-      path,
-      query: query || undefined,
-      ip,
-      userAgent,
-    }, `→ ${method} ${path}`);
+    logger.info(
+      {
+        type: 'request',
+        requestId,
+        method,
+        path,
+        query: query || undefined,
+        ip,
+        userAgent,
+      },
+      `→ ${method} ${path}`,
+    );
 
     return {
       requestId,
@@ -122,15 +125,18 @@ export const loggingPlugin = new Elysia({ name: 'logging' })
 
     // Log response
     const logLevel = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
-    logger[logLevel]({
-      type: 'response',
-      requestId,
-      method,
-      path,
-      statusCode,
-      duration,
-      responseSize,
-    }, `← ${method} ${path} ${statusCode} ${duration}ms`);
+    logger[logLevel](
+      {
+        type: 'response',
+        requestId,
+        method,
+        path,
+        statusCode,
+        duration,
+        responseSize,
+      },
+      `← ${method} ${path} ${statusCode} ${duration}ms`,
+    );
 
     // Add request ID to response headers
     if (response && typeof response === 'object' && !Array.isArray(response)) {
@@ -153,18 +159,24 @@ export const loggingPlugin = new Elysia({ name: 'logging' })
     // Map error code to status
     const statusCode = mapErrorCodeToStatus(code);
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     // Log error
-    logger.error({
-      type: 'error',
-      requestId,
-      method,
-      path,
-      statusCode,
-      duration,
-      errorCode: code,
-      errorMessage: error.message,
-      errorStack: error.stack,
-    }, `✗ ${method} ${path} ${statusCode} ${duration}ms - ${error.message}`);
+    logger.error(
+      {
+        type: 'error',
+        requestId,
+        method,
+        path,
+        statusCode,
+        duration,
+        errorCode: code,
+        errorMessage,
+        errorStack,
+      },
+      `✗ ${method} ${path} ${statusCode} ${duration}ms - ${errorMessage}`,
+    );
   })
   // Add request ID to response headers via onAfterResponse
   .onAfterResponse(({ set, requestId }) => {

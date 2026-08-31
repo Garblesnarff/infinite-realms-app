@@ -5,6 +5,12 @@ import { MemoryService } from '../../services/memory-service.js';
 
 import type { Memory } from '../../../../db/schema/index';
 
+type MemoryRouteRow = Omit<Memory, 'embedding'> & {
+  // List/detail queries deliberately omit this heavy column. Insert results may
+  // still contain it, so the mapper accepts both query shapes.
+  embedding?: Memory['embedding'];
+};
+
 const ALLOWED_MEMORY_TYPES = [
   'general',
   'npc',
@@ -46,7 +52,7 @@ const memorySchema = t.Object({
   chapter_marker: t.Optional(t.Boolean()),
 });
 
-const mapMemory = (memory: Memory) => ({
+const mapMemory = (memory: MemoryRouteRow) => ({
   id: memory.id,
   campaign_id: memory.campaignId,
   session_id: memory.sessionId,

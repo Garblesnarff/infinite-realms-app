@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 
 import { RestMechanics } from '../rest-mechanics';
 
-import type { CharacterHitDice } from '../../../../db/schema/index';
+import type { CharacterHitDice } from '../../../../../db/schema/index';
 
 describe('RestMechanics', () => {
   describe('calculateConModifier', () => {

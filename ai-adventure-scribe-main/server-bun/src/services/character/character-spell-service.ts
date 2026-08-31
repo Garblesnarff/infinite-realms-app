@@ -25,7 +25,7 @@ import {
 } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 
-import type { Character, NewCharacter } from '../../../../db/schema/index';
+import type { Character } from '../../../../db/schema/index';
 
 export class CharacterSpellService {
   /**
@@ -46,7 +46,8 @@ export class CharacterSpellService {
     // selection is authoritative, so this sync may only fill a column that is still NULL/empty.
     // Keep the condition in SQL so a concurrent create/update cannot be overwritten between a
     // read and a write.
-    const updates: Partial<Record<keyof NewCharacter, string | SQL<unknown>>> = {};
+    type LegacySpellColumn = 'cantrips' | 'knownSpells' | 'preparedSpells' | 'ritualSpells';
+    const updates: Partial<Record<LegacySpellColumn, string | SQL<unknown>>> = {};
 
     const valueForColumn = (column: unknown, value: string): string | SQL<unknown> =>
       options.fillEmptyOnly

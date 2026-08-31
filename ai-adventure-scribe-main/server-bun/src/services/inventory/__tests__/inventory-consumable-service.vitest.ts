@@ -36,41 +36,42 @@ vi.mock('../../../../../db/client', () => {
 // Mock schema and other dependencies
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
-  return { ...actual as any };
+  return { ...(actual as any) };
 });
 
 describe('InventoryConsumableService', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = 'char-123';
   const mockItemId = 'item-123';
+  const mockedDbThen = (db as unknown as { then: ReturnType<typeof vi.fn> }).then;
 
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset the then mock to return empty array by default
-    (db.then as any).mockImplementation((resolve: any) => resolve([]));
+    mockedDbThen.mockImplementation((resolve: any) => resolve([]));
   });
 
   describe('useConsumable', () => {
     it('should throw NotFoundError if item is not found', async () => {
-      (db.then as any).mockImplementation((resolve: any) => resolve([]));
+      mockedDbThen.mockImplementation((resolve: any) => resolve([]));
 
       await expect(
         InventoryConsumableService.useConsumable(
           { characterId: mockCharacterId, itemId: mockItemId, quantity: 1 },
-          mockUserId
-        )
+          mockUserId,
+        ),
       ).rejects.toThrow(NotFoundError);
     });
 
     it('should throw BusinessLogicError if insufficient quantity', async () => {
       const mockItem = { id: mockItemId, quantity: 0 };
-      (db.then as any).mockImplementation((resolve: any) => resolve([{ item: mockItem }]));
+      mockedDbThen.mockImplementation((resolve: any) => resolve([{ item: mockItem }]));
 
       await expect(
         InventoryConsumableService.useConsumable(
           { characterId: mockCharacterId, itemId: mockItemId, quantity: 1 },
-          mockUserId
-        )
+          mockUserId,
+        ),
       ).rejects.toThrow(BusinessLogicError);
     });
 
@@ -80,7 +81,7 @@ describe('InventoryConsumableService', () => {
 
       // Mock the sequence of calls: item lookup, ownership check, log insert, update.
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]); // select item
         if (callCount === 2) return resolve([{ one: 1 }]); // ownership check
@@ -91,7 +92,7 @@ describe('InventoryConsumableService', () => {
 
       const result = await InventoryConsumableService.useConsumable(
         { characterId: mockCharacterId, itemId: mockItemId, quantity: 1 },
-        mockUserId
+        mockUserId,
       );
 
       expect(result.success).toBe(true);
@@ -106,7 +107,7 @@ describe('InventoryConsumableService', () => {
       const mockLog = { id: 'log-1' };
 
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]); // select item
         if (callCount === 2) return resolve([mockLog]); // insert log
@@ -116,7 +117,7 @@ describe('InventoryConsumableService', () => {
 
       const result = await InventoryConsumableService.useConsumable(
         { characterId: mockCharacterId, itemId: mockItemId, quantity: 1 },
-        mockUserId
+        mockUserId,
       );
 
       expect(result.success).toBe(true);
@@ -128,7 +129,7 @@ describe('InventoryConsumableService', () => {
     it('should throw InternalServerError if usage log creation fails', async () => {
       const mockItem = { id: mockItemId, quantity: 5 };
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]);
         if (callCount === 2) return resolve([{ one: 1 }]); // ownership check
@@ -139,8 +140,8 @@ describe('InventoryConsumableService', () => {
       await expect(
         InventoryConsumableService.useConsumable(
           { characterId: mockCharacterId, itemId: mockItemId, quantity: 1 },
-          mockUserId
-        )
+          mockUserId,
+        ),
       ).rejects.toThrow('Failed to log consumable usage');
     });
   });
@@ -151,7 +152,7 @@ describe('InventoryConsumableService', () => {
       const mockLog = { id: 'log-1' };
 
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]); // find by name
         if (callCount === 2) return resolve([mockLog]); // insert log (inside useConsumable)
@@ -163,7 +164,7 @@ describe('InventoryConsumableService', () => {
         mockCharacterId,
         mockUserId,
         'Arrow',
-        1
+        1,
       );
 
       expect(result.success).toBe(true);
@@ -172,10 +173,10 @@ describe('InventoryConsumableService', () => {
     });
 
     it('should throw NotFoundError if ammunition not found', async () => {
-      (db.then as any).mockImplementation((resolve: any) => resolve([]));
+      mockedDbThen.mockImplementation((resolve: any) => resolve([]));
 
       await expect(
-        InventoryConsumableService.useAmmunition(mockCharacterId, mockUserId, 'Arrow')
+        InventoryConsumableService.useAmmunition(mockCharacterId, mockUserId, 'Arrow'),
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -185,7 +186,7 @@ describe('InventoryConsumableService', () => {
       const mockItem = { id: mockItemId, name: 'Arrow', quantity: 10 };
 
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]); // find
         if (callCount === 2) return resolve([{ ...mockItem, quantity: 15 }]); // update
@@ -196,7 +197,7 @@ describe('InventoryConsumableService', () => {
         mockCharacterId,
         mockUserId,
         'Arrow',
-        5
+        5,
       );
 
       expect(result.quantity).toBe(15);
@@ -207,7 +208,7 @@ describe('InventoryConsumableService', () => {
       const newItem = { id: 'new-id', name: 'Arrow', quantity: 5 };
 
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([]); // find returns nothing
         if (callCount === 2) return resolve([{ one: 1 }]); // ownership check
@@ -219,7 +220,7 @@ describe('InventoryConsumableService', () => {
         mockCharacterId,
         mockUserId,
         'Arrow',
-        5
+        5,
       );
 
       expect(result.id).toBe('new-id');
@@ -227,17 +228,17 @@ describe('InventoryConsumableService', () => {
     });
 
     it('should throw InternalServerError if item is missing in results', async () => {
-      (db.then as any).mockImplementation((resolve: any) => resolve([{ something: 'else' }]));
+      mockedDbThen.mockImplementation((resolve: any) => resolve([{ something: 'else' }]));
 
       await expect(
-        InventoryConsumableService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5)
+        InventoryConsumableService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5),
       ).rejects.toThrow('Failed to find ammunition item');
     });
 
     it('should throw InternalServerError if update fails', async () => {
       const mockItem = { id: mockItemId, name: 'Arrow', quantity: 10 };
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([{ item: mockItem }]);
         if (callCount === 2) return resolve([]); // update returns empty
@@ -245,13 +246,13 @@ describe('InventoryConsumableService', () => {
       });
 
       await expect(
-        InventoryConsumableService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5)
+        InventoryConsumableService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5),
       ).rejects.toThrow('Failed to update ammunition');
     });
 
     it('should throw NotFoundError if insert fails to return item', async () => {
       let callCount = 0;
-      (db.then as any).mockImplementation((resolve: any) => {
+      mockedDbThen.mockImplementation((resolve: any) => {
         callCount++;
         if (callCount === 1) return resolve([]); // find returns nothing
         if (callCount === 2) return resolve([]); // insert returns nothing
@@ -259,7 +260,7 @@ describe('InventoryConsumableService', () => {
       });
 
       await expect(
-        InventoryConsumableService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5)
+        InventoryConsumableService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5),
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -267,11 +268,11 @@ describe('InventoryConsumableService', () => {
   describe('getUsageHistory', () => {
     it('should return usage log entries', async () => {
       const mockLogs = [{ id: 'log-1' }, { id: 'log-2' }];
-      (db.then as any).mockImplementation((resolve: any) => resolve(mockLogs.map(l => ({ log: l }))));
+      mockedDbThen.mockImplementation((resolve: any) => resolve(mockLogs.map((l) => ({ log: l }))));
 
       const result = await InventoryConsumableService.getUsageHistory(
         { characterId: mockCharacterId },
-        mockUserId
+        mockUserId,
       );
 
       expect(result).toHaveLength(2);

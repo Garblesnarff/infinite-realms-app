@@ -9,12 +9,14 @@
 
 import { Elysia } from 'elysia';
 
+import type { AuthTokenPayload } from './auth.js';
+
 function parseList(value: string | undefined): Set<string> {
   return new Set(
     (value || '')
       .split(',')
       .map((entry) => entry.trim().toLowerCase())
-      .filter(Boolean)
+      .filter(Boolean),
   );
 }
 
@@ -43,8 +45,12 @@ export function isAdmin(user: { plan?: string; email?: string; userId?: string }
 export const requireAdmin = new Elysia({ name: 'require-admin' })
   // 'scoped' is REQUIRED: local-by-default hooks make a hook-only plugin
   // inert for the parent's routes (same bug class as bead -4ru).
-  .onBeforeHandle({ as: 'scoped' }, ({ user, set }) => {
-    if (!isAdmin(user)) {
+  .onBeforeHandle({ as: 'scoped' }, (context) => {
+    // `user` is supplied by the parent requireAuth plugin. A standalone Elysia
+    // plugin cannot infer that parent's decorator at its declaration site.
+    const { set } = context;
+    const user = (context as typeof context & { user?: AuthTokenPayload | null }).user;
+    if (!isAdmin(user ?? null)) {
       set.status = 403;
       return { error: 'Admin access required' };
     }

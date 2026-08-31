@@ -34,7 +34,7 @@ export interface HitDice {
   id: string;
   characterId: string;
   className: string;
-  dieType: string; // 'd6', 'd8', 'd10', 'd12'
+  dieType: HitDieType;
   totalDice: number;
   usedDice: number;
   createdAt: Date;
@@ -130,18 +130,18 @@ export type HitDieType = 'd6' | 'd8' | 'd10' | 'd12';
  * Mapping of class names to hit die types
  */
 export const HIT_DICE_BY_CLASS: Record<string, HitDieType> = {
-  'Barbarian': 'd12',
-  'Fighter': 'd10',
-  'Paladin': 'd10',
-  'Ranger': 'd10',
-  'Bard': 'd8',
-  'Cleric': 'd8',
-  'Druid': 'd8',
-  'Monk': 'd8',
-  'Rogue': 'd8',
-  'Warlock': 'd8',
-  'Sorcerer': 'd6',
-  'Wizard': 'd6',
+  Barbarian: 'd12',
+  Fighter: 'd10',
+  Paladin: 'd10',
+  Ranger: 'd10',
+  Bard: 'd8',
+  Cleric: 'd8',
+  Druid: 'd8',
+  Monk: 'd8',
+  Rogue: 'd8',
+  Warlock: 'd8',
+  Sorcerer: 'd6',
+  Wizard: 'd6',
 };
 
 /**

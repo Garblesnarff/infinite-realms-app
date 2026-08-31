@@ -171,10 +171,8 @@ export class LevelUpService {
       }
 
       for (const asi of abilityScoreImprovements) {
-        // @ts-expect-error - dynamic access to ability score
         const currentValue = updatedStats[asi.ability];
         const newValue = Math.min(20, currentValue + asi.increase);
-        // @ts-expect-error - dynamic access to ability score
         updatedStats[asi.ability] = newValue;
       }
 
@@ -411,7 +409,7 @@ export class LevelUpService {
     // gating the insert on its result keeps the authorization guarantee.
     const [progRows] = await Promise.all([progressionUpdate, charUpdate]);
 
-    if (!progRows || (progRows as LevelProgression[]).length === 0) {
+    if (progRows.length === 0) {
       // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
       throw new NotFoundError('Character progression', characterId);
     }

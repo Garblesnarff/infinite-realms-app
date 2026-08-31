@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "test": "bun test"
+    "test": "bun scripts/run-isolated-tests.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.0.0",

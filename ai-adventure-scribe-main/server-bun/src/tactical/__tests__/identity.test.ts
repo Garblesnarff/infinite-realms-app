@@ -237,7 +237,7 @@ describe('slug-based entity identity', () => {
         entityId: null,
         x: null,
         y: null,
-        changes: summon as unknown as Record<string, unknown>,
+        changes: summon,
       }).applied,
     ).toBe(true);
     const placed = map.entities.find((e) => e.id === summon.id)!;

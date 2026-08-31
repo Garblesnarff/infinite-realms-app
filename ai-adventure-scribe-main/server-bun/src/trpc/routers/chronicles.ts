@@ -49,6 +49,9 @@ export async function verifySessionOwnership(
       sessionId: gameSessions.id,
       campaignId: gameSessions.campaignId,
       sessionNumber: gameSessions.sessionNumber,
+      campaignUserId: campaigns.userId,
+      characterUserId: characters.userId,
+      characterOwnerId: characters.ownerId,
     })
     .from(gameSessions)
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))

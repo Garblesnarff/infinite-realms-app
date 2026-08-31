@@ -29,8 +29,8 @@ export default defineConfig({
     // remembered to add them here.
     //
     // server-bun/src is intentionally NOT globbed here: server-bun has its own test
-    // runner (package.json `"server:test": "cd server-bun && bun test"`, and
-    // server-bun/package.json `"test": "bun test"`), which is Bun's native test
+    // runner (package.json `"server:test": "cd server-bun && bun run test"`, and
+    // server-bun/package.json `"test": "bun scripts/run-isolated-tests.ts"`), which is Bun's native test
     // runner and auto-discovers *.test.ts files with no allowlist needed. Running
     // those same files through Vitest too would duplicate execution and require
     // keeping two configs in sync, reintroducing the same kind of drift this change
@@ -62,7 +62,7 @@ export default defineConfig({
       'src/utils/__tests__/character-proficiency-calculations.test.ts',
       'cli/src/**/*.{test,spec}.{ts,tsx}',
       'src/**/*.{test,spec}.{ts,tsx}',
-      'tests/**/*.{test,spec}.{ts,tsx}'
+      'tests/**/*.{test,spec}.{ts,tsx}',
     ],
     exclude: [
       // Standard build/dependency output - never contains tests we want to run.
@@ -130,7 +130,7 @@ export default defineConfig({
         'src/utils/environmental-hazards/common-hazards.ts',
         'src/utils/combat/spellcasting-actions.ts',
         'src/utils/character-proficiency-calculations.ts',
-        'src/**/*.{ts,tsx}'
+        'src/**/*.{ts,tsx}',
       ],
       all: true,
       exclude: [

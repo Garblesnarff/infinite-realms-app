@@ -22,7 +22,10 @@ mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) => {
     const authHeader = request.headers.get('x-test-user');
     if (authHeader === 'member') {
-      return { user: { userId: 'member-1', email: 'member@example.test', plan: 'free' }, error: null };
+      return {
+        user: { userId: 'member-1', email: 'member@example.test', plan: 'free' },
+        error: null,
+      };
     }
     if (authHeader === 'admin') {
       return { user: { userId: 'admin-1', email: 'admin@example.test', plan: 'pro' }, error: null };
@@ -53,7 +56,9 @@ mock.module('../../../lib/supabase.js', () => ({
 }));
 mock.module('../../../middleware/admin.js', () => ({
   isAdmin: (user: AuthTokenPayload | null) => user && user.userId === 'admin-1',
-  requireAdmin: new Elysia({ name: 'test-require-admin' }).onBeforeHandle(({ set, user }) => {
+  requireAdmin: new Elysia({ name: 'test-require-admin' }).onBeforeHandle((context) => {
+    const { set } = context;
+    const user = (context as typeof context & { user?: AuthTokenPayload | null }).user;
     if (!user || user.userId !== 'admin-1') {
       set.status = 403;
       return { error: 'Admin access required' };
@@ -133,7 +138,9 @@ describe('v1 route API boundaries', () => {
       }),
     );
     const adjustmentResponse = await app.handle(
-      new Request('http://localhost/v1/encounters/adjustment?sessionId=owned-session-id&difficulty=hard'),
+      new Request(
+        'http://localhost/v1/encounters/adjustment?sessionId=owned-session-id&difficulty=hard',
+      ),
     );
 
     expect(telemetryResponse.status).toBe(401);
@@ -177,17 +184,23 @@ describe('v1 route API boundaries', () => {
 
     // 3) Adjustment owned session
     const adjustmentOwned = await app.handle(
-      new Request('http://localhost/v1/encounters/adjustment?sessionId=owned-session-id&difficulty=hard', {
-        headers: { 'x-test-user': 'member' },
-      }),
+      new Request(
+        'http://localhost/v1/encounters/adjustment?sessionId=owned-session-id&difficulty=hard',
+        {
+          headers: { 'x-test-user': 'member' },
+        },
+      ),
     );
     expect(adjustmentOwned.status).toBe(200);
 
     // 4) Adjustment unowned session
     const adjustmentUnowned = await app.handle(
-      new Request('http://localhost/v1/encounters/adjustment?sessionId=unowned-session-id&difficulty=hard', {
-        headers: { 'x-test-user': 'member' },
-      }),
+      new Request(
+        'http://localhost/v1/encounters/adjustment?sessionId=unowned-session-id&difficulty=hard',
+        {
+          headers: { 'x-test-user': 'member' },
+        },
+      ),
     );
     expect(adjustmentUnowned.status).toBe(404);
   });

@@ -29,6 +29,7 @@ import { RestMechanics } from './rest/rest-mechanics.js';
 
 import type {
   HitDieType,
+  HitDice,
   LongRestResult,
   RestorableResource,
   RestType,
@@ -184,7 +185,7 @@ export class RestService {
     // Spend hit dice if requested
     let hpRestored = 0;
     let hitDiceSpent = 0;
-    let updatedHitDice = hitDice;
+    let updatedHitDice: HitDice[] = hitDice;
 
     if (hitDiceToSpend > 0) {
       const result = await this.spendHitDice(characterId, userId, hitDiceToSpend, undefined, {

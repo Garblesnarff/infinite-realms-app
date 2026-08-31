@@ -21,7 +21,7 @@ describe('secured game route contracts', () => {
 
   it('declares session context, list, update, quest, and template routes', () => {
     for (const declaration of [
-      /\.get\('\/:id\/context'/,
+      /\.get\(\s*'\/:id\/context'/,
       /\.get\(\s*'\/'/,
       /\.patch\(\s*'\/:id'/,
       /\.get\('\/quests'/,

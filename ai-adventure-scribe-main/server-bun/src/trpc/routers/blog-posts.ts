@@ -19,16 +19,8 @@ import {
   blogTags,
 } from '../../../../db/schema/index';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
-import {
-  normalizeStatusFields,
-  resolveAuthorId,
-  syncPostRelations,
-} from './blog-helpers.js';
-import {
-  blogListQuerySchema,
-  blogPostInputSchema,
-  blogPostUpdateSchema,
-} from './blog-schemas.js';
+import { normalizeStatusFields, resolveAuthorId, syncPostRelations } from './blog-helpers.js';
+import { blogListQuerySchema, blogPostInputSchema, blogPostUpdateSchema } from './blog-schemas.js';
 
 /**
  * Fetch categories and tags for multiple posts in batch to avoid N+1 queries
@@ -49,7 +41,9 @@ async function fetchPostsRelations(ctx: { db: any }, postIds: string[]) {
     name: blogTags.name,
   };
 
-  const [allCategories, allTags] = await Promise.all([
+  type PostRelationRow = { postId: string; id: string; slug: string; name: string };
+
+  const [allCategories, allTags] = (await Promise.all([
     ctx.db
       .select(catSelect)
       .from(blogPostCategories)
@@ -60,7 +54,7 @@ async function fetchPostsRelations(ctx: { db: any }, postIds: string[]) {
       .from(blogPostTags)
       .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
       .where(inArray(blogPostTags.postId, postIds)),
-  ]);
+  ])) as [PostRelationRow[], PostRelationRow[]];
 
   // Group by postId
   const relationsMap: Record<string, { categories: any[]; tags: any[] }> = {};
@@ -91,12 +85,17 @@ export const blogPostsRouter = router({
     const { page, pageSize, category, tag, search } = input;
     const offset = (page - 1) * pageSize;
 
-    const conditions: SQL[] = [eq(blogPosts.status, 'published'), lte(blogPosts.publishedAt, new Date())];
+    const conditions: SQL[] = [
+      eq(blogPosts.status, 'published'),
+      lte(blogPosts.publishedAt, new Date()),
+    ];
 
     if (search) {
       const sanitized = search.replace(/[%_]/g, '').trim();
       if (sanitized) {
-        conditions.push(or(ilike(blogPosts.title, `%${sanitized}%`), ilike(blogPosts.summary, `%${sanitized}%`))!);
+        conditions.push(
+          or(ilike(blogPosts.title, `%${sanitized}%`), ilike(blogPosts.summary, `%${sanitized}%`))!,
+        );
       }
     }
 
@@ -110,12 +109,9 @@ export const blogPostsRouter = router({
             .from(blogPostCategories)
             .innerJoin(blogCategories, eq(blogPostCategories.categoryId, blogCategories.id))
             .where(
-              and(
-                eq(blogPostCategories.postId, blogPosts.id),
-                eq(blogCategories.slug, category)
-              )
-            )
-        )
+              and(eq(blogPostCategories.postId, blogPosts.id), eq(blogCategories.slug, category)),
+            ),
+        ),
       );
     }
 
@@ -126,13 +122,8 @@ export const blogPostsRouter = router({
             .select({ one: sql`1` })
             .from(blogPostTags)
             .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
-            .where(
-              and(
-                eq(blogPostTags.postId, blogPosts.id),
-                eq(blogTags.slug, tag)
-              )
-            )
-        )
+            .where(and(eq(blogPostTags.postId, blogPosts.id), eq(blogTags.slug, tag))),
+        ),
       );
     }
 
@@ -180,39 +171,41 @@ export const blogPostsRouter = router({
   /**
    * Get single post by slug (PUBLIC)
    */
-  getBySlug: publicProcedure.input(z.object({ slug: z.string().min(1) })).query(async ({ input, ctx }) => {
-    // ⚡ Bolt: COLLAPSED 3 QUERIES INTO 1.
-    // Use a single relational query to fetch post, author, categories, and tags in one round-trip.
-    const post: any = await ctx.db.query.blogPosts.findFirst({
-      where: and(eq(blogPosts.slug, input.slug), eq(blogPosts.status, 'published')),
-      with: {
-        author: true,
-        categories: {
-          with: {
-            category: {
-              columns: { id: true, slug: true, name: true },
+  getBySlug: publicProcedure
+    .input(z.object({ slug: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      // ⚡ Bolt: COLLAPSED 3 QUERIES INTO 1.
+      // Use a single relational query to fetch post, author, categories, and tags in one round-trip.
+      const post: any = await ctx.db.query.blogPosts.findFirst({
+        where: and(eq(blogPosts.slug, input.slug), eq(blogPosts.status, 'published')),
+        with: {
+          author: true,
+          categories: {
+            with: {
+              category: {
+                columns: { id: true, slug: true, name: true },
+              },
+            },
+          },
+          tags: {
+            with: {
+              tag: {
+                columns: { id: true, slug: true, name: true },
+              },
             },
           },
         },
-        tags: {
-          with: {
-            tag: {
-              columns: { id: true, slug: true, name: true },
-            },
-          },
-        },
-      },
-    });
+      });
 
-    if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
 
-    // Flatten relations to match expected frontend structure and API contract
-    return {
-      ...post,
-      categories: post.categories.map((pc: any) => pc.category).filter(Boolean),
-      tags: post.tags.map((pt: any) => pt.tag).filter(Boolean),
-    };
-  }),
+      // Flatten relations to match expected frontend structure and API contract
+      return {
+        ...post,
+        categories: post.categories.map((pc: any) => pc.category).filter(Boolean),
+        tags: post.tags.map((pt: any) => pt.tag).filter(Boolean),
+      };
+    }),
 
   /**
    * Create new blog post (PROTECTED)
@@ -220,14 +213,25 @@ export const blogPostsRouter = router({
   create: protectedProcedure.input(blogPostInputSchema).mutation(async ({ input, ctx }) => {
     const { categoryIds, tagIds, ...postData } = input;
     const authorId = await resolveAuthorId(ctx, input.authorId);
-    const statusFields = normalizeStatusFields(input.status || 'draft', input.scheduledFor, input.publishedAt);
+    const statusFields = normalizeStatusFields(
+      input.status || 'draft',
+      input.scheduledFor,
+      input.publishedAt,
+    );
 
     const [post] = await ctx.db
       .insert(blogPosts)
-      .values({ ...postData, ...statusFields, authorId, seoKeywords: input.seoKeywords || [], metadata: input.metadata || {} })
+      .values({
+        ...postData,
+        ...statusFields,
+        authorId,
+        seoKeywords: input.seoKeywords || [],
+        metadata: input.metadata || {},
+      })
       .returning();
 
-    if (!post) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create post' });
+    if (!post)
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create post' });
 
     // ⚡ Bolt: Parallelize category and tag synchronization using syncPostRelations helper.
     // This reduces sequential database round-trips from O(4) to O(2) for taxonomy.

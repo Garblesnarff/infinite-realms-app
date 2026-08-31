@@ -37,7 +37,7 @@ export class ConditionLifecycleService {
         WHERE ce.id = ${encounterId}
           AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
         LIMIT 1
-      `
+      `,
     );
 
     if (!encounterAccess || encounterAccess.length === 0) {
@@ -58,7 +58,7 @@ export class ConditionLifecycleService {
     saveAbility?: SaveAbility,
     source?: string,
     currentRound?: number,
-    userId?: string
+    userId?: string,
   ): Promise<{ condition: ParticipantConditionWithDetails; warnings: string[] }> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
@@ -68,7 +68,7 @@ export class ConditionLifecycleService {
 
     // Get condition from library
     const conditionLibrary = await db.execute<Record<string, unknown>>(
-      sql`SELECT * FROM conditions_library WHERE name = ${conditionName} LIMIT 1`
+      sql`SELECT * FROM conditions_library WHERE name = ${conditionName} LIMIT 1`,
     );
 
     if (!conditionLibrary || conditionLibrary.length === 0) {
@@ -79,7 +79,7 @@ export class ConditionLifecycleService {
 
     // Get participant to get current round and verify encounterId
     const participantResult = await db.execute<Record<string, unknown>>(
-      sql`SELECT encounter_id FROM combat_participants WHERE id = ${participantId} AND encounter_id = ${encounterId} LIMIT 1`
+      sql`SELECT encounter_id FROM combat_participants WHERE id = ${participantId} AND encounter_id = ${encounterId} LIMIT 1`,
     );
 
     if (!participantResult || participantResult.length === 0) {
@@ -90,7 +90,7 @@ export class ConditionLifecycleService {
     let appliedAtRound = currentRound || 1;
     if (!currentRound) {
       const encounterResult = await db.execute<Record<string, unknown>>(
-        sql`SELECT current_round FROM combat_encounters WHERE id = ${participantResult[0]!.encounter_id} LIMIT 1`
+        sql`SELECT current_round FROM combat_encounters WHERE id = ${participantResult[0]!.encounter_id} LIMIT 1`,
       );
       if (encounterResult && encounterResult.length > 0) {
         appliedAtRound = encounterResult[0]!.current_round as number;
@@ -103,18 +103,22 @@ export class ConditionLifecycleService {
       expiresAtRound = appliedAtRound + durationValue;
     } else if (durationType === 'minutes' && durationValue) {
       // 1 minute = 10 rounds (60 seconds / 6 seconds per round)
-      expiresAtRound = appliedAtRound + (durationValue * 10);
+      expiresAtRound = appliedAtRound + durationValue * 10;
     } else if (durationType === 'hours' && durationValue) {
       // 1 hour = 600 rounds
-      expiresAtRound = appliedAtRound + (durationValue * 600);
+      expiresAtRound = appliedAtRound + durationValue * 600;
     }
 
     // Check for conflicts - Note: This will be moved to ConditionMechanics in the next step
     // For now, we use a placeholder or assume it's available in ConditionMechanics
-    const conflicts = await ConditionMechanics.checkConditionConflicts(participantId, conditionName, userId);
+    const conflicts = await ConditionMechanics.checkConditionConflicts(
+      participantId,
+      conditionName,
+      userId,
+    );
     const supersededIds: string[] = [];
 
-    conflicts.forEach(conflict => {
+    conflicts.forEach((conflict) => {
       warnings.push(conflict.message);
       // Collect superseded conditions for batch removal
       if (conflict.conflictType === 'superseded') {
@@ -129,7 +133,10 @@ export class ConditionLifecycleService {
           sql`
             UPDATE combat_participant_conditions
             SET is_active = false
-            WHERE id IN (${sql.join(supersededIds.map(id => sql`${id}`), sql`, `)})
+            WHERE id IN (${sql.join(
+              supersededIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})
               AND participant_id IN (
                 SELECT cp.id FROM combat_participants cp
                 ${
@@ -149,10 +156,14 @@ export class ConditionLifecycleService {
                     : sql``
                 }
               )
-          `
+          `,
         );
       } catch (err) {
-        combatLogger.error({ msg: 'Failed to remove superseded conditions', error: err, supersededIds });
+        combatLogger.error({
+          msg: 'Failed to remove superseded conditions',
+          error: err,
+          supersededIds,
+        });
       }
     }
 
@@ -201,7 +212,7 @@ export class ConditionLifecycleService {
             : sql``
         }
         RETURNING *
-      `
+      `,
     );
 
     const participantCondition = result[0] as unknown as ParticipantCondition;
@@ -226,7 +237,11 @@ export class ConditionLifecycleService {
   /**
    * Remove a condition from a participant
    */
-  static async removeCondition(conditionId: string, encounterId: string, userId?: string): Promise<boolean> {
+  static async removeCondition(
+    conditionId: string,
+    encounterId: string,
+    userId?: string,
+  ): Promise<boolean> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
     }
@@ -257,7 +272,7 @@ export class ConditionLifecycleService {
             }
           )
         RETURNING id
-      `
+      `,
     );
 
     return result ? result.length > 0 : false;
@@ -270,7 +285,7 @@ export class ConditionLifecycleService {
     conditionId: string,
     encounterId: string,
     saveRoll: number,
-    userId?: string
+    userId?: string,
   ): Promise<{ saved: boolean; conditionRemoved: boolean; message: string }> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
@@ -300,7 +315,7 @@ export class ConditionLifecycleService {
               : sql``
           }
         LIMIT 1
-      `
+      `,
     );
 
     if (!result || result.length === 0) {
@@ -310,7 +325,9 @@ export class ConditionLifecycleService {
     const condition = result[0] as unknown as ParticipantCondition;
 
     if (!condition.saveDc || !condition.saveAbility) {
-      throw new BusinessLogicError('This condition does not require a saving throw', { conditionId });
+      throw new BusinessLogicError('This condition does not require a saving throw', {
+        conditionId,
+      });
     }
 
     const saved = saveRoll >= condition.saveDc;
@@ -335,10 +352,15 @@ export class ConditionLifecycleService {
   static async advanceConditionDurations(
     encounterId: string,
     currentRound: number,
-    userId?: string
+    userId?: string,
   ): Promise<{
     expiredConditions: ParticipantConditionWithDetails[];
-    savingThrowsNeeded: Array<{ participantId: string; conditionId: string; saveAbility: SaveAbility; saveDc: number }>;
+    savingThrowsNeeded: Array<{
+      participantId: string;
+      conditionId: string;
+      saveAbility: SaveAbility;
+      saveDc: number;
+    }>;
   }> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
@@ -374,13 +396,18 @@ export class ConditionLifecycleService {
               ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
               : sql``
           }
-      `
+      `,
     );
 
     const expiredConditions: ParticipantConditionWithDetails[] = [];
-    const savingThrowsNeeded: Array<{ participantId: string; conditionId: string; saveAbility: SaveAbility; saveDc: number }> = [];
+    const savingThrowsNeeded: Array<{
+      participantId: string;
+      conditionId: string;
+      saveAbility: SaveAbility;
+      saveDc: number;
+    }> = [];
 
-    for (const rowData of (result || [])) {
+    for (const rowData of result || []) {
       const row = rowData as {
         id: string;
         participant_id: string;
@@ -394,13 +421,15 @@ export class ConditionLifecycleService {
         source_description: string | null;
         condition_name: string;
         condition_description: string;
-        mechanical_effects: unknown;
+        mechanical_effects: string;
         icon_name: string | null;
         created_at: string;
       };
       // Check if condition has expired
       if (row.expires_at_round && row.expires_at_round <= currentRound) {
-        const mechanicalEffects = ConditionQueryService.parseMechanicalEffects(row.mechanical_effects);
+        const mechanicalEffects = ConditionQueryService.parseMechanicalEffects(
+          row.mechanical_effects,
+        );
         expiredConditions.push({
           id: row.id,
           participantId: row.participant_id,
@@ -444,7 +473,7 @@ export class ConditionLifecycleService {
           SET is_active = false
           WHERE id IN (${sql.join(
             expiredIds.map((id) => sql`${id}`),
-            sql`, `
+            sql`, `,
           )})
             AND participant_id IN (
               SELECT cp.id FROM combat_participants cp
@@ -465,7 +494,7 @@ export class ConditionLifecycleService {
                     : sql``
                 }
             )
-        `
+        `,
       );
     }
 

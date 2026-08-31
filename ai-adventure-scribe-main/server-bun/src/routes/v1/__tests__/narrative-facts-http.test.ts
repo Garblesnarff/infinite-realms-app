@@ -64,7 +64,7 @@ const ledger = {
 const { createNarrativeFactRoutes } = await import('../narrative-facts.js');
 const app = new Elysia().use(
   createNarrativeFactRoutes({
-    auth: requireAuth as NonNullable<NarrativeFactRouteOptions['auth']>,
+    auth: requireAuth as unknown as NonNullable<NarrativeFactRouteOptions['auth']>,
     ledger: ledger as unknown as NonNullable<NarrativeFactRouteOptions['ledger']>,
   }),
 );

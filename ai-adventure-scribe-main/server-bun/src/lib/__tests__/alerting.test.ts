@@ -101,7 +101,7 @@ describe('alert()', () => {
 
   it('never throws when the webhook fetch rejects', async () => {
     process.env.SLACK_ALERT_WEBHOOK_URL = 'https://hooks.example.test/webhook';
-    globalThis.fetch = (() => Promise.reject(new Error('network down'))) as typeof fetch;
+    globalThis.fetch = (() => Promise.reject(new Error('network down'))) as unknown as typeof fetch;
 
     expect(() => alert('narrative_fact_write_failed', { error: 'x' })).not.toThrow();
 

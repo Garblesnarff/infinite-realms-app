@@ -20,18 +20,18 @@ import type {
  * Conditions that include or supersede other conditions
  */
 export const CONDITION_HIERARCHY: Record<string, string[]> = {
-  'Paralyzed': ['Incapacitated'],
-  'Petrified': ['Incapacitated'],
-  'Stunned': ['Incapacitated'],
-  'Unconscious': ['Incapacitated', 'Prone'],
+  Paralyzed: ['Incapacitated'],
+  Petrified: ['Incapacitated'],
+  Stunned: ['Incapacitated'],
+  Unconscious: ['Incapacitated', 'Prone'],
 };
 
 /**
  * Mutually incompatible conditions
  */
 export const INCOMPATIBLE_CONDITIONS: Record<string, string[]> = {
-  'Invisible': ['Blinded'], // Being invisible doesn't help if you're blind
-  'Prone': ['Flying'], // Can't be prone while flying
+  Invisible: ['Blinded'], // Being invisible doesn't help if you're blind
+  Prone: ['Flying'], // Can't be prone while flying
 };
 
 export class ConditionMechanics {
@@ -39,11 +39,11 @@ export class ConditionMechanics {
    * Calculate aggregated mechanical effects from a list of conditions
    */
   static calculateAggregatedEffects(
-    conditions: ParticipantConditionWithDetails[]
+    conditions: ParticipantConditionWithDetails[],
   ): AggregatedMechanicalEffects {
-    const aggregated: AggregatedMechanicalEffects = {
+    const aggregated = {
       appliedConditions: [],
-    };
+    } as unknown as AggregatedMechanicalEffects;
 
     // Merge all mechanical effects
     for (const condition of conditions) {
@@ -65,7 +65,7 @@ export class ConditionMechanics {
           (aggregated as Record<string, unknown>)[key] = this.mergeEffectValues(
             currentValue as string | number | boolean | undefined,
             value,
-            key
+            key,
           );
         }
       }
@@ -80,7 +80,7 @@ export class ConditionMechanics {
   private static mergeEffectValues(
     current: string | number | boolean | undefined,
     incoming: string | number | boolean | undefined,
-    key: string
+    key: string,
   ): string | number | boolean | undefined {
     // For auto_fail, that always takes precedence
     if (current === 'auto_fail' || incoming === 'auto_fail') {
@@ -140,7 +140,7 @@ export class ConditionMechanics {
     // Blinded attackers have disadvantage
     if (effects.appliedConditions.includes('Blinded')) {
       hasDisadvantage = true;
-      if (!reasons.some(r => r.includes('Blinded'))) {
+      if (!reasons.some((r) => r.includes('Blinded'))) {
         reasons.push('Attacker is Blinded (disadvantage on attacks)');
       }
     }
@@ -148,7 +148,7 @@ export class ConditionMechanics {
     // Poisoned attackers have disadvantage
     if (effects.appliedConditions.includes('Poisoned')) {
       hasDisadvantage = true;
-      if (!reasons.some(r => r.includes('Poisoned'))) {
+      if (!reasons.some((r) => r.includes('Poisoned'))) {
         reasons.push('Attacker is Poisoned (disadvantage on attacks)');
       }
     }
@@ -156,7 +156,7 @@ export class ConditionMechanics {
     // Prone attackers have disadvantage on attacks
     if (effects.appliedConditions.includes('Prone')) {
       hasDisadvantage = true;
-      if (!reasons.some(r => r.includes('Prone'))) {
+      if (!reasons.some((r) => r.includes('Prone'))) {
         reasons.push('Attacker is Prone (disadvantage on attacks)');
       }
     }
@@ -164,7 +164,7 @@ export class ConditionMechanics {
     // Restrained attackers have disadvantage
     if (effects.appliedConditions.includes('Restrained')) {
       hasDisadvantage = true;
-      if (!reasons.some(r => r.includes('Restrained'))) {
+      if (!reasons.some((r) => r.includes('Restrained'))) {
         reasons.push('Attacker is Restrained (disadvantage on attacks)');
       }
     }
@@ -178,7 +178,7 @@ export class ConditionMechanics {
   static calculateTargetModifiers(
     effects: AggregatedMechanicalEffects,
     attackType: 'melee' | 'ranged' | 'spell',
-    distanceInFeet?: number
+    distanceInFeet?: number,
   ): {
     hasAdvantage: boolean;
     hasDisadvantage: boolean;
@@ -245,7 +245,7 @@ export class ConditionMechanics {
     ) {
       isAutoCrit = true;
       hasAdvantage = true;
-      if (!reasons.some(r => r.includes('auto-crit'))) {
+      if (!reasons.some((r) => r.includes('auto-crit'))) {
         reasons.push('Target is Paralyzed/Unconscious within 5ft (auto-crit on hit, advantage)');
       }
     }
@@ -258,7 +258,7 @@ export class ConditionMechanics {
    */
   static calculateSaveModifiers(
     effects: AggregatedMechanicalEffects,
-    saveAbility: SaveAbility
+    saveAbility: SaveAbility,
   ): {
     autoFail: boolean;
     hasAdvantage: boolean;
@@ -271,18 +271,25 @@ export class ConditionMechanics {
     let hasDisadvantage = false;
 
     // Map save ability to mechanical effect key
-    const saveKey = `saving_throws_${saveAbility.slice(0, 3).toLowerCase()}` as keyof MechanicalEffects;
+    const saveKey =
+      `saving_throws_${saveAbility.slice(0, 3).toLowerCase()}` as keyof MechanicalEffects;
     const saveEffect = effects[saveKey];
 
     if (saveEffect === 'auto_fail') {
       autoFail = true;
-      reasons.push(`Auto-fail ${saveAbility.toUpperCase()} saves from: ${effects.appliedConditions.join(', ')}`);
+      reasons.push(
+        `Auto-fail ${saveAbility.toUpperCase()} saves from: ${effects.appliedConditions.join(', ')}`,
+      );
     } else if (saveEffect === 'disadvantage') {
       hasDisadvantage = true;
-      reasons.push(`Disadvantage on ${saveAbility.toUpperCase()} saves from: ${effects.appliedConditions.join(', ')}`);
+      reasons.push(
+        `Disadvantage on ${saveAbility.toUpperCase()} saves from: ${effects.appliedConditions.join(', ')}`,
+      );
     } else if (saveEffect === 'advantage') {
       hasAdvantage = true;
-      reasons.push(`Advantage on ${saveAbility.toUpperCase()} saves from: ${effects.appliedConditions.join(', ')}`);
+      reasons.push(
+        `Advantage on ${saveAbility.toUpperCase()} saves from: ${effects.appliedConditions.join(', ')}`,
+      );
     }
 
     // Paralyzed: Auto-fail STR and DEX saves
@@ -291,7 +298,7 @@ export class ConditionMechanics {
       (saveAbility === 'strength' || saveAbility === 'dexterity')
     ) {
       autoFail = true;
-      if (!reasons.some(r => r.includes('Paralyzed'))) {
+      if (!reasons.some((r) => r.includes('Paralyzed'))) {
         reasons.push('Paralyzed (auto-fail STR/DEX saves)');
       }
     }
@@ -302,7 +309,7 @@ export class ConditionMechanics {
       (saveAbility === 'strength' || saveAbility === 'dexterity')
     ) {
       autoFail = true;
-      if (!reasons.some(r => r.includes('Unconscious'))) {
+      if (!reasons.some((r) => r.includes('Unconscious'))) {
         reasons.push('Unconscious (auto-fail STR/DEX saves)');
       }
     }
@@ -313,7 +320,7 @@ export class ConditionMechanics {
       (saveAbility === 'strength' || saveAbility === 'dexterity')
     ) {
       autoFail = true;
-      if (!reasons.some(r => r.includes('Stunned'))) {
+      if (!reasons.some((r) => r.includes('Stunned'))) {
         reasons.push('Stunned (auto-fail STR/DEX saves)');
       }
     }
@@ -321,7 +328,7 @@ export class ConditionMechanics {
     // Restrained: Disadvantage on DEX saves
     if (effects.appliedConditions.includes('Restrained') && saveAbility === 'dexterity') {
       hasDisadvantage = true;
-      if (!reasons.some(r => r.includes('Restrained'))) {
+      if (!reasons.some((r) => r.includes('Restrained'))) {
         reasons.push('Restrained (disadvantage on DEX saves)');
       }
     }
@@ -367,7 +374,13 @@ export class ConditionMechanics {
     let canReact = true;
 
     // Check for incapacitated conditions
-    const incapacitatingConditions = ['Incapacitated', 'Paralyzed', 'Petrified', 'Stunned', 'Unconscious'];
+    const incapacitatingConditions = [
+      'Incapacitated',
+      'Paralyzed',
+      'Petrified',
+      'Stunned',
+      'Unconscious',
+    ];
     for (const condition of incapacitatingConditions) {
       if (effects.appliedConditions.includes(condition)) {
         canAct = false;
@@ -437,7 +450,7 @@ export class ConditionMechanics {
   static async checkConditionConflicts(
     participantId: string,
     newConditionName: string,
-    userId?: string
+    userId?: string,
   ): Promise<ConditionConflict[]> {
     const activeConditions = await ConditionQueryService.getActiveConditions(participantId, userId);
     const conflicts: ConditionConflict[] = [];

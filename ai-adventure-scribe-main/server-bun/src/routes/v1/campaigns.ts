@@ -19,7 +19,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { CampaignService } from '../../services/campaign-service.js';
+import { CampaignService, type CampaignListRow } from '../../services/campaign-service.js';
 
 import type { Campaign } from '../../../../db/schema/index';
 
@@ -60,7 +60,7 @@ type UpdateCampaignBody = Static<typeof updateCampaignBodySchema>;
  * Helper to map camelCase Campaign to snake_case for API compatibility
  */
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-const mapCampaignToApi = (campaign: Campaign) => ({
+const mapCampaignToApi = (campaign: Campaign | CampaignListRow) => ({
   id: campaign.id,
   user_id: campaign.userId,
   name: campaign.name,
@@ -92,7 +92,7 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
   // transform phase, before resolve() (which requireAuth uses) populates
   // `user` in beforeHandle. A derive() here always sees user === undefined,
   // so the ownership fetch is silently skipped and every /:id request 404s.
-  .resolve(async ({ user, params }) => {
+  .resolve({ as: 'scoped' }, async ({ user, params }) => {
     let campaign = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch campaign once in derive block to avoid double-fetching.

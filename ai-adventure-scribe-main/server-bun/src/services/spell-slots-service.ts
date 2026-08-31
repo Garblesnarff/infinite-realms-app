@@ -253,7 +253,12 @@ export class SpellSlotsService {
 
     // ⚡ Bolt: Consolidated character ownership verification and spell slot retrieval into a single query.
     // Using a LEFT JOIN from characters ensures we can verify ownership and fetch slots in one round-trip.
-    const results = await (db as any)
+    type RestorableSlot = Pick<
+      SpellSlot,
+      'id' | 'characterId' | 'spellLevel' | 'totalSlots' | 'usedSlots'
+    >;
+    type RestoreSlotRow = { slot: RestorableSlot | null; charId: string };
+    const results: RestoreSlotRow[] = await (db as any)
       .select({
         slot: characterSpellSlots,
         charId: characters.id,
@@ -282,7 +287,9 @@ export class SpellSlotsService {
     }
 
     // Filter out null slots (from characters with no spell slot records)
-    const slots = results.map((r: any) => r.slot).filter((s: any): s is SpellSlot => s !== null);
+    const slots = results
+      .map((r) => r.slot)
+      .filter((slot): slot is RestorableSlot => slot !== null);
 
     if (!slots || slots.length === 0) {
       return {

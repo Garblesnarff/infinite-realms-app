@@ -100,14 +100,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // (old clients, or client-side computation failure) is a no-op, by design.
       if (metrics && typeof metrics === 'object') {
         try {
+          const metricsRecord = metrics as Record<string, unknown>;
           const total =
-            typeof metrics.total === 'number'
-              ? metrics.total
-              : Object.values(metrics).reduce(
-                  (sum, value) => sum + (typeof value === 'number' ? value : 0),
+            typeof metricsRecord.total === 'number'
+              ? metricsRecord.total
+              : Object.values(metricsRecord).reduce<number>(
+                  (sum: number, value: unknown) => sum + (typeof value === 'number' ? value : 0),
                   0,
                 );
-          const line = `[PromptMetrics] ${JSON.stringify({ ...metrics, total })}`;
+          const line = `[PromptMetrics] ${JSON.stringify({ ...metricsRecord, total })}`;
           if (total > 30_000) {
             logger.warn(line);
           } else {

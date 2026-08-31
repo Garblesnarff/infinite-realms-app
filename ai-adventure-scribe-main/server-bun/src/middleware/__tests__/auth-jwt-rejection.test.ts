@@ -23,10 +23,10 @@ const publicJwk = await exportJWK(publicKey);
 publicJwk.kid = 'test-workos-key';
 
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async () =>
+globalThis.fetch = (async () =>
   new Response(JSON.stringify({ keys: [publicJwk] }), {
     headers: { 'content-type': 'application/json' },
-  });
+  })) as unknown as typeof fetch;
 
 const { requireAuth } = await import('../auth.js');
 const app = new Elysia()

@@ -16,6 +16,7 @@ import { db } from '../../../db/client';
 import { characters, fogOfWar, scenes } from '../../../db/schema/index';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 
+import type { FoundryMessage } from './collaboration/room-manager.js';
 import type { FogOfWar } from '../../../db/schema/index';
 
 /**
@@ -41,7 +42,7 @@ export interface RevealAreaInput {
 /**
  * Callback type for WebSocket broadcast
  */
-export type BroadcastCallback = (message: unknown) => void;
+export type BroadcastCallback = (message: FoundryMessage) => void;
 
 export class FogOfWarService {
   /**
@@ -90,7 +91,7 @@ export class FogOfWarService {
           ),
         ),
       ),
-    );
+    )!;
   }
 
   /**
@@ -238,7 +239,7 @@ export class FogOfWarService {
           revealedAreas: sql`${fogOfWar.revealedAreas} || ${JSON.stringify(newAreas)}::jsonb`,
           updatedAt: new Date(),
         },
-        where: this.getAccessFilter(fogOfWar.sceneId, fogOfWar.userId, requesterId),
+        where: this.getAccessFilter(sceneId, userId, requesterId),
       })
       .returning();
 

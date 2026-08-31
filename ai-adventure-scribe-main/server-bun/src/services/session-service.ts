@@ -23,6 +23,11 @@ import {
 import { mapSessionListApiRow } from '../../../shared/session-list-contract.js';
 import { NotFoundError } from '../lib/errors.js';
 
+type ActiveSession = Omit<
+  GameSession,
+  'sessionNotes' | 'currentSceneDescription' | 'summary' | 'sessionState'
+>;
+
 export { type MessagePage };
 
 interface CreateSessionData {
@@ -383,7 +388,7 @@ export class SessionService {
       characterId?: string;
     },
     userId: string,
-  ): Promise<GameSession | null> {
+  ): Promise<ActiveSession | null> {
     const session = await db.query.gameSessions.findFirst({
       where: (session, { and, eq, isNull }) =>
         and(

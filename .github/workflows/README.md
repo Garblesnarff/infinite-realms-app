@@ -100,7 +100,7 @@ bunx tsc --noEmit
 bunx vitest run
 
 # Server tests (mirrors `server-vitest`)
-cd server-bun && bun test --isolate
+cd server-bun && bun run test
 
 # Security static-analysis (mirrors `security-lint`)
 node scripts/security-lint.js

@@ -9,6 +9,8 @@ import { Elysia } from 'elysia';
 
 import { supabaseService } from '../lib/supabase.js';
 
+import type { AuthTokenPayload } from './auth.js';
+
 export type BlogRole = 'viewer' | 'author' | 'admin';
 
 function normalizeRole(role: unknown): BlogRole | null {
@@ -69,7 +71,11 @@ export async function canManagePost(postId: string, userId: string): Promise<boo
  * Returns 403 if user is a viewer
  */
 export const requireBlogAuthor = new Elysia({ name: 'require-blog-author' })
-  .derive({ as: 'scoped' }, async ({ user, set }) => {
+  .derive({ as: 'scoped' }, async (context) => {
+    // `user` is added by requireAuth in the consuming route, not by this
+    // standalone authorization plugin.
+    const { set } = context;
+    const user = (context as typeof context & { user?: AuthTokenPayload | null }).user;
     if (!user?.userId) {
       set.status = 401;
       return {

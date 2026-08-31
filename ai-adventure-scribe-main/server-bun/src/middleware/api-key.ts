@@ -105,19 +105,25 @@ export const requireApiKey = new Elysia({ name: 'require-api-key' })
  * Check if API key has a specific permission
  */
 export function hasPermission(permission: string) {
-  return new Elysia({ name: `has-permission-${permission}` })
-    // 'scoped' is REQUIRED — see requireApiKey above.
-    .onBeforeHandle({ as: 'scoped' }, ({ apiKey, set }) => {
-      if (!apiKey) {
-        set.status = 401;
-        return { error: 'Unauthorized' };
-      }
+  return (
+    new Elysia({ name: `has-permission-${permission}` })
+      // 'scoped' is REQUIRED — see requireApiKey above.
+      .onBeforeHandle({ as: 'scoped' }, (context) => {
+        // `apiKey` is supplied by requireApiKey when this plugin is composed into
+        // a route. Keep that dependency explicit without weakening the payload type.
+        const { set } = context;
+        const apiKey = (context as typeof context & { apiKey?: ApiKeyPayload | null }).apiKey;
+        if (!apiKey) {
+          set.status = 401;
+          return { error: 'Unauthorized' };
+        }
 
-      if (!apiKey.permissions.includes(permission) && !apiKey.permissions.includes('*')) {
-        set.status = 403;
-        return { error: 'Forbidden' };
-      }
-    });
+        if (!apiKey.permissions.includes(permission) && !apiKey.permissions.includes('*')) {
+          set.status = 403;
+          return { error: 'Forbidden' };
+        }
+      })
+  );
 }
 
 /**

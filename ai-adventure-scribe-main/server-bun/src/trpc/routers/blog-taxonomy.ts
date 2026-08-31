@@ -20,6 +20,14 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from '../
 import { canManagePost, syncPostCategories, syncPostTags } from './blog-helpers.js';
 import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
 
+type BlogTaxonomyItem = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  postCount?: number;
+};
+
 export const blogTaxonomyRouter = router({
   /**
    * Get all categories (PUBLIC)
@@ -37,7 +45,11 @@ export const blogTaxonomyRouter = router({
       };
 
       if (!input.includeCount) {
-        return await ctx.db.select(baseColumns).from(blogCategories).orderBy(blogCategories.name);
+        const categories = await ctx.db
+          .select(baseColumns)
+          .from(blogCategories)
+          .orderBy(blogCategories.name);
+        return categories.map((category): BlogTaxonomyItem => ({ ...category }));
       }
 
       // ⚡ Bolt: Consolidated category list and post counts into a single joined query.
@@ -60,10 +72,12 @@ export const blogTaxonomyRouter = router({
         .groupBy(blogCategories.id)
         .orderBy(blogCategories.name);
 
-      return results.map((r) => ({
-        ...r.category,
-        postCount: r.postCount,
-      }));
+      return results.map(
+        (r): BlogTaxonomyItem => ({
+          ...r.category,
+          postCount: r.postCount,
+        }),
+      );
     }),
 
   /**
@@ -82,7 +96,8 @@ export const blogTaxonomyRouter = router({
       };
 
       if (!input.includeCount) {
-        return await ctx.db.select(baseColumns).from(blogTags).orderBy(blogTags.name);
+        const tags = await ctx.db.select(baseColumns).from(blogTags).orderBy(blogTags.name);
+        return tags.map((tag): BlogTaxonomyItem => ({ ...tag }));
       }
 
       // ⚡ Bolt: Consolidated tag list and post counts into a single joined query.
@@ -105,42 +120,42 @@ export const blogTaxonomyRouter = router({
         .groupBy(blogTags.id)
         .orderBy(blogTags.name);
 
-      return results.map((r) => ({
-        ...r.tag,
-        postCount: r.postCount,
-      }));
+      return results.map(
+        (r): BlogTaxonomyItem => ({
+          ...r.tag,
+          postCount: r.postCount,
+        }),
+      );
     }),
 
   /**
    * Create category (PROTECTED - admin only in production)
    */
-  createCategory: adminProcedure
-    .input(blogCategorySchema)
-    .mutation(async ({ input, ctx }) => {
-      try {
-        const [category] = await ctx.db
-          .insert(blogCategories)
-          .values({
-            ...input,
-            metadata: {},
-          })
-          .returning();
+  createCategory: adminProcedure.input(blogCategorySchema).mutation(async ({ input, ctx }) => {
+    try {
+      const [category] = await ctx.db
+        .insert(blogCategories)
+        .values({
+          ...input,
+          metadata: {},
+        })
+        .returning();
 
-        return category;
-      } catch (error: any) {
-        // Handle unique constraint violation (duplicate slug)
-        if (error?.code === '23505') {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'Category slug already exists',
-          });
-        }
+      return category;
+    } catch (error: any) {
+      // Handle unique constraint violation (duplicate slug)
+      if (error?.code === '23505') {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create category',
+          code: 'CONFLICT',
+          message: 'Category slug already exists',
         });
       }
-    }),
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to create category',
+      });
+    }
+  }),
 
   /**
    * Update category (PROTECTED - admin only in production)

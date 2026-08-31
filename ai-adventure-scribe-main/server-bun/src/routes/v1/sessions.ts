@@ -101,7 +101,7 @@ const completeSessionSchema = t.Object({
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
-  .resolve(async ({ user, params }) => {
+  .resolve({ as: 'scoped' }, async ({ user, params }) => {
     let session = null;
     if (user && params?.id) {
       try {
@@ -181,29 +181,37 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * GET /v1/sessions/:id
    * Get a session by ID (with ownership verification)
    */
-  .get('/:id', async ({ session }) => {
-    return mapSessionToApi(session as GameSession);
-  }, { params: sessionIdParams })
+  .get(
+    '/:id',
+    async ({ session }) => {
+      return mapSessionToApi(session as GameSession);
+    },
+    { params: sessionIdParams },
+  )
 
   /**
    * GET /v1/sessions/:id/context
    * Get session, campaign, character, and stats with ownership verification.
    */
-  .get('/:id/context', async ({ params, set, user }) => {
-    try {
-      const result = await getSessionContextRouteResult(
-        params.id,
-        (user as { userId: string }).userId,
-        SessionService.getSessionContext,
-      );
-      set.status = result.status;
-      return result.body;
-    } catch (error) {
-      logger.error({ msg: 'SESSION_CONTEXT_GET error', sessionId: params.id, error });
-      set.status = 500;
-      return { error: 'Failed to fetch session context' };
-    }
-  }, { params: sessionIdParams })
+  .get(
+    '/:id/context',
+    async ({ params, set, user }) => {
+      try {
+        const result = await getSessionContextRouteResult(
+          params.id,
+          (user as { userId: string }).userId,
+          SessionService.getSessionContext,
+        );
+        set.status = result.status;
+        return result.body;
+      } catch (error) {
+        logger.error({ msg: 'SESSION_CONTEXT_GET error', sessionId: params.id, error });
+        set.status = 500;
+        return { error: 'Failed to fetch session context' };
+      }
+    },
+    { params: sessionIdParams },
+  )
 
   .patch(
     '/:id',
@@ -245,98 +253,102 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * POST /v1/sessions/:id/complete
    * Mark a session as complete
    */
-  .post('/:id/complete', async ({ params, body, set, user }) => {
-    const { id } = params;
-    const { summary } = body;
+  .post(
+    '/:id/complete',
+    async ({ params, body, set, user }) => {
+      const { id } = params;
+      const { summary } = body;
 
-    try {
-      const session = await SessionService.completeSession(
-        id,
-        (user as { userId: string }).userId,
-        summary,
-      );
+      try {
+        const session = await SessionService.completeSession(
+          id,
+          (user as { userId: string }).userId,
+          summary,
+        );
 
-      // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
-      const userPlan = (user as { userId: string; plan?: string }).plan;
-      if (userPlan === 'pro' || userPlan === 'enterprise') {
-        const sessionUserId = (user as { userId: string }).userId;
-        const sessionIdForChronicle = id;
-        (async () => {
-          let chronicleId: string | undefined;
-          try {
-            chronicleId = await db.transaction(async (tx) => {
-              const [row] = await tx
-                .insert(sessionChronicles)
-                .values({
-                  sessionId: sessionIdForChronicle,
-                  userId: sessionUserId,
-                  status: 'generating',
-                })
-                .returning({ id: sessionChronicles.id });
-              if (!row) throw new Error('Failed to create chronicle row');
-              return row.id;
-            });
+        // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
+        const userPlan = (user as { userId: string; plan?: string }).plan;
+        if (userPlan === 'pro' || userPlan === 'enterprise') {
+          const sessionUserId = (user as { userId: string }).userId;
+          const sessionIdForChronicle = id;
+          (async () => {
+            let chronicleId: string | undefined;
+            try {
+              chronicleId = await db.transaction(async (tx) => {
+                const [row] = await tx
+                  .insert(sessionChronicles)
+                  .values({
+                    sessionId: sessionIdForChronicle,
+                    userId: sessionUserId,
+                    status: 'generating',
+                  })
+                  .returning({ id: sessionChronicles.id });
+                if (!row) throw new Error('Failed to create chronicle row');
+                return row.id;
+              });
 
-            const content = await chronicleGenerator.generateProChronicle(
-              sessionIdForChronicle,
-              sessionUserId,
-            );
-            const illustrationUrl = await chronicleGenerator.generateIllustration(
-              content.illustrationPrompt,
-            );
-            if (!chronicleId) throw new Error('Chronicle row was not created');
-            const completedChronicleId = chronicleId;
+              const content = await chronicleGenerator.generateProChronicle(
+                sessionIdForChronicle,
+                sessionUserId,
+              );
+              const illustrationUrl = await chronicleGenerator.generateIllustration(
+                content.illustrationPrompt,
+              );
+              if (!chronicleId) throw new Error('Chronicle row was not created');
+              const completedChronicleId = chronicleId;
 
-            await db.transaction(async (tx) => {
-              await tx
-                .update(sessionChronicles)
-                .set({
-                  status: 'ready',
-                  chronicleText: content.chronicleText,
-                  chapterTitle: content.chapterTitle,
-                  previouslyOn: content.previouslyOn,
-                  illustrationUrl,
-                  shareToken: chronicleGenerator.generateShareToken(),
-                  generatedAt: new Date(),
-                  updatedAt: new Date(),
-                })
-                .where(eq(sessionChronicles.id, completedChronicleId));
-            });
+              await db.transaction(async (tx) => {
+                await tx
+                  .update(sessionChronicles)
+                  .set({
+                    status: 'ready',
+                    chronicleText: content.chronicleText,
+                    chapterTitle: content.chapterTitle,
+                    previouslyOn: content.previouslyOn,
+                    illustrationUrl,
+                    shareToken: chronicleGenerator.generateShareToken(),
+                    generatedAt: new Date(),
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(sessionChronicles.id, completedChronicleId));
+              });
 
-            logger.info({
-              msg: '[Sessions] Chronicle generated',
-              sessionId: sessionIdForChronicle,
-            });
-          } catch (err) {
-            if (chronicleId) {
-              try {
-                await persistChronicleFailure(db, chronicleId, err);
-              } catch (statusError) {
-                logger.error({
-                  msg: '[Sessions] Chronicle failure status update failed',
-                  sessionId: sessionIdForChronicle,
-                  chronicleId,
-                  error: statusError,
-                });
+              logger.info({
+                msg: '[Sessions] Chronicle generated',
+                sessionId: sessionIdForChronicle,
+              });
+            } catch (err) {
+              if (chronicleId) {
+                try {
+                  await persistChronicleFailure(db, chronicleId, err);
+                } catch (statusError) {
+                  logger.error({
+                    msg: '[Sessions] Chronicle failure status update failed',
+                    sessionId: sessionIdForChronicle,
+                    chronicleId,
+                    error: statusError,
+                  });
+                }
               }
+              logger.error({
+                msg: '[Sessions] Auto chronicle failed',
+                sessionId: sessionIdForChronicle,
+                error: err,
+              });
             }
-            logger.error({
-              msg: '[Sessions] Auto chronicle failed',
-              sessionId: sessionIdForChronicle,
-              error: err,
-            });
-          }
-        })();
-      }
+          })();
+        }
 
-      return mapSessionToApi(session);
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        set.status = 404;
-        return { error: 'Not found' };
+        return mapSessionToApi(session);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: 'Not found' };
+        }
+        logger.error({ msg: 'SESSION_COMPLETE error', error });
+        set.status = 500;
+        return { error: 'Failed to complete session' };
       }
-      logger.error({ msg: 'SESSION_COMPLETE error', error });
-      set.status = 500;
-      return { error: 'Failed to complete session' };
-    }
-  }, { params: sessionIdParams, body: completeSessionSchema });
+    },
+    { params: sessionIdParams, body: completeSessionSchema },
+  );

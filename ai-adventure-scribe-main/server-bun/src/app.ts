@@ -345,7 +345,7 @@ export function createApp() {
       endpoint: '/api/trpc',
       req: request,
       router: appRouter,
-      createContext: ({ req, resHeaders }) => createContext({ req, resHeaders }),
+      createContext: (options) => createContext(options),
     });
   });
 

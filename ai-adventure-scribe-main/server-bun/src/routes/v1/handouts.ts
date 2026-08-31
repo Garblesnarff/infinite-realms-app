@@ -32,7 +32,7 @@ const handoutResponseShell = (actions: unknown[]) => ({
 /** Session-owned handout delivery and campaign journal reads. */
 export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
-  .resolve(async ({ user, params }) => {
+  .resolve({ as: 'scoped' }, async ({ user, params }) => {
     let access = null;
     if (user && params?.id) {
       access = await verifySessionOwnership(params.id, user.userId);

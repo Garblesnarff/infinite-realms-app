@@ -82,7 +82,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: ai-adventure-scribe-main/server-bun
-      - run: bun test --isolate
+      - run: bun run test
         working-directory: ai-adventure-scribe-main/server-bun
 
   # The real-database suites, which `server-vitest` above cannot run.

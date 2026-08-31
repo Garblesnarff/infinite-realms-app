@@ -29,7 +29,7 @@
     "server:start": "bun run bun:start",
     "server:start:ci": "bun run bun:start",
     "start:prod": "bun run bun:start",
-    "server:test": "cd server-bun && bun test",
+    "server:test": "cd server-bun && bun run test",
     "bun:dev": "cd server-bun && bun dev",
     "bun:start": "cd server-bun && bun start",
     "bun:install": "cd server-bun && bun install",

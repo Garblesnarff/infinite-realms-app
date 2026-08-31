@@ -265,7 +265,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   // transform phase, before resolve() (which requireAuth uses) populates
   // `user` in beforeHandle. A derive() here always sees user === undefined,
   // so the ownership fetch is silently skipped and every /:id request 404s.
-  .resolve(async ({ user, params }) => {
+  .resolve({ as: 'scoped' }, async ({ user, params }) => {
     let character = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.

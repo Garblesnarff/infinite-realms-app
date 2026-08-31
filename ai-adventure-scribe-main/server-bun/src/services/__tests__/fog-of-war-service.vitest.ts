@@ -52,7 +52,7 @@ vi.mock('../../../../db/client', () => {
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     and: vi.fn((...args) => ({ type: 'and', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     or: vi.fn((...args) => ({ type: 'or', args })),
@@ -78,7 +78,9 @@ describe('FogOfWarService', () => {
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       // We call a method that uses verifyAccess internally
-      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).resolves.toBeDefined();
+      await expect(
+        FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId),
+      ).resolves.toBeDefined();
     });
 
     it('should throw NotFoundError if scene does not exist or access is denied', async () => {
@@ -87,7 +89,9 @@ describe('FogOfWarService', () => {
       mockSelectBuilder.limit.mockResolvedValue([]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
-      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).rejects.toThrow('Scene not found');
+      await expect(
+        FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId),
+      ).rejects.toThrow('Scene not found');
     });
 
     it('should allow access if requester is target and is a participant', async () => {
@@ -95,7 +99,9 @@ describe('FogOfWarService', () => {
       mockSelectBuilder.limit.mockResolvedValue([{ id: mockSceneId }]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
-      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).resolves.toBeDefined();
+      await expect(
+        FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId),
+      ).resolves.toBeDefined();
     });
 
     it('should deny access if requester is target but not a participant', async () => {
@@ -104,7 +110,9 @@ describe('FogOfWarService', () => {
       mockSelectBuilder.limit.mockResolvedValue([]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
-      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).rejects.toThrow('Scene not found');
+      await expect(
+        FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId),
+      ).rejects.toThrow('Scene not found');
     });
   });
 
@@ -112,12 +120,14 @@ describe('FogOfWarService', () => {
     it('should use atomic UPSERT for revealing areas', async () => {
       // Mock verifyAccess
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{
-        sceneOwnerId: mockUserId,
-        campaignId: 'camp-123',
-        isRequesterParticipant: true,
-        isTargetParticipant: true
-      }]);
+      mockSelectBuilder.limit.mockResolvedValue([
+        {
+          sceneOwnerId: mockUserId,
+          campaignId: 'camp-123',
+          isRequesterParticipant: true,
+          isTargetParticipant: true,
+        },
+      ]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       // Mock the UPSERT
@@ -129,16 +139,17 @@ describe('FogOfWarService', () => {
       (db as any).insert.mockReturnValue(mockInsertBuilder);
 
       const mockInput = {
-        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 10 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 5, y: 10 },
+        ],
         revealedBy: 'DM',
       };
 
-      const result = await FogOfWarService.revealAreas(
-        mockSceneId,
-        mockUserId,
-        mockRequesterId,
-        [mockInput]
-      );
+      const result = await FogOfWarService.revealAreas(mockSceneId, mockUserId, mockRequesterId, [
+        mockInput,
+      ]);
 
       expect(db.insert).toHaveBeenCalled();
       expect(mockInsertBuilder.onConflictDoUpdate).toHaveBeenCalledWith(
@@ -148,7 +159,7 @@ describe('FogOfWarService', () => {
             revealedAreas: expect.anything(),
             updatedAt: expect.anything(),
           }),
-        })
+        }),
       );
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
@@ -157,40 +168,111 @@ describe('FogOfWarService', () => {
       });
     });
 
+    it('should apply the scene and target user access filter to UPSERT conflicts', async () => {
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.limit.mockResolvedValue([
+        {
+          sceneOwnerId: mockUserId,
+          campaignId: 'camp-123',
+          isRequesterParticipant: true,
+          isTargetParticipant: true,
+        },
+      ]);
+      (db as any).select.mockReturnValue(mockSelectBuilder);
+
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.values.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.onConflictDoUpdate.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([{ id: 'upserted-id' }]);
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
+
+      await FogOfWarService.revealAreas(mockSceneId, mockUserId, mockRequesterId, [
+        {
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 5, y: 10 },
+          ],
+        },
+      ]);
+
+      const [conflictConfig] = mockInsertBuilder.onConflictDoUpdate.mock.calls[0] as [
+        { where: any },
+      ];
+      const accessQuery = conflictConfig.where.args[0] as { where: { mock: { calls: any[][] } } };
+      const whereCalls = accessQuery.where.mock.calls;
+      const accessConditions = whereCalls[whereCalls.length - 1]?.[0];
+
+      expect(conflictConfig.where).toEqual(expect.objectContaining({ type: 'exists' }));
+      expect(accessConditions).toEqual(
+        expect.objectContaining({
+          type: 'and',
+          args: expect.arrayContaining([
+            expect.objectContaining({ type: 'eq', b: mockSceneId }),
+            expect.objectContaining({
+              type: 'or',
+              args: expect.arrayContaining([
+                expect.objectContaining({
+                  type: 'and',
+                  args: expect.arrayContaining([
+                    expect.objectContaining({
+                      type: 'eq',
+                      a: expect.objectContaining({ type: 'sql', values: [mockUserId] }),
+                      b: mockRequesterId,
+                    }),
+                  ]),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+
     it('should throw ValidationError if polygon has less than 3 points', async () => {
       // Mock verifyAccess
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{
-        sceneOwnerId: mockUserId,
-        campaignId: 'camp-123',
-        isRequesterParticipant: true,
-        isTargetParticipant: true
-      }]);
+      mockSelectBuilder.limit.mockResolvedValue([
+        {
+          sceneOwnerId: mockUserId,
+          campaignId: 'camp-123',
+          isRequesterParticipant: true,
+          isTargetParticipant: true,
+        },
+      ]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       const mockInput = {
-        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+        ],
       };
 
-      await expect(FogOfWarService.revealAreas(
-        mockSceneId,
-        mockUserId,
-        mockRequesterId,
-        [mockInput]
-      )).rejects.toThrow('A polygon must have at least 3 points');
+      await expect(
+        FogOfWarService.revealAreas(mockSceneId, mockUserId, mockRequesterId, [mockInput]),
+      ).rejects.toThrow('A polygon must have at least 3 points');
     });
   });
 
   describe('revealArea', () => {
     it('should delegate to revealAreas', async () => {
-      const spy = vi.spyOn(FogOfWarService, 'revealAreas').mockResolvedValue([{ id: 'area-1' } as any]);
+      const spy = vi
+        .spyOn(FogOfWarService, 'revealAreas')
+        .mockResolvedValue([{ id: 'area-1' } as any]);
 
-      const mockInput = { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 10 }] };
+      const mockInput = {
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 5, y: 10 },
+        ],
+      };
       const result = await FogOfWarService.revealArea(
         mockSceneId,
         mockUserId,
         mockRequesterId,
-        mockInput
+        mockInput,
       );
 
       expect(spy).toHaveBeenCalledWith(
@@ -198,7 +280,7 @@ describe('FogOfWarService', () => {
         mockUserId,
         mockRequesterId,
         [mockInput],
-        undefined
+        undefined,
       );
       expect(result).toEqual({ id: 'area-1' });
     });
