@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.13.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.12.2...v0.13.0) (2026-08-31)
+
+
+### Features
+
+* add leave WebMCP companion tool ([#1957](https://github.com/Garblesnarff/infinite-realms-production/issues/1957)) ([d4fda11](https://github.com/Garblesnarff/infinite-realms-production/commit/d4fda11789ad0c9b321e9f7201143f1c60a20153))
+
+
+### Bug Fixes
+
+* leave option-less DM replies as free-text ([#1944](https://github.com/Garblesnarff/infinite-realms-production/issues/1944)) ([#1953](https://github.com/Garblesnarff/infinite-realms-production/issues/1953)) ([9c3ff09](https://github.com/Garblesnarff/infinite-realms-production/commit/9c3ff09b2fb082a5fc3f84d37f951597199542b7))
+* seed character_stats for two statless characters ([#1939](https://github.com/Garblesnarff/infinite-realms-production/issues/1939)) ([#1951](https://github.com/Garblesnarff/infinite-realms-production/issues/1951)) ([fbd173c](https://github.com/Garblesnarff/infinite-realms-production/commit/fbd173c6530b924b0058ff5c238c4e9499da0537))
+
 ## [0.12.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.12.1...v0.12.2) (2026-08-30)
 
 
