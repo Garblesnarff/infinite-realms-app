@@ -5,9 +5,11 @@ These rules apply to every AI session — Claude Code (local, Hetzner, cloud), C
 ## 1. NEVER merge pull requests
 
 - Only Rob merges, ever. No exceptions for green CI, for your own PRs, for "trivial" changes, or for PRs another agent asked you to review.
+- Workers never run `gh pr merge` or `gh pr ready`, never enable auto-merge, and never merge their own PRs. Merges happen only in a session where Rob has pasted explicit permission naming the PR number.
 - The single exception: Rob pastes an explicit list of PR numbers into YOUR session with the words "you have my permission to merge". Merge exactly that list, nothing else. Permission given to another session is not permission given to you.
 - Merges to `main` auto-deploy to production within ~15 minutes. An unauthorized merge is an unauthorized production deploy.
-- On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session. Do not be the sixth incident.
+- On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session.
+- On 2026-08-30, #1945 and #1946 were merged by an unidentified agent session. Do not be the next incident.
 - When you DO hold that permission, check §6 before merging — if the PR is a stack parent, merging it the normal way closes its children.
 
 ## 2. Never push directly to `main`
