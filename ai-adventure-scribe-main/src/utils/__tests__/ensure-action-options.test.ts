@@ -62,17 +62,17 @@ describe('ensure-action-options', () => {
       expect(result).toBe(text);
     });
 
-    it('appends static fallback options when options are missing', async () => {
+    it('leaves free-text unchanged when options are missing', async () => {
       const text = 'You wake up in a damp jail cell.';
 
       const result = await ensureActionOptions(text);
 
-      expect(result).toContain(text);
-      expect(result).toContain('A. **Take in your surroundings**');
-      expect(result).toContain('B. **Speak up**');
-      expect(result).toContain('C. **Act on instinct**');
+      expect(result).toBe(text);
+      expect(result).not.toContain('A. **Take in your surroundings**');
+      expect(result).not.toContain('B. **Speak up**');
+      expect(result).not.toContain('C. **Act on instinct**');
       expect(logger.warn).toHaveBeenCalledWith(
-        '[EnsureOptions] DM response had no action options; using static fallback',
+        '[EnsureOptions] DM response had no action options; leaving free-text only',
       );
     });
   });
