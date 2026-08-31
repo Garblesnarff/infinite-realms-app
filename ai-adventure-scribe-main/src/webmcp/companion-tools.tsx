@@ -9,6 +9,7 @@ import {
   getSceneCompanionId,
   getCompanionScene,
   joinParty,
+  leaveParty,
   listMyCharacters,
   rollForCompanion,
   speakAsCompanion,
@@ -154,6 +155,22 @@ export const createCompanionTools = ({
             signalFrom(context),
           );
           companionIdRef.current = getCompanionId(result) ?? companionIdRef.current;
+          onMutation?.();
+          return result;
+        }),
+    },
+    {
+      name: 'leave',
+      description: 'Leave the currently joined companion slot in this game session.',
+      inputSchema: objectSchema(),
+      execute: (_input, context) =>
+        execute(async () => {
+          const result = await leaveParty(
+            sessionId,
+            activeCompanionId(companionIdRef),
+            signalFrom(context),
+          );
+          companionIdRef.current = null;
           onMutation?.();
           return result;
         }),

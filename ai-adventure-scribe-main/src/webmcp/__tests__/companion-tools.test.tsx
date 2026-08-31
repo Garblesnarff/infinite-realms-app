@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe('WebMcpCompanionBridge', () => {
-  it('registers all six tools and aborts their registrations on unmount', async () => {
+  it('registers all seven tools and aborts their registrations on unmount', async () => {
     const registered: WebMcpTool[] = [];
     const signals: (AbortSignal | undefined)[] = [];
     const modelContext: WebMcpModelContext = {
@@ -57,9 +57,10 @@ describe('WebMcpCompanionBridge', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(registered).toHaveLength(6));
+    await waitFor(() => expect(registered).toHaveLength(7));
     expect(registered.map((tool) => tool.name)).toEqual([
       'join_party',
+      'leave',
       'list_my_characters',
       'get_scene',
       'speak_as_companion',
@@ -72,7 +73,7 @@ describe('WebMcpCompanionBridge', () => {
     expect(toolByName(registered, 'get_scene').annotations).toEqual({ readOnlyHint: true });
 
     unmount();
-    expect(signals).toHaveLength(6);
+    expect(signals).toHaveLength(7);
     expect(signals.every((signal) => signal?.aborted)).toBe(true);
   });
 
@@ -87,7 +88,7 @@ describe('WebMcpCompanionBridge', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(7));
   });
 
   it('does not register tools when WebMCP is unavailable', () => {
@@ -114,7 +115,7 @@ describe('companion WebMCP route contracts', () => {
     ).toEqual([companion]);
   });
 
-  it('uses the six specified endpoints and injects the WorkOS bearer token', async () => {
+  it('uses the companion endpoints and injects the WorkOS bearer token', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     fetchMock
@@ -134,7 +135,8 @@ describe('companion WebMCP route contracts', () => {
       )
       .mockResolvedValueOnce(responseFor({ message_id: 'message-1' }))
       .mockResolvedValueOnce(responseFor({ total: 14 }))
-      .mockResolvedValueOnce(responseFor({ accepted: true }));
+      .mockResolvedValueOnce(responseFor({ accepted: true }))
+      .mockResolvedValueOnce(responseFor({ companion: { id: 'companion-row', status: 'left' } }));
 
     const lastSceneRef = { current: null };
     const companionIdRef = { current: null };
@@ -157,8 +159,9 @@ describe('companion WebMCP route contracts', () => {
       action_type: 'attack',
       target_name: 'Ogre',
     });
+    await toolByName(tools, 'leave').execute({});
 
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       'http://localhost:8888/v1/characters',
       'http://localhost:8888/v1/sessions/session%20with%20spaces/companions',
@@ -166,6 +169,7 @@ describe('companion WebMCP route contracts', () => {
       'http://localhost:8888/v1/sessions/session%20with%20spaces/companions/companion-row/say',
       'http://localhost:8888/v1/sessions/session%20with%20spaces/companions/companion-row/roll',
       'http://localhost:8888/v1/combat/encounter-1/intent',
+      'http://localhost:8888/v1/sessions/session%20with%20spaces/companions/companion-row',
     ]);
     for (const [url, init] of fetchMock.mock.calls) {
       expect(url).toContain('http://localhost:8888/');
@@ -190,6 +194,8 @@ describe('companion WebMCP route contracts', () => {
         targetId: 'enemy-1',
       },
     });
+    expect(fetchMock.mock.calls[6][1].method).toBe('DELETE');
+    expect(companionIdRef.current).toBeNull();
   });
 
   it('returns a rejected route body verbatim as tool text', async () => {

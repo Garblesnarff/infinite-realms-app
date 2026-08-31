@@ -185,6 +185,17 @@ export const joinParty = (
     signal,
   );
 
+export const leaveParty = (
+  sessionId: string,
+  companionId: string,
+  signal?: AbortSignal,
+): Promise<unknown> =>
+  requestJson(
+    pathForSession(sessionId, `/companions/${encodeURIComponent(companionId)}`),
+    { method: 'DELETE' },
+    signal,
+  );
+
 export const getCompanionScene = (
   sessionId: string,
   companionId?: string | null,
