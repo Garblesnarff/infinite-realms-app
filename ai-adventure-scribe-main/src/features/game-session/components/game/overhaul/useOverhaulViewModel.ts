@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
+
+import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 
 import type {
   AttackVM,
@@ -12,6 +15,7 @@ import type {
   PartyMemberVM,
 } from './types';
 import type { Character } from '@/types/character';
+import type { ChatMessage } from '@/types/game';
 
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -19,6 +23,14 @@ import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
+import {
+  getSessionCompanions,
+  type SessionCompanion,
+  type SessionCompanionsResponse,
+} from '@/webmcp/companion-api';
+
+const SESSION_COMPANION_POLL_INTERVAL_MS = 15_000;
+const EMPTY_COMPANIONS: SessionCompanion[] = [];
 
 const ABILITY_ORDER: { key: string; label: string }[] = [
   { key: 'strength', label: 'STR' },
@@ -79,6 +91,101 @@ const prettify = (id: string): string =>
     .trim() || 'Item';
 
 const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
+
+export interface PartyMemberSource {
+  characterId: string;
+  member: PartyMemberVM;
+}
+
+export interface EncounterPartyMember {
+  id: string;
+  characterId?: string;
+  name: string;
+  characterClass?: string;
+  level?: number;
+  currentHitPoints: number;
+  maxHitPoints: number;
+  portraitUrl?: string;
+}
+
+export function mergePartyMembers(
+  protagonist: PartyMemberSource | null,
+  companions: readonly SessionCompanion[],
+  encounterPlayers: readonly EncounterPartyMember[],
+): PartyMemberVM[] {
+  const seenCharacterIds = new Set<string>();
+  const party: PartyMemberVM[] = [];
+  const encounterPlayersByCharacterId = new Map<string, EncounterPartyMember>();
+
+  for (const participant of encounterPlayers) {
+    if (participant.characterId && !encounterPlayersByCharacterId.has(participant.characterId)) {
+      encounterPlayersByCharacterId.set(participant.characterId, participant);
+    }
+  }
+
+  const addMember = (characterId: string, member: PartyMemberVM): void => {
+    const dedupeKey = characterId || `party-member:${member.id}`;
+    if (seenCharacterIds.has(dedupeKey)) return;
+    seenCharacterIds.add(dedupeKey);
+    party.push(member);
+  };
+
+  const liveMemberFields = (
+    member: PartyMemberVM,
+    participant: EncounterPartyMember,
+  ): PartyMemberVM => ({
+    ...member,
+    name: participant.name,
+    subtitle: [participant.level ? `Level ${participant.level}` : null, participant.characterClass]
+      .filter(Boolean)
+      .join(' '),
+    currentHp: participant.currentHitPoints,
+    maxHp: participant.maxHitPoints,
+    avatarUrl: participant.portraitUrl ?? member.avatarUrl,
+  });
+
+  if (protagonist) {
+    const encounterPlayer = encounterPlayersByCharacterId.get(protagonist.characterId);
+    addMember(
+      protagonist.characterId,
+      encounterPlayer ? liveMemberFields(protagonist.member, encounterPlayer) : protagonist.member,
+    );
+  }
+
+  for (const companion of companions) {
+    const encounterPlayer = encounterPlayersByCharacterId.get(companion.characterId);
+    const companionMember: PartyMemberVM = {
+      id: companion.id,
+      name: companion.name,
+      subtitle: [`Level ${companion.level}`, companion.class].filter(Boolean).join(' '),
+      currentHp: 0,
+      maxHp: 0,
+      avatarUrl: companion.portraitUrl ?? undefined,
+    };
+    addMember(
+      companion.characterId,
+      encounterPlayer ? liveMemberFields(companionMember, encounterPlayer) : companionMember,
+    );
+  }
+
+  for (const participant of encounterPlayers) {
+    addMember(participant.characterId ?? participant.id, {
+      id: participant.id,
+      name: participant.name,
+      subtitle: [
+        participant.level ? `Level ${participant.level}` : null,
+        participant.characterClass,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      currentHp: participant.currentHitPoints,
+      maxHp: participant.maxHitPoints,
+      avatarUrl: participant.portraitUrl,
+    });
+  }
+
+  return party;
+}
 
 export function buildCharacterSheet(character: Character | null): CharacterSheetVM {
   const empty: CharacterSheetVM = {
@@ -216,6 +323,8 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
 export function useOverhaulViewModel(opts?: {
   chapterLabel?: string;
   sceneBlurb?: string;
+  sessionId?: string;
+  messages?: ChatMessage[];
 }): GameOverhaulViewModel {
   const { state: campaignState } = useCampaign();
   const { state: characterState } = useCharacter();
@@ -224,6 +333,44 @@ export function useOverhaulViewModel(opts?: {
   const campaign = campaignState?.campaign ?? null;
   const character = (characterState?.character ?? null) as Character | null;
   const encounter = combatState?.activeEncounter ?? null;
+  const sessionId = opts?.sessionId;
+  const messageRevision = opts?.messages
+    ? JSON.stringify(
+        opts.messages.map((message) => [
+          message.id ?? null,
+          message.sequenceNumber ?? null,
+          message.timestamp ?? null,
+          message.text,
+        ]),
+      )
+    : undefined;
+  const { data: companionData, refetch: refetchCompanions } = useQuery<SessionCompanionsResponse>({
+    queryKey: ['session-companions', sessionId ?? null],
+    queryFn: ({ signal }) =>
+      sessionId ? getSessionCompanions(sessionId, signal) : Promise.resolve({ companions: [] }),
+    enabled: Boolean(sessionId),
+    retry: false,
+    staleTime: 5_000,
+    refetchInterval: sessionId ? SESSION_COMPANION_POLL_INTERVAL_MS : false,
+    refetchOnWindowFocus: false,
+  });
+  const previousMessageRevision = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!sessionId || messageRevision === undefined) return;
+
+    const currentRevision = `${sessionId}:${messageRevision}`;
+    if (previousMessageRevision.current === null) {
+      previousMessageRevision.current = currentRevision;
+      return;
+    }
+    if (previousMessageRevision.current === currentRevision) return;
+
+    previousMessageRevision.current = currentRevision;
+    void refetchCompanions();
+  }, [messageRevision, refetchCompanions, sessionId]);
+
+  const activeCompanions = companionData?.companions ?? EMPTY_COMPANIONS;
 
   return useMemo<GameOverhaulViewModel>(() => {
     const sheet = buildCharacterSheet(character);
@@ -239,31 +386,24 @@ export function useOverhaulViewModel(opts?: {
         isActive: encounter?.currentTurnParticipantId === p.id,
       }));
 
-    // Party: players in the active encounter, else the player's own character.
-    const players = (encounter?.participants ?? []).filter((p) => p.participantType === 'player');
-    const party: PartyMemberVM[] = players.length
-      ? players.map((p) => ({
-          id: p.id,
-          name: p.name,
-          subtitle: [p.level ? `Level ${p.level}` : null, p.characterClass]
-            .filter(Boolean)
-            .join(' '),
-          currentHp: p.currentHitPoints,
-          maxHp: p.maxHitPoints,
-          avatarUrl: p.portraitUrl,
-        }))
-      : character
-        ? [
-            {
-              id: character.id ?? 'self',
-              name: sheet.name,
-              subtitle: [`Level ${sheet.level}`, character.class?.name].filter(Boolean).join(' '),
-              currentHp: sheet.hpCurrent,
-              maxHp: sheet.hpMax,
-              avatarUrl: character.image_url ?? character.avatar_url,
-            },
-          ]
-        : [];
+    const protagonist = character
+      ? {
+          characterId: character.id ?? 'self',
+          member: {
+            id: character.id ?? 'self',
+            name: sheet.name,
+            subtitle: [`Level ${sheet.level}`, character.class?.name].filter(Boolean).join(' '),
+            currentHp: sheet.hpCurrent,
+            maxHp: sheet.hpMax,
+            avatarUrl: character.image_url ?? character.avatar_url,
+          },
+        }
+      : null;
+    const encounterPlayers = (encounter?.participants ?? []).filter(
+      (participant): participant is typeof participant & { participantType: 'player' } =>
+        participant.participantType === 'player',
+    );
+    const party = mergePartyMembers(protagonist, activeCompanions, encounterPlayers);
 
     return {
       scene: {
@@ -279,7 +419,7 @@ export function useOverhaulViewModel(opts?: {
         regionLabel: campaign?.location ?? undefined,
       },
       party,
-      partyMax: Math.max(party.length, 4),
+      partyMax: 1 + MAX_SESSION_COMPANIONS,
       combat: {
         active: !!encounter,
         round: encounter?.currentRound ?? 1,
@@ -287,5 +427,5 @@ export function useOverhaulViewModel(opts?: {
       },
       character: sheet,
     };
-  }, [campaign, character, encounter, opts?.chapterLabel, opts?.sceneBlurb]);
+  }, [activeCompanions, campaign, character, encounter, opts?.chapterLabel, opts?.sceneBlurb]);
 }

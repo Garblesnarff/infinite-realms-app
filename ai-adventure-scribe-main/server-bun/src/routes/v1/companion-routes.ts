@@ -79,6 +79,17 @@ export function createCompanionRoutes({
         body: t.Object({ character_id: t.String({ minLength: 1, maxLength: 255 }) }),
       },
     )
+    .get(
+      '/:id/companions',
+      async ({ params, user, set }) => {
+        try {
+          return { companions: await service.activeCompanions(params.id, user!.userId) };
+        } catch (error) {
+          return mapRouteError(set, error);
+        }
+      },
+      { params: sessionParams },
+    )
     .delete(
       '/:id/companions/:companionId',
       async ({ params, set }) => {

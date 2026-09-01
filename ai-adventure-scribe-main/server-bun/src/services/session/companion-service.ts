@@ -23,6 +23,7 @@ import {
   type DialogueHistory,
   type SessionCompanion,
 } from '../../../../db/schema/index';
+import { MAX_SESSION_COMPANIONS } from '../../../../shared/companion-constants.js';
 import { rollD20 } from '../../lib/dice.js';
 import {
   BusinessLogicError,
@@ -34,7 +35,7 @@ import { CombatEncounterService } from '../combat/combat-encounter-service.js';
 
 import type { CombatParticipant as ServerCombatParticipant } from '../../types/combat.js';
 
-export const MAX_SESSION_COMPANIONS = 2;
+export { MAX_SESSION_COMPANIONS } from '../../../../shared/companion-constants.js';
 export const COMPANION_TEXT_MAX_LENGTH = 1200;
 
 export interface CompanionPublicRow {
@@ -128,7 +129,20 @@ export type CompanionPartyRow = {
   maxHp: number | null;
   armorClass: number | null;
   createdAt: Date | null;
+  controller: string;
+  imageUrl: string | null;
+  avatarUrl: string | null;
 };
+
+export interface ActiveCompanion {
+  id: string;
+  characterId: string;
+  name: string;
+  class: string | null;
+  level: number;
+  portraitUrl: string | null;
+  controller: string;
+}
 
 export interface SceneDialogueRow {
   speakerType: string | null;
@@ -266,6 +280,9 @@ async function loadActiveCompanionPartyRows(sessionId: string): Promise<Companio
       maxHp: characterStats.maxHitPoints,
       armorClass: characterStats.armorClass,
       createdAt: sessionCompanions.createdAt,
+      controller: sessionCompanions.controller,
+      imageUrl: characters.imageUrl,
+      avatarUrl: characters.avatarUrl,
     })
     .from(sessionCompanions)
     .innerJoin(characters, eq(sessionCompanions.characterId, characters.id))
@@ -514,6 +531,20 @@ export class CompanionService {
       ...companions.map((companion) => companion.characterId),
     ];
     return buildPartyRoster(base, companions, await loadConditions(ids));
+  }
+
+  static async activeCompanions(sessionId: string, userId: string): Promise<ActiveCompanion[]> {
+    await loadSceneBase(sessionId, userId);
+    const companions = await loadActiveCompanionPartyRows(sessionId);
+    return companions.map((companion) => ({
+      id: companion.id,
+      characterId: companion.characterId,
+      name: companion.name,
+      class: companion.class,
+      level: companion.level,
+      portraitUrl: companion.imageUrl ?? companion.avatarUrl,
+      controller: companion.controller,
+    }));
   }
 
   static async scene(

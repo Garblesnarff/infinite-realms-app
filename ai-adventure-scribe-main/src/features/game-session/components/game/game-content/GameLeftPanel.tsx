@@ -10,19 +10,22 @@ import { LeftRailLive } from '../overhaul/LeftRailLive';
  */
 
 interface GameLeftPanelProps {
+  sessionId: string;
   isCollapsed: boolean;
   onToggle: () => void;
   chapterLabel?: string;
 }
 
-export const GameLeftPanel: React.FC<GameLeftPanelProps> = memo(({ isCollapsed, chapterLabel }) => {
-  if (isCollapsed) return null;
+export const GameLeftPanel: React.FC<GameLeftPanelProps> = memo(
+  ({ sessionId, isCollapsed, chapterLabel }) => {
+    if (isCollapsed) return null;
 
-  return (
-    <div className="order-1 md:order-1 w-full md:w-auto min-h-0 h-full">
-      <LeftRailLive chapterLabel={chapterLabel} />
-    </div>
-  );
-});
+    return (
+      <div className="order-1 md:order-1 w-full md:w-auto min-h-0 h-full">
+        <LeftRailLive sessionId={sessionId} chapterLabel={chapterLabel} />
+      </div>
+    );
+  },
+);
 
 GameLeftPanel.displayName = 'GameLeftPanel';

@@ -37,6 +37,20 @@ export interface CompanionPartyMember {
   [key: string]: unknown;
 }
 
+export interface SessionCompanion {
+  id: string;
+  characterId: string;
+  name: string;
+  class: string | null;
+  level: number;
+  portraitUrl: string | null;
+  controller: string;
+}
+
+export interface SessionCompanionsResponse {
+  companions: SessionCompanion[];
+}
+
 export interface CompanionCombatParticipant {
   id?: string;
   participant_id?: string;
@@ -184,6 +198,12 @@ export const joinParty = (
     },
     signal,
   );
+
+export const getSessionCompanions = (
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionCompanionsResponse> =>
+  requestJson(pathForSession(sessionId, '/companions'), { method: 'GET' }, signal);
 
 export const leaveParty = (
   sessionId: string,

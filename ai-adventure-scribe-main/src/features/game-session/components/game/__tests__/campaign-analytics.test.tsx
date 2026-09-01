@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -37,24 +38,31 @@ describe('Campaign hub tab analytics', () => {
     const spy = vi
       .spyOn(AnalyticsModule.analytics, 'campaignTabViewed')
       .mockImplementation(() => {});
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
 
     render(
-      <MemoryRouter initialEntries={['/app/game/cmp-123']}>
-        <Routes>
-          <Route
-            path="/app/game/:id"
-            element={
-              <GameSidePanel
-                sessionData={{ session_notes: '' } as unknown as ExtendedGameSession}
-                updateGameSessionState={async () => {}}
-                combatMode={false}
-                isCollapsed={false}
-                onToggle={() => {}}
-              />
-            }
-          />
-        </Routes>
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/app/game/cmp-123']}>
+          <Routes>
+            <Route
+              path="/app/game/:id"
+              element={
+                <GameSidePanel
+                  sessionData={{ session_notes: '' } as unknown as ExtendedGameSession}
+                  updateGameSessionState={async () => {}}
+                  combatMode={false}
+                  isCollapsed={false}
+                  onToggle={() => {}}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     // Find any button that, when clicked, switches header to Memories.

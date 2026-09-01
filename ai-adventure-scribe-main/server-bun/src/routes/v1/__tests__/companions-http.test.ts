@@ -44,6 +44,17 @@ const service = {
     };
   }),
   party: mock(async () => [{ name: 'Mira', class: 'Cleric', race: 'Elf', level: 5 }]),
+  activeCompanions: mock(async () => [
+    {
+      id: 'companion-1',
+      characterId: 'character-2',
+      name: 'Mira',
+      class: 'Cleric',
+      level: 5,
+      portraitUrl: 'https://example.com/mira.png',
+      controller: 'webmcp',
+    },
+  ]),
   leave: mock(async () => ({
     id: 'companion-1',
     sessionId: 'session-1',
@@ -103,13 +114,14 @@ describe('WebMCP companion route guards', () => {
     process.env.COMPANIONS_ENABLED = 'true';
   });
 
-  it('requires authentication on all five companion routes', async () => {
+  it('requires authentication on all six companion routes', async () => {
     const requests: Request[] = [
       new Request('http://localhost/v1/sessions/session-1/companions', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ character_id: 'character-2' }),
       }),
+      new Request('http://localhost/v1/sessions/session-1/companions'),
       new Request('http://localhost/v1/sessions/session-1/companions/companion-1', {
         method: 'DELETE',
       }),
@@ -131,7 +143,29 @@ describe('WebMCP companion route guards', () => {
     }
   });
 
-  it('hides all five routes while COMPANIONS_ENABLED is off', async () => {
+  it('returns active companions in the left-rail roster shape', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/session-1/companions', { headers: auth }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      companions: [
+        {
+          id: 'companion-1',
+          characterId: 'character-2',
+          name: 'Mira',
+          class: 'Cleric',
+          level: 5,
+          portraitUrl: 'https://example.com/mira.png',
+          controller: 'webmcp',
+        },
+      ],
+    });
+    expect(service.activeCompanions).toHaveBeenCalledWith('session-1', 'user-1');
+  });
+
+  it('hides all six routes while COMPANIONS_ENABLED is off', async () => {
     process.env.COMPANIONS_ENABLED = 'false';
     const response = await app.handle(
       new Request('http://localhost/v1/sessions/session-1/scene', { headers: auth }),
