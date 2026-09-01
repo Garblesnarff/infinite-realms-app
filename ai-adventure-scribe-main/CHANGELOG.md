@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.13.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.13.0...v0.13.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* show session companions in party rail ([#1950](https://github.com/Garblesnarff/infinite-realms-production/issues/1950)) ([a4bcbbf](https://github.com/Garblesnarff/infinite-realms-production/commit/a4bcbbfbb41fd8c115a7516a80bf74f188827e28))
+
 ## [0.13.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.12.2...v0.13.0) (2026-08-31)
 
 
