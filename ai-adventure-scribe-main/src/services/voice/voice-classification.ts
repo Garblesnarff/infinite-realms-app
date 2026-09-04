@@ -1,5 +1,5 @@
 import { VOICE_CONFIGS } from './voice-constants';
-import { type VoicePool, VOICE_POOLS } from './voice-pools';
+import { VOICE_POOLS } from './voice-pools';
 
 import type { VoiceConfig } from '../voice-routing';
 import type { VoiceConfig as VoiceDefinition } from './voice-types';
@@ -13,22 +13,6 @@ const VOICE_CATEGORY_ALIASES: Record<string, string> = {
   villain: 'villain_male',
   creature: 'monster',
   gruff: 'guard',
-};
-
-const VOICE_CATEGORY_POOLS: Record<string, keyof VoicePool> = {
-  narrator: 'dm',
-  hero_male: 'heroes',
-  hero_female: 'heroes',
-  villain_male: 'villains',
-  villain_female: 'villains',
-  monster: 'creatures',
-  goblin: 'creatures',
-  merchant: 'npcs',
-  guard: 'npcs',
-  innkeeper: 'npcs',
-  elder: 'npcs',
-  child: 'npcs',
-  default: 'npcs',
 };
 
 /**
@@ -70,20 +54,6 @@ export function getVoiceConfigByCategory(category: string): VoiceDefinition {
     `⚠️ Unmapped voice category "${String(category)}"; falling back to narrator voice (${VOICE_CONFIGS.narrator.id})`,
   );
   return VOICE_CONFIGS.narrator;
-}
-
-/**
- * Get voice pool based on AI's voice category hint
- */
-export function getVoicePoolByCategory(category: string): VoiceConfig[] {
-  const canonical = getCanonicalVoiceCategory(category);
-  const poolKey = canonical ? VOICE_CATEGORY_POOLS[canonical] : undefined;
-  if (!poolKey) {
-    getVoiceConfigByCategory(category);
-    return VOICE_POOLS.dm;
-  }
-
-  return VOICE_POOLS[poolKey];
 }
 
 /**

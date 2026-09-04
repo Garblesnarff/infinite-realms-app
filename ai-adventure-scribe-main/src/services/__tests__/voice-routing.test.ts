@@ -12,7 +12,6 @@ import {
   getVoiceConfigByCategory,
   detectVoiceCategoryFromNPCType,
   getVoicePoolByCharacter,
-  getVoicePoolByCategory,
 } from '../voice-routing';
 
 import logger from '@/lib/logger';
@@ -121,29 +120,25 @@ describe('voice-routing', () => {
     });
   });
 
-  describe('getVoicePoolByCategory', () => {
-    it('should return correct pools for categories', () => {
-      expect(getVoicePoolByCategory('narrator')).toEqual(VOICE_POOLS.dm);
-      expect(getVoicePoolByCategory('hero_male')).toEqual(VOICE_POOLS.heroes);
-      expect(getVoicePoolByCategory('villain_female')).toEqual(VOICE_POOLS.villains);
-      expect(getVoicePoolByCategory('monster')).toEqual(VOICE_POOLS.creatures);
-      expect(getVoicePoolByCategory('merchant')).toEqual(VOICE_POOLS.npcs);
+  describe('getVoiceConfigByCategory', () => {
+    it('should resolve category labels to configured voices', () => {
+      expect(getVoiceConfigByCategory('Narrator')).toBe(VOICE_CONFIGS.narrator);
+      expect(getVoiceConfigByCategory('hero_male')).toBe(VOICE_CONFIGS.hero_male);
+      expect(getVoiceConfigByCategory('villain_female')).toBe(VOICE_CONFIGS.villain_female);
+      expect(getVoiceConfigByCategory('monster')).toBe(VOICE_CONFIGS.monster);
+      expect(getVoiceConfigByCategory('merchant')).toBe(VOICE_CONFIGS.merchant);
+      expect(getVoiceConfigByCategory('gruff')).toBe(VOICE_CONFIGS.guard);
     });
 
-    it('should warn and fallback to the narrator pool for unknown categories', () => {
-      expect(getVoicePoolByCategory('unknown')).toEqual(VOICE_POOLS.dm);
+    it('should warn and fallback to the narrator voice for unknown categories', () => {
+      expect(getVoiceConfigByCategory('unknown')).toBe(VOICE_CONFIGS.narrator);
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Unmapped voice category "unknown"'),
       );
     });
 
-    it('should resolve category labels to configured voices', () => {
-      expect(getVoiceConfigByCategory('Narrator')).toBe(VOICE_CONFIGS.narrator);
-      expect(getVoiceConfigByCategory('gruff')).toBe(VOICE_CONFIGS.guard);
-      expect(getVoiceConfigByCategory('totally_unknown')).toBe(VOICE_CONFIGS.narrator);
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Unmapped voice category "totally_unknown"'),
-      );
+    it('should normalize case before lookup', () => {
+      expect(getVoiceConfigByCategory('HERO_MALE')).toBe(VOICE_CONFIGS.hero_male);
     });
   });
 
@@ -172,12 +167,6 @@ describe('voice-routing', () => {
   describe('hashCharacterName', () => {
     it('should handle empty name', () => {
       expect(hashCharacterName('')).toBe(0);
-    });
-  });
-
-  describe('getVoicePoolByCategory', () => {
-    it('should handle various case inputs', () => {
-      expect(getVoicePoolByCategory('HERO_MALE')).toEqual(VOICE_POOLS.heroes);
     });
   });
 

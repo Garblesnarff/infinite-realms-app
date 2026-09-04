@@ -1,7 +1,6 @@
 import {
   getCanonicalVoiceCategory,
   getVoiceConfigByCategory,
-  getVoicePoolByCategory,
   getVoicePoolByCharacter,
   detectVoiceCategoryFromNPCType,
 } from './voice/voice-classification';
@@ -19,7 +18,6 @@ export {
   VOICE_POOLS,
   getCanonicalVoiceCategory,
   getVoiceConfigByCategory,
-  getVoicePoolByCategory,
   getVoicePoolByCharacter,
   detectVoiceCategoryFromNPCType,
 };
