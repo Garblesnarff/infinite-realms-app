@@ -41,7 +41,23 @@ const dexterityModifier = (character: Record<string, unknown>): number => {
     | undefined;
   const dexterity = scores?.dexterity;
   if (dexterity && typeof dexterity === 'object') {
-    return numeric((dexterity as { modifier?: unknown }).modifier);
+    const modifier = (dexterity as { modifier?: unknown }).modifier;
+    if (typeof modifier === 'number' && Number.isFinite(modifier)) return modifier;
+  }
+  const stats = character.stats as Record<string, unknown> | undefined;
+  const flatDexterity = character.dexterity ?? stats?.dexterity;
+  if (typeof flatDexterity === 'number' && Number.isFinite(flatDexterity)) {
+    return Math.floor((flatDexterity - 10) / 2);
+  }
+  const characterStats = character.character_stats;
+  if (Array.isArray(characterStats)) {
+    const row = characterStats.find((entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === 'object'),
+    );
+    const rowDexterity = row?.dexterity;
+    if (typeof rowDexterity === 'number' && Number.isFinite(rowDexterity)) {
+      return Math.floor((rowDexterity - 10) / 2);
+    }
   }
   return 0;
 };
@@ -60,6 +76,29 @@ export type CombatEntryPlayerPayload = {
   initiativeModifier: number;
   hpCurrent?: number;
   hpMax?: number;
+};
+
+export type CombatEntryPendingPayload = {
+  trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request';
+  detail: string;
+  combatants: Array<{ name: string; monsterId?: string; count: number }>;
+  sceneSpec: unknown;
+  sceneSpecSynthesized: boolean;
+};
+
+export type CombatEntryPayload = {
+  combatants: CombatEntryPendingPayload['combatants'];
+  sceneSpec: unknown;
+  player: CombatEntryPlayerPayload;
+  /** Omit to make the server roll initiative and mark the seat `(auto-rolled)`. */
+  playerInitiativeRoll?: number;
+};
+
+export type PendingCombatIntentPayload = {
+  actorId: string;
+  actionType: string;
+  targetIds: string[];
+  sourceText: string;
 };
 
 export function buildCombatEntryPlayer(

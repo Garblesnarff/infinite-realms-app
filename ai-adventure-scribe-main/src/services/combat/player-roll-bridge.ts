@@ -31,6 +31,14 @@ export interface PlayerAttackRollSpec {
   disadvantage: boolean;
 }
 
+/** What the entry gate asks for before it seats the encounter. */
+export interface PlayerInitiativeRollSpec {
+  actorLabel: string;
+  initiativeModifier: number;
+}
+
+export type PlayerRollSpec = PlayerAttackRollSpec | PlayerInitiativeRollSpec;
+
 /** `null` means nobody rolled: the engine should roll this attack itself. */
 export type PlayerRollOutcome = { d20: number | null };
 
@@ -40,18 +48,25 @@ export interface PlayerRollHost {
    * player kept, or `null` if they cancelled. Returning a function lets the bridge dismiss a
    * popup the player has already walked away from.
    */
-  present: (spec: PlayerAttackRollSpec, settle: (outcome: PlayerRollOutcome) => void) => () => void;
+  present: (spec: PlayerRollSpec, settle: (outcome: PlayerRollOutcome) => void) => () => void;
 }
 
 let host: PlayerRollHost | null = null;
-let pending: { settle: (outcome: PlayerRollOutcome) => void; dismiss: () => void } | null = null;
+let pending: {
+  settle: (outcome: PlayerRollOutcome) => void;
+  dismiss: () => void;
+  timeoutId?: ReturnType<typeof setTimeout>;
+} | null = null;
+
+/** Keep the ask-first popup short enough to be a turn prompt, but long enough to be usable. */
+export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 12_000;
 
 /** Registered by the provider that owns the dice queue. Passing `null` clears it on unmount. */
 export function setPlayerRollHost(next: PlayerRollHost | null): void {
   host = next;
 }
 
-/** Whether a combat attack is currently waiting on the player's die. */
+/** Whether a combat roll is currently waiting on the player's die. */
 export function hasPendingPlayerRoll(): boolean {
   return pending !== null;
 }
@@ -61,17 +76,82 @@ export function hasPendingPlayerRoll(): boolean {
  *
  * Called by the popup when the player rolls or cancels, and by the turn pipeline when the
  * player does something else instead — sending a message is an answer too, and the answer is
- * "not this die". The pending attack then resolves engine-rolled rather than sitting behind a
- * modal the player has visibly moved on from. No wall-clock timeout exists on purpose: a popup
- * left open overnight is not a failure, it is a player who came back.
+ * "not this die". The pending roll then resolves engine-rolled rather than sitting behind a
+ * modal the player has visibly moved on from.
  */
 export function settlePendingPlayerRoll(outcome: PlayerRollOutcome): boolean {
   if (!pending) return false;
   const settled = pending;
   pending = null;
+  if (settled.timeoutId) clearTimeout(settled.timeoutId);
   settled.dismiss();
   settled.settle(outcome);
   return true;
+}
+
+function isInitiativeSpec(spec: PlayerRollSpec): spec is PlayerInitiativeRollSpec {
+  return 'initiativeModifier' in spec;
+}
+
+function requestPlayerRoll(
+  spec: PlayerRollSpec,
+  timeoutMs: number | undefined,
+): Promise<PlayerRollOutcome> {
+  if (!host) {
+    logger.warn(
+      `[PlayerRoll] no dice host mounted; the engine will roll this ${isInitiativeSpec(spec) ? 'initiative' : 'attack'}`,
+    );
+    return Promise.resolve({ d20: null });
+  }
+
+  // A roll already waiting means a previous request never settled. Settle it engine-rolled
+  // rather than stacking popups, then open this one.
+  if (pending) {
+    logger.warn('[PlayerRoll] superseded by a new roll; the engine rolls the previous one');
+    settlePendingPlayerRoll({ d20: null });
+  }
+
+  const rollLabel = isInitiativeSpec(spec) ? 'initiative' : `attack ${spec.weaponName}`;
+  return new Promise<PlayerRollOutcome>((resolve) => {
+    let settled = false;
+    let dismissPopup = (): void => {};
+    const settle = (outcome: PlayerRollOutcome): void => {
+      if (settled) return;
+      settled = true;
+      logger.info(`[PlayerRoll] settled d20=${outcome.d20 ?? 'auto'} ${rollLabel}`);
+      resolve(outcome);
+    };
+
+    // Install the slot before calling the host. Test hosts and simple React adapters may settle
+    // synchronously; assigning it afterwards would leave a ghost pending roll behind.
+    pending = { settle, dismiss: () => dismissPopup() };
+    const activeHost = host;
+    const hostDismiss = activeHost.present(spec, (outcome) => {
+      if (pending?.settle === settle) {
+        // The queue handler has already completed the visible roll. Clear the bridge slot and
+        // timer, but do not dismiss/cancel the queue entry after it was marked completed.
+        const current = pending;
+        pending = null;
+        if (current.timeoutId) clearTimeout(current.timeoutId);
+        settle(outcome);
+      } else {
+        settle(outcome);
+      }
+    });
+    dismissPopup = hostDismiss;
+
+    if (settled) {
+      // A synchronous host settlement happened before the real dismiss function was returned.
+      hostDismiss();
+    } else if (timeoutMs !== undefined) {
+      const timeoutId = setTimeout(() => {
+        logger.info(`[PlayerRoll] initiative prompt timed out after ${timeoutMs}ms; auto-rolling`);
+        settlePendingPlayerRoll({ d20: null });
+      }, timeoutMs);
+      if (pending?.settle === settle) pending.timeoutId = timeoutId;
+      else clearTimeout(timeoutId);
+    }
+  });
 }
 
 /**
@@ -82,29 +162,18 @@ export function settlePendingPlayerRoll(outcome: PlayerRollOutcome): boolean {
  * behaviour in exactly that case.
  */
 export function requestPlayerAttackRoll(spec: PlayerAttackRollSpec): Promise<PlayerRollOutcome> {
-  if (!host) {
-    logger.warn('[PlayerRoll] no dice host mounted; the engine will roll this attack');
-    return Promise.resolve({ d20: null });
-  }
-  // A roll already waiting means a previous attack never settled. Settle it engine-rolled
-  // rather than stacking popups, then open this one.
-  if (pending) {
-    logger.warn('[PlayerRoll] superseded by a new attack; the engine rolls the previous one');
-    settlePendingPlayerRoll({ d20: null });
-  }
-  return new Promise<PlayerRollOutcome>((resolve) => {
-    let settled = false;
-    const settle = (outcome: PlayerRollOutcome): void => {
-      if (settled) return;
-      settled = true;
-      logger.info(`[PlayerRoll] settled d20=${outcome.d20 ?? 'auto'} weapon=${spec.weaponName}`);
-      resolve(outcome);
-    };
-    const dismiss = host!.present(spec, (outcome) => {
-      // The host settling directly (player rolled or cancelled) clears the slot too.
-      if (pending) pending = null;
-      settle(outcome);
-    });
-    pending = { settle, dismiss };
-  });
+  return requestPlayerRoll(spec, undefined);
+}
+
+/**
+ * Asks for the player's initiative before `/enter` seats the encounter.
+ *
+ * A missing roll is deliberate: it tells the server to roll the player's initiative and the
+ * seating transcript marks that seat `(auto-rolled)`. The bounded timer makes that fallback
+ * deterministic when the player closes the popup or leaves the tab open.
+ */
+export function requestPlayerInitiativeRoll(
+  spec: PlayerInitiativeRollSpec,
+): Promise<PlayerRollOutcome> {
+  return requestPlayerRoll(spec, PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
 }

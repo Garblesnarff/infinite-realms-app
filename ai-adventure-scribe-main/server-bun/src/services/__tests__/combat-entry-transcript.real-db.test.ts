@@ -18,7 +18,13 @@ import {
   realDbUrl,
   testId,
 } from './fixtures/real-db.js';
-import { campaigns, characters, dialogueHistory, gameSessions } from '../../../../db/schema/index';
+import {
+  campaigns,
+  characters,
+  combatEncounters,
+  dialogueHistory,
+  gameSessions,
+} from '../../../../db/schema/index';
 
 const DEDICATED_REAL_DB_HOST = '127.0.0.1';
 const DEDICATED_REAL_DB_PORT = '55432';
@@ -210,5 +216,31 @@ describeWithDb('combat entry seating transcript persistence', () => {
       speakerType: 'system',
       message: body.seatingTranscript,
     });
+  });
+
+  test('permits only one active encounter per session while retaining completed history', async () => {
+    const [{ id: activeId }] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active' })
+      .returning({ id: combatEncounters.id });
+
+    // Two things this assertion needs that it did not have. `.execute()`: a Drizzle query
+    // builder is only thenable, and bun:test's `.rejects` requires a real promise -- it
+    // rejected the builder itself with "Expected promise, Received: PgInsertBase", so the
+    // assertion never observed the constraint it names and the duplicate insert threw
+    // unhandled instead. And `cause`: Drizzle wraps the driver error, so the SQLSTATE lives
+    // on the wrapped PostgresError rather than on the DrizzleQueryError.
+    await expect(
+      database.insert(combatEncounters).values({ sessionId, status: 'active' }).execute(),
+    ).rejects.toMatchObject({
+      cause: { code: '23505', constraint_name: 'idx_combat_encounters_one_active_session' },
+    });
+
+    const [{ id: completedId }] = await database
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'completed' })
+      .returning({ id: combatEncounters.id });
+
+    expect(completedId).not.toBe(activeId);
   });
 });

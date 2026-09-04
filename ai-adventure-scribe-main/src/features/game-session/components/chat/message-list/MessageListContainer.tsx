@@ -6,8 +6,12 @@ import { useMessageDiceRolls } from './use-message-dice-rolls';
 import type { DiceRollContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
 
+import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirmation';
+import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConfirmation';
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { Z_INDEX } from '@/constants/z-index';
+import { useCombat } from '@/contexts/CombatContext';
+import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 
 interface MessageListContainerProps {
@@ -52,6 +56,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     hasMore,
     suppressEmptyState = false,
   }) => {
+    const { state: combatState, refreshCombatState } = useCombat();
+    const entryConfirmation = useCombatEntryConfirmationHost();
     const {
       currentRoll,
       batchProgress,
@@ -105,6 +111,14 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
 
     return (
       <>
+        <CombatEntryConfirmation confirmation={entryConfirmation} />
+
+        <PendingIntentConfirmation
+          encounter={combatState.activeEncounter}
+          onRefresh={refreshCombatState}
+          onSendFullMessage={onSendFullMessage}
+        />
+
         {/* Loading indicator at top when fetching more */}
         {isFetchingMore && hasMore && (
           <div className="flex justify-center py-4">

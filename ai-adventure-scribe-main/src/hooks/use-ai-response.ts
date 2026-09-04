@@ -59,6 +59,8 @@ export interface EnhancedChatMessage extends ChatMessage {
   diceRolls?: DiceRoll[];
   rollRequests?: RollRequest[];
   imageRequests?: ImageRequest[];
+  /** Engine-authored combat notice persisted separately from DM narration. */
+  localNotice?: string;
   sceneSpec?: SceneSpec | null;
   combatDetection?: {
     isCombat: boolean;
@@ -275,6 +277,7 @@ export const useAIResponse = (): {
         const deliveredHandouts = dmActionsResult.deliveredHandouts;
         isInCombat = dmActionsResult.isInCombat;
         activeEncounter = dmActionsResult.activeEncounter;
+        const localNotice = dmActionsResult.localNotice;
 
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
@@ -366,6 +369,7 @@ export const useAIResponse = (): {
           diceRolls,
           rollRequests: processedRolls.playerRollRequests,
           imageRequests,
+          localNotice,
           sceneSpec: (result.scene_spec as SceneSpec | null | undefined) ?? null,
           combatDetection: {
             isCombat: result.combatDetection?.isCombat || false,

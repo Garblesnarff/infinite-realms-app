@@ -1,13 +1,18 @@
 import { useEffect } from 'react';
 
-import type { PlayerAttackRollSpec, PlayerRollOutcome } from '@/services/combat/player-roll-bridge';
+import type {
+  PlayerAttackRollSpec,
+  PlayerInitiativeRollSpec,
+  PlayerRollOutcome,
+  PlayerRollSpec,
+} from '@/services/combat/player-roll-bridge';
 import type { DiceRollRequest } from '@/types/combat';
 
 import { useGame } from '@/contexts/GameContext';
-import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
+import { setPlayerRollHost, settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 
 /**
- * Mounts the dice popup as the place combat goes to ask the player for an attack die.
+ * Mounts the dice popup as the place combat goes to ask the player for an attack or initiative die.
  *
  * The bridge deliberately knows nothing about React: combat resolves inside plain service code
  * during a DM turn, and reaching into a context from there would mean threading the whole dice
@@ -15,7 +20,7 @@ import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
  * long as it is mounted, and unregisters on unmount so a request made after teardown falls back
  * to an engine roll rather than awaiting a popup that no longer exists.
  *
- * The queued request is tagged `combatAttackRoll`, which is what stops the ordinary dice
+ * The queued request is tagged `combatAttackRoll` or `combatInitiativeRoll`, which is what stops the ordinary dice
  * handler from also sending the result to the DM as a chat message — the attack it belongs to
  * is already mid-resolution, and narrating the die as a fresh player utterance would put the
  * same attack through the engine twice.
@@ -25,23 +30,33 @@ export function usePlayerRollHost(): void {
 
   useEffect(() => {
     setPlayerRollHost({
-      present: (spec: PlayerAttackRollSpec, settle: (outcome: PlayerRollOutcome) => void) => {
-        const rollId = requestDiceRoll({
-          requestType: 'attack',
-          description: describeAttackRoll(spec),
-          // The engine adds its own bonus to the natural die it is sent, so the popup shows the
-          // bonus for the player's benefit and submits the raw face. Putting the modifier in
-          // `rollConfig` as well would add it twice.
-          rollConfig: {
-            dieType: 20,
-            count: 1,
-            modifier: 0,
-            advantage: spec.advantage,
-            disadvantage: spec.disadvantage,
-          },
-          ac: spec.targetAc,
-          combatAttackRoll: true,
-        } as Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>);
+      present: (spec: PlayerRollSpec, settle: (outcome: PlayerRollOutcome) => void) => {
+        const request = isInitiativeSpec(spec)
+          ? {
+              requestType: 'initiative' as const,
+              description: describeInitiativeRoll(spec),
+              rollConfig: { dieType: 20, count: 1, modifier: 0 },
+              combatInitiativeRoll: true,
+            }
+          : {
+              requestType: 'attack' as const,
+              description: describeAttackRoll(spec),
+              // The engine adds its own bonus to the natural die it is sent, so the popup shows the
+              // bonus for the player's benefit and submits the raw face. Putting the modifier in
+              // `rollConfig` as well would add it twice.
+              rollConfig: {
+                dieType: 20,
+                count: 1,
+                modifier: 0,
+                advantage: spec.advantage,
+                disadvantage: spec.disadvantage,
+              },
+              ac: spec.targetAc,
+              combatAttackRoll: true,
+            };
+        const rollId = requestDiceRoll(
+          request as Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>,
+        );
 
         registerSettler(rollId, settle);
         return () => {
@@ -50,7 +65,12 @@ export function usePlayerRollHost(): void {
         };
       },
     });
-    return () => setPlayerRollHost(null);
+    return () => {
+      // An unmounted message list cannot answer the queue. Settle before releasing the host so
+      // the initiative timer is cleared and the awaiting entry pipeline falls back safely.
+      settlePendingPlayerRoll({ d20: null });
+      setPlayerRollHost(null);
+    };
   }, [requestDiceRoll, cancelDiceRoll]);
 }
 
@@ -62,6 +82,12 @@ export function describeAttackRoll(spec: PlayerAttackRollSpec): string {
     `${spec.weaponName} attack vs ${spec.targetLabel} — ` +
     `1d20${sign}${spec.attackBonus} vs AC ${spec.targetAc}${edge}`
   );
+}
+
+/** "Initiative for The Seeker — 1d20+2" */
+export function describeInitiativeRoll(spec: PlayerInitiativeRollSpec): string {
+  const sign = spec.initiativeModifier >= 0 ? '+' : '';
+  return `Initiative for ${spec.actorLabel} — 1d20${sign}${spec.initiativeModifier}`;
 }
 
 /**
@@ -87,9 +113,22 @@ function unregisterSettler(rollId: string): void {
  * it as an ordinary narrative roll and send it to the DM.
  */
 export function settleCombatAttackRoll(rollId: string, d20: number | null): boolean {
+  return settleCombatPlayerRoll(rollId, d20);
+}
+
+/** Hands an initiative d20 back to the entry flow instead of sending it to the DM. */
+export function settleCombatInitiativeRoll(rollId: string, d20: number | null): boolean {
+  return settleCombatPlayerRoll(rollId, d20);
+}
+
+function settleCombatPlayerRoll(rollId: string, d20: number | null): boolean {
   const settle = settlers.get(rollId);
   if (!settle) return false;
   settlers.delete(rollId);
   settle({ d20 });
   return true;
+}
+
+function isInitiativeSpec(spec: PlayerRollSpec): spec is PlayerInitiativeRollSpec {
+  return 'initiativeModifier' in spec;
 }

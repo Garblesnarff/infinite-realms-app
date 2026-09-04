@@ -479,6 +479,14 @@ validate_constraints() {
   else
     log_error "index MISSING on combat_participants.encounter_id"
   fi
+
+  local active_session_idx_count
+  active_session_idx_count="$(query_value "SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='combat_encounters' AND indexname='idx_combat_encounters_one_active_session' AND indexdef ILIKE '%UNIQUE INDEX%' AND indexdef ILIKE '%WHERE%status%active%';")"
+  if [ "${active_session_idx_count:-0}" -eq 1 ]; then
+    log_success "partial unique index: one active combat encounter per session"
+  else
+    log_error "partial unique index MISSING: combat_encounters(session_id) WHERE status='active'"
+  fi
 }
 
 # The regression test for the incident itself: the INSERT pulled from the

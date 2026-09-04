@@ -5,7 +5,7 @@
  * encounter state, participant roster, and session owner all agree. It refuses every database
  * target except the dedicated local/CI Postgres and skips honestly when no target is configured.
  */
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
 import { eq, inArray, like } from 'drizzle-orm';
 
 import {
@@ -64,9 +64,8 @@ export async function preCleanPendingIntentFixtures(database: RealDb): Promise<v
   await database.delete(campaigns).where(like(campaigns.userId, `${FIXTURE_OWNER_PREFIX}%`));
 }
 
-const { setPendingCombatIntent } = await importWithRealDb(
-  () => import('../combat/combat-pending-intent-service.js'),
-);
+const { setPendingCombatIntent, clearPendingCombatIntent, promotePendingCombatIntent } =
+  await importWithRealDb(() => import('../combat/combat-pending-intent-service.js'));
 const { CombatEncounterService } = await importWithRealDb(
   () => import('../combat/combat-encounter-service.js'),
 );
@@ -196,6 +195,21 @@ describeWithDb('server-owned pending combat intent', () => {
     return { encounterId, playerId: player.id, monsterId: monster.id };
   };
 
+  /**
+   * Hand the turn to a seated participant.
+   *
+   * Since #1954 the two halves of the flow are deliberately exclusive: a declaration may
+   * only be QUEUED while someone else is acting, and may only be PROMOTED once its actor
+   * owns the turn. A promotion test therefore cannot seat the player as the current
+   * participant up front -- it has to queue on the monster's turn and then advance.
+   */
+  const advanceTurnTo = async (encounterId: string, turnOrder: number) => {
+    await database
+      .update(combatEncounters)
+      .set({ currentTurnOrder: turnOrder })
+      .where(eq(combatEncounters.id, encounterId));
+  };
+
   afterAll(async () => {
     if (!hasRealDb) return;
     try {
@@ -210,6 +224,14 @@ describeWithDb('server-owned pending combat intent', () => {
     } finally {
       await closeRealDb();
     }
+  });
+
+  afterEach(async () => {
+    if (!hasRealDb || !createdEncounterIds.length) return;
+    await database
+      .delete(combatEncounters)
+      .where(inArray(combatEncounters.id, createdEncounterIds));
+    createdEncounterIds.length = 0;
   });
 
   test('stores the declared action with the server-owned round and turn coordinates', async () => {
@@ -274,5 +296,105 @@ describeWithDb('server-owned pending combat intent', () => {
         userId,
       ),
     ).rejects.toMatchObject({ statusCode: 422 });
+  });
+
+  test('clears a pending declaration without changing the encounter turn', async () => {
+    const { encounterId, playerId, monsterId } = await createEncounter();
+    await setPendingCombatIntent(
+      encounterId,
+      {
+        actorId: playerId,
+        actionType: 'attack',
+        targetIds: [monsterId],
+        sourceText: 'I strike the Geometrist.',
+      },
+      userId,
+    );
+
+    await clearPendingCombatIntent(encounterId, userId);
+
+    const [row] = await database
+      .select({ pendingIntent: combatEncounters.pendingIntent })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(row?.pendingIntent).toBeNull();
+  });
+
+  test('promotes the stored declaration only when its actor owns the current turn', async () => {
+    const { encounterId, playerId, monsterId } = await createEncounter();
+    const pending = await setPendingCombatIntent(
+      encounterId,
+      {
+        actorId: playerId,
+        actionType: 'attack',
+        targetIds: [monsterId],
+        sourceText: 'I strike the Geometrist.',
+      },
+      userId,
+    );
+
+    await advanceTurnTo(encounterId, 1);
+
+    await expect(promotePendingCombatIntent(encounterId, userId)).resolves.toEqual(pending);
+
+    const [row] = await database
+      .select({ pendingIntent: combatEncounters.pendingIntent })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(row?.pendingIntent).toBeNull();
+  });
+
+  test('does not promote a declaration while another participant owns the turn', async () => {
+    const { encounterId, playerId, monsterId } = await createEncounter();
+    await setPendingCombatIntent(
+      encounterId,
+      {
+        actorId: playerId,
+        actionType: 'attack',
+        targetIds: [monsterId],
+        sourceText: 'I strike the Geometrist.',
+      },
+      userId,
+    );
+
+    await expect(promotePendingCombatIntent(encounterId, userId)).rejects.toMatchObject({
+      statusCode: 422,
+    });
+  });
+
+  test('promotes a declaration at most once under concurrent confirmation', async () => {
+    const { encounterId, playerId, monsterId } = await createEncounter();
+    const pending = await setPendingCombatIntent(
+      encounterId,
+      {
+        actorId: playerId,
+        actionType: 'attack',
+        targetIds: [monsterId],
+        sourceText: 'I strike the Geometrist.',
+      },
+      userId,
+    );
+
+    await advanceTurnTo(encounterId, 1);
+
+    const results = await Promise.allSettled([
+      promotePendingCombatIntent(encounterId, userId),
+      promotePendingCombatIntent(encounterId, userId),
+    ]);
+    const fulfilled = results.filter(
+      (result): result is PromiseFulfilledResult<typeof pending> => result.status === 'fulfilled',
+    );
+    const rejected = results.filter((result) => result.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0]?.value).toEqual(pending);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toMatchObject({ statusCode: 422 });
+
+    const [row] = await database
+      .select({ pendingIntent: combatEncounters.pendingIntent })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(row?.pendingIntent).toBeNull();
   });
 });

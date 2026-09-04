@@ -1,22 +1,30 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * #1779 — the client no longer decides combat entry.
- *
- * `dm-actions-handler.ts:64` used to BE the entry gate: `combat_transition === 'start' &&
- * scene_spec`, evaluated in the browser, with nothing behind it. Prod session 5ebaffab put
- * four consecutive hostile actions through that predicate and never entered combat once.
- * These tests pin the new contract: the handler starts nothing and reacts to what the server's
- * turn-pipeline gate already did.
+ * #1907 PR2 — the client consumes the server's pending entry handoff, asks for initiative, and
+ * never lets pre-entry attack prose become an outcome.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
+import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
+import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
 import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
+import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/hooks/ai/combat-resolution-step', () => ({
+  resolveDeclaredCombatActions: vi.fn(),
+}));
+vi.mock('@/services/combat/player-roll-bridge', () => ({
+  requestPlayerInitiativeRoll: vi.fn(),
+}));
+vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
+  requestCombatEntryConfirmation: vi.fn(),
 }));
 vi.mock('@/services/combat/combat-action-executor', () => ({
   executeStructuredCombatActionWithBoundary: vi.fn(),
@@ -29,6 +37,10 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn().mockResolvedValue({ ok: true }),
     applyDmHandoutActions: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     resolveAoECast: vi.fn().mockResolvedValue({ ok: true }),
+    enterCombat: vi.fn(),
+    setPendingCombatIntent: vi.fn(),
+    clearPendingCombatIntent: vi.fn(),
+    promotePendingCombatIntent: vi.fn(),
   },
 }));
 vi.mock('@/services/combat/structured-combat-transition', () => ({
@@ -38,6 +50,14 @@ vi.mock('@/services/combat/combat-zero-action-guard', () => ({
   enforceCombatActionOnAttempt: vi.fn().mockResolvedValue(null),
 }));
 
+const PLAYER = {
+  id: 'char-1',
+  name: 'The Storyteller',
+  dexterity: 14,
+  currentHitPoints: 20,
+  maxHitPoints: 20,
+};
+
 const ACTIVE_ENCOUNTER = {
   id: 'encounter-1',
   phase: 'active',
@@ -46,45 +66,217 @@ const ACTIVE_ENCOUNTER = {
   participants: [],
 };
 
-const invoke = (result: Record<string, unknown>, refresh = vi.fn().mockResolvedValue(null)) =>
+const NPC_TURN_ENCOUNTER = {
+  id: 'encounter-1',
+  phase: 'active',
+  currentTurnParticipantId: 'vance-1',
+  currentRound: 1,
+  participants: [
+    {
+      id: 'storyteller-1',
+      characterId: 'char-1',
+      name: 'The Storyteller',
+      participantType: 'player',
+      isActive: true,
+      currentHitPoints: 20,
+      isUnconscious: false,
+    },
+    {
+      id: 'vance-1',
+      name: 'Vance',
+      participantType: 'npc',
+      isActive: true,
+      currentHitPoints: 12,
+      isUnconscious: false,
+    },
+  ],
+};
+
+const PENDING_ENTRY = {
+  trigger: 'tactical_action' as const,
+  detail: 'combat_action attack',
+  combatants: [{ name: 'Vance', count: 1 }],
+  sceneSpec: { environment: 'dungeon_room' },
+  sceneSpecSynthesized: true,
+};
+
+const PLAYER_ACTION = {
+  actor_id: 'the-storyteller',
+  action_type: 'attack',
+  target_ids: ['vance'],
+  weapon_id: null,
+  spell_id: null,
+  slot_level: null,
+  movement_feet: 0,
+};
+
+const NPC_ACTION = {
+  actor_id: 'vance',
+  action_type: 'attack',
+  target_ids: ['the-storyteller'],
+  weapon_id: null,
+  spell_id: null,
+  slot_level: null,
+  movement_feet: 0,
+};
+
+const response = (payload: Record<string, unknown> = {}) => ({
+  ok: true,
+  status: 201,
+  json: vi.fn().mockResolvedValue(payload),
+});
+
+const invoke = (
+  result: Record<string, unknown>,
+  refresh = vi.fn().mockResolvedValue(null),
+  overrides: Record<string, unknown> = {},
+) =>
   handleDmActionsAndTransitions({
     sessionId: 'session-1',
     result: { text: 'You swing.', ...result },
-    characterRecord: { id: 'char-1' },
+    characterRecord: PLAYER,
     activeEncounter: null,
     isInCombat: false,
     refreshCombatState: refresh,
     aiContext: { gameState: {} },
     conversationHistory: [],
+    playerMessage: 'I attempt to punch Vance',
+    ...overrides,
   } as any);
 
-describe('handleDmActionsAndTransitions — combat entry (#1779)', () => {
-  beforeEach(() => vi.clearAllMocks());
+describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 16 });
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' } }) as any,
+    );
+    vi.mocked(userDataApi.setPendingCombatIntent).mockResolvedValue(response() as any);
+    vi.mocked(resolveDeclaredCombatActions).mockResolvedValue({
+      text: 'Vance acts first.',
+      narrationSegments: [],
+    } as any);
+  });
 
   it('never issues a combat start, even on the exact envelope that used to trigger one', async () => {
     await invoke({ combat_transition: 'start', scene_spec: { environment: 'tavern' } });
     expect(startStructuredCombatTransition).not.toHaveBeenCalled();
   });
 
-  it('does not refresh or activate combat for a pending entry handoff', async () => {
-    const refresh = vi.fn().mockResolvedValue(ACTIVE_ENCOUNTER);
+  it('asks for initiative before seating, then queues the player action when an NPC acts first', async () => {
+    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
     const outcome = await invoke(
       {
         combat_transition: 'none',
-        combat_entry_pending: {
-          trigger: 'tactical_action',
-          detail: 'combat_action attack',
-          combatants: [{ name: 'Geometrist', count: 1 }],
-          sceneSpec: { environment: 'dungeon_room' },
-          sceneSpecSynthesized: true,
-        },
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [PLAYER_ACTION, NPC_ACTION],
       },
       refresh,
     );
 
+    expect(requestPlayerInitiativeRoll).toHaveBeenCalledWith({
+      actorLabel: 'The Storyteller',
+      initiativeModifier: 2,
+    });
+    expect(userDataApi.enterCombat).toHaveBeenCalledWith('session-1', {
+      combatants: PENDING_ENTRY.combatants,
+      sceneSpec: PENDING_ENTRY.sceneSpec,
+      player: {
+        characterId: 'char-1',
+        name: 'The Storyteller',
+        initiativeModifier: 2,
+        hpCurrent: 20,
+        hpMax: 20,
+      },
+      playerInitiativeRoll: 16,
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(userDataApi.setPendingCombatIntent).toHaveBeenCalledWith('encounter-1', {
+      actorId: 'storyteller-1',
+      actionType: 'attack',
+      targetIds: ['vance'],
+      sourceText: 'I attempt to punch Vance',
+    });
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encounterId: 'encounter-1',
+        combatActions: [NPC_ACTION],
+        participants: NPC_TURN_ENCOUNTER.participants,
+      }),
+    );
+    expect(outcome.localNotice).toBe(
+      'Your attack is declared. Vance acts first — your turn comes next.',
+    );
+  });
+
+  it('declines combat entry without seating an encounter or resolving the attack', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        text: 'Vance catches your arm before the punch lands.',
+        combat_actions: [PLAYER_ACTION],
+      },
+      refresh,
+    );
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith({
+      actorLabel: 'The Storyteller',
+      combatantLabels: ['Vance'],
+      initiativeRoll: 16,
+      initiativeModifier: 2,
+    });
+    expect(userDataApi.enterCombat).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
-    expect(outcome.isInCombat).toBe(false);
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
     expect(outcome.activeEncounter).toBeNull();
+    expect(outcome.isInCombat).toBe(false);
+    expect(outcome.result.combat_actions).toEqual([]);
+    expect(outcome.responseText).toBe('');
+    expect(outcome.localNotice).toBe(
+      'Combat entry declined. No encounter was seated; your action was not resolved.',
+    );
+  });
+
+  it('does not seat or refresh when the pending handoff has no usable player character', async () => {
+    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
+    const outcome = await invoke(
+      { combat_transition: 'none', combat_entry_pending: PENDING_ENTRY },
+      refresh,
+      { characterRecord: { id: 'char-1' } },
+    );
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(userDataApi.enterCombat).not.toHaveBeenCalled();
+    expect(outcome.isInCombat).toBe(false);
+    expect(outcome.responseText).toBe('Combat entry is waiting for a valid player character.');
+  });
+
+  it('turns a named friendly-NPC attack into an engine entry intent, never an attack outcome (#1943)', async () => {
+    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        text: 'Vance catches your arm before the punch lands.',
+        combat_actions: [PLAYER_ACTION],
+      },
+      refresh,
+    );
+
+    expect(outcome.result.combat_entry).toMatchObject({ entered: true });
+    expect(outcome.result.text).toBe('');
+    expect(outcome.responseText).toBe('');
+    expect(outcome.responseText).not.toContain('catches your arm');
+    expect(outcome.narrationSegments).toBeUndefined();
+    expect(userDataApi.setPendingCombatIntent).toHaveBeenCalledWith(
+      'encounter-1',
+      expect.objectContaining({ actionType: 'attack', targetIds: ['vance'] }),
+    );
   });
 
   it('re-reads authoritative state when the server reports it seated an encounter', async () => {

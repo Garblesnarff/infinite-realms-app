@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
 import type { SessionListApiRow } from '../../shared/session-list-contract';
-import type { StructuredCombatStartPayload } from '@/services/combat/structured-combat-payload';
+import type {
+  CombatEntryPayload,
+  PendingCombatIntentPayload,
+  StructuredCombatStartPayload,
+} from '@/services/combat/structured-combat-payload';
 
 export type {
   CampaignPayload,
@@ -332,6 +336,29 @@ export const userDataApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+    }),
+  enterCombat: (sessionId: string, payload: CombatEntryPayload): Promise<Response> =>
+    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/enter`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  setPendingCombatIntent: (
+    encounterId: string,
+    payload: PendingCombatIntentPayload,
+  ): Promise<Response> =>
+    requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  clearPendingCombatIntent: (encounterId: string): Promise<Response> =>
+    requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent`, {
+      method: 'DELETE',
+    }),
+  promotePendingCombatIntent: (encounterId: string): Promise<Response> =>
+    requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent/promote`, {
+      method: 'POST',
     }),
   saveCombatEncounter: (
     encounterId: string,

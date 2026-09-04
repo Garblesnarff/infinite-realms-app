@@ -7,8 +7,13 @@ import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/u
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import logger from '@/lib/logger';
+import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
+import { isPlayerActor } from '@/services/combat/player-attack-roll';
+import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
+import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
+import { slugify } from '@/utils/slug';
 
 export interface HandleDmActionsParams {
   sessionId: string;
@@ -35,6 +40,33 @@ export interface HandleDmActionsResult {
   deliveredHandouts: JournalHandoutEntry[] | undefined;
   isInCombat: boolean;
   activeEncounter: any;
+  /** An engine-authored notice that the caller should persist as a local/system message. */
+  localNotice?: string;
+}
+
+function findParticipantForActor(
+  actorId: string | undefined,
+  participants: any[] | undefined,
+): any | undefined {
+  if (!actorId) return undefined;
+  return participants?.find(
+    (participant) =>
+      participant.id === actorId || slugify(participant.name || '') === slugify(actorId),
+  );
+}
+
+function isPlayerTurn(encounter: any, player: any): boolean {
+  if (!encounter || !player) return false;
+  if (encounter.currentTurnParticipantId === player.id) return true;
+  const current = findParticipantForActor(
+    encounter.currentTurnParticipantId,
+    encounter.participants,
+  );
+  return current?.id === player.id;
+}
+
+function responsePayload(response: Response): Promise<unknown> {
+  return response.json().catch(() => ({ status: response.status }));
 }
 
 export async function handleDmActionsAndTransitions(
@@ -55,6 +87,104 @@ export async function handleDmActionsAndTransitions(
   let responseText = result.text;
   let narrationSegments = result.narrationSegments;
   let deliveredHandouts: JournalHandoutEntry[] | undefined;
+  let localNotice: string | undefined;
+  let entryWasSeated = false;
+
+  // PR2: the server has detected combat but has not seated it. Ask for the player's initiative
+  // before making the explicit entry call. A null die is intentional: the server rolls it and
+  // writes `(auto-rolled)` into the seating transcript.
+  if (sessionId && !activeEncounter && result.combat_entry_pending) {
+    const pendingEntry = result.combat_entry_pending;
+    const player = buildCombatEntryPlayer(params.characterRecord);
+    if (!player) {
+      logger.warn('[CombatEntry] pending entry has no usable player payload; leaving it unseated');
+      responseText = 'Combat entry is waiting for a valid player character.';
+      narrationSegments = undefined;
+      result = { ...result, combat_actions: [], roll_requests: [] };
+    } else {
+      try {
+        const initiative = await requestPlayerInitiativeRoll({
+          actorLabel: player.name,
+          initiativeModifier: player.initiativeModifier,
+        });
+        const confirmed = await requestCombatEntryConfirmation({
+          actorLabel: player.name,
+          combatantLabels: pendingEntry.combatants.map((combatant: any) => combatant.name),
+          initiativeRoll: initiative.d20,
+          initiativeModifier: player.initiativeModifier,
+        });
+        if (!confirmed) {
+          // A decline is a real answer: do not call `/enter`, do not resolve the model's attack
+          // batch, and do not let the pre-entry telegraph become a fabricated outcome.
+          responseText = '';
+          narrationSegments = undefined;
+          localNotice =
+            'Combat entry declined. No encounter was seated; your action was not resolved.';
+          result = {
+            ...result,
+            text: '',
+            combat_transition: 'none',
+            combat_entry_pending: undefined,
+            combat_actions: [],
+            map_actions: [],
+            roll_requests: [],
+          };
+        } else {
+          const enterResponse = await userDataApi.enterCombat(sessionId, {
+            combatants: pendingEntry.combatants,
+            sceneSpec: pendingEntry.sceneSpec,
+            player,
+            ...(initiative.d20 === null ? {} : { playerInitiativeRoll: initiative.d20 }),
+          });
+          if (!enterResponse.ok) {
+            logger.warn(
+              '[CombatEntry] server refused explicit entry',
+              await responsePayload(enterResponse),
+            );
+            responseText = 'Combat entry could not be confirmed. No attack outcome was resolved.';
+            narrationSegments = undefined;
+            result = { ...result, combat_actions: [], roll_requests: [] };
+          } else {
+            const entryPayload = await enterResponse.json().catch(() => null);
+            const enteredEncounterId =
+              typeof (entryPayload as any)?.encounter?.id === 'string'
+                ? (entryPayload as any).encounter.id
+                : sessionId;
+            entryWasSeated = true;
+            responseText = '';
+            narrationSegments = undefined;
+            result = {
+              ...result,
+              // The model's pre-entry prose is a telegraph, not an outcome. Keep it out of the
+              // post-entry result as well as the display channel until the engine has resolved the
+              // declared action.
+              text: '',
+              combat_transition: 'none',
+              // The explicit endpoint is the only authority that seats the encounter. This
+              // marker lets the existing refresh branch below re-read the new board.
+              combat_entry: {
+                entered: true,
+                encounterId: enteredEncounterId,
+                trigger: pendingEntry.trigger,
+                detail: pendingEntry.detail,
+                sceneSpecSynthesized: pendingEntry.sceneSpecSynthesized,
+              },
+              // Combat roll requests belong to the engine resolution after seating, not to the
+              // ordinary narrative dice queue. Keep non-combat checks intact.
+              roll_requests: (result.roll_requests || []).filter(
+                (request: any) => request.type !== 'attack' && request.type !== 'initiative',
+              ),
+            };
+          }
+        }
+      } catch (error) {
+        logger.warn('[CombatEntry] explicit entry failed; no attack outcome was resolved', error);
+        responseText = 'Combat entry could not be confirmed. No attack outcome was resolved.';
+        narrationSegments = undefined;
+        result = { ...result, combat_actions: [], roll_requests: [] };
+      }
+    }
+  }
 
   // #1779: combat entry is NOT decided here any more.
   //
@@ -140,6 +270,61 @@ export async function handleDmActionsAndTransitions(
     if (forcedActions.text) responseText = forcedActions.text;
   }
 
+  // The first DM batch can contain both the player's opening declaration and NPC actions. If an
+  // NPC won initiative, persist the player's exact declaration against the player's participant
+  // id and let the normal engine pipeline handle only the NPC actions. The queued action is never
+  // offered to combat repair as though it belonged to the current actor.
+  if (entryWasSeated && isInCombat && activeEncounter && result.combat_actions?.length) {
+    const playerParticipant = activeEncounter.participants?.find(
+      (participant: any) =>
+        participant.participantType === 'player' &&
+        (!params.characterRecord?.id || participant.characterId === params.characterRecord.id),
+    );
+    if (playerParticipant && !isPlayerTurn(activeEncounter, playerParticipant)) {
+      const playerActions = result.combat_actions.filter((action: any) =>
+        isPlayerActor(action.actor_id, activeEncounter.participants),
+      );
+      if (playerActions.length) {
+        const declaredAction = playerActions[0];
+        const npcActions = result.combat_actions.filter(
+          (action: any) => !isPlayerActor(action.actor_id, activeEncounter.participants),
+        );
+        try {
+          const pendingResponse = await userDataApi.setPendingCombatIntent(activeEncounter.id, {
+            actorId: playerParticipant.id,
+            actionType: declaredAction.action_type,
+            targetIds: Array.isArray(declaredAction.target_ids) ? declaredAction.target_ids : [],
+            sourceText: playerMessage || result.text,
+          });
+          if (pendingResponse.ok) {
+            const currentActor = findParticipantForActor(
+              activeEncounter.currentTurnParticipantId,
+              activeEncounter.participants,
+            );
+            const currentActorName = currentActor?.name || 'the next actor';
+            localNotice = `Your attack is declared. ${currentActorName} acts first — your turn comes next.`;
+            responseText = '';
+            narrationSegments = undefined;
+          } else {
+            logger.warn(
+              '[CombatEntry] server refused pending player declaration',
+              await responsePayload(pendingResponse),
+            );
+            responseText = 'Your attack was not resolved because it is not your turn yet.';
+            narrationSegments = undefined;
+          }
+        } catch (error) {
+          logger.warn('[CombatEntry] pending player declaration failed', error);
+          responseText = 'Your attack was not resolved because it is not your turn yet.';
+          narrationSegments = undefined;
+        }
+        // Whether the setter succeeded or not, never send the player's out-of-turn action to the
+        // resolver. It produced no dice or damage and must not be repaired into an NPC turn.
+        result = { ...result, combat_actions: npcActions };
+      }
+    }
+  }
+
   if (sessionId && result.combat_actions?.length) {
     const aoeActions = result.combat_actions.filter(
       (action: any): action is DMAoESpellAction =>
@@ -164,7 +349,9 @@ export async function handleDmActionsAndTransitions(
     const narrationResult = await resolveDeclaredCombatActions({
       encounterId: activeEncounter.id,
       combatActions: result.combat_actions,
-      declarationText: result.text,
+      declarationText: entryWasSeated
+        ? 'Combat entry was confirmed. Narrate only authoritative engine results; the player declaration itself is not an outcome.'
+        : result.text,
       participants: activeEncounter.participants,
       aiContext,
       conversationHistory,
@@ -186,5 +373,6 @@ export async function handleDmActionsAndTransitions(
     deliveredHandouts,
     isInCombat,
     activeEncounter,
+    localNotice,
   };
 }

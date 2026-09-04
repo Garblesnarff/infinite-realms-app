@@ -11,7 +11,10 @@ import {
   formatDiceRoll as formatDiceRollUtil,
   getDiceRollOutcome,
 } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
-import { settleCombatAttackRoll } from '@/hooks/combat/use-player-roll-host';
+import {
+  settleCombatAttackRoll,
+  settleCombatInitiativeRoll,
+} from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
@@ -110,6 +113,7 @@ export function useMessageDiceRolls({
     // Cancelling a combat attack die does not cancel the attack: the turn is already in flight
     // and must resolve. The engine rolls it instead, and the transcript says so.
     settleCombatAttackRoll(currentRoll.id, null);
+    settleCombatInitiativeRoll(currentRoll.id, null);
     cancelDiceRoll(currentRoll.id);
   }, [currentRoll, cancelDiceRoll]);
 
@@ -171,6 +175,16 @@ export function useMessageDiceRolls({
           logger.info('[useMessageDiceRolls] combat attack die returned to the engine');
           lastRollRef.current = {
             kind: 'attack',
+            label: roll.description,
+            result: rollResult.total,
+            nat: rollResult.naturalRoll,
+          };
+          return;
+        }
+        if (settleCombatInitiativeRoll(roll.id, rollResult.naturalRoll ?? rollResult.total)) {
+          logger.info('[useMessageDiceRolls] combat initiative die returned to the entry flow');
+          lastRollRef.current = {
+            kind: 'initiative',
             label: roll.description,
             result: rollResult.total,
             nat: rollResult.naturalRoll,
@@ -280,6 +294,14 @@ export function useMessageDiceRolls({
           return;
         }
 
+        if (
+          roll.combatInitiativeRoll &&
+          (!Number.isInteger(numericResult) || numericResult < 1 || numericResult > 20)
+        ) {
+          logger.warn('[useMessageDiceRolls] initiative result must be a natural d20 (1-20)');
+          return;
+        }
+
         // CRITICAL FIX: Calculate batch completion status BEFORE dispatch
         let willCompleteBatch = true;
         if (roll.batchId) {
@@ -328,6 +350,12 @@ export function useMessageDiceRolls({
         // message. The typed number IS the natural face, since the popup asks for a bare d20.
         if (settleCombatAttackRoll(roll.id, numericResult)) {
           logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');
+          return;
+        }
+        if (settleCombatInitiativeRoll(roll.id, numericResult)) {
+          logger.info(
+            '[useMessageDiceRolls] manual combat initiative die returned to the entry flow',
+          );
           return;
         }
 

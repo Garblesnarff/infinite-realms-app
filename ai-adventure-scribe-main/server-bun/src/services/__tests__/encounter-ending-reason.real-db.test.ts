@@ -84,6 +84,7 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
   let campaignId: string;
   let characterId: string;
   let sessionId: string;
+  const createdSessionIds: string[] = [];
   let encounterId: string;
   let heroId: string;
   let monsterId: string;
@@ -107,11 +108,20 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
         currentHitPoints: 40,
         speed: 30,
       });
-      [{ id: sessionId }] = await db
-        .insert(gameSessions)
-        .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
-        .returning({ id: gameSessions.id });
     }
+
+    // A fresh SESSION per test, not just a fresh encounter. Since #1954 a partial unique
+    // index allows one active encounter per session, and not every test here concludes the
+    // encounter it was given -- the pure `every reason produces a distinct sentence` case
+    // never touches the database at all -- so a per-test encounter on one shared session
+    // collides with the row the previous test left active. Isolating the session is what
+    // the invariant asks for; the campaign and character stay shared because nothing here
+    // asserts on them.
+    [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    createdSessionIds.push(sessionId);
 
     // A fresh encounter and board per test: `concludeEncounter` destroys both, and each
     // assertion is about what an ending leaves behind rather than about ending twice.
@@ -205,22 +215,22 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       .select({ id: combatParticipants.id })
       .from(combatParticipants)
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
-      .where(eq(combatEncounters.sessionId, sessionId));
+      .where(inArray(combatEncounters.sessionId, createdSessionIds));
     await db.delete(combatParticipantStatus).where(
       inArray(
         combatParticipantStatus.participantId,
         rows.map((row) => row.id),
       ),
     );
-    await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+    await db.delete(tacticalMaps).where(inArray(tacticalMaps.sessionId, createdSessionIds));
     for (const row of await db
       .select({ id: combatEncounters.id })
       .from(combatEncounters)
-      .where(eq(combatEncounters.sessionId, sessionId))) {
+      .where(inArray(combatEncounters.sessionId, createdSessionIds))) {
       await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, row.id));
     }
-    await db.delete(combatEncounters).where(eq(combatEncounters.sessionId, sessionId));
-    await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    await db.delete(combatEncounters).where(inArray(combatEncounters.sessionId, createdSessionIds));
+    await db.delete(gameSessions).where(inArray(gameSessions.id, createdSessionIds));
     await db.delete(characterStats).where(eq(characterStats.characterId, characterId));
     await db.delete(characters).where(eq(characters.id, characterId));
     await db.delete(campaigns).where(eq(campaigns.id, campaignId));

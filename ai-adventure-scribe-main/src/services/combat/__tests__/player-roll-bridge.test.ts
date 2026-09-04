@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   hasPendingPlayerRoll,
   requestPlayerAttackRoll,
+  requestPlayerInitiativeRoll,
+  PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
   setPlayerRollHost,
   settlePendingPlayerRoll,
 } from '../player-roll-bridge';
@@ -33,6 +35,10 @@ describe('the player roll bridge', () => {
   beforeEach(() => {
     settlePendingPlayerRoll({ d20: null });
     setPlayerRollHost(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('hands the popup the spec and returns the die the player kept', async () => {
@@ -115,5 +121,47 @@ describe('the player roll bridge', () => {
   it('reports no pending roll when nothing is outstanding', () => {
     expect(hasPendingPlayerRoll()).toBe(false);
     expect(settlePendingPlayerRoll({ d20: null })).toBe(false);
+  });
+
+  it('asks for initiative and auto-rolls after the bounded prompt timeout', async () => {
+    vi.useFakeTimers();
+    const dismiss = vi.fn();
+    const present = vi.fn((_spec, _settle) => dismiss);
+    setPlayerRollHost({ present });
+
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+
+    expect(present.mock.calls[0][0]).toEqual({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+    await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({ d20: null });
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('clears the initiative timeout when the player supplies a die', async () => {
+    vi.useFakeTimers();
+    let settleInitiative: ((outcome: { d20: number | null }) => void) | undefined;
+    const present = vi.fn((_spec, settle) => {
+      settleInitiative = settle;
+      return () => {};
+    });
+    setPlayerRollHost({ present });
+
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: -1,
+    });
+    settleInitiative?.({ d20: 17 });
+
+    await expect(pending).resolves.toEqual({ d20: 17 });
+    await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
+    expect(hasPendingPlayerRoll()).toBe(false);
   });
 });

@@ -157,6 +157,8 @@ export interface DiceRollRequest {
    * player utterance would resolve the same attack twice.
    */
   combatAttackRoll?: boolean;
+  /** Set when this d20 belongs to the ask-first combat-entry initiative prompt. */
+  combatInitiativeRoll?: boolean;
 }
 
 export interface DiceRollQueue {

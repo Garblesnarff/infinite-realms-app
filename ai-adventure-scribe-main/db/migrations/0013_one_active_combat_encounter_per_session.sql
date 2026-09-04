@@ -1,0 +1,7 @@
+-- 0013_one_active_combat_encounter_per_session -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- The authoritative DDL, including the historical duplicate cleanup, is authored by hand in
+-- supabase/migrations/20260830_one_active_combat_encounter_per_session.sql and is manually
+-- applied after this PR merges. This file and its snapshot only advance the Drizzle snapshot
+-- chain; replaying generated DDL here would duplicate the Supabase migration in the combined
+-- migration harness.

@@ -16,6 +16,7 @@ const CHARACTER_ID = '99999999-8888-4777-8666-555555555555';
 const seatCalls: unknown[] = [];
 let authenticated = true;
 let encounterActive = false;
+let seatError: { code: string } | null = null;
 const authenticateRequest = async () =>
   authenticated
     ? {
@@ -50,6 +51,7 @@ const combatState = {
 
 const seatCombatEntry = async (params: unknown) => {
   seatCalls.push(params);
+  if (seatError) throw seatError;
   if (encounterActive) return null;
   encounterActive = true;
   return {
@@ -99,6 +101,7 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
   beforeEach(() => {
     authenticated = true;
     encounterActive = false;
+    seatError = null;
     seatCalls.splice(0);
   });
 
@@ -143,6 +146,15 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     expect(second.status).toBe(409);
     expect(await second.json()).toEqual({ error: 'Combat entry is no longer available' });
     expect(seatCalls).toHaveLength(2);
+  });
+
+  it('maps a concurrent unique-index violation to the same 409 as the pre-check', async () => {
+    seatError = { code: '23505' };
+
+    const response = await request(validBody());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Combat entry is no longer available' });
   });
 
   it.each([12.5, 0, 21])('rejects playerInitiativeRoll=%s before seating', async (roll) => {

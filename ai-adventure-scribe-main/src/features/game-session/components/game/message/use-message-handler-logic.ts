@@ -201,6 +201,18 @@ export const useMessageHandlerLogic = ({
         sanitizedAiResponseMessage.rollRequests &&
         sanitizedAiResponseMessage.rollRequests.length > 0;
 
+      // A queued out-of-turn declaration has an engine-authored acknowledgement independent of
+      // any unrelated dice request the same DM batch may carry. Persist it before showing the
+      // dice UI so the player is never left wondering whether their attack was accepted.
+      if (aiResponseMessage.localNotice) {
+        await sendMessage({
+          text: aiResponseMessage.localNotice,
+          sender: 'system',
+          timestamp: new Date().toISOString(),
+          context: { intent: 'combat_pending_intent' },
+        });
+      }
+
       if (hasRollRequests) {
         // DO NOT display AI message - suppress the narrative completely
         // Only process the roll requests (show the dice popup)
@@ -213,7 +225,14 @@ export const useMessageHandlerLogic = ({
         processAiResponse(sanitizedAiResponseMessage.rollRequests);
       } else {
         // No roll requests - display the message normally
-        await sendMessage(sanitizedAiResponseMessage);
+        // A queued out-of-turn declaration intentionally has no DM outcome to display. The
+        // system notice above is the complete response when the NPC batch was empty.
+        if (
+          sanitizedAiResponseMessage.text ||
+          sanitizedAiResponseMessage.narrationSegments?.length
+        ) {
+          await sendMessage(sanitizedAiResponseMessage);
+        }
       }
 
       // Only process combat detection, voice, scene updates, and memories

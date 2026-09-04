@@ -120,6 +120,47 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
     });
   });
 
+  it('returns combat-entry intent for an attack against a named friendly NPC (#1943)', async () => {
+    generatedResult = {
+      text: dmEnvelope({
+        text: 'Vance catches your arm before the punch lands.',
+        combat_actions: [
+          {
+            actor_id: 'the-storyteller',
+            action_type: 'attack',
+            target_ids: ['vance'],
+            weapon_id: null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+        ],
+      }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'I attempt to punch Vance',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const body = (await response.json()) as { text: string };
+    const envelope = JSON.parse(body.text) as Record<string, unknown>;
+
+    expect(envelope.combat_transition).toBe('none');
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'tactical_action',
+      combatants: [{ name: 'Vance', count: 1 }],
+    });
+    expect(envelope.combat_actions).toEqual([
+      expect.objectContaining({
+        actor_id: 'the-storyteller',
+        action_type: 'attack',
+        target_ids: ['vance'],
+      }),
+    ]);
+  });
+
   it('leaves a peaceful turn untouched', async () => {
     generatedResult = {
       text: dmEnvelope({

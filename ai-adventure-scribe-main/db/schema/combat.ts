@@ -8,7 +8,7 @@
  * This schema matches the unified migration: 20251112_01_add_combat_system_unified.sql
  */
 
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -19,6 +19,7 @@ import {
   index,
   jsonb,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 import { gameSessions, characters } from './game';
@@ -79,6 +80,9 @@ export const combatEncounters = pgTable(
   (table) => ({
     sessionIdx: index('idx_combat_encounters_session').on(table.sessionId),
     statusIdx: index('idx_combat_encounters_status').on(table.status),
+    activeSessionIdx: uniqueIndex('idx_combat_encounters_one_active_session')
+      .on(table.sessionId)
+      .where(sql`${table.status} = 'active'`),
   }),
 );
 

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { db } from '../../../../db/client';
@@ -95,6 +95,84 @@ export async function setPendingCombatIntent(
   return updated.pendingIntent;
 }
 
+/** Clear a pending declaration after the player chooses a different action. */
+export async function clearPendingCombatIntent(encounterId: string, userId: string): Promise<void> {
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  if (state.encounter.status !== 'active') {
+    throw new BusinessLogicError('Encounter is not active', { status: state.encounter.status });
+  }
+  const pendingIntent = state.encounter.pendingIntent;
+  if (!pendingIntent) throw new BusinessLogicError('No pending combat intent to clear');
+
+  const [updated] = await db
+    .update(combatEncounters)
+    .set({
+      pendingIntent: null,
+      version: sql`${combatEncounters.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(combatEncounters.id, encounterId),
+        eq(combatEncounters.status, 'active'),
+        eq(combatEncounters.version, state.encounter.version),
+        sql`${combatEncounters.pendingIntent} = ${JSON.stringify(pendingIntent)}::jsonb`,
+      ),
+    )
+    .returning({ id: combatEncounters.id });
+
+  if (!updated) throw new BusinessLogicError('Pending combat intent already consumed');
+}
+
+/**
+ * Atomically promote the stored declaration when its actor owns the current turn.
+ *
+ * The client still sends the returned source text through the ordinary DM turn. Clearing here
+ * first prevents the normal resolution step from treating the deliberate re-declaration as a
+ * stale queued action, while the current-turn check prevents a stale confirmation from stealing
+ * another participant's turn.
+ */
+export async function promotePendingCombatIntent(
+  encounterId: string,
+  userId: string,
+): Promise<PendingCombatIntent> {
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  if (state.encounter.status !== 'active') {
+    throw new BusinessLogicError('Encounter is not active', { status: state.encounter.status });
+  }
+  const pendingIntent = state.encounter.pendingIntent;
+  if (!pendingIntent) throw new BusinessLogicError('No pending combat intent to promote');
+  if (state.currentParticipant?.id !== pendingIntent.actorId) {
+    throw new BusinessLogicError(
+      'Pending combat intent actor is not the current-turn participant',
+      {
+        actorId: pendingIntent.actorId,
+      },
+    );
+  }
+
+  const [updated] = await db
+    .update(combatEncounters)
+    .set({
+      pendingIntent: null,
+      version: sql`${combatEncounters.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(combatEncounters.id, encounterId),
+        eq(combatEncounters.status, 'active'),
+        eq(combatEncounters.version, state.encounter.version),
+        sql`${combatEncounters.pendingIntent} = ${JSON.stringify(pendingIntent)}::jsonb`,
+      ),
+    )
+    .returning({ id: combatEncounters.id });
+  if (!updated) throw new BusinessLogicError('Pending combat intent already consumed');
+  return pendingIntent;
+}
+
 export class CombatPendingIntentService {
   static setPendingCombatIntent = setPendingCombatIntent;
+  static clearPendingCombatIntent = clearPendingCombatIntent;
+  static promotePendingCombatIntent = promotePendingCombatIntent;
 }

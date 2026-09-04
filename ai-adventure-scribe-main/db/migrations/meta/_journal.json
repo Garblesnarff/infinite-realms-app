@@ -92,6 +92,13 @@
       "when": 1788018800894,
       "tag": "0012_combat_pending_intent",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788140251521,
+      "tag": "0013_one_active_combat_encounter_per_session",
+      "breakpoints": true
     }
   ]
 }

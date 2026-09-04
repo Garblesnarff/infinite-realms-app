@@ -39,10 +39,24 @@ const enterBody = t.Object({
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function isPostgresUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!current || typeof current !== 'object') return false;
+    if ((current as { code?: unknown }).code === '23505') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 function mapEntryError(
   set: { status?: number | string },
   error: unknown,
 ): { error: string; details?: unknown } {
+  if (isPostgresUniqueViolation(error)) {
+    set.status = 409;
+    return { error: 'Combat entry is no longer available' };
+  }
   if (error instanceof AppError) {
     set.status = error.statusCode;
     return {
