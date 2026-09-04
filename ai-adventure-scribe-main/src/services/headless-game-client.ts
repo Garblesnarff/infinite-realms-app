@@ -7,6 +7,7 @@ import type { RollRequest } from '@/types/roll-request';
 
 import { buildAIContext } from '@/hooks/ai/ai-utils';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
+import { stripAssetTags } from '@/lib/utils';
 import { AIService } from '@/services/ai-service';
 import {
   combatBoundaryFromResult,
@@ -32,13 +33,6 @@ export type HeadlessEvent =
       initiative: InitiativeOrderEntry[];
     }
   | { type: 'error'; message: string };
-
-export function stripAssetTags(text: string): string {
-  return text
-    .replace(/\[ASSET:[^\]]+\]/gi, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 export class ContractViolationError extends Error {
   readonly category = 'contract';
@@ -225,7 +219,7 @@ export class HeadlessGameClient {
       characterId: String(game.character.id || 'player'),
     });
     this.pending = processed.playerRollRequests;
-    const text = stripAssetTags(response.text);
+    const text = stripAssetTags(response.text).replace(/\n{3,}/g, '\n\n');
     for (let index = 0; index < priorRollMessages.length; index += 1) {
       await userDataApi.saveSessionMessages(this.sessionId, {
         speaker_type: 'player',
