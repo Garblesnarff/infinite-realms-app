@@ -3,7 +3,7 @@
  * large JSONB fields like 'setting_details' and 'thematic_elements' when not needed.
  */
 export const CAMPAIGN_SELECT_COLUMNS =
-  'id, name, description, genre, difficulty_level, campaign_length, tone, status, background_image, art_style, created_at, updated_at, era, location, atmosphere, setting_details, thematic_elements, style_config, rules_config, user_id';
+  'id, name, description, genre, difficulty_level, campaign_length, tone, status, background_image, art_style, created_at, updated_at, era, location, atmosphere, setting_details, thematic_elements, style_config, rules_config, starter_campaign_id, user_id';
 
 /**
  * Interface for campaign setting details
@@ -39,6 +39,7 @@ export interface CampaignListItem {
   status?: string | null;
   background_image?: string | null;
   art_style?: string | null;
+  starter_campaign_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -76,6 +77,7 @@ export interface Campaign {
   art_style?: string;
   style_config?: Record<string, any>;
   rules_config?: Record<string, any>;
+  starter_campaign_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }

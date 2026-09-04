@@ -127,6 +127,13 @@
       "when": 1790913294162,
       "tag": "0017_create_feedback_table",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790913294163,
+      "tag": "0018_campaign_starter_link",
+      "breakpoints": true
     }
   ]
 }

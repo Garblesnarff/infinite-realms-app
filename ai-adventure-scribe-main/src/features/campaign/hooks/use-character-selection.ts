@@ -88,6 +88,33 @@ export interface UseCharacterSelectionReturn {
   getModifier: (score?: number) => string;
 }
 
+interface CampaignStarterLinkResponse {
+  starter_campaign_id?: unknown;
+}
+
+type StarterLinkApi = Pick<typeof userDataApi, 'getCampaign' | 'listSessions'>;
+
+/**
+ * Resolve the starter campaign for a user-owned campaign.
+ *
+ * Campaigns created through Explore carry the durable link on their own row. Older
+ * campaigns may only have the link on a prior session, so retain that lookup as a
+ * compatibility fallback while the backfill runs.
+ */
+export async function resolveStarterCampaignIdForCampaign(
+  campaignId: string,
+  api: StarterLinkApi = userDataApi,
+): Promise<string | null> {
+  const campaign = (await api.getCampaign(campaignId)) as CampaignStarterLinkResponse | null;
+  const campaignStarterCampaignId = campaign?.starter_campaign_id;
+  if (typeof campaignStarterCampaignId === 'string' && campaignStarterCampaignId.trim()) {
+    return campaignStarterCampaignId;
+  }
+
+  const sessions = await api.listSessions({ campaignId, starterOnly: true, limit: 1 });
+  return resolveStarterCampaignIdFromSessionList(sessions);
+}
+
 export function useCharacterSelection({
   isOpen,
   onClose,
@@ -110,8 +137,7 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!user?.id) return null;
 
-      const sessions = await userDataApi.listSessions({ campaignId, starterOnly: true, limit: 1 });
-      return resolveStarterCampaignIdFromSessionList(sessions);
+      return resolveStarterCampaignIdForCampaign(campaignId);
     },
     enabled: !!user?.id && isOpen,
   });

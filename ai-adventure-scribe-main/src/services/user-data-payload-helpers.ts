@@ -117,6 +117,7 @@ export const CAMPAIGN_FIELDS = [
   'art_style',
   'style_config',
   'rules_config',
+  'starter_campaign_id',
 ] as const;
 
 export function prepareCampaignPayload(payload: Record<string, unknown>): CampaignPayload {

@@ -49,6 +49,7 @@ const campaignBodySchema = t.Object({
   art_style: t.Optional(t.Nullable(t.String())),
   style_config: t.Optional(t.Nullable(t.Any())),
   rules_config: t.Optional(t.Nullable(t.Any())),
+  starter_campaign_id: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 255 }))),
 });
 
 const updateCampaignBodySchema = t.Partial(campaignBodySchema);
@@ -79,6 +80,7 @@ const mapCampaignToApi = (campaign: Campaign | CampaignListRow) => ({
   art_style: campaign.artStyle,
   style_config: campaign.styleConfig,
   rules_config: campaign.rulesConfig,
+  starter_campaign_id: campaign.starterCampaignId,
   created_at: campaign.createdAt,
   updated_at: campaign.updatedAt,
 });
@@ -152,6 +154,7 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
           artStyle: payload.art_style,
           styleConfig: payload.style_config,
           rulesConfig: payload.rules_config,
+          starterCampaignId: payload.starter_campaign_id,
         });
 
         set.status = 201;

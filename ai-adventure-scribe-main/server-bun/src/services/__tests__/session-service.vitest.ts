@@ -296,7 +296,7 @@ describe('SessionService', () => {
     /**
      * createSession now runs the ownership check as its own SELECT and only inserts
      * if it matched. `ownershipRows` is what that SELECT resolves to: [] for an
-     * unowned resource, [{ one: 1 }] for an owned one.
+     * unowned resource, or a row carrying the campaign starter link when owned.
      */
     const mockOwnershipCheck = (ownershipRows: unknown[]) => {
       const limit = vi.fn().mockResolvedValue(ownershipRows);
@@ -351,6 +351,27 @@ describe('SessionService', () => {
       expect(db.insert).toHaveBeenCalledWith(gameSessions);
       expect(mockValues).toHaveBeenCalledWith(
         expect.objectContaining({ campaignId, characterId: null }),
+      );
+    });
+
+    it('should prefer the campaign starter link when stamping a new session', async () => {
+      const campaignId = 'starter-campaign';
+      mockOwnershipCheck([{ starterCampaignId: 'the-eternal-feast' }]);
+
+      const mockReturning = vi.fn().mockResolvedValue([{ id: 'new-session', campaignId }]);
+      const mockValues = vi.fn().mockReturnValue({ returning: mockReturning });
+      vi.mocked(db.insert).mockReturnValue({ values: mockValues } as unknown as any);
+
+      await SessionService.createSession(
+        { campaignId, starterCampaignId: 'stale-request-link' },
+        userId,
+      );
+
+      expect(mockValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          campaignId,
+          starterCampaignId: 'the-eternal-feast',
+        }),
       );
     });
   });

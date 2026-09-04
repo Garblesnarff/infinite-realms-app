@@ -717,6 +717,7 @@ export type Database = {
       template_version: number
       thumbnail_url: string | null
       published_at: string | null
+      starter_campaign_id: string | null
       }
       Insert: {
       id?: string
@@ -744,6 +745,7 @@ export type Database = {
       template_version?: number
       thumbnail_url?: string | null
       published_at?: string | null
+      starter_campaign_id?: string | null
       }
       Update: {
       id?: string
@@ -771,6 +773,7 @@ export type Database = {
       template_version?: number
       thumbnail_url?: string | null
       published_at?: string | null
+      starter_campaign_id?: string | null
       }
       Relationships: []
     }

@@ -96,6 +96,7 @@ export class CampaignService {
         visibility: true,
         templateVersion: true,
         thumbnailUrl: true,
+        starterCampaignId: true,
       },
     });
   }

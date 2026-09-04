@@ -3,10 +3,12 @@ import { renderHook, act } from '@testing-library/react';
 import { useNavigate } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { useCharacterSelection } from '../use-character-selection';
+import {
+  resolveStarterCampaignIdForCampaign,
+  useCharacterSelection,
+} from '../use-character-selection';
 
 import type { Mock } from 'vitest';
-
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +20,15 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(),
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCampaign: vi.fn(),
+    listSessions: vi.fn(),
+    listStarterCharacterTemplates: vi.fn(),
+    createCharacter: vi.fn(),
+  },
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -64,13 +75,53 @@ describe('useCharacterSelection', () => {
     });
   });
 
+  describe('starter link resolution', () => {
+    it('prefers the campaign-level link and does not query sessions', async () => {
+      const getCampaign = vi.fn().mockResolvedValue({ starter_campaign_id: 'starter-campaign' });
+      const listSessions = vi.fn();
+
+      await expect(
+        resolveStarterCampaignIdForCampaign('camp-1', { getCampaign, listSessions }),
+      ).resolves.toBe('starter-campaign');
+      expect(getCampaign).toHaveBeenCalledWith('camp-1');
+      expect(listSessions).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the session-derived link when the campaign row is empty', async () => {
+      const getCampaign = vi.fn().mockResolvedValue({ starter_campaign_id: null });
+      const listSessions = vi
+        .fn()
+        .mockResolvedValue([{ starter_campaign_id: 'starter-from-session' }]);
+
+      await expect(
+        resolveStarterCampaignIdForCampaign('camp-1', { getCampaign, listSessions }),
+      ).resolves.toBe('starter-from-session');
+      expect(listSessions).toHaveBeenCalledWith({
+        campaignId: 'camp-1',
+        starterOnly: true,
+        limit: 1,
+      });
+    });
+
+    it('returns no starter link when neither source has one', async () => {
+      const getCampaign = vi.fn().mockResolvedValue({ starter_campaign_id: null });
+      const listSessions = vi.fn().mockResolvedValue([]);
+
+      await expect(
+        resolveStarterCampaignIdForCampaign('camp-1', { getCampaign, listSessions }),
+      ).resolves.toBeNull();
+    });
+  });
+
   it('initializes correctly', () => {
-    const { result } = renderHook(() => useCharacterSelection({
-      campaignId: 'camp-1',
-      campaignName: 'Campaign 1',
-      onClose: mockOnClose,
-      isOpen: true,
-    }));
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
 
     expect(result.current.isCreating).toBe(false);
     expect(result.current.isLoading).toBe(false);
@@ -117,12 +168,14 @@ describe('useCharacterSelection', () => {
   });
 
   it('handles handleCreateCharacter', () => {
-    const { result } = renderHook(() => useCharacterSelection({
-      campaignId: 'camp-1',
-      campaignName: 'Campaign 1',
-      onClose: mockOnClose,
-      isOpen: true,
-    }));
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
 
     act(() => {
       result.current.handleCreateCharacter();
@@ -133,12 +186,14 @@ describe('useCharacterSelection', () => {
   });
 
   it('handles startGameWithCharacter', () => {
-    const { result } = renderHook(() => useCharacterSelection({
-      campaignId: 'camp-1',
-      campaignName: 'Campaign 1',
-      onClose: mockOnClose,
-      isOpen: true,
-    }));
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
 
     const mockCharacter = {
       id: 'char-1',

@@ -42,6 +42,7 @@ export async function resolveOrCreateStarterCampaign(
     campaign_length: 'full',
     status: 'active',
     background_image: starter.coverImageUrl,
+    starter_campaign_id: starter.id,
   });
   log(`Created new campaign ${campaign.id} for starter ${starter.id}`);
   return campaign.id;

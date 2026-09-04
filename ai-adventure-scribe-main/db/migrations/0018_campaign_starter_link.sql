@@ -1,0 +1,6 @@
+-- 0018_campaign_starter_link -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- The authoritative DDL for campaigns.starter_campaign_id is authored by hand in
+-- supabase/migrations/20260903_add_campaign_starter_link.sql. The migration replay
+-- merges both migration trees; keeping the generated ALTER TABLE here would make
+-- ownership of this additive change depend on replay order.

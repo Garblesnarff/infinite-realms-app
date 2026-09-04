@@ -65,12 +65,15 @@ export const campaigns = pgTable(
     templateVersion: integer('template_version').default(1).notNull(),
     thumbnailUrl: text('thumbnail_url'),
     publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
+    // References starter_campaigns when this user-owned campaign was created from Explore.
+    starterCampaignId: text('starter_campaign_id'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
   },
   (table) => ({
     userIdIdx: index('idx_campaigns_user_id').on(table.userId),
     statusIdx: index('idx_campaigns_status').on(table.status),
+    starterCampaignIdx: index('idx_campaigns_starter_campaign').on(table.starterCampaignId),
   }),
 );
 

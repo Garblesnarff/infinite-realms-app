@@ -56,6 +56,7 @@ interface CreateSessionData {
 export function buildSessionInsertValues(
   data: CreateSessionData,
   ids: { campaignId: string | null; characterId: string | null },
+  starterCampaignId: string | null | undefined = data.starterCampaignId,
 ) {
   return {
     campaignId: ids.campaignId,
@@ -69,7 +70,7 @@ export function buildSessionInsertValues(
     sessionNotes: data.sessionNotes ?? null,
     turnCount: data.turnCount ?? 0,
     sessionState: {},
-    starterCampaignId: data.starterCampaignId ?? null,
+    starterCampaignId: starterCampaignId ?? null,
     campaignVersion: data.campaignVersion ?? null,
     ruleset: '5e',
   };
@@ -187,7 +188,7 @@ export class SessionService {
       // Each branch is now: run the branch's ownership query, then insert. The WHERE
       // clauses are carried over unchanged -- only the insert-select wrapper is gone.
       const owned = await db
-        .select({ one: sql`1` })
+        .select({ starterCampaignId: campaigns.starterCampaignId })
         .from(campaigns)
         .innerJoin(characters, eq(characters.id, data.characterId))
         .where(
@@ -203,16 +204,20 @@ export class SessionService {
         [session] = await db
           .insert(gameSessions)
           .values(
-            buildSessionInsertValues(data, {
-              campaignId: data.campaignId,
-              characterId: data.characterId,
-            }),
+            buildSessionInsertValues(
+              data,
+              {
+                campaignId: data.campaignId,
+                characterId: data.characterId,
+              },
+              owned[0]?.starterCampaignId ?? data.starterCampaignId,
+            ),
           )
           .returning();
       }
     } else if (data.campaignId) {
       const owned = await db
-        .select({ one: sql`1` })
+        .select({ starterCampaignId: campaigns.starterCampaignId })
         .from(campaigns)
         .where(and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId)))
         .limit(1);
@@ -221,10 +226,14 @@ export class SessionService {
         [session] = await db
           .insert(gameSessions)
           .values(
-            buildSessionInsertValues(data, {
-              campaignId: data.campaignId,
-              characterId: null,
-            }),
+            buildSessionInsertValues(
+              data,
+              {
+                campaignId: data.campaignId,
+                characterId: null,
+              },
+              owned[0]?.starterCampaignId ?? data.starterCampaignId,
+            ),
           )
           .returning();
       }
