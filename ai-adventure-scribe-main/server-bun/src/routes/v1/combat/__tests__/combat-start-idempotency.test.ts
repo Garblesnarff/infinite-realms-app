@@ -165,4 +165,16 @@ describe('starting combat while combat is already active', () => {
     }
     expect(startCalls).toHaveLength(0);
   });
+
+  it('returns 404 for the removed client-controlled initiative reorder route', async () => {
+    const response = await app.handle(
+      new Request(`http://localhost/${ENCOUNTER_ID}/reorder`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer valid-token' },
+        body: JSON.stringify({ participantId: 'seeker', newInitiative: 1 }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+  });
 });

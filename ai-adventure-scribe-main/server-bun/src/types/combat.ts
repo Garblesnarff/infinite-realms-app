@@ -4,6 +4,7 @@
  * Type-safe interfaces for D&D 5E combat initiative and turn order system
  */
 
+import type { PendingCombatIntent } from '../../../db/schema/index';
 import type { EntitySize } from '../tactical/types.js';
 
 /**
@@ -307,6 +308,7 @@ export interface CombatEncounter {
   currentTurnOrder: number;
   status: string; // CombatStatus but stored as text in DB
   version: number;
+  pendingIntent: PendingCombatIntent | null;
   location: string | null;
   difficulty: string | null;
   experienceAwarded: number | null;
@@ -366,6 +368,8 @@ export interface CreateParticipantInput {
   monsterId?: string | null;
   name: string;
   initiativeModifier: number;
+  /** Input-only natural d20; only the explicit player entry path supplies this. */
+  initiativeRoll?: number;
   hpCurrent?: number | null;
   hpMax?: number | null;
 }

@@ -62,10 +62,9 @@ export async function handleDmActionsAndTransitions(
   // unconstrained model-authored string, evaluated in the browser, with no engine-side
   // predicate behind it. Prod session 5ebaffab put four consecutive hostile actions through it
   // and never entered combat once. The decision now lives server-side in the turn pipeline
-  // (`services/combat/combat-entry-gate.ts`), which creates the encounter and rolls initiative
-  // BEFORE this turn's narration is returned and rewrites the envelope it hands back. By the
-  // time a response reaches this handler the encounter already exists; the client's only job
-  // is to re-read authoritative state, which the refresh below already does.
+  // (`services/combat/combat-entry-gate.ts`), which now returns a pending handoff. PR2 owns the
+  // popup and the explicit `/enter` call; this handler must not treat the pending handoff or the
+  // model's raw `combat_transition: "start"` as a seated encounter.
   if (result.combat_entry?.entered) {
     logger.info('Server combat entry gate seated an encounter for this turn', {
       encounterId: result.combat_entry.encounterId,
@@ -81,19 +80,9 @@ export async function handleDmActionsAndTransitions(
     }
   }
 
-  // A transition just moved the board. Re-read rather than wait for the broadcast to land
-  // in a later render: a start that also carries combat_actions has to resolve them on this
-  // turn, and the resolution prompt below has to be told the fight is on.
-  //
-  // `combat_entry` is checked alongside the transition so a gated entry refreshes even if the
-  // envelope rewrite were ever to change shape — the server's own report of what it did is the
-  // more authoritative of the two signals.
-  if (
-    sessionId &&
-    (result.combat_entry?.entered ||
-      result.combat_transition === 'start' ||
-      result.combat_transition === 'end')
-  ) {
+  // A seated entry (from the explicit endpoint) or an end transition moves the board. A pending
+  // handoff and a raw model start do not: no encounter exists until `/enter` succeeds.
+  if (sessionId && (result.combat_entry?.entered || result.combat_transition === 'end')) {
     activeEncounter = await refreshCombatState();
     isInCombat = activeEncounter?.phase === 'active';
     aiContext.gameState.isInCombat = isInCombat;
@@ -181,6 +170,9 @@ export async function handleDmActionsAndTransitions(
       conversationHistory,
       userPlan,
       turnCount,
+      queuedIntentActorIds: activeEncounter?.pendingIntent?.actorId
+        ? [activeEncounter.pendingIntent.actorId]
+        : [],
     });
     result = narrationResult;
     responseText = narrationResult.text;

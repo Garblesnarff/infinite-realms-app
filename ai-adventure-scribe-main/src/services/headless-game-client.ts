@@ -186,10 +186,9 @@ export class HeadlessGameClient {
     if (response.roll_requests !== undefined && !Array.isArray(response.roll_requests)) {
       throw new ContractViolationError('DM response roll_requests field is not an array');
     }
-    // #1779: entry is the server's decision, made inside the turn pipeline before this
-    // response came back. The headless client no longer starts combat — it reads what the
-    // gate already did, exactly as the browser client now does.
-    if (response.combat_entry?.entered || response.combat_transition === 'start') {
+    // #1907 PR1: a pending handoff is not a seated encounter. Only the explicit `/enter`
+    // response can report `combat_entry.entered`; the model's raw start signal is not authority.
+    if (response.combat_entry?.entered) {
       this.combatActive = true;
     } else if (response.combat_transition === 'end') {
       const endResponse = await userDataApi.endTacticalMap(this.sessionId);

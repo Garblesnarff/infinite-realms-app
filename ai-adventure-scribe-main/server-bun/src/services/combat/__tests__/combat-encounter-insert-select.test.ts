@@ -14,11 +14,11 @@ import * as schema from '../../../../../db/schema/index';
  *   Insert select error: selected fields are not the same or are in a different order
  *   compared to the table definition
  *
- * The projection listed four of `combat_encounters`' thirteen columns. The throw happened
+ * The projection listed four of `combat_encounters`' fourteen columns. The throw happened
  * before any query was issued, which is why the failure took 5-15ms and why it was invisible:
  * `logger.error({ error: e })` serialized the Error as `{}`.
  *
- * 33537a67 repaired that one call site by extending its projection to all thirteen columns.
+ * 33537a67 repaired that one call site by extending its projection to all fourteen columns.
  * A later sweep found the pattern at 34 call sites, 30 of them broken the same way, so it is
  * now banned outright (`no-restricted-syntax` in eslint.config.js) and every call site has
  * been converted to an authorization query plus `insert().values()`.
@@ -53,6 +53,7 @@ describe('why drizzle insert-select is banned', () => {
     currentRound: sql`1`,
     currentTurnOrder: sql`0`,
     version: sql`1`,
+    pendingIntent: sql`null::jsonb`,
     location: sql`null::text`,
     difficulty: sql`null::text`,
     experienceAwarded: sql`null::integer`,
@@ -94,7 +95,7 @@ describe('why drizzle insert-select is banned', () => {
     expect(() =>
       db
         .insert(schema.combatEncounters)
-        .select(db.select({ id: schema.gameSessions.id }).from(schema.gameSessions)),
+        .select(db.select({ id: schema.gameSessions.id }).from(schema.gameSessions) as never),
     ).toThrow(/Insert select error/);
   });
 

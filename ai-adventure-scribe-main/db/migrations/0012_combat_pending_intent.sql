@@ -1,0 +1,7 @@
+-- 0012_combat_pending_intent -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- The authoritative DDL is authored by hand in
+-- supabase/migrations/20260830_add_combat_pending_intent.sql and is manually
+-- applied after this PR merges. This file and its snapshot only advance the
+-- Drizzle snapshot chain; replaying the generated ALTER here would duplicate
+-- the Supabase migration in the combined migration harness.

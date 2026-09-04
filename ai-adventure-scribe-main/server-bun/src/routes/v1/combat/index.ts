@@ -1,8 +1,10 @@
 import { Elysia } from 'elysia';
 
 import { actionRoutes } from './actions.js';
+import { entryRoutes } from './entry.js';
 import { initiativeRoutes } from './initiative.js';
 import { intentRoutes } from './intents.js';
+import { pendingIntentRoutes } from './pending-intent.js';
 import { persistenceRoutes } from './persistence.js';
 import { statusRoutes } from './status.js';
 
@@ -11,8 +13,10 @@ import { statusRoutes } from './status.js';
 // applied server-side via intent resolution; the persistence route only records the
 // already-calculated damage log for the legacy browser integrator.
 export const combatRoutes = new Elysia({ prefix: '/v1/combat' })
+  .use(entryRoutes)
   .use(initiativeRoutes)
   .use(actionRoutes)
   .use(intentRoutes)
+  .use(pendingIntentRoutes)
   .use(statusRoutes)
   .use(persistenceRoutes);

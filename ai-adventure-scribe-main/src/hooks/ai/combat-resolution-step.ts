@@ -15,6 +15,7 @@ import {
 } from '@/services/combat/combat-outcome-transcript';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
+import { slugify } from '@/utils/slug';
 
 /**
  * Handing the DM's declared combat actions to the engine, and narrating what the engine did.
@@ -43,6 +44,8 @@ export interface CombatResolutionParams {
   turnCount?: number;
   /** The encounter's participants, so the player's own attacks can be told apart. */
   participants?: Array<{ id: string; name?: string; participantType?: string }>;
+  /** Actors whose refused declarations are already queued for their next legal turn. */
+  queuedIntentActorIds?: string[];
 }
 
 /**
@@ -62,6 +65,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     userPlan,
     turnCount,
     participants,
+    queuedIntentActorIds,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
@@ -84,11 +88,22 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // One repair attempt per turn, not per action: the budget belongs to the turn, and a DM
   // that got the actor wrong once will get it wrong for every action in the same batch.
   let repairSpent = false;
+  const queuedActorIds = new Set(queuedIntentActorIds ?? []);
+  const queuedActorSlugs = new Set(
+    participants
+      ?.filter((participant) => queuedActorIds.has(participant.id))
+      .map((participant) => slugify(participant.name ?? ''))
+      .filter(Boolean),
+  );
+  const isQueuedIntentActor = (actorId: string): boolean =>
+    queuedActorIds.has(actorId) || queuedActorSlugs.has(slugify(actorId));
   const labelFor = (actorId: string): string =>
     participants?.find((participant) => participant.id === actorId)?.name ?? actorId;
   const recordRefusal = (action: StructuredCombatAction, refusal: CombatIntentRefusedError) => {
+    const queued = isQueuedIntentActor(action.actor_id);
     refusedActions.push({
       resolved: false,
+      ...(queued ? { queued: true } : {}),
       actor: labelFor(action.actor_id),
       actorIsPlayer: isPlayerActor(action.actor_id, participants),
       action: action.action_type,
@@ -106,7 +121,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
     const playerDie =
-      action.action_type === 'attack' && isPlayerActor(action.actor_id, participants)
+      !isQueuedIntentActor(action.actor_id) &&
+      action.action_type === 'attack' &&
+      isPlayerActor(action.actor_id, participants)
         ? await askPlayerForAttackDie({
             encounterId,
             action,
@@ -163,6 +180,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     } catch (error) {
       if (!(error instanceof CombatIntentRefusedError)) throw error;
       recordRefusal(action, error);
+      if (isQueuedIntentActor(action.actor_id)) {
+        // A pending declaration is deliberately not re-declared as whoever owns the current
+        // turn. PR2 will confirm it when this actor becomes current; it must not consume the
+        // one-shot repair budget or become another participant's action (#1908).
+        logger.info(`[CombatRepair] outcome=queued actor=${action.actor_id}`);
+        continue;
+      }
       if (repairSpent) {
         // A second refusal is not repaired again, and it is no longer thrown while the engine
         // has results to report either. Throwing here is what turned an NPC's refusal into

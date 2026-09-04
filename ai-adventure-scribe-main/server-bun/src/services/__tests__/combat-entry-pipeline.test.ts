@@ -1,10 +1,9 @@
 /**
- * #1779 §1 — the gate's placement in the turn pipeline.
+ * #1907 PR1 — detection's placement in the turn pipeline.
  *
  * These tests are about ORDER as much as behaviour: the encounter must exist by the time the
- * generate call returns, and the envelope the client receives must already say so. In session
- * 552a0122 the punch resolved at 17:39:42 and the encounter POST landed at 17:39:56 — same
- * turn, wrong order — which is what put the player a turn out of phase for the whole fight.
+ * generate call returns, without writing an encounter. The envelope carries a pending handoff;
+ * the explicit `/enter` call owns seating and the player's initiative die.
  */
 import { describe, expect, it } from 'bun:test';
 
@@ -45,13 +44,20 @@ function stubDeps(): { deps: CombatEntryGateDeps; startedAt: number[] } {
           participants: participants.map((participant, index) => ({
             id: `participant-${index}`,
             name: participant.name,
+            initiative: index === 0 ? 18 : 15,
+            initiativeModifier: participant.initiativeModifier,
+            characterId: participant.characterId ?? null,
+            turnOrder: index,
           })),
           participantSizes: {},
+          turnOrder: [],
+          currentParticipant: null,
         };
       },
       createTacticalCombatMap: async () => ({}),
       sanitizeSceneSpec: (raw) => ({ ok: true, sceneSpec: raw as never, overrides: [] }),
       trackCombatEvent: () => {},
+      persistSessionMessage: async () => undefined,
       publishCombatState: async () => undefined,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
     },
@@ -59,7 +65,7 @@ function stubDeps(): { deps: CombatEntryGateDeps; startedAt: number[] } {
 }
 
 describe('applyCombatEntryGate', () => {
-  it('seats the encounter and rewrites the envelope before the turn is returned', async () => {
+  it('returns a pending handoff without seating or rewriting the model transition', async () => {
     const { deps, startedAt } = stubDeps();
     const options = [
       'A. **Press the attack**, keep the Ifrit off balance.',
@@ -87,18 +93,15 @@ describe('applyCombatEntryGate', () => {
       deps,
     });
 
-    // The encounter exists by the time this call resolves — that is the whole ordering fix.
-    expect(startedAt).toHaveLength(1);
+    expect(startedAt).toHaveLength(0);
 
     const envelope = JSON.parse(returned.text) as Record<string, unknown>;
-    expect(envelope.combat_transition).toBe('start');
-    expect(envelope.scene_spec).toBeTruthy();
+    expect(envelope.combat_transition).toBe('none');
+    expect(envelope.scene_spec).toBeNull();
     expect(envelope.options).toEqual(options);
-    expect(envelope.combat_entry).toMatchObject({
-      entered: true,
-      encounterId: 'encounter-1',
+    expect(envelope.combat_entry_pending).toMatchObject({
       trigger: 'attack_roll_request',
-      sceneSpecSynthesized: true,
+      combatants: [{ name: 'Hostile Creature', count: 1 }],
     });
     // Narration is never touched: the gate adds authority, it does not rewrite the fiction.
     expect(envelope.text).toBe('Your fist arcs toward the Ifrit.');
@@ -164,6 +167,8 @@ describe('applyCombatEntryGate', () => {
       combatEntry: COMBAT_ENTRY,
       deps,
     });
-    expect((JSON.parse(returned.text) as { combat_entry?: unknown }).combat_entry).toBeTruthy();
+    expect(
+      (JSON.parse(returned.text) as { combat_entry_pending?: unknown }).combat_entry_pending,
+    ).toBeTruthy();
   });
 });

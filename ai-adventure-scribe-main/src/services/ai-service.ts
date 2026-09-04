@@ -218,12 +218,12 @@ export class AIService {
           promptMetrics = undefined;
         }
 
-        // #1779: the player seat travels with the turn so the SERVER can create the encounter
-        // and roll initiative before this call returns. Entry stopped being a client decision
-        // resting on one model-authored string; the client only reacts to what comes back.
+        // #1907 PR1: inactive sessions carry the player context needed for server-side combat
+        // entry detection. Active encounters do not need detection and must not manufacture a
+        // pending entry from their ordinary combat actions.
         const entryPlayer = buildCombatEntryPlayer(params.context.characterDetails);
         const combatEntry =
-          params.context.sessionId && entryPlayer
+          params.context.sessionId && entryPlayer && params.context.gameState?.isInCombat !== true
             ? { sessionId: params.context.sessionId, player: entryPlayer }
             : undefined;
 

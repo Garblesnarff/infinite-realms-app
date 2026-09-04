@@ -335,7 +335,16 @@ export class CombatEncounterService {
           });
         }
         const speed = Number(character?.stats?.speed ?? npcStats.speed ?? fallback.speed);
-        const roll = rollD20();
+        // A player who explicitly rolled at the entry prompt owns this d20. Every other seat,
+        // including companions appended above and all NPC/monster inputs, remains engine-rolled.
+        const requestedRoll = input.initiativeRoll;
+        const roll =
+          requestedRoll !== undefined &&
+          Number.isInteger(requestedRoll) &&
+          requestedRoll >= 1 &&
+          requestedRoll <= 20
+            ? requestedRoll
+            : rollD20();
         const initiative = InitiativeMechanics.calculateInitiative(roll, initiativeModifier);
         return {
           encounterId: encounter.id,

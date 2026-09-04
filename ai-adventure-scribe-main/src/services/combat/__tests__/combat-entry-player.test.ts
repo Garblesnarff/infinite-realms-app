@@ -1,5 +1,5 @@
 /**
- * #1779 — the player seat sent with every DM turn so the server can seat an encounter.
+ * #1907 PR1 — the player context sent with inactive DM turns so the server can detect entry.
  *
  * Only the four values a participant row is built from travel with the turn; the character
  * record itself never leaves the client whole.

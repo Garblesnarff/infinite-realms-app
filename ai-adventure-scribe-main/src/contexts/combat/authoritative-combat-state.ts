@@ -29,6 +29,14 @@ type ServerEncounter = {
   currentTurnOrder: number;
   startedAt: string | Date;
   endedAt?: string | Date | null;
+  pendingIntent?: {
+    actorId: string;
+    actionType: string;
+    targetIds: string[];
+    sourceText: string;
+    queuedOnTurn: number;
+    queuedOnRound: number;
+  } | null;
 };
 export type AuthoritativeCombatPayload = {
   encounter: ServerEncounter;
@@ -90,5 +98,6 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
     roundsElapsed: payload.encounter.currentRound,
     startTime: new Date(payload.encounter.startedAt),
     endTime: payload.encounter.endedAt ? new Date(payload.encounter.endedAt) : undefined,
+    pendingIntent: payload.encounter.pendingIntent ?? null,
   };
 }

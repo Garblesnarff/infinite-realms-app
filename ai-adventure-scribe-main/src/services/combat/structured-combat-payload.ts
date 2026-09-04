@@ -47,11 +47,12 @@ const dexterityModifier = (character: Record<string, unknown>): number => {
 };
 
 /**
- * The player seat the server's combat entry gate needs (#1779).
+ * The player context the server's combat-entry detector needs (#1907 PR1).
  *
- * Sent alongside every DM turn so the server can create the encounter and roll initiative
- * BEFORE the turn's narration comes back. The character record never leaves the client whole:
- * only the four values a participant row is built from travel with the turn.
+ * Sent with inactive-session DM turns so the detector can build a pending handoff. The explicit
+ * entry endpoint later re-derives the participant row; this payload never seats combat itself.
+ * The character record never leaves the client whole: only the values a participant row needs
+ * travel with the turn.
  */
 export type CombatEntryPlayerPayload = {
   characterId: string | null;

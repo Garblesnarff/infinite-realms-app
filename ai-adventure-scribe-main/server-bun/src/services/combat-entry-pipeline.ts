@@ -6,14 +6,13 @@
  * than a hope about client ordering. The gate runs here, after contract enforcement (so it
  * judges the accepted dialect, not the raw one) and before the response leaves the server.
  *
- * On entry the returned envelope is REWRITTEN: `combat_transition` becomes `"start"` and
- * `scene_spec` carries the scene that was actually used. That is not cosmetic — the client's
- * post-turn pipeline re-reads authoritative combat state whenever it sees a start transition,
- * so rewriting is what makes the initiative panel appear before the turn's outcome is narrated
- * instead of a turn later. `combat_entry` is added alongside as the explicit, auditable record
- * of what the server decided and why.
+ * On entry the returned envelope receives `combat_entry_pending`, an explicit, auditable handoff
+ * containing the server-derived combatants and sanitized scene. It is deliberately not seated
+ * here: the player must confirm the entry and may provide their own initiative d20 through the
+ * separate `/v1/combat/sessions/:sessionId/enter` endpoint.
  */
-import { runCombatEntryGate } from './combat/combat-entry-gate.js';
+import { detectCombatEntry } from './combat/combat-entry-gate.js';
+import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './combat/scene-spec-sanitizer.js';
 import { logger } from '../lib/logger.js';
 
 import type {
@@ -57,49 +56,37 @@ export async function applyCombatEntryGate(params: {
   combatEntry?: CombatEntryContext | null;
   deps?: CombatEntryGateDeps;
 }): Promise<LLMResponse> {
-  const { result, userId, combatEntry } = params;
+  const { result, combatEntry } = params;
   if (result.error || !combatEntry?.sessionId || !combatEntry.player) return result;
 
   const envelope = parseEnvelope(result.text);
   if (!envelope) return result;
 
-  // Imported lazily so the decision logic — and its tests — never drag in the database, the
-  // tactical generator, or the websocket publisher just to read a DM envelope.
-  const deps =
-    params.deps ?? (await import('./combat/combat-entry-gate-deps.js')).combatEntryGateDeps;
-
-  const outcome = await runCombatEntryGate(
-    {
-      sessionId: combatEntry.sessionId,
-      userId,
-      player: combatEntry.player,
-      response: envelope as unknown as CombatEntryResponse,
-    },
-    deps,
-  );
-  if (!outcome) return result;
+  // Detection is pure. Keep the optional dependency seam for tests that need to assert scene
+  // sanitization, but never import or call the database-backed seating dependencies here.
+  const pending = detectCombatEntry({
+    sessionId: combatEntry.sessionId,
+    playerName: combatEntry.player.name,
+    response: envelope as unknown as CombatEntryResponse,
+    sanitizeSceneSpec: params.deps?.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
+  });
+  if (!pending) return result;
 
   logger.info({
-    msg: 'COMBAT_ENTRY_GATE_ENTERED',
+    msg: 'COMBAT_ENTRY_DETECTED_PENDING_PLAYER_ENTRY',
     sessionId: combatEntry.sessionId,
-    encounterId: outcome.encounterId,
-    trigger: outcome.trigger,
-    detail: outcome.detail,
-    sceneSpecSynthesized: outcome.sceneSpecSynthesized,
-    participants: outcome.participantCount,
+    trigger: pending.trigger,
+    detail: pending.detail,
+    sceneSpecSynthesized: pending.sceneSpecSynthesized,
+    participants: pending.combatants.reduce((total, combatant) => total + combatant.count, 1),
   });
 
   const rewritten = {
     ...envelope,
-    combat_transition: 'start',
-    scene_spec: outcome.sceneSpec,
-    combat_entry: {
-      entered: true,
-      encounterId: outcome.encounterId,
-      trigger: outcome.trigger,
-      detail: outcome.detail,
-      sceneSpecSynthesized: outcome.sceneSpecSynthesized,
-    },
+    // A pending entry is not a combat transition. This prevents old clients from treating the
+    // model's `combat_transition: "start"` as proof that an encounter exists.
+    combat_transition: 'none',
+    combat_entry_pending: pending,
   };
   return { ...result, text: JSON.stringify(rewritten) };
 }

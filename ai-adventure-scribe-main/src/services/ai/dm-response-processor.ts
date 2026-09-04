@@ -293,9 +293,10 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     dice_rolls,
     combat_transition: transition || 'none',
     scene_spec: structuredResponse?.scene_spec ?? null,
-    // #1779: present only when the server's entry gate seated the encounter during this turn.
-    // It is the audit record of a decision the client no longer makes.
+    // #1907 PR1/PR2: present only when an explicit server entry response is being carried
+    // through the AI response shape. The client never decides entry from model text.
     combat_entry: structuredResponse?.combat_entry ?? undefined,
+    combat_entry_pending: structuredResponse?.combat_entry_pending ?? undefined,
     map_actions: structuredResponse?.map_actions || [],
     handout_actions: structuredResponse?.handout_actions || [],
     combat_actions: structuredResponse?.combat_actions || [],

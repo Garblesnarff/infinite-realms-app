@@ -66,6 +66,27 @@ describe('handleDmActionsAndTransitions — combat entry (#1779)', () => {
     expect(startStructuredCombatTransition).not.toHaveBeenCalled();
   });
 
+  it('does not refresh or activate combat for a pending entry handoff', async () => {
+    const refresh = vi.fn().mockResolvedValue(ACTIVE_ENCOUNTER);
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          trigger: 'tactical_action',
+          detail: 'combat_action attack',
+          combatants: [{ name: 'Geometrist', count: 1 }],
+          sceneSpec: { environment: 'dungeon_room' },
+          sceneSpecSynthesized: true,
+        },
+      },
+      refresh,
+    );
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(outcome.isInCombat).toBe(false);
+    expect(outcome.activeEncounter).toBeNull();
+  });
+
   it('re-reads authoritative state when the server reports it seated an encounter', async () => {
     const refresh = vi.fn().mockResolvedValue(ACTIVE_ENCOUNTER);
     const outcome = await invoke(

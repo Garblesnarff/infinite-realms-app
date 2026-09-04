@@ -101,7 +101,7 @@ const setupMessage = () => {
   return history[history.length - 1].content as string;
 };
 
-const run = () =>
+const run = (overrides: Record<string, unknown> = {}) =>
   resolveDeclaredCombatActions({
     encounterId: '10444307-0000-4000-8000-000000000003',
     combatActions: [action(PLAYER_ID, NPC_ID)],
@@ -109,6 +109,7 @@ const run = () =>
     participants: PARTICIPANTS,
     aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
     conversationHistory: [],
+    ...overrides,
   });
 
 describe('a player action the engine refused', () => {
@@ -207,6 +208,35 @@ describe('a player action the engine refused', () => {
     repairRefusedCombatAction.mockResolvedValue(null);
 
     await expect(run()).rejects.toThrow('Actor is not the current-turn participant');
+  });
+
+  it('queues a refused pending declaration instead of repairing it as the current-turn actor', async () => {
+    await run({ queuedIntentActorIds: [PLAYER_ID] });
+
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(resolutionPayload().refusedActions[0]).toMatchObject({
+      actor: 'The Reveler',
+      queued: true,
+    });
+  });
+
+  it('recognizes the queued participant when the DM uses its board slug', async () => {
+    executeStructuredCombatActionWithBoundary.mockImplementation(
+      async (_encounterId: string, act: any) => {
+        if (act.actor_id === PLAYER_SLUG) throw outOfTurn();
+        return { outcomes: [], boundary: null };
+      },
+    );
+
+    await run({
+      combatActions: [action(PLAYER_SLUG, NPC_ID)],
+      queuedIntentActorIds: [PLAYER_ID],
+    });
+
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+    expect(resolutionPayload().refusedActions[0]).toMatchObject({ queued: true });
   });
 });
 

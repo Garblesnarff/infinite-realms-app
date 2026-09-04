@@ -111,11 +111,6 @@ const participantIdSchema = t.Object({
   participantId: t.String({ minLength: 1, maxLength: 255 }),
 });
 
-const reorderInitiativeSchema = t.Object({
-  participantId: t.String({ minLength: 1, maxLength: 255 }),
-  newInitiative: t.Number({ minimum: -100, maximum: 100 }),
-});
-
 function mapCombatError(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set: any,
@@ -488,58 +483,6 @@ export function createInitiativeRoutes({
       )
 
       /**
-       * PATCH /v1/combat/:encounterId/reorder
-       * Manually adjust initiative order
-       */
-      .patch(
-        '/:encounterId/reorder',
-        async ({ request, params, body, set }) => {
-          const { user, error: authError } = await authenticateRequest(request);
-          if (authError || !user) {
-            set.status = 401;
-            return { error: authError || 'Unauthorized' };
-          }
-
-          try {
-            const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
-            if (!verification.success) {
-              set.status = verification.error!.status;
-              return { error: verification.error!.message };
-            }
-
-            const { participantId, newInitiative } = body;
-
-            if (!participantId || newInitiative === undefined) {
-              set.status = 400;
-              return { error: 'participantId and newInitiative are required' };
-            }
-
-            await combatInitiativeService.reorderInitiative(
-              params.encounterId,
-              participantId,
-              newInitiative,
-              user.userId,
-            );
-            const combatState = await combatEncounterService.getCombatState(
-              params.encounterId,
-              user.userId,
-            );
-
-            return combatState;
-          } catch (e) {
-            logger.error({ msg: 'Reorder initiative error', error: e });
-            return mapCombatError(
-              set,
-              e,
-              'Failed to reorder initiative',
-              'Combat participant not found',
-            );
-          }
-        },
-        { params: encounterIdParams, body: reorderInitiativeSchema },
-      )
-
-      /**
        * POST /v1/combat/:encounterId/end
        * End a combat encounter
        */
@@ -632,7 +575,11 @@ export function createInitiativeRoutes({
               params.encounterId,
               user.userId,
             );
-            return { ...combatState, initiativeOrder: buildInitiativeOrder(combatState) };
+            return {
+              ...combatState,
+              initiativeOrder: buildInitiativeOrder(combatState),
+              pendingIntent: combatState.encounter.pendingIntent ?? null,
+            };
           } catch (e) {
             logger.error({ msg: 'Get combat status error', error: e });
             return mapCombatError(set, e, 'Failed to get combat status', 'Encounter not found');

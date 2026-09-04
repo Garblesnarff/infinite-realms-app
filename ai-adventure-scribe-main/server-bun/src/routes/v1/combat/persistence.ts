@@ -8,14 +8,12 @@ import {
   getCharacterCombatStatus,
   getCombatParticipantStatus,
   recordCombatDamageLog,
-  saveCombatPersistence,
   updateCombatParticipantStatus,
 } from '../../../services/combat/combat-persistence-service.js';
 
 import type {
   CombatDamageLogInput,
   CombatParticipantStatusUpdate,
-  CombatPersistenceInput,
 } from '../../../services/combat/combat-persistence-service.js';
 
 const uuidString = t.String({ format: 'uuid' });
@@ -37,58 +35,6 @@ const participantParam = t.Object({
 // "/characters/:characterId/attacks".
 const characterParam = t.Object({
   characterId: uuidString,
-});
-
-const persistenceParticipant = t.Object({
-  id: uuidString,
-  characterId: t.Optional(t.Nullable(uuidString)),
-  npcId: t.Optional(t.Nullable(uuidString)),
-  name: t.String({ minLength: 1, maxLength: 255 }),
-  participantType: t.Union([
-    t.Literal('player'),
-    t.Literal('npc'),
-    t.Literal('enemy'),
-    t.Literal('monster'),
-  ]),
-  initiative: t.Integer({ minimum: -1000, maximum: 1000 }),
-  initiativeModifier: t.Integer({ minimum: -1000, maximum: 1000 }),
-  turnOrder: t.Integer({ minimum: 0, maximum: 1000 }),
-  isActive: t.Boolean(),
-  armorClass: t.Integer({ minimum: -1000, maximum: 1000 }),
-  maxHp: t.Integer({ minimum: 0, maximum: 1_000_000 }),
-  speed: t.Integer({ minimum: 0, maximum: 1_000_000 }),
-  damageResistances: t.Array(t.String({ maxLength: 100 }), { maxItems: 100 }),
-  damageImmunities: t.Array(t.String({ maxLength: 100 }), { maxItems: 100 }),
-  damageVulnerabilities: t.Array(t.String({ maxLength: 100 }), { maxItems: 100 }),
-});
-
-const persistenceStatus = t.Object({
-  participantId: uuidString,
-  currentHp: t.Integer({ minimum: 0, maximum: 1_000_000 }),
-  maxHp: t.Integer({ minimum: 0, maximum: 1_000_000 }),
-  tempHp: t.Integer({ minimum: 0, maximum: 1_000_000 }),
-  isConscious: t.Boolean(),
-  deathSavesSuccesses: t.Integer({ minimum: 0, maximum: 3 }),
-  deathSavesFailures: t.Integer({ minimum: 0, maximum: 3 }),
-});
-
-const persistenceCondition = t.Object({
-  participantId: uuidString,
-  conditionName: t.String({ minLength: 1, maxLength: 100 }),
-  durationRounds: t.Optional(t.Nullable(t.Integer({ minimum: 0, maximum: 100_000 }))),
-  source: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
-});
-
-const persistenceBody = t.Object({
-  sessionId: uuidString,
-  status: t.Union([t.Literal('active'), t.Literal('paused'), t.Literal('completed')]),
-  currentRound: t.Integer({ minimum: 0, maximum: 100_000 }),
-  currentTurnOrder: t.Integer({ minimum: 0, maximum: 1000 }),
-  location: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
-  startedAt: t.String({ format: 'date-time' }),
-  participants: t.Array(persistenceParticipant, { maxItems: 100 }),
-  statuses: t.Array(persistenceStatus, { maxItems: 100 }),
-  conditions: t.Array(persistenceCondition, { maxItems: 500 }),
 });
 
 const statusUpdateBody = t.Object({
@@ -127,19 +73,11 @@ export const persistenceRoutes = new Elysia()
   .use(planRateLimit('default'))
   .post(
     '/encounters/:encounterId/persistence',
-    async ({ params, body, set, user }) => {
-      try {
-        const result = await saveCombatPersistence(
-          params.encounterId,
-          body as CombatPersistenceInput,
-          user.userId,
-        );
-        return { ok: true, ...result };
-      } catch (error) {
-        return mapError(set, error, 'Failed to persist combat encounter');
-      }
+    ({ set }) => {
+      set.status = 410;
+      return { error: 'Combat persistence endpoint retired; combat state is server-authoritative' };
     },
-    { params: encounterParam, body: persistenceBody },
+    { params: encounterParam },
   )
   .post(
     '/encounters/:encounterId/damage-log',

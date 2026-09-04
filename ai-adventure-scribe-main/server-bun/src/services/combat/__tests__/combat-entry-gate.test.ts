@@ -3,19 +3,22 @@
  *
  * Every scenario here is drawn from prod: session 5ebaffab (four hostile turns, no encounter
  * ever created) and session 552a0122 (entry fired, but after the punch had already resolved as
- * a d20+2 skill check). The gate's contract is that each of those turns now seats an encounter
- * before the narration returns.
+ * a d20+2 skill check). Detection and seating are separate contracts: the turn pipeline only
+ * returns a pending handoff, while the explicit entry endpoint owns every write.
  */
 import { describe, expect, it } from 'bun:test';
 
 import {
   buildEntryParticipants,
   deriveEntryCombatants,
+  detectCombatEntry,
   detectCombatEntryTrigger,
-  runCombatEntryGate,
+  seatCombatEntry,
   synthesizeSceneSpec,
   type CombatEntryGateDeps,
+  type CombatEntryParticipantInput,
   type CombatEntryResponse,
+  type CombatEntryStartResult,
 } from '../combat-entry-gate.js';
 
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
@@ -45,25 +48,38 @@ type Recorded = { event: string; properties: Record<string, unknown> };
 function stubDeps(overrides: Partial<CombatEntryGateDeps> = {}): {
   deps: CombatEntryGateDeps;
   events: Recorded[];
-  started: Array<{ sessionId: string; participants: unknown[] }>;
+  started: Array<{ sessionId: string; participants: CombatEntryParticipantInput[] }>;
   maps: Array<{ sessionId: string; sceneSpec: unknown }>;
+  seatingMessages: unknown[];
 } {
   const events: Recorded[] = [];
-  const started: Array<{ sessionId: string; participants: unknown[] }> = [];
+  const started: Array<{ sessionId: string; participants: CombatEntryParticipantInput[] }> = [];
   const maps: Array<{ sessionId: string; sceneSpec: unknown }> = [];
+  const seatingMessages: unknown[] = [];
   const deps: CombatEntryGateDeps = {
     getActiveEncounter: async () => undefined,
     verifySessionOwnership: async () => ({ success: true }),
     startCombat: async (sessionId, participants) => {
       started.push({ sessionId, participants });
+      const seated = participants.map((participant, index) => ({
+        id: `participant-${index}`,
+        name: participant.name,
+        initiative: [18, 15, 14][index] ?? 10,
+        initiativeModifier: participant.initiativeModifier,
+        characterId: participant.characterId ?? null,
+        turnOrder: index,
+      }));
       return {
         encounter: { id: 'encounter-1' },
-        participants: participants.map((participant, index) => ({
-          id: `participant-${index}`,
-          name: participant.name,
-        })),
+        participants: seated,
         participantSizes: {},
-      };
+        turnOrder: seated.map((participant, index) => ({
+          participant: { ...participant, participantType: index === 0 ? 'player' : 'monster' },
+          isCurrent: index === 0,
+          hasGone: false,
+        })),
+        currentParticipant: seated[0] ?? null,
+      } satisfies CombatEntryStartResult;
     },
     createTacticalCombatMap: async (sessionId, _participants, sceneSpec) => {
       maps.push({ sessionId, sceneSpec });
@@ -75,11 +91,31 @@ function stubDeps(overrides: Partial<CombatEntryGateDeps> = {}): {
       overrides: [],
     }),
     trackCombatEvent: (event, properties) => events.push({ event, properties }),
+    persistSessionMessage: async (message) => seatingMessages.push(message),
     publishCombatState: async () => undefined,
     logger: { info: () => {}, warn: () => {}, error: () => {} },
     ...overrides,
   };
-  return { deps, events, started, maps };
+  return { deps, events, started, maps, seatingMessages };
+}
+
+async function seatDetectedResponse(
+  params: {
+    sessionId: string;
+    userId: string;
+    player: typeof PLAYER;
+    response: CombatEntryResponse;
+  },
+  deps: CombatEntryGateDeps,
+) {
+  const pending = detectCombatEntry({
+    sessionId: params.sessionId,
+    playerName: params.player.name,
+    response: params.response,
+    sanitizeSceneSpec: deps.sanitizeSceneSpec,
+  });
+  if (!pending) return null;
+  return seatCombatEntry({ ...params, ...pending }, deps);
 }
 
 describe('detectCombatEntryTrigger — the three entry triggers', () => {
@@ -275,10 +311,41 @@ describe('buildEntryParticipants', () => {
   });
 });
 
-describe('runCombatEntryGate', () => {
+describe('detectCombatEntry', () => {
+  it('returns a pending handoff without invoking any seating dependency', () => {
+    const { deps, started, maps } = stubDeps();
+    const pending = detectCombatEntry({
+      sessionId: SESSION_ID,
+      playerName: PLAYER.name,
+      response: response({ combat_transition: 'start' }),
+      sanitizeSceneSpec: deps.sanitizeSceneSpec,
+    });
+
+    expect(pending).toMatchObject({
+      trigger: 'combat_transition',
+      detail: 'combat_transition="start"',
+      combatants: [{ name: 'Hostile Creature', count: 1 }],
+      sceneSpecSynthesized: true,
+    });
+    expect(started).toHaveLength(0);
+    expect(maps).toHaveLength(0);
+  });
+
+  it('does not detect a peaceful response', () => {
+    expect(
+      detectCombatEntry({
+        sessionId: SESSION_ID,
+        playerName: PLAYER.name,
+        response: response(),
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('seatCombatEntry', () => {
   it('creates the encounter and rolls initiative when a hostile signal arrives', async () => {
     const { deps, events, started } = stubDeps();
-    const outcome = await runCombatEntryGate(
+    const outcome = await seatDetectedResponse(
       {
         sessionId: SESSION_ID,
         userId: USER_ID,
@@ -295,10 +362,71 @@ describe('runCombatEntryGate', () => {
     expect(events[0].properties.entryTrigger).toBe('combat_transition');
   });
 
+  it('passes the player d20 only to the player seat and reports the complete seating line', async () => {
+    const { deps, started } = stubDeps();
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Geometrist', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        playerInitiativeRoll: 16,
+      },
+      deps,
+    );
+
+    expect(started[0].participants[0].initiativeRoll).toBe(16);
+    expect(started[0].participants[1].initiativeRoll).toBeUndefined();
+    expect(outcome?.seatingTranscript).toBe(
+      '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled). Geometrist: 15 + 0 = 15.',
+    );
+  });
+
+  it('persists the seating line as a system session-message row', async () => {
+    const { deps, seatingMessages } = stubDeps();
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Geometrist', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        playerInitiativeRoll: 16,
+      },
+      deps,
+    );
+
+    expect(seatingMessages).toEqual([
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        speakerType: 'system',
+        message: outcome?.seatingTranscript,
+      },
+    ]);
+  });
+
+  it('labels a missing player d20 as auto-rolled', async () => {
+    const { deps } = stubDeps();
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Geometrist', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+      },
+      deps,
+    );
+
+    expect(outcome?.seatingTranscript).toContain('You: 16 + 2 = 18 (auto-rolled).');
+  });
+
   it('does nothing when the turn carries no hostile signal', async () => {
     const { deps, started } = stubDeps();
     expect(
-      await runCombatEntryGate(
+      await seatDetectedResponse(
         { sessionId: SESSION_ID, userId: USER_ID, player: PLAYER, response: response() },
         deps,
       ),
@@ -309,7 +437,7 @@ describe('runCombatEntryGate', () => {
   it('never restarts a fight that is already running', async () => {
     const { deps, started } = stubDeps({ getActiveEncounter: async () => ({ id: 'existing' }) });
     expect(
-      await runCombatEntryGate(
+      await seatDetectedResponse(
         {
           sessionId: SESSION_ID,
           userId: USER_ID,
@@ -327,7 +455,7 @@ describe('runCombatEntryGate', () => {
       verifySessionOwnership: async () => ({ success: false }),
     });
     expect(
-      await runCombatEntryGate(
+      await seatDetectedResponse(
         {
           sessionId: SESSION_ID,
           userId: USER_ID,
@@ -342,7 +470,7 @@ describe('runCombatEntryGate', () => {
 
   it('synthesizes a scene when the model supplied none', async () => {
     const { deps, maps } = stubDeps();
-    const outcome = await runCombatEntryGate(
+    const outcome = await seatDetectedResponse(
       {
         sessionId: SESSION_ID,
         userId: USER_ID,
@@ -360,7 +488,7 @@ describe('runCombatEntryGate', () => {
     const { deps, maps } = stubDeps({
       sanitizeSceneSpec: () => ({ ok: false, detail: 'sceneSpec.environment must be one of: ...' }),
     });
-    const outcome = await runCombatEntryGate(
+    const outcome = await seatDetectedResponse(
       {
         sessionId: SESSION_ID,
         userId: USER_ID,
@@ -376,7 +504,7 @@ describe('runCombatEntryGate', () => {
 
   it('uses the model scene when it survives sanitising', async () => {
     const { deps, maps } = stubDeps();
-    const outcome = await runCombatEntryGate(
+    const outcome = await seatDetectedResponse(
       {
         sessionId: SESSION_ID,
         userId: USER_ID,
@@ -389,22 +517,23 @@ describe('runCombatEntryGate', () => {
     expect((maps[0].sceneSpec as { environment: string }).environment).toBe('tavern');
   });
 
-  it('degrades to telemetry instead of losing the turn when the encounter cannot be seated', async () => {
+  it('records failure telemetry and propagates an entry endpoint failure', async () => {
     const { deps, events } = stubDeps({
       startCombat: async () => {
         throw new Error('participants insert failed');
       },
     });
-    const outcome = await runCombatEntryGate(
-      {
-        sessionId: SESSION_ID,
-        userId: USER_ID,
-        player: PLAYER,
-        response: response({ combat_transition: 'start' }),
-      },
-      deps,
-    );
-    expect(outcome).toBeNull();
+    await expect(
+      seatDetectedResponse(
+        {
+          sessionId: SESSION_ID,
+          userId: USER_ID,
+          player: PLAYER,
+          response: response({ combat_transition: 'start' }),
+        },
+        deps,
+      ),
+    ).rejects.toThrow('participants insert failed');
     expect(events).toHaveLength(1);
     expect(events[0].event).toBe('combat_entry_failed');
     expect(events[0].properties.error).toBe('participants insert failed');
@@ -419,7 +548,7 @@ describe('runCombatEntryGate', () => {
    */
   it('acceptance: a punched jelly with no stat block enters combat deterministically', async () => {
     const { deps, events, started, maps } = stubDeps();
-    const outcome = await runCombatEntryGate(
+    const outcome = await seatDetectedResponse(
       {
         sessionId: SESSION_ID,
         userId: USER_ID,

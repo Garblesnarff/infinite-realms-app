@@ -26,6 +26,16 @@ import { npcs } from './world';
 
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
+/** A player action held until its declared actor reaches the current turn. */
+export interface PendingCombatIntent {
+  actorId: string;
+  actionType: string;
+  targetIds: string[];
+  sourceText: string;
+  queuedOnTurn: number;
+  queuedOnRound: number;
+}
+
 /**
  * Combat Encounters Table
  * Tracks combat encounters within game sessions with round and turn order management
@@ -53,6 +63,7 @@ export const combatEncounters = pgTable(
     currentRound: integer('current_round').notNull().default(1),
     currentTurnOrder: integer('current_turn_order').notNull().default(0),
     version: integer('version').notNull().default(1),
+    pendingIntent: jsonb('pending_intent').$type<PendingCombatIntent | null>(),
 
     // Optional metadata
     location: text('location'),

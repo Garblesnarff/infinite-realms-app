@@ -26,6 +26,14 @@ export interface CombatEncounter {
   phase: CombatPhase;
   currentRound: number;
   currentTurnParticipantId?: string;
+  pendingIntent?: {
+    actorId: string;
+    actionType: string;
+    targetIds: string[];
+    sourceText: string;
+    queuedOnTurn: number;
+    queuedOnRound: number;
+  } | null;
 
   // Participants in initiative order
   participants: CombatParticipant[];

@@ -11,6 +11,7 @@ import { sanitizeSceneSpec } from './scene-spec-sanitizer.js';
 import { createTacticalCombatMap } from './tactical-combat-lifecycle.js';
 import { combatLogger } from '../../lib/logger.js';
 import { verifySessionOwnership } from '../../routes/v1/combat/helpers.js';
+import { SessionMessageService } from '../session/session-message-service.js';
 
 import type { CombatEntryGateDeps } from './combat-entry-gate.js';
 import type { EntitySize, SceneSpec } from '../../tactical/types.js';
@@ -37,6 +38,8 @@ export const combatEntryGateDeps: CombatEntryGateDeps = {
   sanitizeSceneSpec,
   trackCombatEvent: (event, properties) =>
     trackCombatEvent(event as Parameters<typeof trackCombatEvent>[0], properties),
+  persistSessionMessage: ({ sessionId, userId, speakerType, message }) =>
+    SessionMessageService.addMessage({ sessionId, speakerType, message }, userId),
   publishCombatState,
   logger: combatLogger,
 };

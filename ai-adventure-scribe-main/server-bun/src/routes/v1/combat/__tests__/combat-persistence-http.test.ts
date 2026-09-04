@@ -4,23 +4,9 @@ import { Elysia, status } from 'elysia';
 
 import { NotFoundError } from '../../../../lib/errors.js';
 
-const saveCalls: unknown[][] = [];
 const damageLogCalls: unknown[][] = [];
 const readCalls: unknown[][] = [];
 const updateCalls: unknown[][] = [];
-
-const savedResult = {
-  encounterId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-  participants: 0,
-  statuses: 0,
-  conditions: 0,
-  skippedConditions: [],
-};
-
-let saveImplementation = async (...args: unknown[]): Promise<typeof savedResult> => {
-  saveCalls.push(args);
-  return savedResult;
-};
 
 let damageLogImplementation = async (...args: unknown[]): Promise<{ id: string }> => {
   damageLogCalls.push(args);
@@ -67,7 +53,6 @@ mock.module('../../../../lib/logger.js', () => ({
   logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
 }));
 mock.module('../../../../services/combat/combat-persistence-service.js', () => ({
-  saveCombatPersistence: (...args: unknown[]) => saveImplementation(...args),
   recordCombatDamageLog: (...args: unknown[]) => damageLogImplementation(...args),
   getCombatParticipantStatus: (...args: unknown[]) => readImplementation(...args),
   updateCombatParticipantStatus: (...args: unknown[]) => updateImplementation(...args),
@@ -90,14 +75,9 @@ const persistencePayload = {
 };
 
 beforeEach(() => {
-  saveCalls.length = 0;
   damageLogCalls.length = 0;
   readCalls.length = 0;
   updateCalls.length = 0;
-  saveImplementation = async (...args: unknown[]): Promise<typeof savedResult> => {
-    saveCalls.push(args);
-    return savedResult;
-  };
   damageLogImplementation = async (...args: unknown[]): Promise<{ id: string }> => {
     damageLogCalls.push(args);
     return { id: 'cccccccc-dddd-4eee-8fff-000000000000' };
@@ -135,10 +115,9 @@ describe('combat persistence HTTP boundary', () => {
     );
 
     expect(response.status).toBe(401);
-    expect(saveCalls).toEqual([]);
   });
 
-  it('passes the authenticated owner to the encounter persistence service', async () => {
+  it('returns 410 for authenticated persistence callers before any client state is accepted', async () => {
     const response = await app.handle(
       new Request('http://localhost/encounters/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/persistence', {
         method: 'POST',
@@ -147,28 +126,21 @@ describe('combat persistence HTTP boundary', () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, ...savedResult });
-    expect(saveCalls).toEqual([
-      ['aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', persistencePayload, 'owner-1'],
-    ]);
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: 'Combat persistence endpoint retired; combat state is server-authoritative',
+    });
   });
 
-  it('masks an ownership miss as not found', async () => {
-    saveImplementation = async () => {
-      throw new NotFoundError('Session');
-    };
-
+  it('returns 410 even when the retired route receives no JSON body', async () => {
     const response = await app.handle(
       new Request('http://localhost/encounters/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/persistence', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-test-user': 'owner' },
-        body: JSON.stringify(persistencePayload),
+        headers: { 'x-test-user': 'owner' },
       }),
     );
 
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: 'Not found' });
+    expect(response.status).toBe(410);
   });
 
   it('rejects anonymous damage-log writes before the service can run', async () => {

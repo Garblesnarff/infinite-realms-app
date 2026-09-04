@@ -3,13 +3,12 @@
  *
  * The gate's own behaviour is covered in `services/combat/__tests__/combat-entry-gate.test.ts`.
  * What this file proves is that `POST /v1/llm/generate` — the single funnel every DM turn
- * passes through — runs it against the accepted response and returns the rewritten envelope,
- * so the encounter exists before the player ever sees the turn.
+ * passes through — runs detection against the accepted response and returns a pending handoff,
+ * without creating an encounter before the player confirms it.
  */
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
-const seatedEncounters: string[] = [];
 let generatedResult: Record<string, unknown> = { text: '{}', provider: 'openrouter', model: 'm' };
 
 mock.module('../../../lib/auth.js', () => ({
@@ -51,31 +50,6 @@ mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: { generate: async () => generatedResult },
 }));
 
-// The database-backed half of the gate. Everything above it — trigger detection, scene
-// synthesis, participant assembly, envelope rewrite — is the real implementation.
-mock.module('../../../services/combat/combat-entry-gate-deps.js', () => ({
-  combatEntryGateDeps: {
-    getActiveEncounter: async () => undefined,
-    verifySessionOwnership: async () => ({ success: true }),
-    startCombat: async (sessionId: string, participants: Array<{ name: string }>) => {
-      seatedEncounters.push(sessionId);
-      return {
-        encounter: { id: 'encounter-http-1' },
-        participants: participants.map((participant, index) => ({
-          id: `participant-${index}`,
-          name: participant.name,
-        })),
-        participantSizes: {},
-      };
-    },
-    createTacticalCombatMap: async () => ({}),
-    sanitizeSceneSpec: (raw: unknown) => ({ ok: true, sceneSpec: raw, overrides: [] }),
-    trackCombatEvent: () => {},
-    publishCombatState: async () => undefined,
-    logger: testLogger,
-  },
-}));
-
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 const app = createRequestPipelineApp().use(llmRoutes);
@@ -111,10 +85,10 @@ const generate = async (body: Record<string, unknown>) =>
 
 describe('POST /v1/llm/generate — combat entry gate', () => {
   beforeEach(() => {
-    seatedEncounters.length = 0;
+    generatedResult = { text: '{}', provider: 'openrouter', model: 'm' };
   });
 
-  it('seats an encounter for a hostile turn and returns a rewritten envelope', async () => {
+  it('returns a pending entry for a hostile turn without seating an encounter', async () => {
     generatedResult = {
       text: dmEnvelope({
         combat_actions: [
@@ -137,15 +111,11 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
     const body = (await response.json()) as { text: string };
 
     expect(response.status).toBe(200);
-    expect(seatedEncounters).toEqual([SESSION_ID]);
-
     const envelope = JSON.parse(body.text) as Record<string, unknown>;
-    expect(envelope.combat_transition).toBe('start');
-    expect(envelope.scene_spec).toBeTruthy();
-    expect(envelope.combat_entry).toMatchObject({
-      entered: true,
-      encounterId: 'encounter-http-1',
+    expect(envelope.combat_transition).toBe('none');
+    expect(envelope.combat_entry_pending).toMatchObject({
       trigger: 'tactical_action',
+      combatants: [{ name: 'Dishwasher Prime', count: 1 }],
       sceneSpecSynthesized: true,
     });
   });
@@ -171,8 +141,7 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
 
     const response = await generate({ prompt: 'I search the kitchen', combatEntry: COMBAT_ENTRY });
     const body = (await response.json()) as { text: string };
-    expect(seatedEncounters).toHaveLength(0);
-    expect((JSON.parse(body.text) as Record<string, unknown>).combat_entry).toBeUndefined();
+    expect((JSON.parse(body.text) as Record<string, unknown>).combat_entry_pending).toBeUndefined();
   });
 
   it('stays backward compatible with clients that send no combatEntry', async () => {
@@ -183,6 +152,9 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
     };
     const response = await generate({ prompt: 'I punch it' });
     expect(response.status).toBe(200);
-    expect(seatedEncounters).toHaveLength(0);
+    expect(
+      (JSON.parse(((await response.json()) as { text: string }).text) as Record<string, unknown>)
+        .combat_entry_pending,
+    ).toBeUndefined();
   });
 });

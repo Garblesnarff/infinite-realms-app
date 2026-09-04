@@ -161,10 +161,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider,
         responseSchema,
       });
-      // #1779: the deterministic entry gate. Runs after contract enforcement so it judges the
-      // accepted dialect, and before the response is returned so the encounter and its
-      // initiative exist BEFORE the player ever sees this turn's narration. Combat entry is
-      // no longer a client decision resting on one model-authored string.
+      // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it
+      // judges the accepted dialect, and returns a pending handoff without seating. The explicit
+      // combat entry endpoint owns the encounter, initiative, map, telemetry, and publication.
       result = await applyCombatEntryGate({
         result,
         userId,
@@ -226,9 +225,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // Permissive on keys (log-only, never stored) so new sections don't require a
         // schema change; values must be numbers.
         metrics: t.Optional(t.Record(t.String(), t.Number())),
-        // #1779: the session and player identity the combat entry gate needs to seat an
-        // encounter server-side. Optional — absent (non-DM generations, older clients) simply
-        // means the gate does not run for that call.
+        // #1907 PR1: the session and player identity detection needs to build the pending entry
+        // handoff. Optional — absent (non-DM generations, older clients) simply means detection
+        // does not run for that call.
         combatEntry: t.Optional(
           t.Object({
             sessionId: t.String({ minLength: 1, maxLength: 255 }),

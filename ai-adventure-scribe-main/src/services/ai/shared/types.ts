@@ -75,14 +75,22 @@ export interface AIResponse {
   combat_transition?: 'none' | 'start' | 'end';
   scene_spec?: unknown | null;
   /**
-   * #1779: the server's deterministic entry gate seated an encounter during this turn.
-   * Present only on the turn combat was entered; the client reacts to it, never decides it.
+   * #1907 PR1/PR2: an explicit combat-entry response seated an encounter.
+   * The client reacts to this server result; it never decides entry from model text.
    */
   combat_entry?: {
     entered: true;
     encounterId: string;
     trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request';
     detail: string;
+    sceneSpecSynthesized: boolean;
+  };
+  /** #1907 PR1: detected combat awaiting the player's explicit seating confirmation. */
+  combat_entry_pending?: {
+    trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request';
+    detail: string;
+    combatants: Array<{ name: string; monsterId?: string; count: number }>;
+    sceneSpec: unknown;
     sceneSpecSynthesized: boolean;
   };
   map_actions?: DMMapAction[];

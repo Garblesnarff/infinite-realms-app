@@ -41,9 +41,9 @@ export interface GenerateTextParams {
    */
   metrics?: Record<string, number>;
   /**
-   * #1779: session + player seat for the server-side combat entry gate. When present, the
-   * server may create the encounter and roll initiative before this call returns, and the
-   * returned envelope comes back rewritten with `combat_transition: "start"`.
+   * #1907 PR1: session + player context for server-side combat entry detection. When present,
+   * the returned envelope may carry `combat_entry_pending`; the explicit `/combat/sessions/:id/enter`
+   * request owns seating and initiative.
    */
   combatEntry?: {
     sessionId: string;

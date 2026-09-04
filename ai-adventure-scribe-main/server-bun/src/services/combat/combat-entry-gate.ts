@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- one cohesive entry decision: detect, derive, synthesize, seat. */
+/* eslint-disable max-lines -- one cohesive entry contract: detect, derive, synthesize, seat. */
 /**
  * Deterministic server-side combat entry gate (#1779).
  *
@@ -9,9 +9,10 @@
  * was emitting a tactical `shove` against the target it claimed it was not fighting. Session
  * 552a0122 entered combat only because the model happened to emit both fields together.
  *
- * The gate makes entry a property of the engine rather than of the narrator. It runs on the
- * turn pipeline, server-side, BEFORE the turn's narration is returned to the client, and it
- * fires when no encounter is active and the DM response shows ANY of three signals:
+ * Detection makes the entry decision a property of the server rather than of a client-side
+ * narrator heuristic. It runs on the turn pipeline before the narration is returned, and it
+ * emits a pending handoff when no encounter is active and the DM response shows ANY of three
+ * signals. Seating is an explicit endpoint operation below:
  *
  *   1. `combat_transition === 'start'`  — the existing signal, now enforced by the server.
  *   2. a tactical/combat action targeting an entity — the model behaving as though a fight
@@ -21,7 +22,9 @@
  * One model string stops being a single point of failure because combat *behavior* also
  * triggers entry.
  */
+import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './scene-spec-sanitizer.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
+import { ValidationError } from '../../lib/errors.js';
 
 import type { SceneSpec } from '../../tactical/types.js';
 import type { DMMapAction, DMResponse } from '../dm/dm-response-schema.js';
@@ -189,6 +192,74 @@ export function synthesizeSceneSpec(sessionId: string, description?: string): Sc
   };
 }
 
+export type SceneSpecSanitizer = (
+  raw: unknown,
+  sessionId: string,
+) => { ok: true; sceneSpec: SceneSpec; overrides: string[] } | { ok: false; detail: string };
+
+/** The pure input to combat-entry detection. It contains no database or publication dependency. */
+export interface CombatEntryDetectionParams {
+  sessionId: string;
+  playerName: string;
+  response: CombatEntryResponse;
+  sanitizeSceneSpec?: SceneSpecSanitizer;
+}
+
+/**
+ * Resolve the scene carried by a detected entry without making it a side effect of detection.
+ * The sanitizer is a pure validator; the database-backed map is deliberately absent here.
+ */
+function resolveDetectedScene(
+  sessionId: string,
+  response: CombatEntryResponse,
+  sanitize: SceneSpecSanitizer,
+): { sceneSpec: SceneSpec; sceneSpecSynthesized: boolean } {
+  if (response.scene_spec) {
+    const sanitized = sanitize(response.scene_spec, sessionId);
+    if (sanitized.ok) {
+      return { sceneSpec: sanitized.sceneSpec, sceneSpecSynthesized: false };
+    }
+  }
+
+  return {
+    sceneSpec: synthesizeSceneSpec(sessionId, response.text),
+    sceneSpecSynthesized: true,
+  };
+}
+
+export interface CombatEntryPending {
+  trigger: CombatEntryReason;
+  detail: string;
+  combatants: DerivedCombatant[];
+  sceneSpec: SceneSpec;
+  sceneSpecSynthesized: boolean;
+}
+
+/**
+ * Detect and describe combat entry without reading or writing combat state.
+ *
+ * The returned object is the only server-authored handoff between the LLM turn and the explicit
+ * `/enter` confirmation. In particular, this function never calls startCombat, creates a map,
+ * emits telemetry, or publishes a websocket state.
+ */
+export function detectCombatEntry(params: CombatEntryDetectionParams): CombatEntryPending | null {
+  const trigger = detectCombatEntryTrigger(params.response);
+  if (!trigger) return null;
+
+  const scene = resolveDetectedScene(
+    params.sessionId,
+    params.response,
+    params.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
+  );
+
+  return {
+    trigger: trigger.reason,
+    detail: trigger.detail,
+    combatants: deriveEntryCombatants(params.response, params.playerName),
+    ...scene,
+  };
+}
+
 export interface CombatEntryParticipantInput {
   encounterId: string;
   characterId?: string | null;
@@ -196,6 +267,8 @@ export interface CombatEntryParticipantInput {
   monsterId?: string;
   name: string;
   initiativeModifier: number;
+  /** Input-only natural d20. The entry endpoint sets this for the player only. */
+  initiativeRoll?: number;
   hpCurrent?: number | null;
   hpMax?: number | null;
 }
@@ -230,6 +303,27 @@ export function buildEntryParticipants(
   return participants;
 }
 
+export interface CombatEntryStartParticipant {
+  id: string;
+  name: string;
+  initiative: number;
+  initiativeModifier: number;
+  characterId?: string | null;
+  turnOrder?: number;
+}
+
+export interface CombatEntryStartResult {
+  encounter: { id: string };
+  participants: CombatEntryStartParticipant[];
+  participantSizes?: Record<string, unknown>;
+  turnOrder?: Array<{
+    participant: CombatEntryStartParticipant & { participantType: string };
+    isCurrent: boolean;
+    hasGone: boolean;
+  }>;
+  currentParticipant?: CombatEntryStartParticipant | null;
+}
+
 export interface CombatEntryOutcome {
   entered: true;
   encounterId: string;
@@ -239,6 +333,12 @@ export interface CombatEntryOutcome {
   sceneSpecSynthesized: boolean;
   sceneSpec: SceneSpec;
   participantCount: number;
+  seatingTranscript: string;
+}
+
+export interface SeatedCombatEntryOutcome extends CombatEntryOutcome {
+  /** Kept for `/enter`; the LLM pipeline only serializes the audit fields above. */
+  combatState: CombatEntryStartResult;
 }
 
 /**
@@ -256,11 +356,7 @@ export interface CombatEntryGateDeps {
     participants: CombatEntryParticipantInput[],
     surpriseRound: boolean,
     userId: string,
-  ) => Promise<{
-    encounter: { id: string };
-    participants: Array<{ id: string; name: string }>;
-    participantSizes?: Record<string, unknown>;
-  }>;
+  ) => Promise<CombatEntryStartResult>;
   createTacticalCombatMap: (
     sessionId: string,
     participants: Array<{ id: string; name: string }>,
@@ -272,6 +368,12 @@ export interface CombatEntryGateDeps {
     sessionId: string,
   ) => { ok: true; sceneSpec: SceneSpec; overrides: string[] } | { ok: false; detail: string };
   trackCombatEvent: (event: string, properties: Record<string, unknown>) => void;
+  persistSessionMessage: (message: {
+    sessionId: string;
+    userId: string;
+    speakerType: 'system';
+    message: string;
+  }) => Promise<unknown>;
   publishCombatState: (encounterId: string, userId: string, reason: string) => Promise<unknown>;
   logger: {
     info: (data: unknown) => void;
@@ -280,31 +382,88 @@ export interface CombatEntryGateDeps {
   };
 }
 
-export interface CombatEntryGateParams {
+export interface CombatEntrySeatParams {
   sessionId: string;
   userId: string;
   player: CombatEntryPlayer;
-  response: CombatEntryResponse;
+  combatants: DerivedCombatant[];
+  sceneSpec: SceneSpec;
+  sceneSpecSynthesized?: boolean;
+  trigger?: CombatEntryReason;
+  detail?: string;
+  playerInitiativeRoll?: number;
 }
 
 /**
- * Create the encounter and roll initiative, or return null because there is nothing to do.
+ * Format the server-owned initiative facts as the seating line shown to the player.
  *
- * Returning null covers three distinct non-events, all of them normal: no hostile signal, an
- * encounter is already running (the gate never restarts a fight — see the `alreadyActive`
- * no-op the start route learned in run 8), or the session is not the caller's.
- *
- * A THROWN error is never propagated. The gate is on the turn path: a failure to seat an
- * encounter must degrade to a narrated turn plus loud `combat_integrity` telemetry, never to a
- * turn the player never receives.
+ * `combat_participants` stores the total and modifier, so the natural d20 is recovered as
+ * `total - modifier`. The player marker is based on the explicit entry roll, while NPCs and
+ * companions remain quietly engine-rolled as they have always been.
  */
-export async function runCombatEntryGate(
-  params: CombatEntryGateParams,
+export function buildCombatSeatingTranscript(
+  participants: CombatEntryStartParticipant[],
+  player: CombatEntryPlayer,
+  playerInitiativeRoll?: number,
+): string {
+  let playerNamed = false;
+  const ordered = [...participants].sort(
+    (left, right) => (left.turnOrder ?? 0) - (right.turnOrder ?? 0),
+  );
+  const entries = ordered.map((participant) => {
+    const isPlayer =
+      !playerNamed &&
+      (player.characterId
+        ? participant.characterId === player.characterId
+        : participant.name === (player.name || 'Player'));
+    if (isPlayer) playerNamed = true;
+    const label = isPlayer ? 'You' : participant.name;
+    const roll = participant.initiative - participant.initiativeModifier;
+    const modifier =
+      participant.initiativeModifier < 0
+        ? `- ${Math.abs(participant.initiativeModifier)}`
+        : `+ ${participant.initiativeModifier}`;
+    const playerRollNote = isPlayer
+      ? playerInitiativeRoll === undefined
+        ? ' (auto-rolled)'
+        : ' (you rolled)'
+      : '';
+    return `${label}: ${roll} ${modifier} = ${participant.initiative}${playerRollNote}.`;
+  });
+
+  return `⚙️ Engine: Initiative — ${entries.join(' ')}`;
+}
+
+function validatePlayerInitiativeRoll(roll: number | undefined): void {
+  if (roll === undefined) return;
+  if (!Number.isInteger(roll) || roll < 1 || roll > 20) {
+    throw new ValidationError('playerInitiativeRoll must be an integer from 1 to 20');
+  }
+}
+
+/**
+ * Seat a detected entry after the player has supplied (or declined to supply) their d20.
+ *
+ * All writes live here: the encounter, tactical map, seating transcript, telemetry, and
+ * publication happen in this function and nowhere in `detectCombatEntry` or the LLM turn
+ * pipeline.
+ */
+export async function seatCombatEntry(
+  params: CombatEntrySeatParams,
   deps: CombatEntryGateDeps,
-): Promise<CombatEntryOutcome | null> {
-  const { sessionId, userId, player, response } = params;
-  const trigger = detectCombatEntryTrigger(response);
-  if (!trigger) return null;
+): Promise<SeatedCombatEntryOutcome | null> {
+  const {
+    sessionId,
+    userId,
+    player,
+    combatants,
+    sceneSpec,
+    sceneSpecSynthesized = false,
+    trigger = 'combat_transition',
+    detail = 'combat entry confirmed by the player',
+    playerInitiativeRoll,
+  } = params;
+  validatePlayerInitiativeRoll(playerInitiativeRoll);
 
   try {
     const active = await deps.getActiveEncounter(sessionId, userId);
@@ -315,56 +474,29 @@ export async function runCombatEntryGate(
       deps.logger.warn({
         msg: 'Combat entry gate refused: session not owned by caller',
         sessionId,
-        trigger: trigger.reason,
+        trigger,
       });
       return null;
     }
 
-    // Scene: the model's, if it survives sanitising; otherwise ours. An invalid scene_spec is
-    // downgraded to a synthesized one rather than aborting entry — the whole point of #1779 §2.
-    let sceneSpecSynthesized = false;
-    let scene: SceneSpec;
-    if (response.scene_spec) {
-      const sanitized = deps.sanitizeSceneSpec(response.scene_spec, sessionId);
-      if (sanitized.ok) {
-        scene = sanitized.sceneSpec;
-        if (sanitized.overrides.length) {
-          deps.logger.info({
-            msg: 'Overrode model-supplied scene_spec fields on gated combat entry',
-            sessionId,
-            overrides: sanitized.overrides,
-          });
-        }
-      } else {
-        sceneSpecSynthesized = true;
-        scene = synthesizeSceneSpec(sessionId, response.text);
-        deps.logger.warn({
-          msg: 'Synthesized scene_spec after the model supplied an invalid one',
-          sessionId,
-          detail: sanitized.detail,
-        });
-      }
-    } else {
-      sceneSpecSynthesized = true;
-      scene = synthesizeSceneSpec(sessionId, response.text);
-    }
-
-    const combatants = deriveEntryCombatants(response, player.name);
     const participants = buildEntryParticipants(player, combatants);
+    if (playerInitiativeRoll !== undefined && participants[0]) {
+      participants[0] = { ...participants[0], initiativeRoll: playerInitiativeRoll };
+    }
     const combatState = await deps.startCombat(sessionId, participants, false, userId);
 
     await deps.createTacticalCombatMap(
       sessionId,
       combatState.participants,
-      scene,
+      sceneSpec,
       combatState.participantSizes,
     );
 
     deps.trackCombatEvent('combat_started', {
       encounterId: combatState.encounter.id,
       sessionId,
-      entryTrigger: trigger.reason,
-      entryDetail: trigger.detail,
+      entryTrigger: trigger,
+      entryDetail: detail,
       sceneSpecSynthesized,
       // Named so the "every campaign NPC fights as AC 12 / 11 HP" finding stays visible.
       genericStatFallbackAc: GENERIC_NPC_STATS.armorClass,
@@ -375,32 +507,45 @@ export async function runCombatEntryGate(
       participants: combatState.participants.length,
       gated: true,
     });
+    const seatingTranscript = buildCombatSeatingTranscript(
+      combatState.participants,
+      player,
+      playerInitiativeRoll,
+    );
+    await deps.persistSessionMessage({
+      sessionId,
+      userId,
+      speakerType: 'system',
+      message: seatingTranscript,
+    });
     await deps.publishCombatState(combatState.encounter.id, userId, 'combat_started');
 
     return {
       entered: true,
       encounterId: combatState.encounter.id,
-      trigger: trigger.reason,
-      detail: trigger.detail,
+      trigger,
+      detail,
       sceneSpecSynthesized,
-      sceneSpec: scene,
+      sceneSpec,
       participantCount: combatState.participants.length,
+      seatingTranscript,
+      combatState,
     };
   } catch (error) {
     deps.logger.error({
       msg: '!!!!!!!!!!!!!!!! COMBAT_ENTRY_GATE_FAILED !!!!!!!!!!!!!!!!',
       alert: true,
       sessionId,
-      trigger: trigger.reason,
-      detail: trigger.detail,
+      trigger,
+      detail,
       error,
     });
     deps.trackCombatEvent('combat_entry_failed', {
       sessionId,
-      entryTrigger: trigger.reason,
-      entryDetail: trigger.detail,
+      entryTrigger: trigger,
+      entryDetail: detail,
       error: error instanceof Error ? error.message : String(error),
     });
-    return null;
+    throw error;
   }
 }
