@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.14.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.13.1...v0.14.0) (2026-09-04)
+
+
+### Features
+
+* **combat:** add ask-first entry and pending intent promotion ([#1954](https://github.com/Garblesnarff/infinite-realms-production/issues/1954)) ([9a9e13a](https://github.com/Garblesnarff/infinite-realms-production/commit/9a9e13a64cad93a3a5cd2a5a97727900947aaaae))
+* **combat:** split entry seating and pending intents ([#1935](https://github.com/Garblesnarff/infinite-realms-production/issues/1935)) ([52796a7](https://github.com/Garblesnarff/infinite-realms-production/commit/52796a786f1387b60907520eaee294c54ba49d79))
+
+
+### Refactoring
+
+* **combat:** retire legacy start and snapshot paths ([#1960](https://github.com/Garblesnarff/infinite-realms-production/issues/1960)) ([c6196c6](https://github.com/Garblesnarff/infinite-realms-production/commit/c6196c6f1bf5a606d23a37a5546862d072da7fcc))
+* **headless:** use shared stripAssetTags helper ([#1963](https://github.com/Garblesnarff/infinite-realms-production/issues/1963)) ([357176d](https://github.com/Garblesnarff/infinite-realms-production/commit/357176d2aaa7787ebaa2f8d0c99046db8028d9d7)), closes [#1947](https://github.com/Garblesnarff/infinite-realms-production/issues/1947)
+
 ## [0.13.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.13.0...v0.13.1) (2026-09-01)
 
 
