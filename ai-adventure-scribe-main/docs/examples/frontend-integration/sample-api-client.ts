@@ -72,7 +72,7 @@ class ApiClientError extends Error {
     public code: string,
     public statusCode: number,
     message: string,
-    public details?: any
+    public details?: any,
   ) {
     super(message);
     this.name = 'ApiClientError';
@@ -196,7 +196,7 @@ export class DndApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    skipCache = false
+    skipCache = false,
   ): Promise<T> {
     const url = `${this.config.baseUrl}${endpoint}`;
     const cacheKey = `${options.method || 'GET'}:${endpoint}`;
@@ -272,7 +272,7 @@ export class DndApiClient {
       throw new ApiClientError(
         'UNKNOWN',
         response.status,
-        `HTTP ${response.status}: ${response.statusText}`
+        `HTTP ${response.status}: ${response.statusText}`,
       );
     }
 
@@ -280,7 +280,7 @@ export class DndApiClient {
       errorData.error.code,
       errorData.error.statusCode,
       errorData.error.message,
-      errorData.error.details
+      errorData.error.details,
     );
   }
 
@@ -350,13 +350,24 @@ export class DndApiClient {
   // COMBAT API
   // ============================================================================
 
-  async startCombat(
+  async enterCombat(
     sessionId: string,
-    participants: any[]
+    payload: {
+      combatants: Array<{ name: string; monsterId?: string; count?: number }>;
+      sceneSpec: unknown;
+      player: {
+        characterId?: string | null;
+        name: string;
+        initiativeModifier: number;
+        hpCurrent?: number;
+        hpMax?: number;
+      };
+      playerInitiativeRoll?: number;
+    },
   ): Promise<CombatState> {
-    return this.request(`/v1/sessions/${sessionId}/combat/start`, {
+    return this.request(`/v1/combat/sessions/${sessionId}/enter`, {
       method: 'POST',
-      body: JSON.stringify({ participants }),
+      body: JSON.stringify(payload),
     });
   }
 
@@ -366,28 +377,18 @@ export class DndApiClient {
     });
   }
 
-  async rollInitiative(
-    encounterId: string,
-    participantId: string,
-    roll?: number
-  ): Promise<any> {
+  async rollInitiative(encounterId: string, participantId: string, roll?: number): Promise<any> {
     return this.request(`/v1/combat/${encounterId}/roll-initiative`, {
       method: 'POST',
       body: JSON.stringify({ participantId, roll }),
     });
   }
 
-  async makeAttack(
-    encounterId: string,
-    attack: AttackRequest
-  ): Promise<AttackResult> {
-    const result = await this.request<AttackResult>(
-      `/v1/combat/${encounterId}/attack`,
-      {
-        method: 'POST',
-        body: JSON.stringify(attack),
-      }
-    );
+  async makeAttack(encounterId: string, attack: AttackRequest): Promise<AttackResult> {
+    const result = await this.request<AttackResult>(`/v1/combat/${encounterId}/attack`, {
+      method: 'POST',
+      body: JSON.stringify(attack),
+    });
 
     // Invalidate combat state cache after attack
     this.cache.invalidate(`GET:/v1/combat/${encounterId}/status`);
@@ -395,17 +396,11 @@ export class DndApiClient {
     return result;
   }
 
-  async applyDamage(
-    encounterId: string,
-    damage: DamageRequest
-  ): Promise<DamageResult> {
-    const result = await this.request<DamageResult>(
-      `/v1/combat/${encounterId}/damage`,
-      {
-        method: 'POST',
-        body: JSON.stringify(damage),
-      }
-    );
+  async applyDamage(encounterId: string, damage: DamageRequest): Promise<DamageResult> {
+    const result = await this.request<DamageResult>(`/v1/combat/${encounterId}/damage`, {
+      method: 'POST',
+      body: JSON.stringify(damage),
+    });
 
     this.cache.invalidate(`GET:/v1/combat/${encounterId}/status`);
     return result;
@@ -415,7 +410,7 @@ export class DndApiClient {
     encounterId: string,
     participantId: string,
     healingAmount: number,
-    sourceDescription?: string
+    sourceDescription?: string,
   ): Promise<any> {
     const result = await this.request(`/v1/combat/${encounterId}/heal`, {
       method: 'POST',
@@ -426,11 +421,7 @@ export class DndApiClient {
     return result;
   }
 
-  async rollDeathSave(
-    encounterId: string,
-    participantId: string,
-    roll: number
-  ): Promise<any> {
+  async rollDeathSave(encounterId: string, participantId: string, roll: number): Promise<any> {
     const result = await this.request(`/v1/combat/${encounterId}/death-save`, {
       method: 'POST',
       body: JSON.stringify({ participantId, roll }),
@@ -440,17 +431,11 @@ export class DndApiClient {
     return result;
   }
 
-  async applyCondition(
-    encounterId: string,
-    condition: any
-  ): Promise<any> {
-    const result = await this.request(
-      `/v1/combat/${encounterId}/conditions/apply`,
-      {
-        method: 'POST',
-        body: JSON.stringify(condition),
-      }
-    );
+  async applyCondition(encounterId: string, condition: any): Promise<any> {
+    const result = await this.request(`/v1/combat/${encounterId}/conditions/apply`, {
+      method: 'POST',
+      body: JSON.stringify(condition),
+    });
 
     this.cache.invalidate(`GET:/v1/combat/${encounterId}/status`);
     return result;
@@ -472,31 +457,22 @@ export class DndApiClient {
   async takeShortRest(
     characterId: string,
     hitDiceToSpend: number = 0,
-    notes?: string
+    notes?: string,
   ): Promise<ShortRestResult> {
-    const result = await this.request<ShortRestResult>(
-      `/v1/rest/characters/${characterId}/short`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ hitDiceToSpend, notes }),
-      }
-    );
+    const result = await this.request<ShortRestResult>(`/v1/rest/characters/${characterId}/short`, {
+      method: 'POST',
+      body: JSON.stringify({ hitDiceToSpend, notes }),
+    });
 
     this.invalidateCache(/\/v1\/characters\/${characterId}/);
     return result;
   }
 
-  async takeLongRest(
-    characterId: string,
-    notes?: string
-  ): Promise<LongRestResult> {
-    const result = await this.request<LongRestResult>(
-      `/v1/rest/characters/${characterId}/long`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ notes }),
-      }
-    );
+  async takeLongRest(characterId: string, notes?: string): Promise<LongRestResult> {
+    const result = await this.request<LongRestResult>(`/v1/rest/characters/${characterId}/long`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
 
     this.invalidateCache(/\/v1\/characters\/${characterId}/);
     return result;
@@ -504,19 +480,16 @@ export class DndApiClient {
 
   async getHitDice(characterId: string): Promise<HitDice[]> {
     const response = await this.request<{ hitDice: HitDice[] }>(
-      `/v1/rest/characters/${characterId}/hit-dice`
+      `/v1/rest/characters/${characterId}/hit-dice`,
     );
     return response.hitDice;
   }
 
   async spendHitDice(characterId: string, count: number): Promise<any> {
-    const result = await this.request(
-      `/v1/rest/characters/${characterId}/hit-dice/spend`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ count }),
-      }
-    );
+    const result = await this.request(`/v1/rest/characters/${characterId}/hit-dice/spend`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    });
 
     this.cache.invalidate(`GET:/v1/rest/characters/${characterId}/hit-dice`);
     return result;
@@ -528,68 +501,55 @@ export class DndApiClient {
 
   async getInventory(
     characterId: string,
-    filters?: { itemType?: string; equipped?: boolean }
+    filters?: { itemType?: string; equipped?: boolean },
   ): Promise<InventoryItem[]> {
     const params = new URLSearchParams();
     if (filters?.itemType) params.append('itemType', filters.itemType);
-    if (filters?.equipped !== undefined)
-      params.append('equipped', String(filters.equipped));
+    if (filters?.equipped !== undefined) params.append('equipped', String(filters.equipped));
 
     const query = params.toString() ? `?${params.toString()}` : '';
     const response = await this.request<{ items: InventoryItem[] }>(
-      `/v1/characters/${characterId}/inventory${query}`
+      `/v1/characters/${characterId}/inventory${query}`,
     );
 
     return response.items;
   }
 
-  async addItem(
-    characterId: string,
-    item: CreateItemRequest
-  ): Promise<InventoryItem> {
+  async addItem(characterId: string, item: CreateItemRequest): Promise<InventoryItem> {
     const response = await this.request<{ item: InventoryItem }>(
       `/v1/characters/${characterId}/inventory`,
       {
         method: 'POST',
         body: JSON.stringify(item),
-      }
+      },
     );
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/inventory`);
     return response.item;
   }
 
-  async useConsumable(
-    characterId: string,
-    itemId: string,
-    quantity: number = 1
-  ): Promise<any> {
-    const result = await this.request(
-      `/v1/characters/${characterId}/inventory/${itemId}/use`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ quantity }),
-      }
-    );
+  async useConsumable(characterId: string, itemId: string, quantity: number = 1): Promise<any> {
+    const result = await this.request(`/v1/characters/${characterId}/inventory/${itemId}/use`, {
+      method: 'POST',
+      body: JSON.stringify({ quantity }),
+    });
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/inventory`);
     return result;
   }
 
   async equipItem(characterId: string, itemId: string): Promise<void> {
-    await this.request(
-      `/v1/characters/${characterId}/inventory/${itemId}/equip`,
-      { method: 'POST' }
-    );
+    await this.request(`/v1/characters/${characterId}/inventory/${itemId}/equip`, {
+      method: 'POST',
+    });
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/inventory`);
   }
 
   async unequipItem(characterId: string, itemId: string): Promise<void> {
-    await this.request(
-      `/v1/characters/${characterId}/inventory/${itemId}/unequip`,
-      { method: 'POST' }
-    );
+    await this.request(`/v1/characters/${characterId}/inventory/${itemId}/unequip`, {
+      method: 'POST',
+    });
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/inventory`);
   }
@@ -610,32 +570,27 @@ export class DndApiClient {
     characterId: string,
     xp: number,
     source: string,
-    description?: string
+    description?: string,
   ): Promise<AwardXPResult> {
     const result = await this.request<AwardXPResult>(
       `/v1/progression/characters/${characterId}/experience/award`,
       {
         method: 'POST',
         body: JSON.stringify({ xp, source, description }),
-      }
+      },
     );
 
-    this.cache.invalidate(
-      `GET:/v1/progression/characters/${characterId}/progression`
-    );
+    this.cache.invalidate(`GET:/v1/progression/characters/${characterId}/progression`);
     return result;
   }
 
-  async levelUp(
-    characterId: string,
-    choices: LevelUpRequest
-  ): Promise<LevelUpResult> {
+  async levelUp(characterId: string, choices: LevelUpRequest): Promise<LevelUpResult> {
     const result = await this.request<LevelUpResult>(
       `/v1/progression/characters/${characterId}/level-up`,
       {
         method: 'POST',
         body: JSON.stringify(choices),
-      }
+      },
     );
 
     this.invalidateCache(/\/v1\/characters\/${characterId}/);
@@ -648,23 +603,16 @@ export class DndApiClient {
 
   async getCharacterFeatures(characterId: string): Promise<CharacterFeature[]> {
     const response = await this.request<{ features: CharacterFeature[] }>(
-      `/v1/characters/${characterId}/features`
+      `/v1/characters/${characterId}/features`,
     );
     return response.features;
   }
 
-  async useFeature(
-    characterId: string,
-    featureId: string,
-    context?: string
-  ): Promise<any> {
-    const result = await this.request(
-      `/v1/characters/${characterId}/features/${featureId}/use`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ context }),
-      }
-    );
+  async useFeature(characterId: string, featureId: string, context?: string): Promise<any> {
+    const result = await this.request(`/v1/characters/${characterId}/features/${featureId}/use`, {
+      method: 'POST',
+      body: JSON.stringify({ context }),
+    });
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/features`);
     return result;
@@ -682,7 +630,7 @@ export class DndApiClient {
     characterId: string,
     spellName: string,
     spellLevel: number,
-    slotLevel: number
+    slotLevel: number,
   ): Promise<UseSpellSlotResult> {
     const result = await this.request<UseSpellSlotResult>(
       `/v1/characters/${characterId}/spell-slots/use`,
@@ -693,24 +641,18 @@ export class DndApiClient {
           spellLevel,
           slotLevelUsed: slotLevel,
         }),
-      }
+      },
     );
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/spell-slots`);
     return result;
   }
 
-  async restoreSpellSlots(
-    characterId: string,
-    level?: number
-  ): Promise<any> {
-    const result = await this.request(
-      `/v1/characters/${characterId}/spell-slots/restore`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ level }),
-      }
-    );
+  async restoreSpellSlots(characterId: string, level?: number): Promise<any> {
+    const result = await this.request(`/v1/characters/${characterId}/spell-slots/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ level }),
+    });
 
     this.cache.invalidate(`GET:/v1/characters/${characterId}/spell-slots`);
     return result;

@@ -1,13 +1,12 @@
 /**
- * Combat lifecycle callbacks: starting/ending encounters, turn advance,
- * initiative rolls, and encounter persistence.
+ * Combat lifecycle callbacks: local encounter controls and initiative rolls.
+ * Server-backed combat state is reconciled through use-authoritative-combat-sync.
  */
 
 import { useCallback } from 'react';
 
 import { buildCharacterData } from './character-data';
 import { createCombatParticipant, sortByInitiative } from './participant-factory';
-import { saveEncounterToDatabase as saveToDb } from './persistence';
 
 import type { ReducerAction } from './combat-reducer';
 import type { Character } from '@/types/character';
@@ -38,10 +37,6 @@ export function useCombatLifecycle({
   dispatch,
   character,
 }: UseCombatLifecycleArgs): UseCombatLifecycleReturn {
-  const saveEncounterToDatabase = useCallback(async (encounter: CombatEncounter) => {
-    await saveToDb(encounter);
-  }, []);
-
   const startCombat = useCallback(
     async (sessionId: string, initialParticipants: Partial<CombatParticipant>[]) => {
       const encounterId = crypto.randomUUID();
@@ -75,33 +70,17 @@ export function useCombatLifecycle({
 
       dispatch({ type: 'SET_ENCOUNTER', encounter });
       dispatch({ type: 'START_COMBAT' });
-
-      await saveEncounterToDatabase(encounter);
     },
-    [saveEncounterToDatabase, character, dispatch],
+    [character, dispatch],
   );
 
   const endCombat = useCallback(async () => {
-    if (state.activeEncounter) {
-      const updatedEncounter = {
-        ...state.activeEncounter,
-        phase: 'conclusion' as const,
-        endTime: new Date(),
-      };
-
-      await saveEncounterToDatabase(updatedEncounter);
-    }
-
     dispatch({ type: 'END_COMBAT' });
-  }, [state.activeEncounter, saveEncounterToDatabase, dispatch]);
+  }, [dispatch]);
 
   const nextTurn = useCallback(async () => {
     dispatch({ type: 'NEXT_TURN' });
-
-    if (state.activeEncounter) {
-      await saveEncounterToDatabase(state.activeEncounter);
-    }
-  }, [state.activeEncounter, saveEncounterToDatabase, dispatch]);
+  }, [dispatch]);
 
   const rollInitiative = useCallback(
     async (participantId: string): Promise<number> => {

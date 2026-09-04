@@ -59,14 +59,14 @@ vi.mock('../../../../db/client', () => {
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     and: vi.fn((...args) => ({ type: 'and', args })),
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     inArray: vi.fn((a, b) => ({ type: 'inArray', a, b })),
     sql: Object.assign(
       vi.fn((strings, ...values) => ({ strings, values, type: 'sql' })),
-      { join: vi.fn((args) => args) }
+      { join: vi.fn((args) => args) },
     ),
     exists: vi.fn((subquery) => ({ type: 'exists', subquery })),
   };
@@ -184,10 +184,7 @@ describe('CombatInitiativeService Security', () => {
       // 3. Mock encounter existence check
       const qb3 = createMockQueryBuilder([{ id: mockEncounterId }]);
 
-      (db.select as any)
-        .mockReturnValueOnce(qb1)
-        .mockReturnValueOnce(qb2)
-        .mockReturnValueOnce(qb3);
+      (db.select as any).mockReturnValueOnce(qb1).mockReturnValueOnce(qb2).mockReturnValueOnce(qb3);
 
       // 4. Mock participant insertion with an explicit INSERT ... VALUES
       const insertQb = createMockQueryBuilder();
@@ -252,22 +249,6 @@ describe('CombatInitiativeService Security', () => {
 
       expect(result.total).toBeGreaterThanOrEqual(3); // server d20 + 2
       expect(result.total).toBeLessThanOrEqual(22);
-    });
-  });
-
-  describe('reorderInitiative Security', () => {
-    it('should throw NotFoundError if the user does not own the participant in reorderInitiative', async () => {
-      const qb = createMockQueryBuilder([]);
-      (db.select as any).mockReturnValueOnce(qb);
-
-      await expect(
-        CombatInitiativeService.reorderInitiative(
-          mockEncounterId,
-          'other-participant',
-          20,
-          mockUserId,
-        ),
-      ).rejects.toThrow(NotFoundError);
     });
   });
 

@@ -1,40 +1,82 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { IDENTICAL_FAILURE_LIMIT, failureFingerprint, runAutoTurns } from './auto';
-import { CombatStartError } from '../../src/services/combat/combat-start-failure';
 
 const DM_ENVELOPE = {
   text: 'You draw your longsword and step forward.',
-  combat_transition: 'start',
-  scene_spec: { environment: 'tavern', sessionId: 'eternal_feast_01', seed: 12345 },
-  combatants: [{ monster_id: 'srd:bandit', name: 'Aggressive Patron', count: 1 }],
+  combat_transition: 'none',
+  combat_entry_pending: {
+    trigger: 'combat_transition',
+    detail: 'combat_entry_pending',
+    sceneSpec: { environment: 'tavern', sessionId: 'eternal_feast_01', seed: 12345 },
+    sceneSpecSynthesized: false,
+    combatants: [{ monsterId: 'srd:bandit', name: 'Aggressive Patron', count: 1 }],
+  },
 };
 
-const combatStartFailure = () =>
-  Object.assign(
-    new CombatStartError(
-      500,
-      'participants',
-      'insert select error',
-      '{"error":"Failed to start combat encounter","stage":"participants"}',
-      DM_ENVELOPE,
-    ),
-    // The headless client attaches the provider that served the (successful) DM turn.
-    { provider: 'openrouter', model: 'mistral-small-creative' },
-  );
+type CombatEntryFailure = Error & {
+  category: 'transport';
+  status: number;
+  stage: 'entry';
+  detail: string;
+  responseBody: string;
+  envelope: unknown;
+  fingerprint: string;
+  toTranscriptDetail: () => Record<string, unknown>;
+};
 
-const clientThatAlwaysFailsToStartCombat = () => ({
+const combatEntryFailure = (
+  overrides: Partial<Pick<CombatEntryFailure, 'status' | 'stage' | 'detail'>> = {},
+): CombatEntryFailure & { provider: string; model: string } => {
+  const status = overrides.status ?? 409;
+  const stage = overrides.stage ?? 'entry';
+  const detail = overrides.detail ?? 'Combat entry is no longer available';
+  const responseBody = JSON.stringify({ error: detail });
+  const error = new Error(
+    `Combat entry failed (${status}, stage: ${stage}): ${detail}`,
+  ) as CombatEntryFailure;
+  Object.assign(error, {
+    name: 'CombatEntryError',
+    category: 'transport' as const,
+    status,
+    stage,
+    detail,
+    responseBody,
+    envelope: DM_ENVELOPE,
+    fingerprint: `combat_entry:${status}:${stage}:${detail}`,
+    toTranscriptDetail: () => ({
+      kind: 'combat_entry_failure',
+      status,
+      stage,
+      detail,
+      responseBody,
+      dmEnvelope: DM_ENVELOPE,
+    }),
+  });
+  return Object.assign(error, {
+    // The headless client attaches the provider that served the successful DM turn.
+    provider: 'openrouter',
+    model: 'mistral-small-creative',
+  });
+};
+
+const clientThatAlwaysFailsToEnterCombat = (): {
+  pendingRolls: readonly [];
+  availableOptions: string[];
+  roll: () => { skipped: boolean };
+  play: ReturnType<typeof vi.fn>;
+} => ({
   pendingRolls: [] as const,
   availableOptions: ['I attack the nearest patron.'],
   roll: () => ({ skipped: false }),
   play: vi.fn(async () => {
-    throw combatStartFailure();
+    throw combatEntryFailure();
   }),
 });
 
-describe('auto-play resilience to a hard combat-start failure', () => {
+describe('auto-play resilience to a hard combat-entry failure', () => {
   it(`stops after ${IDENTICAL_FAILURE_LIMIT} identical consecutive failures with a verdict`, async () => {
-    const client = clientThatAlwaysFailsToStartCombat();
+    const client = clientThatAlwaysFailsToEnterCombat();
     const errors: unknown[] = [];
 
     const summary = await runAutoTurns(client, 20, (error) => errors.push(error), {
@@ -48,11 +90,11 @@ describe('auto-play resilience to a hard combat-start failure', () => {
     expect(summary.turnsCompleted).toBe(0);
     expect(summary.turnsSkipped).toBe(20 - IDENTICAL_FAILURE_LIMIT);
     expect(summary.verdict).toContain('identical consecutive failures');
-    expect(summary.verdict).toContain('combat_start:500:participants');
+    expect(summary.verdict).toContain('combat_entry:409:entry');
   });
 
-  it('counts a failed combat start as a transport error', async () => {
-    const summary = await runAutoTurns(clientThatAlwaysFailsToStartCombat(), 5, () => {}, {
+  it('counts a failed combat entry as a transport error', async () => {
+    const summary = await runAutoTurns(clientThatAlwaysFailsToEnterCombat(), 5, () => {}, {
       delayMs: 0,
       sleep: async () => {},
     });
@@ -62,7 +104,7 @@ describe('auto-play resilience to a hard combat-start failure', () => {
   });
 
   it('records provider telemetry for turns that failed after the DM answered', async () => {
-    const summary = await runAutoTurns(clientThatAlwaysFailsToStartCombat(), 5, () => {}, {
+    const summary = await runAutoTurns(clientThatAlwaysFailsToEnterCombat(), 5, () => {}, {
       delayMs: 0,
       sleep: async () => {},
     });
@@ -103,7 +145,7 @@ describe('auto-play resilience to a hard combat-start failure', () => {
         call += 1;
         // fail, fail, succeed, fail, fail — never three in a row.
         if (call === 3) return { provider: 'openrouter', model: 'm' };
-        throw combatStartFailure();
+        throw combatEntryFailure();
       }),
     };
 
@@ -115,28 +157,24 @@ describe('auto-play resilience to a hard combat-start failure', () => {
   });
 });
 
-describe('combat start failure reporting', () => {
-  it('carries the DM envelope and the server response body for the transcript', () => {
-    const detail = combatStartFailure().toTranscriptDetail();
+describe('combat-entry failure reporting', () => {
+  it('carries the DM envelope and server response body for the transcript', () => {
+    const detail = combatEntryFailure().toTranscriptDetail();
 
     expect(detail).toMatchObject({
-      kind: 'combat_start_failure',
-      status: 500,
-      stage: 'participants',
-      detail: 'insert select error',
+      kind: 'combat_entry_failure',
+      status: 409,
+      stage: 'entry',
+      detail: 'Combat entry is no longer available',
     });
     expect(detail.dmEnvelope).toEqual(DM_ENVELOPE);
-    expect(String(detail.responseBody)).toContain('Failed to start combat encounter');
+    expect(String(detail.responseBody)).toContain('Combat entry is no longer available');
   });
 
   it('fingerprints identical failures identically and distinct ones distinctly', () => {
-    expect(failureFingerprint(combatStartFailure())).toBe(
-      failureFingerprint(combatStartFailure()),
-    );
-    expect(failureFingerprint(combatStartFailure())).not.toBe(
-      failureFingerprint(
-        new CombatStartError(500, 'map_generation', 'other reason', '', DM_ENVELOPE),
-      ),
+    expect(failureFingerprint(combatEntryFailure())).toBe(failureFingerprint(combatEntryFailure()));
+    expect(failureFingerprint(combatEntryFailure())).not.toBe(
+      failureFingerprint(combatEntryFailure({ status: 500, detail: 'other reason' })),
     );
   });
 });

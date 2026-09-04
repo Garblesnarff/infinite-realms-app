@@ -79,8 +79,8 @@ CREATE INDEX idx_combat_participants_turn_order ON combat_participants(encounter
 ```typescript
 // server/src/routes/v1/combat.ts
 
-POST   /v1/sessions/:sessionId/combat/start
-  Body: { participantIds: string[], surpriseRound?: boolean }
+POST   /v1/combat/sessions/:sessionId/enter
+  Body: { combatants: Combatant[], sceneSpec: unknown, player: CombatEntryPlayer }
   Returns: { encounterId: string, turnOrder: Participant[] }
 
 POST   /v1/combat/:encounterId/roll-initiative
@@ -89,10 +89,6 @@ POST   /v1/combat/:encounterId/roll-initiative
 
 POST   /v1/combat/:encounterId/next-turn
   Returns: { currentParticipant: Participant, round: number, turnOrder: number }
-
-PATCH  /v1/combat/:encounterId/reorder
-  Body: { participantId: string, newInitiative: number }
-  Returns: { turnOrder: Participant[] }
 
 POST   /v1/combat/:encounterId/end
   Returns: { summary: CombatSummary }
@@ -105,7 +101,6 @@ GET    /v1/combat/:encounterId/status
 ```typescript
 // src/features/combat/components/initiative-tracker/InitiativeTracker.tsx
 // - Real-time initiative order display
-// - Drag-and-drop reordering
 // - Current turn highlighting
 // - Round counter
 // - Add/remove participants mid-combat

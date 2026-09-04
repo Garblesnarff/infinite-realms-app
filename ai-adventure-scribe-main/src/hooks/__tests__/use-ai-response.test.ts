@@ -40,7 +40,6 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
-    startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyTacticalMapAction: vi.fn(),
     applyDmTacticalActions: vi.fn(),
@@ -411,9 +410,8 @@ describe('useAIResponse', () => {
 
   /**
    * #1779: the client no longer starts combat. The server's turn-pipeline entry gate creates
-   * the encounter before the turn returns, so a `start` envelope must produce NO
-   * `startStructuredCombat` call — only a re-read of authoritative state. Ending combat is
-   * still a client-issued transition and is unchanged.
+   * the encounter before the turn returns, so a `start` envelope only carries audit context.
+   * Ending combat is still a client-issued transition and is unchanged.
    */
   it('never issues a combat start, and still delegates combat end to userDataApi', async () => {
     const { AIService } = await import('@/services/ai-service');
@@ -425,7 +423,6 @@ describe('useAIResponse', () => {
       campaign: {},
       character: { id: 'ch', name: 'Rook' },
     } as any);
-    vi.mocked(userDataApi.startStructuredCombat).mockResolvedValue({ ok: true } as any);
     (AIService.chatWithDM as any).mockResolvedValue({
       text: 'A goblin ambushes!',
       combat_transition: 'start',
@@ -443,7 +440,6 @@ describe('useAIResponse', () => {
     const { result } = renderHook(() => useAIResponse());
     const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
 
-    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
     // #1779 part 4: even though the client no longer starts combat, the envelope's
     // entry signals still have to reach the transcript for auditability.
     expect(response.context).toEqual(

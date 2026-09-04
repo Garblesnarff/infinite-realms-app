@@ -12,7 +12,6 @@ import type {
   CombatAction as CombatActionType,
   ReactionOpportunity,
   ActionType,
-  DiceRoll,
 } from '@/types/combat';
 
 /**
@@ -41,7 +40,6 @@ export type ReducerAction =
   | { type: 'ADD_PARTICIPANT'; participant: CombatParticipant }
   | { type: 'REMOVE_PARTICIPANT'; participantId: string }
   | { type: 'NEXT_TURN' }
-  | { type: 'NEW_ROUND' }
   | { type: 'ADD_ACTION'; action: CombatActionType }
   | { type: 'SET_SELECTED_PARTICIPANT'; participantId?: string }
   | { type: 'SET_SELECTED_TARGET'; targetId?: string }
@@ -50,10 +48,7 @@ export type ReducerAction =
   | { type: 'ADD_REACTION_OPPORTUNITY'; opportunity: ReactionOpportunity }
   | { type: 'REMOVE_REACTION_OPPORTUNITY'; opportunityId: string }
   | { type: 'CLEAR_REACTION_OPPORTUNITIES' }
-  | { type: 'SET_PENDING_REACTION'; opportunityId: string; selectedReaction: ActionType }
-  | { type: 'REROLL_INITIATIVE'; participantId: string; newInitiative: number; roll: DiceRoll }
-  | { type: 'UPDATE_INITIATIVE_ORDER'; newOrder: string[] }
-  | { type: 'SET_GROUP_ID'; participantId: string; groupId: string };
+  | { type: 'SET_PENDING_REACTION'; opportunityId: string; selectedReaction: ActionType };
 
 /**
  * Reducer function for combat state management
@@ -107,8 +102,8 @@ export function combatReducer(state: CombatState, action: ReducerAction): Combat
       if (!state.activeEncounter) return state;
       // Insert participant in initiative order
       const newParticipants = [...state.activeEncounter.participants, action.participant].sort(
-        (a, b) => b.initiative - a.initiative ||
-          (b.initiativeBonus ?? 0) - (a.initiativeBonus ?? 0),
+        (a, b) =>
+          b.initiative - a.initiative || (b.initiativeBonus ?? 0) - (a.initiativeBonus ?? 0),
       );
       return {
         ...state,
@@ -148,14 +143,21 @@ export function combatReducer(state: CombatState, action: ReducerAction): Combat
       let checked = 0;
       while (checked < state.activeEncounter.participants.length) {
         const participant = state.activeEncounter.participants[nextIndex];
-        if (participant && participant.currentHitPoints > 0 && !participant.isDead && !participant.isUnconscious) break;
+        if (
+          participant &&
+          participant.currentHitPoints > 0 &&
+          !participant.isDead &&
+          !participant.isUnconscious
+        )
+          break;
         nextIndex = (nextIndex + 1) % state.activeEncounter.participants.length;
         if (nextIndex === 0) newRound += 1;
         checked += 1;
       }
-      const nextParticipant = checked === state.activeEncounter.participants.length
-        ? undefined
-        : state.activeEncounter.participants[nextIndex];
+      const nextParticipant =
+        checked === state.activeEncounter.participants.length
+          ? undefined
+          : state.activeEncounter.participants[nextIndex];
       return {
         ...state,
         activeEncounter: {
@@ -243,50 +245,6 @@ export function combatReducer(state: CombatState, action: ReducerAction): Combat
         pendingReactionResponse: {
           opportunityId: action.opportunityId,
           selectedReaction: action.selectedReaction,
-        },
-      };
-
-    case 'REROLL_INITIATIVE':
-      if (!state.activeEncounter) return state;
-
-      return {
-        ...state,
-        activeEncounter: {
-          ...state.activeEncounter,
-          participants: state.activeEncounter.participants.map((p) =>
-            p.id === action.participantId ? { ...p, initiative: action.newInitiative } : p,
-          ),
-        },
-      };
-
-    case 'UPDATE_INITIATIVE_ORDER': {
-      if (!state.activeEncounter) return state;
-      const reorderedParticipants = [...state.activeEncounter.participants].sort((a, b) => {
-        const aIndex = action.newOrder.indexOf(a.id);
-        const bIndex = action.newOrder.indexOf(b.id);
-        if (aIndex === -1) return 1; // Move unknown participants to end
-        if (bIndex === -1) return -1;
-        return aIndex - bIndex;
-      });
-      return {
-        ...state,
-        activeEncounter: {
-          ...state.activeEncounter,
-          participants: reorderedParticipants,
-        },
-      };
-    }
-
-    case 'SET_GROUP_ID':
-      if (!state.activeEncounter) return state;
-
-      return {
-        ...state,
-        activeEncounter: {
-          ...state.activeEncounter,
-          participants: state.activeEncounter.participants.map((p) =>
-            p.id === action.participantId ? { ...p, groupId: action.groupId } : p,
-          ),
         },
       };
 

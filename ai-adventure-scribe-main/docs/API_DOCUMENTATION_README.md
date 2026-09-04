@@ -42,20 +42,21 @@ Manage D&D 5E combat encounters with full rules support.
 
 **Example: Start Combat**
 ```bash
-POST /v1/sessions/{sessionId}/combat/start
+POST /v1/combat/sessions/{sessionId}/enter
 Content-Type: application/json
 
 {
-  "participants": [
-    {
-      "name": "Gandalf",
-      "characterId": "char-123",
-      "initiativeModifier": 2,
-      "hpCurrent": 45,
-      "hpMax": 45
-    }
+  "combatants": [
+    { "name": "Orc Warrior", "monsterId": "srd:orc", "count": 1 }
   ],
-  "surpriseRound": false
+  "sceneSpec": { "environment": "dungeon_room" },
+  "player": {
+    "characterId": "char-123",
+    "name": "Gandalf",
+    "initiativeModifier": 2,
+    "hpCurrent": 45,
+    "hpMax": 45
+  }
 }
 ```
 

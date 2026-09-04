@@ -7,7 +7,7 @@ import * as schema from '../../../../../db/schema/index';
 /**
  * Root-cause guard for the Drizzle insert-select class.
  *
- * `POST /v1/combat/sessions/:id/start` returned 500 on every call because Drizzle's
+ * The legacy structured combat start returned 500 on every call because Drizzle's
  * insert-select builder validates its projection against the target table and throws
  * synchronously:
  *

@@ -418,14 +418,6 @@ export interface RollInitiativeInput {
 }
 
 /**
- * Input for reordering initiative
- */
-export interface ReorderInitiativeInput {
-  participantId: string;
-  newInitiative: number;
-}
-
-/**
  * Input for adding participants to combat
  */
 export interface AddParticipantsInput {

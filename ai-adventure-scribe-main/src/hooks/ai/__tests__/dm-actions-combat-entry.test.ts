@@ -10,7 +10,6 @@ import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
-import { startStructuredCombatTransition } from '@/services/combat/structured-combat-transition';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));
@@ -42,9 +41,6 @@ vi.mock('@/services/user-data-api', () => ({
     clearPendingCombatIntent: vi.fn(),
     promotePendingCombatIntent: vi.fn(),
   },
-}));
-vi.mock('@/services/combat/structured-combat-transition', () => ({
-  startStructuredCombatTransition: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('@/services/combat/combat-zero-action-guard', () => ({
   enforceCombatActionOnAttempt: vi.fn().mockResolvedValue(null),
@@ -161,7 +157,6 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
 
   it('never issues a combat start, even on the exact envelope that used to trigger one', async () => {
     await invoke({ combat_transition: 'start', scene_spec: { environment: 'tavern' } });
-    expect(startStructuredCombatTransition).not.toHaveBeenCalled();
   });
 
   it('asks for initiative before seating, then queues the player action when an NPC acts first', async () => {
@@ -323,7 +318,6 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     const refresh = vi.fn().mockResolvedValue(null);
     const outcome = await invoke({ combat_transition: 'none' }, refresh);
     expect(refresh).not.toHaveBeenCalled();
-    expect(startStructuredCombatTransition).not.toHaveBeenCalled();
     expect(outcome.isInCombat).toBe(false);
   });
 });

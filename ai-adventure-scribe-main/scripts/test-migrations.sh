@@ -446,7 +446,7 @@ validate_schema() {
 
   log_section "Targeted Incident Assertions"
 
-  # The exact column whose absence 500'd every POST /v1/combat/sessions/:id/start.
+  # The exact column whose absence 500'd every structured combat start.
   assert_column combat_participant_status exhaustion_level integer
   # Inverse drift from the 20260710 fix: prod was migrated to jsonb, schema.ts
   # was not updated to match until 17ebfd47.

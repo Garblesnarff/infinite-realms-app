@@ -6,9 +6,8 @@
  * the client treat the fight as live, fetch the board the server already built, and emit map
  * state — without ever issuing a combat-start request of its own.
  *
- * The former "refused combat start" test is gone with the code path it covered: there is no
- * client-issued start left to be refused. Entry failures are now server-side and surface as
- * `combat_entry_failed` telemetry (see `combat-entry-gate.test.ts`).
+ * Retryable entry-failure coverage lives in `combat-entry-resilience.test.ts`; entry failures
+ * are server-side and surface as `combat_entry_failed` telemetry.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,7 +36,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     saveSessionMessages: vi.fn(async () => ({})),
     updateSession: vi.fn(async () => ({})),
-    startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     getActiveCombat: vi.fn(
@@ -82,7 +80,6 @@ describe('fixture headless structured combat bridge', () => {
     const events = await client.play('I draw my sword.');
 
     // Entry is the server's decision, made before this response existed.
-    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'roll_request' }),
@@ -119,7 +116,6 @@ describe('fixture headless structured combat bridge', () => {
     const client = new HeadlessGameClient('fixture-session');
     const events = await client.play('I punch the nearest living thing.');
 
-    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
     expect(events).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'map_state' })]),
     );

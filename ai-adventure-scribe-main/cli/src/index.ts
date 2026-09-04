@@ -144,7 +144,7 @@ async function selectSession(args: Args): Promise<string> {
 }
 
 /**
- * A failed combat start must leave a full record in the transcript: the DM envelope that
+ * A failed combat entry must leave a full record in the transcript: the DM envelope that
  * produced it and the server's response body. Without those, a broken run reads as a bare
  * "Error: ... 500" with nothing to diagnose.
  */

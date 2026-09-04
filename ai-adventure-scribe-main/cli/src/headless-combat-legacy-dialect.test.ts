@@ -32,7 +32,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     saveSessionMessages: vi.fn(async () => ({})),
     updateSession: vi.fn(async () => ({})),
-    startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     getActiveCombat: vi.fn(),
@@ -163,6 +162,5 @@ describe('fixture headless combat: a whole encounter in the legacy dialect', () 
 
     // And the encounter ended the only way it is allowed to: an end transition.
     expect(userDataApi.endTacticalMap).toHaveBeenCalledTimes(1);
-    expect(userDataApi.startStructuredCombat).not.toHaveBeenCalled();
   });
 });

@@ -1,13 +1,13 @@
 /**
  * Consecutive identical hard failures that end an auto-play run. Retrying a deterministic
- * server failure (a 500 on every combat start, say) just burns LLM calls and fills the
+ * server failure (a 500 on every combat entry, say) just burns LLM calls and fills the
  * transcript with the same line; three is enough to establish it is not transient.
  */
 export const IDENTICAL_FAILURE_LIMIT = 3;
 
 /**
  * Identity of a failure, for "is this the same thing again?". Errors that expose a
- * `fingerprint` (CombatStartError) define their own; everything else falls back to
+ * Transport errors can define their own `fingerprint`; everything else falls back to
  * name + message.
  */
 export function failureFingerprint(error: unknown): string {

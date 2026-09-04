@@ -30,7 +30,7 @@ bash scripts/setup-git-hooks.sh  # if it printed nothing
 **Why the rule exists.** Drizzle schema files are TypeScript. Adding a column there makes the code compile, the types check, and the tests pass — while the column does not exist in any database. Nothing fails until a real query hits real PostgreSQL. Three separate production incidents came from exactly this:
 
 - **20260710** — `character_equipment` drifted from `db/schema/inventory.ts`.
-- **20260725** — `combat_participant_status.exhaustion_level` was added to `db/schema/combat.ts` in `e10115f0` with no migration. Every `POST /v1/combat/sessions/:id/start` had 500'd since that feature shipped.
+- **20260725** — `combat_participant_status.exhaustion_level` was added to `db/schema/combat.ts` in `e10115f0` with no migration. Every structured combat start had 500'd since that feature shipped.
 - **20260725, same investigation** — a full table-by-table diff found **eleven tables** present in `db/schema/*.ts` and absent from production: spellcasting, resting, levelling/XP and class-features writes had been silently failing since each shipped. See `17ebfd47` for the writeup.
 
 Type-checking and unit tests cannot catch this class of bug, which is why it needs a CI gate of its own.

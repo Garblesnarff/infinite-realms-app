@@ -351,11 +351,11 @@ export function createTacticalMapRoutes({
        * The DM's `combat_transition: "end"` lands here, and it must end the whole encounter.
        *
        * It used to destroy only the map. That asymmetry is what run 9's "four restarts" actually
-       * were: `start` creates an encounter AND a map, `end` removed the map and left the encounter
-       * active forever, and 47205c12's idempotent-start gate — which the CLI does hit, via
-       * `/v1/combat/sessions/:id/start` — then correctly refused every subsequent start as a no-op.
+       * were: `enter` creates an encounter AND a map, `end` removed the map and left the encounter
+       * active forever, and the entry gate then correctly refused every subsequent entry as a
+       * no-op.
        * The result was combat with a live encounter and no board: `getMap()` 404s, no digest
-       * reaches the prompt, nothing can resolve, and each end/start cycle reads as a restart. The
+       * reaches the prompt, nothing can resolve, and each end/entry cycle reads as a restart. The
        * gate was never the bug; this endpoint's half-transition was.
        *
        * It then remained the one ending that recorded nothing. This is the path a DM reaches when

@@ -31,11 +31,10 @@ describe('userDataApi tactical transport', () => {
       response,
     );
     await expect(
-      userDataApi.startStructuredCombat('session id', {
-        participants: [
-          { encounterId: '', characterId: 'character-1', name: 'Rook', initiativeModifier: 0 },
-        ],
+      userDataApi.enterCombat('session id', {
+        combatants: [{ name: 'Goblin', count: 1 }],
         sceneSpec: { width: 10, height: 10 },
+        player: { characterId: 'character-1', name: 'Rook', initiativeModifier: 0 },
       }),
     ).resolves.toBe(response);
     await expect(userDataApi.endTacticalMap('session id')).resolves.toBe(response);
@@ -56,15 +55,14 @@ describe('userDataApi tactical transport', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8888/v1/combat/sessions/session%20id/start',
+      'http://localhost:8888/v1/combat/sessions/session%20id/enter',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
         body: JSON.stringify({
-          participants: [
-            { encounterId: '', characterId: 'character-1', name: 'Rook', initiativeModifier: 0 },
-          ],
+          combatants: [{ name: 'Goblin', count: 1 }],
           sceneSpec: { width: 10, height: 10 },
+          player: { characterId: 'character-1', name: 'Rook', initiativeModifier: 0 },
         }),
       },
     );

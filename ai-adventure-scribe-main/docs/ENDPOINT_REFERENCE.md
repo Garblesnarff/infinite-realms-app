@@ -19,10 +19,9 @@ Authorization: Bearer <token>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/v1/sessions/{sessionId}/combat/start` | Start new combat encounter ✅ |
+| POST | `/v1/combat/sessions/{sessionId}/enter` | Enter a pending combat encounter ✅ |
 | POST | `/v1/combat/{encounterId}/roll-initiative` | Roll initiative for participant |
 | POST | `/v1/combat/{encounterId}/next-turn` | Advance to next turn |
-| PATCH | `/v1/combat/{encounterId}/reorder` | Manually adjust initiative order |
 | POST | `/v1/combat/{encounterId}/end` | End combat encounter |
 | GET | `/v1/combat/{encounterId}/status` | Get current combat state ✅ |
 

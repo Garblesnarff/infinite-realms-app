@@ -28,7 +28,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     saveSessionMessages: vi.fn(async () => ({})),
     updateSession: vi.fn(async () => ({})),
-    startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     getActiveCombat: vi.fn(),

@@ -35,10 +35,6 @@ vi.mock('@/services/user-data-api', () => ({
     resolveAoECast: vi.fn(),
   },
 }));
-vi.mock('@/services/combat/structured-combat-transition', () => ({
-  startStructuredCombatTransition: vi.fn().mockResolvedValue({ ok: true }),
-}));
-
 const ACTIVE_ENCOUNTER = { id: 'encounter-1', phase: 'active' };
 
 const TACTICAL_CONTEXT = `ACTIVE the-seeker

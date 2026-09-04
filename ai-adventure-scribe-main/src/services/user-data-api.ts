@@ -4,7 +4,6 @@ import type { SessionListApiRow } from '../../shared/session-list-contract';
 import type {
   CombatEntryPayload,
   PendingCombatIntentPayload,
-  StructuredCombatStartPayload,
 } from '@/services/combat/structured-combat-payload';
 
 export type {
@@ -86,9 +85,6 @@ export type TacticalMapActionPayload = {
   changes?: Record<string, unknown> | null;
 };
 
-// Defined next to the builder that produces it so server-side tests can share both.
-export type { StructuredCombatStartPayload };
-
 export type AoECastPayload = {
   phase: 'propose' | 'resolve';
   actorId: string;
@@ -96,47 +92,6 @@ export type AoECastPayload = {
   origin: { x: number; y: number };
   direction: { x: number; y: number } | null;
   slotLevel: number | null;
-};
-
-export type CombatPersistencePayload = {
-  sessionId: string;
-  status: 'active' | 'paused' | 'completed';
-  currentRound: number;
-  currentTurnOrder: number;
-  location: string | null;
-  startedAt: string;
-  participants: Array<{
-    id: string;
-    characterId: string | null;
-    npcId: string | null;
-    name: string;
-    participantType: 'player' | 'npc' | 'enemy' | 'monster';
-    initiative: number;
-    initiativeModifier: number;
-    turnOrder: number;
-    isActive: boolean;
-    armorClass: number;
-    maxHp: number;
-    speed: number;
-    damageResistances: string[];
-    damageImmunities: string[];
-    damageVulnerabilities: string[];
-  }>;
-  statuses: Array<{
-    participantId: string;
-    currentHp: number;
-    maxHp: number;
-    tempHp: number;
-    isConscious: boolean;
-    deathSavesSuccesses: number;
-    deathSavesFailures: number;
-  }>;
-  conditions: Array<{
-    participantId: string;
-    conditionName: string;
-    durationRounds: number | null;
-    source: string | null;
-  }>;
 };
 
 export type CombatParticipantStatusResponse = {
@@ -328,15 +283,6 @@ export const userDataApi = {
     requestResponse(
       `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(entityId)}`,
     ),
-  startStructuredCombat: (
-    sessionId: string,
-    payload: StructuredCombatStartPayload,
-  ): Promise<Response> =>
-    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }),
   enterCombat: (sessionId: string, payload: CombatEntryPayload): Promise<Response> =>
     requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/enter`, {
       method: 'POST',
@@ -359,21 +305,6 @@ export const userDataApi = {
   promotePendingCombatIntent: (encounterId: string): Promise<Response> =>
     requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent/promote`, {
       method: 'POST',
-    }),
-  saveCombatEncounter: (
-    encounterId: string,
-    payload: CombatPersistencePayload,
-  ): Promise<{
-    ok: boolean;
-    encounterId: string;
-    participants: number;
-    statuses: number;
-    conditions: number;
-    skippedConditions: string[];
-  }> =>
-    request(`/v1/combat/encounters/${encodeURIComponent(encounterId)}/persistence`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
     }),
   logCombatDamage: (
     encounterId: string,

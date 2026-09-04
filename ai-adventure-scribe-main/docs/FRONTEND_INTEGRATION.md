@@ -112,19 +112,24 @@ The combat system handles D&D 5E combat encounters with initiative tracking, tur
 
 ### Starting a Combat Encounter
 
-**Endpoint:** `POST /v1/sessions/{sessionId}/combat/start`
+**Endpoint:** `POST /v1/combat/sessions/{sessionId}/enter`
 
 ```typescript
-interface StartCombatRequest {
-  participants: Array<{
+interface CombatEntryRequest {
+  combatants: Array<{
     name: string;
-    characterId?: string;
-    npcId?: string;
+    monsterId?: string;
+    count?: number;
+  }>;
+  sceneSpec: unknown;
+  player: {
+    characterId?: string | null;
+    name: string;
     initiativeModifier: number;
     hpCurrent?: number;
     hpMax?: number;
-  }>;
-  surpriseRound?: boolean;
+  };
+  playerInitiativeRoll?: number;
 }
 
 interface CombatState {
@@ -144,28 +149,21 @@ interface CombatState {
   currentParticipant: CombatParticipant | null;
 }
 
-// Example: Start combat with party and enemies
-async function startCombat(sessionId: string): Promise<CombatState> {
-  return apiRequest<CombatState>(`/v1/sessions/${sessionId}/combat/start`, {
+// Example: Enter combat after the server has returned a pending combat handoff
+async function enterCombat(sessionId: string): Promise<CombatState> {
+  return apiRequest<CombatState>(`/v1/combat/sessions/${sessionId}/enter`, {
     method: 'POST',
     body: JSON.stringify({
-      participants: [
-        {
-          name: 'Aragorn',
-          characterId: 'char-123',
-          initiativeModifier: 2,
-          hpCurrent: 45,
-          hpMax: 45,
-        },
-        {
-          name: 'Orc Warrior',
-          npcId: 'npc-456',
-          initiativeModifier: 0,
-          hpCurrent: 30,
-          hpMax: 30,
-        },
-      ],
-      surpriseRound: false,
+      combatants: [{ name: 'Orc Warrior', monsterId: 'srd:orc', count: 1 }],
+      sceneSpec: { environment: 'forest', size: 'medium' },
+      player: {
+        characterId: 'char-123',
+        name: 'Aragorn',
+        initiativeModifier: 2,
+        hpCurrent: 45,
+        hpMax: 45,
+      },
+      playerInitiativeRoll: 14,
     }),
   });
 }

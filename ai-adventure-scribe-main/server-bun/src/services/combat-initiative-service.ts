@@ -354,66 +354,6 @@ export class CombatInitiativeService {
   }
 
   /**
-   * Manually reorder initiative for a participant
-   * @param encounterId - Combat encounter ID
-   * @param participantId - Participant ID
-   * @param newInitiative - New initiative value
-   */
-  static async reorderInitiative(
-    encounterId: string,
-    participantId: string,
-    newInitiative: number,
-    userId?: string,
-  ): Promise<void> {
-    if (userId) {
-      // 🛡️ Sentinel: Replaced generic encounter access check with specific participant ownership check.
-      // This prevents unauthorized manual adjustment of initiative for other participants.
-      await verifyParticipantOwnership(participantId, encounterId, userId);
-    }
-
-    // Update participant initiative
-    // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
-    const [updated] = await db
-      .update(combatParticipants)
-      .set({ initiative: newInitiative, updatedAt: new Date() })
-      .where(
-        and(
-          eq(combatParticipants.id, participantId),
-          eq(combatParticipants.encounterId, encounterId),
-          userId
-            ? exists(
-                db
-                  .select({ one: sql`1` })
-                  .from(combatEncounters)
-                  .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-                  .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
-                  .where(
-                    and(
-                      eq(combatEncounters.id, combatParticipants.encounterId),
-                      or(
-                        eq(campaigns.userId, userId),
-                        eq(characters.userId, userId),
-                        eq(characters.ownerId, userId),
-                      ),
-                    ),
-                  ),
-              )
-            : sql`true`,
-        ),
-      )
-      .returning();
-
-    if (!updated) {
-      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Participant', participantId);
-    }
-
-    // Recalculate turn order
-    await this.calculateTurnOrder(encounterId);
-  }
-
-  /**
    * Remove a participant from combat
    */
   static async removeParticipant(participantId: string, userId?: string): Promise<void> {

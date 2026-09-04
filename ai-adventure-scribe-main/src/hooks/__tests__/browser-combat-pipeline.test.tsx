@@ -41,7 +41,6 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
-    startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
@@ -132,6 +131,7 @@ const combatPayload = (status: 'active' | 'completed') => ({
 
 /** Scripts `/v1/combat/sessions/:id/active` for the whole suite. */
 let activeResponse: { status: 'active' | 'completed' } | null = null;
+let fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <CombatProvider sessionId={SESSION_ID}>{children}</CombatProvider>
@@ -147,15 +147,18 @@ const broadcastCombatState = (status: 'active' | 'completed') =>
 beforeEach(() => {
   vi.clearAllMocks();
   activeResponse = null;
+  fetchCalls = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
+      fetchCalls.push({ url: String(url), init });
       if (!String(url).includes('/active')) throw new Error(`unexpected fetch: ${url}`);
       if (!activeResponse) return { ok: false, status: 404, json: async () => ({}) };
+      const status = activeResponse.status;
       return {
         ok: true,
         status: 200,
-        json: async () => ({ combat: combatPayload(activeResponse.status) }),
+        json: async () => ({ combat: combatPayload(status) }),
       };
     }),
   );
@@ -213,7 +216,7 @@ describe('browser combat state follows server truth', () => {
     expect(result.current.state.activeEncounter).toBeNull();
   });
 
-  it('leaves the manual combat button path alone', async () => {
+  it('keeps the manual combat path local without issuing persistence POSTs', async () => {
     const { result } = renderHook(() => useCombat(), { wrapper });
     await waitFor(() => expect(fetch).toHaveBeenCalled());
 
@@ -221,6 +224,7 @@ describe('browser combat state follows server truth', () => {
       await result.current.startCombat('current-session', [{ name: 'Rook' }]);
     });
     expect(result.current.state.isInCombat).toBe(true);
+    expect(fetchCalls.some(({ init }) => init?.method === 'POST')).toBe(false);
 
     // The server has never heard of a client-minted encounter, so its silence must not end it.
     await act(async () => {

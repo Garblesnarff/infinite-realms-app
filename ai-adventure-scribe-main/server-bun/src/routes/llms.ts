@@ -81,7 +81,7 @@ Base URL: ${siteUrl}
 - POST /v1/llm/chat - Send message to AI game master (streaming response)
 
 ### Combat
-- POST /v1/combat/sessions/:sessionId/start - Start encounter
+- POST /v1/combat/sessions/:sessionId/enter - Enter encounter after the server-side combat gate
 - POST /v1/combat/:encounterId/roll-initiative - Roll initiative
 - POST /v1/combat/:encounterId/attack - Make attack roll
 - POST /v1/combat/:encounterId/intent - Submit combat intent (damage/healing applied server-side)

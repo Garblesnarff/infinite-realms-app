@@ -60,7 +60,7 @@ Comprehensive API documentation has been implemented for **64+ D&D 5E mechanics 
 ##### Combat Module (21+ endpoints)
 | Endpoint | Method | Description | Status |
 |----------|--------|-------------|--------|
-| `/v1/sessions/{sessionId}/combat/start` | POST | Start combat encounter | ✅ Fully Documented |
+| `/v1/combat/sessions/{sessionId}/enter` | POST | Enter a pending combat encounter | ✅ Fully Documented |
 | `/v1/combat/{encounterId}/status` | GET | Get combat state | ✅ Fully Documented |
 | `/v1/combat/{encounterId}/attack` | POST | Resolve attack | ✅ Fully Documented |
 | `/v1/combat/{encounterId}/roll-initiative` | POST | Roll initiative | ⚠️ Partially |
