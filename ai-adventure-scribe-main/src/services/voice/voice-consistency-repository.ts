@@ -2,13 +2,13 @@
  * Voice Consistency Repository
  *
  * Data access layer for character-to-voice mappings.
- * Handles Supabase interactions for persistent voice consistency.
+ * Handles authenticated server API interactions for persistent voice consistency.
  *
  * @author AI Dungeon Master Team
  */
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 
 export class VoiceConsistencyRepository {
   /**
@@ -26,19 +26,7 @@ export class VoiceConsistencyRepository {
     }>
   > {
     try {
-      // ⚡ Bolt: Using explicit column selection to avoid over-fetching
-      // large JSONB metadata fields when listing mappings.
-      const { data, error } = await supabase
-        .from('character_voice_mappings')
-        .select(
-          'id, character_name, voice_category, voice_id, last_used, updated_at, appearance_count',
-        )
-        .eq('session_id', sessionId);
-
-      if (error) {
-        logger.error('Error fetching voice mappings:', error);
-        return [];
-      }
+      const data = await issue1784Api.getVoiceMappings(sessionId);
 
       if (!data || data.length === 0) {
         logger.debug(`No voice mappings found for session: ${sessionId}`);
@@ -71,19 +59,12 @@ export class VoiceConsistencyRepository {
     initialCount: number = 1,
   ): Promise<void> {
     try {
-      const now = new Date().toISOString();
-      const { error } = await supabase.from('character_voice_mappings').insert({
-        session_id: sessionId,
+      await issue1784Api.upsertVoiceMapping(sessionId, {
         character_name: characterName,
         voice_category: voiceCategory,
         voice_id: voiceId,
         appearance_count: initialCount,
-        first_appearance: now,
-        last_used: now,
-        metadata: {},
       });
-
-      if (error) throw error;
 
       logger.info(
         `💾 Saved voice mapping: ${characterName} -> ${voiceCategory} (count: ${initialCount})`,
@@ -100,18 +81,7 @@ export class VoiceConsistencyRepository {
     try {
       // ⚡ Bolt: Optimized to perform update in a single round-trip by using the pre-calculated count.
       // This eliminates the redundant SELECT query previously performed here.
-      const now = new Date().toISOString();
-
-      const { error } = await supabase
-        .from('character_voice_mappings')
-        .update({
-          appearance_count: newCount,
-          last_used: now,
-          updated_at: now,
-        })
-        .eq('id', mappingId);
-
-      if (error) throw error;
+      await issue1784Api.updateVoiceMapping(mappingId, { appearance_count: newCount });
 
       logger.debug(`📊 Updated usage for mapping: ${mappingId} (count: ${newCount})`);
     } catch (error) {

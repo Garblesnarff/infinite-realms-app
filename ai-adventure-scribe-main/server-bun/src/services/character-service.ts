@@ -33,6 +33,8 @@ import { InternalServerError } from '../lib/errors.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * Narrow the loose equipment records the route accepts down to the three fields the armour
  * class rule reads. Written here rather than trusting the shape because the body is validated
@@ -330,6 +332,7 @@ export class CharacterService {
     characterId: string,
     userId: string,
     data: Partial<NewCharacter>,
+    equipment?: Array<Record<string, unknown>>,
   ): Promise<Character | null> {
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
     const {
@@ -340,36 +343,119 @@ export class CharacterService {
       ...safeUpdates
     } = data as any;
 
-    const [updated] = await db
-      .update(characters)
-      .set({
-        ...safeUpdates,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(characters.id, characterId),
-          or(
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId),
-            exists(
-              db
-                .select({ one: sql`1` })
-                .from(characterPermissions)
-                .where(
-                  and(
-                    eq(characterPermissions.characterId, characters.id),
-                    eq(characterPermissions.userId, userId),
-                    inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+    return db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(characters)
+        .set({
+          ...safeUpdates,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(characters.id, characterId),
+            or(
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+              exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(characterPermissions)
+                  .where(
+                    and(
+                      eq(characterPermissions.characterId, characters.id),
+                      eq(characterPermissions.userId, userId),
+                      inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                    ),
                   ),
-                ),
+              ),
             ),
           ),
-        ),
-      )
-      .returning();
+        )
+        .returning();
 
-    return updated || null;
+      if (!updated || !equipment) return updated || null;
+
+      for (const item of equipment) {
+        const itemName = String(item.item_name || '').trim();
+        const validItemId = typeof item.id === 'string' && UUID_PATTERN.test(item.id);
+        let existing = validItemId
+          ? await tx
+              .select({ id: characterEquipment.id })
+              .from(characterEquipment)
+              .where(
+                and(
+                  eq(characterEquipment.id, item.id as string),
+                  eq(characterEquipment.characterId, characterId),
+                ),
+              )
+              .limit(1)
+          : [];
+
+        if (!existing[0]) {
+          existing = await tx
+            .select({ id: characterEquipment.id })
+            .from(characterEquipment)
+            .where(
+              and(
+                eq(characterEquipment.characterId, characterId),
+                eq(characterEquipment.itemName, itemName),
+              ),
+            )
+            .limit(1);
+        }
+
+        const textValue = (value: unknown): string | null => {
+          if (value === undefined || value === null) return null;
+          return Array.isArray(value) ? JSON.stringify(value) : String(value);
+        };
+        const magicEffects =
+          typeof item.magic_effects === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(item.magic_effects);
+                } catch {
+                  return item.magic_effects;
+                }
+              })()
+            : (item.magic_effects ?? null);
+        const equipmentValues = {
+          itemName,
+          itemType: item.item_type == null ? 'equipment' : String(item.item_type),
+          quantity: item.quantity == null ? 1 : Math.trunc(Number(item.quantity)),
+          equipped: Boolean(item.equipped),
+          isMagic: Boolean(item.is_magic),
+          magicBonus: item.magic_bonus == null ? 0 : Math.trunc(Number(item.magic_bonus)),
+          magicProperties: textValue(item.magic_properties),
+          requiresAttunement: Boolean(item.requires_attunement),
+          isAttuned: Boolean(item.is_attuned),
+          attunementRequirements: textValue(item.attunement_requirements),
+          magicItemType: textValue(item.magic_item_type),
+          magicItemRarity:
+            item.magic_item_rarity == null ? 'common' : String(item.magic_item_rarity),
+          magicEffects,
+          updatedAt: new Date(),
+        };
+
+        if (existing[0]) {
+          await tx
+            .update(characterEquipment)
+            .set(equipmentValues)
+            .where(
+              and(
+                eq(characterEquipment.id, existing[0].id),
+                eq(characterEquipment.characterId, characterId),
+              ),
+            );
+        } else {
+          await tx.insert(characterEquipment).values({
+            characterId,
+            ...equipmentValues,
+          });
+        }
+      }
+
+      return updated;
+    });
   }
 
   /**

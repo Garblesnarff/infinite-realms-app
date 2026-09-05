@@ -11,8 +11,10 @@ import { SAFETY_ENABLED } from './types';
 
 import type { ChatMessage } from '@/types/game';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { Issue1784ApiError, issue1784Api } from '@/services/issue-1784-api';
+
+const SESSION_CONFIG_FALLBACK_CODES = ['PGRST205', 'PGRST103', '42P01'] as const;
 
 export class SafetyCommandProcessor {
   private sessionId: string;
@@ -33,27 +35,25 @@ export class SafetyCommandProcessor {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('session_config')
-        .select('*')
-        .eq('session_id', this.sessionId)
-        .single();
-
-      if (error) {
-        const code = (error as { code?: string }).code;
-        const status = (error as { status?: number }).status;
-        if (code === 'PGRST205' || code === 'PGRST103' || code === '42P01' || status === 404) {
-          logger.warn('🛡️ [Safety] session_config table not available, using defaults');
-          return null;
-        }
-        logger.warn('🛡️ [Safety] Failed to load session config, using defaults:', error);
-        return null;
-      }
+      const data = await issue1784Api.getSessionConfig<SessionConfig>(this.sessionId);
 
       this.safetyConfig = data as SessionConfig;
       this.configCacheExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
       return this.safetyConfig;
     } catch (error) {
+      const code = error instanceof Issue1784ApiError ? error.code : undefined;
+      const status = error instanceof Issue1784ApiError ? error.status : undefined;
+      const isHandledCode =
+        typeof code === 'string' &&
+        (SESSION_CONFIG_FALLBACK_CODES as readonly string[]).includes(code);
+      if (isHandledCode || status === 404) {
+        logger.warn('🛡️ [Safety] session_config table not available, using defaults');
+        return null;
+      }
+      if (error instanceof Issue1784ApiError) {
+        logger.warn('🛡️ [Safety] Failed to load session config, using defaults:', error);
+        return null;
+      }
       logger.error('🛡️ [Safety] Error loading session config:', error);
       return null;
     }

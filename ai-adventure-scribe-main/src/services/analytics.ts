@@ -1,5 +1,6 @@
 import { featureFlags } from '@/config/featureFlags';
 import { logger } from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 
 // Minimal type for analytics payloads
 export type AnalyticsPayload = Record<string, unknown>;
@@ -106,15 +107,11 @@ export const analytics = {
       timestamp: new Date().toISOString(),
     });
 
-    // Track to database for metrics (client-side call)
+    // Track to the authenticated server route for metrics.
     try {
-      // Import supabase client dynamically to avoid circular dependencies
-      const { supabase } = await import('@/integrations/supabase/client');
-
-      await supabase.from('character_creation_metrics').insert({
+      await issue1784Api.recordCharacterCreationFlow({
         flow,
         campaign_id: info.campaignId || null,
-        user_id: info.userId || null,
       });
     } catch (error) {
       // Silently fail - analytics should not break the app

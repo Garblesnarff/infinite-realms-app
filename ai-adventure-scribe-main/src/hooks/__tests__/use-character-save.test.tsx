@@ -5,19 +5,6 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    rpc: vi.fn(),
-    from: vi.fn(() => ({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockResolvedValue({ error: null }),
-      upsert: vi.fn().mockResolvedValue({ error: null }),
-      select: vi.fn().mockReturnThis(),
-    })),
-  },
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -77,7 +64,6 @@ import type { AbilityScores, Character } from '@/types/character';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';
 import { userDataApi } from '@/services/user-data-api';
@@ -149,13 +135,6 @@ describe('useCharacterSave', () => {
     (characterBackgroundGenerator.generateCharacterBackground as any).mockResolvedValue(
       'generated-url',
     );
-    (supabase.from as any).mockImplementation(() => ({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockResolvedValue({ error: null }),
-      upsert: vi.fn().mockResolvedValue({ error: null }),
-      select: vi.fn().mockReturnThis(),
-    }));
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
@@ -211,12 +190,16 @@ describe('useCharacterSave', () => {
         id: 'existing-id',
         name: 'Updated Hero',
         abilityScores: makeAbilityScores(12),
+        inventory: [{ itemId: 'Longsword', itemType: 'weapon', quantity: 1, equipped: true }],
       }),
     );
 
     expect(userDataApi.updateCharacter).toHaveBeenCalledWith(
       'existing-id',
-      expect.objectContaining({ name: 'Updated Hero' }),
+      expect.objectContaining({
+        name: 'Updated Hero',
+        equipment: [expect.objectContaining({ item_name: 'Longsword' })],
+      }),
     );
     expect(userDataApi.updateCharacterStats).toHaveBeenCalledWith(
       'existing-id',
@@ -271,22 +254,15 @@ describe('useCharacterSave', () => {
     );
   });
 
-  it('should continue if stats or equipment save fails during update', async () => {
+  it('should continue if stats save fails during update', async () => {
     const character = makeCharacter({
       id: 'existing-id',
       name: 'Updated Hero',
       inventory: [{ itemId: 'item-1' }],
     });
 
-    (supabase.from as any).mockImplementation((table: string) => {
-      if (table === 'characters') {
-        return {
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          or: vi.fn().mockResolvedValue({ error: null }),
-        };
-      }
-      return { upsert: vi.fn().mockResolvedValue({ error: { message: 'Stats failed' } }) };
+    (userDataApi.updateCharacterStats as any).mockResolvedValueOnce({
+      error: { message: 'Stats failed' },
     });
 
     const savedCharacter = await save(character);
@@ -296,6 +272,30 @@ describe('useCharacterSave', () => {
     expect(mockToast).not.toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Save Error',
+      }),
+    );
+  });
+
+  it('should surface an atomic character and equipment save failure during update', async () => {
+    const character = makeCharacter({
+      id: 'existing-id',
+      name: 'Updated Hero',
+      inventory: [{ itemId: 'item-1' }],
+    });
+
+    (userDataApi.updateCharacter as any).mockRejectedValueOnce(new Error('Equipment save failed'));
+
+    const savedCharacter = await save(character);
+
+    expect(savedCharacter).toBeNull();
+    expect(userDataApi.updateCharacter).toHaveBeenCalledWith(
+      'existing-id',
+      expect.objectContaining({ equipment: [expect.objectContaining({ item_name: 'item-1' })] }),
+    );
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Save Error',
+        description: expect.stringContaining('Equipment save failed'),
       }),
     );
   });

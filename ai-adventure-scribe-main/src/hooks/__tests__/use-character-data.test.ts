@@ -2,24 +2,15 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// useCharacterData is a hybrid: character fetching moved from supabase.from('characters') to
-// userDataApi.getCharacter() (the Bun server's REST API client), while character_equipment is
-// still queried directly via supabase.from('character_equipment') - see
-// src/hooks/use-character-data.ts. Both need to be mocked. eq() resolves directly (no
-// .maybeSingle()) since the equipment query is awaited as part of Promise.all without a
-// terminal single-row call.
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-    })),
-  },
-}));
-
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCharacter: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: {
+    getCharacterEquipment: vi.fn(),
   },
 }));
 
@@ -66,8 +57,8 @@ import { useCharacterData } from '../use-character-data';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 import { isValidUUID } from '@/utils/validation';
 
@@ -81,6 +72,7 @@ describe('useCharacterData', () => {
     (useAuth as any).mockReturnValue({ user: { id: mockUserId } });
     (useToast as any).mockReturnValue({ toast: mockToast });
     (isValidUUID as any).mockReturnValue(true);
+    vi.mocked(issue1784Api.getCharacterEquipment).mockResolvedValue([]);
   });
 
   it('should fetch and transform character data successfully', async () => {
@@ -107,13 +99,9 @@ describe('useCharacterData', () => {
     };
 
     vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({
-        data: [{ item_name: 'Longsword', id: 'item-1', quantity: 1, equipped: true }],
-        error: null,
-      }),
-    });
+    vi.mocked(issue1784Api.getCharacterEquipment).mockResolvedValue([
+      { item_name: 'Longsword', id: 'item-1', quantity: 1, equipped: true } as any,
+    ]);
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
 
@@ -133,7 +121,7 @@ describe('useCharacterData', () => {
     expect(result.current.character?.inventory[0].equipped).toBe(true);
 
     expect(userDataApi.getCharacter).toHaveBeenCalledWith(mockCharacterId);
-    expect(supabase.from).toHaveBeenCalledWith('character_equipment');
+    expect(issue1784Api.getCharacterEquipment).toHaveBeenCalledWith(mockCharacterId);
   });
 
   it('should handle invalid character ID UUID', async () => {
@@ -239,13 +227,7 @@ describe('useCharacterData', () => {
     };
 
     vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
-    // Explicitly reset the equipment query mock - vi.clearAllMocks() in beforeEach clears
-    // call history but not a prior test's supabase.from().mockReturnValue() implementation,
-    // so without this the "fetch and transform" test's Longsword equipment mock would leak in.
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-    });
+    vi.mocked(issue1784Api.getCharacterEquipment).mockResolvedValue([]);
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
 

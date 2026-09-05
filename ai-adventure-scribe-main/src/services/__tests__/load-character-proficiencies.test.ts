@@ -29,13 +29,8 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: { getCharacter, getSession },
 }));
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-    })),
-  },
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: { getCharacterEquipment: vi.fn().mockResolvedValue([]) },
 }));
 
 vi.mock('../characterSpellApi', () => ({

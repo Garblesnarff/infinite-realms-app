@@ -22,15 +22,13 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock Supabase
-const mockInsert = vi.fn().mockResolvedValue({ error: null });
-const mockFrom = vi.fn().mockReturnValue({
-  insert: mockInsert,
-});
+const { mockRecordCharacterCreationFlow } = vi.hoisted(() => ({
+  mockRecordCharacterCreationFlow: vi.fn().mockResolvedValue(undefined),
+}));
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: (table: string) => mockFrom(table),
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: {
+    recordCharacterCreationFlow: mockRecordCharacterCreationFlow,
   },
 }));
 
@@ -59,29 +57,37 @@ describe('analytics service', () => {
     });
 
     it('should prioritize characterTheme', () => {
-      expect(analytics.detectArtStyle({
-        characterTheme: 'grimdark',
-        campaignGenre: 'high fantasy'
-      })).toBe('grimdark');
+      expect(
+        analytics.detectArtStyle({
+          characterTheme: 'grimdark',
+          campaignGenre: 'high fantasy',
+        }),
+      ).toBe('grimdark');
     });
 
     it('should use campaignGenre if characterTheme is missing', () => {
-      expect(analytics.detectArtStyle({
-        campaignGenre: 'cyberpunk'
-      })).toBe('cyberpunk');
+      expect(
+        analytics.detectArtStyle({
+          campaignGenre: 'cyberpunk',
+        }),
+      ).toBe('cyberpunk');
     });
 
     it('should return unknown if both are empty/whitespace', () => {
-      expect(analytics.detectArtStyle({
-        characterTheme: '  ',
-        campaignGenre: ''
-      })).toBe('unknown');
+      expect(
+        analytics.detectArtStyle({
+          characterTheme: '  ',
+          campaignGenre: '',
+        }),
+      ).toBe('unknown');
     });
 
     it('should handle non-string inputs gracefully', () => {
-      expect(analytics.detectArtStyle({
-        characterTheme: 123 as any,
-      })).toBe('123');
+      expect(
+        analytics.detectArtStyle({
+          characterTheme: 123 as any,
+        }),
+      ).toBe('123');
     });
   });
 
@@ -210,33 +216,34 @@ describe('analytics service', () => {
   });
 
   describe('trackCharacterCreationFlow', () => {
-    it('should track to analytics and Supabase', async () => {
+    it('should track to analytics and the authenticated server route', async () => {
       const trackSpy = vi.spyOn(analytics, 'track');
 
       await analytics.trackCharacterCreationFlow('new', { campaignId: 'c1', userId: 'u1' });
 
-      expect(trackSpy).toHaveBeenCalledWith('character_creation_flow', expect.objectContaining({
-        flow: 'new',
-        campaignId: 'c1',
-      }));
+      expect(trackSpy).toHaveBeenCalledWith(
+        'character_creation_flow',
+        expect.objectContaining({
+          flow: 'new',
+          campaignId: 'c1',
+        }),
+      );
 
-      expect(mockFrom).toHaveBeenCalledWith('character_creation_metrics');
-      expect(mockInsert).toHaveBeenCalledWith({
+      expect(mockRecordCharacterCreationFlow).toHaveBeenCalledWith({
         flow: 'new',
         campaign_id: 'c1',
-        user_id: 'u1',
       });
     });
 
-    it('should handle Supabase errors gracefully', async () => {
+    it('should handle server route errors gracefully', async () => {
       const { logger } = await import('@/lib/logger');
-      mockInsert.mockRejectedValueOnce(new Error('DB Error'));
+      mockRecordCharacterCreationFlow.mockRejectedValueOnce(new Error('DB Error'));
 
       await analytics.trackCharacterCreationFlow('legacy');
 
       expect(logger.warn).toHaveBeenCalledWith(
         'Failed to track character creation flow to database',
-        expect.objectContaining({ error: expect.any(Error) })
+        expect.objectContaining({ error: expect.any(Error) }),
       );
     });
   });

@@ -2,8 +2,8 @@ import { SAFETY_ENABLED } from './types';
 
 import type { SafetyCommand } from './types';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 
 /** Minimal session snapshot passed through to safety audit logging. */
 export interface SafetySessionState {
@@ -21,22 +21,16 @@ export class SafetyAuditService {
     playerMessage?: string,
     aiResponse?: string,
     sessionState?: SafetySessionState,
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
     if (!SAFETY_ENABLED) {
       return;
     }
     try {
-      // SECURITY: Use provided userId instead of Supabase auth (WorkOS is used)
-      if (!userId) {
-        logger.warn('🛡️ [Safety Audit] No userId provided for audit log - this is insecure');
-        return;
-      }
-
-      // Get session info for audit context
+      // The server route authenticates the request and takes the user identity
+      // from the verified WorkOS subject. Keep the legacy argument for callers
+      // that still provide it, but never send it as a client-controlled field.
       const auditData = {
-        session_id: sessionId,
-        user_id: userId,
         event_type: command.type,
         triggered_by: command.triggeredBy,
         trigger_word: command.triggerWord,
@@ -57,19 +51,13 @@ export class SafetyAuditService {
         session_turn_number: sessionState?.turn_count || 0,
       };
 
-      // Insert into audit trail
-      const { error: insertError } = await supabase.from('safety_audit_trail').insert(auditData);
-
-      if (insertError) {
-        logger.error('🛡️ [Safety Audit] Failed to log safety event:', insertError);
-      } else {
-        logger.info('🛡️ [Safety Audit] Safety event logged successfully:', {
-          sessionId: sessionId,
-          commandType: command.type,
-          triggeredBy: command.triggeredBy,
-          autoTriggered: command.autoTriggered,
-        });
-      }
+      await issue1784Api.recordSafetyEvent(sessionId, auditData);
+      logger.info('🛡️ [Safety Audit] Safety event logged successfully:', {
+        sessionId: sessionId,
+        commandType: command.type,
+        triggeredBy: command.triggeredBy,
+        autoTriggered: command.autoTriggered,
+      });
 
       // Also log locally for debugging
       logger.info('🛡️ [Safety Audit Local]', {

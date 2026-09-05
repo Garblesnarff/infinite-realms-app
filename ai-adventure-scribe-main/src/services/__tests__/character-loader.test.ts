@@ -7,9 +7,10 @@ import { characterSpellService } from '../characterSpellApi';
 
 import { supabase } from '@/integrations/supabase/client';
 
-const { getCharacter, getSession } = vi.hoisted(() => ({
+const { getCharacter, getSession, getCharacterEquipment } = vi.hoisted(() => ({
   getCharacter: vi.fn(),
   getSession: vi.fn(),
+  getCharacterEquipment: vi.fn(),
 }));
 
 // Mock dependencies
@@ -25,6 +26,10 @@ vi.mock('@/integrations/supabase/client', () => ({
 
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { getCharacter, getSession },
+}));
+
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: { getCharacterEquipment },
 }));
 
 vi.mock('../characterSpellApi', () => ({
@@ -51,6 +56,7 @@ describe('CharacterLoaderService', () => {
     vi.clearAllMocks();
     getCharacter.mockReset();
     getSession.mockReset();
+    getCharacterEquipment.mockReset();
   });
 
   describe('loadCharacterWithSpells', () => {
@@ -201,12 +207,7 @@ describe('CharacterLoaderService', () => {
   });
 
   describe('loadCharacterBySession', () => {
-    // TODO(vitest-config-audit, 2026-07-14): loadCharacterBySession() (see
-    // src/services/load-character-by-session.ts) now resolves the session/character via
-    // userDataApi.getSession()/getCharacter() (real fetch() calls to the Bun server)
-    // instead of the mocked supabase.from() chain, so this mock never intercepts. Needs
-    // userDataApi mocks.
-    it.skip('should load character details by game session ID', async () => {
+    it('should load character details by game session ID through authenticated APIs', async () => {
       // Arrange
       const mockSession = { character_id: 'char-123', user_id: 'user-456' };
       const mockCharacter = {
@@ -220,17 +221,9 @@ describe('CharacterLoaderService', () => {
         character_equipment: [{ item_name: 'Battleaxe' }],
       };
 
-      const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockCharacter, error: null }),
-      });
+      getSession.mockResolvedValue(mockSession);
+      getCharacter.mockResolvedValue(mockCharacter);
+      getCharacterEquipment.mockResolvedValue([{ item_name: 'Battleaxe' }]);
 
       // Act
       const result = await characterLoaderService.loadCharacterBySession('session-789', 'user-456');
@@ -240,6 +233,7 @@ describe('CharacterLoaderService', () => {
       expect(result?.name).toBe('Session Hero');
       expect(result?.equipment).toEqual(['Battleaxe']);
       expect(result?.abilityScores?.strength.score).toBe(16);
+      expect(getCharacterEquipment).toHaveBeenCalledWith('char-123');
     });
 
     it('should return undefined when session is not found', async () => {
@@ -265,8 +259,7 @@ describe('CharacterLoaderService', () => {
       expect(result).toBeUndefined();
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above.
-    it.skip('should handle character with no stats or equipment in loadCharacterBySession', async () => {
+    it('should handle character with no stats or equipment in loadCharacterBySession', async () => {
       // Arrange
       const mockSession = { character_id: 'char-123', user_id: 'user-456' };
       const mockCharacter = {
@@ -277,17 +270,9 @@ describe('CharacterLoaderService', () => {
         character_equipment: null,
       };
 
-      const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockCharacter, error: null }),
-      });
+      getSession.mockResolvedValue(mockSession);
+      getCharacter.mockResolvedValue(mockCharacter);
+      getCharacterEquipment.mockResolvedValue([]);
 
       // Act
       const result = await characterLoaderService.loadCharacterBySession('session-789');

@@ -11,8 +11,8 @@ import type {
   CharacterBackground,
 } from '@/types/character';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 import {
   parseOptionalProficiencyList,
@@ -37,12 +37,9 @@ export async function loadCharacterBySession(
 
     if (!session?.character_id) return undefined;
 
-    const [characterData, equipmentResult] = await Promise.all([
+    const [characterData, equipmentData] = await Promise.all([
       userDataApi.getCharacter(session.character_id),
-      supabase
-        .from('character_equipment')
-        .select('item_name')
-        .eq('character_id', session.character_id),
+      issue1784Api.getCharacterEquipment(session.character_id),
     ]);
 
     if (!characterData) return undefined;
@@ -91,7 +88,7 @@ export async function loadCharacterBySession(
       ideals: [],
       bonds: [],
       flaws: [],
-      equipment: equipmentResult.data?.map((item: { item_name: string }) => item.item_name) || [],
+      equipment: equipmentData.map((item: { item_name: string }) => item.item_name),
     };
   } catch (error) {
     logger.error('[CharacterLoader] Error loading character by session:', error);

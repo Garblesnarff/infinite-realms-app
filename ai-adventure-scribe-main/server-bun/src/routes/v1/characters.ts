@@ -100,6 +100,7 @@ const characterSchema = t.Object({
   equipment: t.Optional(
     t.Array(
       t.Object({
+        id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
         item_name: t.String({ minLength: 1 }),
         item_type: t.Optional(t.String()),
         quantity: t.Optional(t.Number({ minimum: 0 })),
@@ -275,7 +276,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
 
     return { character };
   })
-  .onBeforeHandle(async ({ params, character, set }) => {
+  .onBeforeHandle(({ params, character, set }) => {
     if (params?.id && !character) {
       // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
       set.status = 404;
@@ -421,55 +422,65 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .put(
     '/:id',
-    async ({ params, body, user }) => {
+    async ({ params, body, user, set }) => {
       try {
-        const updated = await CharacterService.update(params.id, user!.userId, {
-          name: body.name,
-          description: body.description,
-          race: body.race,
-          class: body.class,
-          level: body.level,
-          alignment: body.alignment,
-          experiencePoints: body.experience_points,
-          imageUrl: body.image_url,
-          avatarUrl: body.avatar_url,
-          appearance: body.appearance,
-          personalityTraits: body.personality_traits,
-          personalityNotes: body.personality_notes,
-          backstoryElements: body.backstory_elements,
-          background: body.background,
-          backgroundImage: body.background_image,
-          theme: body.theme,
-          sessionNotes: body.session_notes,
-          skillProficiencies: body.skill_proficiencies,
-          expertiseProficiencies: body.expertise_proficiencies,
-          toolProficiencies: body.tool_proficiencies,
-          savingThrowProficiencies: body.saving_throw_proficiencies,
-          languages: body.languages,
-          cantrips: body.cantrips,
-          knownSpells: body.known_spells,
-          preparedSpells: body.prepared_spells,
-          ritualSpells: body.ritual_spells,
-          spellSlots: body.spell_slots,
-          pactSlots: body.pact_slots,
-          activeConcentration: body.active_concentration,
-          classFeatures: body.class_features,
-          fightingStyles: body.fighting_styles,
-          copperPieces: body.copper_pieces,
-          silverPieces: body.silver_pieces,
-          electrumPieces: body.electrum_pieces,
-          goldPieces: body.gold_pieces,
-          platinumPieces: body.platinum_pieces,
-          damageResistances: body.damage_resistances,
-          damageImmunities: body.damage_immunities,
-          damageVulnerabilities: body.damage_vulnerabilities,
-          visionTypes: body.vision_types,
-          obscurement: body.obscurement,
-          isHidden: body.is_hidden,
-          stealthCheckBonus: body.stealth_check_bonus,
-          classLevels: body.class_levels,
-          totalLevel: body.total_level,
-        });
+        const updated = await CharacterService.update(
+          params.id,
+          user!.userId,
+          {
+            name: body.name,
+            description: body.description,
+            race: body.race,
+            class: body.class,
+            level: body.level,
+            alignment: body.alignment,
+            experiencePoints: body.experience_points,
+            imageUrl: body.image_url,
+            avatarUrl: body.avatar_url,
+            appearance: body.appearance,
+            personalityTraits: body.personality_traits,
+            personalityNotes: body.personality_notes,
+            backstoryElements: body.backstory_elements,
+            background: body.background,
+            backgroundImage: body.background_image,
+            theme: body.theme,
+            sessionNotes: body.session_notes,
+            skillProficiencies: body.skill_proficiencies,
+            expertiseProficiencies: body.expertise_proficiencies,
+            toolProficiencies: body.tool_proficiencies,
+            savingThrowProficiencies: body.saving_throw_proficiencies,
+            languages: body.languages,
+            cantrips: body.cantrips,
+            knownSpells: body.known_spells,
+            preparedSpells: body.prepared_spells,
+            ritualSpells: body.ritual_spells,
+            spellSlots: body.spell_slots,
+            pactSlots: body.pact_slots,
+            activeConcentration: body.active_concentration,
+            classFeatures: body.class_features,
+            fightingStyles: body.fighting_styles,
+            copperPieces: body.copper_pieces,
+            silverPieces: body.silver_pieces,
+            electrumPieces: body.electrum_pieces,
+            goldPieces: body.gold_pieces,
+            platinumPieces: body.platinum_pieces,
+            damageResistances: body.damage_resistances,
+            damageImmunities: body.damage_immunities,
+            damageVulnerabilities: body.damage_vulnerabilities,
+            visionTypes: body.vision_types,
+            obscurement: body.obscurement,
+            isHidden: body.is_hidden,
+            stealthCheckBonus: body.stealth_check_bonus,
+            classLevels: body.class_levels,
+            totalLevel: body.total_level,
+          },
+          body.equipment,
+        );
+
+        if (!updated) {
+          set.status = 404;
+          return { error: 'Character not found' };
+        }
 
         return mapCharacterToApi(updated as Character & { stats?: CharacterStats });
       } catch (error) {

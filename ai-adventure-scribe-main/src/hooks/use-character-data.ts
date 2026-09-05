@@ -2,7 +2,7 @@
  * useCharacterData Hook
  *
  * This hook is responsible for fetching and managing detailed character data
- * from Supabase, including basic info, stats, and equipment. It also handles
+ * from the authenticated server APIs, including basic info, stats, and equipment. It also handles
  * validation of the character ID and navigation in case of errors or if the
  * character is not found.
  *
@@ -12,7 +12,7 @@
  * Key Dependencies:
  * - React (useState, useEffect)
  * - React Router (useNavigate)
- * - Supabase client (`@/integrations/supabase/client`)
+ * - Authenticated character API clients
  * - useToast hook (`@/hooks/use-toast`)
  * - Character type (`@/types/character`)
  * - isValidUUID utility (`@/utils/validation`)
@@ -31,7 +31,7 @@ import type { Character } from '@/types/character';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previous steps
-import { supabase } from '@/integrations/supabase/client';
+import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 import {
   transformCharacterData,
@@ -40,17 +40,6 @@ import {
   type CharacterEquipmentRow,
 } from '@/utils/character/data-transformers';
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
-
-/**
- * Columns actually present on `character_equipment`.
- *
- * NOTE: there is no `description` column on this table. A stale generated type
- * used to claim otherwise and a select of that name returned Postgres 42703 on
- * every character load (#1859). Types were regenerated; still prefer
- * `db/schema/inventory.ts` if they ever drift again.
- */
-const CHARACTER_EQUIPMENT_COLUMNS =
-  'id, item_name, item_type, quantity, equipped, is_magic, magic_bonus, magic_properties, requires_attunement, is_attuned, attunement_requirements, magic_item_type, magic_item_rarity, magic_effects';
 
 /**
  * Custom hook for fetching and managing character data
@@ -89,7 +78,7 @@ export const useCharacterData = (characterId: string | undefined) => {
   );
 
   /**
-   * Fetches character data from Supabase
+   * Fetches character data from the authenticated server APIs
    * Includes basic info, stats, and equipment
    *
    * ⚡ Bolt: Wrapped in useCallback to stabilize identity and prevent unnecessary re-fetches
@@ -112,15 +101,13 @@ export const useCharacterData = (characterId: string | undefined) => {
         return;
       }
 
-      // ⚡ Bolt: Fetch character data with stats and equipment in a single query.
-      // This reduces database round-trips from 2 to 1 and improves loading performance.
-      // Explicit column selection avoids over-fetching metadata.
+      // Fetch the character and its ownership-checked equipment in parallel.
       const [characterData, equipmentResult] = await Promise.all([
         userDataApi.getCharacter(characterId!),
-        supabase
-          .from('character_equipment')
-          .select(CHARACTER_EQUIPMENT_COLUMNS)
-          .eq('character_id', characterId!),
+        issue1784Api
+          .getCharacterEquipment(characterId!)
+          .then((data) => ({ data, error: null }))
+          .catch((error: unknown) => ({ data: null, error })),
       ]);
 
       // Equipment is supplementary to the character record. Throwing here discarded the
@@ -151,8 +138,10 @@ export const useCharacterData = (characterId: string | undefined) => {
         ? characterRecord.character_stats[0]
         : characterRecord.character_stats;
 
-      // ⚡ Bolt: equipmentData is now pre-fetched via the joined query
-      const equipmentData = equipmentResult.error ? null : equipmentResult.data;
+      // Equipment is returned by the ownership-checked character route.
+      const equipmentData = equipmentResult.error
+        ? null
+        : (equipmentResult.data as unknown as CharacterEquipmentRow[]);
 
       // Transform and set character data
       const transformedCharacter = transformCharacterData(

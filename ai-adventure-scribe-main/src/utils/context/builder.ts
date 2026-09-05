@@ -6,6 +6,7 @@ import type { Memory } from '@/types/memory';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 
 interface ContextParams {
@@ -28,20 +29,16 @@ class GameContextBuilder {
   }
 
   private async fetchCharacter(characterId: string): Promise<CharacterRow | null> {
-    // ⚡ Bolt: Optimized to select only required columns and relations with explicit selection for nested objects.
-    // This reduces database load and data transfer while maintaining all required context data.
-    const [character, equipmentResult, questResult] = await Promise.all([
+    // Fetch the character and ownership-checked equipment in parallel while
+    // retaining the existing quest-progress API call.
+    const [character, equipmentData, questResult] = await Promise.all([
       userDataApi.getCharacter(characterId),
-      supabase
-        .from('character_equipment')
-        .select('item_name, item_type, description, equipped')
-        .eq('character_id', characterId),
+      issue1784Api.getCharacterEquipment(characterId),
       userDataApi.listCharacterQuestProgress(characterId),
     ]);
-    if (equipmentResult.error) throw equipmentResult.error;
     return {
       ...character,
-      character_equipment: equipmentResult.data,
+      character_equipment: equipmentData,
       quest_progress: questResult,
     } as CharacterRow;
   }

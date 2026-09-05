@@ -1,31 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
-/* eslint-disable @typescript-eslint/no-restricted-imports */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { voiceProfileService, type VoiceProfile } from '../voice-profile-service';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
 // Use vi.hoisted to declare mocked functions that can be used in the hoisted vi.mock calls
-const { mockSelect, mockEq, mockUpsert, mockSingle, mockGenerateText } = vi.hoisted(() => ({
-  mockSelect: vi.fn().mockReturnThis(),
-  mockEq: vi.fn().mockReturnThis(),
-  mockUpsert: vi.fn().mockReturnThis(),
-  mockSingle: vi.fn(),
+const { mockGetProfile, mockUpsertProfile, mockGenerateText } = vi.hoisted(() => ({
+  mockGetProfile: vi.fn(),
+  mockUpsertProfile: vi.fn(),
   mockGenerateText: vi.fn(),
 }));
 
-// Mock supabase client
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: mockSelect,
-      eq: mockEq,
-      upsert: mockUpsert,
-      single: mockSingle,
-    })),
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: {
+    getVoiceProfile: mockGetProfile,
+    upsertVoiceProfile: mockUpsertProfile,
   },
 }));
 
@@ -67,29 +58,20 @@ describe('VoiceProfileService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSelect.mockReturnThis();
-    mockEq.mockReturnThis();
-    mockUpsert.mockReturnThis();
   });
 
   describe('getVoiceProfile', () => {
     it('should query database and return a voice profile on success', async () => {
-      mockSingle.mockResolvedValueOnce({ data: mockProfile, error: null });
+      mockGetProfile.mockResolvedValueOnce(mockProfile);
 
       const result = await voiceProfileService.getVoiceProfile(mockCharacterId);
 
-      expect(supabase.from).toHaveBeenCalledWith('character_voice_profiles');
-      expect(mockSelect).toHaveBeenCalledWith(
-        'id, character_id, voice_style, speech_patterns, vocabulary_level, tone, quirks, example_phrases, consistency_score, created_at, updated_at'
-      );
-      expect(mockEq).toHaveBeenCalledWith('character_id', mockCharacterId);
-      expect(mockSingle).toHaveBeenCalled();
+      expect(mockGetProfile).toHaveBeenCalledWith(mockCharacterId);
       expect(result).toEqual(mockProfile);
     });
 
     it('should return null and debug log on PGRST116 (not found) error', async () => {
-      const mockNotFoundError = { code: 'PGRST116', message: 'No rows found' };
-      mockSingle.mockResolvedValueOnce({ data: null, error: mockNotFoundError });
+      mockGetProfile.mockResolvedValueOnce(null);
 
       const result = await voiceProfileService.getVoiceProfile(mockCharacterId);
 
@@ -98,28 +80,28 @@ describe('VoiceProfileService', () => {
     });
 
     it('should return null and error log on other database errors', async () => {
-      const mockDbError = { code: 'OTHER_CODE', message: 'DB connection error' };
-      mockSingle.mockResolvedValueOnce({ data: null, error: mockDbError });
-
-      const result = await voiceProfileService.getVoiceProfile(mockCharacterId);
-
-      expect(result).toBeNull();
-      expect(logger.error).toHaveBeenCalledWith(
-        'Error fetching voice profile:',
-        mockDbError
-      );
-    });
-
-    it('should return null and log exception on unexpected code crashes', async () => {
-      const crashError = new Error('Database crash');
-      mockSingle.mockRejectedValueOnce(crashError);
+      const mockDbError = new Error('DB connection error');
+      mockGetProfile.mockRejectedValueOnce(mockDbError);
 
       const result = await voiceProfileService.getVoiceProfile(mockCharacterId);
 
       expect(result).toBeNull();
       expect(logger.error).toHaveBeenCalledWith(
         'Error accessing voice profile database:',
-        crashError
+        mockDbError,
+      );
+    });
+
+    it('should return null and log exception on unexpected code crashes', async () => {
+      const crashError = new Error('Database crash');
+      mockGetProfile.mockRejectedValueOnce(crashError);
+
+      const result = await voiceProfileService.getVoiceProfile(mockCharacterId);
+
+      expect(result).toBeNull();
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error accessing voice profile database:',
+        crashError,
       );
     });
   });
@@ -138,46 +120,38 @@ describe('VoiceProfileService', () => {
         ...inputProfile,
       };
 
-      mockSingle.mockResolvedValueOnce({ data: updatedProfileResponse, error: null });
+      mockUpsertProfile.mockResolvedValueOnce(updatedProfileResponse);
 
       const result = await voiceProfileService.upsertVoiceProfile(mockCharacterId, inputProfile);
 
-      expect(supabase.from).toHaveBeenCalledWith('character_voice_profiles');
-      expect(mockUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          character_id: mockCharacterId,
-          voice_style: 'eloquent and fast',
-          speech_patterns: ['articulate', 'precise'],
-          vocabulary_level: 'advanced',
-          tone: '',
-          quirks: ['uses rare idioms'],
-          example_phrases: [],
-          consistency_score: 0.0,
-          updated_at: expect.any(String),
-        })
+      expect(mockUpsertProfile).toHaveBeenCalledWith(mockCharacterId, {
+        voice_style: 'eloquent and fast',
+        speech_patterns: ['articulate', 'precise'],
+        vocabulary_level: 'advanced',
+        tone: '',
+        quirks: ['uses rare idioms'],
+        example_phrases: [],
+        consistency_score: 0.0,
+      });
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Voice profile saved for character'),
       );
-      expect(mockSingle).toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Voice profile saved for character'));
       expect(result).toEqual(updatedProfileResponse);
     });
 
     it('should return null and log errors when upsert returns a database error', async () => {
-      const mockDbError = { message: 'Unique constraint violation' };
-      mockSingle.mockResolvedValueOnce({ data: null, error: mockDbError });
+      const mockDbError = new Error('Unique constraint violation');
+      mockUpsertProfile.mockRejectedValueOnce(mockDbError);
 
       const result = await voiceProfileService.upsertVoiceProfile(mockCharacterId, {});
 
       expect(result).toBeNull();
-      expect(logger.error).toHaveBeenCalledWith('Failed to upsert voice profile:', mockDbError);
-      expect(logger.error).toHaveBeenCalledWith(
-        'Error upserting voice profile:',
-        expect.any(Error)
-      );
+      expect(logger.error).toHaveBeenCalledWith('Error upserting voice profile:', mockDbError);
     });
 
     it('should return null and log exception on unexpected exceptions', async () => {
       const crashError = new Error('Network timeout during upsert');
-      mockSingle.mockRejectedValueOnce(crashError);
+      mockUpsertProfile.mockRejectedValueOnce(crashError);
 
       const result = await voiceProfileService.upsertVoiceProfile(mockCharacterId, {});
 
@@ -243,7 +217,7 @@ describe('VoiceProfileService', () => {
           prompt: expect.stringContaining('Halt! Who goes there?'),
           temperature: 0.3,
           maxTokens: 1000,
-        })
+        }),
       );
 
       expect(result).toEqual({
@@ -256,10 +230,7 @@ describe('VoiceProfileService', () => {
         consistency_score: 0.9,
       });
 
-      expect(logger.info).toHaveBeenCalledWith(
-        '🎭 Voice analysis completed:',
-        expect.any(Object)
-      );
+      expect(logger.info).toHaveBeenCalledWith('🎭 Voice analysis completed:', expect.any(Object));
     });
 
     it('should apply correct default properties/normalization if JSON keys are missing or invalid', async () => {
@@ -342,6 +313,57 @@ describe('VoiceProfileService', () => {
         example_phrases: ['Hello'],
         consistency_score: 0.5,
       });
+    });
+  });
+
+  describe('Integration: Voice Profile Workflow', () => {
+    it('should create and retrieve voice profile from analyzed dialogue', async () => {
+      const dialogue = [
+        'Greetings, noble adventurers!',
+        'Indeed, I have heard tales of your valor.',
+        'Pray tell, what brings you to my humble establishment?',
+      ];
+
+      mockGenerateText.mockResolvedValueOnce(
+        JSON.stringify({
+          voice_style: 'eloquent',
+          speech_patterns: ['formal', 'archaic phrasing'],
+          vocabulary_level: 'archaic',
+          tone: 'welcoming',
+          quirks: ['uses "pray tell"'],
+          example_phrases: dialogue,
+          consistency_score: 0.88,
+        }),
+      );
+
+      const analysis = await voiceProfileService.analyzeDialogue(dialogue);
+
+      expect(analysis.voice_style).toBe('eloquent');
+      expect(analysis.vocabulary_level).toBe('archaic');
+
+      const characterId = 'char-merchant-1';
+      const savedProfile: VoiceProfile = {
+        id: 'profile-3',
+        character_id: characterId,
+        voice_style: 'eloquent',
+        speech_patterns: ['formal', 'archaic phrasing'],
+        vocabulary_level: 'archaic',
+        tone: 'welcoming',
+        quirks: ['uses "pray tell"'],
+        example_phrases: dialogue,
+        consistency_score: 0.88,
+      };
+
+      mockUpsertProfile.mockResolvedValueOnce(savedProfile);
+      const upserted = await voiceProfileService.upsertVoiceProfile(characterId, analysis);
+      expect(upserted).toEqual(savedProfile);
+
+      mockGetProfile.mockResolvedValueOnce(savedProfile);
+      const retrieved = await voiceProfileService.getVoiceProfile(characterId);
+
+      expect(retrieved).toEqual(savedProfile);
+      expect(retrieved?.voice_style).toBe('eloquent');
+      expect(retrieved?.vocabulary_level).toBe('archaic');
     });
   });
 });

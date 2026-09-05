@@ -1,30 +1,20 @@
-
-
-/* eslint-disable @typescript-eslint/no-restricted-imports */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { VoiceConsistencyRepository } from '../voice-consistency-repository';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
-// Set up hoisted spy/mock functions
-const { mockSelect, mockEq, mockInsert, mockUpdate } = vi.hoisted(() => ({
-  mockSelect: vi.fn().mockReturnThis(),
-  mockEq: vi.fn().mockReturnThis(),
-  mockInsert: vi.fn(),
-  mockUpdate: vi.fn().mockReturnThis(),
+const { mockGetMappings, mockUpsertMapping, mockUpdateMapping } = vi.hoisted(() => ({
+  mockGetMappings: vi.fn(),
+  mockUpsertMapping: vi.fn(),
+  mockUpdateMapping: vi.fn(),
 }));
 
-// Mock Supabase client
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: mockSelect,
-      eq: mockEq,
-      insert: mockInsert,
-      update: mockUpdate,
-    })),
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: {
+    getVoiceMappings: mockGetMappings,
+    upsertVoiceMapping: mockUpsertMapping,
+    updateVoiceMapping: mockUpdateMapping,
   },
 }));
 
@@ -46,9 +36,6 @@ vi.mock('@/lib/logger', () => {
 describe('VoiceConsistencyRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSelect.mockReturnThis();
-    mockEq.mockReturnThis();
-    mockUpdate.mockReturnThis();
   });
 
   describe('getSessionMappings', () => {
@@ -76,15 +63,11 @@ describe('VoiceConsistencyRepository', () => {
         },
       ];
 
-      mockEq.mockResolvedValueOnce({ data: mockDbData, error: null });
+      mockGetMappings.mockResolvedValueOnce(mockDbData);
 
       const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
-      expect(supabase.from).toHaveBeenCalledWith('character_voice_mappings');
-      expect(mockSelect).toHaveBeenCalledWith(
-        'id, character_name, voice_category, voice_id, last_used, updated_at, appearance_count',
-      );
-      expect(mockEq).toHaveBeenCalledWith('session_id', sessionId);
+      expect(mockGetMappings).toHaveBeenCalledWith(sessionId);
       expect(result).toHaveLength(2);
 
       // Mapping 1 assertions
@@ -107,37 +90,42 @@ describe('VoiceConsistencyRepository', () => {
     });
 
     it('should return empty list when no mappings exist', async () => {
-      mockEq.mockResolvedValueOnce({ data: [], error: null });
+      mockGetMappings.mockResolvedValueOnce([]);
 
       const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
       expect(result).toEqual([]);
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining(`No voice mappings found for session: ${sessionId}`));
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.stringContaining(`No voice mappings found for session: ${sessionId}`),
+      );
     });
 
     it('should return empty list and log error on database select failure', async () => {
-      const mockError = { message: 'Database connection failed' };
-      mockEq.mockResolvedValueOnce({ data: null, error: mockError });
+      const mockError = new Error('Database connection failed');
+      mockGetMappings.mockRejectedValueOnce(mockError);
 
       const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
       expect(result).toEqual([]);
-      expect(logger.error).toHaveBeenCalledWith('Error fetching voice mappings:', mockError);
+      expect(logger.error).toHaveBeenCalledWith('Error getting session mappings:', mockError);
     });
 
     it('should return empty list and log error on throw inside getSessionMappings', async () => {
-      mockEq.mockRejectedValueOnce(new Error('CRITICAL DB FAILURE'));
+      mockGetMappings.mockRejectedValueOnce(new Error('CRITICAL DB FAILURE'));
 
       const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
       expect(result).toEqual([]);
-      expect(logger.error).toHaveBeenCalledWith('Error getting session mappings:', expect.any(Error));
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error getting session mappings:',
+        expect.any(Error),
+      );
     });
   });
 
   describe('saveCharacterVoiceMapping', () => {
     it('should insert new character voice mapping successfully', async () => {
-      mockInsert.mockResolvedValueOnce({ error: null });
+      mockUpsertMapping.mockResolvedValueOnce({});
 
       await VoiceConsistencyRepository.saveCharacterVoiceMapping(
         'session-123',
@@ -147,24 +135,17 @@ describe('VoiceConsistencyRepository', () => {
         3,
       );
 
-      expect(supabase.from).toHaveBeenCalledWith('character_voice_mappings');
-      expect(mockInsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: 'session-123',
-          character_name: 'Bruenor',
-          voice_category: 'elder',
-          voice_id: 'voice-bruenor',
-          appearance_count: 3,
-          first_appearance: expect.any(String),
-          last_used: expect.any(String),
-          metadata: {},
-        }),
-      );
+      expect(mockUpsertMapping).toHaveBeenCalledWith('session-123', {
+        character_name: 'Bruenor',
+        voice_category: 'elder',
+        voice_id: 'voice-bruenor',
+        appearance_count: 3,
+      });
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('Bruenor -> elder'));
     });
 
     it('should default appearance_count to 1 when omitted', async () => {
-      mockInsert.mockResolvedValueOnce({ error: null });
+      mockUpsertMapping.mockResolvedValueOnce({});
 
       await VoiceConsistencyRepository.saveCharacterVoiceMapping(
         'session-123',
@@ -173,16 +154,17 @@ describe('VoiceConsistencyRepository', () => {
         'voice-bruenor',
       );
 
-      expect(mockInsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          appearance_count: 1,
-        }),
-      );
+      expect(mockUpsertMapping).toHaveBeenCalledWith('session-123', {
+        character_name: 'Bruenor',
+        voice_category: 'elder',
+        voice_id: 'voice-bruenor',
+        appearance_count: 1,
+      });
     });
 
     it('should throw or log error on database insert failure', async () => {
-      const mockError = { message: 'Unique constraint violation' };
-      mockInsert.mockResolvedValueOnce({ error: mockError });
+      const mockError = new Error('Unique constraint violation');
+      mockUpsertMapping.mockRejectedValueOnce(mockError);
 
       await VoiceConsistencyRepository.saveCharacterVoiceMapping(
         'session-123',
@@ -197,25 +179,17 @@ describe('VoiceConsistencyRepository', () => {
 
   describe('updateCharacterUsage', () => {
     it('should update character usage successfully', async () => {
-      mockEq.mockResolvedValueOnce({ error: null });
+      mockUpdateMapping.mockResolvedValueOnce({});
 
       await VoiceConsistencyRepository.updateCharacterUsage('mapping-123', 8);
 
-      expect(supabase.from).toHaveBeenCalledWith('character_voice_mappings');
-      expect(mockUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          appearance_count: 8,
-          last_used: expect.any(String),
-          updated_at: expect.any(String),
-        }),
-      );
-      expect(mockEq).toHaveBeenCalledWith('id', 'mapping-123');
+      expect(mockUpdateMapping).toHaveBeenCalledWith('mapping-123', { appearance_count: 8 });
       expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('mapping-123 (count: 8)'));
     });
 
     it('should log error on database update failure', async () => {
-      const mockError = { message: 'Foreign key failure' };
-      mockEq.mockResolvedValueOnce({ error: mockError });
+      const mockError = new Error('Foreign key failure');
+      mockUpdateMapping.mockRejectedValueOnce(mockError);
 
       await VoiceConsistencyRepository.updateCharacterUsage('mapping-123', 8);
 

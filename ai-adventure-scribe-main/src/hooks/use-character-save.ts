@@ -10,7 +10,6 @@ import type { Character } from '@/types/character';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
-import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';
 import { userDataApi } from '@/services/user-data-api';
@@ -51,7 +50,7 @@ const getStoredCharacterStats = (character: Character): StoredCharacterStats | u
 
 /**
  * Custom hook for handling character data persistence
- * Provides methods and state for saving character data to Supabase
+ * Provides methods and state for saving character data through the authenticated API
  */
 export const useCharacterSave = (): {
   saveCharacter: (character: Character) => Promise<Character | null>;
@@ -128,7 +127,7 @@ export const useCharacterSave = (): {
   );
 
   /**
-   * Saves character data to Supabase
+   * Saves character data through the authenticated character API
    * Handles both creation and updates of character data
    * @param character - The character data to save
    * @returns Promise<Character | null> The saved character data or null if save failed
@@ -261,23 +260,20 @@ export const useCharacterSave = (): {
             delete statsData.current_hit_points;
           }
 
+          const equipmentData =
+            character.inventory && character.inventory.length > 0
+              ? transformEquipmentForStorage(character, characterData.id)
+              : undefined;
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const promises: Promise<any>[] = [
-            userDataApi.updateCharacter(characterData.id, characterData),
+            userDataApi.updateCharacter(characterData.id, {
+              ...characterData,
+              ...(equipmentData ? { equipment: equipmentData } : {}),
+            }),
             userDataApi.updateCharacterStats(characterData.id, statsData),
             saveSpells(characterData.id),
           ];
-
-          if (character.inventory && character.inventory.length > 0) {
-            const equipmentData = transformEquipmentForStorage(character, characterData.id);
-            promises.push(
-              Promise.resolve(
-                supabase.from('character_equipment').upsert(equipmentData, {
-                  onConflict: 'character_id,item_name',
-                }),
-              ),
-            );
-          }
 
           const results = await Promise.all(promises);
 
@@ -287,8 +283,6 @@ export const useCharacterSave = (): {
 
           // Log warnings for other potential failures but don't fail the entire operation
           if (results[1]?.error) logger.warn('Stats save failed but continuing:', results[1].error);
-          if (results[3]?.error)
-            logger.warn('Equipment save failed but continuing:', results[3].error);
 
           savedCharacter = { ...character, campaign_id: effectiveCampaignId };
         }

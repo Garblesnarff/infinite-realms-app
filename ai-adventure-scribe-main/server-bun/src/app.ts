@@ -45,6 +45,7 @@ import { spellsRoutes } from './routes/v1/spells';
 import { waitlistRoutes } from './routes/v1/waitlist';
 import { internalRoutes } from './routes/v1/internal';
 import { telemetryRoutes } from './routes/v1/telemetry';
+import { issue1784DataRoutes } from './routes/v1/issue-1784-data';
 import { securedGameDataRoutes } from './routes/v1/secured-game-data';
 import { worldBuilderRoutes } from './routes/v1/world-builder';
 import { blogApiRoutes } from './routes/v1/blog';
@@ -259,6 +260,7 @@ export function createApp() {
 
   // Character routes (spell data, etc.)
   app.use(charactersRoutes);
+  app.use(issue1784DataRoutes);
 
   // LLM routes (AI text generation)
   app.use(llmRoutes);

@@ -5,15 +5,15 @@
  * Handles persistent voice characteristics like style, tone, and quirks.
  *
  * Dependencies:
- * - Supabase client (src/integrations/supabase/client.ts)
+ * - Authenticated #1784 voice-profile API
  * - LLM API client (src/services/llm-api-client.ts)
  *
  * @author AI Dungeon Master Team
  */
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 
 export interface VoiceProfile {
   id?: string;
@@ -35,25 +35,11 @@ export class VoiceProfileService {
    */
   async getVoiceProfile(characterId: string): Promise<VoiceProfile | null> {
     try {
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
-      const { data, error } = await supabase
-        .from('character_voice_profiles')
-        .select(
-          'id, character_id, voice_style, speech_patterns, vocabulary_level, tone, quirks, example_phrases, consistency_score, created_at, updated_at'
-        )
-        .eq('character_id', characterId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // No voice profile found (not an error)
-          logger.debug(`No voice profile found for character: ${characterId}`);
-          return null;
-        }
-        logger.error('Error fetching voice profile:', error);
+      const data = await issue1784Api.getVoiceProfile(characterId);
+      if (!data) {
+        logger.debug(`No voice profile found for character: ${characterId}`);
         return null;
       }
-
       return data as VoiceProfile;
     } catch (error) {
       logger.error('Error accessing voice profile database:', error);
@@ -69,26 +55,15 @@ export class VoiceProfileService {
     profile: Partial<Omit<VoiceProfile, 'id' | 'character_id' | 'created_at' | 'updated_at'>>,
   ): Promise<VoiceProfile | null> {
     try {
-      const { data, error } = await supabase
-        .from('character_voice_profiles')
-        .upsert({
-          character_id: characterId,
-          voice_style: profile.voice_style || '',
-          speech_patterns: profile.speech_patterns || [],
-          vocabulary_level: profile.vocabulary_level || 'average',
-          tone: profile.tone || '',
-          quirks: profile.quirks || [],
-          example_phrases: profile.example_phrases || [],
-          consistency_score: profile.consistency_score || 0.0,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Failed to upsert voice profile:', error);
-        throw new Error(`Failed to upsert voice profile: ${error.message}`);
-      }
+      const data = await issue1784Api.upsertVoiceProfile(characterId, {
+        voice_style: profile.voice_style || '',
+        speech_patterns: profile.speech_patterns || [],
+        vocabulary_level: profile.vocabulary_level || 'average',
+        tone: profile.tone || '',
+        quirks: profile.quirks || [],
+        example_phrases: profile.example_phrases || [],
+        consistency_score: profile.consistency_score || 0.0,
+      });
 
       logger.info(`✅ Voice profile saved for character: ${characterId}`);
       return data as VoiceProfile;

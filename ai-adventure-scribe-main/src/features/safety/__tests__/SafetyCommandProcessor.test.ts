@@ -6,13 +6,28 @@ import { SafetyAuditService } from '../SafetyAuditService';
 import { SafetyCommandProcessor } from '../SafetyCommandProcessor';
 import { SAFETY_ENABLED } from '../types';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { Issue1784ApiError } from '@/services/issue-1784-api';
 
-// Mock Supabase
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(),
+const { mockGetSessionConfig, mockRecordSafetyEvent } = vi.hoisted(() => ({
+  mockGetSessionConfig: vi.fn(),
+  mockRecordSafetyEvent: vi.fn(),
+}));
+
+vi.mock('@/services/issue-1784-api', () => ({
+  Issue1784ApiError: class MockIssue1784ApiError extends Error {
+    status: number;
+    code?: string;
+
+    constructor(message: string, status: number, code?: string) {
+      super(message);
+      this.status = status;
+      this.code = code;
+    }
+  },
+  issue1784Api: {
+    getSessionConfig: mockGetSessionConfig,
+    recordSafetyEvent: mockRecordSafetyEvent,
   },
 }));
 
@@ -29,16 +44,11 @@ vi.mock('@/lib/logger', () => ({
 describe('SafetyCommandProcessor', () => {
   const sessionId = 'test-session-123';
   let processor: SafetyCommandProcessor;
-  const mockSupabaseChain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    insert: vi.fn().mockResolvedValue({ error: null }),
-  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(supabase.from).mockReturnValue(mockSupabaseChain as any);
+    mockGetSessionConfig.mockResolvedValue(null);
+    mockRecordSafetyEvent.mockResolvedValue({ ok: true, id: 'audit-1' });
     processor = new SafetyCommandProcessor(sessionId);
     // Force cache clearing for each test
     (processor as any).configCacheExpiry = 0;
@@ -122,7 +132,7 @@ describe('SafetyCommandProcessor', () => {
         strict_mode_triggers: false,
       };
 
-      mockSupabaseChain.single.mockResolvedValueOnce({ data: mockConfig, error: null });
+      mockGetSessionConfig.mockResolvedValueOnce(mockConfig);
 
       const result = await processor.checkAutoTriggerCommands('this is forbidden');
       expect(result.isSafetyCommand).toBe(true);
@@ -136,7 +146,7 @@ describe('SafetyCommandProcessor', () => {
         strict_mode_triggers: true,
       };
 
-      mockSupabaseChain.single.mockResolvedValueOnce({ data: mockConfig, error: null });
+      mockGetSessionConfig.mockResolvedValueOnce(mockConfig);
 
       // 'blood' is a default trigger, should be ignored in strict mode if not in custom list
       const result = await processor.checkAutoTriggerCommands('there is blood');
@@ -144,16 +154,13 @@ describe('SafetyCommandProcessor', () => {
 
       // Need to clear cache/mock again because we are in the same test but want different call
       (processor as any).safetyConfig = undefined;
-      mockSupabaseChain.single.mockResolvedValueOnce({ data: mockConfig, error: null });
+      mockGetSessionConfig.mockResolvedValueOnce(mockConfig);
       const result2 = await processor.checkAutoTriggerCommands('this is onlythis');
       expect(result2.isSafetyCommand).toBe(true);
     });
 
     it('should handle config load errors gracefully and use defaults', async () => {
-      mockSupabaseChain.single.mockResolvedValueOnce({
-        data: null,
-        error: { message: 'Database error', status: 500 } as any,
-      });
+      mockGetSessionConfig.mockRejectedValueOnce(new Issue1784ApiError('request failed', 500));
 
       const result = await processor.checkAutoTriggerCommands('there is blood');
       expect(result.isSafetyCommand).toBe(true);
@@ -207,7 +214,7 @@ describe('SafetyCommandProcessor', () => {
       expect(response.text).toContain('GAME RESUMED');
     });
 
-    it('should log to audit trail if userId is NOT provided (warning case)', async () => {
+    it('should log to the authenticated audit route without a client userId', async () => {
       const command: any = {
         type: 'x_card',
         triggeredBy: 'explicit_command',
@@ -215,8 +222,9 @@ describe('SafetyCommandProcessor', () => {
       };
 
       await processor.processSafetyCommand(command);
-      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
-        expect.stringContaining('No userId provided for audit log'),
+      expect(mockRecordSafetyEvent).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ event_type: 'x_card' }),
       );
     });
 
@@ -227,7 +235,7 @@ describe('SafetyCommandProcessor', () => {
         timestamp: new Date().toISOString(),
       };
 
-      mockSupabaseChain.insert.mockResolvedValueOnce({ error: null });
+      mockRecordSafetyEvent.mockResolvedValueOnce({ ok: true, id: 'audit-2' });
 
       await SafetyAuditService.logSafetyEvent(
         sessionId,
@@ -238,12 +246,9 @@ describe('SafetyCommandProcessor', () => {
         'user-123',
       );
 
-      expect(supabase.from).toHaveBeenCalledWith('safety_audit_trail');
-      expect(mockSupabaseChain.insert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: 'user-123',
-          event_type: 'x_card',
-        }),
+      expect(mockRecordSafetyEvent).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ event_type: 'x_card' }),
       );
     });
   });

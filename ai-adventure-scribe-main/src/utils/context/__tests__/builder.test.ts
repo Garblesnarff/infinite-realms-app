@@ -4,13 +4,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { gameContextBuilder } from '../builder';
 
 import { supabase } from '@/integrations/supabase/client';
+import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 
-// GameContextBuilder is a hybrid: campaign/character/memory *entities* now come
-// from userDataApi (the Bun server's REST API client), while `worlds` and
-// `character_equipment` are still joined directly via supabase.from(). Both
-// need to be mocked - see src/utils/context/builder.ts fetchCampaign /
-// fetchCharacter / fetchMemories.
+// GameContextBuilder gets campaign/character/memory entities from userDataApi,
+// equipment from the authenticated #1784 route, and worlds from Supabase.
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(),
@@ -27,6 +25,12 @@ vi.mock('@/services/user-data-api', () => ({
   },
 }));
 
+vi.mock('@/services/issue-1784-api', () => ({
+  issue1784Api: {
+    getCharacterEquipment: vi.fn(),
+  },
+}));
+
 // Mock logger
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -37,7 +41,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-/** Queue up a fully-successful userDataApi + supabase response set for one build() call. */
+/** Queue up a fully-successful API + Supabase response set for one build() call. */
 function mockSuccessfulBuild({
   campaign,
   character,
@@ -54,18 +58,14 @@ function mockSuccessfulBuild({
   vi.mocked(userDataApi.getCharacter).mockResolvedValueOnce(character as any);
   vi.mocked(userDataApi.listCharacterQuestProgress).mockResolvedValueOnce([]);
   vi.mocked(userDataApi.listMemories).mockResolvedValueOnce(memories as any);
+  vi.mocked(issue1784Api.getCharacterEquipment).mockResolvedValueOnce(equipment as any);
 
   const fromSpy = vi.mocked(supabase.from);
-  // fetchCampaign() queries `worlds` first, fetchCharacter() queries
-  // `character_equipment` second - both run synchronously before either
-  // awaits, so the mockReturnValueOnce queue must match that call order.
+  // fetchCampaign() queries `worlds`; the equipment request is now made through
+  // the authenticated API and is mocked above.
   fromSpy.mockReturnValueOnce({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-  } as any);
-  fromSpy.mockReturnValueOnce({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockResolvedValue({ data: equipment, error: null }),
   } as any);
 }
 
@@ -99,17 +99,19 @@ describe('GameContextBuilder', () => {
       race: 'Elf',
       class: 'Wizard',
       level: 5,
-      character_stats: [{
-        current_hit_points: 35,
-        max_hit_points: 35,
-        armor_class: 12,
-        strength: 8,
-        dexterity: 14,
-        constitution: 12,
-        intelligence: 18,
-        wisdom: 13,
-        charisma: 10,
-      }],
+      character_stats: [
+        {
+          current_hit_points: 35,
+          max_hit_points: 35,
+          armor_class: 12,
+          strength: 8,
+          dexterity: 14,
+          constitution: 12,
+          intelligence: 18,
+          wisdom: 13,
+          charisma: 10,
+        },
+      ],
       character_equipment: [
         { item_name: 'Staff', item_type: 'weapon', equipped: true },
         { item_name: 'Robes', item_type: 'armor', equipped: true },
@@ -187,9 +189,8 @@ describe('GameContextBuilder', () => {
     vi.mocked(userDataApi.getCampaign).mockResolvedValueOnce({ name: 'Campaign' } as any);
     vi.mocked(userDataApi.listQuests).mockResolvedValueOnce([]);
 
-    // Character - Failure (Rejected). fetchCharacter() awaits
-    // Promise.all([getCharacter(), supabase.from('character_equipment')..., listCharacterQuestProgress()]),
-    // so a single rejection is enough to make the whole fetchCharacter() call reject.
+    // Character - Failure (Rejected). fetchCharacter() awaits all three of its
+    // API requests, so a single rejection is enough to make that level reject.
     vi.mocked(userDataApi.getCharacter).mockRejectedValueOnce(new Error('DB Error'));
     vi.mocked(userDataApi.listCharacterQuestProgress).mockResolvedValueOnce([]);
 
@@ -202,11 +203,7 @@ describe('GameContextBuilder', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     } as any);
-    // fetchCharacter()'s `character_equipment` lookup
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-    } as any);
+    vi.mocked(issue1784Api.getCharacterEquipment).mockResolvedValueOnce([]);
 
     const context = await gameContextBuilder.build(mockParams);
 
