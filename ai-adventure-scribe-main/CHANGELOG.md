@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.14.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.0...v0.14.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **db:** close six public anon tables ([#1964](https://github.com/Garblesnarff/infinite-realms-production/issues/1964)) ([74e353d](https://github.com/Garblesnarff/infinite-realms-production/commit/74e353d22314b8621ae98bf130004da8b4783d72))
+* route issue 1784 browser table access through auth ([#1967](https://github.com/Garblesnarff/infinite-realms-production/issues/1967)) ([eb392ea](https://github.com/Garblesnarff/infinite-realms-production/commit/eb392eacf99f3b29a0bd7f2495812ce53c52aa59))
+
 ## [0.14.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.13.1...v0.14.0) (2026-09-04)
 
 
