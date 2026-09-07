@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.14.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.1...v0.14.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* **auth:** stop token refresh storms and terminate ended sessions ([#1983](https://github.com/Garblesnarff/infinite-realms-production/issues/1983)) ([e7a2cd8](https://github.com/Garblesnarff/infinite-realms-production/commit/e7a2cd8008aa702092f83c3d95a9a51b192a031b))
+* **combat:** make entry confirmation outcomes visible ([#1980](https://github.com/Garblesnarff/infinite-realms-production/issues/1980)) ([0a4a241](https://github.com/Garblesnarff/infinite-realms-production/commit/0a4a241381a0d85847486aabe17532349dc7cf58))
+* **ui:** freeze campaign chapter until a DM chapter transition exists ([#1974](https://github.com/Garblesnarff/infinite-realms-production/issues/1974)) ([#1982](https://github.com/Garblesnarff/infinite-realms-production/issues/1982)) ([34efbeb](https://github.com/Garblesnarff/infinite-realms-production/commit/34efbeb72be37ce6262cadcc5db471b9a88d50be))
+* **ui:** portal ability-check tooltips and drop dead attacks button ([#1975](https://github.com/Garblesnarff/infinite-realms-production/issues/1975)) ([#1981](https://github.com/Garblesnarff/infinite-realms-production/issues/1981)) ([91757bb](https://github.com/Garblesnarff/infinite-realms-production/commit/91757bbbe716c250c935903185d2d804557068c9))
+
 ## [0.14.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.0...v0.14.1) (2026-09-05)
 
 
