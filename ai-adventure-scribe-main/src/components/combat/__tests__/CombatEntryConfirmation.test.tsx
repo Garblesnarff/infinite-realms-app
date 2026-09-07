@@ -1,8 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CombatEntryConfirmation } from '../CombatEntryConfirmation';
+
+import logger from '@/lib/logger';
+
+vi.mock('@/lib/logger', () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 describe('CombatEntryConfirmation', () => {
   it('offers the entry Strike and decline actions before seating', () => {
@@ -30,5 +35,17 @@ describe('CombatEntryConfirmation', () => {
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(decline).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      '[CombatEntry] confirmation popup mounted',
+      expect.objectContaining({ actorLabel: 'The Storyteller' }),
+    );
+    expect(logger.info).toHaveBeenCalledWith('[CombatEntry] confirmation popup resolved', {
+      actorLabel: 'The Storyteller',
+      confirmed: true,
+    });
+    expect(logger.info).toHaveBeenCalledWith('[CombatEntry] confirmation popup resolved', {
+      actorLabel: 'The Storyteller',
+      confirmed: false,
+    });
   });
 });

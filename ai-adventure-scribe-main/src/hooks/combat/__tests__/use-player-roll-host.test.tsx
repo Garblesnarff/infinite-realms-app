@@ -45,4 +45,24 @@ describe('usePlayerRollHost teardown', () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(hasPendingPlayerRoll()).toBe(false);
   });
+
+  it('uses the initiative modifier in the popup roll config and description', async () => {
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 1,
+    });
+
+    expect(requestDiceRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Initiative for The Seeker — 1d20+1',
+        rollConfig: { dieType: 20, count: 1, modifier: 1 },
+        combatInitiativeRoll: true,
+      }),
+    );
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
 });

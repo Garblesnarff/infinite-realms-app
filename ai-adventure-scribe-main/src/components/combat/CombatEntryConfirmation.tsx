@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import type { PendingCombatEntryConfirmation } from '@/hooks/combat/use-combat-entry-confirmation-host';
 
 import { Button } from '@/components/ui/button';
+import logger from '@/lib/logger';
 
 interface CombatEntryConfirmationProps {
   confirmation: PendingCombatEntryConfirmation | null;
@@ -18,12 +19,30 @@ function formatInitiative(initiativeRoll: number | null, initiativeModifier: num
 export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = ({
   confirmation,
 }) => {
+  const pendingSpec = confirmation?.spec;
+
+  useEffect(() => {
+    if (!pendingSpec) return;
+    logger.info('[CombatEntry] confirmation popup mounted', {
+      actorLabel: pendingSpec.actorLabel,
+      combatantLabels: pendingSpec.combatantLabels,
+    });
+  }, [pendingSpec]);
+
   if (!confirmation) return null;
 
   const { spec } = confirmation;
   const combatants = spec.combatantLabels.length
     ? spec.combatantLabels.join(', ')
     : 'the opposing side';
+
+  const resolve = (confirmed: boolean): void => {
+    logger.info('[CombatEntry] confirmation popup resolved', {
+      actorLabel: spec.actorLabel,
+      confirmed,
+    });
+    (confirmed ? confirmation.confirm : confirmation.decline)();
+  };
 
   return (
     <section
@@ -39,10 +58,10 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
         {formatInitiative(spec.initiativeRoll, spec.initiativeModifier)}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" variant="fantasy" onClick={confirmation.confirm}>
+        <Button type="button" variant="fantasy" onClick={() => resolve(true)}>
           [Strike]
         </Button>
-        <Button type="button" variant="outline" onClick={confirmation.decline}>
+        <Button type="button" variant="outline" onClick={() => resolve(false)}>
           [Do something else]
         </Button>
       </div>

@@ -2,7 +2,7 @@
 import { useRef, useCallback } from 'react';
 
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
-import type { ImageRequest } from '@/hooks/ai/types';
+import type { ImageRequest, LocalNotice } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
@@ -59,8 +59,10 @@ export interface EnhancedChatMessage extends ChatMessage {
   diceRolls?: DiceRoll[];
   rollRequests?: RollRequest[];
   imageRequests?: ImageRequest[];
-  /** Engine-authored combat notice persisted separately from DM narration. */
+  /** Backwards-compatible newline-delimited engine notice text. */
   localNotice?: string;
+  /** Engine-authored notices with per-message persistence ownership. */
+  localNotices?: LocalNotice[];
   sceneSpec?: SceneSpec | null;
   combatDetection?: {
     isCombat: boolean;
@@ -278,6 +280,7 @@ export const useAIResponse = (): {
         isInCombat = dmActionsResult.isInCombat;
         activeEncounter = dmActionsResult.activeEncounter;
         const localNotice = dmActionsResult.localNotice;
+        const localNotices = dmActionsResult.localNotices;
 
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
@@ -370,6 +373,7 @@ export const useAIResponse = (): {
           rollRequests: processedRolls.playerRollRequests,
           imageRequests,
           localNotice,
+          localNotices,
           sceneSpec: (result.scene_spec as SceneSpec | null | undefined) ?? null,
           combatDetection: {
             isCombat: result.combatDetection?.isCombat || false,

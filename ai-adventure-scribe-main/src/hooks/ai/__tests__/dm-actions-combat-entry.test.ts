@@ -203,6 +203,12 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.localNotice).toBe(
       'Your attack is declared. Vance acts first — your turn comes next.',
     );
+    expect(outcome.localNotices).toEqual([
+      {
+        text: 'Your attack is declared. Vance acts first — your turn comes next.',
+        persist: true,
+      },
+    ]);
   });
 
   it('declines combat entry without seating an encounter or resolving the attack', async () => {
@@ -235,6 +241,12 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.localNotice).toBe(
       'Combat entry declined. No encounter was seated; your action was not resolved.',
     );
+    expect(outcome.localNotices).toEqual([
+      {
+        text: 'Combat entry declined. No encounter was seated; your action was not resolved.',
+        persist: true,
+      },
+    ]);
   });
 
   it('does not seat or refresh when the pending handoff has no usable player character', async () => {
@@ -248,7 +260,89 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(userDataApi.enterCombat).not.toHaveBeenCalled();
     expect(outcome.isInCombat).toBe(false);
-    expect(outcome.responseText).toBe('Combat entry is waiting for a valid player character.');
+    expect(outcome.responseText).toBe('');
+    expect(outcome.localNotice).toBe('Combat entry is waiting for a valid player character.');
+  });
+
+  it('appends the server seating transcript as the visible system notice on success', async () => {
+    const seatingTranscript = '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled).';
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, seatingTranscript }) as any,
+    );
+
+    const outcome = await invoke({
+      combat_transition: 'none',
+      combat_entry_pending: PENDING_ENTRY,
+      combat_actions: [],
+    });
+
+    expect(outcome.localNotice).toBe(seatingTranscript);
+    expect(outcome.localNotices).toEqual([{ text: seatingTranscript, persist: false }]);
+    expect(outcome.responseText).toBe('');
+  });
+
+  it.each([
+    [
+      'decline',
+      async () => {
+        vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
+      },
+    ],
+    [
+      'non-ok /enter',
+      async () => {
+        vi.mocked(userDataApi.enterCombat).mockResolvedValue({
+          ok: false,
+          status: 503,
+          json: vi.fn().mockResolvedValue({ error: 'unavailable' }),
+        } as any);
+        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
+      },
+    ],
+    [
+      'thrown /enter',
+      async () => {
+        vi.mocked(userDataApi.enterCombat).mockRejectedValue(new Error('network down'));
+        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
+      },
+    ],
+    [
+      'no confirmation host',
+      async () => {
+        const error = Object.assign(new Error('Combat entry confirmation UI is unavailable'), {
+          name: 'CombatEntryConfirmationUnavailableError',
+          code: 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE',
+        });
+        vi.mocked(requestCombatEntryConfirmation).mockRejectedValue(error);
+        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
+      },
+    ],
+  ])('produces a visible non-empty line for %s', async (_branch, run) => {
+    const outcome = await run();
+    expect(outcome.localNotice).toBeTruthy();
+  });
+
+  it('turns a missing confirmation host into its explicit visible message', async () => {
+    const error = Object.assign(new Error('Combat entry confirmation UI is unavailable'), {
+      name: 'CombatEntryConfirmationUnavailableError',
+      code: 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE',
+    });
+    vi.mocked(requestCombatEntryConfirmation).mockRejectedValue(error);
+
+    const outcome = await invoke({
+      combat_transition: 'none',
+      combat_entry_pending: PENDING_ENTRY,
+    });
+
+    expect(outcome.localNotice).toBe('Combat entry could not be confirmed (no confirmation UI)');
+    expect(outcome.localNotices).toEqual([
+      {
+        text: 'Combat entry could not be confirmed (no confirmation UI)',
+        persist: true,
+      },
+    ]);
+    expect(outcome.responseText).toBe('');
   });
 
   it('turns a named friendly-NPC attack into an engine entry intent, never an attack outcome (#1943)', async () => {

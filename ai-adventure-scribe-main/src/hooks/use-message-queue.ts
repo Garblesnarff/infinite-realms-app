@@ -70,6 +70,18 @@ export const useMessageQueue = (sessionId: string | null) => {
       const messageId = message.id || uuidv4();
       const now = message.timestamp || new Date().toISOString();
 
+      // Some engine notices are already persisted by the authoritative server operation that
+      // produced them. Keep them in the optimistic UI and refetch on success, but never insert a
+      // second dialogue_history row from the client.
+      if (message.persist === false) {
+        setQueueStatus('idle');
+        return {
+          ...message,
+          id: messageId,
+          timestamp: now,
+        };
+      }
+
       while (retries < MAX_RETRIES) {
         try {
           setQueueStatus(retries > 0 ? 'retrying' : 'processing');

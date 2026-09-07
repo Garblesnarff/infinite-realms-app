@@ -3,6 +3,7 @@ import type {
   DMAoESpellAction,
   DMHandoutAction,
 } from '../../../server-bun/src/services/dm/dm-response-schema';
+import type { LocalNotice } from '@/hooks/ai/types';
 import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/user-data-api';
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
@@ -40,8 +41,10 @@ export interface HandleDmActionsResult {
   deliveredHandouts: JournalHandoutEntry[] | undefined;
   isInCombat: boolean;
   activeEncounter: any;
-  /** An engine-authored notice that the caller should persist as a local/system message. */
+  /** Backwards-compatible newline-delimited notice text. Prefer localNotices for ownership. */
   localNotice?: string;
+  /** Per-notice persistence metadata for local/system messages. */
+  localNotices?: LocalNotice[];
 }
 
 function findParticipantForActor(
@@ -69,6 +72,20 @@ function responsePayload(response: Response): Promise<unknown> {
   return response.json().catch(() => ({ status: response.status }));
 }
 
+const COMBAT_ENTRY_FAILURE_NOTICE =
+  'Combat entry could not be confirmed. No attack outcome was resolved.';
+const COMBAT_ENTRY_NO_HOST_NOTICE = 'Combat entry could not be confirmed (no confirmation UI)';
+const COMBAT_ENTRY_NO_PLAYER_NOTICE = 'Combat entry is waiting for a valid player character.';
+
+function isCombatEntryConfirmationNoHostError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: unknown; name?: unknown };
+  return (
+    candidate.code === 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE' ||
+    candidate.name === 'CombatEntryConfirmationUnavailableError'
+  );
+}
+
 export async function handleDmActionsAndTransitions(
   params: HandleDmActionsParams,
 ): Promise<HandleDmActionsResult> {
@@ -88,7 +105,15 @@ export async function handleDmActionsAndTransitions(
   let narrationSegments = result.narrationSegments;
   let deliveredHandouts: JournalHandoutEntry[] | undefined;
   let localNotice: string | undefined;
+  const localNotices: LocalNotice[] = [];
   let entryWasSeated = false;
+
+  const appendLocalNotice = (notice: unknown, persist = true): void => {
+    if (typeof notice !== 'string' || !notice.trim()) return;
+    const text = notice.trim();
+    localNotice = localNotice ? `${localNotice}\n${text}` : text;
+    localNotices.push({ text, persist });
+  };
 
   // PR2: the server has detected combat but has not seated it. Ask for the player's initiative
   // before making the explicit entry call. A null die is intentional: the server rolls it and
@@ -98,8 +123,9 @@ export async function handleDmActionsAndTransitions(
     const player = buildCombatEntryPlayer(params.characterRecord);
     if (!player) {
       logger.warn('[CombatEntry] pending entry has no usable player payload; leaving it unseated');
-      responseText = 'Combat entry is waiting for a valid player character.';
+      responseText = '';
       narrationSegments = undefined;
+      appendLocalNotice(COMBAT_ENTRY_NO_PLAYER_NOTICE);
       result = { ...result, combat_actions: [], roll_requests: [] };
     } else {
       try {
@@ -118,8 +144,9 @@ export async function handleDmActionsAndTransitions(
           // batch, and do not let the pre-entry telegraph become a fabricated outcome.
           responseText = '';
           narrationSegments = undefined;
-          localNotice =
-            'Combat entry declined. No encounter was seated; your action was not resolved.';
+          appendLocalNotice(
+            'Combat entry declined. No encounter was seated; your action was not resolved.',
+          );
           result = {
             ...result,
             text: '',
@@ -141,11 +168,16 @@ export async function handleDmActionsAndTransitions(
               '[CombatEntry] server refused explicit entry',
               await responsePayload(enterResponse),
             );
-            responseText = 'Combat entry could not be confirmed. No attack outcome was resolved.';
+            responseText = '';
             narrationSegments = undefined;
+            appendLocalNotice(COMBAT_ENTRY_FAILURE_NOTICE);
             result = { ...result, combat_actions: [], roll_requests: [] };
           } else {
             const entryPayload = await enterResponse.json().catch(() => null);
+            // `seatCombatEntry` already persisted this exact system row. Keep it
+            // visible locally, but do not send it through the client persistence
+            // queue a second time.
+            appendLocalNotice((entryPayload as any)?.seatingTranscript, false);
             const enteredEncounterId =
               typeof (entryPayload as any)?.encounter?.id === 'string'
                 ? (entryPayload as any).encounter.id
@@ -179,8 +211,13 @@ export async function handleDmActionsAndTransitions(
         }
       } catch (error) {
         logger.warn('[CombatEntry] explicit entry failed; no attack outcome was resolved', error);
-        responseText = 'Combat entry could not be confirmed. No attack outcome was resolved.';
+        responseText = '';
         narrationSegments = undefined;
+        appendLocalNotice(
+          isCombatEntryConfirmationNoHostError(error)
+            ? COMBAT_ENTRY_NO_HOST_NOTICE
+            : COMBAT_ENTRY_FAILURE_NOTICE,
+        );
         result = { ...result, combat_actions: [], roll_requests: [] };
       }
     }
@@ -302,7 +339,9 @@ export async function handleDmActionsAndTransitions(
               activeEncounter.participants,
             );
             const currentActorName = currentActor?.name || 'the next actor';
-            localNotice = `Your attack is declared. ${currentActorName} acts first — your turn comes next.`;
+            appendLocalNotice(
+              `Your attack is declared. ${currentActorName} acts first — your turn comes next.`,
+            );
             responseText = '';
             narrationSegments = undefined;
           } else {
@@ -374,5 +413,6 @@ export async function handleDmActionsAndTransitions(
     isInCombat,
     activeEncounter,
     localNotice,
+    localNotices: localNotices.length > 0 ? localNotices : undefined,
   };
 }

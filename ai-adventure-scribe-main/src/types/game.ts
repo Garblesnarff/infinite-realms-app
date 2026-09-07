@@ -81,6 +81,8 @@ export interface ChatMessage {
   sender: SpeakerType;
   id?: string;
   timestamp?: string;
+  /** Client-only hint for display-only messages whose server row already exists. */
+  persist?: boolean;
   // Server-assigned monotonic sequence number (Phase 0.2 / #1678). Preferred over
   // `timestamp` for chronological ordering when merging paginated history, since it
   // is immune to clock skew and same-millisecond ties.

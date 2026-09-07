@@ -12,6 +12,18 @@ export interface CombatEntryConfirmationHost {
   present: (spec: CombatEntryConfirmationSpec, settle: (confirmed: boolean) => void) => () => void;
 }
 
+export const COMBAT_ENTRY_CONFIRMATION_NO_HOST_CODE = 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE';
+
+/** Returned distinctly so the turn pipeline can tell "no UI" from an intentional decline. */
+export class CombatEntryConfirmationUnavailableError extends Error {
+  readonly code = COMBAT_ENTRY_CONFIRMATION_NO_HOST_CODE;
+
+  constructor() {
+    super('Combat entry confirmation UI is unavailable');
+    this.name = 'CombatEntryConfirmationUnavailableError';
+  }
+}
+
 let host: CombatEntryConfirmationHost | null = null;
 let pending: {
   settle: (confirmed: boolean) => void;
@@ -28,7 +40,7 @@ export function hasPendingCombatEntryConfirmation(): boolean {
   return pending !== null;
 }
 
-/** Resolve an entry prompt and dismiss its UI. Missing hosts decline safely. */
+/** Resolve an entry prompt and dismiss its UI. */
 export function settlePendingCombatEntryConfirmation(confirmed: boolean): boolean {
   if (!pending) return false;
   const settled = pending;
@@ -43,9 +55,10 @@ export function requestCombatEntryConfirmation(
   spec: CombatEntryConfirmationSpec,
 ): Promise<boolean> {
   if (!host) {
-    logger.warn('[CombatEntry] no confirmation host mounted; declining entry');
-    return Promise.resolve(false);
+    logger.warn('[CombatEntry] no confirmation host mounted; rejecting entry confirmation');
+    return Promise.reject(new CombatEntryConfirmationUnavailableError());
   }
+  const activeHost = host;
 
   if (pending) {
     logger.warn('[CombatEntry] superseded by a new entry confirmation; declining the previous one');
@@ -63,7 +76,6 @@ export function requestCombatEntryConfirmation(
     };
 
     pending = { settle, dismiss: () => dismissPopup() };
-    const activeHost = host;
     const hostDismiss = activeHost.present(spec, (confirmed) => {
       if (pending?.settle === settle) pending = null;
       settle(confirmed);

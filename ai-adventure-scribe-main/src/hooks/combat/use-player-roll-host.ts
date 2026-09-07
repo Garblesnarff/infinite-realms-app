@@ -35,7 +35,7 @@ export function usePlayerRollHost(): void {
           ? {
               requestType: 'initiative' as const,
               description: describeInitiativeRoll(spec),
-              rollConfig: { dieType: 20, count: 1, modifier: 0 },
+              rollConfig: { dieType: 20, count: 1, modifier: spec.initiativeModifier },
               combatInitiativeRoll: true,
             }
           : {

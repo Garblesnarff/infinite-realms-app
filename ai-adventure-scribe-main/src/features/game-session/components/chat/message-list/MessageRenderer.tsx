@@ -4,6 +4,7 @@ import { CompanionMessage } from './CompanionMessage';
 import { DMMessage } from './DMMessage';
 import { DynamicOptionsSection } from './DynamicOptionsSection';
 import { PlayerMessage } from './PlayerMessage';
+import { SystemMessage } from './SystemMessage';
 
 import type { ChatMessage } from '@/types/game';
 
@@ -137,6 +138,13 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
               />
             )}
           </div>
+        ) : message.sender === 'system' ? (
+          <SystemMessage
+            message={message}
+            isFirstInGroup={isFirstInGroup}
+            isLastInGroup={isLastInGroup}
+            displayText={displayText}
+          />
         ) : isDM ? (
           <DMMessage
             message={message}

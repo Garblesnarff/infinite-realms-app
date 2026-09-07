@@ -32,6 +32,18 @@ export interface ImageRequest {
 }
 
 /**
+ * Engine-authored system notices that are displayed by the client.
+ *
+ * Some notices describe a server mutation that has already been persisted (for
+ * example, the combat seating transcript), so they must not be written again
+ * by the client message queue.
+ */
+export interface LocalNotice {
+  text: string;
+  persist: boolean;
+}
+
+/**
  * Result of processing roll requests through deduplication,
  * suppression, and NPC auto-execution.
  */

@@ -119,6 +119,23 @@ describe('useMessageQueue', () => {
     expect(result.current.queueStatus).toBe('idle');
   });
 
+  it('does not persist an already-persisted seating transcript', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    const seatingTranscript = '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled).';
+
+    await act(async () => {
+      await result.current.messageMutation.mutateAsync({
+        text: seatingTranscript,
+        sender: 'system',
+        persist: false,
+      });
+    });
+
+    expect(mockSaveSessionMessages).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(result.current.queueStatus).toBe('idle');
+  });
+
   it('should retry on failure with exponential backoff', async () => {
     mockInsert
       .mockResolvedValueOnce({ error: { message: 'Failed 1' } })

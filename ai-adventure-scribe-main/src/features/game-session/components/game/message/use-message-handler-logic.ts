@@ -201,14 +201,20 @@ export const useMessageHandlerLogic = ({
         sanitizedAiResponseMessage.rollRequests &&
         sanitizedAiResponseMessage.rollRequests.length > 0;
 
-      // A queued out-of-turn declaration has an engine-authored acknowledgement independent of
-      // any unrelated dice request the same DM batch may carry. Persist it before showing the
-      // dice UI so the player is never left wondering whether their attack was accepted.
-      if (aiResponseMessage.localNotice) {
+      // Engine-authored notices may have different persistence owners. The seating transcript
+      // is already written by the server's `/enter` endpoint, while decline/failure/no-host and
+      // queued-intent notices still belong in the client message history.
+      const localNotices =
+        aiResponseMessage.localNotices ??
+        (aiResponseMessage.localNotice
+          ? [{ text: aiResponseMessage.localNotice, persist: true }]
+          : []);
+      for (const notice of localNotices) {
         await sendMessage({
-          text: aiResponseMessage.localNotice,
+          text: notice.text,
           sender: 'system',
           timestamp: new Date().toISOString(),
+          persist: notice.persist,
           context: { intent: 'combat_pending_intent' },
         });
       }
