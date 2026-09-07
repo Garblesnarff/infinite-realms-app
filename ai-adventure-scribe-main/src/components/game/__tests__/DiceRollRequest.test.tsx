@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -139,19 +140,56 @@ describe('DiceRollRequest', () => {
 
     fireEvent.click(disButton);
     expect(screen.getByRole('button', { name: /Disable Disadvantage/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Enable Advantage/i })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: /Disable Disadvantage/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Enable Advantage/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: /Disable Disadvantage/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     // Toggle off
     fireEvent.click(screen.getByRole('button', { name: /Disable Disadvantage/i }));
-    expect(screen.getByRole('button', { name: /Enable Disadvantage/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Enable Disadvantage/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
 
     // Toggle advantage on
     fireEvent.click(screen.getByRole('button', { name: /Enable Advantage/i }));
-    expect(screen.getByRole('button', { name: /Disable Advantage/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Disable Advantage/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     // Toggle advantage off
     fireEvent.click(screen.getByRole('button', { name: /Disable Advantage/i }));
-    expect(screen.getByRole('button', { name: /Enable Advantage/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Enable Advantage/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('keeps the roll formula in place when the Advantage tooltip opens', async () => {
+    const user = userEvent.setup();
+    render(
+      <DiceRollRequest
+        request={defaultRequest}
+        onRoll={mockOnRoll}
+        onManualResult={mockOnManualResult}
+      />,
+    );
+
+    const formula = screen.getByText('1d20+2');
+    const rollPanel = formula.closest('div.bg-white');
+    expect(rollPanel).not.toBeNull();
+
+    await user.hover(screen.getByRole('button', { name: /Enable Advantage/i }));
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Enable Advantage');
+    expect(screen.getByText('1d20+2')).toBeVisible();
+    expect(rollPanel).not.toContainElement(tooltip);
   });
 
   it('switches to manual mode, goes back, and submits a result', () => {
@@ -163,7 +201,9 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    );
 
     const input = screen.getByLabelText(/Enter your roll result:/i);
     fireEvent.change(input, { target: { value: '18' } });
@@ -173,7 +213,9 @@ describe('DiceRollRequest', () => {
     expect(screen.queryByLabelText(/Enter your roll result:/i)).not.toBeInTheDocument();
 
     // Go manual again and submit
-    fireEvent.click(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    );
     const input2 = screen.getByLabelText(/Enter your roll result:/i);
     fireEvent.change(input2, { target: { value: '18' } });
     fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
@@ -431,7 +473,9 @@ describe('DiceRollRequest', () => {
       <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
-    expect(screen.getByRole('button', { name: /roll 1d20\+3 for A general charisma test/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /roll 1d20\+3 for A general charisma test/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText(/roll formula could not be resolved/i)).not.toBeInTheDocument();
     // Must be called with 'check' rollType (not 'skill' which would throw with no skillName)
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(

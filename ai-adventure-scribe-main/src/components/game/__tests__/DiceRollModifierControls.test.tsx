@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -15,7 +16,7 @@ describe('DiceRollModifierControls', () => {
         hasDisadvantage={false}
         onToggleAdvantage={mockToggleAdvantage}
         onToggleDisadvantage={mockToggleDisadvantage}
-      />
+      />,
     );
 
     const advButton = screen.getByRole('button', { name: /Enable Advantage/i });
@@ -34,7 +35,7 @@ describe('DiceRollModifierControls', () => {
         hasDisadvantage={false}
         onToggleAdvantage={mockToggleAdvantage}
         onToggleDisadvantage={mockToggleDisadvantage}
-      />
+      />,
     );
 
     const advButton = screen.getByRole('button', { name: /Disable Advantage/i });
@@ -49,7 +50,7 @@ describe('DiceRollModifierControls', () => {
         hasDisadvantage={true}
         onToggleAdvantage={mockToggleAdvantage}
         onToggleDisadvantage={mockToggleDisadvantage}
-      />
+      />,
     );
 
     const disButton = screen.getByRole('button', { name: /Disable Disadvantage/i });
@@ -64,7 +65,7 @@ describe('DiceRollModifierControls', () => {
         hasDisadvantage={false}
         onToggleAdvantage={mockToggleAdvantage}
         onToggleDisadvantage={mockToggleDisadvantage}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Enable Advantage/i }));
@@ -72,5 +73,25 @@ describe('DiceRollModifierControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Enable Disadvantage/i }));
     expect(mockToggleDisadvantage).toHaveBeenCalledTimes(1);
+  });
+
+  it('portals the Advantage tooltip out of the modifier layout flow', async () => {
+    const user = userEvent.setup();
+    render(
+      <DiceRollModifierControls
+        hasAdvantage={false}
+        hasDisadvantage={false}
+        onToggleAdvantage={mockToggleAdvantage}
+        onToggleDisadvantage={mockToggleDisadvantage}
+      />,
+    );
+
+    const group = screen.getByRole('group', { name: /Roll modifiers/i });
+    await user.hover(screen.getByRole('button', { name: /Enable Advantage/i }));
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Enable Advantage');
+    expect(group).not.toContainElement(tooltip);
+    expect(document.body).toContainElement(tooltip);
   });
 });

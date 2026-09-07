@@ -113,9 +113,6 @@ export const RightSheet: React.FC<{ c: CharacterSheetVM; sessionId?: string }> =
               </div>
             </div>
           ))}
-          <button className="w-full pt-1 text-center text-[10px] font-medium text-infinite-gold/80 hover:text-infinite-gold">
-            View All Attacks
-          </button>
         </div>
       </IRPanel>
       <IRPanel>
