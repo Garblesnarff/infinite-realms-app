@@ -6,6 +6,7 @@ import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { MessageHandler } from '../message/MessageHandler';
+import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 import { SceneHeader } from '../overhaul/SceneHeader';
 import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
 import { StatsBar } from '../StatsBar';
@@ -90,7 +91,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const { hasPendingRolls, pendingRequests } = usePendingRolls();
     const sceneBlurb = stripAssetTags(sessionData.current_scene_description || '');
     const overhaul = useOverhaulViewModel({
-      chapterLabel: `Chapter ${sessionData.turn_count ?? 0}`,
+      chapterLabel: resolveCampaignChapterLabel(sessionData.turn_count),
       sceneBlurb,
     });
 

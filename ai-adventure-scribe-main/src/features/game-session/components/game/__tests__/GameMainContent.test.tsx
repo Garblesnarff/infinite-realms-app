@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   queueStatus: 'idle',
   hasPendingRolls: false,
   pendingRequests: [] as Array<{ type: string }>,
+  lastChapterLabel: undefined as string | undefined,
 }));
 
 vi.mock('@/contexts/MessageContext', () => ({
@@ -20,10 +21,19 @@ vi.mock('@/hooks/use-pending-rolls', () => ({
   }),
 }));
 vi.mock('../overhaul/useOverhaulViewModel', () => ({
-  useOverhaulViewModel: ({ sceneBlurb }: { sceneBlurb: string }) => ({
-    scene: { title: 'THE LIVE CAMPAIGN', blurb: sceneBlurb },
-    campaign: { chapter: 'Chapter 7' },
-  }),
+  useOverhaulViewModel: ({
+    sceneBlurb,
+    chapterLabel,
+  }: {
+    sceneBlurb: string;
+    chapterLabel?: string;
+  }) => {
+    state.lastChapterLabel = chapterLabel;
+    return {
+      scene: { title: 'THE LIVE CAMPAIGN', blurb: sceneBlurb },
+      campaign: { chapter: chapterLabel ?? 'Chapter 1' },
+    };
+  },
 }));
 vi.mock('../overhaul/SceneHeader', () => ({
   SceneHeader: ({ title, blurb }: { title: string; blurb?: string }) => (
@@ -114,6 +124,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.queueStatus = 'idle';
     state.hasPendingRolls = false;
     state.pendingRequests = [];
+    state.lastChapterLabel = undefined;
     sendMessage.mockClear();
   });
 
@@ -146,5 +157,19 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByText('Please complete the saving throw roll above')).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('does not treat session turn_count as a campaign chapter number', () => {
+    render(
+      <GameMainContent
+        {...baseProps}
+        sessionData={{ ...baseProps.sessionData, turn_count: 15 } as never}
+        showSceneBlurb={false}
+      />,
+    );
+
+    expect(state.lastChapterLabel).toBe('Chapter 1');
+    expect(screen.getByTestId('scene-header')).toHaveTextContent('Chapter 1');
+    expect(screen.getByTestId('scene-header')).not.toHaveTextContent('Chapter 15');
   });
 });

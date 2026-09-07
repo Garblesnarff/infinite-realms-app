@@ -5,6 +5,7 @@ import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
 import { FloatingActionPanel } from '../FloatingActionPanel';
+import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
@@ -154,7 +155,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               sessionId={sessionId}
               isCollapsed={isLeftCollapsed}
               onToggle={handleLeftClose}
-              chapterLabel={`Chapter ${sessionData?.turn_count ?? 0}`}
+              chapterLabel={resolveCampaignChapterLabel(sessionData?.turn_count)}
             />
 
             {/* Main Content Area */}

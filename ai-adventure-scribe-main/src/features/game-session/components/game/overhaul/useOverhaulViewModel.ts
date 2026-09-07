@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
+import { FROZEN_CAMPAIGN_CHAPTER_LABEL } from './campaign-chapter';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 
 import type {
@@ -412,7 +413,7 @@ export function useOverhaulViewModel(opts?: {
       },
       campaign: {
         name: campaign?.name ?? 'Adventure',
-        chapter: opts?.chapterLabel ?? 'Chapter 1',
+        chapter: opts?.chapterLabel ?? FROZEN_CAMPAIGN_CHAPTER_LABEL,
         thumbnailUrl: campaign?.background_image ?? undefined,
         objective: campaign?.description ?? 'Your adventure awaits.',
         objectiveTasks: [],
