@@ -40,7 +40,7 @@ export const useSessionValidator = ({
       if (session.campaign_id !== campaignId || session.character_id !== characterId)
         throw new Error('Session mismatch');
     } catch (error) {
-      logger.error('Session validation failed:', error);
+      logger.error('Session validation failed:', { error });
       toast({
         title: 'Session Error',
         description: 'Invalid game session. Please try starting a new game.',

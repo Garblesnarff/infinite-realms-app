@@ -4,13 +4,14 @@ import React from 'react';
 import AuthPage from './AuthPage';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { SESSION_ENDED_MESSAGE } from '@/services/auth/TokenService';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionEnded } = useAuth();
 
   if (loading) {
     return (
@@ -24,7 +25,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!user) {
-    return <AuthPage />;
+    return (
+      <>
+        {sessionEnded && (
+          <div
+            role="alert"
+            className="border-b border-amber-400/40 bg-amber-950 px-4 py-3 text-center text-sm font-medium text-amber-100"
+          >
+            {SESSION_ENDED_MESSAGE}
+          </div>
+        )}
+        <AuthPage />
+      </>
+    );
   }
 
   return <>{children}</>;

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { ChatInput } from '../ChatInput';
 
+import { PENDING_INPUT_STORAGE_KEY, SESSION_ENDED_STORAGE_KEY } from '@/services/auth/TokenService';
 import * as diceParser from '@/utils/diceCommandParser';
 
 // Mock UI components
@@ -19,13 +20,7 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('@/components/ui/textarea', () => ({
   Textarea: React.forwardRef(({ value, onChange, onKeyDown, ...props }: any, ref: any) => (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={onChange}
-      onKeyDown={onKeyDown}
-      {...props}
-    />
+    <textarea ref={ref} value={value} onChange={onChange} onKeyDown={onKeyDown} {...props} />
   )),
 }));
 
@@ -41,13 +36,19 @@ describe('ChatInput', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
+    localStorage.removeItem(SESSION_ENDED_STORAGE_KEY);
   });
 
   it('renders correctly', () => {
     render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
 
-    expect(screen.getByPlaceholderText(/describe what your character would like to do/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/describe what your character would like to do/i)).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/describe what your character would like to do/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/describe what your character would like to do/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send message/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/quick dice roll/i)).toBeInTheDocument();
   });
@@ -82,6 +83,34 @@ describe('ChatInput', () => {
     expect(textarea).toHaveValue('');
   });
 
+  it('keeps pending input when the session ends during send', async () => {
+    let resolveSend!: () => void;
+    const onSendMessage = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+
+    render(<ChatInput onSendMessage={onSendMessage} isDisabled={false} />);
+    const textarea = screen.getByPlaceholderText(/describe what your character would like to do/i);
+    const sendButton = screen.getByRole('button', { name: /send message/i });
+
+    await user.type(textarea, 'Keep this turn');
+    void user.click(sendButton);
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem(PENDING_INPUT_STORAGE_KEY)).toBe('Keep this turn');
+    });
+
+    localStorage.setItem(SESSION_ENDED_STORAGE_KEY, String(Date.now()));
+    resolveSend();
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue('Keep this turn');
+    });
+  });
+
   it('allows new line when pressing Shift+Enter', async () => {
     render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
     const textarea = screen.getByPlaceholderText(/describe what your character would like to do/i);
@@ -111,7 +140,10 @@ describe('ChatInput', () => {
 
     expect(sendButton).toBeDisabled();
 
-    await user.type(screen.getByPlaceholderText(/describe what your character would like to do/i), '   ');
+    await user.type(
+      screen.getByPlaceholderText(/describe what your character would like to do/i),
+      '   ',
+    );
     expect(sendButton).toBeDisabled();
 
     await user.click(sendButton);
@@ -150,9 +182,12 @@ describe('ChatInput', () => {
     expect(textarea).toHaveValue('/roll 1d20');
 
     // The suggestions should be hidden. We check that the listbox is gone.
-    await waitFor(() => {
-      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('handles quick dice roll button', async () => {

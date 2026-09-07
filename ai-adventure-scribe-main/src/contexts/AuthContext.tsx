@@ -5,10 +5,15 @@ import { useUserPlan, type UserPlan } from '@/hooks/auth/use-user-plan';
 import { resetAuthGate, markAuthReady } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import {
+  clearSessionEnded,
+  isSessionEnded,
   isTokenExpiringSoon,
   loadCachedSession,
   persistSession,
-  refreshAccessToken,
+  refreshAccessTokenOnce,
+  SESSION_ENDED_EVENT,
+  SESSION_ENDED_STORAGE_KEY,
+  SESSION_STORAGE_KEY,
   type WorkOSSession,
 } from '@/services/auth/TokenService';
 
@@ -25,6 +30,7 @@ interface WorkOSUser {
 interface AuthContextType {
   user: WorkOSUser | null;
   session: WorkOSSession | null;
+  sessionEnded: boolean;
   loading: boolean;
   blogRole: BlogRole | null;
   blogRoleLoading: boolean;
@@ -52,20 +58,45 @@ export const useAuth = (): AuthContextType => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<WorkOSUser | null>(null);
   const [session, setSession] = useState<WorkOSSession | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(() => isSessionEnded());
   const [loading, setLoading] = useState(true);
+  const sessionRef = React.useRef<WorkOSSession | null>(session);
+  sessionRef.current = session;
 
   // Extract Blog Role and User Plan logic to specialized hooks
   const { blogRole, blogRoleLoading, isBlogAdmin, refreshBlogRole } = useBlogRole({ user });
   const { userPlan, userPlanLoading, refreshUserPlan } = useUserPlan({ user, loading });
+
+  const endSession = useCallback(() => {
+    // TokenService clears the browser tokens when it enters the terminal
+    // state. Repeat the local state transition here for same-tab and
+    // cross-tab notifications, while leaving pending input untouched.
+    persistSession(null);
+    setSession(null);
+    setUser(null);
+    setSessionEnded(true);
+    setLoading(false);
+    markAuthReady();
+  }, []);
 
   // Verify session and load user data
   const refreshAuth = useCallback(async () => {
     // Block all API calls until auth verification completes
     resetAuthGate();
     setLoading(true);
+
+    if (isSessionEnded()) {
+      endSession();
+      return;
+    }
+
     const cachedSession = loadCachedSession();
 
     if (!cachedSession) {
+      clearSessionEnded();
+      setSession(null);
+      setUser(null);
+      setSessionEnded(false);
       setLoading(false);
       markAuthReady(); // Unblock API calls - no session means user needs to login
       return;
@@ -94,26 +125,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // page load after idle silently signed the user out and the first
       // API calls raced out with a stale token (cold-load 401 bug).
       if (!result.ok && result.status === 401 && cachedSession.refresh_token) {
-        try {
-          const newTokens = await refreshAccessToken(cachedSession.refresh_token);
-          if (newTokens) {
-            activeSession = {
-              access_token: newTokens.accessToken,
-              refresh_token: newTokens.refreshToken,
-            };
-            persistSession(activeSession);
-            result = await verifyToken(activeSession.access_token);
-          }
-        } catch (refreshError) {
-          logger.error('Token refresh during session verification failed:', refreshError);
+        const newTokens = await refreshAccessTokenOnce(
+          cachedSession.refresh_token,
+          cachedSession.access_token,
+        );
+        if (newTokens) {
+          activeSession = {
+            access_token: newTokens.accessToken,
+            refresh_token: newTokens.refreshToken,
+          };
+          persistSession(activeSession);
+          result = await verifyToken(activeSession.access_token);
         }
       }
 
       if (!result.ok) {
+        if (isSessionEnded()) {
+          endSession();
+          return;
+        }
+
         // Token invalid and refresh failed/unavailable, clear session
+        clearSessionEnded();
         persistSession(null);
         setSession(null);
         setUser(null);
+        setSessionEnded(false);
         setLoading(false);
         markAuthReady(); // Unblock API calls - invalid token, user needs to login
         return;
@@ -122,7 +159,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userData = result.userData;
 
       if (userData) {
+        clearSessionEnded();
         setSession(activeSession);
+        setSessionEnded(false);
         setUser({
           id: userData.id,
           email: userData.email,
@@ -137,16 +176,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         markAuthReady(); // Unblock API calls - valid session established
       } else {
+        clearSessionEnded();
         markAuthReady(); // Unblock API calls - no user data, app will redirect to login
       }
     } catch (error) {
-      logger.error('Error verifying session:', error);
-      persistSession(null);
-      markAuthReady(); // Unblock API calls even on error
+      logger.error('Error verifying session:', { error });
+      if (isSessionEnded()) {
+        endSession();
+      } else {
+        clearSessionEnded();
+        persistSession(null);
+        setSession(null);
+        setUser(null);
+        setSessionEnded(false);
+        markAuthReady(); // Unblock API calls even on error
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [endSession]);
 
   // Load session and verify on mount
   useEffect(() => {
@@ -164,21 +212,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener('auth-tokens-updated', handleTokensUpdated);
 
+    const handleSessionEnded = (): void => {
+      endSession();
+    };
+
+    window.addEventListener(SESSION_ENDED_EVENT, handleSessionEnded);
+
+    const handleStorageChange = (event: StorageEvent): void => {
+      if (event.key === SESSION_ENDED_STORAGE_KEY && event.newValue) {
+        endSession();
+        return;
+      }
+
+      // A refresh in another tab publishes the new pair before releasing its
+      // lock. Adopt it locally so this tab does not continue using a stale
+      // access token between timer ticks.
+      if (event.key !== SESSION_STORAGE_KEY || !event.newValue) return;
+
+      try {
+        const nextSession = JSON.parse(event.newValue) as WorkOSSession;
+        if (!nextSession.access_token) return;
+        clearSessionEnded();
+        if (nextSession.refresh_token) {
+          window.sessionStorage.setItem('workos_refresh_token', nextSession.refresh_token);
+        }
+        sessionRef.current = nextSession;
+        setSessionEnded(false);
+        setSession(nextSession);
+      } catch (error) {
+        logger.warn('Failed to sync auth session from another tab:', { error });
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
     return () => {
       window.removeEventListener('auth-tokens-updated', handleTokensUpdated);
+      window.removeEventListener(SESSION_ENDED_EVENT, handleSessionEnded);
+      window.removeEventListener('storage', handleStorageChange);
     };
-  }, [refreshAuth]);
+  }, [endSession, refreshAuth]);
 
   // Auto-refresh token before it expires (WorkOS tokens expire every ~5 minutes)
+  const hasRefreshToken = Boolean(session?.refresh_token);
   useEffect(() => {
-    if (!session?.access_token || !session?.refresh_token) return;
+    if (!hasRefreshToken || sessionEnded) return;
 
     const checkAndRefresh = async (): Promise<void> => {
-      if (!session?.access_token || !session?.refresh_token) return;
+      const activeSession = sessionRef.current;
+      if (!activeSession?.access_token || !activeSession.refresh_token || isSessionEnded()) return;
 
-      if (isTokenExpiringSoon(session.access_token)) {
+      if (isTokenExpiringSoon(activeSession.access_token)) {
         logger.info('Access token expiring soon, refreshing...');
-        const newTokens = await refreshAccessToken(session.refresh_token);
+        const newTokens = await refreshAccessTokenOnce(
+          activeSession.refresh_token,
+          activeSession.access_token,
+        );
 
         if (newTokens) {
           logger.info('Token refreshed successfully');
@@ -186,10 +275,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             access_token: newTokens.accessToken,
             refresh_token: newTokens.refreshToken,
           };
-          setSession(newSession);
-          persistSession(newSession);
-        } else {
-          logger.warn('Token refresh failed, user may need to re-login');
+          if (!isSessionEnded()) {
+            sessionRef.current = newSession;
+            setSession(newSession);
+            persistSession(newSession);
+          }
+        } else if (isSessionEnded()) {
+          endSession();
         }
       }
     };
@@ -201,7 +293,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const interval = setInterval(checkAndRefresh, 30 * 1000);
 
     return () => clearInterval(interval);
-  }, [session?.access_token, session?.refresh_token]);
+  }, [endSession, hasRefreshToken, sessionEnded]);
 
   // Persist session to localStorage
   useEffect(() => {
@@ -264,6 +356,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     () => ({
       user,
       session,
+      sessionEnded,
       loading,
       blogRole,
       blogRoleLoading,
@@ -280,6 +373,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [
       user,
       session,
+      sessionEnded,
       loading,
       blogRole,
       blogRoleLoading,

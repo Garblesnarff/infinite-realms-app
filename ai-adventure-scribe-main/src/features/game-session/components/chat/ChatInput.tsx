@@ -3,18 +3,19 @@ import React, { useState, useRef, useEffect, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
+import {
+  clearPendingInput,
+  isSessionEnded,
+  loadPendingInput,
+  savePendingInput,
+} from '@/services/auth/TokenService';
 import { mightBeDiceCommand, getDiceCommandSuggestions } from '@/utils/diceCommandParser';
 
 interface ChatInputProps {
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string) => void | Promise<void>;
   isDisabled: boolean;
 }
 
@@ -29,7 +30,7 @@ interface ChatInputProps {
  * @param isDisabled - Boolean to disable input during message processing
  */
 export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, isDisabled }) => {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(loadPendingInput);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>([]);
@@ -68,12 +69,25 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
   /**
    * Handles message submission and clears input
    */
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
     if (!input.trim() || isDisabled) return;
-    onSendMessage(input.trim());
-    setInput('');
+
+    const submittedInput = input.trim();
+    // Keep the exact text in this tab until the request completes. If the
+    // refresh terminal state unmounts the game, the composer can restore it
+    // after the player signs in again.
+    savePendingInput(submittedInput);
     setIsExpanded(false);
     setShowDiceSuggestions(false);
+
+    try {
+      await onSendMessage(submittedInput);
+      if (isSessionEnded()) return;
+      clearPendingInput();
+      setInput('');
+    } catch {
+      // Keep the pending input available for retry after a failed request.
+    }
   };
 
   /**
@@ -196,74 +210,74 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
               </Tooltip>
             </div>
 
-          {/* Input area */}
-          <div className="flex-1 relative">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Describe what your character would like to do..."
-              className="min-h-[20px] max-h-28 resize-none border-0 shadow-none focus:ring-0 focus:border-0 p-0 text-sm leading-relaxed placeholder:text-gray-600 bg-transparent"
-              disabled={isDisabled}
-              rows={1}
-              aria-label="Describe what your character would like to do"
-              aria-autocomplete="list"
-              aria-controls={showDiceSuggestions ? listboxId : undefined}
-              aria-activedescendant={
-                showDiceSuggestions && diceSuggestions.length > 0
-                  ? `${baseId}-option-${selectedIndex}`
-                  : undefined
-              }
-            />
+            {/* Input area */}
+            <div className="flex-1 relative">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Describe what your character would like to do..."
+                className="min-h-[20px] max-h-28 resize-none border-0 shadow-none focus:ring-0 focus:border-0 p-0 text-sm leading-relaxed placeholder:text-gray-600 bg-transparent"
+                disabled={isDisabled}
+                rows={1}
+                aria-label="Describe what your character would like to do"
+                aria-autocomplete="list"
+                aria-controls={showDiceSuggestions ? listboxId : undefined}
+                aria-activedescendant={
+                  showDiceSuggestions && diceSuggestions.length > 0
+                    ? `${baseId}-option-${selectedIndex}`
+                    : undefined
+                }
+              />
 
-            {/* Character count indicator */}
-            {input.length > 500 && (
-              <div className="absolute -top-6 right-0 text-xs text-gray-400">
-                {input.length}/1000
-              </div>
-            )}
-
-            {/* Dice command suggestions */}
-            {showDiceSuggestions && diceSuggestions.length > 0 && (
-              <div
-                id={listboxId}
-                className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto"
-                style={{ zIndex: Z_INDEX.DROPDOWN }}
-                role="listbox"
-                aria-labelledby={suggestionsHeaderId}
-              >
-                <div className="p-2">
-                  <div
-                    id={suggestionsHeaderId}
-                    className="text-xs text-muted-foreground mb-2 flex items-center gap-1"
-                  >
-                    <Dice6 className="w-3 h-3" aria-hidden="true" />
-                    Dice Roll Suggestions
-                  </div>
-                  {diceSuggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      id={`${baseId}-option-${index}`}
-                      type="button"
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className={cn(
-                        'w-full text-left px-2 py-1 text-sm rounded font-mono transition-colors',
-                        index === selectedIndex
-                          ? 'bg-accent text-accent-foreground'
-                          : 'hover:bg-accent/50',
-                      )}
-                      disabled={isDisabled}
-                      role="option"
-                      aria-selected={index === selectedIndex}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+              {/* Character count indicator */}
+              {input.length > 500 && (
+                <div className="absolute -top-6 right-0 text-xs text-gray-400">
+                  {input.length}/1000
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+
+              {/* Dice command suggestions */}
+              {showDiceSuggestions && diceSuggestions.length > 0 && (
+                <div
+                  id={listboxId}
+                  className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto"
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  role="listbox"
+                  aria-labelledby={suggestionsHeaderId}
+                >
+                  <div className="p-2">
+                    <div
+                      id={suggestionsHeaderId}
+                      className="text-xs text-muted-foreground mb-2 flex items-center gap-1"
+                    >
+                      <Dice6 className="w-3 h-3" aria-hidden="true" />
+                      Dice Roll Suggestions
+                    </div>
+                    {diceSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        id={`${baseId}-option-${index}`}
+                        type="button"
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        className={cn(
+                          'w-full text-left px-2 py-1 text-sm rounded font-mono transition-colors',
+                          index === selectedIndex
+                            ? 'bg-accent text-accent-foreground'
+                            : 'hover:bg-accent/50',
+                        )}
+                        disabled={isDisabled}
+                        role="option"
+                        aria-selected={index === selectedIndex}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Enhanced Send button with better touch targets */}
             <Tooltip delayDuration={300}>
