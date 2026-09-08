@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.15.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.3...v0.15.0) (2026-09-08)
+
+
+### Features
+
+* **sheet:** add spells section ([#1992](https://github.com/Garblesnarff/infinite-realms-production/issues/1992)) ([25264b2](https://github.com/Garblesnarff/infinite-realms-production/commit/25264b24246bc94868d40e2a7f5cabcc53acdcbe))
+
 ## [0.14.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.2...v0.14.3) (2026-09-08)
 
 
