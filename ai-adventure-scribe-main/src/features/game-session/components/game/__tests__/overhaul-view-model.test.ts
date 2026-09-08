@@ -45,6 +45,55 @@ describe('game-session character sheet view model', () => {
     expect(sheet.hpCurrent).toBe(7);
     expect(sheet.hpMax).toBe(20);
   });
+
+  it('adapts stored spell groups, slots, and spellcasting stats for the sheet', () => {
+    const character = {
+      id: 'scholar-stored-spells',
+      name: 'The Scholar',
+      level: 3,
+      race: { name: 'Human', speed: 30, traits: [], languages: [] },
+      class: { name: 'Wizard', hitDie: 6 },
+      abilityScores: {
+        strength: { score: 10, modifier: 0, savingThrow: false },
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 18, modifier: 4, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 10, modifier: 0, savingThrow: false },
+      },
+      cantrips: ['fire-bolt', 'mage-hand', 'light'],
+      knownSpells: [
+        'magic-missile',
+        'shield',
+        'detect-magic',
+        'identify',
+        'find-familiar',
+        'misty-step',
+      ],
+      preparedSpells: ['magic-missile', 'shield', 'detect-magic', 'identify', 'find-familiar'],
+      spellSlots: {
+        1: { max: 4, current: 4 },
+        2: { max: 2, current: 1 },
+      },
+    } as unknown as Character;
+
+    const sheet = buildCharacterSheet(character);
+
+    expect(sheet.spells.cantrips).toHaveLength(3);
+    expect(sheet.spells.known).toHaveLength(6);
+    expect(sheet.spells.prepared).toHaveLength(5);
+    expect(sheet.spellcasting).toMatchObject({
+      ability: 'INT',
+      spellAttackBonus: 6,
+      spellSaveDC: 14,
+      canPrepare: true,
+      slots: [
+        { level: 1, current: 4, max: 4 },
+        { level: 2, current: 1, max: 2 },
+      ],
+    });
+    expect(sheet.spells.known.find((spell) => spell.id === 'misty-step')?.isPrepared).toBe(false);
+  });
 });
 
 describe('game-session party view model', () => {

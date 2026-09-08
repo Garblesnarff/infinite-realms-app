@@ -1,10 +1,10 @@
 import React from 'react';
 
-import type { DiceRollContext } from '../../chat/MessageList';
+import type { MessageSendContext } from '../../chat/MessageList';
 
 interface QueueItem {
   message: string;
-  context?: DiceRollContext;
+  context?: MessageSendContext;
   resolve: (value: void | PromiseLike<void>) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   reject: (error: any) => void;
@@ -17,9 +17,11 @@ interface QueueItem {
  * and maintains synchronous actualSendMessage ref alignment for session continuity.
  */
 export const useMessageSendQueue = (): {
-  handleSendMessage: (playerInput: string, context?: DiceRollContext) => Promise<void>;
+  handleSendMessage: (playerInput: string, context?: MessageSendContext) => Promise<void>;
   isSendingRef: React.MutableRefObject<boolean>;
-  actualSendMessageRef: React.MutableRefObject<(input: string, ctx?: DiceRollContext) => Promise<void>>;
+  actualSendMessageRef: React.MutableRefObject<
+    (input: string, ctx?: MessageSendContext) => Promise<void>
+  >;
 } => {
   // Request queue to prevent concurrent message sends
   const sendQueueRef = React.useRef<QueueItem[]>([]);
@@ -28,7 +30,7 @@ export const useMessageSendQueue = (): {
   // Ref keeps processSendQueue pointed at the latest actualSendMessage closure,
   // preventing stale sessionId / extractMemories captures when the session changes.
   const actualSendMessageRef = React.useRef<
-    (input: string, ctx?: DiceRollContext) => Promise<void>
+    (input: string, ctx?: MessageSendContext) => Promise<void>
   >(async () => {
     /* populated after actualSendMessage is defined */
   });
@@ -63,7 +65,7 @@ export const useMessageSendQueue = (): {
 
   // Public handleSendMessage that queues messages
   const handleSendMessage = React.useCallback(
-    async (playerInput: string, context?: DiceRollContext): Promise<void> => {
+    async (playerInput: string, context?: MessageSendContext): Promise<void> => {
       return new Promise<void>((resolve, reject) => {
         // Add to queue with optional context (for dice roll results)
         sendQueueRef.current.push({

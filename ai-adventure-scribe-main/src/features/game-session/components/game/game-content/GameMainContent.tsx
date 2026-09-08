@@ -12,6 +12,7 @@ import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
 import { StatsBar } from '../StatsBar';
 import { TimelineRail } from '../TimelineRail';
 
+import type { SpellCastHandlerRef } from '../spell-cast-handler';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import { CombatStatus } from '@/components/combat/CombatStatus';
@@ -47,6 +48,7 @@ interface GameMainContentProps {
   isCombatDetected: boolean;
   isGeneratingGreeting: boolean;
   innerHandleAIResponse: (message: unknown) => Promise<void>;
+  spellCastHandlerRef: SpellCastHandlerRef;
   lastSafetyCommand?: {
     type: 'x_card' | 'veil' | 'pause' | 'resume';
     timestamp: string;
@@ -81,6 +83,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     isCombatDetected,
     isGeneratingGreeting,
     innerHandleAIResponse,
+    spellCastHandlerRef,
     lastSafetyCommand,
     contentWarnings,
     comfortLevel,
@@ -189,6 +192,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               turnCount={sessionData.turn_count ?? 0}
               updateGameSessionState={updateGameSessionState}
               onAIResponse={innerHandleAIResponse}
+              spellCastHandlerRef={spellCastHandlerRef}
             >
               {({ handleSendMessage, isProcessing }) => (
                 <>

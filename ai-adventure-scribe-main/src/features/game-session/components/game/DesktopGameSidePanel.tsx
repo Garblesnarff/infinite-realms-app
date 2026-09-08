@@ -1,12 +1,4 @@
-import {
-  List,
-  ChevronDown,
-  ChevronUp,
-  User,
-  Sword,
-  BookOpen,
-  ChevronLeft,
-} from 'lucide-react';
+import { List, ChevronDown, ChevronUp, User, Sword, BookOpen, ChevronLeft } from 'lucide-react';
 import React from 'react';
 
 import { CombatSummary } from './CombatSummary';
@@ -14,6 +6,7 @@ import { DesktopMemoryTab } from './memory/DesktopMemoryTab';
 import { RightSheetLive } from './overhaul/RightSheetLive';
 import { HandoutCard } from '../handouts/HandoutCard';
 
+import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { Memory } from '@/types/memory';
 
@@ -45,6 +38,7 @@ export interface DesktopGameSidePanelProps {
   sortedMemories: Memory[];
   journalLoading: boolean;
   journalEntries: JournalHandoutEntry[];
+  spellCastHandlerRef?: SpellCastHandlerRef;
 }
 
 /**
@@ -75,6 +69,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
     sortedMemories,
     journalLoading,
     journalEntries,
+    spellCastHandlerRef,
   }) => {
     return (
       <div
@@ -208,7 +203,11 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
               >
                 <TabsContent value="character" className="mt-0 flex-1 border-0 bg-transparent p-0">
                   <div style={{ maxHeight: '78vh', overflow: 'auto' }} className="p-1">
-                    <RightSheetLive sessionId={sessionId} />
+                    <RightSheetLive
+                      sessionId={sessionId}
+                      isInCombat={isInCombat}
+                      spellCastHandlerRef={spellCastHandlerRef}
+                    />
                   </div>
                 </TabsContent>
 

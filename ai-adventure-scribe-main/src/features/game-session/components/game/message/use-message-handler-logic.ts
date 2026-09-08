@@ -5,7 +5,7 @@ import { useMessageSendQueue } from './use-message-send-queue';
 import { useSessionValidator } from '../session/SessionValidator';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
-import type { DiceRollContext } from '../../chat/MessageList';
+import type { MessageSendContext } from '../../chat/MessageList';
 import type { ChatMessage } from '@/types/game';
 
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -61,7 +61,7 @@ export const useMessageHandlerLogic = ({
   updateGameSessionState,
   onAIResponse,
 }: UseMessageHandlerLogicProps): {
-  handleSendMessage: (playerInput: string, context?: DiceRollContext) => Promise<void>;
+  handleSendMessage: (playerInput: string, context?: MessageSendContext) => Promise<void>;
   isProcessing: boolean;
 } => {
   const { messages, sendMessage, queueStatus } = useMessageContext();
@@ -100,7 +100,7 @@ export const useMessageHandlerLogic = ({
   // The actual message sending logic (extracted from handleSendMessage)
   const actualSendMessage = async (
     playerInput: string,
-    providedContext?: DiceRollContext,
+    providedContext?: MessageSendContext,
   ): Promise<void> => {
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);

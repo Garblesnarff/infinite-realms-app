@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 
-import type { DiceRollContext } from '../MessageList';
+import type { MessageSendContext, DiceRollContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { DiceRollRequest } from '@/utils/diceRolls';
@@ -34,7 +34,7 @@ export type LastRollMeta = {
 
 interface UseMessageDiceRollsProps {
   onSendMessage: (message: ChatMessage) => Promise<void>;
-  onSendFullMessage?: (message: string, context?: DiceRollContext) => Promise<void>;
+  onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
 }
 
 /**

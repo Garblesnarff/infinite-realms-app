@@ -87,6 +87,8 @@ export const MOCK_VIEW_MODEL: GameOverhaulViewModel = {
       { id: 'i2', name: 'Torch', quantity: 8 },
       { id: 'i3', name: 'Rope (50 ft)', quantity: 1 },
     ],
+    spells: { cantrips: [], known: [], prepared: [] },
+    spellcasting: null,
     gold: 1245,
     carriedWeight: 48.7,
     maxWeight: 120,

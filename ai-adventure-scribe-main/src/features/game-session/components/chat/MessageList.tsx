@@ -40,8 +40,16 @@ export interface DiceRollContext {
   };
 }
 
+export interface SpellCastContext {
+  intent: 'spell_cast';
+  spellId: string;
+  spellLevel: number | null;
+}
+
+export type MessageSendContext = DiceRollContext | SpellCastContext;
+
 interface MessageListProps {
-  onSendFullMessage?: (message: string, context?: DiceRollContext) => Promise<void>;
+  onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
   sessionId?: string;
   containerRef?: React.RefObject<HTMLDivElement>;
   suppressEmptyState?: boolean;

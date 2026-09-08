@@ -7,6 +7,7 @@ import { GameRightPanel } from './GameRightPanel';
 import { FloatingActionPanel } from '../FloatingActionPanel';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 
+import type { SpellCastHandlerRef } from '../spell-cast-handler';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import { Z_INDEX } from '@/constants/z-index';
@@ -39,6 +40,7 @@ interface GameLayoutProps {
   isGeneratingGreeting: boolean;
   innerHandleAIResponse: (message: unknown) => Promise<void>;
   isDM: boolean;
+  spellCastHandlerRef: SpellCastHandlerRef;
   lastSafetyCommand?: {
     type: 'x_card' | 'veil' | 'pause' | 'resume';
     timestamp: string;
@@ -74,6 +76,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     isGeneratingGreeting,
     innerHandleAIResponse,
     isDM,
+    spellCastHandlerRef,
     lastSafetyCommand,
     contentWarnings,
     comfortLevel,
@@ -176,6 +179,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               isCombatDetected={isCombatDetected}
               isGeneratingGreeting={isGeneratingGreeting}
               innerHandleAIResponse={innerHandleAIResponse}
+              spellCastHandlerRef={spellCastHandlerRef}
               lastSafetyCommand={lastSafetyCommand}
               contentWarnings={contentWarnings}
               comfortLevel={comfortLevel}
@@ -190,6 +194,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 sessionData={sessionData}
                 updateGameSessionState={updateGameSessionState}
                 combatMode={combatMode}
+                spellCastHandlerRef={spellCastHandlerRef}
                 onToggle={handleRightToggle}
               />
             </div>

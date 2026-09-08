@@ -1,8 +1,4 @@
-import {
-  ChevronDown,
-  Menu,
-  ChevronLeft,
-} from 'lucide-react';
+import { ChevronDown, Menu, ChevronLeft } from 'lucide-react';
 import React, { useState, useEffect, useId, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -10,6 +6,7 @@ import { DesktopGameSidePanel } from './DesktopGameSidePanel';
 import { GameSidePanelContent } from './GameSidePanelContent';
 
 import type { MemoryType } from './memory/types';
+import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
 
 import { Button } from '@/components/ui/button';
@@ -29,6 +26,7 @@ interface MemoryPanelProps {
   sessionData: ExtendedGameSession | null;
   updateGameSessionState: (newState: Partial<ExtendedGameSession>) => Promise<void>;
   combatMode: boolean;
+  spellCastHandlerRef?: SpellCastHandlerRef;
 }
 
 interface GameSidePanelProps extends MemoryPanelProps {
@@ -42,7 +40,15 @@ interface GameSidePanelProps extends MemoryPanelProps {
  * Provides filtering, sorting, and collapsible functionality
  */
 export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
-  ({ sessionId, sessionData, updateGameSessionState, combatMode, isCollapsed, onToggle }) => {
+  ({
+    sessionId,
+    sessionData,
+    updateGameSessionState,
+    combatMode,
+    spellCastHandlerRef,
+    isCollapsed,
+    onToggle,
+  }) => {
     // Get contexts
     const { memories = [], isLoading: memoriesLoading } = useMemoryContext();
     const { state: characterState } = useCharacter();
@@ -159,6 +165,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   sessionData={sessionData}
                   updateGameSessionState={updateGameSessionState}
                   combatMode={combatMode}
+                  spellCastHandlerRef={spellCastHandlerRef}
                   isExpanded={isExpanded}
                   setIsExpanded={setIsExpanded}
                   activeTab={activeTab}
@@ -254,6 +261,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
         sortedMemories={sortedMemories}
         journalLoading={journalLoading}
         journalEntries={journalEntries}
+        spellCastHandlerRef={spellCastHandlerRef}
       />
     );
   },

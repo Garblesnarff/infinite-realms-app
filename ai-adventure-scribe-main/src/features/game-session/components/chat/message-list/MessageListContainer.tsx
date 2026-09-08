@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { MessageRenderer } from './MessageRenderer';
 import { useMessageDiceRolls } from './use-message-dice-rolls';
 
-import type { DiceRollContext } from '../MessageList';
+import type { MessageSendContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
 
 import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirmation';
@@ -25,7 +25,7 @@ interface MessageListContainerProps {
   onGenerateScene: (message: ChatMessage & { id?: string; timestamp?: string }) => Promise<void>;
   onOptionSelect: (optionText: string) => Promise<void>;
   onSendMessage: (message: ChatMessage) => Promise<void>;
-  onSendFullMessage?: (message: string, context?: DiceRollContext) => Promise<void>;
+  onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
   isFetchingMore?: boolean;
   hasMore?: boolean;
   suppressEmptyState?: boolean;

@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RightSheet } from '../RightSheet';
+import { buildSpellCastContext, buildSpellCastMessage } from '../spell-view-model';
 
 import type { CharacterSheetVM } from '../types';
 
@@ -31,6 +32,50 @@ const sheet: CharacterSheetVM = {
   conditions: [],
   equipment: [],
   inventory: [],
+  spells: { cantrips: [], known: [], prepared: [] },
+  spellcasting: null,
+};
+
+const casterSheet: CharacterSheetVM = {
+  ...sheet,
+  name: 'The Scholar',
+  subtitle: 'Human · Wizard',
+  spells: {
+    cantrips: [
+      {
+        id: 'fire-bolt',
+        name: 'Fire Bolt',
+        level: 0,
+        isPrepared: true,
+        canPrepare: false,
+      },
+    ],
+    known: [
+      {
+        id: 'magic-missile',
+        name: 'Magic Missile',
+        level: 1,
+        isPrepared: true,
+        canPrepare: true,
+      },
+    ],
+    prepared: [
+      {
+        id: 'magic-missile',
+        name: 'Magic Missile',
+        level: 1,
+        isPrepared: true,
+        canPrepare: true,
+      },
+    ],
+  },
+  spellcasting: {
+    ability: 'INT',
+    spellAttackBonus: 5,
+    spellSaveDC: 13,
+    canPrepare: true,
+    slots: [{ level: 1, current: 4, max: 4 }],
+  },
 };
 
 describe('RightSheet attacks list', () => {
@@ -41,5 +86,59 @@ describe('RightSheet attacks list', () => {
     expect(screen.getByText('Shield Bash')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /View All Attacks/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/View All Attacks/i)).not.toBeInTheDocument();
+  });
+
+  it('shows spell groups and routes out-of-combat casts to the handler', async () => {
+    const onCastSpell = vi.fn().mockResolvedValue(undefined);
+    const onTogglePrepared = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RightSheet c={casterSheet} onCastSpell={onCastSpell} onTogglePrepared={onTogglePrepared} />,
+    );
+
+    expect(screen.getByText('Spells')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cantrips' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Spellbook' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Prepared' })).toBeInTheDocument();
+    expect(screen.getByText('4/4')).toBeInTheDocument();
+    expect(screen.getByText('Save DC')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unprepare Magic Missile' }));
+    expect(onTogglePrepared).toHaveBeenCalledWith('magic-missile', false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cast Magic Missile' }));
+    expect(onCastSpell).toHaveBeenCalledWith(casterSheet.spells.known[0]);
+
+    expect(buildSpellCastContext(casterSheet.spells.known[0])).toEqual({
+      intent: 'spell_cast',
+      spellId: 'magic-missile',
+      spellLevel: 1,
+    });
+    expect(buildSpellCastMessage(casterSheet.spells.known[0])).toBe(
+      'I cast Magic Missile [spell_id=magic-missile, spell_level=level 1].',
+    );
+  });
+
+  it('does not offer a cast action during combat or a preparation toggle to non-casters', () => {
+    render(<RightSheet c={casterSheet} isInCombat />);
+    expect(screen.queryByRole('button', { name: 'Cast Magic Missile' })).not.toBeInTheDocument();
+
+    const nonCaster = {
+      ...sheet,
+      spells: {
+        cantrips: [],
+        known: [
+          {
+            id: 'stored-spell',
+            name: 'Stored Spell',
+            level: 1,
+            isPrepared: false,
+            canPrepare: false,
+          },
+        ],
+        prepared: [],
+      },
+    } satisfies CharacterSheetVM;
+    render(<RightSheet c={nonCaster} />);
+    expect(screen.queryByRole('button', { name: /Prepare Stored Spell/i })).not.toBeInTheDocument();
   });
 });

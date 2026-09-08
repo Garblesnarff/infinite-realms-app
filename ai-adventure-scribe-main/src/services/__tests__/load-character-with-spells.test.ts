@@ -27,6 +27,10 @@ describe('loadCharacterWithSpells API spell shape', () => {
       known_spells: '',
       prepared_spells: '',
       ritual_spells: '',
+      spell_slots: JSON.stringify({
+        1: { max: 4, current: 3 },
+        2: { max: 2, current: 1 },
+      }),
       character_stats: [{ charisma: 16 }],
     });
     getCharacterSpells.mockResolvedValue({
@@ -40,5 +44,32 @@ describe('loadCharacterWithSpells API spell shape', () => {
     expect(convertSpellIdsToFrontend).toHaveBeenNthCalledWith(2, ['healing-word']);
     expect(result?.cantrips).toEqual(['frontend-vicious-mockery']);
     expect(result?.knownSpells).toEqual(['frontend-healing-word']);
+  });
+
+  it('hydrates stored spell slots without recomputing them', async () => {
+    getCharacter.mockResolvedValue({
+      id: 'character-id',
+      name: 'Stored Wizard',
+      race: 'Human',
+      class: 'Wizard',
+      level: 3,
+      cantrips: '',
+      known_spells: '',
+      prepared_spells: '',
+      ritual_spells: '',
+      spell_slots: {
+        1: { max: 4, current: 3 },
+        2: { max: 2, current: 1 },
+      },
+      character_stats: [{ intelligence: 18 }],
+    });
+    getCharacterSpells.mockResolvedValue({ cantrips: [], spells: [] });
+
+    const result = await loadCharacterWithSpells('character-id');
+
+    expect(result?.spellSlots).toEqual({
+      1: { max: 4, current: 3 },
+      2: { max: 2, current: 1 },
+    });
   });
 });

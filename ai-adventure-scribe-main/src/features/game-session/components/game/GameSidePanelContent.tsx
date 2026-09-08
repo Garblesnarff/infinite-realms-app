@@ -1,11 +1,12 @@
 import React, { useId, useCallback } from 'react';
 
 import { CombatSummary } from './CombatSummary';
-import { CompactCharacterHeader } from './CompactCharacterHeader';
 import { MemoryCard } from './memory/MemoryCard';
 import { MemoryFilter } from './memory/MemoryFilter';
 import { HandoutCard } from '../handouts/HandoutCard';
+import { RightSheetLive } from './overhaul/RightSheetLive';
 
+import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { CharacterState } from '@/contexts/character/types';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
@@ -16,7 +17,6 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { CompanionPartyStrip } from '@/webmcp/CompanionPartyStrip';
 
 export interface GameSidePanelContentProps {
   sessionId?: string;
@@ -45,6 +45,7 @@ export interface GameSidePanelContentProps {
   isMobileDrawerOpen: boolean;
   journalEntries?: JournalHandoutEntry[];
   journalLoading?: boolean;
+  spellCastHandlerRef?: SpellCastHandlerRef;
 }
 
 /**
@@ -69,6 +70,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
     isInCombat,
     journalEntries = [],
     journalLoading = false,
+    spellCastHandlerRef,
   }) => {
     const sessionNotesId = useId();
 
@@ -109,12 +111,11 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
           {activeTab === 'character' && (
             <ScrollArea className="h-full">
               <div className="p-4">
-                <CompactCharacterHeader />
-                {sessionId ? (
-                  <div className="mt-3">
-                    <CompanionPartyStrip sessionId={sessionId} />
-                  </div>
-                ) : null}
+                <RightSheetLive
+                  sessionId={sessionId}
+                  isInCombat={isInCombat}
+                  spellCastHandlerRef={spellCastHandlerRef}
+                />
               </div>
             </ScrollArea>
           )}

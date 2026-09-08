@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { FROZEN_CAMPAIGN_CHAPTER_LABEL } from './campaign-chapter';
+import { buildSpellsViewModel } from './spell-view-model';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 
 import type {
@@ -14,6 +15,7 @@ import type {
   InventoryItemVM,
   NamedModVM,
   PartyMemberVM,
+  SpellsVM,
 } from './types';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
@@ -92,6 +94,12 @@ const prettify = (id: string): string =>
     .trim() || 'Item';
 
 const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
+
+const EMPTY_SPELLS: SpellsVM = {
+  cantrips: [],
+  known: [],
+  prepared: [],
+};
 
 export interface PartyMemberSource {
   characterId: string;
@@ -207,6 +215,8 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     conditions: [],
     equipment: [],
     inventory: [],
+    spells: EMPTY_SPELLS,
+    spellcasting: null,
   };
   if (!character) return empty;
 
@@ -226,6 +236,7 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
   const xpMax = getExperienceForLevel(Math.min(20, level + 1)) || xpCurrent;
   const { current: hpCurrent, maximum: hpMax } = getCharacterSheetHitPoints(character);
+  const { spells, spellcasting } = buildSpellsViewModel(character, stats);
 
   const abilityScores = ABILITY_ORDER.map((a) => {
     const score =
@@ -314,6 +325,8 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     conditions,
     equipment,
     inventory,
+    spells,
+    spellcasting,
   };
 }
 

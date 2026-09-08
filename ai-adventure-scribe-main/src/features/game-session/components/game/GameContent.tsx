@@ -6,6 +6,7 @@ import { GameLoadingOverlay, GameLayout } from './game-content';
 import GameProviders from './GameProviders';
 import { useGameData } from './useGameData';
 
+import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 import type { ChatMessage } from '@/types/game';
 
@@ -229,6 +230,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   );
   const [isCombatDetected, setIsCombatDetected] = useState(false);
   const [showTracker, setShowTracker] = useState(false);
+  const spellCastHandlerRef = React.useRef<SpellCastHandlerRef['current']>(null);
 
   // Safety state (placeholder values for future implementation)
   const [lastSafetyCommand] = useState<
@@ -350,6 +352,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
       isGeneratingGreeting={isGeneratingGreeting}
       innerHandleAIResponse={innerHandleAIResponse}
       isDM={isDM}
+      spellCastHandlerRef={spellCastHandlerRef}
       lastSafetyCommand={lastSafetyCommand}
       contentWarnings={contentWarnings}
       comfortLevel={comfortLevel}

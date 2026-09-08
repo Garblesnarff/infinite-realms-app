@@ -3,6 +3,7 @@ import React, { memo } from 'react';
 
 import { GameSidePanel } from '../MemoryPanel';
 
+import type { SpellCastHandlerRef } from '../spell-cast-handler';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import { Button } from '@/components/ui/button';
@@ -21,11 +22,20 @@ interface GameRightPanelProps {
   sessionData: ExtendedGameSession;
   updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
   combatMode: boolean;
+  spellCastHandlerRef: SpellCastHandlerRef;
   onToggle: () => void;
 }
 
 export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
-  ({ sessionId, isCollapsed, sessionData, updateGameSessionState, combatMode, onToggle }) => {
+  ({
+    sessionId,
+    isCollapsed,
+    sessionData,
+    updateGameSessionState,
+    combatMode,
+    spellCastHandlerRef,
+    onToggle,
+  }) => {
     if (!isCollapsed) {
       return (
         <div className="w-full md:w-auto min-h-0 transition-all duration-300">
@@ -34,6 +44,7 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
             sessionData={sessionData}
             updateGameSessionState={updateGameSessionState}
             combatMode={combatMode}
+            spellCastHandlerRef={spellCastHandlerRef}
             isCollapsed={isCollapsed}
             onToggle={onToggle}
           />

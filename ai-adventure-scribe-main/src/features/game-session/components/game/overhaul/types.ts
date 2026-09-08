@@ -61,6 +61,41 @@ export interface InventoryItemVM {
   quantity?: number; // 3
 }
 
+export interface SpellVM {
+  id: string;
+  name: string;
+  level: number | null;
+  school?: string;
+  castingTime?: string;
+  range?: string;
+  components?: string;
+  description?: string;
+  ritual?: boolean;
+  concentration?: boolean;
+  isPrepared: boolean;
+  canPrepare: boolean;
+}
+
+export interface SpellSlotVM {
+  level: number;
+  current: number;
+  max: number;
+}
+
+export interface SpellcastingVM {
+  ability: string;
+  spellAttackBonus: number | null;
+  spellSaveDC: number | null;
+  canPrepare: boolean;
+  slots: SpellSlotVM[];
+}
+
+export interface SpellsVM {
+  cantrips: SpellVM[];
+  known: SpellVM[];
+  prepared: SpellVM[];
+}
+
 export interface CharacterSheetVM {
   name: string; // "Aldric Vale"
   subtitle: string; // "Human · Fighter (Champion)"
@@ -80,6 +115,8 @@ export interface CharacterSheetVM {
   conditions: ConditionVM[];
   equipment: EquipmentVM[];
   inventory: InventoryItemVM[];
+  spells: SpellsVM;
+  spellcasting: SpellcastingVM | null;
   gold?: number;
   carriedWeight?: number;
   maxWeight?: number;

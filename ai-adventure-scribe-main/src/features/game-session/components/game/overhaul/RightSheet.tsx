@@ -1,7 +1,8 @@
 import React from 'react';
 
-import type { CharacterSheetVM } from './types';
+import type { CharacterSheetVM, SpellVM } from './types';
 
+import { Button } from '@/components/ui/button';
 import {
   IRBar,
   IRModRow,
@@ -70,15 +71,236 @@ const TwoCol: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="grid grid-cols-2 gap-3">{children}</div>
 );
 
-export const RightSheet: React.FC<{ c: CharacterSheetVM; sessionId?: string }> = ({
+const spellLevelLabel = (level: number | null): string => {
+  if (level === 0) return 'Cantrip';
+  return level == null ? 'Level unknown' : `Level ${level}`;
+};
+
+const SpellEntry: React.FC<{
+  spell: SpellVM;
+  isInCombat: boolean;
+  showActions: boolean;
+  pendingSpellId?: string;
+  onCastSpell?: (spell: SpellVM) => void | Promise<void>;
+  onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
+}> = ({ spell, isInCombat, showActions, pendingSpellId, onCastSpell, onTogglePrepared }) => (
+  <div className="rounded border border-white/5 bg-white/[0.02] p-2">
+    <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-medium text-foreground/90">{spell.name}</p>
+        <p className="text-[10px] text-muted-foreground">
+          {spellLevelLabel(spell.level)}
+          {spell.school ? ` · ${spell.school}` : ''}
+        </p>
+      </div>
+      {showActions && (
+        <div className="flex shrink-0 items-center gap-1">
+          {spell.canPrepare && onTogglePrepared && (
+            <Button
+              type="button"
+              size="sm"
+              variant={spell.isPrepared ? 'secondary' : 'outline'}
+              className="h-6 px-1.5 text-[10px]"
+              disabled={pendingSpellId === spell.id}
+              aria-pressed={spell.isPrepared}
+              aria-label={`${spell.isPrepared ? 'Unprepare' : 'Prepare'} ${spell.name}`}
+              onClick={() => void onTogglePrepared(spell.id, !spell.isPrepared)}
+            >
+              {pendingSpellId === spell.id ? 'Saving…' : spell.isPrepared ? 'Prepared' : 'Prepare'}
+            </Button>
+          )}
+          {!isInCombat && onCastSpell && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 border-infinite-gold/30 px-1.5 text-[10px] text-infinite-gold"
+              aria-label={`Cast ${spell.name}`}
+              onClick={() => void onCastSpell(spell)}
+            >
+              Cast
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+    {spell.description && (
+      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
+        {spell.description}
+      </p>
+    )}
+  </div>
+);
+
+const SpellGroup: React.FC<{
+  title: string;
+  spells: SpellVM[];
+  isInCombat: boolean;
+  showActions?: boolean;
+  pendingSpellId?: string;
+  onCastSpell?: (spell: SpellVM) => void | Promise<void>;
+  onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
+}> = ({
+  title,
+  spells,
+  isInCombat,
+  showActions = true,
+  pendingSpellId,
+  onCastSpell,
+  onTogglePrepared,
+}) => (
+  <section aria-label={title} className="space-y-1.5">
+    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-infinite-gold/80">
+      {title}
+    </h3>
+    {spells.length > 0 ? (
+      <div className="space-y-1.5">
+        {spells.map((spell) => (
+          <SpellEntry
+            key={spell.id}
+            spell={spell}
+            isInCombat={isInCombat}
+            showActions={showActions}
+            pendingSpellId={pendingSpellId}
+            onCastSpell={onCastSpell}
+            onTogglePrepared={onTogglePrepared}
+          />
+        ))}
+      </div>
+    ) : (
+      <p className="text-[10px] text-muted-foreground">None recorded.</p>
+    )}
+  </section>
+);
+
+const SpellsSection: React.FC<{
+  c: CharacterSheetVM;
+  isInCombat: boolean;
+  pendingSpellId?: string;
+  spellActionError?: string;
+  onCastSpell?: (spell: SpellVM) => void | Promise<void>;
+  onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
+}> = ({ c, isInCombat, pendingSpellId, spellActionError, onCastSpell, onTogglePrepared }) => (
+  <IRPanel>
+    <IRPanelHeader title="Spells" />
+    <div className="space-y-3 p-2.5">
+      {c.spellcasting ? (
+        <div className="grid grid-cols-3 gap-1.5 rounded border border-white/5 bg-white/[0.02] p-2 text-center">
+          <div>
+            <p className="text-[9px] uppercase text-muted-foreground">Ability</p>
+            <p className="text-[11px] font-semibold text-foreground">{c.spellcasting.ability}</p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-muted-foreground">Attack</p>
+            <p className="text-[11px] font-semibold text-foreground">
+              {c.spellcasting.spellAttackBonus == null
+                ? '—'
+                : c.spellcasting.spellAttackBonus >= 0
+                  ? `+${c.spellcasting.spellAttackBonus}`
+                  : c.spellcasting.spellAttackBonus}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-muted-foreground">Save DC</p>
+            <p className="text-[11px] font-semibold text-foreground">
+              {c.spellcasting.spellSaveDC ?? '—'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[10px] text-muted-foreground">No spellcasting data recorded.</p>
+      )}
+
+      {spellActionError && (
+        <p role="alert" className="text-[10px] text-destructive">
+          {spellActionError}
+        </p>
+      )}
+
+      <SpellGroup
+        title="Cantrips"
+        spells={c.spells.cantrips}
+        isInCombat={isInCombat}
+        pendingSpellId={pendingSpellId}
+        onCastSpell={c.spellcasting ? onCastSpell : undefined}
+        onTogglePrepared={onTogglePrepared}
+      />
+      <SpellGroup
+        title={c.spellcasting?.canPrepare ? 'Spellbook' : 'Known Spells'}
+        spells={c.spells.known}
+        isInCombat={isInCombat}
+        pendingSpellId={pendingSpellId}
+        onCastSpell={c.spellcasting ? onCastSpell : undefined}
+        onTogglePrepared={onTogglePrepared}
+      />
+      {c.spellcasting?.canPrepare && (
+        <SpellGroup
+          title="Prepared"
+          spells={c.spells.prepared}
+          isInCombat={isInCombat}
+          showActions={false}
+        />
+      )}
+
+      {c.spellcasting && (
+        <section aria-label="Spell Slots" className="space-y-1.5">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-infinite-gold/80">
+            Spell Slots
+          </h3>
+          {c.spellcasting.slots.length > 0 ? (
+            <div className="grid grid-cols-2 gap-1.5">
+              {c.spellcasting.slots.map((slot) => (
+                <div
+                  key={slot.level}
+                  className="flex items-center justify-between rounded border border-white/5 px-2 py-1 text-[10px]"
+                >
+                  <span className="text-muted-foreground">Level {slot.level}</span>
+                  <span className="font-semibold text-foreground">
+                    {slot.current}/{slot.max}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">No spell slots recorded.</p>
+          )}
+        </section>
+      )}
+    </div>
+  </IRPanel>
+);
+
+export const RightSheet: React.FC<{
+  c: CharacterSheetVM;
+  sessionId?: string;
+  isInCombat?: boolean;
+  pendingSpellId?: string;
+  spellActionError?: string;
+  onCastSpell?: (spell: SpellVM) => void | Promise<void>;
+  onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
+}> = ({
   c,
   sessionId,
+  isInCombat = false,
+  pendingSpellId,
+  spellActionError,
+  onCastSpell,
+  onTogglePrepared,
 }) => (
   <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
     <SheetHeader c={c} />
     {sessionId ? <CompanionPartyStrip sessionId={sessionId} /> : null}
     <CoreStats c={c} />
     <AbilityScores c={c} />
+
+    <SpellsSection
+      c={c}
+      isInCombat={isInCombat}
+      pendingSpellId={pendingSpellId}
+      spellActionError={spellActionError}
+      onCastSpell={onCastSpell}
+      onTogglePrepared={onTogglePrepared}
+    />
 
     <TwoCol>
       <IRPanel>
