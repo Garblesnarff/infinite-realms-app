@@ -2,7 +2,10 @@ import { Heart, Shield, Zap, Sword } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import { useCharacter } from '@/contexts/CharacterContext';
-import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
+import {
+  formatCharacterSheetHitPoints,
+  getCharacterSheetHitPoints,
+} from '@/utils/character/character-sheet-hit-points';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 /**
@@ -64,7 +67,12 @@ export const StatsBar: React.FC = React.memo(() => {
 
   return (
     <div className="flex items-center gap-4 mt-2 mb-4 p-2 bg-muted/50 rounded-lg">
-      <StatBadge icon={Heart} value={`${currentHp}/${maxHp}`} label="HP" color="text-red-600" />
+      <StatBadge
+        icon={Heart}
+        value={formatCharacterSheetHitPoints({ current: currentHp, maximum: maxHp })}
+        label="HP"
+        color="text-red-600"
+      />
       <StatBadge icon={Shield} value={armorClass} label="AC" color="text-blue-600" />
       <StatBadge icon={Zap} value={`+${proficiency}`} label="PROF" color="text-green-600" />
       <StatBadge

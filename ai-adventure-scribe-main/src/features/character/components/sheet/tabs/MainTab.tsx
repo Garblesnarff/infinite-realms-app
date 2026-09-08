@@ -32,8 +32,8 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
 
   const stats = useCharacterStats(character);
 
-  // Stored character_stats HP is authoritative for an existing character;
-  // formula math remains available through the helper for preview/legacy data.
+  // Stored character_stats HP is authoritative; missing values remain missing
+  // while the sheet waits for the persisted stats to load.
   const { current: currentHp, maximum: maxHp } = getCharacterSheetHitPoints(character);
 
   const {
@@ -46,7 +46,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
     applyHealing,
     resetDeathSaves,
     updateDeathSave,
-  } = useCombatState(maxHp, currentHp);
+  } = useCombatState(maxHp ?? 0, currentHp ?? 0);
 
   const proficiencyBonus = stats?.proficiencyBonus ?? 2;
   const armorClass = stats?.armorClass ?? 10;
@@ -59,6 +59,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
       <CombatVitals
         character={character}
         maxHp={maxHp}
+        hasStoredHp={currentHp !== null && maxHp !== null}
         combatState={combatState}
         damageInput={damageInput}
         setDamageInput={setDamageInput}

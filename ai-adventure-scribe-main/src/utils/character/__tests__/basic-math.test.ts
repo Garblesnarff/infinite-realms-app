@@ -12,7 +12,6 @@ import {
 
 import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
 
-
 // Mock EQUIPMENT_LOOKUP
 vi.mock('@/data/equipmentOptions', () => ({
   EQUIPMENT_LOOKUP: {
@@ -76,10 +75,20 @@ describe('basic-math', () => {
       expect(calculateHitPoints(character)).toBe(2);
     });
 
-    it('should handle missing level and scores', () => {
-      const character: any = {};
-      // level 1, hitDie 8, conMod 0 -> 8
-      expect(calculateHitPoints(character)).toBe(8);
+    it('should resolve the hit die from a class name when the class record is partial', () => {
+      const character: any = {
+        level: 1,
+        abilityScores: { constitution: { modifier: 0 } },
+        class: { name: 'Wizard' },
+      };
+
+      expect(calculateHitPoints(character)).toBe(6);
+    });
+
+    it('should reject missing class data instead of assuming a d8', () => {
+      expect(() => calculateHitPoints({} as any)).toThrow(
+        'Cannot calculate hit points without a resolved character class',
+      );
     });
 
     it('should handle partial character data with null abilityScores', () => {
@@ -308,7 +317,9 @@ describe('basic-math', () => {
     });
 
     it('should handle armor with maxDexModifier of 0', () => {
-      (EQUIPMENT_LOOKUP.get as any).mockReturnValue({ armorClass: { base: 14, maxDexModifier: 0 } });
+      (EQUIPMENT_LOOKUP.get as any).mockReturnValue({
+        armorClass: { base: 14, maxDexModifier: 0 },
+      });
       const character: any = {
         abilityScores: { dexterity: { modifier: 2 } },
         equippedArmor: 'clunky',

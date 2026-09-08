@@ -159,8 +159,8 @@ export function mergePartyMembers(
       id: companion.id,
       name: companion.name,
       subtitle: [`Level ${companion.level}`, companion.class].filter(Boolean).join(' '),
-      currentHp: 0,
-      maxHp: 0,
+      currentHp: null,
+      maxHp: null,
       avatarUrl: companion.portraitUrl ?? undefined,
     };
     addMember(
@@ -195,8 +195,8 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     level: 1,
     xpCurrent: 0,
     xpMax: 300,
-    hpCurrent: 0,
-    hpMax: 0,
+    hpCurrent: null,
+    hpMax: null,
     ac: 10,
     initiative: '+0',
     speed: 30,

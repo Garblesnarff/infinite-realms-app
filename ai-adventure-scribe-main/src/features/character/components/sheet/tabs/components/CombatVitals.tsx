@@ -22,11 +22,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { MISSING_HIT_POINTS_LABEL } from '@/utils/character/character-sheet-hit-points';
 import { getHPColor } from '@/utils/hp-utils';
 
 interface CombatVitalsProps {
   character: Character;
-  maxHp: number;
+  maxHp: number | null;
+  hasStoredHp: boolean;
   combatState: CombatState;
   damageInput: string;
   setDamageInput: (value: string) => void;
@@ -47,6 +49,7 @@ interface CombatVitalsProps {
 const CombatVitals: React.FC<CombatVitalsProps> = ({
   character,
   maxHp,
+  hasStoredHp,
   combatState,
   damageInput,
   setDamageInput,
@@ -59,7 +62,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
   damageId,
   healingId,
 }) => {
-  const isUnconscious = combatState.currentHp <= 0;
+  const isUnconscious = hasStoredHp && combatState.currentHp <= 0;
   const isDead = combatState.deathSaves.failures >= 3;
   const isStabilized = combatState.deathSaves.successes >= 3;
 
@@ -77,17 +80,23 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Hit Points</span>
             <Badge variant={isUnconscious ? 'destructive' : 'secondary'}>
-              {combatState.currentHp} / {maxHp}
+              {hasStoredHp ? `${combatState.currentHp} / ${maxHp}` : MISSING_HIT_POINTS_LABEL}
             </Badge>
           </div>
 
           {/* HP Bar */}
-          <Progress
-            value={(combatState.currentHp / maxHp) * 100}
-            className="h-3"
-            indicatorClassName={getHPColor((combatState.currentHp / maxHp) * 100)}
-            aria-label={`Hit Points: ${combatState.currentHp} of ${maxHp} remaining`}
-          />
+          {hasStoredHp && maxHp !== null ? (
+            <Progress
+              value={(combatState.currentHp / maxHp) * 100}
+              className="h-3"
+              indicatorClassName={getHPColor((combatState.currentHp / maxHp) * 100)}
+              aria-label={`Hit Points: ${combatState.currentHp} of ${maxHp} remaining`}
+            />
+          ) : (
+            <div role="status" aria-label="Hit Points unavailable" className="text-center">
+              {MISSING_HIT_POINTS_LABEL}
+            </div>
+          )}
 
           {/* Temp HP */}
           {combatState.tempHp > 0 && (
@@ -110,7 +119,10 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Resistances */}
             {character.damageResistances?.length > 0 && (
               <div className="flex items-start gap-2 mb-2">
-                <ShieldCheck className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <ShieldCheck
+                  className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <div>
                   <span className="text-xs text-muted-foreground">Resistances:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -170,7 +182,10 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Vision Types */}
             {character.visionTypes?.length > 0 && (
               <div className="flex items-start gap-2 mb-2">
-                <Target className="w-4 h-4 text-infinite-purple mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <Target
+                  className="w-4 h-4 text-infinite-purple mt-0.5 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <div>
                   <span className="text-xs text-muted-foreground">Vision:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -192,7 +207,10 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Obscurement */}
             {character.obscurement && character.obscurement !== 'clear' && (
               <div className="flex items-start gap-2 mb-2">
-                <ShieldAlert className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <ShieldAlert
+                  className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <div>
                   <span className="text-xs text-muted-foreground">Environment:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -212,7 +230,10 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Hidden Status */}
             {character.isHidden && (
               <div className="flex items-start gap-2">
-                <Eye className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <Eye
+                  className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0"
+                  aria-hidden="true"
+                />
                 <div>
                   <span className="text-xs text-muted-foreground">Stealth:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -227,47 +248,49 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
         )}
 
         {/* Damage/Healing Controls */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Label htmlFor={damageId} className="sr-only">
-              Damage amount
-            </Label>
-            <Input
-              id={damageId}
-              type="number"
-              placeholder="Damage"
-              value={damageInput}
-              onChange={(e) => setDamageInput(e.target.value)}
-              className="text-sm"
-            />
-            <Button size="sm" variant="destructive" onClick={applyDamage} className="w-full mt-1">
-              <Minus className="w-3 h-3 mr-1" />
-              Apply Damage
-            </Button>
+        {hasStoredHp && (
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label htmlFor={damageId} className="sr-only">
+                Damage amount
+              </Label>
+              <Input
+                id={damageId}
+                type="number"
+                placeholder="Damage"
+                value={damageInput}
+                onChange={(e) => setDamageInput(e.target.value)}
+                className="text-sm"
+              />
+              <Button size="sm" variant="destructive" onClick={applyDamage} className="w-full mt-1">
+                <Minus className="w-3 h-3 mr-1" />
+                Apply Damage
+              </Button>
+            </div>
+            <div className="flex-1">
+              <Label htmlFor={healingId} className="sr-only">
+                Healing amount
+              </Label>
+              <Input
+                id={healingId}
+                type="number"
+                placeholder="Healing"
+                value={healingInput}
+                onChange={(e) => setHealingInput(e.target.value)}
+                className="text-sm"
+              />
+              <Button
+                size="sm"
+                variant="default"
+                onClick={applyHealing}
+                className="w-full mt-1 bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Apply Healing
+              </Button>
+            </div>
           </div>
-          <div className="flex-1">
-            <Label htmlFor={healingId} className="sr-only">
-              Healing amount
-            </Label>
-            <Input
-              id={healingId}
-              type="number"
-              placeholder="Healing"
-              value={healingInput}
-              onChange={(e) => setHealingInput(e.target.value)}
-              className="text-sm"
-            />
-            <Button
-              size="sm"
-              variant="default"
-              onClick={applyHealing}
-              className="w-full mt-1 bg-green-600 hover:bg-green-700"
-            >
-              <Plus className="w-3 h-3 mr-1" />
-              Apply Healing
-            </Button>
-          </div>
-        </div>
+        )}
 
         {/* Death Saves (only show when unconscious) */}
         {isUnconscious && !isDead && (

@@ -400,12 +400,16 @@ describe('character-calculations', () => {
           traits: ['Darkvision'],
           languages: ['Common', 'Elvish'],
         } as any,
+        character_stats: {
+          current_hit_points: 20,
+          max_hit_points: 20,
+        },
       };
 
       const stats = calculateAllCharacterStats(character as Character);
 
       expect(stats.proficiencyBonus).toBe(2);
-      expect(stats.hitPoints).toBe(20); // 6+2 (lvl 1) + 2*(4+2) (lvl 2-3) = 8 + 12 = 20
+      expect(stats.hitPoints).toBe(20); // Stored HP is authoritative.
       expect(stats.armorClass).toBe(11); // 10 + 1 (Dex)
       expect(stats.speed).toBe(30);
       expect(stats.allTraits).toContain('Darkvision');
@@ -416,7 +420,7 @@ describe('character-calculations', () => {
     it('should handle missing data gracefully', () => {
       const stats = calculateAllCharacterStats({} as Character);
       expect(stats.proficiencyBonus).toBe(2);
-      expect(stats.hitPoints).toBe(8); // 8+0 (lvl 1)
+      expect(stats.hitPoints).toBeNull();
       expect(stats.armorClass).toBe(10);
       expect(stats.speed).toBe(30);
     });

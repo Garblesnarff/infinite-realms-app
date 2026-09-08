@@ -84,6 +84,10 @@ describe('CompactCharacterHeader', () => {
         wisdom: { score: 10, modifier: 0 },
         charisma: { score: 12, modifier: 1 },
       },
+      character_stats: {
+        current_hit_points: 55,
+        max_hit_points: 55,
+      },
     };
 
     (useCharacter as any).mockReturnValue({
@@ -95,11 +99,7 @@ describe('CompactCharacterHeader', () => {
     expect(screen.getByText('Grog')).toBeInTheDocument();
     expect(screen.getByText(/Level 5 Goliath Barbarian/)).toBeInTheDocument();
 
-    // HP: 12 + 3 (1st) + 4 * (7 + 3) = 15 + 40 = 55
-    // Wait, let's check calculateHitPoints logic in character-calculations.ts:
-    // firstLevelHP = max(1, 12 + 3) = 15
-    // perSubsequentLevelHP = max(1, floor(12/2) + 1 + 3) = max(1, 6+1+3) = 10
-    // total = 15 + 4 * 10 = 55
+    // Stored current/max HP is displayed directly.
     expect(screen.getByLabelText(/Hit Points: 55/)).toBeInTheDocument();
 
     // AC (Barbarian): 10 + 2 (DEX) + 3 (CON) = 15

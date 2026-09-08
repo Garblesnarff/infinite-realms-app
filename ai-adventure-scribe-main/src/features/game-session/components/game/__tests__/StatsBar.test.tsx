@@ -45,6 +45,10 @@ describe('StatsBar', () => {
         charisma: { modifier: 0 },
       },
       equippedArmor: '',
+      character_stats: {
+        current_hit_points: 12,
+        max_hit_points: 12,
+      },
     };
 
     (useCharacter as any).mockReturnValue({
@@ -53,7 +57,6 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    // HP fallback: 10 + 2 = 12
     expect(getStatValue('HP')).toBe('12/12');
 
     // AC: 10 + 3 = 13
@@ -130,6 +133,10 @@ describe('StatsBar', () => {
         charisma: { modifier: 0 },
       },
       equippedArmor: '',
+      character_stats: {
+        current_hit_points: 15,
+        max_hit_points: 15,
+      },
     };
 
     (useCharacter as any).mockReturnValue({
@@ -138,7 +145,6 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    // HP fallback: 12 + 3 = 15
     expect(getStatValue('HP')).toBe('15/15');
     // AC: 10 + 2 (DEX) + 3 (CON) = 15
     expect(getStatValue('AC')).toBe('15');
@@ -169,8 +175,7 @@ describe('StatsBar', () => {
     expect(getStatValue('AC')).toBe('17');
   });
 
-  it('verifies fixed HP calculation for level 2', () => {
-    // Standard 5e fallback: (10 + 2) + (6 + 2) = 20
+  it('displays stored HP for level 2', () => {
     const mockCharacter = {
       level: 2,
       class: { name: 'Fighter', hitDie: 10 },
@@ -181,6 +186,10 @@ describe('StatsBar', () => {
         intelligence: { modifier: 0 },
         wisdom: { modifier: 0 },
         charisma: { modifier: 0 },
+      },
+      character_stats: {
+        current_hit_points: 20,
+        max_hit_points: 20,
       },
     };
 

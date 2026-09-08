@@ -162,9 +162,7 @@ describe('use-character-stats hooks', () => {
       expect(result.current?.spellSaveDC).toBe(13);
     });
 
-    it('should incorporate constitution bonus into HP', () => {
-      // 10 CON base + 2 racial = 12 CON (+1 mod)
-      // Level 1 Wizard HP = 6 + 1 = 7
+    it('does not invent sheet HP when stored stats are unavailable', () => {
       const toughWizard: Character = {
         ...mockCharacter,
         race: {
@@ -176,8 +174,7 @@ describe('use-character-stats hooks', () => {
 
       const { result } = renderHook(() => useCharacterStats(toughWizard));
 
-      // CURRENT BUG: If it uses base scores, CON 10 (+0 mod) -> HP 6
-      expect(result.current?.hitPoints).toBe(7);
+      expect(result.current?.hitPoints).toBeNull();
     });
   });
 

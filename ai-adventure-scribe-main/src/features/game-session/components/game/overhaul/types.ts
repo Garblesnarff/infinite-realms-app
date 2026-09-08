@@ -22,8 +22,8 @@ export interface PartyMemberVM {
   id: string;
   name: string;
   subtitle: string; // "Level 5 Cleric"
-  currentHp: number;
-  maxHp: number;
+  currentHp: number | null;
+  maxHp: number | null;
   avatarUrl?: string;
 }
 
@@ -68,8 +68,8 @@ export interface CharacterSheetVM {
   xpCurrent: number;
   xpMax: number;
   avatarUrl?: string;
-  hpCurrent: number;
-  hpMax: number;
+  hpCurrent: number | null;
+  hpMax: number | null;
   ac: number;
   initiative: string; // "+3"
   speed: number; // 30

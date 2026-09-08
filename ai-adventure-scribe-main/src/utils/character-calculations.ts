@@ -28,7 +28,7 @@ import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hi
 export interface CharacterStats {
   // Core Stats
   proficiencyBonus: number;
-  hitPoints: number;
+  hitPoints: number | null;
   hitDie: string;
   armorClass: number;
   initiative: number;
@@ -293,7 +293,7 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
   return {
     proficiencyBonus: pb,
     // Existing-character displays must honor server-authoritative character_stats;
-    // the helper falls back to preview math only when no stored HP exists.
+    // missing stored HP remains null instead of being synthesized.
     hitPoints: getCharacterSheetHitPoints(character).maximum,
     hitDie: `1d${character.class?.hitDie || 8}`,
     armorClass: calculateArmorClass(character),

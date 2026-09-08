@@ -8,7 +8,10 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCharacterStats } from '@/hooks/use-character-stats';
 import logger from '@/lib/logger';
-import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
+import {
+  formatCharacterSheetHitPoints,
+  getCharacterSheetHitPoints,
+} from '@/utils/character/character-sheet-hit-points';
 
 interface FloatingActionPanelProps {
   isVisible: boolean;
@@ -30,7 +33,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
     const stats = useCharacterStats(character);
 
     const sheetHitPoints = useMemo(
-      () => (character ? getCharacterSheetHitPoints(character) : { current: 0, maximum: 0 }),
+      () => (character ? getCharacterSheetHitPoints(character) : { current: null, maximum: null }),
       [character],
     );
 
@@ -55,6 +58,11 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
     }, [sheetHitPoints, stats]);
 
     const { currentHp, maxHp, armorClass, proficiency } = displayStats;
+    const hpDisplay = formatCharacterSheetHitPoints({ current: currentHp, maximum: maxHp });
+    const hpAriaLabel =
+      currentHp !== null && maxHp !== null
+        ? `Hit Points: ${currentHp} out of ${maxHp}`
+        : `Hit Points: ${hpDisplay}`;
 
     const handleQuickRoll = useCallback((type: string): void => {
       // This would integrate with your dice rolling system
@@ -117,11 +125,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
                   title={isExpanded ? 'Collapse actions' : 'Expand actions'}
                   className="h-6 w-6 p-0 rounded-full hover:bg-infinite-purple/20"
                 >
-                  {isExpanded ? (
-                    <Minus className="h-3 w-3" />
-                  ) : (
-                    <Plus className="h-3 w-3" />
-                  )}
+                  {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
                 </Button>
                 <Button
                   type="button"
@@ -147,13 +151,11 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
             >
               <div
                 role="group"
-                aria-label={`Hit Points: ${currentHp} out of ${maxHp}`}
+                aria-label={hpAriaLabel}
                 className="p-2 rounded-lg bg-red-500/10 border border-red-400/20"
               >
                 <Heart aria-hidden="true" className="h-4 w-4 mx-auto text-red-400 mb-1" />
-                <div className="text-xs font-bold text-card-foreground">
-                  {currentHp}/{maxHp}
-                </div>
+                <div className="text-xs font-bold text-card-foreground">{hpDisplay}</div>
                 <div className="text-[10px] text-muted-foreground">HP</div>
               </div>
               <div

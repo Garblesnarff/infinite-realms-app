@@ -1,3 +1,5 @@
+import { findSrdClass } from '../../../shared/srd-class-data';
+
 import type { Character } from '@/types/character';
 
 import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
@@ -39,7 +41,11 @@ export const calculateProficiencyBonus = (level: number): number => {
 export const calculateHitPoints = (character: Character): number => {
   const level = Math.max(1, character.level || 1);
   const conMod = character.abilityScores?.constitution?.modifier || 0;
-  const hitDie = character.class?.hitDie || 8;
+  const hitDie = character.class?.hitDie ?? findSrdClass(character.class?.name)?.hitDie;
+
+  if (hitDie === undefined) {
+    throw new Error('Cannot calculate hit points without a resolved character class');
+  }
 
   // First level gets max hit die + con mod
   // D&D 5e rule: minimum 1 HP per level

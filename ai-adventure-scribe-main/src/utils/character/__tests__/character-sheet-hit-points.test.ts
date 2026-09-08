@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { calculateHitPoints } from '../basic-math';
-import { getCharacterSheetHitPoints } from '../character-sheet-hit-points';
+import {
+  formatCharacterSheetHitPoints,
+  getCharacterSheetHitPoints,
+} from '../character-sheet-hit-points';
 import { transformCharacterData } from '../data-transformers';
 
 import type { Character } from '@/types/character';
@@ -26,7 +29,17 @@ const EXISTING_CHARACTER_DISPLAY_CONSUMERS = [
   '../../../features/character/components/sheet/tabs/MainTab.tsx',
 ] as const;
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('getCharacterSheetHitPoints', () => {
+  it('does not import or call the preview HP calculator', () => {
+    const source = readFileSync(resolve(testDirectory, '../character-sheet-hit-points.ts'), 'utf8');
+
+    expect(source).not.toContain('calculateHitPoints');
+  });
+
   it('keeps existing-character display consumers on the stored HP helper', () => {
     for (const relativePath of EXISTING_CHARACTER_DISPLAY_CONSUMERS) {
       const source = readFileSync(resolve(testDirectory, relativePath), 'utf8');
@@ -36,7 +49,7 @@ describe('getCharacterSheetHitPoints', () => {
     }
   });
 
-  it('displays stored current and max HP when they disagree with preview math', () => {
+  it('displays stored 7 HP when it disagrees with preview math', () => {
     const character = transformCharacterData(
       {
         id: 'char-123',
@@ -53,14 +66,32 @@ describe('getCharacterSheetHitPoints', () => {
         intelligence: 10,
         wisdom: 10,
         charisma: 10,
-        current_hit_points: 4,
-        max_hit_points: 10,
+        current_hit_points: 7,
+        max_hit_points: 7,
       },
       [],
     );
 
     expect(calculateHitPoints(character)).toBe(6);
-    expect(getCharacterSheetHitPoints(character)).toEqual({ current: 4, maximum: 10 });
+    const hitPoints = getCharacterSheetHitPoints(character);
+    expect(hitPoints).toEqual({ current: 7, maximum: 7 });
+    expect(formatCharacterSheetHitPoints(hitPoints)).toBe('7/7');
+  });
+
+  it('renders an em dash and warns once when stored max HP is null', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const character = {
+      id: 'missing-max-hp',
+      character_stats: { current_hit_points: 7, max_hit_points: null },
+    } as unknown as Character;
+
+    const first = getCharacterSheetHitPoints(character);
+    const second = getCharacterSheetHitPoints(character);
+
+    expect(first).toEqual({ current: 7, maximum: null });
+    expect(formatCharacterSheetHitPoints(first)).toBe('—');
+    expect(formatCharacterSheetHitPoints(second)).toBe('—');
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('preserves a stored zero current HP', () => {

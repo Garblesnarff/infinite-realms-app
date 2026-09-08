@@ -76,8 +76,8 @@ describe('game-session party view model', () => {
         id: 'companion-row',
         name: 'Mira',
         subtitle: 'Level 4 Cleric',
-        currentHp: 0,
-        maxHp: 0,
+        currentHp: null,
+        maxHp: null,
         avatarUrl: 'https://example.com/mira.png',
       },
     ]);

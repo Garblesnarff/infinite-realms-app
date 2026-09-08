@@ -3,6 +3,7 @@ import React from 'react';
 import type { CampaignSummaryVM, CombatantVM, PartyMemberVM } from './types';
 
 import { IRBar, IRPanel, IRPanelHeader, IRThumb } from '@/components/ui/ir-primitives';
+import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 const CurrentCampaign: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }) => (
   <IRPanel>
@@ -77,11 +78,16 @@ const PartyMemberRow: React.FC<{ member: PartyMemberVM }> = ({ member }) => (
       <div className="flex items-baseline justify-between gap-2">
         <p className="truncate text-xs font-semibold text-foreground">{member.name}</p>
         <span className="shrink-0 text-[10px] text-muted-foreground">
-          {member.currentHp}/{member.maxHp}
+          {formatCharacterSheetHitPoints({
+            current: member.currentHp,
+            maximum: member.maxHp,
+          })}
         </span>
       </div>
       <p className="truncate text-[10px] text-muted-foreground">{member.subtitle}</p>
-      <IRBar value={member.currentHp} max={member.maxHp} className="mt-1" />
+      {member.currentHp !== null && member.maxHp !== null && (
+        <IRBar value={member.currentHp} max={member.maxHp} className="mt-1" />
+      )}
     </div>
   </div>
 );

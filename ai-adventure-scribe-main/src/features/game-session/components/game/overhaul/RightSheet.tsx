@@ -11,6 +11,7 @@ import {
   IRThumb,
 } from '@/components/ui/ir-primitives';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { CompanionPartyStrip } from '@/webmcp/CompanionPartyStrip';
 
 const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => {
@@ -47,7 +48,10 @@ const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => {
 
 const CoreStats: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
   <div className="grid grid-cols-4 gap-2">
-    <IRStatTile label="HP" value={`${c.hpCurrent}/${c.hpMax}`} />
+    <IRStatTile
+      label="HP"
+      value={formatCharacterSheetHitPoints({ current: c.hpCurrent, maximum: c.hpMax })}
+    />
     <IRStatTile label="AC" value={c.ac} />
     <IRStatTile label="INIT" value={c.initiative} />
     <IRStatTile label="SPD" value={`${c.speed} ft`} />
