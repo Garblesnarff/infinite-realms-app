@@ -16,6 +16,7 @@ import { resolveCombatantStats } from './combatant-stat-resolution.js';
 import { appendActiveCompanionInputs } from './companion-seating.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
 import { seatParticipantArmorClass } from './participant-armor-class.js';
+import { resolveParticipantType } from './participant-type.js';
 import { scaleMonsterForParty } from './party-scaling.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
 import { db } from '../../../../db/client';
@@ -360,14 +361,10 @@ export class CombatEncounterService {
           damageResistances: monster?.damageResistances ?? [],
           damageImmunities: monster?.damageImmunities ?? [],
           damageVulnerabilities: monster?.damageVulnerabilities ?? [],
-          participantType: input.characterId
-            ? ('player' as const)
-            : input.npcId
-              ? ('npc' as const)
-              : // 'monster' (not 'other') is what the combat UI filters on for enemies.
-                input.monsterId
-                ? ('monster' as const)
-                : ('other' as const),
+          // 'monster' (not 'other') is what the combat UI filters on for enemies;
+          // the monsterId branch collapsed into the helper's fallback, which
+          // returns the same 'monster'. See participant-type.ts.
+          participantType: resolveParticipantType(input),
           // Stored, not re-derived at attack time. A participant carries no monster id, so
           // an attack-time lookup would have to work from the display name -- and combat
           // numbers duplicates ("Shadow Roach 2"), which normalizes to a key no catalog

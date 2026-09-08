@@ -26,6 +26,7 @@ import {
 } from '../../../db/schema/index';
 import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
 import { resetTurnResources } from './combat/combat-turn-resources.js';
+import { resolveParticipantType } from './combat/participant-type.js';
 
 import type { CreateParticipantInput, InitiativeRoll, AdvanceTurnResult } from '../types/combat.js';
 
@@ -54,7 +55,7 @@ export class CombatInitiativeService {
     // Roll initiative (d20 + modifier)
     const roll = rollD20();
     const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
-    const participantType = input.characterId ? 'player' : input.npcId ? 'npc' : 'other';
+    const participantType = resolveParticipantType(input);
 
     // This insert-select projected 8 of combat_participants' 25 columns, so Drizzle
     // threw before issuing it and no participant could ever be added to an encounter.
