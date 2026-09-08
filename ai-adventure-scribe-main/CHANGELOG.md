@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.14.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.2...v0.14.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **character:** use stored HP on sheet ([#1891](https://github.com/Garblesnarff/infinite-realms-production/issues/1891)) ([#1989](https://github.com/Garblesnarff/infinite-realms-production/issues/1989)) ([d6ef57d](https://github.com/Garblesnarff/infinite-realms-production/commit/d6ef57df691742c62a86651f193e3b5a73973515))
+* **combat:** seat name-only combatants as 'monster', not 'other' ([#1988](https://github.com/Garblesnarff/infinite-realms-production/issues/1988)) ([1deb687](https://github.com/Garblesnarff/infinite-realms-production/commit/1deb687e5f34770a0c1a713fe1e76482cd258978))
+
 ## [0.14.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.1...v0.14.2) (2026-09-07)
 
 
