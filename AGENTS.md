@@ -10,7 +10,7 @@ These rules apply to every AI session — Claude Code (local, Hetzner, cloud), C
 - Merges to `main` auto-deploy to production within ~15 minutes. An unauthorized merge is an unauthorized production deploy.
 - On 2026-08-11, five PRs (#1702, #1716, #1719, #1723, #1725) were merged by an unidentified agent session.
 - On 2026-08-30, #1945 and #1946 were merged by an unidentified agent session. Do not be the next incident.
-- When you DO hold that permission, check §6 before merging — if the PR is a stack parent, merging it the normal way closes its children.
+- When you DO hold that permission, check §7 before merging — if the PR is a stack parent, merging it the normal way closes its children.
 
 ## 2. Never push directly to `main`
 
@@ -20,17 +20,23 @@ All work goes through a branch and a draft PR with "Do not merge — for review"
 
 - Before calling any code "live" or "deployed", prove ancestry: `git merge-base --is-ancestor <commit> origin/main`. A worktree or feature branch is NOT main.
 - Report test/lint gates as DELTAS against a baseline run on `origin/main`, not as raw counts.
-- If your findings disprove the premise of your instructions, STOP and report — do not build on a wrong premise.
+- If your findings disprove the premise of your instructions, report it. Continue if the authorized scope still holds; ask before changing scope.
 
 ## 4. Respect in-flight work
 
-Before editing, check open PRs (`gh pr list`). Do not modify files that an open PR touches; document the conflict on the relevant issue instead.
+Before editing, check open PRs (`gh pr list`). Do not modify files that an unrelated open PR touches. The current task's own PR and explicitly authorized stacks are allowed; document conflicts with unrelated PRs on the relevant issue instead.
 
-## 5. Migrations
+## 5. Worktree hygiene
+
+- Use one isolated worktree per issue, named for that issue (for example, `worktrees/issue-1973-spells-section`).
+- Remove the issue worktree after its PR merges.
+- Run `git worktree prune` weekly to clear stale administrative entries.
+
+## 6. Migrations
 
 One migration tree owns each table's DDL (see docs/memory-system-design-v2.md §6). Never create the same table's DDL in both `db/migrations/` and `supabase/migrations/`. Manual prod applies must be recorded (see issue #1703).
 
-## 6. Stacked PRs: retarget children BEFORE merging the parent
+## 7. Stacked PRs: retarget children BEFORE merging the parent
 
 Deleting a branch **closes** every open PR that targets it as `base`. GitHub does auto-retarget children to the parent's base when the parent merges, but that is asynchronous and `--delete-branch` races it — along with this repo's auto-delete-head-branches-on-merge setting. Lose the race and the child PR is closed outright, taking its review threads and CI history with it.
 
@@ -57,7 +63,7 @@ This has bitten us twice, and recovery is worse than prevention both times:
 
 A wrongly-closed child is only recoverable if someone notices. Twice now, nobody did until later.
 
-## 7. Board discipline — issue #1855 is the control room
+## 8. Board discipline — issue #1855 is the control room
 
 **Only the board maintainer edits the #1855 body.** Other sessions do not edit it, and do not comment on it.
 

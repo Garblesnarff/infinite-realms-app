@@ -2,7 +2,7 @@
 
 **What this is**: Essential context, gotchas, and locations that save you time when working on InfiniteRealms.
 
-**What this isn't**: Detailed implementation docs (see AGENTS.md for architecture, or read the code).
+**What this isn't**: Detailed implementation docs; use the relevant docs and code for architecture and implementation details.
 
 ---
 
@@ -10,9 +10,8 @@
 
 ### Production Environment
 - **This is a PRODUCTION codebase on a Hetzner VPS**
-- Changes go live immediately - be careful!
-- **Always test before pushing** (`bun run build`, verify changes)
-- **Commit and push after EVERY change** - user doesn't have easy local access to code
+- Changes to `main` deploy to production; agent publication follows the repository root rules.
+- **Publication rules**: Follow the repository root [AGENTS.md](../AGENTS.md): work through a branch and draft PR; merge only with explicit permission naming the PR.
 - User may not be technical - explain clearly, double-check your assumptions
 
 ### 🔒 SECURITY - NEVER COMMIT SECRETS
@@ -135,11 +134,11 @@ cd server-bun && bun run src/index.ts
 - Supabase Edge Functions (still Deno)
 
 ### Workflow
-1. Make changes
-2. Test: `bun run build` (catch TS errors)
-3. Commit: `git commit -m "..."`
-4. Push: `git push origin main` (deploys to production!)
-5. Repeat for each logical change
+1. Make changes on a feature branch
+2. Run `bun run build` for the frontend production build and `bun run type-check` for TypeScript checks
+3. Commit scoped changes
+4. Open or update the draft PR when publication is authorized
+5. Report the exact branch and PR state
 
 ---
 
@@ -174,8 +173,8 @@ ai-adventure-scribe-main/
 │   ├── data/                # D&D reference data (spells, feats, levels)
 │   ├── agents/              # Multi-agent system
 │   └── hooks/               # React hooks
-├── AGENTS.md                # Architecture & development guidance
-└── CLAUDE.md                # This file
+├── AGENTS.md                # Compatibility symlink to this quick reference
+└── CLAUDE.md                # App-specific assistant quick reference
 ```
 
 **Important**:
@@ -185,25 +184,9 @@ ai-adventure-scribe-main/
 
 ---
 
-## Bead System (Issue Tracking)
+## Issue Tracking
 
-We use **Beads**, not GitHub issues. Wrapper script: `./scripts/bd.sh`
-
-```bash
-# Create bug
-bd create "AI DM requests passive rolls" -d "Details..." -t bug -p 0
-
-# List open issues
-bd list --status open
-
-# Update status
-bd update bead-id --status in_progress
-
-# Close with reason
-bd close bead-id --reason "Fixed: description"
-```
-
-**Always**: Reference beads in commits: `Closes bead: bead-id`
+Issues and pull requests are managed in GitHub. Use `gh` and follow [`docs/agents/issue-tracker.md`](../docs/agents/issue-tracker.md) for the repository's issue workflow.
 
 ---
 
@@ -212,8 +195,7 @@ bd close bead-id --reason "Fixed: description"
 ### 1. Production Environment (Hetzner VPS)
 - **This is LIVE production** - not a dev environment
 - Changes to `main` branch go live immediately
-- **Test everything**: `bun run build` before pushing
-- **Commit frequently**: User doesn't have easy local access to code
+- **Run the relevant checks** before opening or updating a PR: `bun run build` for the frontend production build and `bun run type-check` for TypeScript.
 - **Be cautious**: Real users are affected by bugs
 - **Supabase is local**: Running in Docker, not Supabase Cloud
 - **User may not be technical**: Explain clearly, verify assumptions
@@ -386,8 +368,9 @@ When AI does something wrong, **educate via prompts** (fastest fix):
 ## Quick Command Reference
 
 ```bash
-# Build (ALWAYS run before pushing to production!)
-bun run build             # Frontend build
+# Build and type-check before opening or updating a PR
+bun run build             # Frontend production build (Vite)
+bun run type-check        # tsc --noEmit && tsc -p server-bun/tsconfig.json --noEmit
 cd server-bun && bun run src/index.ts  # Test Bun server
 
 # Run dev environment
@@ -411,13 +394,12 @@ docker logs supabase-edge-functions # Edge function logs
 docker logs supabase-auth           # GoTrue auth logs
 docker logs supabase-kong           # API gateway logs
 
-# Git workflow (PRODUCTION - changes go live!)
-git add -A
-git commit -m "..."       # Include "Closes bead: X"
-git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
+# Git workflow: use the repository root AGENTS.md publication rules.
+git add <scoped-paths>
+git commit -m "..."
 ```
 
-**Remember**: This is production! Always test before pushing.
+**Remember**: This is production! Use a feature branch and draft PR; merge only with explicit permission naming the PR.
 
 ---
 
@@ -430,9 +412,8 @@ git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
 4. Add education to `promptBuilder.ts` (forbidden + correct examples)
 5. Add to `systemInstruction` if critical ("NEVER do X")
 6. Calculate/provide data AI needs (passive scores, AC, etc.)
-7. **Test**: `bun run build` (no TS errors)
-8. **Commit & push** (this is production!)
-9. Create bead, update status, close when done
+7. **Test**: `bun run build` (frontend production build) and `bun run type-check` (frontend and server TypeScript checks)
+8. Commit scoped changes and update the corresponding GitHub issue or draft PR
 
 ### Add New D&D Mechanic
 1. Implement calculation:
@@ -528,10 +509,10 @@ curl -X POST http://localhost:8888/internal/generate-commit-post \
 Based on [developer onboarding research](https://www.cortex.io/post/developer-onboarding-guide):
 
 **Good**:
-- Clear README with setup (see AGENTS.md for architecture)
+- Clear README with setup and links to the relevant architecture documentation
 - Examples over abstractions (see existing code)
 - Hands-on learning (fix a bug, make a PR)
-- Centralized docs (AGENTS.md, this file)
+- Centralized docs (root `AGENTS.md`, `docs/`, and this file)
 
 **Avoid**:
 - Passive learning (reading docs for days)
@@ -543,7 +524,7 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 ## Debugging Checklist
 
 **TypeScript errors**:
-- [ ] Run `bun run build`
+- [ ] Run `bun run type-check`
 - [ ] Check types in `types.ts`
 - [ ] Make new fields optional with `?`
 
@@ -567,7 +548,7 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 
 ## Resources
 
-- **AGENTS.md**: Full architecture and development patterns
+- **Agent operating rules**: repository root `AGENTS.md`. See `docs/` for architecture and design guidance.
 - **Bun Docs**: https://bun.sh/docs
 - **Elysia Docs**: https://elysiajs.com/introduction.html
 - **D&D 5E SRD**: https://dnd.wizards.com/resources/systems-reference-document
@@ -586,15 +567,15 @@ The user (project owner) may not be a developer:
 **Do**:
 - ✅ Explain what you're doing in plain language
 - ✅ Double-check assumptions (ask if unsure)
-- ✅ Test thoroughly before pushing to production
-- ✅ Commit/push frequently (they don't have easy code access)
+- ✅ Test thoroughly before opening or updating a draft PR
+- ✅ Keep commits scoped and document changes clearly in commits
 - ✅ Document changes clearly in commits
 
 **Don't**:
 - ❌ Assume technical knowledge
 - ❌ Use jargon without explaining
 - ❌ Make risky changes without testing
-- ❌ Batch changes (commit after each logical change)
+- ❌ Treat every edit as an immediate production publication
 - ❌ **NEVER commit .env files or hardcode secrets!**
 
 ---
@@ -651,11 +632,10 @@ See `~/.claude/skills/dev-browser/SKILL.md` for full documentation.
 
 Blog hero images are generated using **fal.ai Z-Image Turbo** (`~$0.008/image`).
 
-**API Key**: `FAL_API_KEY` from `/var/www/imagineink/server-bun/.env` (shared with Imagine Ink)
+**API Key**: `FAL_API_KEY` comes from the authorized runtime environment; never read it from or print it from a `.env` file.
 
 **Quick generation pattern** (Bun):
 ```bash
-export $(grep FAL_API_KEY /var/www/imagineink/server-bun/.env | head -1)
 bun -e "
 const res = await fetch('https://queue.fal.run/fal-ai/z-image/turbo', {
   method: 'POST',
