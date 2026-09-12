@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.0...v0.16.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* **voice:** resolve NPC TTS categories without narrator fallback ([#2000](https://github.com/Garblesnarff/infinite-realms-production/issues/2000)) ([1495f63](https://github.com/Garblesnarff/infinite-realms-production/commit/1495f631a367bebff8f79714dedc4f4b44807120))
+
 ## [0.16.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.15.0...v0.16.0) (2026-09-12)
 
 
