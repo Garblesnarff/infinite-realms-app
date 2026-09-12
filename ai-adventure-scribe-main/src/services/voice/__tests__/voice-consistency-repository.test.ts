@@ -107,7 +107,11 @@ describe('VoiceConsistencyRepository', () => {
       const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
       expect(result).toEqual([]);
-      expect(logger.error).toHaveBeenCalledWith('Error getting session mappings:', mockError);
+      expect(logger.error).toHaveBeenCalledWith('Error getting session mappings:', {
+        message: 'Database connection failed',
+        name: 'Error',
+        status: undefined,
+      });
     });
 
     it('should return empty list and log error on throw inside getSessionMappings', async () => {
@@ -118,7 +122,10 @@ describe('VoiceConsistencyRepository', () => {
       expect(result).toEqual([]);
       expect(logger.error).toHaveBeenCalledWith(
         'Error getting session mappings:',
-        expect.any(Error),
+        expect.objectContaining({
+          message: 'CRITICAL DB FAILURE',
+          name: 'Error',
+        }),
       );
     });
   });

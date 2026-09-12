@@ -16,7 +16,12 @@ import { VoiceConsistencyRepository } from './voice/voice-consistency-repository
 import { inferVoiceCategory, normalizeCharacterName } from './voice/voice-utils';
 import { VoiceMapper } from './voice-mapper';
 import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
-import { setCharacterVoiceMapping } from './voice-routing';
+import {
+  VOICE_CATEGORY_VALUES,
+  getCanonicalVoiceCategory,
+  isUnknownSpeaker,
+  setCharacterVoiceMapping,
+} from './voice-routing';
 
 import type { VoiceConfig } from './voice/voice-types';
 
@@ -25,11 +30,41 @@ import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 
 const LEGACY_NARRATOR_VOICE_ID = 'bIHbv24MWmeRgasZH58o';
 
+type ResolvedVoice = {
+  voiceCategory: string;
+  voiceConfig: VoiceConfig;
+  isCacheable: boolean;
+};
+
+function resolveVoiceCategory(category: string): ResolvedVoice {
+  const canonicalCategory = getCanonicalVoiceCategory(category);
+  const voiceConfig = VoiceMapper.getVoiceForCategory(category);
+
+  if (!canonicalCategory) {
+    return {
+      voiceCategory: 'narrator',
+      voiceConfig,
+      isCacheable: false,
+    };
+  }
+
+  return {
+    voiceCategory: canonicalCategory,
+    voiceConfig,
+    isCacheable: true,
+  };
+}
+
 function resolvePersistedVoiceConfig(mapping: {
   voiceCategory: string;
   voiceId: string | null;
-}): VoiceConfig {
-  const voiceConfig = VoiceMapper.getVoiceForCategory(mapping.voiceCategory);
+}): ResolvedVoice {
+  const resolved = resolveVoiceCategory(mapping.voiceCategory);
+  if (!resolved.isCacheable) {
+    return resolved;
+  }
+
+  const { voiceConfig } = resolved;
   const persistedVoiceId = mapping.voiceId?.trim();
 
   // Older assignments stored the narrator ID when an AI label was not found
@@ -40,10 +75,10 @@ function resolvePersistedVoiceConfig(mapping: {
     persistedVoiceId === LEGACY_NARRATOR_VOICE_ID ||
     persistedVoiceId === VoiceMapper.getNarratorVoice().id
   ) {
-    return voiceConfig;
+    return resolved;
   }
 
-  return { ...voiceConfig, id: persistedVoiceId };
+  return { ...resolved, voiceConfig: { ...voiceConfig, id: persistedVoiceId } };
 }
 
 export { type VoiceProfile };
@@ -93,19 +128,22 @@ export class VoiceConsistencyService {
     try {
       const mappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
-      const knownCharacters: SessionVoiceContext['knownCharacters'] =
-        {} as SessionVoiceContext['knownCharacters'];
+      const availableVoiceCategories = [...VOICE_CATEGORY_VALUES];
+      const knownCharacters: SessionVoiceContext['knownCharacters'] = {};
       mappings.forEach((mapping) => {
+        const voiceCategory = getCanonicalVoiceCategory(mapping.voiceCategory);
+        if (!voiceCategory) {
+          logger.warn(
+            `Ignoring unmapped persisted voice category "${mapping.voiceCategory}" for "${mapping.characterName}"`,
+          );
+          return;
+        }
         knownCharacters[mapping.characterName] = {
-          voiceCategory: mapping.voiceCategory,
+          voiceCategory,
           appearances: mapping.appearanceCount,
           lastUsed: mapping.lastUsed,
         };
       });
-
-      // Get available voice categories from VoiceMapper
-      const allVoices = VoiceMapper.getAllVoices();
-      const availableVoiceCategories = Object.keys(allVoices).filter((key) => key !== 'default');
 
       logger.debug('📋 Voice context:', {
         knownCharacters: Object.keys(knownCharacters),
@@ -117,13 +155,14 @@ export class VoiceConsistencyService {
         availableVoiceCategories,
       };
     } catch (error) {
-      logger.error('Error getting session voice context:', error);
+      logger.error('Error getting session voice context:', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : typeof error,
+      });
 
-      // Return minimal context on error
-      const allVoices = VoiceMapper.getAllVoices();
       return {
         knownCharacters: {},
-        availableVoiceCategories: Object.keys(allVoices).filter((key) => key !== 'default'),
+        availableVoiceCategories: [...VOICE_CATEGORY_VALUES],
       };
     }
   }
@@ -159,8 +198,7 @@ export class VoiceConsistencyService {
     >();
 
     for (const segment of cleanSegments) {
-      if (!segment.character) {
-        // Narration - use narrator voice
+      if (!segment.character || isUnknownSpeaker(segment.character)) {
         assignments.push({
           character: 'narrator',
           voiceCategory: 'narrator',
@@ -174,44 +212,50 @@ export class VoiceConsistencyService {
       const existingMapping = mappingLookup.get(cleanCharacter);
 
       if (existingMapping) {
-        // Use existing voice assignment
-        const voiceConfig = resolvePersistedVoiceConfig(existingMapping);
-        setCharacterVoiceMapping(cleanCharacter, voiceConfig);
-        assignments.push({
-          character: cleanCharacter,
-          voiceCategory: existingMapping.voiceCategory,
-          voiceConfig,
-          isNewCharacter: false,
+        const resolved = resolvePersistedVoiceConfig(existingMapping);
+        if (resolved.isCacheable) {
+          setCharacterVoiceMapping(cleanCharacter, resolved.voiceConfig);
+          updatesNeeded.set(existingMapping.id, (updatesNeeded.get(existingMapping.id) || 0) + 1);
+          assignments.push({
+            character: cleanCharacter,
+            voiceCategory: resolved.voiceCategory,
+            voiceConfig: resolved.voiceConfig,
+            isNewCharacter: false,
+          });
+          continue;
+        }
+        mappingLookup.delete(cleanCharacter);
+      }
+
+      const pending = pendingAssignments.get(cleanCharacter);
+      const resolved = pending
+        ? { ...pending, isCacheable: true }
+        : resolveVoiceCategory(segment.voice_category || inferVoiceCategory(cleanCharacter));
+
+      if (resolved.isCacheable) {
+        pendingAssignments.set(cleanCharacter, {
+          voiceCategory: resolved.voiceCategory,
+          voiceConfig: resolved.voiceConfig,
         });
+        setCharacterVoiceMapping(cleanCharacter, resolved.voiceConfig);
+      }
 
-        // ⚡ Bolt: Aggregate increments for existing characters.
-        updatesNeeded.set(existingMapping.id, (updatesNeeded.get(existingMapping.id) || 0) + 1);
-      } else {
-        // New character - use AI's voice category assignment or fallback
-        const pending = pendingAssignments.get(cleanCharacter);
-        const voiceCategory =
-          pending?.voiceCategory || segment.voice_category || inferVoiceCategory(cleanCharacter);
-        const voiceConfig = pending?.voiceConfig || VoiceMapper.getVoiceForCategory(voiceCategory);
+      assignments.push({
+        character: cleanCharacter,
+        voiceCategory: resolved.voiceCategory,
+        voiceConfig: resolved.voiceConfig,
+        isNewCharacter: true,
+      });
 
-        pendingAssignments.set(cleanCharacter, { voiceCategory, voiceConfig });
-        setCharacterVoiceMapping(cleanCharacter, voiceConfig);
-
-        assignments.push({
-          character: cleanCharacter,
-          voiceCategory,
-          voiceConfig,
-          isNewCharacter: true,
-        });
-
-        // ⚡ Bolt: Aggregate increments for new characters in this response.
+      if (resolved.isCacheable) {
         const pendingInsert = insertsNeeded.get(cleanCharacter);
         if (pendingInsert) {
           pendingInsert.count++;
         } else {
           insertsNeeded.set(cleanCharacter, {
             characterName: cleanCharacter,
-            voiceCategory,
-            voiceId: voiceConfig.id,
+            voiceCategory: resolved.voiceCategory,
+            voiceId: resolved.voiceConfig.id,
             count: 1,
           });
         }

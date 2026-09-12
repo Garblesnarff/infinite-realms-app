@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable max-lines */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+import { VOICE_CATEGORY_ALIASES } from '../../../server-bun/src/services/dm/dm-response-schema';
 import { VOICE_CONFIGS } from '../voice/voice-constants';
 import {
   normalizeCharacterName,
@@ -8,6 +10,7 @@ import {
   assignVoice,
   ensureMapInitialized,
   clearCharacterVoiceMappings,
+  getCharacterVoiceMappings,
   VOICE_POOLS,
   getVoiceConfigByCategory,
   detectVoiceCategoryFromNPCType,
@@ -128,6 +131,9 @@ describe('voice-routing', () => {
       expect(getVoiceConfigByCategory('monster')).toBe(VOICE_CONFIGS.monster);
       expect(getVoiceConfigByCategory('merchant')).toBe(VOICE_CONFIGS.merchant);
       expect(getVoiceConfigByCategory('gruff')).toBe(VOICE_CONFIGS.guard);
+      expect(getVoiceConfigByCategory('high-pitched, fast, breathless')).toBe(VOICE_CONFIGS.goblin);
+      expect(getVoiceConfigByCategory('calm')).toBe(VOICE_CONFIGS.innkeeper);
+      expect(getVoiceConfigByCategory('narrative')).toBe(VOICE_CONFIGS.narrator);
     });
 
     it('should warn and fallback to the narrator voice for unknown categories', () => {
@@ -139,6 +145,15 @@ describe('voice-routing', () => {
 
     it('should normalize case before lookup', () => {
       expect(getVoiceConfigByCategory('HERO_MALE')).toBe(VOICE_CONFIGS.hero_male);
+    });
+
+    it('maps every schema voice alias to a configured ElevenLabs voice', () => {
+      const aliases = Object.entries(VOICE_CATEGORY_ALIASES);
+      expect(aliases.length).toBeGreaterThan(0);
+
+      for (const [alias, target] of aliases) {
+        expect(VOICE_CONFIGS[target], `alias "${alias}" -> "${target}"`).toBeDefined();
+      }
     });
   });
 
@@ -174,13 +189,13 @@ describe('voice-routing', () => {
     it('should handle character with no name', () => {
       const segment: any = { type: 'character', character: '', text: 'Hello' };
       const voice = assignVoice(segment);
-      expect(voice).toEqual(VOICE_POOLS.dm[0]);
+      expect(voice.id).toBe(VOICE_CONFIGS.narrator.id);
     });
 
     it('should always assign the DM voice to dm type segments', () => {
       const segment: any = { type: 'dm', text: 'Narration' };
       const voice = assignVoice(segment);
-      expect(voice).toEqual(VOICE_POOLS.dm[0]);
+      expect(voice.id).toBe(VOICE_CONFIGS.narrator.id);
     });
 
     it('should assign a consistent voice to a character', () => {
@@ -237,12 +252,76 @@ describe('voice-routing', () => {
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Unmapped voice category "unmapped_style"'),
       );
+      expect(getCharacterVoiceMappings()).toEqual({});
+    });
+
+    it('should assign the narrator voice to a narrator segment', () => {
+      const voice = assignVoice({
+        type: 'dm',
+        text: 'The lantern gutters.',
+        voice_category: 'narrator',
+      });
+
+      expect(voice.id).toBe(VOICE_CONFIGS.narrator.id);
+    });
+
+    it('should resolve an NPC dialogue segment to that NPC voice', () => {
+      const voice = assignVoice({
+        type: 'character',
+        character: 'Serena',
+        text: 'Welcome.',
+        voice_category: 'innkeeper',
+      });
+
+      expect(voice).toBe(VOICE_CONFIGS.innkeeper);
+      expect(voice.id).not.toBe(VOICE_CONFIGS.narrator.id);
+    });
+
+    it('should use narrator for an unknown speaker without caching it', () => {
+      const voice = assignVoice({
+        type: 'character',
+        character: 'Unknown NPC',
+        text: 'Who am I?',
+        voice_category: 'merchant',
+      });
+
+      expect(voice.id).toBe(VOICE_CONFIGS.narrator.id);
+      expect(getCharacterVoiceMappings()).toEqual({});
+    });
+
+    it('should not cache reopen free-text misses, but should cache resolved aliases', () => {
+      const breathless = assignVoice({
+        type: 'character',
+        character: 'Professor Emil Darkwater',
+        text: 'P-please...',
+        voice_category: 'high-pitched, fast, breathless',
+      });
+      const calm = assignVoice({
+        type: 'character',
+        character: 'Innkeep Mara',
+        text: 'Sit down.',
+        voice_category: 'calm',
+      });
+      const narrative = assignVoice({
+        type: 'character',
+        character: 'Veteran',
+        text: 'The road is clear.',
+        voice_category: 'narrative',
+      });
+
+      expect(breathless.id).toBe(VOICE_CONFIGS.goblin.id);
+      expect(calm.id).toBe(VOICE_CONFIGS.innkeeper.id);
+      expect(narrative.id).toBe(VOICE_CONFIGS.narrator.id);
+      expect(getCharacterVoiceMappings()['professor emil darkwater']).toBe(
+        VOICE_CONFIGS.goblin.name,
+      );
+      expect(getCharacterVoiceMappings()['innkeep mara']).toBe(VOICE_CONFIGS.innkeeper.name);
     });
 
     it('should fallback to DM voice if no character is provided for character type', () => {
       const segment: any = { type: 'character', text: 'Hello' };
       const voice = assignVoice(segment);
-      expect(voice).toEqual(VOICE_POOLS.dm[0]);
+      expect(voice.id).toBe(VOICE_CONFIGS.narrator.id);
     });
   });
 

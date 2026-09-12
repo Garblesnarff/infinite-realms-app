@@ -229,12 +229,8 @@ export const useVoiceProcessing = ({
 
       logger.info('📝 Progressive Voice: Processing plain text as fallback');
 
-      const voiceSegments = VoiceDirector.processPlainText(text);
-      if (voiceSegments.length === 0) {
-        return;
-      }
-
-      // Use the AI segments path for consistency
+      // Structured segments already went through speakAISegments. This path
+      // must not invent speakers via the dialogue parser.
       await speakAISegments([
         {
           type: 'dm',

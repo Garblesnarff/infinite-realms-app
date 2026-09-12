@@ -110,10 +110,10 @@ describe('VoiceConsistencyService', () => {
       expect(result.knownCharacters).toEqual({});
       expect(result.availableVoiceCategories).toContain('hero_male');
       expect(result.availableVoiceCategories).not.toContain('default');
-      expect(logger.error).toHaveBeenCalledWith(
-        'Error getting session voice context:',
-        expect.any(Error),
-      );
+      expect(logger.error).toHaveBeenCalledWith('Error getting session voice context:', {
+        message: 'DB failure',
+        name: 'Error',
+      });
     });
   });
 
@@ -285,6 +285,78 @@ describe('VoiceConsistencyService', () => {
       expect(result[0].voiceConfig).toBeDefined();
 
       expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve reopen free-text labels and never persist a miss', async () => {
+      vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockResolvedValueOnce([]);
+      vi.mocked(VoiceConsistencyRepository.saveCharacterVoiceMapping).mockResolvedValue(
+        undefined as any,
+      );
+
+      const result = await service.processVoiceAssignments(sessionId, [
+        {
+          type: 'dialogue',
+          text: 'P-please...',
+          character: 'Professor Emil Darkwater',
+          voice_category: 'high-pitched, fast, breathless',
+        },
+        {
+          type: 'dialogue',
+          text: 'Sit.',
+          character: 'Innkeep Mara',
+          voice_category: 'calm',
+        },
+        {
+          type: 'dialogue',
+          text: 'The road is clear.',
+          character: 'Veteran',
+          voice_category: 'narrative',
+        },
+        {
+          type: 'dialogue',
+          text: 'Who am I?',
+          character: 'Mystery',
+          voice_category: 'unmapped_style',
+        },
+      ]);
+
+      expect(result.map((assignment) => assignment.voiceConfig.id)).toEqual([
+        VoiceMapper.getVoiceForCategory('goblin').id,
+        VoiceMapper.getVoiceForCategory('innkeeper').id,
+        VoiceMapper.getVoiceForCategory('narrator').id,
+        VoiceMapper.getVoiceForCategory('narrator').id,
+      ]);
+      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).toHaveBeenCalledTimes(3);
+      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).toHaveBeenCalledWith(
+        sessionId,
+        'professor emil darkwater',
+        'goblin',
+        VoiceMapper.getVoiceForCategory('goblin').id,
+        1,
+      );
+      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'mystery',
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('should keep an unknown speaker audible as narrator without caching', async () => {
+      vi.mocked(VoiceConsistencyRepository.getSessionMappings).mockResolvedValueOnce([]);
+
+      const result = await service.processVoiceAssignments(sessionId, [
+        { type: 'dialogue', text: 'Hello?', character: 'Unknown NPC' },
+      ]);
+
+      expect(result[0]).toEqual({
+        character: 'narrator',
+        voiceCategory: 'narrator',
+        voiceConfig: VoiceMapper.getNarratorVoice(),
+        isNewCharacter: false,
+      });
+      expect(VoiceConsistencyRepository.saveCharacterVoiceMapping).not.toHaveBeenCalled();
     });
   });
 

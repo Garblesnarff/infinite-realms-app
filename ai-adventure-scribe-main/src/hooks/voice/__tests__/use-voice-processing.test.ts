@@ -141,7 +141,6 @@ describe('useVoiceProcessing', () => {
     const text = 'Fallback text';
     const voiceSegments = [{ character: 'DM', text, voice_category: 'dm' }];
 
-    (VoiceDirector.processPlainText as any).mockReturnValue(voiceSegments);
     (VoiceDirector.validateAISegments as any).mockReturnValue([{ type: 'dm', text }]);
     (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
     (VoiceDirector.generateAudio as any).mockResolvedValue({
@@ -155,8 +154,39 @@ describe('useVoiceProcessing', () => {
       await result.current.speakPlainText(text);
     });
 
-    expect(VoiceDirector.processPlainText).toHaveBeenCalledWith(text);
+    expect(VoiceDirector.processPlainText).not.toHaveBeenCalled();
+    expect(VoiceDirector.processAISegments).toHaveBeenCalled();
     expect(mockPlayAudioSegment).toHaveBeenCalled();
+  });
+
+  it('should not invent speakers when falling back to plain text', async () => {
+    const text = 'You press the latch. "Wait," says an unknown npc.';
+    const voiceSegments = [{ character: 'DM', text, voiceId: 'narrator-id' }];
+
+    (VoiceDirector.validateAISegments as any).mockReturnValue([
+      { type: 'dm', text, character: undefined, voice_category: undefined },
+    ]);
+    (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
+    (VoiceDirector.generateAudio as any).mockResolvedValue({
+      ...voiceSegments[0],
+      audioUrl: 'http://test.com/audio.mp3',
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    await act(async () => {
+      await result.current.speakPlainText(text);
+    });
+
+    expect(VoiceDirector.processPlainText).not.toHaveBeenCalled();
+    expect(VoiceDirector.validateAISegments).toHaveBeenCalledWith([
+      {
+        type: 'dm',
+        text,
+        character: undefined,
+        voice_category: undefined,
+      },
+    ]);
   });
 
   it('should handle errors during processing and continue with next segment', async () => {

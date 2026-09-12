@@ -72,6 +72,32 @@ describe('VoiceDirector', () => {
       expect(result[1].voiceId).toBeDefined();
     });
 
+    it('should keep narrator, NPC, and unknown speakers on the documented voices', () => {
+      const result = VoiceDirector.processAISegments([
+        { type: 'dm', text: 'The lantern gutters.', voice_category: 'narrator' },
+        {
+          type: 'character',
+          text: 'Welcome.',
+          character: 'Serena',
+          voice_category: 'innkeeper',
+        },
+        {
+          type: 'character',
+          text: 'Hello?',
+          character: 'Unknown NPC',
+          voice_category: 'merchant',
+        },
+      ]);
+
+      expect(result.map((segment) => segment.voiceId)).toEqual([
+        VOICE_CONFIGS.narrator.id,
+        VOICE_CONFIGS.innkeeper.id,
+        VOICE_CONFIGS.narrator.id,
+      ]);
+      expect(result[1].voiceId).not.toBe(result[0].voiceId);
+      expect(result[2].voiceId).toBe(VOICE_CONFIGS.narrator.id);
+    });
+
     it('should retain distinct voice IDs for narrator and gruff character categories', () => {
       const result = VoiceDirector.processAISegments([
         {

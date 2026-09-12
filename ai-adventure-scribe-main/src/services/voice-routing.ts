@@ -1,4 +1,5 @@
 import {
+  VOICE_CATEGORY_VALUES,
   getCanonicalVoiceCategory,
   getVoiceConfigByCategory,
   getVoicePoolByCharacter,
@@ -20,6 +21,7 @@ export {
   getVoiceConfigByCategory,
   getVoicePoolByCharacter,
   detectVoiceCategoryFromNPCType,
+  VOICE_CATEGORY_VALUES,
 };
 
 // Core types for voice management
@@ -60,6 +62,21 @@ export interface AISegment {
   text: string;
   character?: string;
   voice_category?: string;
+}
+
+const UNKNOWN_SPEAKER_NAMES = new Set([
+  '',
+  'unknown',
+  'unknown npc',
+  'unknown speaker',
+  'npc',
+  'speaker',
+  'dm',
+  'narrator',
+]);
+
+export function isUnknownSpeaker(character?: string): boolean {
+  return UNKNOWN_SPEAKER_NAMES.has(normalizeCharacterName(character || ''));
 }
 
 // Constants extracted from VoiceDirector
@@ -117,45 +134,43 @@ export function getCharacterVoiceMappings(): Record<string, string> {
  * Assign voice to a segment based on character and type
  */
 export function assignVoice(segment: AISegment): VoiceConfig {
-  // DM/Narrator always gets the DM voice
-  if (segment.type === 'dm') {
-    return VOICE_POOLS.dm[0];
+  // Narration and unknown speakers stay audible as the narrator voice.
+  if (segment.type === 'dm' || isUnknownSpeaker(segment.character)) {
+    return getVoiceConfigByCategory('narrator');
   }
 
-  // Character voices
-  if (segment.character) {
-    const character = normalizeCharacterName(segment.character);
+  const character = normalizeCharacterName(segment.character || '');
 
-    // Check if we've assigned a voice to this character before
-    const voiceMap = ensureMapInitialized();
-    const existingVoice = voiceMap.get(character);
-    if (existingVoice) {
-      return existingVoice;
-    }
+  const voiceMap = ensureMapInitialized();
+  const existingVoice = voiceMap.get(character);
+  if (existingVoice) {
+    return existingVoice;
+  }
 
-    // A category is a label, not an ElevenLabs ID. Resolve it directly so
-    // aliases such as "gruff" select their configured voice instead of
-    // falling through to an arbitrary pool member.
-    let selectedVoice: VoiceConfig;
-    if (segment.voice_category) {
-      selectedVoice = getVoiceConfigByCategory(segment.voice_category);
-    } else {
-      const voicePool = getVoicePoolByCharacter(character);
-      const voiceIndex = hashCharacterName(character) % voicePool.length;
-      selectedVoice = voicePool[voiceIndex];
-    }
+  // A category is a label, not an ElevenLabs ID. Resolve it directly so
+  // aliases such as "gruff" select their configured voice instead of
+  // falling through to an arbitrary pool member.
+  let selectedVoice: VoiceConfig;
+  let cacheable = true;
+  if (segment.voice_category?.trim()) {
+    selectedVoice = getVoiceConfigByCategory(segment.voice_category);
+    // Do not poison the character cache with a narrator fallback for an
+    // unmapped category. A later valid category must still be able to resolve.
+    cacheable = Boolean(getCanonicalVoiceCategory(segment.voice_category));
+  } else {
+    const voicePool = getVoicePoolByCharacter(character);
+    const voiceIndex = hashCharacterName(character) % voicePool.length;
+    selectedVoice = voicePool[voiceIndex];
+  }
 
-    // Remember this assignment
+  if (cacheable) {
     setCharacterVoiceMapping(character, selectedVoice);
-
     logger.info(
       `🎯 New voice assignment: "${character}" -> ${selectedVoice.name} [${selectedVoice.id}] (${segment.voice_category || 'auto'})`,
     );
-    return selectedVoice;
   }
 
-  // Fallback to DM voice
-  return VOICE_POOLS.dm[0];
+  return selectedVoice;
 }
 
 /**

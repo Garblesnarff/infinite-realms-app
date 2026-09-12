@@ -45,6 +45,8 @@ The DM MUST open this scene with narrative continuity from this recap — pick u
     return `
 <voice_optimization>
 Your response will be synthesized into voice. Structure your narration into logical segments.
+voice_category must be one of: narrator, hero_male, hero_female, villain_male, villain_female, monster, goblin, merchant, guard, innkeeper, elder, child.
+Use narrator for DM narration and unknown speakers. Do not invent free-text voice traits.
 </voice_optimization>`;
   }
 

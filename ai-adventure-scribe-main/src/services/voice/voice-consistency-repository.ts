@@ -43,7 +43,11 @@ export class VoiceConsistencyRepository {
         appearanceCount: mapping.appearance_count || 1,
       }));
     } catch (error) {
-      logger.error('Error getting session mappings:', error);
+      logger.error('Error getting session mappings:', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : typeof error,
+        status: (error as { status?: unknown })?.status,
+      });
       return [];
     }
   }

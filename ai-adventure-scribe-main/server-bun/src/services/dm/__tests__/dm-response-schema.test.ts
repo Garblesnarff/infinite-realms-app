@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { dmResponseSchema, parseDmResponse } from '../dm-response-schema.js';
+import { VOICE_CATEGORY_VALUES, dmResponseSchema, parseDmResponse } from '../dm-response-schema.js';
 
 const response = (overrides: Record<string, unknown> = {}) => ({
   text: 'The lantern flame gutters in the cold passage.',
@@ -46,5 +46,74 @@ describe('dmResponseSchema options contract', () => {
 
   test('accepts legacy local shells that omit options', () => {
     expect(parseDmResponse(response()).success).toBe(true);
+  });
+});
+
+describe('dmResponseSchema voice category contract', () => {
+  test('exposes the closed configured voice category enum', () => {
+    const properties = dmResponseSchema.properties as Record<string, unknown>;
+    const narrationSegmentProperties = (
+      properties.narration_segments as {
+        items: { properties: { voice_category: unknown } };
+      }
+    ).items.properties;
+
+    expect(narrationSegmentProperties.voice_category).toEqual({
+      anyOf: [{ type: 'string', enum: [...VOICE_CATEGORY_VALUES] }, { type: 'null' }],
+    });
+  });
+
+  test('normalizes reopen free-text labels to configured keys', () => {
+    const parsed = parseDmResponse(
+      response({
+        narration_segments: [
+          {
+            type: 'character',
+            text: 'P-please...',
+            character: 'Professor Emil Darkwater',
+            voice_category: 'high-pitched, fast, breathless',
+          },
+          {
+            type: 'character',
+            text: 'Sit.',
+            character: 'Innkeep Mara',
+            voice_category: 'calm',
+          },
+          {
+            type: 'dm',
+            text: 'The road is clear.',
+            character: null,
+            voice_category: 'narrative',
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.narration_segments.map((segment) => segment.voice_category)).toEqual([
+      'goblin',
+      'innkeeper',
+      'narrator',
+    ]);
+  });
+
+  test('does not pass an unknown free-text category through', () => {
+    const parsed = parseDmResponse(
+      response({
+        narration_segments: [
+          {
+            type: 'character',
+            text: 'Who am I?',
+            character: 'Mystery',
+            voice_category: 'unmapped_style',
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.narration_segments[0].voice_category).toBeNull();
   });
 });

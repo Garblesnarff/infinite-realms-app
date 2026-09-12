@@ -21,6 +21,7 @@ import {
   type AISegment,
   type VoiceConfig,
   type VoiceSegment,
+  VOICE_CATEGORY_VALUES,
   assignVoice,
   clearCharacterVoiceMappings as clearMappings,
   getCharacterVoiceMappings as getMappings,
@@ -108,21 +109,7 @@ export class VoiceDirector {
    * Get all available voice categories for AI prompting
    */
   static getAvailableVoiceCategories(): string[] {
-    return [
-      'narrator',
-      'hero_male',
-      'hero_female',
-      'villain_male',
-      'villain_female',
-      'monster',
-      'creature',
-      'goblin',
-      'merchant',
-      'guard',
-      'innkeeper',
-      'elder',
-      'child',
-    ];
+    return [...VOICE_CATEGORY_VALUES];
   }
 
   /**

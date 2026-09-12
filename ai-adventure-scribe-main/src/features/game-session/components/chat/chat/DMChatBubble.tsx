@@ -7,9 +7,8 @@ import type { NarrationSegment } from '@/hooks/use-ai-response';
 import type { ChatMessage } from '@/services/ai-service';
 
 import { ActionOptions } from '@/components/game/ActionOptions';
-import {
-  TooltipProvider,
-} from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { convertNarrationToAISegments } from '@/features/game-session/components/audio/voice-utils';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import logger from '@/lib/logger';
@@ -25,21 +24,6 @@ interface DMChatBubbleProps {
   narrationSegments?: NarrationSegment[];
   onOptionSelect?: (optionText: string) => void;
 }
-
-// Helper function to convert NarrationSegments to AISegments
-const convertNarrationToAISegments = (narrationSegments: NarrationSegment[]): {
-  type: 'dm' | 'character';
-  text: string;
-  character?: string;
-  voice_category?: string;
-}[] => {
-  return narrationSegments.map((segment) => ({
-    type: segment.type === 'dm' ? 'dm' : ('character' as 'dm' | 'character'),
-    text: segment.text,
-    character: segment.character,
-    voice_category: segment.voice_category,
-  }));
-};
 
 export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
   ({ message, narrationSegments, onOptionSelect }) => {
@@ -152,84 +136,86 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
       <div className="flex justify-start animate-in slide-in-from-left-2 duration-500">
         <TooltipProvider>
           <div className="flex max-w-[85%] flex-row items-start">
-          {/* Enhanced DM Avatar */}
-          <div className="flex-shrink-0 mr-4 relative" aria-label="Dungeon Master">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-infinite-purple to-infinite-teal text-white shadow-lg border-2 border-white/20 hover-glow transition-all duration-300"
-              aria-hidden="true"
-            >
-              <span className="text-xs">🎭</span>
-            </div>
-            <div
-              className="absolute -bottom-1 -right-1 w-4 h-4 bg-infinite-gold rounded-full flex items-center justify-center border-2 border-background"
-              aria-label="DM Badge"
-            >
-              <span className="text-[8px] font-bold text-infinite-dark" aria-hidden="true">
-                DM
-              </span>
-            </div>
-          </div>
-
-          {/* Enhanced Message Bubble */}
-          <div className="flex flex-col items-start space-y-3">
-            <div
-              className={`relative px-6 py-4 rounded-2xl transition-all duration-300 glass-strong shadow-lg hover:shadow-xl ${
-                isThisMessagePlaying
-                  ? 'ring-2 ring-infinite-purple/70 shadow-2xl bg-gradient-to-br from-card/90 to-card/60 backdrop-blur-xl'
-                  : 'hover:bg-card/80'
-              }`}
-            >
-              {/* Speech Bubble Tail */}
-              <div className="absolute left-[-8px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-card/90"></div>
-              <div className="absolute left-[-6px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-card"></div>
-              {/* Enhanced Message Content */}
-              <div className="text-narrative text-foreground-secondary">{renderMessageContent}</div>
-
-              <DMBubbleVoiceSection
-                isVoiceEnabled={isVoiceEnabled}
-                isProcessing={isProcessing}
-                isThisMessagePlaying={isThisMessagePlaying}
-                isMuted={isMuted}
-                error={error}
-                hasUserInteracted={hasUserInteracted}
-                segments={segments}
-                currentSegmentIndex={currentSegmentIndex}
-                handlePlayPause={handlePlayPause}
-                toggleMute={toggleMute}
-              />
+            {/* Enhanced DM Avatar */}
+            <div className="flex-shrink-0 mr-4 relative" aria-label="Dungeon Master">
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-infinite-purple to-infinite-teal text-white shadow-lg border-2 border-white/20 hover-glow transition-all duration-300"
+                aria-hidden="true"
+              >
+                <span className="text-xs">🎭</span>
+              </div>
+              <div
+                className="absolute -bottom-1 -right-1 w-4 h-4 bg-infinite-gold rounded-full flex items-center justify-center border-2 border-background"
+                aria-label="DM Badge"
+              >
+                <span className="text-[8px] font-bold text-infinite-dark" aria-hidden="true">
+                  DM
+                </span>
+              </div>
             </div>
 
-            {/* Enhanced Action Options */}
-            {parsedMessage.hasOptions && (
-              <div className="w-full animate-in slide-in-from-bottom-2 duration-500">
-                <ActionOptions
-                  options={parsedMessage.options}
-                  onOptionSelect={handleOptionSelect}
-                  delay={10000} // 10 second delay
+            {/* Enhanced Message Bubble */}
+            <div className="flex flex-col items-start space-y-3">
+              <div
+                className={`relative px-6 py-4 rounded-2xl transition-all duration-300 glass-strong shadow-lg hover:shadow-xl ${
+                  isThisMessagePlaying
+                    ? 'ring-2 ring-infinite-purple/70 shadow-2xl bg-gradient-to-br from-card/90 to-card/60 backdrop-blur-xl'
+                    : 'hover:bg-card/80'
+                }`}
+              >
+                {/* Speech Bubble Tail */}
+                <div className="absolute left-[-8px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-card/90"></div>
+                <div className="absolute left-[-6px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-card"></div>
+                {/* Enhanced Message Content */}
+                <div className="text-narrative text-foreground-secondary">
+                  {renderMessageContent}
+                </div>
+
+                <DMBubbleVoiceSection
+                  isVoiceEnabled={isVoiceEnabled}
+                  isProcessing={isProcessing}
+                  isThisMessagePlaying={isThisMessagePlaying}
+                  isMuted={isMuted}
+                  error={error}
+                  hasUserInteracted={hasUserInteracted}
+                  segments={segments}
+                  currentSegmentIndex={currentSegmentIndex}
+                  handlePlayPause={handlePlayPause}
+                  toggleMute={toggleMute}
                 />
               </div>
-            )}
 
-            {/* Enhanced Timestamp */}
-            <div
-              className="text-xs text-muted-foreground/60 px-2 font-mono bg-card/30 rounded px-2 py-1"
-              aria-label={
-                message.timestamp
-                  ? `Sent at ${new Date(message.timestamp).toLocaleTimeString()}`
-                  : undefined
-              }
-            >
-              {message.timestamp
-                ? new Date(message.timestamp).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : ''}
+              {/* Enhanced Action Options */}
+              {parsedMessage.hasOptions && (
+                <div className="w-full animate-in slide-in-from-bottom-2 duration-500">
+                  <ActionOptions
+                    options={parsedMessage.options}
+                    onOptionSelect={handleOptionSelect}
+                    delay={10000} // 10 second delay
+                  />
+                </div>
+              )}
+
+              {/* Enhanced Timestamp */}
+              <div
+                className="text-xs text-muted-foreground/60 px-2 font-mono bg-card/30 rounded px-2 py-1"
+                aria-label={
+                  message.timestamp
+                    ? `Sent at ${new Date(message.timestamp).toLocaleTimeString()}`
+                    : undefined
+                }
+              >
+                {message.timestamp
+                  ? new Date(message.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : ''}
+              </div>
             </div>
           </div>
-        </div>
-      </TooltipProvider>
-    </div>
+        </TooltipProvider>
+      </div>
     );
   },
 );

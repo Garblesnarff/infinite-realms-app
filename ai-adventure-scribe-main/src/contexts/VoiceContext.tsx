@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo } from
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 
+import { convertNarrationToAISegments } from '@/features/game-session/components/audio/voice-utils';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import { extractNarrativeContent } from '@/utils/parseMessageOptions';
 
@@ -54,16 +55,6 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
     initializeAudioContext,
   } = useProgressiveVoice();
 
-  // Helper function to convert NarrationSegments to AISegments
-  const convertNarrationToAISegments = useCallback((narrationSegments: NarrationSegment[]) => {
-    return narrationSegments.map((segment) => ({
-      type: (['dm', 'narration'].includes(segment.type) ? 'dm' : 'character') as 'dm' | 'character',
-      text: segment.text,
-      character: segment.character,
-      voice_category: segment.voice_category,
-    }));
-  }, []);
-
   const playMessage = useCallback(
     (messageId: string, text: string, narrationSegments?: NarrationSegment[]) => {
       // Initialize audio context for browser compatibility
@@ -100,7 +91,6 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
       resumePlayback,
       stopPlayback,
       initializeAudioContext,
-      convertNarrationToAISegments,
       speakAISegments,
       speakPlainText,
     ],

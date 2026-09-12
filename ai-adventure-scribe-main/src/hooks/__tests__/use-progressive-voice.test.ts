@@ -118,7 +118,19 @@ describe('useProgressiveVoice', () => {
       await result.current.speakPlainText('Hello');
     });
 
-    expect(VoiceDirector.processPlainText).toHaveBeenCalledWith('Hello');
+    // New contract (#1942): the plain-text fallback no longer runs the
+    // dialogue parser. The text is spoken as a single narrator ('dm')
+    // segment carrying no character and no voice_category, so the degraded
+    // path can never invent a speaker.
+    expect(VoiceDirector.processPlainText).not.toHaveBeenCalled();
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'dm',
+        text: 'Hello',
+        character: undefined,
+        voice_category: undefined,
+      }),
+    );
     await waitFor(() => expect(mockPlayAudioSegment).toHaveBeenCalled());
   });
 

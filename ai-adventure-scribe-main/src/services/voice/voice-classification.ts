@@ -1,44 +1,17 @@
 import { VOICE_CONFIGS } from './voice-constants';
 import { VOICE_POOLS } from './voice-pools';
+import {
+  VOICE_CATEGORY_VALUES,
+  getCanonicalVoiceCategory,
+  normalizeVoiceCategory,
+} from '../../../server-bun/src/services/dm/dm-response-schema';
 
 import type { VoiceConfig } from '../voice-routing';
 import type { VoiceConfig as VoiceDefinition } from './voice-types';
 
 import logger from '@/lib/logger';
 
-const VOICE_CATEGORY_ALIASES: Record<string, string> = {
-  dm: 'narrator',
-  narrator: 'narrator',
-  hero: 'hero_male',
-  villain: 'villain_male',
-  creature: 'monster',
-  gruff: 'guard',
-};
-
-/**
- * Normalize the category labels emitted by the AI before looking them up.
- * Category labels are not ElevenLabs voice IDs; they must resolve to a
- * configured voice before they reach the audio service.
- */
-export function normalizeVoiceCategory(category: string): string {
-  return category
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-}
-
-/**
- * Return the configured category key for an AI category label.
- */
-export function getCanonicalVoiceCategory(category: string): string | undefined {
-  if (typeof category !== 'string' || !category.trim()) {
-    return undefined;
-  }
-
-  const normalized = normalizeVoiceCategory(category);
-  const canonical = VOICE_CATEGORY_ALIASES[normalized] || normalized;
-  return VOICE_CONFIGS[canonical] ? canonical : undefined;
-}
+export { VOICE_CATEGORY_VALUES, getCanonicalVoiceCategory, normalizeVoiceCategory };
 
 /**
  * Resolve a category to a real ElevenLabs voice configuration.

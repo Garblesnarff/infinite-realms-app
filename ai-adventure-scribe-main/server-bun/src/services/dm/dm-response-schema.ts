@@ -76,6 +76,65 @@ export type DMHandoutAction = {
   giver: string;
 };
 
+/** Canonical labels the DM may emit for per-segment TTS. */
+export const VOICE_CATEGORY_VALUES = [
+  'narrator',
+  'hero_male',
+  'hero_female',
+  'villain_male',
+  'villain_female',
+  'monster',
+  'goblin',
+  'merchant',
+  'guard',
+  'innkeeper',
+  'elder',
+  'child',
+] as const;
+
+export type VoiceCategory = (typeof VOICE_CATEGORY_VALUES)[number];
+
+const VOICE_CATEGORY_SET = new Set<string>(VOICE_CATEGORY_VALUES);
+
+/**
+ * Legacy / free-text labels observed in production. Normalized to a
+ * configured key so they never reach ElevenLabs as a category string.
+ */
+export const VOICE_CATEGORY_ALIASES: Record<string, VoiceCategory> = {
+  dm: 'narrator',
+  narrator: 'narrator',
+  narrative: 'narrator',
+  hero: 'hero_male',
+  villain: 'villain_male',
+  creature: 'monster',
+  gruff: 'guard',
+  calm: 'innkeeper',
+  measured: 'innkeeper',
+  nervous: 'merchant',
+  breathless: 'goblin',
+  high_pitched_fast_breathless: 'goblin',
+};
+
+export function normalizeVoiceCategory(category: string): string {
+  return category
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+export function getCanonicalVoiceCategory(category: string): VoiceCategory | undefined {
+  if (typeof category !== 'string' || !category.trim()) {
+    return undefined;
+  }
+
+  const normalized = normalizeVoiceCategory(category);
+  const canonical = VOICE_CATEGORY_ALIASES[normalized] || normalized;
+  return VOICE_CATEGORY_SET.has(canonical) ? (canonical as VoiceCategory) : undefined;
+}
+
 export type DMResponse = {
   text: string;
   options?: string[];
@@ -83,7 +142,7 @@ export type DMResponse = {
     type: 'dm' | 'character' | 'transition';
     text: string;
     character: string | null;
-    voice_category: string | null;
+    voice_category: VoiceCategory | null;
   }>;
   roll_requests: Array<{
     type: 'check' | 'save' | 'attack' | 'damage' | 'initiative';
@@ -237,7 +296,10 @@ const baseProperties = {
         type: { type: 'string', enum: ['dm', 'character', 'transition'] },
         text: { type: 'string' },
         character: nullable({ type: 'string' }),
-        voice_category: nullable({ type: 'string' }),
+        voice_category: nullable({
+          type: 'string',
+          enum: [...VOICE_CATEGORY_VALUES],
+        }),
       },
       required: ['type', 'text', 'character', 'voice_category'],
     },
@@ -408,5 +470,25 @@ export function parseDmResponse(
     return { success: false, issues: ['handout_actions contains an invalid action'] };
   if (!Array.isArray(response.combat_actions) || !response.combat_actions.every(isCombatAction))
     return { success: false, issues: ['combat_actions contains an invalid action'] };
+
+  if (Array.isArray(response.narration_segments)) {
+    response.narration_segments = response.narration_segments.map((segment) => {
+      if (!segment || typeof segment !== 'object') {
+        return segment;
+      }
+      const raw = segment as { voice_category?: unknown };
+      if (raw.voice_category == null || raw.voice_category === '') {
+        return { ...raw, voice_category: null };
+      }
+      if (typeof raw.voice_category !== 'string') {
+        return { ...raw, voice_category: null };
+      }
+      return {
+        ...raw,
+        voice_category: getCanonicalVoiceCategory(raw.voice_category) ?? null,
+      };
+    });
+  }
+
   return { success: true, data: response as DMResponse };
 }
