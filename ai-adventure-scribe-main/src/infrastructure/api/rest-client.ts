@@ -25,6 +25,8 @@ export interface LLMHistoryMessage {
 
 export interface GenerateTextParams {
   prompt: string;
+  /** The player's raw turn input, kept separate from the assembled prompt for server-side intent detection. */
+  player_input?: string;
   model?: string;
   maxTokens?: number;
   temperature?: number;
@@ -152,6 +154,7 @@ class LlmApiClient {
         method: 'POST',
         body: JSON.stringify({
           prompt: params.prompt,
+          player_input: params.player_input,
           model: model || params.model,
           maxTokens: params.maxTokens,
           temperature: params.temperature,

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- the pipeline test covers the ordered entry contract and telemetry. */
 /**
  * #1907 PR1 — detection's placement in the turn pipeline.
  *
@@ -5,8 +6,9 @@
  * generate call returns, without writing an encounter. The envelope carries a pending handoff;
  * the explicit `/enter` call owns seating and the player's initiative die.
  */
-import { describe, expect, it } from 'bun:test';
+import { afterAll, describe, expect, it, spyOn } from 'bun:test';
 
+import { logger } from '../../lib/logger.js';
 import { applyCombatEntryGate } from '../combat-entry-pipeline.js';
 
 import type { CombatEntryGateDeps } from '../combat/combat-entry-gate.js';
@@ -17,6 +19,15 @@ const COMBAT_ENTRY = {
   sessionId: SESSION_ID,
   player: { characterId: 'character-1', name: 'The Storyteller', initiativeModifier: 2 },
 };
+
+const warnings: Array<Record<string, unknown>> = [];
+const warn = spyOn(logger, 'warn').mockImplementation(((entry: Record<string, unknown>) => {
+  warnings.push(entry);
+}) as typeof logger.warn);
+
+afterAll(() => {
+  warn.mockRestore();
+});
 
 const dmEnvelope = (overrides: Record<string, unknown> = {}): string =>
   JSON.stringify({
@@ -170,5 +181,95 @@ describe('applyCombatEntryGate', () => {
     expect(
       (JSON.parse(returned.text) as { combat_entry_pending?: unknown }).combat_entry_pending,
     ).toBeTruthy();
+  });
+
+  it("declared attack + model already emits combat_transition:'start' with two combatants → both survive", async () => {
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          combat_transition: 'start',
+          combatants: [
+            { name: 'Professor Emil Darkwater', count: 1 },
+            { name: 'Shadow Guard', count: 1 },
+          ],
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: COMBAT_ENTRY,
+      declaredAttack: {
+        verb: 'punch',
+        actorName: 'Professor Emil Darkwater',
+      },
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'combat_transition',
+      combatants: [
+        { name: 'Professor Emil Darkwater', count: 1 },
+        { name: 'Shadow Guard', count: 1 },
+      ],
+    });
+  });
+
+  it('emits COMBAT_INTENT_DIRECTIVE_CONTRACT_VIOLATION when the model resolves the declared attack', async () => {
+    warnings.length = 0;
+    const { deps } = stubDeps();
+    await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          text: 'Your punch hits Professor Emil Darkwater and he falls.',
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: COMBAT_ENTRY,
+      declaredAttack: {
+        verb: 'punch',
+        actorName: 'Professor Emil Darkwater',
+      },
+      deps,
+    });
+
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        msg: 'COMBAT_INTENT_DIRECTIVE_CONTRACT_VIOLATION',
+        event: 'contract_violation',
+        sessionId: SESSION_ID,
+        actorName: 'Professor Emil Darkwater',
+        verb: 'punch',
+      }),
+    );
+  });
+
+  it('logs the forced player-intent pending entry', async () => {
+    const infos: Array<Record<string, unknown>> = [];
+    const info = spyOn(logger, 'info').mockImplementation(((entry: Record<string, unknown>) => {
+      infos.push(entry);
+    }) as typeof logger.info);
+
+    try {
+      const { deps } = stubDeps();
+      await applyCombatEntryGate({
+        result: { text: 'The model leaves the attack unresolved.' } as never,
+        userId: USER_ID,
+        combatEntry: COMBAT_ENTRY,
+        declaredAttack: {
+          verb: 'punch',
+          actorName: 'Professor Emil Darkwater',
+        },
+        deps,
+      });
+
+      expect(infos).toContainEqual(
+        expect.objectContaining({
+          msg: 'COMBAT_ENTRY_DETECTED_PENDING_PLAYER_ENTRY',
+          trigger: 'player_intent',
+        }),
+      );
+    } finally {
+      info.mockRestore();
+    }
   });
 });

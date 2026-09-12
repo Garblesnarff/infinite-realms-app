@@ -29,7 +29,11 @@ import { ValidationError } from '../../lib/errors.js';
 import type { SceneSpec } from '../../tactical/types.js';
 import type { DMMapAction, DMResponse } from '../dm/dm-response-schema.js';
 
-export type CombatEntryReason = 'combat_transition' | 'tactical_action' | 'attack_roll_request';
+export type CombatEntryReason =
+  | 'combat_transition'
+  | 'tactical_action'
+  | 'attack_roll_request'
+  | 'player_intent';
 
 export interface CombatEntryTrigger {
   reason: CombatEntryReason;

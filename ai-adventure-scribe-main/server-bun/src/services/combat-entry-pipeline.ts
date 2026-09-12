@@ -11,7 +11,11 @@
  * here: the player must confirm the entry and may provide their own initiative d20 through the
  * separate `/v1/combat/sessions/:sessionId/enter` endpoint.
  */
-import { detectCombatEntry } from './combat/combat-entry-gate.js';
+import {
+  detectCombatEntry,
+  mapActionTarget,
+  synthesizeSceneSpec,
+} from './combat/combat-entry-gate.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './combat/scene-spec-sanitizer.js';
 import { logger } from '../lib/logger.js';
 
@@ -20,6 +24,7 @@ import type {
   CombatEntryPlayer,
   CombatEntryResponse,
 } from './combat/combat-entry-gate.js';
+import type { DeclaredAttack } from './combat/combat-intent-gate.js';
 import type { LLMResponse } from './llm-provider-service.js';
 
 /** What the client must send for the server to be able to seat the player in an encounter. */
@@ -44,6 +49,93 @@ const parseEnvelope = (text: string): Record<string, unknown> | null => {
   }
 };
 
+const hasAuthoredCombatant = (envelope: Record<string, unknown>): boolean =>
+  Array.isArray(envelope.combatants) &&
+  envelope.combatants.some(
+    (combatant) =>
+      combatant &&
+      typeof combatant === 'object' &&
+      typeof (combatant as { name?: unknown }).name === 'string' &&
+      Boolean((combatant as { name: string }).name.trim()),
+  );
+
+const hasTargetedMapAction = (envelope: Record<string, unknown>): boolean =>
+  Array.isArray(envelope.map_actions) &&
+  envelope.map_actions.some(
+    (action) =>
+      action &&
+      typeof action === 'object' &&
+      Boolean(mapActionTarget(action as Parameters<typeof mapActionTarget>[0])),
+  );
+
+/**
+ * Initiative is meaningful only when the response identifies who the roll belongs to. A model
+ * asking for initiative during a peaceful action ("Cast Light") must not manufacture an entry
+ * handoff. Other roll requests remain byte-for-byte represented in the accepted envelope.
+ */
+export function stripUntargetedInitiativeRollRequests(
+  result: LLMResponse,
+  declaredAttack?: DeclaredAttack | null,
+): LLMResponse {
+  if (result.error) return result;
+  const envelope = parseEnvelope(result.text);
+  if (!envelope || !Array.isArray(envelope.roll_requests)) return result;
+
+  const initiativeRequests = envelope.roll_requests.filter(
+    (request) =>
+      request &&
+      typeof request === 'object' &&
+      (request as { type?: unknown }).type === 'initiative',
+  );
+  if (!initiativeRequests.length) return result;
+
+  if (hasAuthoredCombatant(envelope) || hasTargetedMapAction(envelope) || declaredAttack) {
+    return result;
+  }
+
+  const remainingRolls = envelope.roll_requests.filter(
+    (request) =>
+      !(
+        request &&
+        typeof request === 'object' &&
+        (request as { type?: unknown }).type === 'initiative'
+      ),
+  );
+  logger.warn({
+    msg: 'initiative_without_target',
+    event: 'initiative_without_target',
+    removed: initiativeRequests.length,
+  });
+  return {
+    ...result,
+    text: JSON.stringify({ ...envelope, roll_requests: remainingRolls }),
+  };
+}
+
+const declaredCombatOutcomePattern =
+  /\b(?:hits?|strikes?|punch(?:es|ed)?|slashes?|stabs?|shoots?|fires?|deals?|damage|wounds?|bleeds?|falls?|collapses?|dies?|slain)\b/i;
+
+const normalizeCombatantName = (value: string): string =>
+  value
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim();
+
+const isDeclaredCombatant = (
+  combatant: { name: string; monsterId?: string },
+  declaredAttack: DeclaredAttack,
+): boolean => {
+  if (declaredAttack.monsterId && combatant.monsterId === declaredAttack.monsterId) return true;
+
+  const combatantName = normalizeCombatantName(combatant.name);
+  const declaredName = normalizeCombatantName(declaredAttack.actorName);
+  return (
+    combatantName === declaredName ||
+    combatantName.endsWith(` ${declaredName}`) ||
+    declaredName.endsWith(` ${combatantName}`)
+  );
+};
+
 /**
  * Run the gate for this turn and return the response the client should receive.
  *
@@ -54,23 +146,87 @@ export async function applyCombatEntryGate(params: {
   result: LLMResponse;
   userId: string;
   combatEntry?: CombatEntryContext | null;
+  declaredAttack?: DeclaredAttack | null;
   deps?: CombatEntryGateDeps;
 }): Promise<LLMResponse> {
-  const { result, combatEntry } = params;
-  if (result.error || !combatEntry?.sessionId || !combatEntry.player) return result;
+  const { combatEntry, declaredAttack } = params;
+  const sanitizedResult = stripUntargetedInitiativeRollRequests(params.result, declaredAttack);
+  if (sanitizedResult.error || !combatEntry?.sessionId || !combatEntry.player) {
+    return sanitizedResult;
+  }
 
-  const envelope = parseEnvelope(result.text);
-  if (!envelope) return result;
+  // A declared attack is allowed to force the handoff even when the model answered with pure
+  // prose or omitted every structured combat field. The original narration remains in `text`;
+  // only the server-owned envelope is added around it.
+  const envelope =
+    parseEnvelope(sanitizedResult.text) ?? (declaredAttack ? { text: sanitizedResult.text } : null);
+  if (!envelope) return sanitizedResult;
 
   // Detection is pure. Keep the optional dependency seam for tests that need to assert scene
   // sanitization, but never import or call the database-backed seating dependencies here.
-  const pending = detectCombatEntry({
+  let pending = detectCombatEntry({
     sessionId: combatEntry.sessionId,
     playerName: combatEntry.player.name,
     response: envelope as unknown as CombatEntryResponse,
     sanitizeSceneSpec: params.deps?.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
   });
-  if (!pending) return result;
+
+  if (declaredAttack) {
+    if (!pending) {
+      const declaredDetection = detectCombatEntry({
+        sessionId: combatEntry.sessionId,
+        playerName: combatEntry.player.name,
+        response: { ...envelope, combat_transition: 'start' } as unknown as CombatEntryResponse,
+        sanitizeSceneSpec: params.deps?.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
+      });
+      const sceneSpec =
+        declaredDetection?.sceneSpec ??
+        synthesizeSceneSpec(
+          combatEntry.sessionId,
+          typeof envelope.text === 'string' ? envelope.text : undefined,
+        );
+      pending = {
+        trigger: 'player_intent',
+        detail: `player declared an attack on ${declaredAttack.actorName}`,
+        combatants: [
+          {
+            name: declaredAttack.actorName,
+            ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
+            count: 1,
+          },
+        ],
+        sceneSpec,
+        sceneSpecSynthesized: declaredDetection?.sceneSpecSynthesized ?? true,
+      };
+    } else if (
+      !pending.combatants.some((combatant) => isDeclaredCombatant(combatant, declaredAttack))
+    ) {
+      pending = {
+        ...pending,
+        combatants: [
+          ...pending.combatants,
+          {
+            name: declaredAttack.actorName,
+            ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
+            count: 1,
+          },
+        ],
+      };
+    }
+
+    const narration = typeof envelope.text === 'string' ? envelope.text : sanitizedResult.text;
+    if (declaredCombatOutcomePattern.test(narration)) {
+      logger.warn({
+        msg: 'COMBAT_INTENT_DIRECTIVE_CONTRACT_VIOLATION',
+        event: 'contract_violation',
+        sessionId: combatEntry.sessionId,
+        actorName: declaredAttack.actorName,
+        verb: declaredAttack.verb,
+      });
+    }
+  }
+
+  if (!pending) return sanitizedResult;
 
   logger.info({
     msg: 'COMBAT_ENTRY_DETECTED_PENDING_PLAYER_ENTRY',
@@ -88,5 +244,5 @@ export async function applyCombatEntryGate(params: {
     combat_transition: 'none',
     combat_entry_pending: pending,
   };
-  return { ...result, text: JSON.stringify(rewritten) };
+  return { ...sanitizedResult, text: JSON.stringify(rewritten) };
 }

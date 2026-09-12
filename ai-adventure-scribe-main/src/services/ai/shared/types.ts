@@ -81,13 +81,13 @@ export interface AIResponse {
   combat_entry?: {
     entered: true;
     encounterId: string;
-    trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request';
+    trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request' | 'player_intent';
     detail: string;
     sceneSpecSynthesized: boolean;
   };
   /** #1907 PR1: detected combat awaiting the player's explicit seating confirmation. */
   combat_entry_pending?: {
-    trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request';
+    trigger: 'combat_transition' | 'tactical_action' | 'attack_roll_request' | 'player_intent';
     detail: string;
     combatants: Array<{ name: string; monsterId?: string; count: number }>;
     sceneSpec: unknown;

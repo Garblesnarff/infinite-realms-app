@@ -229,6 +229,7 @@ export class AIService {
 
         const rawResponse = await llmApiClient.generateText({
           prompt: fullPrompt,
+          player_input: params.message,
           temperature: 0.9,
           maxTokens: 8192,
           responseSchema: dmResponseSchema,

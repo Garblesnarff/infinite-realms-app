@@ -189,6 +189,7 @@ jobs:
             src/services/__tests__/combat-damage-log-resilience.test.ts \
             src/services/__tests__/combat-initiative-modifier.real-db.test.ts \
             src/services/__tests__/combat-pending-intent.real-db.test.ts \
+            src/services/__tests__/combat-intent-roster.real-db.test.ts \
             src/services/__tests__/combat-entry-transcript.real-db.test.ts \
             src/services/__tests__/companions.real-db.test.ts \
             src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts \

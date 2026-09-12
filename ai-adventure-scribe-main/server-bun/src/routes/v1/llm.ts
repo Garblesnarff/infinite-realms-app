@@ -15,8 +15,11 @@ import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
+import { detectDeclaredAttack } from '../../services/combat/combat-intent-gate.js';
+import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
 import {
   applyCombatEntryGate,
+  stripUntargetedInitiativeRollRequests,
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
@@ -31,6 +34,25 @@ const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
   if (status === 400) return 400;
   if (status === 503) return 503;
   return 500;
+};
+
+const extractPlayerInputFromPrompt = (prompt: string): string | undefined => {
+  const match = /<player_input>\s*([\s\S]*?)\s*<\/player_input>\s*$/i.exec(prompt);
+  const playerInput = match?.[1]?.trim();
+  return playerInput || undefined;
+};
+
+const looksLikeCombatIntent = (playerInput: string): boolean =>
+  /^\s*(?:(?:i|we)\s+)?(?:(?:try|attempt)\s+to\s+)?(?:punch|hit|strike|stab|slash|shoot|attack|kick|tackle|grapple|shove|fire\b|swing\b|throw\b|cast\b)/i.test(
+    playerInput,
+  );
+
+const escapeXmlAttribute = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const appendDeclaredAttackDirective = (prompt: string, actorName: string): string => {
+  const escapedActor = escapeXmlAttribute(actorName);
+  return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and narrate only the wind-up.</declared_attack>`;
 };
 
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
@@ -87,6 +109,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         responseSchema,
         metrics,
         combatEntry,
+        player_input: requestedPlayerInput,
       } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
@@ -142,8 +165,25 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
 
+      const playerInput =
+        typeof requestedPlayerInput === 'string'
+          ? requestedPlayerInput
+          : extractPlayerInputFromPrompt(prompt);
+      let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
+      if (
+        combatEntry?.sessionId &&
+        typeof playerInput === 'string' &&
+        looksLikeCombatIntent(playerInput)
+      ) {
+        const actors = await loadCombatIntentActorRoster(combatEntry.sessionId, userId);
+        declaredAttack = detectDeclaredAttack(playerInput, actors);
+      }
+      const llmPrompt = declaredAttack
+        ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName)
+        : prompt;
+
       let result = await LLMProviderService.generate({
-        prompt,
+        prompt: llmPrompt,
         model,
         maxTokens,
         temperature,
@@ -151,9 +191,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider,
         responseSchema,
       });
+      result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
       result = await enforceCombatTransitionContract({
         result,
-        prompt,
+        prompt: llmPrompt,
         model,
         maxTokens,
         temperature,
@@ -161,6 +202,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider,
         responseSchema,
       });
+      result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
       // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it
       // judges the accepted dialect, and returns a pending handoff without seating. The explicit
       // combat entry endpoint owns the encounter, initiative, map, telemetry, and publication.
@@ -168,6 +210,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         result,
         userId,
         combatEntry: combatEntry as CombatEntryContext | undefined,
+        declaredAttack,
       });
 
       if (result.error) {
@@ -207,6 +250,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
     {
       body: t.Object({
         prompt: t.String(),
+        player_input: t.Optional(t.String({ maxLength: 20_000 })),
         model: t.Optional(t.String()),
         maxTokens: t.Optional(t.Number()),
         temperature: t.Optional(t.Number()),
@@ -303,6 +347,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
     {
       body: t.Object({
         prompt: t.String(),
+        player_input: t.Optional(t.String({ maxLength: 20_000 })),
         model: t.Optional(t.String()),
         maxTokens: t.Optional(t.Number()),
         temperature: t.Optional(t.Number()),

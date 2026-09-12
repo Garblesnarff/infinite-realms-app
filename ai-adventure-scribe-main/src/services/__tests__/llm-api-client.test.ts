@@ -71,7 +71,10 @@ describe('LlmApiClient', () => {
         json: () => Promise.resolve({ text: 'Generated response' }),
       });
 
-      const result = await llmApiClient.generateText({ prompt: 'Hello' });
+      const result = await llmApiClient.generateText({
+        prompt: 'Hello',
+        player_input: 'I punch Darkwater',
+      });
 
       expect(result).toBe('Generated response');
       expect(mockFetch).toHaveBeenCalledWith(
@@ -81,6 +84,7 @@ describe('LlmApiClient', () => {
           body: expect.stringContaining('"prompt":"Hello"'),
         }),
       );
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body).player_input).toBe('I punch Darkwater');
       // Verify logger was used (info log on success in some paths)
       // Actually llmApiClient.generateText doesn't log on success by default
     });

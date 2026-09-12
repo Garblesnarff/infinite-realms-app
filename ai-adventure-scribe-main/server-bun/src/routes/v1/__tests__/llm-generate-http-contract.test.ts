@@ -156,7 +156,7 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       scene_spec: null,
       map_actions: [],
       handout_actions: [],
-      combatants: [],
+      combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
       combat_actions: [],
     };
     generatedQueue = [
@@ -217,7 +217,7 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       scene_spec: null,
       map_actions: [],
       handout_actions: [],
-      combatants: [],
+      combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
       combat_actions: [],
     });
     generatedQueue = [

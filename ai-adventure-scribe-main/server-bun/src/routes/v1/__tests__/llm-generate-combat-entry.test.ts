@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- the route contract matrix keeps A1-A4 together. */
 /**
  * #1779 §1 — the entry gate is wired into the turn pipeline, not merely written.
  *
@@ -10,6 +11,11 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
 let generatedResult: Record<string, unknown> = { text: '{}', provider: 'openrouter', model: 'm' };
+let generatedInputs: Record<string, unknown>[] = [];
+const intentActors = [
+  { name: 'Professor Emil Darkwater' },
+  { name: 'The Ghoul', monsterId: 'srd:ghoul' },
+];
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -47,7 +53,15 @@ mock.module('../../../services/ai-usage-service.js', () => ({
   },
 }));
 mock.module('../../../services/llm-provider-service.js', () => ({
-  LLMProviderService: { generate: async () => generatedResult },
+  LLMProviderService: {
+    generate: async (input: Record<string, unknown>) => {
+      generatedInputs.push(input);
+      return generatedResult;
+    },
+  },
+}));
+mock.module('../../../services/combat/combat-intent-roster.js', () => ({
+  loadCombatIntentActorRoster: async () => intentActors,
 }));
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
@@ -74,7 +88,7 @@ const dmEnvelope = (overrides: Record<string, unknown> = {}): string =>
     ...overrides,
   });
 
-const generate = async (body: Record<string, unknown>) =>
+const generate = async (body: Record<string, unknown>): Promise<Response> =>
   app.handle(
     new Request('http://localhost/v1/llm/generate', {
       method: 'POST',
@@ -86,6 +100,7 @@ const generate = async (body: Record<string, unknown>) =>
 describe('POST /v1/llm/generate — combat entry gate', () => {
   beforeEach(() => {
     generatedResult = { text: '{}', provider: 'openrouter', model: 'm' };
+    generatedInputs = [];
   });
 
   it('returns a pending entry for a hostile turn without seating an encounter', async () => {
@@ -159,6 +174,135 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
         target_ids: ['vance'],
       }),
     ]);
+  });
+
+  it('forces player-intent entry from pure prose and injects the server directive (#1943 A1-A3)', async () => {
+    generatedResult = {
+      text: 'Darkwater flinches as you square your shoulders.',
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'i punch Darkwater',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const body = (await response.json()) as { text: string };
+    const envelope = JSON.parse(body.text) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'player_intent',
+      combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+    });
+    expect(envelope.text).toContain('Darkwater flinches');
+    expect(generatedInputs[0]?.prompt).toContain(
+      '<declared_attack actor="Professor Emil Darkwater">',
+    );
+    expect(generatedInputs[0]?.prompt).toContain('Do NOT resolve it.');
+  });
+
+  it('uses the tail-tagged player input for old clients (#1943 A1)', async () => {
+    generatedResult = {
+      text: 'The blow is only a wind-up.',
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.\n<player_input>i punch Darkwater</player_input>',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+
+    expect(envelope.combat_entry_pending).toMatchObject({ trigger: 'player_intent' });
+    expect(generatedInputs[0]?.prompt).toContain(
+      '<declared_attack actor="Professor Emil Darkwater">',
+    );
+  });
+
+  it('does not treat a peaceful question to an NPC as an attack (#1943 A2)', async () => {
+    generatedResult = {
+      text: dmEnvelope({ text: 'Darkwater considers your question.' }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'I ask Darkwater why he lied',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+
+    expect(envelope.combat_entry_pending).toBeUndefined();
+    expect(generatedInputs[0]?.prompt).not.toContain('<declared_attack');
+  });
+
+  it('strips an untargeted initiative request from Cast Light (#1943 A4)', async () => {
+    generatedResult = {
+      text: dmEnvelope({
+        text: 'You cast Light and the room brightens.',
+        roll_requests: [
+          {
+            type: 'initiative',
+            formula: '1d20+dex',
+            purpose: 'Initiative',
+            dc: null,
+            ac: null,
+            advantage: false,
+            disadvantage: false,
+          },
+        ],
+      }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'Cast Light',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+
+    expect(envelope.combat_entry_pending).toBeUndefined();
+    expect(envelope.roll_requests).toEqual([]);
+    expect(generatedInputs).toHaveLength(1);
+  });
+
+  it('recognizes a damage spell declared against a roster actor (#1943 A2-A3)', async () => {
+    generatedResult = {
+      text: 'The spell gathers at the tip of your finger.',
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'cast Magic Missile at the ghoul',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'player_intent',
+      combatants: [{ name: 'The Ghoul', monsterId: 'srd:ghoul', count: 1 }],
+    });
+    expect(generatedInputs[0]?.prompt).toContain('<declared_attack actor="The Ghoul">');
   });
 
   it('leaves a peaceful turn untouched', async () => {

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import {
-  resolveParticipantType,
-  type ParticipantType,
-} from '../combat/participant-type.js';
+import { resolveParticipantType, type ParticipantType } from '../combat/participant-type.js';
 
 /**
  * The values `combat_participants_participant_type_check` accepts. Duplicated
