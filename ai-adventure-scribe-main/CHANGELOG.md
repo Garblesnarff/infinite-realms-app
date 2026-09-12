@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.15.0...v0.16.0) (2026-09-12)
+
+
+### Features
+
+* **combat:** gate declared player attacks before LLM ([#1979](https://github.com/Garblesnarff/infinite-realms-production/issues/1979)) ([5572579](https://github.com/Garblesnarff/infinite-realms-production/commit/5572579bd2515a72886f5f3c19da6dfade7db149))
+
+
+### Documentation
+
+* reconcile agent instructions and push guard ([#1998](https://github.com/Garblesnarff/infinite-realms-production/issues/1998)) ([4512a6e](https://github.com/Garblesnarff/infinite-realms-production/commit/4512a6e0fa3744c98511a07afee72bae4b51ef75))
+
 ## [0.15.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.14.3...v0.15.0) (2026-09-08)
 
 
