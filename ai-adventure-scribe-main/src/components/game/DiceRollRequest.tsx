@@ -25,6 +25,7 @@ interface DiceRollRequestProps {
   request: RollRequest;
   onRoll: (formula: string, advantage?: boolean, disadvantage?: boolean) => void;
   onManualResult: (result: number) => void;
+  onRollCommit?: () => void;
   onCancel?: () => void;
   className?: string;
 }
@@ -34,7 +35,7 @@ interface DiceRollRequestProps {
  * Shows when DM requests a roll, allows player to roll or input manually
  */
 export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
-  ({ request, onRoll: _onRoll, onManualResult, onCancel, className }) => {
+  ({ request, onRoll: _onRoll, onManualResult, onRollCommit, onCancel, className }) => {
     const {
       manualMode,
       manualResult,
@@ -54,7 +55,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       handleBackToRoll,
       toggleAdvantage,
       toggleDisadvantage,
-    } = useDiceRollRequest({ request, onManualResult });
+    } = useDiceRollRequest({ request, onManualResult, onRollCommit });
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
 

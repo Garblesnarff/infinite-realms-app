@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   hasPendingPlayerRoll,
+  markPlayerRollCommitted,
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
   PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
@@ -31,6 +32,14 @@ const SPEC = {
   disadvantage: false,
 };
 
+const hostHandle = (
+  rollId = 'roll-1',
+  dismiss = vi.fn(),
+): { rollId: string; dismiss: () => void } => ({
+  rollId,
+  dismiss,
+});
+
 describe('the player roll bridge', () => {
   beforeEach(() => {
     settlePendingPlayerRoll({ d20: null });
@@ -44,7 +53,7 @@ describe('the player roll bridge', () => {
   it('hands the popup the spec and returns the die the player kept', async () => {
     const present = vi.fn((_spec, settle) => {
       settle({ d20: 18 });
-      return () => {};
+      return hostHandle();
     });
     setPlayerRollHost({ present });
 
@@ -61,7 +70,7 @@ describe('the player roll bridge', () => {
     setPlayerRollHost({
       present: (_spec, settle) => {
         setTimeout(() => settle({ d20: null }), 0);
-        return () => {};
+        return hostHandle();
       },
     });
 
@@ -69,7 +78,7 @@ describe('the player roll bridge', () => {
   });
 
   it('lets the turn pipeline settle a roll the player walked away from', async () => {
-    setPlayerRollHost({ present: () => () => {} });
+    setPlayerRollHost({ present: () => hostHandle() });
     const pending = requestPlayerAttackRoll(SPEC);
 
     expect(hasPendingPlayerRoll()).toBe(true);
@@ -81,7 +90,7 @@ describe('the player roll bridge', () => {
 
   it('dismisses the abandoned popup rather than leaving it on screen', async () => {
     const dismiss = vi.fn();
-    setPlayerRollHost({ present: () => dismiss });
+    setPlayerRollHost({ present: () => hostHandle('roll-1', dismiss) });
     const pending = requestPlayerAttackRoll(SPEC);
 
     settlePendingPlayerRoll({ d20: null });
@@ -92,7 +101,7 @@ describe('the player roll bridge', () => {
 
   it('never stacks two popups: a superseding attack settles the first engine-rolled', async () => {
     // Two popups at once would ask the player which of two attacks they are rolling for.
-    setPlayerRollHost({ present: () => () => {} });
+    setPlayerRollHost({ present: () => hostHandle() });
     const first = requestPlayerAttackRoll(SPEC);
     const second = requestPlayerAttackRoll({ ...SPEC, weaponName: 'dagger' });
 
@@ -107,7 +116,7 @@ describe('the player roll bridge', () => {
     setPlayerRollHost({
       present: (_spec, settle) => {
         settleTwice = settle;
-        return () => {};
+        return hostHandle();
       },
     });
     const pending = requestPlayerAttackRoll(SPEC);
@@ -126,7 +135,7 @@ describe('the player roll bridge', () => {
   it('asks for initiative and auto-rolls after the bounded prompt timeout', async () => {
     vi.useFakeTimers();
     const dismiss = vi.fn();
-    const present = vi.fn((_spec, _settle) => dismiss);
+    const present = vi.fn((_spec, _settle) => hostHandle('initiative-roll-1', dismiss));
     setPlayerRollHost({ present });
 
     const pending = requestPlayerInitiativeRoll({
@@ -150,7 +159,7 @@ describe('the player roll bridge', () => {
     let settleInitiative: ((outcome: { d20: number | null }) => void) | undefined;
     const present = vi.fn((_spec, settle) => {
       settleInitiative = settle;
-      return () => {};
+      return hostHandle('initiative-roll-1');
     });
     setPlayerRollHost({ present });
 
@@ -162,6 +171,52 @@ describe('the player roll bridge', () => {
 
     await expect(pending).resolves.toEqual({ d20: 17 });
     await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('lets a committed initiative roll settle after the 30s prompt window', async () => {
+    vi.useFakeTimers();
+    let settleInitiative: ((outcome: { d20: number | null }) => void) | undefined;
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        settleInitiative = settle;
+        return hostHandle('initiative-roll-1');
+      },
+    });
+
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(markPlayerRollCommitted('initiative-roll-1')).toBe(true);
+    await vi.advanceTimersByTimeAsync(3_500);
+    settleInitiative?.({ d20: 14 });
+
+    await expect(pending).resolves.toEqual({ d20: 14 });
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('treats a commit after the untouched popup timed out as a no-op', async () => {
+    vi.useFakeTimers();
+    let settleInitiative: ((outcome: { d20: number | null }) => void) | undefined;
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        settleInitiative = settle;
+        return hostHandle('initiative-roll-1');
+      },
+    });
+
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+    await vi.advanceTimersByTimeAsync(PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({ d20: null });
+    expect(markPlayerRollCommitted('initiative-roll-1')).toBe(false);
+    settleInitiative?.({ d20: 14 });
     expect(hasPendingPlayerRoll()).toBe(false);
   });
 });

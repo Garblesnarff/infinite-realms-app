@@ -19,6 +19,7 @@ export function isNumericFormula(formula: string): boolean {
 interface UseDiceRollRequestProps {
   request: RollRequest;
   onManualResult: (result: number) => void;
+  onRollCommit?: () => void;
 }
 
 /**
@@ -26,7 +27,11 @@ interface UseDiceRollRequestProps {
  * Extracted from DiceRollRequest.tsx
  * Manages state and logic for dice roll requests
  */
-export function useDiceRollRequest({ request, onManualResult }: UseDiceRollRequestProps) {
+export function useDiceRollRequest({
+  request,
+  onManualResult,
+  onRollCommit,
+}: UseDiceRollRequestProps) {
   const [manualMode, setManualMode] = useState(false);
   const [manualResult, setManualResult] = useState('');
   const [hasAdvantage, setHasAdvantage] = useState(request.advantage || false);
@@ -160,10 +165,13 @@ export function useDiceRollRequest({ request, onManualResult }: UseDiceRollReque
   const effectiveManualMode = manualMode || (!!character && resolvedFormula === null);
 
   const handleAutoRoll = useCallback(() => {
+    // Commit before starting the animation: the initiative bridge must stop its fallback timer
+    // while the player's roll is visibly in flight.
+    onRollCommit?.();
     // Show the animated dice rolling
     setShowDiceAnimation(true);
     setIsRolling(true);
-  }, []);
+  }, [onRollCommit]);
 
   const handleDiceRollComplete = useCallback(
     (result: number | unknown, _details?: unknown) => {

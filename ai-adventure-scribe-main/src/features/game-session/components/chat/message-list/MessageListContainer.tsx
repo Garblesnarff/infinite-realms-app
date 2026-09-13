@@ -13,6 +13,7 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
+import { markPlayerRollCommitted } from '@/services/combat/player-roll-bridge';
 
 interface MessageListContainerProps {
   messages: ChatMessage[];
@@ -221,6 +222,11 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               request={rollRequest}
               onRoll={handleDiceRoll}
               onManualResult={handleManualResult}
+              onRollCommit={
+                currentRoll.combatInitiativeRoll
+                  ? () => markPlayerRollCommitted(currentRoll.id)
+                  : undefined
+              }
               onCancel={handleCancelRoll}
               batchProgress={batchProgress}
               className="shadow-2xl animate-in slide-in-from-bottom-4 duration-300"

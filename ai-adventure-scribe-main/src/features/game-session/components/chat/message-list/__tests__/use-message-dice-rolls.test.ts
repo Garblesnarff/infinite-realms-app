@@ -6,6 +6,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useMessageDiceRolls } from '../use-message-dice-rolls';
 
 import { useGame } from '@/contexts/GameContext';
+import {
+  settleCombatAttackRoll,
+  settleCombatInitiativeRoll,
+} from '@/hooks/combat/use-player-roll-host';
+import logger from '@/lib/logger';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 
@@ -16,6 +21,11 @@ vi.mock('@/contexts/GameContext', () => ({
 
 vi.mock('@/utils/diceUtils', () => ({
   rollDice: vi.fn(),
+}));
+
+vi.mock('@/hooks/combat/use-player-roll-host', () => ({
+  settleCombatAttackRoll: vi.fn(),
+  settleCombatInitiativeRoll: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -58,6 +68,8 @@ describe('useMessageDiceRolls', () => {
         pendingRolls: [],
       },
     };
+    vi.mocked(settleCombatAttackRoll).mockReturnValue(false);
+    vi.mocked(settleCombatInitiativeRoll).mockReturnValue(false);
   });
 
   it('should return initial state when no roll is active', () => {
@@ -649,6 +661,38 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
+    });
+
+    it('does not reach the no-current-roll branch for a committed combat initiative roll', async () => {
+      const committedRoll = {
+        id: 'roll-1',
+        requestType: 'initiative',
+        description: 'Initiative for The Storyteller',
+        rollConfig: { dieType: 20, count: 1, modifier: 2 },
+        status: 'pending',
+        combatInitiativeRoll: true,
+      };
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(committedRoll);
+      mockUseGame.completeDiceRoll.mockImplementation(() => undefined);
+      vi.mocked(settleCombatInitiativeRoll).mockReturnValue(true);
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(14);
+      });
+
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 14 });
+      expect(settleCombatInitiativeRoll).toHaveBeenCalledWith('roll-1', 14);
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        '[useMessageDiceRolls] No current dice roll in queue',
+      );
+      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
     });
 
     it('should handle object result in handleManualResult', async () => {

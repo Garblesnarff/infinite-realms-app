@@ -59,9 +59,12 @@ export function usePlayerRollHost(): void {
         );
 
         registerSettler(rollId, settle);
-        return () => {
-          unregisterSettler(rollId);
-          cancelDiceRoll(rollId);
+        return {
+          rollId,
+          dismiss: () => {
+            unregisterSettler(rollId);
+            cancelDiceRoll(rollId);
+          },
         };
       },
     });

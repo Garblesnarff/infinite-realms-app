@@ -42,24 +42,35 @@ export type PlayerRollSpec = PlayerAttackRollSpec | PlayerInitiativeRollSpec;
 /** `null` means nobody rolled: the engine should roll this attack itself. */
 export type PlayerRollOutcome = { d20: number | null };
 
+export interface PlayerRollHostHandle {
+  /** The queue id for the popup, used to commit a player-initiated roll before it settles. */
+  rollId: string;
+  /** Dismisses the visible queue entry. */
+  dismiss: () => void;
+}
+
 export interface PlayerRollHost {
   /**
    * Opens the dice popup for `spec`. Must call `settle` exactly once, with the natural d20 the
-   * player kept, or `null` if they cancelled. Returning a function lets the bridge dismiss a
-   * popup the player has already walked away from.
+   * player kept, or `null` if they cancelled. The returned handle lets the bridge identify and
+   * dismiss a popup the player has already walked away from.
    */
-  present: (spec: PlayerRollSpec, settle: (outcome: PlayerRollOutcome) => void) => () => void;
+  present: (
+    spec: PlayerRollSpec,
+    settle: (outcome: PlayerRollOutcome) => void,
+  ) => PlayerRollHostHandle;
 }
 
 let host: PlayerRollHost | null = null;
 let pending: {
   settle: (outcome: PlayerRollOutcome) => void;
   dismiss: () => void;
+  rollId?: string;
   timeoutId?: ReturnType<typeof setTimeout>;
 } | null = null;
 
 /** Keep the ask-first popup short enough to be a turn prompt, but long enough to be usable. */
-export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 12_000;
+export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 30_000;
 
 /** Registered by the provider that owns the dice queue. Passing `null` clears it on unmount. */
 export function setPlayerRollHost(next: PlayerRollHost | null): void {
@@ -69,6 +80,19 @@ export function setPlayerRollHost(next: PlayerRollHost | null): void {
 /** Whether a combat roll is currently waiting on the player's die. */
 export function hasPendingPlayerRoll(): boolean {
   return pending !== null;
+}
+
+/**
+ * Commits a player-initiated initiative roll while its animation is still running.
+ *
+ * The popup takes 3.5 seconds to produce its result. The timeout must therefore stop when the
+ * player clicks Roll, not when the animation eventually settles the queue entry.
+ */
+export function markPlayerRollCommitted(rollId: string): boolean {
+  if (!pending || pending.rollId !== rollId || pending.timeoutId === undefined) return false;
+  clearTimeout(pending.timeoutId);
+  pending.timeoutId = undefined;
+  return true;
 }
 
 /**
@@ -83,7 +107,7 @@ export function settlePendingPlayerRoll(outcome: PlayerRollOutcome): boolean {
   if (!pending) return false;
   const settled = pending;
   pending = null;
-  if (settled.timeoutId) clearTimeout(settled.timeoutId);
+  if (settled.timeoutId !== undefined) clearTimeout(settled.timeoutId);
   settled.dismiss();
   settled.settle(outcome);
   return true;
@@ -126,23 +150,24 @@ function requestPlayerRoll(
     // synchronously; assigning it afterwards would leave a ghost pending roll behind.
     pending = { settle, dismiss: () => dismissPopup() };
     const activeHost = host;
-    const hostDismiss = activeHost.present(spec, (outcome) => {
+    const hostHandle = activeHost.present(spec, (outcome) => {
       if (pending?.settle === settle) {
         // The queue handler has already completed the visible roll. Clear the bridge slot and
         // timer, but do not dismiss/cancel the queue entry after it was marked completed.
         const current = pending;
         pending = null;
-        if (current.timeoutId) clearTimeout(current.timeoutId);
+        if (current.timeoutId !== undefined) clearTimeout(current.timeoutId);
         settle(outcome);
       } else {
         settle(outcome);
       }
     });
-    dismissPopup = hostDismiss;
+    dismissPopup = hostHandle.dismiss;
+    if (pending?.settle === settle) pending.rollId = hostHandle.rollId;
 
     if (settled) {
       // A synchronous host settlement happened before the real dismiss function was returned.
-      hostDismiss();
+      hostHandle.dismiss();
     } else if (timeoutMs !== undefined) {
       const timeoutId = setTimeout(() => {
         logger.info(`[PlayerRoll] initiative prompt timed out after ${timeoutMs}ms; auto-rolling`);

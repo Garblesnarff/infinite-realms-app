@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * #1907 PR2 — the client consumes the server's pending entry handoff, asks for initiative, and
- * never lets pre-entry attack prose become an outcome.
+ * #2007 — the client consumes the server's pending entry handoff, confirms intent before asking
+ * for initiative, and never lets pre-entry attack prose become an outcome.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -159,7 +159,16 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     await invoke({ combat_transition: 'start', scene_spec: { environment: 'tavern' } });
   });
 
-  it('asks for initiative before seating, then queues the player action when an NPC acts first', async () => {
+  it('confirms before initiative, then seats and queues the player action when an NPC acts first', async () => {
+    const order: string[] = [];
+    vi.mocked(requestCombatEntryConfirmation).mockImplementation(async () => {
+      order.push('confirmation');
+      return true;
+    });
+    vi.mocked(requestPlayerInitiativeRoll).mockImplementation(async () => {
+      order.push('initiative');
+      return { d20: 16 };
+    });
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
     const outcome = await invoke(
       {
@@ -170,6 +179,13 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       refresh,
     );
 
+    expect(order).toEqual(['confirmation', 'initiative']);
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith({
+      actorLabel: 'The Storyteller',
+      combatantLabels: ['Vance'],
+      initiativeRoll: null,
+      initiativeModifier: 2,
+    });
     expect(requestPlayerInitiativeRoll).toHaveBeenCalledWith({
       actorLabel: 'The Storyteller',
       initiativeModifier: 2,
@@ -228,9 +244,10 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(requestCombatEntryConfirmation).toHaveBeenCalledWith({
       actorLabel: 'The Storyteller',
       combatantLabels: ['Vance'],
-      initiativeRoll: 16,
+      initiativeRoll: null,
       initiativeModifier: 2,
     });
+    expect(requestPlayerInitiativeRoll).not.toHaveBeenCalled();
     expect(userDataApi.enterCombat).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
     expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();

@@ -115,9 +115,8 @@ export async function handleDmActionsAndTransitions(
     localNotices.push({ text, persist });
   };
 
-  // PR2: the server has detected combat but has not seated it. Ask for the player's initiative
-  // before making the explicit entry call. A null die is intentional: the server rolls it and
-  // writes `(auto-rolled)` into the seating transcript.
+  // The server has detected combat but has not seated it. Confirm the player's intent before
+  // asking for initiative: declining must not open a dice popup or roll a die.
   if (sessionId && !activeEncounter && result.combat_entry_pending) {
     const pendingEntry = result.combat_entry_pending;
     const player = buildCombatEntryPlayer(params.characterRecord);
@@ -129,14 +128,10 @@ export async function handleDmActionsAndTransitions(
       result = { ...result, combat_actions: [], roll_requests: [] };
     } else {
       try {
-        const initiative = await requestPlayerInitiativeRoll({
-          actorLabel: player.name,
-          initiativeModifier: player.initiativeModifier,
-        });
         const confirmed = await requestCombatEntryConfirmation({
           actorLabel: player.name,
           combatantLabels: pendingEntry.combatants.map((combatant: any) => combatant.name),
-          initiativeRoll: initiative.d20,
+          initiativeRoll: null,
           initiativeModifier: player.initiativeModifier,
         });
         if (!confirmed) {
@@ -157,6 +152,12 @@ export async function handleDmActionsAndTransitions(
             roll_requests: [],
           };
         } else {
+          // The confirmation is the intent gate. Only after the player chooses Strike do we
+          // request the initiative die that the explicit seating endpoint will consume.
+          const initiative = await requestPlayerInitiativeRoll({
+            actorLabel: player.name,
+            initiativeModifier: player.initiativeModifier,
+          });
           const enterResponse = await userDataApi.enterCombat(sessionId, {
             combatants: pendingEntry.combatants,
             sceneSpec: pendingEntry.sceneSpec,

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CombatEntryConfirmation } from '../CombatEntryConfirmation';
 
+import { Z_INDEX } from '@/constants/z-index';
 import logger from '@/lib/logger';
 
 vi.mock('@/lib/logger', () => ({
@@ -29,7 +30,10 @@ describe('CombatEntryConfirmation', () => {
       />,
     );
 
-    expect(screen.getByText('Initiative: (auto-rolled by the engine)')).toBeInTheDocument();
+    expect(screen.getByText('Initiative: rolled after confirmation')).toBeInTheDocument();
+    const overlay = screen.getByTestId('combat-entry-confirmation-overlay');
+    expect(overlay).toHaveClass('fixed', 'bottom-24', 'left-1/2');
+    expect(overlay).toHaveStyle({ zIndex: Z_INDEX.POPOVER });
     fireEvent.click(screen.getByRole('button', { name: '[Strike]' }));
     fireEvent.click(screen.getByRole('button', { name: '[Do something else]' }));
 
