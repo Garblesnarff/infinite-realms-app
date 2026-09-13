@@ -84,6 +84,20 @@ jobs:
         working-directory: ai-adventure-scribe-main/server-bun
       - run: bun run test
         working-directory: ai-adventure-scribe-main/server-bun
+      # The job is named server-vitest but until now ran no Vitest at all. The
+      # step above is `bun scripts/run-isolated-tests.ts`, whose glob is
+      # `src/**/*.test.ts`; the 28 `src/**/*.vitest.ts` files import from
+      # 'vitest', so `bun test` could not have run them even if the glob
+      # matched. They were executed by nothing -- 250 tests, 8 of the files
+      # security/authorization suites (T01, #1875).
+      #
+      # server-bun/vitest.config.ts already globs them correctly; only the
+      # invocation was missing, so this is a new step rather than a config fix.
+      # `vitest` itself is a devDependency of the ai-adventure-scribe-main
+      # workspace, not of server-bun, and resolves through the ancestor
+      # node_modules/.bin that the install two steps up populates.
+      - run: bun run test:vitest
+        working-directory: ai-adventure-scribe-main/server-bun
 
   # The real-database suites, which `server-vitest` above cannot run.
   #
@@ -111,15 +125,36 @@ jobs:
   #      assert against another. #1904's guard allowlists exactly
   #      127.0.0.1:55432, which this satisfies.
   #
-  # The file list is explicit rather than a glob, and that is deliberate. Two
-  # suites do NOT pass against a real database on main today --
-  # solo-survivability (7 failures) and monster-attacks (2, on a genuine
-  # participant_type CHECK violation that also reproduces in production) -- and
-  # a whole-suite `bun test` with a database configured fails 54 tests, because
+  # The file list is explicit rather than a glob, and that is deliberate: a
+  # whole-suite `bun test` with a database configured fails 54 tests, because
   # `mock.module('.../db/client', () => ({ db: {} }))` in the route smoke tests
-  # leaks across files and hands the real-DB suites an empty `db`. Enabling the
-  # honest subset now beats waiting on all three. Add files here as they harden;
-  # the tail of that work is tracked on #1906.
+  # leaks across files and hands the real-DB suites an empty `db`. Add files
+  # here as they harden; the tail of that work is tracked on #1906.
+  #
+  # monster-attacks joined this list in T02 and passes 10/10. The 2 failures
+  # this note used to attribute to a participant_type CHECK violation do not
+  # reproduce at all; it had simply never been registered, so nothing noticed
+  # it had become green.
+  #
+  # solo-survivability is the one suite still absent, and it is genuinely
+  # blocked: 4 pass / 7 fail, re-measured (T02) on the pgvector/pgvector image
+  # this job actually uses, reproduced across three fresh replays. That 7 is
+  # unchanged from when this note was first written. They are ordinary
+  # assertion mismatches -- death-save outcomes, an encounter that stays
+  # `active` where the suite expects `completed`, and transcript text that no
+  # longer matches /HIT for \d+ damage/ -- so it is a behaviour triage, per
+  # case, on #1999. Not a harness problem.
+  #
+  # MEASURING THIS CORRECTLY REQUIRES pgvector. scripts/test-migrations.sh
+  # SKIPS every migration mentioning `vector(` when the extension is absent,
+  # and says so in a warning that is easy to scroll past. On a plain
+  # postgres:16 that silently drops
+  # supabase/migrations/20251205_create_lore_keeper_tables.sql, so
+  # campaign_chunks comes out without its `embedding vector(768)` column, both
+  # suites die on `column "embedding" ... does not exist`, and the result looks
+  # exactly like schema drift. It is not -- #1999 was filed on that mistake and
+  # withdrawn. Use pgvector/pgvector:pg16, and check the replay summary says
+  # "pgvector available" before trusting any number from it.
   server-real-db:
     runs-on: self-hosted
     steps:
@@ -193,6 +228,7 @@ jobs:
             src/services/__tests__/combat-entry-transcript.real-db.test.ts \
             src/services/__tests__/companions.real-db.test.ts \
             src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts \
+            src/services/__tests__/monster-attacks.real-db.test.ts \
             2>&1 | tee "/tmp/real-db-$GITHUB_RUN_ID.log"
           if grep -qE '^ *[1-9][0-9]* skip' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
             echo "::error::a real-database suite SKIPPED. The database env did not reach the tests."

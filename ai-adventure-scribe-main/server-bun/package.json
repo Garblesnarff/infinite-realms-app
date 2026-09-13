@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "test": "bun scripts/run-isolated-tests.ts"
+    "test": "bun scripts/run-isolated-tests.ts",
+    "test:vitest": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.0.0",
