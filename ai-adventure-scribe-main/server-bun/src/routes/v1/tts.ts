@@ -11,7 +11,14 @@ type TtsFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 const ttsRequestSchema = t.Object({
   text: t.String({ minLength: 1, maxLength: 5000 }),
   model_id: t.Optional(t.String()),
-  voice_settings: t.Optional(t.Record(t.String(), t.Number())),
+  voice_settings: t.Optional(
+    t.Object({
+      stability: t.Optional(t.Number({ minimum: 0, maximum: 1 })),
+      similarity_boost: t.Optional(t.Number({ minimum: 0, maximum: 1 })),
+      style: t.Optional(t.Number({ minimum: 0, maximum: 1 })),
+      use_speaker_boost: t.Optional(t.Boolean()),
+    }),
+  ),
 });
 
 export interface TtsRouteOptions {

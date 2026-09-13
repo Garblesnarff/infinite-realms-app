@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia, status } from 'elysia';
 
+import { VOICE_CONFIGS } from '../../../../../src/services/voice/voice-constants.ts';
+import { VOICE_POOLS } from '../../../../../src/services/voice/voice-pools.ts';
+
 import type { TtsRouteOptions } from '../tts.js';
 
 const envKeys = [
@@ -173,5 +176,45 @@ describe('POST /v1/ai-proxy/voice/:voiceId', () => {
     expect(limitedResponses[0]?.status).toBe(200);
     expect(limitedResponses.at(-1)?.status).toBe(429);
     expect(otherUser.status).toBe(200);
+  });
+
+  it('accepts voice_settings from every VOICE_CONFIGS and VOICE_POOLS entry', async () => {
+    const payloads = [
+      ...Object.entries(VOICE_CONFIGS).map(([name, config]) => ({
+        name: `VOICE_CONFIGS.${name}`,
+        settings: config.settings,
+      })),
+      ...Object.entries(VOICE_POOLS).flatMap(([pool, voices]) =>
+        voices.map((voice, index) => ({
+          name: `VOICE_POOLS.${pool}[${index}] (${voice.name})`,
+          settings: voice.settings,
+        })),
+      ),
+    ];
+
+    expect(payloads.length).toBeGreaterThan(0);
+
+    for (const [index, { name, settings }] of payloads.entries()) {
+      const token = `tts-contract-${index}`;
+      const userId = `tts-contract-${index}`;
+      testUsers[`Bearer ${token}`] = userId;
+
+      const response = await app.handle(
+        new Request('http://localhost/v1/ai-proxy/voice/voice-1', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            text: 'The lantern flickers.',
+            model_id: 'eleven_flash_v2_5',
+            voice_settings: settings,
+          }),
+        }),
+      );
+
+      expect(response.status, `${name} should pass the proxy validator`).toBe(200);
+    }
   });
 });
