@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.2...v0.16.3) (2026-09-13)
+
+
+### Bug Fixes
+
+* **combat:** confirm before initiative roll ([#2009](https://github.com/Garblesnarff/infinite-realms-production/issues/2009)) ([73c8ee9](https://github.com/Garblesnarff/infinite-realms-production/commit/73c8ee95ec5bf01f4faae0be03be9d7b78b0e818))
+* **tts:** accept ElevenLabs voice_settings booleans ([#2006](https://github.com/Garblesnarff/infinite-realms-production/issues/2006)) ([e3c2765](https://github.com/Garblesnarff/infinite-realms-production/commit/e3c27654898074fdbcfa76f10c5689181ef71f18))
+* **voice:** persist speaker segments and split by speaker ([#2010](https://github.com/Garblesnarff/infinite-realms-production/issues/2010)) ([950c15c](https://github.com/Garblesnarff/infinite-realms-production/commit/950c15c409e7fa7fc5c6c183202086f1a6b5cd1c))
+
 ## [0.16.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.1...v0.16.2) (2026-09-13)
 
 
