@@ -9,6 +9,7 @@ import type { ChatMessage } from '@/types/game';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import { persistableNarrationSegments } from '@/utils/narration-segments';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
@@ -87,6 +88,7 @@ export const useMessageQueue = (sessionId: string | null) => {
           setQueueStatus(retries > 0 ? 'retrying' : 'processing');
 
           // Format the context to ensure it's compatible with Supabase's Json type
+          const narrationSegments = persistableNarrationSegments(message);
           const contextData = message.context
             ? {
                 location: message.context.location || null,
@@ -95,8 +97,11 @@ export const useMessageQueue = (sessionId: string | null) => {
                 handouts: message.context.handouts || null,
                 combat_transition: message.context.combat_transition || null,
                 scene_spec: Boolean(message.context.scene_spec),
+                narration_segments: narrationSegments,
               }
-            : {};
+            : narrationSegments
+              ? { narration_segments: narrationSegments }
+              : {};
 
           await userDataApi.saveSessionMessages(sessionId, {
             id: messageId,
@@ -172,22 +177,28 @@ export const useMessageQueue = (sessionId: string | null) => {
     async (batch: ChatMessage[]) => {
       if (!sessionId) throw new Error('Session ID is required to save messages');
       const now = new Date().toISOString();
-      const formattedBatch = batch.map((message) => ({
-        id: message.id || uuidv4(),
-        message: message.text,
-        speaker_type: message.sender,
-        context: message.context
-          ? {
-              location: message.context.location || null,
-              emotion: message.context.emotion || null,
-              intent: message.context.intent || null,
-              handouts: message.context.handouts || null,
-              combat_transition: message.context.combat_transition || null,
-              scene_spec: Boolean(message.context.scene_spec),
-            }
-          : {},
-        timestamp: message.timestamp || now,
-      }));
+      const formattedBatch = batch.map((message) => {
+        const narrationSegments = persistableNarrationSegments(message);
+        return {
+          id: message.id || uuidv4(),
+          message: message.text,
+          speaker_type: message.sender,
+          context: message.context
+            ? {
+                location: message.context.location || null,
+                emotion: message.context.emotion || null,
+                intent: message.context.intent || null,
+                handouts: message.context.handouts || null,
+                combat_transition: message.context.combat_transition || null,
+                scene_spec: Boolean(message.context.scene_spec),
+                narration_segments: narrationSegments,
+              }
+            : narrationSegments
+              ? { narration_segments: narrationSegments }
+              : {},
+          timestamp: message.timestamp || now,
+        };
+      });
 
       await userDataApi.saveSessionMessages(sessionId, formattedBatch);
     },

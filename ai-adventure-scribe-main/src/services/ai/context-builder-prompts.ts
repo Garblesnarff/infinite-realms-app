@@ -44,7 +44,11 @@ The DM MUST open this scene with narrative continuity from this recap — pick u
   static buildVoiceOptimizationSection(): string {
     return `
 <voice_optimization>
-Your response will be synthesized into voice. Structure your narration into logical segments.
+Your response will be synthesized into voice.
+Emit one narration_segments entry per speaker change. Never put two speakers in one segment.
+- Prose/narration: type "dm", character null (speaker = narrator), voice_category "narrator"
+- Quoted NPC dialogue: type "character", character = that NPC's name, voice_category from the closed enum
+A reply with narration AND an NPC quote MUST be at least two segments with distinct speakers.
 voice_category must be one of: narrator, hero_male, hero_female, villain_male, villain_female, monster, goblin, merchant, guard, innkeeper, elder, child.
 Use narrator for DM narration and unknown speakers. Do not invent free-text voice traits.
 </voice_optimization>`;

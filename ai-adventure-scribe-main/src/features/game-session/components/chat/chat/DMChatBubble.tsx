@@ -13,6 +13,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import logger from '@/lib/logger';
 import { DiceEngine } from '@/services/dice/DiceEngine';
+import { resolveNarrationSegments } from '@/utils/narration-segments';
 import {
   parseMessageOptions,
   extractNarrativeContent,
@@ -107,9 +108,16 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
       } else if (!isProcessing) {
         logger.info('🎵 Playing message:', message.id);
 
-        if (narrationSegments && narrationSegments.length > 0) {
+        const playableSegments = resolveNarrationSegments(
+          {
+            narrationSegments: message.narrationSegments,
+            context: (message as { context?: { narration_segments?: NarrationSegment[] } }).context,
+          },
+          narrationSegments,
+        );
+        if (playableSegments && playableSegments.length > 0) {
           logger.debug('🎭 Using AI segments for message playback');
-          const aiSegments = convertNarrationToAISegments(narrationSegments);
+          const aiSegments = convertNarrationToAISegments(playableSegments);
           speakAISegments(aiSegments);
         } else {
           logger.debug('📝 Using plain text fallback for message playback');
@@ -124,8 +132,7 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
       stopPlayback,
       speakAISegments,
       speakPlainText,
-      message.content,
-      message.id,
+      message,
       narrationSegments,
       hasUserInteracted,
       setHasUserInteracted,

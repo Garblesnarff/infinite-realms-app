@@ -14,6 +14,7 @@ import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
 import { extractEngineGeneratedLines } from '@/utils/engine-lines';
+import { resolveNarrationSegments } from '@/utils/narration-segments';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 import { parseAssetTags } from '../../../utils/parse-asset-tags';
 
@@ -224,8 +225,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
             <MessageVoicePlayer
               messageId={messageId}
               messageText={displayContent}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              narrationSegments={message.narrationSegments as any}
+              narrationSegments={resolveNarrationSegments(message)}
             />
           )}
 

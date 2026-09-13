@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { VOICE_CATEGORY_VALUES, dmResponseSchema, parseDmResponse } from '../dm-response-schema.js';
+import {
+  VOICE_CATEGORY_VALUES,
+  dmResponseSchema,
+  parseDmResponse,
+  reviewNarrationSpeakerSplit,
+} from '../dm-response-schema.js';
 
 const response = (overrides: Record<string, unknown> = {}) => ({
   text: 'The lantern flame gutters in the cold passage.',
@@ -115,5 +120,72 @@ describe('dmResponseSchema voice category contract', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.narration_segments[0].voice_category).toBeNull();
+  });
+});
+
+describe('dmResponseSchema speaker-split contract', () => {
+  const mixedText = 'Captain Sarah Reeves steps onto the deck. "Hold the line," she says.';
+
+  test('narration plus one NPC quote parses to at least two distinct speakers', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: mixedText,
+        narration_segments: [
+          {
+            type: 'dm',
+            text: 'Captain Sarah Reeves steps onto the deck.',
+            character: null,
+            voice_category: 'narrator',
+          },
+          {
+            type: 'character',
+            text: 'Hold the line.',
+            character: 'Captain Sarah Reeves',
+            voice_category: 'guard',
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const review = reviewNarrationSpeakerSplit(parsed.data.text, parsed.data.narration_segments);
+    expect(parsed.data.narration_segments.length).toBeGreaterThanOrEqual(2);
+    expect(review.distinctSpeakers.length).toBeGreaterThanOrEqual(2);
+    expect(review.flagged).toBe(false);
+  });
+
+  test('flags a mixed reply that collapsed into one speaker segment without failing parse', () => {
+    const warn = console.warn;
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    try {
+      const parsed = parseDmResponse(
+        response({
+          text: mixedText,
+          narration_segments: [
+            {
+              type: 'dm',
+              text: mixedText,
+              character: null,
+              voice_category: 'narrator',
+            },
+          ],
+        }),
+      );
+
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) return;
+      const review = reviewNarrationSpeakerSplit(parsed.data.text, parsed.data.narration_segments);
+      expect(review.flagged).toBe(true);
+      expect(warnings.some((entry) => String(entry[0]).includes('collapsed mixed speakers'))).toBe(
+        true,
+      );
+    } finally {
+      console.warn = warn;
+    }
   });
 });

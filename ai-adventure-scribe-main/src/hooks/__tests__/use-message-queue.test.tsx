@@ -119,6 +119,38 @@ describe('useMessageQueue', () => {
     expect(result.current.queueStatus).toBe('idle');
   });
 
+  it('persists narration_segments with the session message', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    const narrationSegments = [
+      { type: 'dm', text: 'The captain steps forward.', voice_category: 'narrator' },
+      {
+        type: 'character',
+        text: 'Hold the line.',
+        character: 'Captain Sarah Reeves',
+        voice_category: 'guard',
+      },
+    ];
+    const message: any = {
+      text: 'The captain steps forward. "Hold the line," she says.',
+      sender: 'dm',
+      context: { location: 'Deck', emotion: 'tense', intent: 'response' },
+      narrationSegments,
+    };
+
+    await act(async () => {
+      await result.current.messageMutation.mutateAsync(message);
+    });
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speaker_type: 'dm',
+        context: expect.objectContaining({
+          narration_segments: narrationSegments,
+        }),
+      }),
+    );
+  });
+
   it('does not persist an already-persisted seating transcript', async () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const seatingTranscript = '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled).';

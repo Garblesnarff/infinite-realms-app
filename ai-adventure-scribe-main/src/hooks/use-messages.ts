@@ -5,6 +5,10 @@ import type { ChatMessage, MessageContext } from '@/types/game';
 
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import {
+  narrationSegmentsFromPersistedContext,
+  persistableNarrationSegments,
+} from '@/utils/narration-segments';
 
 const PAGE_SIZE = 50;
 
@@ -97,6 +101,7 @@ export const useMessages = (
           timestamp: msg.timestamp,
           sequenceNumber: typeof msg.sequence_number === 'number' ? msg.sequence_number : undefined,
           context,
+          narrationSegments: narrationSegmentsFromPersistedContext(context),
           images: Array.isArray(msg.images) ? msg.images : undefined,
           speakerName:
             typeof msg.speaker_name === 'string'
@@ -198,14 +203,18 @@ export const useMessages = (
       });
 
       try {
+        const narrationSegments = persistableNarrationSegments(message);
         const contextData = message.context
           ? {
               location: message.context.location || null,
               emotion: message.context.emotion || null,
               intent: message.context.intent || null,
               handouts: message.context.handouts || null,
+              narration_segments: narrationSegments,
             }
-          : {};
+          : narrationSegments
+            ? { narration_segments: narrationSegments }
+            : {};
 
         await userDataApi.saveSessionMessages(sessionId, {
           id: message.id,

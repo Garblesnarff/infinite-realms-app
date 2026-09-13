@@ -19,6 +19,7 @@ import { ProgressiveVoicePlayer } from '../audio/ProgressiveVoicePlayer';
 
 import { useMessageContext } from '@/contexts/MessageContext';
 import logger from '@/lib/logger';
+import { resolveNarrationSegments } from '@/utils/narration-segments';
 
 export const VoiceHandler: React.FC = () => {
   const { messages } = useMessageContext();
@@ -26,7 +27,7 @@ export const VoiceHandler: React.FC = () => {
   const lastMessage = messages[messages.length - 1];
   const shouldRenderPlayer = lastMessage?.sender === 'dm' && lastMessage.text;
   const cleanText = shouldRenderPlayer ? lastMessage.text.replace(/[*_`#]/g, '') : '';
-  const narrationSegments = lastMessage?.narrationSegments;
+  const narrationSegments = lastMessage ? resolveNarrationSegments(lastMessage) : undefined;
 
   // Debug logging
   React.useEffect(() => {

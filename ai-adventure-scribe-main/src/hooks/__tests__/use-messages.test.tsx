@@ -109,6 +109,40 @@ describe('useMessages', () => {
     expect(result.current.hasMore).toBe(false);
   });
 
+  it('restores persisted narration_segments onto loaded DM messages', async () => {
+    const narrationSegments = [
+      { type: 'dm', text: 'The captain steps forward.', voice_category: 'narrator' },
+      {
+        type: 'character',
+        text: 'Hold the line.',
+        character: 'Captain Sarah Reeves',
+        voice_category: 'guard',
+      },
+    ];
+
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: [
+        {
+          id: 'msg-dm',
+          message: 'The captain steps forward. "Hold the line," she says.',
+          speaker_type: 'dm',
+          timestamp: new Date().toISOString(),
+          sequence_number: 1,
+          context: { narration_segments: narrationSegments },
+          game_sessions: { characters: null },
+        },
+      ],
+      total: 1,
+      hasMore: false,
+    });
+
+    const { result } = renderHook(() => useMessages(sessionId), { wrapper });
+
+    await waitFor(() => expect(result.current.data.length).toBe(1), { timeout: 2000 });
+
+    expect(result.current.data[0].narrationSegments).toEqual(narrationSegments);
+  });
+
   it('should handle pagination with loadMore', async () => {
     const page0Results = {
       messages: Array.from({ length: 50 }, (_, i) => ({

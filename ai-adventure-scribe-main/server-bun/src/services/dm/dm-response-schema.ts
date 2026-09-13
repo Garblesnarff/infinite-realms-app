@@ -454,6 +454,37 @@ const isHandoutAction = (value: unknown): value is DMHandoutAction => {
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
 
+const QUOTED_DIALOGUE = /["“][^"”]+["”]/;
+
+function speakerKey(segment: DMResponse['narration_segments'][number]): string {
+  if (segment.type === 'dm' || segment.type === 'transition' || !segment.character) {
+    return 'narrator';
+  }
+  const name = segment.character.trim().toLowerCase();
+  if (!name || name === 'narrator' || name === 'dm') {
+    return 'narrator';
+  }
+  return name;
+}
+
+/**
+ * Mixed narration + quoted dialogue must be one segment per speaker.
+ * Collapsed replies are flagged (logged) and still accepted.
+ */
+export function reviewNarrationSpeakerSplit(
+  text: string,
+  segments: DMResponse['narration_segments'],
+): { distinctSpeakers: string[]; flagged: boolean } {
+  const distinctSpeakers = [...new Set(segments.map(speakerKey))];
+  const hasQuotedDialogue = QUOTED_DIALOGUE.test(text);
+  const proseWithoutQuotes = text.replace(QUOTED_DIALOGUE, '').trim();
+  const mixed = hasQuotedDialogue && proseWithoutQuotes.length > 0;
+  return {
+    distinctSpeakers,
+    flagged: mixed && distinctSpeakers.length < 2,
+  };
+}
+
 export function parseDmResponse(
   value: unknown,
 ): { success: true; data: DMResponse } | { success: false; issues: string[] } {
@@ -490,5 +521,15 @@ export function parseDmResponse(
     });
   }
 
-  return { success: true, data: response as DMResponse };
+  const parsed = response as DMResponse;
+  if (typeof parsed.text === 'string' && Array.isArray(parsed.narration_segments)) {
+    const review = reviewNarrationSpeakerSplit(parsed.text, parsed.narration_segments);
+    if (review.flagged) {
+      console.warn('narration_segments collapsed mixed speakers into one voice', {
+        distinctSpeakers: review.distinctSpeakers,
+      });
+    }
+  }
+
+  return { success: true, data: parsed };
 }
