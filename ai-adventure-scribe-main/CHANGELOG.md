@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.1...v0.16.2) (2026-09-13)
+
+
+### CI/CD
+
+* run the 28 server vitest files that no job ever discovered ([#1997](https://github.com/Garblesnarff/infinite-realms-production/issues/1997)) ([8e9d80d](https://github.com/Garblesnarff/infinite-realms-production/commit/8e9d80da2d7384ff6085af00ff3df36f80a8f351))
+
 ## [0.16.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.0...v0.16.1) (2026-09-12)
 
 
