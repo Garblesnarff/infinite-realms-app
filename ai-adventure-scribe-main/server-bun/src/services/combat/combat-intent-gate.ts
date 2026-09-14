@@ -18,7 +18,7 @@ export interface DeclaredAttack {
 
 /**
  * Deliberately small, clause-head vocabulary. This is not a classifier: it only recognizes
- * an attack-shaped opening and then resolves the named actor against the server roster.
+ * an attack-shaped clause and then resolves the named actor against the server roster.
  */
 export const COMBAT_INTENT_VERBS = [
   'punch',
@@ -33,11 +33,33 @@ export const COMBAT_INTENT_VERBS = [
   'grapple',
   'shove',
   'fire at',
+  'swing',
   'swing at',
   'throw',
+  'cast',
 ] as const;
 
 const IGNORABLE_ACTOR_WORDS = new Set(['a', 'an', 'at', 'in', 'on', 'the', 'to']);
+
+const DIRECT_ATTACK_VERBS = [
+  'punch',
+  'hit',
+  'strike',
+  'stab',
+  'slash',
+  'shoot',
+  'attack',
+  'kick',
+  'tackle',
+  'grapple',
+  'shove',
+] as const;
+
+const VERB_TOKEN_PATTERN =
+  /(?:punch|hit|strike|stab|slash|shoot|attack|kick|tackle|grapple|shove|fire|swing|throw|cast)(?:es|s)?\b/gi;
+
+const DECLARATION_BLOCK_PATTERN =
+  /\b(?:don't|do not|won't|never|not going to|should\s+i|can\s+i|could\s+i|what\s+if|if\s+i)\b/i;
 
 const normalize = (value: string): string =>
   value
@@ -53,7 +75,10 @@ const actorWords = (value: string): string[] =>
 
 const stripTrailingPunctuation = (value: string): string => value.replace(/[.!?,;:]+$/, '').trim();
 
-const matchActor = (targetText: string, actors: CombatIntentActor[]): CombatIntentActor | null => {
+const matchActor = (
+  targetText: string,
+  actors: readonly CombatIntentActor[],
+): CombatIntentActor | null => {
   const targetWords = new Set(actorWords(targetText));
   if (!targetWords.size) return null;
 
@@ -96,6 +121,164 @@ const toDeclaredAttack = (verb: string, actor: CombatIntentActor): DeclaredAttac
   };
 };
 
+const splitIntoClauses = (input: string): string[] => {
+  const clauses: string[] = [];
+  let clauseStart = 0;
+  let quote: 'straight' | 'curly' | null = null;
+
+  const pushClause = (end: number): void => {
+    const clause = input.slice(clauseStart, end).trim();
+    if (clause) clauses.push(clause);
+  };
+
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index];
+    if (character === '“') {
+      quote = 'curly';
+      continue;
+    }
+    if (character === '”') {
+      quote = null;
+      continue;
+    }
+    if (character === '"' && input[index - 1] !== '\\') {
+      quote = quote === 'straight' ? null : 'straight';
+      continue;
+    }
+    if (quote) continue;
+
+    if (character === ',' || character === ';') {
+      pushClause(index);
+      clauseStart = index + 1;
+      continue;
+    }
+
+    const delimiter = /^(?:and|then)(?=\s|$)/i.exec(input.slice(index));
+    const before = input[index - 1];
+    const after = input[index + (delimiter?.[0].length ?? 0)];
+    if (
+      delimiter &&
+      (index === 0 || /\s/.test(before ?? '')) &&
+      (index + delimiter[0].length === input.length || /\s/.test(after ?? ''))
+    ) {
+      pushClause(index);
+      clauseStart = index + delimiter[0].length;
+      index += delimiter[0].length - 1;
+    }
+  }
+
+  pushClause(input.length);
+  return clauses;
+};
+
+const stripLeadingPlayerIntent = (value: string): string =>
+  value
+    .replace(
+      /^(?:(?:i|i'll|we|we'll)\s+)?(?:(?:try|attempt)\s+to\s+|want\s+to\s+|(?:i'm|i am)\s+going\s+to\s+|let\s+me\s+)?/i,
+      '',
+    )
+    .trim();
+
+const isInsideQuote = (value: string, index: number): boolean => {
+  let quote: 'straight' | 'curly' | null = null;
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
+    const character = value[cursor];
+    if (character === '“') quote = 'curly';
+    else if (character === '”') quote = null;
+    else if (character === '"' && value[cursor - 1] !== '\\') {
+      quote = quote === 'straight' ? null : 'straight';
+    }
+    if (cursor === index) return quote !== null;
+  }
+  return false;
+};
+
+/**
+ * A roster actor at the start of a clause is the speaker of that clause, not its player. This
+ * guard is checked before player-prefix stripping so "the professor punches the air" cannot be
+ * mistaken for a player declaration when the target words happen to overlap the roster.
+ */
+const hasRosterActorSubject = (clause: string, actors: readonly CombatIntentActor[]): boolean => {
+  VERB_TOKEN_PATTERN.lastIndex = 0;
+  for (const match of clause.matchAll(VERB_TOKEN_PATTERN)) {
+    const index = match.index ?? -1;
+    if (index < 0 || isInsideQuote(clause, index)) continue;
+    if (matchActor(clause.slice(0, index), actors)) return true;
+  }
+  return false;
+};
+
+const singularVerb = (verb: string): string => verb.toLowerCase().replace(/(?:es|s)$/i, '');
+
+interface ClauseAttackMatch {
+  verb: string;
+  targetText: string;
+  spellName?: string;
+}
+
+const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
+  const castMatch = /^cast\s+(.+?)\s+(?:at|on)\s+(.+)$/i.exec(clause);
+  if (castMatch) {
+    return {
+      verb: 'cast',
+      spellName: stripTrailingPunctuation(castMatch[1]),
+      targetText: castMatch[2],
+    };
+  }
+
+  const throwMatch = /^throw\s+.+?\s+at\s+(.+)$/i.exec(clause);
+  if (throwMatch) return { verb: 'throw', targetText: throwMatch[1] };
+
+  const takeSwingMatch = /^take\s+a\s+swing\s+(?:at|on)\s+(.+)$/i.exec(clause);
+  if (takeSwingMatch) return { verb: 'swing', targetText: takeSwingMatch[1] };
+
+  const swingMatch = /^swing(?:\s+.+?)?\s+(?:at|on)\s+(.+)$/i.exec(clause);
+  if (swingMatch) return { verb: 'swing', targetText: swingMatch[1] };
+
+  const fireMatch = /^fire\s+(?:at|on)\s+(.+)$/i.exec(clause);
+  if (fireMatch) return { verb: 'fire at', targetText: fireMatch[1] };
+
+  const goForMatch = /^go\s+for\s+(.+)$/i.exec(clause);
+  if (goForMatch) return { verb: 'go for', targetText: goForMatch[1] };
+
+  const directVerbPattern = new RegExp(
+    `^(${DIRECT_ATTACK_VERBS.join('|')})(?:es|s)?\\b(?:\\s+(?:at|on))?\\s+(.+)$`,
+    'i',
+  );
+  const directVerbMatch = directVerbPattern.exec(clause);
+  if (!directVerbMatch) return null;
+  return { verb: singularVerb(directVerbMatch[1]), targetText: directVerbMatch[2] };
+};
+
+const resolveClauseAttack = (
+  rawClause: string,
+  actors: readonly CombatIntentActor[],
+): DeclaredAttack | null => {
+  const clause = stripTrailingPunctuation(rawClause.trim());
+  if (!clause || DECLARATION_BLOCK_PATTERN.test(clause.replace(/[’‘]/g, "'"))) return null;
+  if (hasRosterActorSubject(clause, actors)) return null;
+
+  const strippedClause = stripLeadingPlayerIntent(clause);
+  if (!strippedClause || isInsideQuote(strippedClause, 0)) return null;
+
+  const match = matchClauseHead(strippedClause);
+  if (!match) return null;
+
+  const verb = match.verb === 'fire at' ? 'fire' : match.verb;
+  const verbOffset = strippedClause.search(new RegExp(`\\b${verb.split('\\s+')[0]}\\b`, 'i'));
+  if (verbOffset >= 0 && isInsideQuote(strippedClause, verbOffset)) return null;
+
+  if (match.spellName) {
+    const spell = getSpellByName(match.spellName);
+    if (!spell?.damage) return null;
+    const actor = matchActor(match.targetText, actors);
+    return actor ? toDeclaredAttack(`cast ${spell.name}`, actor) : null;
+  }
+
+  const actor = matchActor(match.targetText, actors);
+  return actor ? toDeclaredAttack(match.verb, actor) : null;
+};
+
 /**
  * Resolve a player-declared attack using only the supplied roster.
  *
@@ -109,39 +292,11 @@ export function detectDeclaredAttack(
 ): DeclaredAttack | null {
   if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
 
-  let input = playerInput.trim().replace(/\s+/g, ' ');
-  input = input.replace(/^(?:i|we)\s+/i, '');
-  input = input.replace(/^(?:(?:try|attempt)\s+to)\s+/i, '');
-
-  const castMatch = /^cast\s+(.+?)\s+(?:at|on)\s+(.+)$/i.exec(input);
-  if (castMatch) {
-    const spellName = stripTrailingPunctuation(castMatch[1]);
-    const spell = getSpellByName(spellName);
-    if (!spell?.damage) return null;
-    const actor = matchActor(castMatch[2], [...actors]);
-    return actor ? toDeclaredAttack(`cast ${spell.name}`, actor) : null;
+  const clauses = splitIntoClauses(playerInput.trim().replace(/\s+/g, ' '));
+  let declaredAttack: DeclaredAttack | null = null;
+  for (const clause of clauses) {
+    const match = resolveClauseAttack(clause, actors);
+    if (match) declaredAttack = match;
   }
-
-  const throwMatch = /^throw\s+.+?\s+at\s+(.+)$/i.exec(input);
-  if (throwMatch) {
-    const actor = matchActor(throwMatch[1], [...actors]);
-    return actor ? toDeclaredAttack('throw', actor) : null;
-  }
-
-  const prepositionVerbMatch = /^(fire\s+at|swing\s+at)\s+(.+)$/i.exec(input);
-  if (prepositionVerbMatch) {
-    const actor = matchActor(prepositionVerbMatch[2], [...actors]);
-    return actor
-      ? toDeclaredAttack(prepositionVerbMatch[1].toLowerCase().replace(/\s+/g, ' '), actor)
-      : null;
-  }
-
-  const directVerbMatch =
-    /^(punch|hit|strike|stab|slash|shoot|attack|kick|tackle|grapple|shove)\b(?:\s+(?:at|on))?\s+(.+)$/i.exec(
-      input,
-    );
-  if (!directVerbMatch) return null;
-
-  const actor = matchActor(directVerbMatch[2], [...actors]);
-  return actor ? toDeclaredAttack(directVerbMatch[1].toLowerCase(), actor) : null;
+  return declaredAttack;
 }

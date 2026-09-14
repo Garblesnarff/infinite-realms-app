@@ -12,6 +12,8 @@ import { Elysia } from 'elysia';
 
 let generatedResult: Record<string, unknown> = { text: '{}', provider: 'openrouter', model: 'm' };
 let generatedInputs: Record<string, unknown>[] = [];
+const infoLogs: unknown[] = [];
+const warningLogs: unknown[] = [];
 const intentActors = [
   { name: 'Professor Emil Darkwater' },
   { name: 'The Ghoul', monsterId: 'srd:ghoul' },
@@ -25,8 +27,12 @@ mock.module('../../../lib/auth.js', () => ({
 }));
 const testLogger = {
   debug: () => {},
-  info: () => {},
-  warn: () => {},
+  info: (entry: unknown) => {
+    infoLogs.push(entry);
+  },
+  warn: (entry: unknown) => {
+    warningLogs.push(entry);
+  },
   error: () => {},
   child: () => testLogger,
 };
@@ -101,6 +107,8 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
   beforeEach(() => {
     generatedResult = { text: '{}', provider: 'openrouter', model: 'm' };
     generatedInputs = [];
+    infoLogs.length = 0;
+    warningLogs.length = 0;
   });
 
   it('returns a pending entry for a hostile turn without seating an encounter', async () => {
@@ -203,6 +211,42 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
     expect(generatedInputs[0]?.prompt).toContain('Do NOT resolve it.');
   });
 
+  it('drives ordinary attack phrasing through the contract-violation telemetry path (#1943)', async () => {
+    generatedResult = {
+      text: dmEnvelope({
+        text: 'Your punch hits Professor Emil Darkwater before he can react.',
+      }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'i take a swing and attempt to punch the professor',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const body = (await response.json()) as { text: string };
+    const envelope = JSON.parse(body.text) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'player_intent',
+      combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+    });
+    expect(generatedInputs[0]?.prompt).toContain(
+      '<declared_attack actor="Professor Emil Darkwater">',
+    );
+    expect(warningLogs).toContainEqual(
+      expect.objectContaining({
+        msg: 'COMBAT_INTENT_DIRECTIVE_CONTRACT_VIOLATION',
+        event: 'contract_violation',
+        sessionId: SESSION_ID,
+        actorName: 'Professor Emil Darkwater',
+        verb: 'punch',
+      }),
+    );
+  });
+
   it('uses the tail-tagged player input for old clients (#1943 A1)', async () => {
     generatedResult = {
       text: 'The blow is only a wind-up.',
@@ -244,6 +288,14 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
 
     expect(envelope.combat_entry_pending).toBeUndefined();
     expect(generatedInputs[0]?.prompt).not.toContain('<declared_attack');
+    expect(infoLogs).toContainEqual(
+      expect.objectContaining({
+        msg: 'COMBAT_INTENT_NO_DECLARATION',
+        sessionId: SESSION_ID,
+        prefilter: false,
+        detector: null,
+      }),
+    );
   });
 
   it('strips an untargeted initiative request from Cast Light (#1943 A4)', async () => {

@@ -15,7 +15,10 @@ import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
-import { detectDeclaredAttack } from '../../services/combat/combat-intent-gate.js';
+import {
+  COMBAT_INTENT_VERBS,
+  detectDeclaredAttack,
+} from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
 import {
   applyCombatEntryGate,
@@ -42,10 +45,26 @@ const extractPlayerInputFromPrompt = (prompt: string): string | undefined => {
   return playerInput || undefined;
 };
 
+const COMBAT_INTENT_IDIOMS = ['take a swing', 'swing at', 'go for'] as const;
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const combatIntentPrefilter = new RegExp(
+  [...COMBAT_INTENT_VERBS, ...COMBAT_INTENT_IDIOMS]
+    .sort((left, right) => right.length - left.length)
+    .map(
+      (term) =>
+        `\\b${term
+          .split(/\s+/)
+          .map((word) => escapeRegExp(word))
+          .join('\\s+')}\\b`,
+    )
+    .join('|'),
+  'i',
+);
+
 const looksLikeCombatIntent = (playerInput: string): boolean =>
-  /^\s*(?:(?:i|we)\s+)?(?:(?:try|attempt)\s+to\s+)?(?:punch|hit|strike|stab|slash|shoot|attack|kick|tackle|grapple|shove|fire\b|swing\b|throw\b|cast\b)/i.test(
-    playerInput,
-  );
+  combatIntentPrefilter.test(playerInput);
 
 const escapeXmlAttribute = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -169,14 +188,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         typeof requestedPlayerInput === 'string'
           ? requestedPlayerInput
           : extractPlayerInputFromPrompt(prompt);
+      const combatIntentPrefilterMatched =
+        typeof playerInput === 'string' && looksLikeCombatIntent(playerInput);
       let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
       if (
         combatEntry?.sessionId &&
         typeof playerInput === 'string' &&
-        looksLikeCombatIntent(playerInput)
+        combatIntentPrefilterMatched
       ) {
         const actors = await loadCombatIntentActorRoster(combatEntry.sessionId, userId);
         declaredAttack = detectDeclaredAttack(playerInput, actors);
+      }
+      if (combatEntry?.sessionId && !declaredAttack) {
+        logger.info({
+          msg: 'COMBAT_INTENT_NO_DECLARATION',
+          sessionId: combatEntry.sessionId,
+          prefilter: combatIntentPrefilterMatched,
+          detector: declaredAttack,
+        });
       }
       const llmPrompt = declaredAttack
         ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName)
