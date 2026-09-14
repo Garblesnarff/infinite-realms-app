@@ -30,12 +30,20 @@ describe('CombatEntryConfirmation', () => {
       />,
     );
 
-    expect(screen.getByText('Initiative: rolled after confirmation')).toBeInTheDocument();
+    expect(screen.getByText('Combat is about to begin')).toBeInTheDocument();
+    expect(
+      screen.getByText('Strike at Vance? Your initiative is rolled after you confirm.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Initiative: rolled after confirmation')).not.toBeInTheDocument();
     const overlay = screen.getByTestId('combat-entry-confirmation-overlay');
-    expect(overlay).toHaveClass('fixed', 'bottom-24', 'left-1/2');
-    expect(overlay).toHaveStyle({ zIndex: Z_INDEX.POPOVER });
-    fireEvent.click(screen.getByRole('button', { name: '[Strike]' }));
-    fireEvent.click(screen.getByRole('button', { name: '[Do something else]' }));
+    expect(overlay).toHaveClass('fixed', 'bottom-40', 'left-1/2');
+    expect(overlay).toHaveStyle({ zIndex: Z_INDEX.COMBAT_ENTRY_CONFIRMATION });
+    const strike = screen.getByRole('button', { name: '[Strike]' });
+    const declineButton = screen.getByRole('button', { name: '[Do something else]' });
+    expect(strike).toHaveAttribute('data-action', 'confirm');
+    expect(declineButton).toHaveAttribute('data-action', 'decline');
+    fireEvent.click(strike);
+    fireEvent.click(declineButton);
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(decline).toHaveBeenCalledTimes(1);
@@ -46,10 +54,12 @@ describe('CombatEntryConfirmation', () => {
     expect(logger.info).toHaveBeenCalledWith('[CombatEntry] confirmation popup resolved', {
       actorLabel: 'The Storyteller',
       confirmed: true,
+      action: 'confirm',
     });
     expect(logger.info).toHaveBeenCalledWith('[CombatEntry] confirmation popup resolved', {
       actorLabel: 'The Storyteller',
       confirmed: false,
+      action: 'decline',
     });
   });
 });

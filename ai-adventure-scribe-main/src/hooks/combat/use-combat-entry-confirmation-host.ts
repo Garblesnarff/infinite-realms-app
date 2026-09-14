@@ -6,6 +6,7 @@ import type {
 } from '@/services/combat/combat-entry-confirmation-bridge';
 
 import {
+  clearCombatEntryConfirmationHost,
   setCombatEntryConfirmationHost,
   settlePendingCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -17,7 +18,9 @@ export interface PendingCombatEntryConfirmation {
 }
 
 /** Connects the async entry gate to the React confirmation surface. */
-export function useCombatEntryConfirmationHost(): PendingCombatEntryConfirmation | null {
+export function useCombatEntryConfirmationHost(
+  ownerKey?: string,
+): PendingCombatEntryConfirmation | null {
   const [pendingSpec, setPendingSpec] = useState<CombatEntryConfirmationSpec | null>(null);
 
   useEffect(() => {
@@ -29,15 +32,18 @@ export function useCombatEntryConfirmationHost(): PendingCombatEntryConfirmation
         };
       },
     };
-    setCombatEntryConfirmationHost(entryHost);
+    setCombatEntryConfirmationHost(entryHost, ownerKey);
 
     return () => {
-      // Closing the game surface is an explicit decline. This also settles the awaiting
-      // dm-actions handler, so an unmounted tab cannot leave entry suspended forever.
-      settlePendingCombatEntryConfirmation(false);
-      setCombatEntryConfirmationHost(null);
+      // React can tear down and immediately remount this owner during a StrictMode pass or a
+      // list refresh. Wait for the replacement host before treating the unmount as a real route
+      // change/session leave; the bridge reattaches same-session pending UI to that replacement.
+      queueMicrotask(() => {
+        const stillOwnsHost = clearCombatEntryConfirmationHost(entryHost);
+        if (stillOwnsHost) settlePendingCombatEntryConfirmation(false);
+      });
     };
-  }, []);
+  }, [ownerKey]);
 
   if (!pendingSpec) return null;
   return {

@@ -27,6 +27,7 @@ interface MessageListContainerProps {
   onOptionSelect: (optionText: string) => Promise<void>;
   onSendMessage: (message: ChatMessage) => Promise<void>;
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
+  sessionId?: string;
   isFetchingMore?: boolean;
   hasMore?: boolean;
   suppressEmptyState?: boolean;
@@ -53,12 +54,13 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     onOptionSelect,
     onSendMessage,
     onSendFullMessage,
+    sessionId,
     isFetchingMore,
     hasMore,
     suppressEmptyState = false,
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
-    const entryConfirmation = useCombatEntryConfirmationHost();
+    const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
     const {
       currentRoll,
       batchProgress,

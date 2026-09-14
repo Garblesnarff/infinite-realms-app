@@ -73,6 +73,9 @@ export const Z_INDEX = {
   // Popovers and context menus
   POPOVER: 70,
 
+  // Combat entry confirmation - must sit above the dice popup and popovers
+  COMBAT_ENTRY_CONFIRMATION: 71,
+
   // Context menus (alias for POPOVER)
   CONTEXT_MENU: 70,
 

@@ -140,6 +140,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             onOptionSelect={handleOptionSelect}
             onSendMessage={sendMessage}
             onSendFullMessage={onSendFullMessage}
+            sessionId={sessionId}
             isFetchingMore={isFetchingMore}
             hasMore={hasMore}
             suppressEmptyState={suppressEmptyState}

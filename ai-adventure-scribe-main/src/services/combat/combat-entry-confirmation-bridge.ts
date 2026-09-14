@@ -25,14 +25,45 @@ export class CombatEntryConfirmationUnavailableError extends Error {
 }
 
 let host: CombatEntryConfirmationHost | null = null;
+let hostOwnerKey: string | undefined;
 let pending: {
+  spec: CombatEntryConfirmationSpec;
+  ownerKey: string | undefined;
   settle: (confirmed: boolean) => void;
   dismiss: () => void;
 } | null = null;
 
 /** Registered by the message list while the entry confirmation surface is mounted. */
-export function setCombatEntryConfirmationHost(next: CombatEntryConfirmationHost | null): void {
+export function setCombatEntryConfirmationHost(
+  next: CombatEntryConfirmationHost | null,
+  ownerKey?: string,
+): void {
   host = next;
+  hostOwnerKey = next ? ownerKey : undefined;
+
+  // A confirmation request belongs to its session. Reattach it to a remounted host for the
+  // same session, but decline it when a different session takes over the bridge.
+  if (!next || !pending) return;
+  const activePending = pending;
+  if (activePending.ownerKey !== ownerKey) {
+    settlePendingCombatEntryConfirmation(false);
+    return;
+  }
+
+  const hostDismiss = next.present(activePending.spec, activePending.settle);
+  if (pending === activePending) {
+    activePending.dismiss = hostDismiss;
+  } else {
+    hostDismiss();
+  }
+}
+
+/** Clears a host only when the caller still owns the bridge. */
+export function clearCombatEntryConfirmationHost(expected: CombatEntryConfirmationHost): boolean {
+  if (host !== expected) return false;
+  host = null;
+  hostOwnerKey = undefined;
+  return true;
 }
 
 /** Whether an entry confirmation is currently waiting for the player. */
@@ -59,6 +90,7 @@ export function requestCombatEntryConfirmation(
     return Promise.reject(new CombatEntryConfirmationUnavailableError());
   }
   const activeHost = host;
+  const activeOwnerKey = hostOwnerKey;
 
   if (pending) {
     logger.warn('[CombatEntry] superseded by a new entry confirmation; declining the previous one');
@@ -75,7 +107,7 @@ export function requestCombatEntryConfirmation(
       resolve(confirmed);
     };
 
-    pending = { settle, dismiss: () => dismissPopup() };
+    pending = { spec, ownerKey: activeOwnerKey, settle, dismiss: () => dismissPopup() };
     const hostDismiss = activeHost.present(spec, (confirmed) => {
       if (pending?.settle === settle) pending = null;
       settle(confirmed);
