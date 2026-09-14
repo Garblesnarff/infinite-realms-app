@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.4...v0.16.5) (2026-09-14)
+
+
+### Bug Fixes
+
+* **combat:** repair combat entry confirmation hit target ([#2017](https://github.com/Garblesnarff/infinite-realms-production/issues/2017)) ([7d64836](https://github.com/Garblesnarff/infinite-realms-production/commit/7d648361e8b29fa875248b09fc33e7475e80bbce))
+
 ## [0.16.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.3...v0.16.4) (2026-09-14)
 
 
