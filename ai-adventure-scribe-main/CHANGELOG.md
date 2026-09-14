@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.5...v0.16.6) (2026-09-14)
+
+
+### Bug Fixes
+
+* **combat:** layer entry confirmation above chat ([#2025](https://github.com/Garblesnarff/infinite-realms-production/issues/2025)) ([76e99b5](https://github.com/Garblesnarff/infinite-realms-production/commit/76e99b5196afbc9e674bb37108c27b1404c122f5))
+* **voice:** derive narration segments from the message text ([#2018](https://github.com/Garblesnarff/infinite-realms-production/issues/2018)) ([3a200eb](https://github.com/Garblesnarff/infinite-realms-production/commit/3a200eb8aeceb2a8fca1ca0516d5807a8475ab8a))
+
 ## [0.16.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.4...v0.16.5) (2026-09-14)
 
 
