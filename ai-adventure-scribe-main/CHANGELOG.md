@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.16.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.3...v0.16.4) (2026-09-14)
+
+
+### Bug Fixes
+
+* **combat:** recognize ordinary player attack phrasing ([#2012](https://github.com/Garblesnarff/infinite-realms-production/issues/2012)) ([44932c5](https://github.com/Garblesnarff/infinite-realms-production/commit/44932c5643531845dcf6d22b553c713bfe113461))
+
 ## [0.16.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.2...v0.16.3) (2026-09-13)
 
 
