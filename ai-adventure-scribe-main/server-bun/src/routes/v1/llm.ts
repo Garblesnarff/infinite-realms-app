@@ -26,6 +26,7 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
+import { rewriteNarrationSegmentsInLlmText } from '../../services/dm/dm-response-schema.js';
 import {
   createUpstreamModelErrorBody,
   LLMUpstreamError,
@@ -274,7 +275,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         });
       }
 
-      return { text: result.text, provider: result.provider, model: result.model };
+      return {
+        text: rewriteNarrationSegmentsInLlmText(result.text),
+        provider: result.provider,
+        model: result.model,
+      };
     },
     {
       body: t.Object({

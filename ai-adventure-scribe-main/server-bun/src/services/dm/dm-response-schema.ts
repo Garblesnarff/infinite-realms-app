@@ -6,6 +6,8 @@
  * the browser bundle.  The strict OpenRouter schema, runtime parser, and
  * public TypeScript types intentionally live together so they cannot drift.
  */
+import { deriveNarrationSegments } from './narration-segment-derivation.js';
+
 import type { Cell, MapEntity, Point } from '../../tactical/types.js';
 
 export type ForcedMoveMode = 'shove' | 'pull' | 'teleport';
@@ -522,7 +524,13 @@ export function parseDmResponse(
   }
 
   const parsed = response as DMResponse;
-  if (typeof parsed.text === 'string' && Array.isArray(parsed.narration_segments)) {
+  if (typeof parsed.text === 'string') {
+    const hints = Array.isArray(parsed.narration_segments) ? parsed.narration_segments : [];
+    parsed.narration_segments = deriveNarrationSegments(
+      parsed.text,
+      hints,
+      getCanonicalVoiceCategory,
+    );
     const review = reviewNarrationSpeakerSplit(parsed.text, parsed.narration_segments);
     if (review.flagged) {
       console.warn('narration_segments collapsed mixed speakers into one voice', {
@@ -532,4 +540,24 @@ export function parseDmResponse(
   }
 
   return { success: true, data: parsed };
+}
+
+export function rewriteNarrationSegmentsInLlmText(text: string): string {
+  try {
+    const cleaned = text
+      .trim()
+      .replace(/^```(?:json)?\s*/, '')
+      .replace(/\s*```$/, '');
+    const payload = JSON.parse(cleaned) as Record<string, unknown>;
+    if (!payload || typeof payload !== 'object' || typeof payload.text !== 'string') {
+      return text;
+    }
+    const parsed = parseDmResponse(payload);
+    if (parsed.success) {
+      return JSON.stringify(parsed.data);
+    }
+    return text;
+  } catch {
+    return text;
+  }
 }

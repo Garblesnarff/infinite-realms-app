@@ -71,6 +71,7 @@ describe('dmResponseSchema voice category contract', () => {
   test('normalizes reopen free-text labels to configured keys', () => {
     const parsed = parseDmResponse(
       response({
+        text: '"P-please..." "Sit."',
         narration_segments: [
           {
             type: 'character',
@@ -84,28 +85,20 @@ describe('dmResponseSchema voice category contract', () => {
             character: 'Innkeep Mara',
             voice_category: 'calm',
           },
-          {
-            type: 'dm',
-            text: 'The road is clear.',
-            character: null,
-            voice_category: 'narrative',
-          },
         ],
       }),
     );
 
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.narration_segments.map((segment) => segment.voice_category)).toEqual([
-      'goblin',
-      'innkeeper',
-      'narrator',
-    ]);
+    const spoken = parsed.data.narration_segments.filter((segment) => segment.type === 'character');
+    expect(spoken.map((segment) => segment.voice_category)).toEqual(['goblin', 'innkeeper']);
   });
 
   test('does not pass an unknown free-text category through', () => {
     const parsed = parseDmResponse(
       response({
+        text: '"Who am I?"',
         narration_segments: [
           {
             type: 'character',
@@ -155,37 +148,26 @@ describe('dmResponseSchema speaker-split contract', () => {
     expect(review.flagged).toBe(false);
   });
 
-  test('flags a mixed reply that collapsed into one speaker segment without failing parse', () => {
-    const warn = console.warn;
-    const warnings: unknown[][] = [];
-    console.warn = (...args: unknown[]) => {
-      warnings.push(args);
-    };
+  test('derives distinct speakers from mixed text even when the model emitted one segment', () => {
+    const parsed = parseDmResponse(
+      response({
+        text: mixedText,
+        narration_segments: [
+          {
+            type: 'character',
+            text: 'Hold the line.',
+            character: 'Captain Sarah Reeves',
+            voice_category: 'guard',
+          },
+        ],
+      }),
+    );
 
-    try {
-      const parsed = parseDmResponse(
-        response({
-          text: mixedText,
-          narration_segments: [
-            {
-              type: 'dm',
-              text: mixedText,
-              character: null,
-              voice_category: 'narrator',
-            },
-          ],
-        }),
-      );
-
-      expect(parsed.success).toBe(true);
-      if (!parsed.success) return;
-      const review = reviewNarrationSpeakerSplit(parsed.data.text, parsed.data.narration_segments);
-      expect(review.flagged).toBe(true);
-      expect(warnings.some((entry) => String(entry[0]).includes('collapsed mixed speakers'))).toBe(
-        true,
-      );
-    } finally {
-      console.warn = warn;
-    }
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const review = reviewNarrationSpeakerSplit(parsed.data.text, parsed.data.narration_segments);
+    expect(parsed.data.narration_segments.length).toBeGreaterThanOrEqual(2);
+    expect(review.distinctSpeakers.length).toBeGreaterThanOrEqual(2);
+    expect(review.flagged).toBe(false);
   });
 });
