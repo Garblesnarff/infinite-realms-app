@@ -31,6 +31,7 @@ interface MessageListContainerProps {
   isFetchingMore?: boolean;
   hasMore?: boolean;
   suppressEmptyState?: boolean;
+  onCombatEntrySpaceChange?: (space: number) => void;
 }
 
 /**
@@ -58,6 +59,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     isFetchingMore,
     hasMore,
     suppressEmptyState = false,
+    onCombatEntrySpaceChange,
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
@@ -114,7 +116,10 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
 
     return (
       <>
-        <CombatEntryConfirmation confirmation={entryConfirmation} />
+        <CombatEntryConfirmation
+          confirmation={entryConfirmation}
+          onSpaceChange={onCombatEntrySpaceChange}
+        />
 
         <PendingIntentConfirmation
           encounter={combatState.activeEncounter}

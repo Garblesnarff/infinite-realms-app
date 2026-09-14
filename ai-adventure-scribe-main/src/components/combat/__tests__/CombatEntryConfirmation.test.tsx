@@ -36,10 +36,14 @@ describe('CombatEntryConfirmation', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Initiative: rolled after confirmation')).not.toBeInTheDocument();
     const overlay = screen.getByTestId('combat-entry-confirmation-overlay');
+    expect(overlay.parentElement).toBe(document.body);
     expect(overlay).toHaveClass('fixed', 'bottom-40', 'left-1/2');
     expect(overlay).toHaveStyle({ zIndex: Z_INDEX.COMBAT_ENTRY_CONFIRMATION });
     const strike = screen.getByRole('button', { name: '[Strike]' });
     const declineButton = screen.getByRole('button', { name: '[Do something else]' });
+    const card = screen.getByRole('alert', { name: 'Combat entry confirmation' });
+    expect(card).toHaveClass('bg-card', 'border-infinite-gold', 'shadow-2xl');
+    expect(card).not.toHaveClass('bg-card/95', 'border-infinite-gold/60');
     expect(strike).toHaveAttribute('data-action', 'confirm');
     expect(declineButton).toHaveAttribute('data-action', 'decline');
     fireEvent.click(strike);

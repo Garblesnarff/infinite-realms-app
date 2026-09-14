@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { PendingCombatEntryConfirmation } from '@/hooks/combat/use-combat-entry-confirmation-host';
 
@@ -8,13 +9,19 @@ import logger from '@/lib/logger';
 
 interface CombatEntryConfirmationProps {
   confirmation: PendingCombatEntryConfirmation | null;
+  onSpaceChange?: (space: number) => void;
 }
+
+const COMBAT_ENTRY_CONFIRMATION_GAP_PX = 24;
+const COMBAT_ENTRY_CONFIRMATION_FALLBACK_HEIGHT_PX = 136;
 
 /** Confirms or declines entry before the explicit seating endpoint is called. */
 export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = ({
   confirmation,
+  onSpaceChange,
 }) => {
   const pendingSpec = confirmation?.spec;
+  const cardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!pendingSpec) return;
@@ -24,7 +31,30 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
     });
   }, [pendingSpec]);
 
+  useLayoutEffect(() => {
+    if (!confirmation) {
+      onSpaceChange?.(0);
+      return;
+    }
+
+    const card = cardRef.current;
+    const updateSpace = (): void => {
+      const cardHeight =
+        card?.getBoundingClientRect().height || COMBAT_ENTRY_CONFIRMATION_FALLBACK_HEIGHT_PX;
+      onSpaceChange?.(Math.ceil(cardHeight) + COMBAT_ENTRY_CONFIRMATION_GAP_PX);
+    };
+
+    updateSpace();
+    if (typeof ResizeObserver === 'undefined' || !card) return;
+
+    const observer = new ResizeObserver(updateSpace);
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [confirmation, onSpaceChange]);
+
   if (!confirmation) return null;
+
+  if (typeof document === 'undefined') return null;
 
   const { spec } = confirmation;
   const combatants = spec.combatantLabels.length
@@ -42,14 +72,15 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
     (confirmed ? confirmation.confirm : confirmation.decline)();
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed bottom-40 left-1/2 transform -translate-x-1/2"
+      className="pointer-events-none fixed bottom-40 left-1/2 -translate-x-1/2"
       style={{ zIndex: Z_INDEX.COMBAT_ENTRY_CONFIRMATION }}
       data-testid="combat-entry-confirmation-overlay"
     >
       <section
-        className="w-[min(calc(100vw-2rem),28rem)] rounded-xl border-2 border-infinite-gold/60 bg-card/95 p-4 shadow-lg"
+        ref={cardRef}
+        className="pointer-events-auto w-[min(calc(100vw-2rem),28rem)] rounded-xl border-2 border-infinite-gold bg-card p-4 shadow-2xl"
         role="alert"
         aria-label="Combat entry confirmation"
       >
@@ -66,6 +97,7 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
           </Button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 };
