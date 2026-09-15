@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.18.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.17.2...v0.18.0) (2026-09-15)
+
+
+### Features
+
+* **combat:** log NPC_TURN_LOOP_DONE at the runner's return ([#2048](https://github.com/Garblesnarff/infinite-realms-production/issues/2048)) ([3d1d2ea](https://github.com/Garblesnarff/infinite-realms-production/commit/3d1d2ead58b8eec4db46abfafd636216456c35dd)), closes [#2033](https://github.com/Garblesnarff/infinite-realms-production/issues/2033)
+
+
+### Bug Fixes
+
+* execute autonomous NPC turns ([#2037](https://github.com/Garblesnarff/infinite-realms-production/issues/2037)) ([c3db664](https://github.com/Garblesnarff/infinite-realms-production/commit/c3db664106767f01ce23400e0316224011909893))
+
 ## [0.17.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.17.1...v0.17.2) (2026-09-15)
 
 
