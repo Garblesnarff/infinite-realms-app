@@ -46,7 +46,22 @@ export interface CombatResolutionParams {
   participants?: Array<{ id: string; name?: string; participantType?: string }>;
   /** Actors whose refused declarations are already queued for their next legal turn. */
   queuedIntentActorIds?: string[];
+  /** The entry endpoint already proposed this first action, and its die was requested upstream. */
+  playerAttackRoll?: {
+    action: StructuredCombatAction;
+    d20?: number;
+    autoRolled: boolean;
+  };
 }
+
+const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction): boolean =>
+  left.actor_id === right.actor_id &&
+  left.action_type === right.action_type &&
+  left.weapon_id === right.weapon_id &&
+  left.spell_id === right.spell_id &&
+  left.slot_level === right.slot_level &&
+  left.target_ids.length === right.target_ids.length &&
+  left.target_ids.every((target, index) => target === right.target_ids[index]);
 
 /**
  * Resolves targeted actions until the first turn or combat boundary, then asks the DM to narrate
@@ -66,6 +81,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     turnCount,
     participants,
     queuedIntentActorIds,
+    playerAttackRoll,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
@@ -120,10 +136,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const runAction = async (action: StructuredCombatAction): Promise<BatchBoundary> => {
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
-    const playerDie =
-      !isQueuedIntentActor(action.actor_id) &&
-      action.action_type === 'attack' &&
-      isPlayerActor(action.actor_id, participants)
+    const entryRoll =
+      playerAttackRoll && sameAction(playerAttackRoll.action, action) ? playerAttackRoll : null;
+    const playerDie = entryRoll
+      ? entryRoll
+      : !isQueuedIntentActor(action.actor_id) &&
+          action.action_type === 'attack' &&
+          isPlayerActor(action.actor_id, participants)
         ? await askPlayerForAttackDie({
             encounterId,
             action,

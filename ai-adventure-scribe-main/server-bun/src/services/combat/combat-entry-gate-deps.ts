@@ -5,6 +5,7 @@
  * dragging in the database, the tactical generator, or the websocket publisher.
  */
 import { CombatEncounterService } from './combat-encounter-service.js';
+import { deriveCombatEntryFirstAction } from './combat-entry-first-action.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { sanitizeSceneSpec } from './scene-spec-sanitizer.js';
@@ -41,5 +42,6 @@ export const combatEntryGateDeps: CombatEntryGateDeps = {
   persistSessionMessage: ({ sessionId, userId, speakerType, message }) =>
     SessionMessageService.addMessage({ sessionId, speakerType, message }, userId),
   publishCombatState,
+  deriveFirstAction: (params) => deriveCombatEntryFirstAction(params),
   logger: combatLogger,
 };

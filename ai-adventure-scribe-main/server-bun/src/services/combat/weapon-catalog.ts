@@ -59,6 +59,10 @@ const UNARMED_CLAIMS = new Set([
   'fists',
   'kick',
   'headbutt',
+  'shove',
+  'grapple',
+  'slap',
+  'elbow',
 ]);
 
 /** A punch, kick, or explicit unarmed strike — not "whatever is equipped". */

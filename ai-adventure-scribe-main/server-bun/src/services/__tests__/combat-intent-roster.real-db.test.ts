@@ -186,7 +186,11 @@ describeWithDb('combat intent roster and player-intent seating', () => {
     ]);
 
     const declaredAttack = detectDeclaredAttack('I punch Ledger Warden', roster);
-    expect(declaredAttack).toEqual({ verb: 'punch', actorName: 'Ledger Warden' });
+    expect(declaredAttack).toEqual({
+      verb: 'punch',
+      actorName: 'Ledger Warden',
+      attackSource: 'unarmed',
+    });
 
     const player = {
       characterId,
@@ -207,6 +211,7 @@ describeWithDb('combat intent roster and player-intent seating', () => {
         combatants: Array<{ name: string; count: number; monsterId?: string }>;
         sceneSpec: unknown;
         sceneSpecSynthesized: boolean;
+        declaredAttack: NonNullable<typeof declaredAttack>;
       };
     };
     const pending = envelope.combat_entry_pending;
@@ -228,6 +233,7 @@ describeWithDb('combat intent roster and player-intent seating', () => {
         trigger: pending.trigger,
         detail: pending.detail,
         playerInitiativeRoll: 13,
+        declaredAttack: pending.declaredAttack,
       },
       combatEntryGateDeps,
     );
@@ -242,6 +248,7 @@ describeWithDb('combat intent roster and player-intent seating', () => {
 
     const participants = await database
       .select({
+        id: combatParticipants.id,
         name: combatParticipants.name,
         characterId: combatParticipants.characterId,
         participantType: combatParticipants.participantType,
@@ -253,6 +260,7 @@ describeWithDb('combat intent roster and player-intent seating', () => {
 
     expect(participants).toHaveLength(2);
     expect(participants).toContainEqual({
+      id: expect.any(String),
       name: 'Roster Player',
       characterId,
       participantType: 'player',
@@ -260,11 +268,23 @@ describeWithDb('combat intent roster and player-intent seating', () => {
       initiativeModifier: 3,
     });
     expect(participants).toContainEqual({
+      id: expect.any(String),
       name: 'Ledger Warden',
       characterId: null,
       participantType: 'monster',
       initiativeModifier: expect.any(Number),
       initiative: expect.any(Number),
     });
+    expect(outcome.firstAction).toMatchObject({
+      type: 'attack',
+      source: 'unarmed',
+      roll_request: { modifier: 2 },
+    });
+    expect(outcome.firstAction?.actor).toBe(
+      participants.find((participant) => participant.characterId === characterId)?.id,
+    );
+    expect(outcome.firstAction?.target).toBe(
+      participants.find((participant) => participant.name === 'Ledger Warden')?.id,
+    );
   });
 });

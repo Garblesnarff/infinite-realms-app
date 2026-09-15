@@ -211,6 +211,10 @@ describe('applyCombatEntryGate', () => {
         { name: 'Professor Emil Darkwater', count: 1 },
         { name: 'Shadow Guard', count: 1 },
       ],
+      declaredAttack: {
+        verb: 'punch',
+        actorName: 'Professor Emil Darkwater',
+      },
     });
   });
 

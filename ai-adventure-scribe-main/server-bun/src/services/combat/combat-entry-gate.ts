@@ -26,6 +26,8 @@ import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './scene-spec-sani
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
 import { ValidationError } from '../../lib/errors.js';
 
+import type { CombatEntryFirstAction } from './combat-entry-first-action.js';
+import type { DeclaredAttack } from './combat-intent-gate.js';
 import type { SceneSpec } from '../../tactical/types.js';
 import type { DMMapAction, DMResponse } from '../dm/dm-response-schema.js';
 
@@ -237,6 +239,7 @@ export interface CombatEntryPending {
   combatants: DerivedCombatant[];
   sceneSpec: SceneSpec;
   sceneSpecSynthesized: boolean;
+  declaredAttack?: DeclaredAttack;
 }
 
 /**
@@ -313,6 +316,10 @@ export interface CombatEntryStartParticipant {
   initiative: number;
   initiativeModifier: number;
   characterId?: string | null;
+  npcId?: string | null;
+  participantType?: string;
+  armorClass?: number | null;
+  encounterId?: string;
   turnOrder?: number;
 }
 
@@ -343,6 +350,7 @@ export interface CombatEntryOutcome {
 export interface SeatedCombatEntryOutcome extends CombatEntryOutcome {
   /** Kept for `/enter`; the LLM pipeline only serializes the audit fields above. */
   combatState: CombatEntryStartResult;
+  firstAction?: CombatEntryFirstAction;
 }
 
 /**
@@ -379,6 +387,12 @@ export interface CombatEntryGateDeps {
     message: string;
   }) => Promise<unknown>;
   publishCombatState: (encounterId: string, userId: string, reason: string) => Promise<unknown>;
+  deriveFirstAction?: (params: {
+    sessionId: string;
+    combatState: CombatEntryStartResult;
+    player: CombatEntryPlayer;
+    declaredAttack: DeclaredAttack;
+  }) => Promise<CombatEntryFirstAction | null>;
   logger: {
     info: (data: unknown) => void;
     warn: (data: unknown) => void;
@@ -396,6 +410,7 @@ export interface CombatEntrySeatParams {
   trigger?: CombatEntryReason;
   detail?: string;
   playerInitiativeRoll?: number;
+  declaredAttack?: DeclaredAttack;
 }
 
 /**
@@ -466,6 +481,7 @@ export async function seatCombatEntry(
     trigger = 'combat_transition',
     detail = 'combat entry confirmed by the player',
     playerInitiativeRoll,
+    declaredAttack,
   } = params;
   validatePlayerInitiativeRoll(playerInitiativeRoll);
 
@@ -495,6 +511,24 @@ export async function seatCombatEntry(
       sceneSpec,
       combatState.participantSizes,
     );
+
+    let firstAction: CombatEntryFirstAction | undefined;
+    if (declaredAttack && deps.deriveFirstAction) {
+      try {
+        firstAction =
+          (await deps.deriveFirstAction({ sessionId, combatState, player, declaredAttack })) ??
+          undefined;
+      } catch (error) {
+        // Seating must remain available even if a malformed declaration cannot be grounded. The
+        // client will show the explicit declare-action notice rather than silently ending the turn.
+        deps.logger.warn({
+          msg: 'Combat entry first action could not be derived',
+          sessionId,
+          encounterId: combatState.encounter.id,
+          error,
+        });
+      }
+    }
 
     deps.trackCombatEvent('combat_started', {
       encounterId: combatState.encounter.id,
@@ -534,6 +568,7 @@ export async function seatCombatEntry(
       participantCount: combatState.participants.length,
       seatingTranscript,
       combatState,
+      ...(firstAction ? { firstAction } : {}),
     };
   } catch (error) {
     deps.logger.error({

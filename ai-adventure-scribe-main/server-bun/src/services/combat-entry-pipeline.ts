@@ -214,6 +214,8 @@ export async function applyCombatEntryGate(params: {
       };
     }
 
+    pending = { ...pending, declaredAttack };
+
     const narration = typeof envelope.text === 'string' ? envelope.text : sanitizedResult.text;
     if (declaredCombatOutcomePattern.test(narration)) {
       logger.warn({

@@ -184,6 +184,32 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
     ]);
   });
 
+  it('end-to-end: resolves the raw swing-and-punch declaration into an unarmed first-action handoff', async () => {
+    generatedResult = {
+      text: dmEnvelope({ text: 'The professor braces as your attack begins.' }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'I attempt to swing and punch the professor',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const body = (await response.json()) as { text: string };
+    const envelope = JSON.parse(body.text) as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'player_intent',
+      declaredAttack: {
+        verb: 'punch',
+        actorName: 'Professor Emil Darkwater',
+        attackSource: 'unarmed',
+      },
+    });
+  });
+
   it('forces player-intent entry from pure prose and injects the server directive (#1943 A1-A3)', async () => {
     generatedResult = {
       text: 'Darkwater flinches as you square your shoulders.',

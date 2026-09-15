@@ -34,6 +34,20 @@ const enterBody = t.Object({
     hpCurrent: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
     hpMax: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
   }),
+  declaredAttack: t.Optional(
+    t.Object({
+      verb: t.String({ minLength: 1, maxLength: 80 }),
+      actorName: t.String({ minLength: 1, maxLength: 200 }),
+      actorSlug: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+      monsterId: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+      attackSource: t.Optional(
+        t.Union([t.Literal('unarmed'), t.Literal('weapon'), t.Literal('spell')]),
+      ),
+      weaponName: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+      spellId: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+      spellName: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+    }),
+  ),
   playerInitiativeRoll: t.Optional(t.Integer({ minimum: 1, maximum: 20 })),
 });
 
@@ -125,6 +139,7 @@ export function createCombatEntryRoutes({
             combatants,
             sceneSpec: sanitized.sceneSpec,
             playerInitiativeRoll: body.playerInitiativeRoll,
+            declaredAttack: body.declaredAttack,
           },
           combatEntryGateDeps,
         );
@@ -154,6 +169,7 @@ function enterResponse(
       combatState as Parameters<typeof buildInitiativeOrder>[0],
     ),
     seatingTranscript: outcome.seatingTranscript,
+    ...(outcome.firstAction ? { first_action: outcome.firstAction } : {}),
   };
 }
 

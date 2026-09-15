@@ -34,6 +34,7 @@ describe('detectDeclaredAttack', () => {
     expect(detectDeclaredAttack('i punch Darkwater', actors)).toEqual({
       verb: 'punch',
       actorName: 'Professor Emil Darkwater',
+      attackSource: 'unarmed',
     });
   });
 
@@ -54,6 +55,9 @@ describe('detectDeclaredAttack', () => {
       verb: 'cast Magic Missile',
       actorName: 'The Ghoul',
       monsterId: 'srd:ghoul',
+      attackSource: 'spell',
+      spellId: 'magic-missile',
+      spellName: 'Magic Missile',
     });
   });
 

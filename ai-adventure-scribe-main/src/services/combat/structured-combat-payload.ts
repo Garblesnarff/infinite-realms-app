@@ -50,6 +50,17 @@ export type CombatEntryPayload = {
   player: CombatEntryPlayerPayload;
   /** Omit to make the server roll initiative and mark the seat `(auto-rolled)`. */
   playerInitiativeRoll?: number;
+  /** Server-detected player declaration; `/enter` resolves this into the first engine action. */
+  declaredAttack?: {
+    verb: string;
+    actorName: string;
+    actorSlug?: string;
+    monsterId?: string;
+    attackSource?: 'unarmed' | 'weapon' | 'spell';
+    weaponName?: string;
+    spellId?: string;
+    spellName?: string;
+  };
 };
 
 export type PendingCombatIntentPayload = {

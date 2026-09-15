@@ -18,6 +18,7 @@ import {
   vitalStateOf,
   type VitalsInput,
 } from './death-saves-service.js';
+import { isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -557,6 +558,9 @@ export async function proposeCombatAttack(
   const targetLabel = await participantLabel(encounterId, resolved.targetId, userId);
   const equipped = await listEquippedWeaponProfiles(actor);
   const grounding = groundRequestedWeapon(resolved.weaponId, equipped);
+  const groundedWeaponId = isUnarmedWeaponClaim(resolved.weaponId)
+    ? UNARMED_STRIKE.id
+    : grounding.weaponId;
   const approach = await decideAttackApproach({
     sessionId: encounter.sessionId,
     actorId: resolved.actorId,
@@ -572,7 +576,7 @@ export async function proposeCombatAttack(
     {
       attackerId: resolved.actorId,
       targetId: resolved.targetId,
-      weaponId: grounding.weaponId,
+      weaponId: groundedWeaponId,
       attackType: approach.attackType,
       // The proposal claims no version: it writes nothing that a concurrent write could lose.
       expectedVersion: encounter.version,
@@ -588,7 +592,7 @@ export async function proposeCombatAttack(
     ...proposal,
     actorId: resolved.actorId,
     targetId: resolved.targetId,
-    weaponId: grounding.weaponId,
+    weaponId: groundedWeaponId,
     expectedVersion: encounter.version,
     targetLabel,
     requestedWeapon: grounding.requested,
@@ -678,6 +682,9 @@ export async function executeCombatIntent(
       // walked into melee to fire an arrow, or reach-refused for a sword she was holding.
       const equipped = await listEquippedWeaponProfiles(actor);
       const grounding = groundRequestedWeapon(intent.weaponId, equipped);
+      const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
+        ? UNARMED_STRIKE.id
+        : grounding.weaponId;
       if (!grounding.grounded) {
         logger.warn(
           {
@@ -726,7 +733,7 @@ export async function executeCombatIntent(
               targetId: intent.targetId,
               // The grounded id, not the raw claim: resolution re-reads the sheet, and it must
               // land on the weapon the reach check was made against.
-              weaponId: grounding.weaponId,
+              weaponId: groundedWeaponId,
               attackType: approach.attackType,
               expectedVersion: intent.expectedVersion,
               advantage: intent.advantage,

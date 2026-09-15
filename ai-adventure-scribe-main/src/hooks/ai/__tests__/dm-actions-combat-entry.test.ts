@@ -9,7 +9,10 @@ import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
-import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
+import {
+  requestPlayerAttackRoll,
+  requestPlayerInitiativeRoll,
+} from '@/services/combat/player-roll-bridge';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));
@@ -20,6 +23,7 @@ vi.mock('@/hooks/ai/combat-resolution-step', () => ({
   resolveDeclaredCombatActions: vi.fn(),
 }));
 vi.mock('@/services/combat/player-roll-bridge', () => ({
+  requestPlayerAttackRoll: vi.fn(),
   requestPlayerInitiativeRoll: vi.fn(),
 }));
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
@@ -88,6 +92,11 @@ const NPC_TURN_ENCOUNTER = {
   ],
 };
 
+const PLAYER_TURN_ENCOUNTER = {
+  ...NPC_TURN_ENCOUNTER,
+  currentTurnParticipantId: 'storyteller-1',
+};
+
 const PENDING_ENTRY = {
   trigger: 'tactical_action' as const,
   detail: 'combat_action attack',
@@ -114,6 +123,34 @@ const NPC_ACTION = {
   spell_id: null,
   slot_level: null,
   movement_feet: 0,
+};
+
+const FIRST_ACTION_COMBAT_ACTION = { ...PLAYER_ACTION, weapon_id: 'unarmed-strike' };
+
+const FIRST_ACTION = {
+  type: 'attack',
+  actor: 'storyteller-1',
+  actorLabel: 'The Storyteller',
+  target: 'vance-1',
+  targetLabel: 'Vance',
+  source: 'unarmed',
+  attackSource: 'unarmed',
+  weaponId: 'unarmed-strike',
+  weaponName: 'Unarmed Strike',
+  spellId: null,
+  slotLevel: null,
+  combat_action: FIRST_ACTION_COMBAT_ACTION,
+  roll_request: {
+    type: 'attack',
+    formula: '1d20+5',
+    purpose: 'Unarmed Strike attack against Vance',
+    dc: null,
+    ac: 12,
+    advantage: false,
+    disadvantage: false,
+    modifier: 5,
+    actorName: 'The Storyteller',
+  },
 };
 
 const response = (payload: Record<string, unknown> = {}) => ({
@@ -144,6 +181,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 16 });
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' } }) as any,
@@ -227,6 +265,69 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     ]);
   });
 
+  it('uses /enter first_action and its engine modifier, ignoring model combat_actions', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          ...PENDING_ENTRY,
+          declaredAttack: {
+            verb: 'punch',
+            actorName: 'Vance',
+            attackSource: 'unarmed',
+          },
+        },
+        // This is deliberately a conflicting model action. The entry action must win.
+        combat_actions: [NPC_ACTION],
+      },
+      refresh,
+    );
+
+    expect(requestPlayerAttackRoll).toHaveBeenCalledWith({
+      actorLabel: 'The Storyteller',
+      targetLabel: 'Vance',
+      weaponName: 'Unarmed Strike',
+      attackBonus: 5,
+      targetAc: 12,
+      advantage: false,
+      disadvantage: false,
+    });
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [FIRST_ACTION_COMBAT_ACTION],
+        playerAttackRoll: { action: FIRST_ACTION_COMBAT_ACTION, d20: 17, autoRolled: false },
+      }),
+    );
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalledWith(
+      expect.objectContaining({ combatActions: [NPC_ACTION] }),
+    );
+  });
+
+  it('shows the explicit declare-action notice when entry returns neither action path', async () => {
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(outcome.localNotices).toContainEqual({
+      text: 'Combat has begun. Declare your action.',
+      persist: true,
+    });
+    expect(outcome.result.combat_actions).toEqual([]);
+  });
+
   it('declines combat entry without seating an encounter or resolving the attack', async () => {
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
@@ -293,8 +394,13 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       combat_actions: [],
     });
 
-    expect(outcome.localNotice).toBe(seatingTranscript);
-    expect(outcome.localNotices).toEqual([{ text: seatingTranscript, persist: false }]);
+    expect(outcome.localNotice).toBe(
+      `${seatingTranscript}\nCombat has begun. Declare your action.`,
+    );
+    expect(outcome.localNotices).toEqual([
+      { text: seatingTranscript, persist: false },
+      { text: 'Combat has begun. Declare your action.', persist: true },
+    ]);
     expect(outcome.responseText).toBe('');
   });
 

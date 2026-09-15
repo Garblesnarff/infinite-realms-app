@@ -123,6 +123,17 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     });
   });
 
+  it('forwards the server-detected player declaration to first-action derivation', async () => {
+    const declaredAttack = {
+      verb: 'punch',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'unarmed',
+    };
+    await request({ ...validBody(), declaredAttack });
+
+    expect(seatCalls[0]).toMatchObject({ declaredAttack });
+  });
+
   it('allows the server to auto-roll when the player roll is omitted', async () => {
     await request(validBody());
     expect(seatCalls[0]).toMatchObject({ playerInitiativeRoll: undefined });

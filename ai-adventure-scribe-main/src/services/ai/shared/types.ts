@@ -92,6 +92,16 @@ export interface AIResponse {
     combatants: Array<{ name: string; monsterId?: string; count: number }>;
     sceneSpec: unknown;
     sceneSpecSynthesized: boolean;
+    declaredAttack?: {
+      verb: string;
+      actorName: string;
+      actorSlug?: string;
+      monsterId?: string;
+      attackSource?: 'unarmed' | 'weapon' | 'spell';
+      weaponName?: string;
+      spellId?: string;
+      spellName?: string;
+    };
   };
   map_actions?: DMMapAction[];
   handout_actions?: DMHandoutAction[];

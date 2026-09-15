@@ -362,6 +362,64 @@ describe('seatCombatEntry', () => {
     expect(events[0].properties.entryTrigger).toBe('combat_transition');
   });
 
+  it('returns the engine-derived first action for a declared punch', async () => {
+    const firstAction = {
+      type: 'attack' as const,
+      source: 'unarmed' as const,
+      attackSource: 'unarmed' as const,
+      actor: 'participant-0',
+      actorLabel: PLAYER.name,
+      target: 'participant-1',
+      targetLabel: 'Professor Emil Darkwater',
+      weaponId: 'unarmed-strike',
+      weaponName: 'Unarmed Strike',
+      spellId: null,
+      slotLevel: null,
+      combat_action: {
+        actor_id: 'participant-0',
+        action_type: 'attack' as const,
+        target_ids: ['participant-1'],
+        weapon_id: 'unarmed-strike',
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0 as const,
+      },
+      roll_request: {
+        type: 'attack' as const,
+        formula: '1d20+5',
+        purpose: 'Unarmed Strike attack against Professor Emil Darkwater',
+        dc: null,
+        ac: 13,
+        advantage: false,
+        disadvantage: false,
+        modifier: 5,
+        actorName: PLAYER.name,
+      },
+    };
+    const deriveFirstAction = async () => firstAction;
+    const { deps } = stubDeps({ deriveFirstAction });
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        trigger: 'player_intent',
+        detail: 'player declared an attack on Professor Emil Darkwater',
+        declaredAttack: { verb: 'punch', actorName: 'Professor Emil Darkwater' },
+      },
+      deps,
+    );
+
+    expect(outcome?.firstAction).toMatchObject({
+      type: 'attack',
+      source: 'unarmed',
+      weaponName: 'Unarmed Strike',
+      roll_request: { modifier: 5 },
+    });
+  });
+
   it('passes the player d20 only to the player seat and reports the complete seating line', async () => {
     const { deps, started } = stubDeps();
     const outcome = await seatCombatEntry(

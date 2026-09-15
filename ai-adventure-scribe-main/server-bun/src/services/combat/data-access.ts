@@ -13,7 +13,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { and, asc, desc, eq, exists, inArray, or, isNotNull, sql } from 'drizzle-orm';
 
-import { findCatalogWeapon, UNARMED_STRIKE, weaponProfileMatches } from './weapon-catalog.js';
+import {
+  findCatalogWeapon,
+  isUnarmedWeaponClaim,
+  UNARMED_STRIKE,
+  weaponProfileMatches,
+} from './weapon-catalog.js';
 import { db } from '../../../../db/client';
 import {
   combatEncounters,
@@ -230,6 +235,9 @@ export async function getEquippedWeaponProfile(
   participant: any,
   requestedWeaponId?: string,
 ): Promise<WeaponRuleProfile> {
+  if (requestedWeaponId && isUnarmedWeaponClaim(requestedWeaponId)) {
+    return { ...UNARMED_STRIKE };
+  }
   const equipped = await listEquippedWeaponProfiles(participant);
   if (requestedWeaponId) {
     const selected = equipped.find((profile) => weaponProfileMatches(profile, requestedWeaponId));

@@ -14,6 +14,10 @@ export interface DeclaredAttack {
   actorName: string;
   actorSlug?: string;
   monsterId?: string;
+  attackSource?: 'unarmed' | 'weapon' | 'spell';
+  weaponName?: string;
+  spellId?: string;
+  spellName?: string;
 }
 
 /**
@@ -29,9 +33,12 @@ export const COMBAT_INTENT_VERBS = [
   'shoot',
   'attack',
   'kick',
+  'headbutt',
   'tackle',
   'grapple',
   'shove',
+  'slap',
+  'elbow',
   'fire at',
   'swing',
   'swing at',
@@ -53,10 +60,12 @@ const DIRECT_ATTACK_VERBS = [
   'tackle',
   'grapple',
   'shove',
+  'slap',
+  'elbow',
 ] as const;
 
 const VERB_TOKEN_PATTERN =
-  /(?:punch|hit|strike|stab|slash|shoot|attack|kick|tackle|grapple|shove|fire|swing|throw|cast)(?:es|s)?\b/gi;
+  /(?:punch|hit|strike|stab|slash|shoot|attack|kick|headbutt|tackle|grapple|shove|slap|elbow|fire|swing|throw|cast)(?:es|s)?\b/gi;
 
 const DECLARATION_BLOCK_PATTERN =
   /\b(?:don't|do not|won't|never|not going to|should\s+i|can\s+i|could\s+i|what\s+if|if\s+i)\b/i;
@@ -214,6 +223,7 @@ interface ClauseAttackMatch {
   verb: string;
   targetText: string;
   spellName?: string;
+  weaponName?: string;
 }
 
 const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
@@ -232,8 +242,14 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
   const takeSwingMatch = /^take\s+a\s+swing\s+(?:at|on)\s+(.+)$/i.exec(clause);
   if (takeSwingMatch) return { verb: 'swing', targetText: takeSwingMatch[1] };
 
-  const swingMatch = /^swing(?:\s+.+?)?\s+(?:at|on)\s+(.+)$/i.exec(clause);
-  if (swingMatch) return { verb: 'swing', targetText: swingMatch[1] };
+  const swingMatch = /^swing(?:\s+(?:my|the)\s+(.+?))?\s+(?:at|on)\s+(.+)$/i.exec(clause);
+  if (swingMatch) {
+    return {
+      verb: 'swing',
+      ...(swingMatch[1] ? { weaponName: stripTrailingPunctuation(swingMatch[1]) } : {}),
+      targetText: swingMatch[2],
+    };
+  }
 
   const fireMatch = /^fire\s+(?:at|on)\s+(.+)$/i.exec(clause);
   if (fireMatch) return { verb: 'fire at', targetText: fireMatch[1] };
@@ -272,11 +288,24 @@ const resolveClauseAttack = (
     const spell = getSpellByName(match.spellName);
     if (!spell?.damage) return null;
     const actor = matchActor(match.targetText, actors);
-    return actor ? toDeclaredAttack(`cast ${spell.name}`, actor) : null;
+    return actor
+      ? {
+          ...toDeclaredAttack(`cast ${spell.name}`, actor),
+          attackSource: 'spell',
+          spellId: spell.id,
+          spellName: spell.name,
+        }
+      : null;
   }
 
   const actor = matchActor(match.targetText, actors);
-  return actor ? toDeclaredAttack(match.verb, actor) : null;
+  if (!actor) return null;
+  const unarmed = new Set(['punch', 'kick', 'headbutt', 'shove', 'grapple', 'slap', 'elbow']);
+  return {
+    ...toDeclaredAttack(match.verb, actor),
+    attackSource: unarmed.has(match.verb) ? 'unarmed' : 'weapon',
+    ...(match.weaponName ? { weaponName: match.weaponName } : {}),
+  };
 };
 
 /**

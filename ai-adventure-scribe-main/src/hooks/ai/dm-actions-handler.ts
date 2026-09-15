@@ -4,6 +4,8 @@ import type {
   DMHandoutAction,
 } from '../../../server-bun/src/services/dm/dm-response-schema';
 import type { LocalNotice } from '@/hooks/ai/types';
+import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
+import type { PlayerAttackRollSpec } from '@/services/combat/player-roll-bridge';
 import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/user-data-api';
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
@@ -11,7 +13,10 @@ import logger from '@/lib/logger';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
-import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
+import {
+  requestPlayerAttackRoll,
+  requestPlayerInitiativeRoll,
+} from '@/services/combat/player-roll-bridge';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
 import { slugify } from '@/utils/slug';
@@ -76,6 +81,53 @@ const COMBAT_ENTRY_FAILURE_NOTICE =
   'Combat entry could not be confirmed. No attack outcome was resolved.';
 const COMBAT_ENTRY_NO_HOST_NOTICE = 'Combat entry could not be confirmed (no confirmation UI)';
 const COMBAT_ENTRY_NO_PLAYER_NOTICE = 'Combat entry is waiting for a valid player character.';
+const COMBAT_ENTRY_DECLARE_ACTION_NOTICE = 'Combat has begun. Declare your action.';
+
+function asEntryAction(value: unknown): StructuredCombatAction | null {
+  if (!value || typeof value !== 'object') return null;
+  const firstAction = value as Record<string, any>;
+  const embedded = firstAction.combat_action;
+  if (embedded && typeof embedded === 'object' && Array.isArray(embedded.target_ids)) {
+    return embedded as StructuredCombatAction;
+  }
+  const actorId = firstAction.actor;
+  const targetId = firstAction.target;
+  if (typeof actorId !== 'string' || typeof targetId !== 'string') return null;
+  const isSpell = firstAction.type === 'spell';
+  return {
+    actor_id: actorId,
+    action_type: isSpell ? 'cast_spell' : 'attack',
+    target_ids: [targetId],
+    weapon_id: typeof firstAction.weaponId === 'string' ? firstAction.weaponId : null,
+    spell_id: typeof firstAction.spellId === 'string' ? firstAction.spellId : null,
+    slot_level: Number.isInteger(firstAction.slotLevel) ? firstAction.slotLevel : null,
+    movement_feet: 0,
+  };
+}
+
+function asEntryAttackRollSpec(value: unknown): PlayerAttackRollSpec | null {
+  if (!value || typeof value !== 'object') return null;
+  const firstAction = value as Record<string, any>;
+  if (firstAction.type !== 'attack' || !firstAction.roll_request) return null;
+  const roll = firstAction.roll_request as Record<string, any>;
+  if (
+    typeof roll.modifier !== 'number' ||
+    typeof roll.ac !== 'number' ||
+    typeof roll.advantage !== 'boolean' ||
+    typeof roll.disadvantage !== 'boolean'
+  ) {
+    return null;
+  }
+  return {
+    actorLabel: typeof roll.actorName === 'string' ? roll.actorName : firstAction.actorLabel,
+    targetLabel: firstAction.targetLabel || firstAction.target,
+    weaponName: firstAction.weaponName || firstAction.source || 'attack',
+    attackBonus: roll.modifier,
+    targetAc: roll.ac,
+    advantage: roll.advantage,
+    disadvantage: roll.disadvantage,
+  };
+}
 
 function isCombatEntryConfirmationNoHostError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -107,6 +159,12 @@ export async function handleDmActionsAndTransitions(
   let localNotice: string | undefined;
   const localNotices: LocalNotice[] = [];
   let entryWasSeated = false;
+  let entryFirstActionPresent = false;
+  let entryFirstAction: StructuredCombatAction | null = null;
+  let entryFirstActionPayload: unknown;
+  let entryPlayerAttackRoll:
+    | { action: StructuredCombatAction; d20?: number; autoRolled: boolean }
+    | undefined;
 
   const appendLocalNotice = (notice: unknown, persist = true): void => {
     if (typeof notice !== 'string' || !notice.trim()) return;
@@ -162,6 +220,7 @@ export async function handleDmActionsAndTransitions(
             combatants: pendingEntry.combatants,
             sceneSpec: pendingEntry.sceneSpec,
             player,
+            ...(pendingEntry.declaredAttack ? { declaredAttack: pendingEntry.declaredAttack } : {}),
             ...(initiative.d20 === null ? {} : { playerInitiativeRoll: initiative.d20 }),
           });
           if (!enterResponse.ok) {
@@ -184,6 +243,12 @@ export async function handleDmActionsAndTransitions(
                 ? (entryPayload as any).encounter.id
                 : sessionId;
             entryWasSeated = true;
+            entryFirstActionPresent = Object.prototype.hasOwnProperty.call(
+              entryPayload ?? {},
+              'first_action',
+            );
+            entryFirstActionPayload = (entryPayload as any)?.first_action;
+            entryFirstAction = asEntryAction(entryFirstActionPayload);
             responseText = '';
             narrationSegments = undefined;
             result = {
@@ -207,6 +272,9 @@ export async function handleDmActionsAndTransitions(
               roll_requests: (result.roll_requests || []).filter(
                 (request: any) => request.type !== 'attack' && request.type !== 'initiative',
               ),
+              // The model batch is never consulted when `/enter` returned an engine-derived
+              // first action. It is restored below only when first_action is absent.
+              ...(entryFirstActionPresent ? { combat_actions: [] } : {}),
             };
           }
         }
@@ -259,6 +327,49 @@ export async function handleDmActionsAndTransitions(
     aiContext.gameState.round = activeEncounter?.currentRound;
   }
 
+  // `/enter` is the source of truth for the player's declaration. Ask for the die from its
+  // engine-generated modifier, then send the same structured action through the normal resolver.
+  // If the endpoint returned no first action, retain the model batch as the documented fallback.
+  if (entryWasSeated && entryFirstActionPresent) {
+    if (entryFirstAction) {
+      result = { ...result, combat_actions: [entryFirstAction] };
+      const playerParticipant = activeEncounter?.participants?.find(
+        (participant: any) =>
+          participant.participantType === 'player' &&
+          (!params.characterRecord?.id || participant.characterId === params.characterRecord.id),
+      );
+      if (
+        activeEncounter &&
+        playerParticipant &&
+        isPlayerTurn(activeEncounter, playerParticipant) &&
+        entryFirstAction.action_type === 'attack'
+      ) {
+        // The server always supplies this for an attack; malformed payloads use engine rolling.
+        const actualRollSpec = asEntryAttackRollSpec(entryFirstActionPayload);
+        if (actualRollSpec) {
+          const roll = await requestPlayerAttackRoll(actualRollSpec);
+          entryPlayerAttackRoll = {
+            action: entryFirstAction,
+            ...(roll.d20 === null ? {} : { d20: roll.d20 }),
+            autoRolled: roll.d20 === null,
+          };
+        } else {
+          entryPlayerAttackRoll = { action: entryFirstAction, autoRolled: true };
+        }
+      }
+    } else {
+      result = { ...result, combat_actions: [] };
+      appendLocalNotice(COMBAT_ENTRY_DECLARE_ACTION_NOTICE);
+      responseText = '';
+      narrationSegments = undefined;
+    }
+  } else if (entryWasSeated && !result.combat_actions?.length) {
+    result = { ...result, combat_actions: [] };
+    appendLocalNotice(COMBAT_ENTRY_DECLARE_ACTION_NOTICE);
+    responseText = '';
+    narrationSegments = undefined;
+  }
+
   // DM map intents are one authenticated server batch. The server owns
   // legality, the single corrective LLM retry, persistence, and broadcast.
   if (sessionId && result.map_actions?.length) {
@@ -291,17 +402,19 @@ export async function handleDmActionsAndTransitions(
   //
   // Placed above the `combat_actions` pipeline rather than inside it so a repaired turn takes
   // the identical path a first-try turn takes, AoE proposals included.
-  const forcedActions = await enforceCombatActionOnAttempt({
-    isInCombat,
-    hasActiveEncounter: !!activeEncounter,
-    result,
-    playerMessage,
-    isDiceRollMessage,
-    aiContext,
-    conversationHistory,
-    userPlan,
-    turnCount,
-  });
+  const forcedActions = entryFirstActionPresent
+    ? null
+    : await enforceCombatActionOnAttempt({
+        isInCombat,
+        hasActiveEncounter: !!activeEncounter,
+        result,
+        playerMessage,
+        isDiceRollMessage,
+        aiContext,
+        conversationHistory,
+        userPlan,
+        turnCount,
+      });
   if (forcedActions) {
     result = { ...result, combat_actions: forcedActions.combat_actions };
     // The regenerated narration is what the corrected turn was written against.
@@ -400,6 +513,7 @@ export async function handleDmActionsAndTransitions(
       queuedIntentActorIds: activeEncounter?.pendingIntent?.actorId
         ? [activeEncounter.pendingIntent.actorId]
         : [],
+      playerAttackRoll: entryPlayerAttackRoll,
     });
     result = narrationResult;
     responseText = narrationResult.text;
