@@ -1,3 +1,5 @@
+import { combatLogger } from '../../lib/logger.js';
+
 import type { SubmittedCombatIntent } from './combat-intent-service.js';
 import type { WeaponRuleProfile } from './combat-rules.js';
 import type { CombatState, DeathSaveResult } from '../../types/combat.js';
@@ -216,6 +218,12 @@ function mergeBoundaryDeathSaves(resolution: unknown, boundary: unknown): unknow
  * ends. Every action still enters `executeCombatIntent`, so dice, grounding, approach, HP,
  * death saves, ending, telemetry, and state publication remain engine-owned.
  */
+/**
+ * Why `advanceNpcTurns` stopped. `combat_ended` takes precedence over `cap`,
+ * and `player_turn` is the ordinary handoff back to the player.
+ */
+export type NpcTurnLoopStopReason = 'player_turn' | 'combat_ended' | 'cap';
+
 export async function advanceNpcTurns(
   encounterId: string,
   userId: string,
@@ -292,6 +300,24 @@ export async function advanceNpcTurns(
       'paused for safety.';
     transcriptLines.push(line);
   }
+
+  // Why the loop stopped is not otherwise recoverable. The runner returns
+  // iterationCount/iterationCap in the HTTP body and logs nothing, so a turn
+  // that ran once and a turn that hit the safety cap look identical in the
+  // log. Shape only -- ids, counts and a reason; no narration, no transcript.
+  const stoppedBecause: NpcTurnLoopStopReason = combatEnded
+    ? 'combat_ended'
+    : capReached
+      ? 'cap'
+      : 'player_turn';
+  combatLogger.info({
+    msg: 'NPC_TURN_LOOP_DONE',
+    sessionId: finalState.encounter.sessionId,
+    encounterId,
+    iterationCount,
+    iterationCap,
+    stoppedBecause,
+  });
 
   return {
     results,
