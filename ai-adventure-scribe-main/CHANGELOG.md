@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.17.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.6...v0.17.0) (2026-09-15)
+
+
+### Features
+
+* **llm:** log the envelope shape on /v1/llm/generate ([#2027](https://github.com/Garblesnarff/infinite-realms-production/issues/2027)) ([d129baf](https://github.com/Garblesnarff/infinite-realms-production/commit/d129baf567bf14591fc0995445d8c62974fad1bd)), closes [#2022](https://github.com/Garblesnarff/infinite-realms-production/issues/2022)
+
+
+### Bug Fixes
+
+* resolve declared attacks on combat entry ([#2024](https://github.com/Garblesnarff/infinite-realms-production/issues/2024)) ([5042784](https://github.com/Garblesnarff/infinite-realms-production/commit/5042784c3868768562fa494a4b8bc33adbb6aa5b))
+
 ## [0.16.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.5...v0.16.6) (2026-09-14)
 
 
