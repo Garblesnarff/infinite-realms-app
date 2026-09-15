@@ -41,13 +41,10 @@ export function usePlayerRollHost(): void {
           : {
               requestType: 'attack' as const,
               description: describeAttackRoll(spec),
-              // The engine adds its own bonus to the natural die it is sent, so the popup shows the
-              // bonus for the player's benefit and submits the raw face. Putting the modifier in
-              // `rollConfig` as well would add it twice.
               rollConfig: {
                 dieType: 20,
                 count: 1,
-                modifier: 0,
+                modifier: attackModifierForRoll(spec),
                 advantage: spec.advantage,
                 disadvantage: spec.disadvantage,
               },
@@ -79,12 +76,18 @@ export function usePlayerRollHost(): void {
 
 /** "Longsword attack vs Sentient Glaze — 1d20+7 vs AC 15 (advantage)" */
 export function describeAttackRoll(spec: PlayerAttackRollSpec): string {
-  const sign = spec.attackBonus >= 0 ? '+' : '';
+  const modifier = attackModifierForRoll(spec);
+  const sign = modifier >= 0 ? '+' : '';
   const edge = spec.advantage ? ' (advantage)' : spec.disadvantage ? ' (disadvantage)' : '';
   return (
     `${spec.weaponName} attack vs ${spec.targetLabel} — ` +
-    `1d20${sign}${spec.attackBonus} vs AC ${spec.targetAc}${edge}`
+    `1d20${sign}${modifier} vs AC ${spec.targetAc}${edge}`
   );
+}
+
+/** The popup text and displayed total must use the exact modifier sent to the roll queue. */
+export function attackModifierForRoll(spec: PlayerAttackRollSpec): number {
+  return spec.attackBonus;
 }
 
 /** "Initiative for The Seeker — 1d20+2" */

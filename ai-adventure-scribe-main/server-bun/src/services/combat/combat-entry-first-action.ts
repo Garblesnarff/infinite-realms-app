@@ -18,11 +18,18 @@ import { UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
 import { combatLogger } from '../../lib/logger.js';
+import { planApproach } from '../../tactical/approach.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 
 import type { DeclaredAttack } from './combat-intent-gate.js';
 
 export type CombatEntryFirstActionSource = 'unarmed' | 'weapon' | 'spell';
+
+export interface CombatEntryReach {
+  inReach: boolean;
+  distanceFeet: number;
+  movedFeetIfApproached: number;
+}
 
 export interface CombatEntryRollRequest {
   type: 'attack';
@@ -38,7 +45,7 @@ export interface CombatEntryRollRequest {
 }
 
 export interface CombatEntryFirstAction {
-  type: 'attack' | 'spell';
+  type: 'attack' | 'spell' | 'move';
   actor: string;
   actorLabel: string;
   target: string;
@@ -49,14 +56,18 @@ export interface CombatEntryFirstAction {
   weaponName: string | null;
   spellId: string | null;
   slotLevel: number | null;
+  reach?: CombatEntryReach;
+  notice?: string;
   combat_action: {
     actor_id: string;
-    action_type: 'attack' | 'cast_spell';
+    action_type: 'attack' | 'cast_spell' | 'move';
     target_ids: string[];
     weapon_id: string | null;
     spell_id: string | null;
     slot_level: number | null;
-    movement_feet: 0;
+    movement_feet: number;
+    x?: number;
+    y?: number;
   };
   roll_request?: CombatEntryRollRequest;
 }
@@ -177,6 +188,20 @@ function attackFormula(modifier: number): string {
   return `1d20${modifier < 0 ? `-${Math.abs(modifier)}` : `+${modifier}`}`;
 }
 
+function projectedMap(
+  map: Awaited<ReturnType<typeof loadActiveTacticalMap>>,
+  actorId: string,
+  destination: { x: number; y: number },
+): Awaited<ReturnType<typeof loadActiveTacticalMap>> {
+  if (!map) return map;
+  return {
+    ...map,
+    entities: map.entities.map((entity) =>
+      entity.id === actorId ? { ...entity, ...destination } : entity,
+    ),
+  };
+}
+
 function geometryFor(
   map: Awaited<ReturnType<typeof loadActiveTacticalMap>>,
   actorId: string,
@@ -266,6 +291,50 @@ export async function deriveCombatEntryFirstAction(
       ? { weapon: { ...UNARMED_STRIKE }, weaponId: undefined }
       : groundRequestedWeapon(params.declaredAttack.weaponName, equipped);
   const map = await deps.loadActiveTacticalMap(params.sessionId);
+  const approach =
+    !grounded.weapon.ranged && map
+      ? planApproach(map, playerParticipant.id, targetParticipant.id, grounded.weapon.normalRange)
+      : null;
+  const reach: CombatEntryReach | undefined = approach
+    ? {
+        inReach: approach.inReach,
+        distanceFeet: approach.resultingDistanceFeet,
+        movedFeetIfApproached: approach.costFeet,
+      }
+    : undefined;
+
+  if (approach && !approach.inReach) {
+    const targetDistance = approach.resultingDistanceFeet;
+    const moved = approach.costFeet;
+    return {
+      type: 'move',
+      actor: playerParticipant.id,
+      actorLabel,
+      target: targetParticipant.id,
+      targetLabel,
+      source,
+      attackSource: source,
+      weaponId: source === 'unarmed' ? UNARMED_STRIKE.id : (grounded.weaponId ?? null),
+      weaponName: grounded.weapon.name,
+      spellId: null,
+      slotLevel: null,
+      reach,
+      notice: `You close ${moved} ft. ${targetLabel} is still ${targetDistance} ft away. Your turn is spent.`,
+      combat_action: {
+        actor_id: playerParticipant.id,
+        action_type: 'move',
+        target_ids: [],
+        weapon_id: source === 'unarmed' ? UNARMED_STRIKE.id : (grounded.weaponId ?? null),
+        spell_id: null,
+        slot_level: null,
+        movement_feet: moved,
+        x: approach.destination.x,
+        y: approach.destination.y,
+      },
+    };
+  }
+
+  const rulesMap = approach ? projectedMap(map, playerParticipant.id, approach.destination) : map;
   const rules = resolveAttackRules({
     strength: profile.scores.str ?? 10,
     dexterity: profile.scores.dex ?? 10,
@@ -275,7 +344,7 @@ export async function deriveCombatEntryFirstAction(
       encounterId: params.combatState.encounter.id,
     }),
     weapon: grounded.weapon,
-    geometry: geometryFor(map, playerParticipant.id, targetParticipant.id),
+    geometry: geometryFor(rulesMap, playerParticipant.id, targetParticipant.id),
     attackerConditions: await deps.getActiveConditionNames(playerParticipant.id),
     targetConditions: await deps.getActiveConditionNames(targetParticipant.id),
   });
@@ -292,6 +361,7 @@ export async function deriveCombatEntryFirstAction(
     weaponName: grounded.weapon.name,
     spellId: null,
     slotLevel: null,
+    ...(reach ? { reach } : {}),
     combat_action: {
       actor_id: playerParticipant.id,
       action_type: 'attack',

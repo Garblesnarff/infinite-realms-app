@@ -61,6 +61,10 @@ export type CombatEntryPayload = {
     spellId?: string;
     spellName?: string;
   };
+  seatingHint?: {
+    targetName: string;
+    reason: 'conversation' | 'asset_tag';
+  };
 };
 
 export type PendingCombatIntentPayload = {

@@ -29,12 +29,13 @@ export const combatEntryGateDeps: CombatEntryGateDeps = {
       surpriseRound,
       userId,
     ),
-  createTacticalCombatMap: (sessionId, participants, sceneSpec, participantSizes) =>
+  createTacticalCombatMap: (sessionId, participants, sceneSpec, participantSizes, seatingHint) =>
     createTacticalCombatMap(
       sessionId,
       participants as Parameters<typeof createTacticalCombatMap>[1],
       sceneSpec as SceneSpec,
       (participantSizes ?? {}) as Record<string, EntitySize>,
+      seatingHint,
     ),
   sanitizeSceneSpec,
   trackCombatEvent: (event, properties) =>

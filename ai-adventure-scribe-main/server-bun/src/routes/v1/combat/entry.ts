@@ -49,6 +49,12 @@ const enterBody = t.Object({
     }),
   ),
   playerInitiativeRoll: t.Optional(t.Integer({ minimum: 1, maximum: 20 })),
+  seatingHint: t.Optional(
+    t.Object({
+      targetName: t.String({ minLength: 1, maxLength: 200 }),
+      reason: t.Union([t.Literal('conversation'), t.Literal('asset_tag')]),
+    }),
+  ),
 });
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -140,6 +146,7 @@ export function createCombatEntryRoutes({
             sceneSpec: sanitized.sceneSpec,
             playerInitiativeRoll: body.playerInitiativeRoll,
             declaredAttack: body.declaredAttack,
+            seatingHint: body.seatingHint,
           },
           combatEntryGateDeps,
         );
@@ -169,6 +176,7 @@ function enterResponse(
       combatState as Parameters<typeof buildInitiativeOrder>[0],
     ),
     seatingTranscript: outcome.seatingTranscript,
+    ...(outcome.notice ? { notice: outcome.notice } : {}),
     ...(outcome.firstAction ? { first_action: outcome.firstAction } : {}),
   };
 }

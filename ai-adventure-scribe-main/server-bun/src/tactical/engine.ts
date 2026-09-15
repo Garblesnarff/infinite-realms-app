@@ -183,7 +183,7 @@ export function getAoETargets(
     .map((e) => ({ id: e.id, friendly: !!source && e.type === source.type }));
 }
 
-function canOccupy(
+export function canOccupy(
   map: TacticalMap,
   entity: MapEntity,
   x: number,

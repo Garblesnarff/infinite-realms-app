@@ -4,9 +4,11 @@ import {
   loadLatestTacticalMapRow,
   saveTacticalMap,
 } from './tactical-map-store.js';
+import { combatLogger } from '../../lib/logger.js';
 import { resetMovement } from '../../tactical/engine.js';
 import { generateMap } from '../../tactical/generator.js';
 import { tacticalSizeForParticipant } from '../../tactical/participant-size.js';
+import { seatEntityWithinReach, type CombatSeatingHint } from '../../tactical/seating.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
 
 import type { EntitySize, SceneSpec, TacticalMap } from '../../tactical/types.js';
@@ -23,6 +25,7 @@ export async function createTacticalCombatMap(
   participants: Participant[],
   sceneSpec: SceneSpec,
   participantSizes: Record<string, EntitySize> = {},
+  seatingHint?: CombatSeatingHint,
 ): Promise<TacticalMap> {
   const existing = await loadActiveTacticalMap(sessionId);
   if (existing) return existing;
@@ -43,6 +46,21 @@ export async function createTacticalCombatMap(
     pcEntities: entities.filter((entity) => entity.type === 'pc'),
     enemyEntities: entities.filter((entity) => entity.type !== 'pc'),
   });
+  const sceneOverridesConversationalSeating =
+    sceneSpec.enemyPlacement === 'ambush' || sceneSpec.enemyPlacement === 'formation';
+  if (seatingHint && !sceneOverridesConversationalSeating) {
+    const player = map.entities.find((entity) => entity.type === 'pc');
+    const seated = player ? seatEntityWithinReach(map, seatingHint.targetId, player.id, 5) : null;
+    combatLogger.info({
+      event: 'COMBAT_SEATING_DISTANCE',
+      msg: 'COMBAT_SEATING_DISTANCE',
+      targetId: seatingHint.targetId,
+      target: seatingHint.targetLabel,
+      playerId: player?.id,
+      distanceFeet: seated?.distanceFeet ?? null,
+      reason: seated ? seatingHint.reason : 'no_cell',
+    });
+  }
   // Facts are session-scoped and live on the latest map row, so a new board would otherwise
   // strand the previous fight's ending on a row nothing reads again. The most common shape of
   // that is precisely the one this wave exists to fix: last hostile falls, combat ends, the DM

@@ -53,6 +53,53 @@ const deps = {
   logger: { warn: () => {} },
 };
 
+const openMap = (targetX: number) => ({
+  id: 'map-1',
+  sessionId: 'session-1',
+  width: 12,
+  height: 1,
+  round: 1,
+  sceneDescription: 'An open room.',
+  cells: Array.from({ length: 1 }, () =>
+    Array.from({ length: 12 }, () => ({
+      terrain: 'floor' as const,
+      blocksMovement: false,
+      blocksSight: false,
+      cover: 0 as const,
+      elevation: 0,
+    })),
+  ),
+  entities: [
+    {
+      id: 'participant-player',
+      name: 'Rook',
+      x: 1,
+      y: 0,
+      size: 'medium' as const,
+      type: 'pc' as const,
+      speedFeet: 30,
+      movementRemaining: 30,
+    },
+    {
+      id: 'participant-professor',
+      name: 'Professor Emil Darkwater',
+      x: targetX,
+      y: 0,
+      size: 'medium' as const,
+      type: 'monster' as const,
+      speedFeet: 30,
+      movementRemaining: 30,
+    },
+  ],
+});
+
+const declaredDaggerAttack = {
+  verb: 'stab',
+  actorName: 'Professor Emil Darkwater',
+  attackSource: 'weapon' as const,
+  weaponName: 'Dagger',
+};
+
 describe('deriveCombatEntryFirstAction', () => {
   it('derives a punch as an unarmed attack with the engine modifier', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
@@ -170,5 +217,78 @@ describe('deriveCombatEntryFirstAction', () => {
         participantId: 'participant-player',
       }),
     ]);
+  });
+
+  it('previews a melee approach without mutating the map and spends the opening turn on movement', async () => {
+    const map = openMap(9);
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredDaggerAttack,
+      },
+      { ...deps, loadActiveTacticalMap: async () => map },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'move',
+      reach: { inReach: false, distanceFeet: 10, movedFeetIfApproached: 30 },
+      notice: 'You close 30 ft. Professor Emil Darkwater is still 10 ft away. Your turn is spent.',
+      combat_action: { action_type: 'move', x: 7, y: 0, movement_feet: 30 },
+    });
+    expect(firstAction?.roll_request).toBeUndefined();
+    expect(map.entities[0]).toMatchObject({ x: 1, y: 0 });
+  });
+
+  it('returns a reachable melee attack after previewing the full movement', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredDaggerAttack,
+      },
+      { ...deps, loadActiveTacticalMap: async () => openMap(8) },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'attack',
+      reach: { inReach: true, distanceFeet: 5, movedFeetIfApproached: 30 },
+      combat_action: { action_type: 'attack' },
+    });
+    expect(firstAction?.roll_request).toBeDefined();
+  });
+
+  it('does not gate a ranged attack on melee reach', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: { ...declaredDaggerAttack, weaponName: 'Longbow' },
+      },
+      {
+        ...deps,
+        loadActiveTacticalMap: async () => openMap(9),
+        listEquippedWeaponProfiles: async () => [
+          {
+            id: 'inventory-bow',
+            name: 'Longbow',
+            damageDice: '1d8',
+            damageType: 'piercing',
+            normalRange: 150,
+            magicBonus: 0,
+            finesse: false,
+            ranged: true,
+            proficient: true,
+          },
+        ],
+      },
+    );
+
+    expect(firstAction?.type).toBe('attack');
+    expect(firstAction?.reach).toBeUndefined();
+    expect(firstAction?.roll_request).toBeDefined();
   });
 });

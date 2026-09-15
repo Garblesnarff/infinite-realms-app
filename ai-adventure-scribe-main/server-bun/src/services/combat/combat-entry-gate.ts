@@ -28,6 +28,7 @@ import { ValidationError } from '../../lib/errors.js';
 
 import type { CombatEntryFirstAction } from './combat-entry-first-action.js';
 import type { DeclaredAttack } from './combat-intent-gate.js';
+import type { CombatSeatingHint, CombatSeatingReason } from '../../tactical/seating.js';
 import type { SceneSpec } from '../../tactical/types.js';
 import type { DMMapAction, DMResponse } from '../dm/dm-response-schema.js';
 
@@ -57,6 +58,11 @@ export interface CombatEntryPlayer {
   initiativeModifier: number;
   hpCurrent?: number | null;
   hpMax?: number | null;
+}
+
+export interface CombatEntrySeatingHint {
+  targetName: string;
+  reason: CombatSeatingReason;
 }
 
 const asArray = <T>(value: T[] | undefined | null): T[] => (Array.isArray(value) ? value : []);
@@ -118,6 +124,12 @@ const slugify = (value: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
+const normalize = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 
 /** `dishwasher-prime` -> `Dishwasher Prime`. Slugs are all the board ever gives us back. */
 const titleize = (slug: string): string =>
@@ -208,7 +220,45 @@ export interface CombatEntryDetectionParams {
   sessionId: string;
   playerName: string;
   response: CombatEntryResponse;
+  declaredAttack?: DeclaredAttack | null;
   sanitizeSceneSpec?: SceneSpecSanitizer;
+}
+
+function mentionedTarget(text: string, declared: DeclaredAttack): boolean {
+  const normalizedText = slugify(text);
+  const targetName = slugify(declared.actorName);
+  const targetSlug = slugify(declared.actorSlug ?? '');
+  return [targetName, targetSlug]
+    .filter(Boolean)
+    .some((candidate) => normalizedText.includes(candidate));
+}
+
+/** Infer only server-readable context; `/enter` re-matches the target to its seated participant. */
+export function inferCombatEntrySeatingHint(
+  text: string | undefined,
+  declaredAttack?: DeclaredAttack | null,
+): CombatEntrySeatingHint | undefined {
+  if (!text || !declaredAttack) return undefined;
+  const targetName = declaredAttack.actorName.trim();
+  if (!targetName || !mentionedTarget(text, declaredAttack)) return undefined;
+
+  const assetTarget = [...text.matchAll(/\[ASSET:(?:npc|monster|entity):([^\]]+)\]/gi)].find(
+    (match) => {
+      const tag = slugify(match[1] ?? '');
+      return (
+        tag &&
+        [slugify(targetName), slugify(declaredAttack.actorSlug ?? '')].some(
+          (candidate) => candidate && (tag === candidate || tag.startsWith(`${candidate}-`)),
+        )
+      );
+    },
+  );
+  if (assetTarget) return { targetName, reason: 'asset_tag' };
+
+  if (/\b(?:says?|said|speaks?|spoke|replies?|asks?|tells?|whispers?|shouts?)\b/i.test(text)) {
+    return { targetName, reason: 'conversation' };
+  }
+  return undefined;
 }
 
 /**
@@ -240,6 +290,7 @@ export interface CombatEntryPending {
   sceneSpec: SceneSpec;
   sceneSpecSynthesized: boolean;
   declaredAttack?: DeclaredAttack;
+  seatingHint?: CombatEntrySeatingHint;
 }
 
 /**
@@ -258,11 +309,16 @@ export function detectCombatEntry(params: CombatEntryDetectionParams): CombatEnt
     params.response,
     params.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
   );
+  const seatingHint = inferCombatEntrySeatingHint(
+    [params.response.text, scene.sceneSpec.sceneDescription].filter(Boolean).join('\n'),
+    params.declaredAttack,
+  );
 
   return {
     trigger: trigger.reason,
     detail: trigger.detail,
     combatants: deriveEntryCombatants(params.response, params.playerName),
+    ...(seatingHint ? { seatingHint } : {}),
     ...scene,
   };
 }
@@ -345,6 +401,7 @@ export interface CombatEntryOutcome {
   sceneSpec: SceneSpec;
   participantCount: number;
   seatingTranscript: string;
+  notice?: string;
 }
 
 export interface SeatedCombatEntryOutcome extends CombatEntryOutcome {
@@ -374,6 +431,7 @@ export interface CombatEntryGateDeps {
     participants: Array<{ id: string; name: string }>,
     sceneSpec: SceneSpec,
     participantSizes?: Record<string, unknown>,
+    seatingHint?: CombatSeatingHint,
   ) => Promise<unknown>;
   sanitizeSceneSpec: (
     raw: unknown,
@@ -411,6 +469,7 @@ export interface CombatEntrySeatParams {
   detail?: string;
   playerInitiativeRoll?: number;
   declaredAttack?: DeclaredAttack;
+  seatingHint?: CombatEntrySeatingHint;
 }
 
 /**
@@ -482,6 +541,7 @@ export async function seatCombatEntry(
     detail = 'combat entry confirmed by the player',
     playerInitiativeRoll,
     declaredAttack,
+    seatingHint,
   } = params;
   validatePlayerInitiativeRoll(playerInitiativeRoll);
 
@@ -505,11 +565,36 @@ export async function seatCombatEntry(
     }
     const combatState = await deps.startCombat(sessionId, participants, false, userId);
 
+    const playerParticipant = combatState.participants.find(
+      (participant) =>
+        (player.characterId && participant.characterId === player.characterId) ||
+        normalize(participant.name) === normalize(player.name),
+    );
+    const hintedTarget = seatingHint
+      ? combatState.participants.find(
+          (participant) =>
+            participant.id !== playerParticipant?.id &&
+            (normalize(participant.name) === normalize(seatingHint.targetName) ||
+              slugify(participant.name) === slugify(seatingHint.targetName) ||
+              slugify(participant.name).startsWith(`${slugify(seatingHint.targetName)}-`)),
+        )
+      : undefined;
+
+    const resolvedSeatingHint: CombatSeatingHint | undefined =
+      hintedTarget && seatingHint
+        ? {
+            targetId: hintedTarget.id,
+            targetLabel: hintedTarget.name,
+            reason: seatingHint.reason,
+          }
+        : undefined;
+
     await deps.createTacticalCombatMap(
       sessionId,
       combatState.participants,
       sceneSpec,
       combatState.participantSizes,
+      resolvedSeatingHint,
     );
 
     let firstAction: CombatEntryFirstAction | undefined;
@@ -567,6 +652,7 @@ export async function seatCombatEntry(
       sceneSpec,
       participantCount: combatState.participants.length,
       seatingTranscript,
+      ...(firstAction?.notice ? { notice: firstAction.notice } : {}),
       combatState,
       ...(firstAction ? { firstAction } : {}),
     };

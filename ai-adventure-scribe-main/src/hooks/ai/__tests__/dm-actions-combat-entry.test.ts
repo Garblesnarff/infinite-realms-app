@@ -153,6 +153,33 @@ const FIRST_ACTION = {
   },
 };
 
+const MOVE_FIRST_ACTION = {
+  type: 'move',
+  actor: 'storyteller-1',
+  actorLabel: 'The Storyteller',
+  target: 'vance-1',
+  targetLabel: 'Vance',
+  source: 'unarmed',
+  attackSource: 'unarmed',
+  weaponId: 'unarmed-strike',
+  weaponName: 'Unarmed Strike',
+  spellId: null,
+  slotLevel: null,
+  reach: { inReach: false, distanceFeet: 10, movedFeetIfApproached: 30 },
+  notice: 'You close 30 ft. Vance is still 10 ft away. Your turn is spent.',
+  combat_action: {
+    actor_id: 'storyteller-1',
+    action_type: 'move',
+    target_ids: [],
+    weapon_id: 'unarmed-strike',
+    spell_id: null,
+    slot_level: null,
+    movement_feet: 30,
+    x: 7,
+    y: 1,
+  },
+};
+
 const response = (payload: Record<string, unknown> = {}) => ({
   ok: true,
   status: 201,
@@ -305,6 +332,41 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
     expect(resolveDeclaredCombatActions).not.toHaveBeenCalledWith(
       expect.objectContaining({ combatActions: [NPC_ACTION] }),
+    );
+  });
+
+  it('resolves an out-of-reach entry as move-only without opening an attack popup', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({
+        encounter: { id: 'encounter-1' },
+        first_action: MOVE_FIRST_ACTION,
+        notice: MOVE_FIRST_ACTION.notice,
+      }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          ...PENDING_ENTRY,
+          declaredAttack: { verb: 'punch', actorName: 'Vance', attackSource: 'unarmed' },
+        },
+        combat_actions: [NPC_ACTION],
+      },
+      refresh,
+    );
+
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    expect(outcome.localNotices).toContainEqual({
+      text: MOVE_FIRST_ACTION.notice,
+      persist: true,
+    });
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [MOVE_FIRST_ACTION.combat_action],
+        playerAttackRoll: undefined,
+      }),
     );
   });
 

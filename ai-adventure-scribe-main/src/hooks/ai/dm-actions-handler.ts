@@ -221,6 +221,7 @@ export async function handleDmActionsAndTransitions(
             sceneSpec: pendingEntry.sceneSpec,
             player,
             ...(pendingEntry.declaredAttack ? { declaredAttack: pendingEntry.declaredAttack } : {}),
+            ...(pendingEntry.seatingHint ? { seatingHint: pendingEntry.seatingHint } : {}),
             ...(initiative.d20 === null ? {} : { playerInitiativeRoll: initiative.d20 }),
           });
           if (!enterResponse.ok) {
@@ -238,6 +239,7 @@ export async function handleDmActionsAndTransitions(
             // visible locally, but do not send it through the client persistence
             // queue a second time.
             appendLocalNotice((entryPayload as any)?.seatingTranscript, false);
+            appendLocalNotice((entryPayload as any)?.notice);
             const enteredEncounterId =
               typeof (entryPayload as any)?.encounter?.id === 'string'
                 ? (entryPayload as any).encounter.id
@@ -342,7 +344,9 @@ export async function handleDmActionsAndTransitions(
         activeEncounter &&
         playerParticipant &&
         isPlayerTurn(activeEncounter, playerParticipant) &&
-        entryFirstAction.action_type === 'attack'
+        entryFirstAction.action_type === 'attack' &&
+        ((entryFirstActionPayload as any)?.reach === undefined ||
+          (entryFirstActionPayload as any)?.reach?.inReach === true)
       ) {
         // The server always supplies this for an attack; malformed payloads use engine rolling.
         const actualRollSpec = asEntryAttackRollSpec(entryFirstActionPayload);

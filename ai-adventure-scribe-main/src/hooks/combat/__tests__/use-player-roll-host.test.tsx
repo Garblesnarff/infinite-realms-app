@@ -10,6 +10,7 @@ import {
   hasPendingPlayerRoll,
   markPlayerRollCommitted,
   requestPlayerInitiativeRoll,
+  requestPlayerAttackRoll,
   setPlayerRollHost,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
@@ -63,6 +64,30 @@ describe('usePlayerRollHost teardown', () => {
         description: 'Initiative for The Seeker — 1d20+1',
         rollConfig: { dieType: 20, count: 1, modifier: 1 },
         combatInitiativeRoll: true,
+      }),
+    );
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
+
+  it('uses the same attack modifier in the popup description and roll config', async () => {
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Seeker',
+      targetLabel: 'Sentient Glaze',
+      weaponName: 'Longsword',
+      attackBonus: 1,
+      targetAc: 15,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    expect(requestDiceRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Longsword attack vs Sentient Glaze — 1d20+1 vs AC 15',
+        rollConfig: expect.objectContaining({ modifier: 1 }),
       }),
     );
 

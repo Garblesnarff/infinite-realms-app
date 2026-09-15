@@ -168,6 +168,7 @@ export async function applyCombatEntryGate(params: {
     sessionId: combatEntry.sessionId,
     playerName: combatEntry.player.name,
     response: envelope as unknown as CombatEntryResponse,
+    declaredAttack,
     sanitizeSceneSpec: params.deps?.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
   });
 
@@ -177,6 +178,7 @@ export async function applyCombatEntryGate(params: {
         sessionId: combatEntry.sessionId,
         playerName: combatEntry.player.name,
         response: { ...envelope, combat_transition: 'start' } as unknown as CombatEntryResponse,
+        declaredAttack,
         sanitizeSceneSpec: params.deps?.sanitizeSceneSpec ?? defaultSanitizeSceneSpec,
       });
       const sceneSpec =
@@ -197,6 +199,7 @@ export async function applyCombatEntryGate(params: {
         ],
         sceneSpec,
         sceneSpecSynthesized: declaredDetection?.sceneSpecSynthesized ?? true,
+        ...(declaredDetection?.seatingHint ? { seatingHint: declaredDetection.seatingHint } : {}),
       };
     } else if (
       !pending.combatants.some((combatant) => isDeclaredCombatant(combatant, declaredAttack))

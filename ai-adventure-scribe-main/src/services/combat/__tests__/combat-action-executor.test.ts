@@ -355,6 +355,38 @@ describe('combat-action-executor', () => {
       }
     });
 
+    it('should execute a server-authoritative move action with its planned destination', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'move' as const,
+        target_ids: [],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 30,
+        x: 7,
+        y: 0,
+      };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: { success: true, remainingFeet: 0 } }),
+      });
+
+      await expect(executeStructuredCombatAction(encounterId, action)).resolves.toEqual([]);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          body: expect.stringContaining('"type":"move"'),
+        }),
+      );
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          body: expect.stringContaining('"x":7'),
+        }),
+      );
+    });
+
     it('should return empty array for unsupported action types', async () => {
       const action = {
         actor_id: 'actor-1',

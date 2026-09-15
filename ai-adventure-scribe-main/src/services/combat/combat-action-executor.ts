@@ -21,6 +21,7 @@ export interface StructuredCombatAction {
   actor_id: string;
   action_type:
     | 'attack'
+    | 'move'
     | 'cast_spell'
     | 'dash'
     | 'disengage'
@@ -34,6 +35,8 @@ export interface StructuredCombatAction {
   spell_id: string | null;
   slot_level: number | null;
   movement_feet: number;
+  x?: number;
+  y?: number;
 }
 
 export interface ResolvedTargetDamage {
@@ -231,6 +234,17 @@ export async function executeStructuredCombatActionWithBoundary(
         type: action.action_type as 'dash' | 'dodge' | 'disengage',
         actorId: action.actor_id,
       },
+      'dm',
+      dmStartedAt,
+    );
+  } else if (
+    action.action_type === 'move' &&
+    typeof action.x === 'number' &&
+    typeof action.y === 'number'
+  ) {
+    result = await executeAuthoritativeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: action.actor_id, x: action.x, y: action.y },
       'dm',
       dmStartedAt,
     );

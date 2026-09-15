@@ -49,12 +49,12 @@ function stubDeps(overrides: Partial<CombatEntryGateDeps> = {}): {
   deps: CombatEntryGateDeps;
   events: Recorded[];
   started: Array<{ sessionId: string; participants: CombatEntryParticipantInput[] }>;
-  maps: Array<{ sessionId: string; sceneSpec: unknown }>;
+  maps: Array<{ sessionId: string; sceneSpec: unknown; seatingHint?: unknown }>;
   seatingMessages: unknown[];
 } {
   const events: Recorded[] = [];
   const started: Array<{ sessionId: string; participants: CombatEntryParticipantInput[] }> = [];
-  const maps: Array<{ sessionId: string; sceneSpec: unknown }> = [];
+  const maps: Array<{ sessionId: string; sceneSpec: unknown; seatingHint?: unknown }> = [];
   const seatingMessages: unknown[] = [];
   const deps: CombatEntryGateDeps = {
     getActiveEncounter: async () => undefined,
@@ -81,8 +81,8 @@ function stubDeps(overrides: Partial<CombatEntryGateDeps> = {}): {
         currentParticipant: seated[0] ?? null,
       } satisfies CombatEntryStartResult;
     },
-    createTacticalCombatMap: async (sessionId, _participants, sceneSpec) => {
-      maps.push({ sessionId, sceneSpec });
+    createTacticalCombatMap: async (sessionId, _participants, sceneSpec, _sizes, seatingHint) => {
+      maps.push({ sessionId, sceneSpec, seatingHint });
       return {};
     },
     sanitizeSceneSpec: (raw) => ({
@@ -105,6 +105,7 @@ async function seatDetectedResponse(
     userId: string;
     player: typeof PLAYER;
     response: CombatEntryResponse;
+    declaredAttack?: NonNullable<Parameters<typeof detectCombatEntry>[0]['declaredAttack']>;
   },
   deps: CombatEntryGateDeps,
 ) {
@@ -112,6 +113,7 @@ async function seatDetectedResponse(
     sessionId: params.sessionId,
     playerName: params.player.name,
     response: params.response,
+    declaredAttack: params.declaredAttack,
     sanitizeSceneSpec: deps.sanitizeSceneSpec,
   });
   if (!pending) return null;
@@ -340,6 +342,28 @@ describe('detectCombatEntry', () => {
       }),
     ).toBeNull();
   });
+
+  it('derives a seating hint when the declared target is asset-tagged in the DM turn', () => {
+    const pending = detectCombatEntry({
+      sessionId: SESSION_ID,
+      playerName: PLAYER.name,
+      response: response({
+        combat_transition: 'start',
+        text: '[ASSET:npc:professor-emil-darkwater] Professor Emil Darkwater says, "At last."',
+        combatants: [{ monster_id: 'professor', name: 'Professor Emil Darkwater', count: 1 }],
+      }),
+      declaredAttack: {
+        verb: 'punch',
+        actorName: 'Professor Emil Darkwater',
+        actorSlug: 'professor-emil-darkwater',
+      },
+    });
+
+    expect(pending?.seatingHint).toEqual({
+      targetName: 'Professor Emil Darkwater',
+      reason: 'asset_tag',
+    });
+  });
 });
 
 describe('seatCombatEntry', () => {
@@ -360,6 +384,35 @@ describe('seatCombatEntry', () => {
     expect(started).toHaveLength(1);
     expect(events.map((entry) => entry.event)).toEqual(['combat_started', 'initiative_completed']);
     expect(events[0].properties.entryTrigger).toBe('combat_transition');
+  });
+
+  it('passes a conversation seating hint only to the matched hostile participant', async () => {
+    const { deps, maps } = stubDeps();
+    const outcome = await seatDetectedResponse(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        response: response({
+          combat_transition: 'start',
+          text: 'Professor Emil Darkwater says, "Come closer."',
+          combatants: [{ monster_id: 'professor', name: 'Professor Emil Darkwater', count: 1 }],
+        }),
+        declaredAttack: {
+          verb: 'punch',
+          actorName: 'Professor Emil Darkwater',
+          actorSlug: 'professor-emil-darkwater',
+        },
+      },
+      deps,
+    );
+
+    expect(outcome?.entered).toBe(true);
+    expect(maps[0]?.seatingHint).toEqual({
+      targetId: 'participant-1',
+      targetLabel: 'Professor Emil Darkwater',
+      reason: 'conversation',
+    });
   });
 
   it('returns the engine-derived first action for a declared punch', async () => {
