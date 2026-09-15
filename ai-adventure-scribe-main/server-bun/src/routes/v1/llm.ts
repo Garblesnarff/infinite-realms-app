@@ -34,6 +34,49 @@ import {
 } from '../../services/llm-errors.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 
+/**
+ * Log the SHAPE of the model envelope on /v1/llm/generate — never its content.
+ *
+ * Issue #2022 asked a simple question about a live turn ("did the model return
+ * combat_actions?") and it was unanswerable: the envelope is not persisted
+ * anywhere. `dialogue_history` has no DM row when the turn dead-ends, `ai_usage`
+ * stores only token counts, and no column holds the completion. This line makes
+ * the next occurrence answerable from the log alone.
+ *
+ * Keys and array lengths only. No narration, no player input, no option text —
+ * nothing that could put player prose or model prose into the log.
+ *
+ * Note on interpretation: this reflects the envelope AFTER
+ * stripUntargetedInitiativeRollRequests and applyCombatEntryGate have run, so
+ * `rollRequests` may be lower than what the model emitted. `combatActions` is
+ * untouched by both, so it does answer #2022's question directly.
+ */
+function logEnvelopeShape(text: string, sessionId: string | undefined): void {
+  try {
+    const cleaned = text
+      .trim()
+      .replace(/^```(?:json)?\s*/, '')
+      .replace(/\s*```$/, '');
+    const envelope = JSON.parse(cleaned) as Record<string, unknown>;
+    if (!envelope || typeof envelope !== 'object') {
+      logger.info({ msg: 'LLM_GENERATE_ENVELOPE_SHAPE', sessionId, parsed: false });
+      return;
+    }
+    const len = (v: unknown): number | null => (Array.isArray(v) ? v.length : null);
+    logger.info({
+      msg: 'LLM_GENERATE_ENVELOPE_SHAPE',
+      sessionId,
+      parsed: true,
+      keys: Object.keys(envelope).sort(),
+      combatActions: len(envelope.combat_actions),
+      rollRequests: len(envelope.roll_requests),
+    });
+  } catch {
+    // Text-only (non-JSON) responses are a real dialect; record that, not an error.
+    logger.info({ msg: 'LLM_GENERATE_ENVELOPE_SHAPE', sessionId, parsed: false });
+  }
+}
+
 const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
   if (status === 400) return 400;
   if (status === 503) return 503;
@@ -274,6 +317,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           outputTokens: result.usage.outputTokens,
         });
       }
+
+      logEnvelopeShape(result.text, combatEntry?.sessionId);
 
       return {
         text: rewriteNarrationSegmentsInLlmText(result.text),
