@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.17.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.17.1...v0.17.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* preview attack reach before player die ([#2036](https://github.com/Garblesnarff/infinite-realms-production/issues/2036)) ([2ecece2](https://github.com/Garblesnarff/infinite-realms-production/commit/2ecece2b28ddda6dce2e6f76d42ea7da092b44f4))
+
 ## [0.17.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.17.0...v0.17.1) (2026-09-15)
 
 
