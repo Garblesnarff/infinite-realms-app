@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.17.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.17.0...v0.17.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ui:** replace Lovable favicon and share tags ([#2031](https://github.com/Garblesnarff/infinite-realms-production/issues/2031)) ([26bc08c](https://github.com/Garblesnarff/infinite-realms-production/commit/26bc08c2b46404aab89e5c40e4f039ba7ffd1433))
+
 ## [0.17.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.16.6...v0.17.0) (2026-09-15)
 
 
