@@ -63,7 +63,11 @@ This has bitten us twice, and recovery is worse than prevention both times:
 
 A wrongly-closed child is only recoverable if someone notices. Twice now, nobody did until later.
 
-## 8. Board discipline — issue #1855 is the control room
+## 8. Every diagnosis and PR report ends with "Friction / simplification"
+
+When you finish a diagnosis or a PR report, add a short **Friction / simplification** section naming what made the work harder than it needed to be: a log line that did not carry the field you needed, a misleading error label, a value that exists only in a response body, two functions doing the same job with different rules, a column that has to be derived by join. Be specific — name the file and line, and say what you actually wanted to read. Items get **filed as issues, not fixed in-task**, unless the friction is itself blocking the task you were given; a diagnosis that quietly grows a refactor stops being a diagnosis, and a fix nobody asked for arrives without a review. If you find nothing, say "none" rather than dropping the section — a report with no friction section reads as a report where nobody looked.
+
+## 9. Board discipline — issue #1855 is the control room
 
 **Only the board maintainer edits the #1855 body.** Other sessions do not edit it, and do not comment on it.
 
