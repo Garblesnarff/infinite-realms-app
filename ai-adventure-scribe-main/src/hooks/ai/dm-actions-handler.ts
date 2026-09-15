@@ -505,6 +505,7 @@ export async function handleDmActionsAndTransitions(
   if (isInCombat && activeEncounter && result.combat_actions?.length) {
     const narrationResult = await resolveDeclaredCombatActions({
       encounterId: activeEncounter.id,
+      sessionId,
       combatActions: result.combat_actions,
       declarationText: entryWasSeated
         ? 'Combat entry was confirmed. Narrate only authoritative engine results; the player declaration itself is not an outcome.'

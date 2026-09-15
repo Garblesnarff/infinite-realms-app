@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
+import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
@@ -15,6 +16,7 @@ import {
 } from '@/services/combat/combat-outcome-transcript';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
+import { userDataApi } from '@/services/user-data-api';
 import { slugify } from '@/utils/slug';
 
 /**
@@ -35,6 +37,8 @@ import { slugify } from '@/utils/slug';
 
 export interface CombatResolutionParams {
   encounterId: string;
+  /** The session route is the stable client entry point for the autonomous turn loop. */
+  sessionId?: string;
   combatActions: unknown[];
   /** The declaration the resolution narration is written against. */
   declarationText: string;
@@ -73,6 +77,7 @@ const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction)
 export async function resolveDeclaredCombatActions(params: CombatResolutionParams): Promise<any> {
   const {
     encounterId,
+    sessionId,
     combatActions,
     declarationText,
     aiContext,
@@ -104,6 +109,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // One repair attempt per turn, not per action: the budget belongs to the turn, and a DM
   // that got the actor wrong once will get it wrong for every action in the same batch.
   let repairSpent = false;
+  let npcTurnRecoverySpent = false;
+  type PlayerAttackRoll = Awaited<ReturnType<typeof askPlayerForAttackDie>>;
+  const playerDieByAction = new WeakMap<StructuredCombatAction, PlayerAttackRoll>();
   const queuedActorIds = new Set(queuedIntentActorIds ?? []);
   const queuedActorSlugs = new Set(
     participants
@@ -133,24 +141,53 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     });
   };
   type BatchBoundary = 'turn_ended' | 'combat_ended';
+
+  const appendAutonomousNpcResults = (advanced: AdvanceNpcTurnsResponse): BatchBoundary => {
+    for (const npcResult of advanced.results) {
+      const { transcriptLines, ...authoritativeResult } = npcResult;
+      resolvedActions.push({
+        ...authoritativeResult,
+        actorIsPlayer: false,
+      });
+      const engineTranscript = formatCombatEngineOutcome(npcResult.action, npcResult.engineResult);
+      if (engineTranscript) engineTranscriptLines.push(engineTranscript);
+      engineTranscriptLines.push(...transcriptLines);
+    }
+    // Death-save lines are attached to their result above. The top-level stream carries the
+    // safety-cap line, which has no individual action to attach to.
+    if (advanced.capReached) {
+      engineTranscriptLines.push(
+        ...advanced.transcriptLines.filter((line) => line.includes('NPC turn loop stopped after')),
+      );
+    }
+    if (advanced.currentParticipant) turnHolder = advanced.currentParticipant;
+    return advanced.combatEnded ? 'combat_ended' : 'turn_ended';
+  };
+
   const runAction = async (action: StructuredCombatAction): Promise<BatchBoundary> => {
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
-    const entryRoll =
-      playerAttackRoll && sameAction(playerAttackRoll.action, action) ? playerAttackRoll : null;
-    const playerDie = entryRoll
-      ? entryRoll
-      : !isQueuedIntentActor(action.actor_id) &&
-          action.action_type === 'attack' &&
-          isPlayerActor(action.actor_id, participants)
-        ? await askPlayerForAttackDie({
-            encounterId,
-            action,
-            actorLabel:
-              participants?.find((participant) => participant.id === action.actor_id)?.name ??
-              action.actor_id,
-          })
-        : null;
+    let playerDie: PlayerAttackRoll;
+    if (playerDieByAction.has(action)) {
+      playerDie = playerDieByAction.get(action) ?? null;
+    } else {
+      const entryRoll =
+        playerAttackRoll && sameAction(playerAttackRoll.action, action) ? playerAttackRoll : null;
+      playerDie = entryRoll
+        ? entryRoll
+        : !isQueuedIntentActor(action.actor_id) &&
+            action.action_type === 'attack' &&
+            isPlayerActor(action.actor_id, participants)
+          ? await askPlayerForAttackDie({
+              encounterId,
+              action,
+              actorLabel:
+                participants?.find((participant) => participant.id === action.actor_id)?.name ??
+                action.actor_id,
+            })
+          : null;
+      playerDieByAction.set(action, playerDie);
+    }
     const execution = await executeStructuredCombatActionWithBoundary(
       encounterId,
       action,
@@ -184,6 +221,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (combatBoundaryFromResult(turn)) return 'combat_ended';
     const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
+    if (sessionId && isPlayerActor(action.actor_id, participants)) {
+      const advanced = await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
+      return appendAutonomousNpcResults(advanced);
+    }
     return 'turn_ended';
   };
 
@@ -199,6 +240,33 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     } catch (error) {
       if (!(error instanceof CombatIntentRefusedError)) throw error;
       recordRefusal(action, error);
+      const refusedCurrentParticipantId = error.details?.currentParticipantId;
+      if (
+        sessionId &&
+        !npcTurnRecoverySpent &&
+        isPlayerActor(action.actor_id, participants) &&
+        refusedCurrentParticipantId &&
+        !isPlayerActor(refusedCurrentParticipantId, participants)
+      ) {
+        npcTurnRecoverySpent = true;
+        const refusalIndex = refusedActions.length - 1;
+        const advanced = await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId);
+        const recoveryBoundary = appendAutonomousNpcResults(advanced);
+        if (recoveryBoundary === 'combat_ended') break;
+        try {
+          const retryBoundary = await runAction(action);
+          // The first refusal was transient: the same player action was accepted after the
+          // stale NPC turn was settled, so do not ask narration to report it as unresolved.
+          refusedActions.splice(refusalIndex, 1);
+          if (retryBoundary) break;
+          continue;
+        } catch (retryError) {
+          if (!(retryError instanceof CombatIntentRefusedError)) throw retryError;
+          recordRefusal(action, retryError);
+          logger.warn('[CombatRepair] NPC-turn recovery retry was refused');
+          continue;
+        }
+      }
       if (isQueuedIntentActor(action.actor_id)) {
         // A pending declaration is deliberately not re-declared as whoever owns the current
         // turn. PR2 will confirm it when this actor becomes current; it must not consume the
@@ -268,6 +336,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         'as something that happened.'
       : declarationText;
 
+  const playerTurn = isPlayerActor(turnHolder?.id ?? '', participants);
+  const playerName =
+    participants?.find((participant) => participant.id === turnHolder?.id)?.name ??
+    turnHolder?.name ??
+    'Player';
   const narration = await AIService.chatWithDM({
     message: JSON.stringify({
       authoritativeCombatResults: resolvedActions,
@@ -285,6 +358,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           }
         : {}),
       ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
+      ...(playerTurn
+        ? {
+            turnHandoff: `End your response with: "${playerName}, what do you do?"`,
+          }
+        : {}),
     }),
     context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
     conversationHistory: [
@@ -301,8 +379,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   });
 
   const narratedText = prependCombatEngineTranscript(narration?.text ?? '', engineTranscriptLines);
+  const handedOffText =
+    playerTurn && !encounterAlreadyConcluded
+      ? ensurePlayerTurnHandoff(narratedText, playerName)
+      : narratedText;
   if (!refusedPlayerActions.length) {
-    return engineTranscriptLines.length ? { ...narration, text: narratedText } : narration;
+    return engineTranscriptLines.length || handedOffText !== narratedText
+      ? { ...narration, text: handedOffText }
+      : narration;
   }
   // Whose turn it is, stated by the engine rather than hoped for from the model. The prompt above
   // asks for it; this is the half that does not depend on compliance, and #1702 is the standing
@@ -312,7 +396,20 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       `turn=${String(refusedPlayerActions[0].currentTurn ?? 'unknown')}`,
   );
   const notice = turnNotice(turnHolder, isPlayerActor(turnHolder?.id ?? '', participants));
-  return { ...narration, text: `${narratedText}\n\n${notice}`.trim() };
+  const refusedText = `${narratedText}\n\n${notice}`.trim();
+  return {
+    ...narration,
+    text:
+      playerTurn && !encounterAlreadyConcluded
+        ? ensurePlayerTurnHandoff(refusedText, playerName)
+        : refusedText,
+  };
+}
+
+function ensurePlayerTurnHandoff(text: string, playerName: string): string {
+  const handoff = `${playerName}, what do you do?`;
+  if (text.trimEnd().toLowerCase().endsWith(handoff.toLowerCase())) return text;
+  return `${text}\n\n${handoff}`.trim();
 }
 
 /**

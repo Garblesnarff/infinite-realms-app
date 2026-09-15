@@ -39,6 +39,7 @@ const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const askPlayerForAttackDie = vi.fn();
+const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -62,6 +63,11 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
   // `isPlayerActor` stays real — telling the player's actions apart is the thing under test.
   ...(await importOriginal<typeof PlayerAttackRoll>()),
   askPlayerForAttackDie: (...args: any[]) => askPlayerForAttackDie(...args),
+}));
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
+  },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -250,6 +256,16 @@ describe('a turn the engine accepted in full', () => {
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: NPC_ID, name: 'Balthazar' },
     });
+    askPlayerForAttackDie.mockResolvedValue(null);
+    advanceNpcTurns.mockResolvedValue({
+      results: [],
+      currentParticipant: { id: NPC_ID, name: 'Balthazar', participantType: 'monster' },
+      combatEnded: false,
+      iterationCount: 0,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: [],
+    });
     chatWithDM.mockImplementation(async ({ message, conversationHistory }: any) => ({
       text: `${conversationHistory[conversationHistory.length - 1]?.content ?? ''} ${message}`,
     }));
@@ -389,5 +405,155 @@ describe('a turn the engine accepted in full', () => {
       authoritativeCombatResults: [],
     });
     expect(setupMessage()).not.toContain('Balthazar swings after the fight is over');
+  });
+
+  it('runs autonomous NPC turns after the player boundary and ends with the player handoff', async () => {
+    const npcEngineResult = {
+      actorName: 'Balthazar',
+      targetName: 'The Reveler',
+      d20: 14,
+      attackBonus: 3,
+      totalAttackRoll: 17,
+      targetAC: 12,
+      hit: true,
+      finalDamage: 4,
+      damageType: 'bludgeoning',
+      targetCondition: 'wounded',
+      autoRolled: true,
+    };
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 6, newHp: 3 }],
+      result: {
+        actorName: 'The Reveler',
+        targetName: 'Balthazar',
+        d20: 16,
+        attackBonus: 5,
+        totalAttackRoll: 21,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 6,
+        damageType: 'slashing',
+        targetCondition: 'wounded',
+      },
+      boundary: null,
+    });
+    executeAuthoritativeCombatIntent.mockResolvedValue({
+      currentParticipant: { id: NPC_ID, name: 'Balthazar' },
+    });
+    advanceNpcTurns.mockResolvedValue({
+      results: [
+        {
+          action: action(NPC_ID, PLAYER_ID),
+          outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }],
+          engineResult: npcEngineResult,
+          actorIsPlayer: false,
+          transcriptLines: [],
+        },
+      ],
+      currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+      combatEnded: false,
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: [],
+    });
+
+    const result = await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      sessionId: 'session-2f420489',
+      combatActions: [action(PLAYER_ID, NPC_ID)],
+      declarationText: 'The Reveler strikes.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(advanceNpcTurns).toHaveBeenCalledWith('session-2f420489', NPC_ID);
+    expect(executeAuthoritativeCombatIntent.mock.invocationCallOrder[0]).toBeLessThan(
+      advanceNpcTurns.mock.invocationCallOrder[0],
+    );
+    const payload = resolutionPayload();
+    expect(payload.authoritativeCombatResults).toHaveLength(2);
+    expect(payload.authoritativeCombatResults[1]).toMatchObject({
+      actorIsPlayer: false,
+      action: { actor_id: NPC_ID },
+      engineResult: npcEngineResult,
+    });
+    expect(result.text.startsWith('⚙️ Engine:')).toBe(true);
+    expect(result.text).toContain('The Reveler');
+    expect(result.text).toContain('Balthazar');
+    expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
+  });
+
+  it('settles a stale NPC holder and retries the refused player action once', async () => {
+    let refusePlayerOnce = true;
+    executeStructuredCombatActionWithBoundary.mockImplementation(
+      async (_encounterId: string, act: any) => {
+        if (act.actor_id === PLAYER_ID && refusePlayerOnce) {
+          refusePlayerOnce = false;
+          throw outOfTurn();
+        }
+        return {
+          outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 3, newHp: 6 }],
+          result: {
+            actorName: 'The Reveler',
+            targetName: 'Balthazar',
+            d20: 15,
+            attackBonus: 5,
+            totalAttackRoll: 20,
+            targetAC: 12,
+            hit: true,
+            finalDamage: 3,
+            damageType: 'slashing',
+          },
+          boundary: null,
+        };
+      },
+    );
+    advanceNpcTurns
+      .mockResolvedValueOnce({
+        results: [
+          {
+            action: action(NPC_ID, PLAYER_ID),
+            outcomes: [{ participantId: PLAYER_ID, hit: false }],
+            engineResult: { actorName: 'Balthazar', targetName: 'The Reveler', hit: false },
+            actorIsPlayer: false,
+            transcriptLines: [],
+          },
+        ],
+        currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+      })
+      .mockResolvedValueOnce({
+        results: [],
+        currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+        combatEnded: false,
+        iterationCount: 0,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+      });
+
+    const result = await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      sessionId: 'session-2f420489',
+      combatActions: [action(PLAYER_ID, NPC_ID)],
+      declarationText: 'The Reveler strikes.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(advanceNpcTurns).toHaveBeenNthCalledWith(1, 'session-2f420489', NPC_ID);
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(2);
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+    expect(chatWithDM).toHaveBeenCalledTimes(1);
+    expect(resolutionPayload().refusedActions).toBeUndefined();
+    expect(resolutionPayload().authoritativeCombatResults).toHaveLength(2);
+    expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
   });
 });

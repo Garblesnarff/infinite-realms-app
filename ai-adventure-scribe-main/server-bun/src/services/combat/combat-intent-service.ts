@@ -374,8 +374,8 @@ async function resolveActorTurn(
  * PLAYERS ARE NOT ADVANCED. A player who has attacked may still move, and the popup #1716 added
  * makes their turn a conversation rather than a single message. Their boundary stays explicit.
  *
- * Returns whether the order actually moved, so the caller knows the board it publishes is a new
- * turn.
+ * Returns the settled boundary when the order moved, so callers can carry death saves across the
+ * implicit transition without performing a second settlement.
  */
 async function advanceAfterSpentNpcTurn(
   encounterId: string,
@@ -384,22 +384,22 @@ async function advanceAfterSpentNpcTurn(
   source: CombatActionSource,
   intentType: SubmittedCombatIntent['type'],
   index: SessionEntityIndex,
-): Promise<boolean> {
+): Promise<Awaited<ReturnType<typeof advanceOneTurn>> | null> {
   // `end_turn` is already a boundary; a player-sourced intent belongs to a client that ends its
   // own turn.
-  if (source !== 'dm' || intentType === 'end_turn') return false;
+  if (source !== 'dm' || intentType === 'end_turn') return null;
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   const actor = state.participants.find((participant) => participant.id === actorId) as
     | (TurnResourceView & { participantType?: string })
     | undefined;
-  if (!actor || !isHostile(actor.participantType as string)) return false;
+  if (!actor || !isHostile(actor.participantType as string)) return null;
   // The action economy is the trigger, not the intent type: a `move`, or an attack that resolved
   // as approach-only, spends nothing and leaves the NPC mid-turn with its attack still to make.
-  if (!actor.actionUsed) return false;
+  if (!actor.actionUsed) return null;
   // Something else already moved the order — an absorbed advance, a death-save settlement — and
   // a step here would skip whoever it landed on.
-  if (state.currentParticipant?.id !== actorId) return false;
-  await advanceOneTurn(encounterId, state.encounter.sessionId, userId);
+  if (state.currentParticipant?.id !== actorId) return null;
+  const settled = await advanceOneTurn(encounterId, state.encounter.sessionId, userId);
   const next = await CombatEncounterService.getCombatState(encounterId, userId);
   logger.warn({
     msg: 'NPC_TURN_AUTO_ADVANCED',
@@ -411,7 +411,7 @@ async function advanceAfterSpentNpcTurn(
     nowCurrentId: next.currentParticipant?.id ?? null,
     nowCurrentSlug: index.slugFor(next.currentParticipant?.id) ?? null,
   });
-  return true;
+  return settled;
 }
 
 /**
@@ -861,6 +861,9 @@ export async function executeCombatIntent(
       // failure ends a campaign without a point of damage being dealt. Same reason `end_turn`
       // triggers the check above.
       const endedOnAdvance = advanced ? await endCombatIfResolved(encounterId, userId) : false;
+      if (advanced?.deathSaves.length && result && typeof result === 'object') {
+        result = { ...(result as Record<string, unknown>), deathSaves: advanced.deathSaves };
+      }
       combatBoundary = endedOnAdvance;
       if (!endedOnAdvance) await publishCombatState(encounterId, userId, intent.type);
     }

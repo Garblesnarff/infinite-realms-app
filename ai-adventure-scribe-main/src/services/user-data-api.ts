@@ -116,6 +116,41 @@ export type CombatParticipantStatusUpdate = {
   deathSavesFailures?: number;
 };
 
+export type AdvanceNpcTurnsResponse = {
+  results: Array<{
+    action: {
+      actor_id: string;
+      action_type: string;
+      target_ids: string[];
+      weapon_id: string | null;
+      spell_id: string | null;
+      slot_level: number | null;
+      movement_feet: number;
+    };
+    outcomes: Array<Record<string, unknown>>;
+    engineResult?: unknown;
+    actorIsPlayer: false;
+    transcriptLines: string[];
+  }>;
+  currentParticipant: { id: string; name: string; participantType: string } | null;
+  combatEnded: boolean;
+  iterationCount: number;
+  iterationCap: number;
+  capReached: boolean;
+  transcriptLines: string[];
+};
+
+type ActiveCombatSnapshot = {
+  combat?: {
+    encounter?: { status?: string };
+    currentParticipant?: {
+      id: string;
+      name: string;
+      participantType: string;
+    } | null;
+  } | null;
+};
+
 export type CombatDamageLogPayload = {
   participantId: string;
   damageAmount: number;
@@ -172,6 +207,17 @@ async function requestResponse(path: string, init: RequestInit = {}): Promise<Re
   });
 }
 
+class UserDataApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly payload: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'UserDataApiRequestError';
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // Wait for AuthContext to verify/refresh the session before reading the
   // token — otherwise cold page loads race out with a stale/expired token.
@@ -199,8 +245,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error || `Request failed with status ${response.status}`);
+    const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    throw new UserDataApiRequestError(
+      typeof payload?.error === 'string'
+        ? payload.error
+        : `Request failed with status ${response.status}`,
+      response.status,
+      payload ?? {},
+    );
   }
 
   const payload = (await response.json()) as T & { error?: unknown };
@@ -330,6 +382,46 @@ export const userDataApi = {
     request(`/v1/combat/characters/${encodeURIComponent(characterId)}/combat-status`),
   getActiveCombat: (sessionId: string): Promise<Response> =>
     requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`),
+  advanceNpcTurns: async (
+    sessionId: string,
+    expectedCurrentParticipantId?: string,
+  ): Promise<AdvanceNpcTurnsResponse> => {
+    try {
+      return await request(
+        `/v1/combat/sessions/${encodeURIComponent(sessionId)}/advance-npc-turns`,
+        {
+          method: 'POST',
+          body: JSON.stringify(
+            expectedCurrentParticipantId ? { expectedCurrentParticipantId } : {},
+          ),
+        },
+      );
+    } catch (error) {
+      if (
+        !(error instanceof UserDataApiRequestError) ||
+        error.status !== 409 ||
+        error.payload.reason !== 'turn_holder_mismatch'
+      ) {
+        throw error;
+      }
+
+      // Another tab/request already advanced the expected NPC. Re-read authoritative state and
+      // let the caller continue from the holder that won the race; never run a second loop.
+      const snapshot = await request<ActiveCombatSnapshot>(
+        `/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`,
+      );
+      const currentParticipant = snapshot.combat?.currentParticipant ?? null;
+      return {
+        results: [],
+        currentParticipant,
+        combatEnded: snapshot.combat?.encounter?.status !== 'active',
+        iterationCount: 0,
+        iterationCap: 0,
+        capReached: false,
+        transcriptLines: [],
+      };
+    }
+  },
   endTacticalMap: (sessionId: string): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
       method: 'POST',

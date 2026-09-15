@@ -12,6 +12,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import { listEquippedWeaponProfiles, verifyCharacterOwnership } from './data-access.js';
+import { UNARMED_STRIKE } from './weapon-catalog.js';
 import { db } from '../../../../db/client';
 import { characterEquipment, characterStats, inventoryItems } from '../../../../db/schema/index';
 
@@ -24,6 +25,19 @@ export type EquippedLoadout = {
   /** The sheet's armour class, or null when the character has no stats row yet. */
   armorClass: number | null;
 };
+
+/**
+ * Select the first engine-grounded weapon for an autonomous turn.
+ *
+ * Characters and NPC rows are read from their equipped/stat-backed profiles. Structured
+ * monsters are read from the stored `MonsterAttackProfile` through the same data-access seam.
+ * A stat-less NPC therefore reaches the ordinary D&D fallback — an unarmed strike — instead
+ * of making up a weapon in the orchestration layer.
+ */
+export async function getDefaultCombatWeapon(participant: unknown): Promise<WeaponRuleProfile> {
+  const weapons = await listEquippedWeaponProfiles(participant);
+  return weapons[0] ?? { ...UNARMED_STRIKE };
+}
 
 /** `inventory_items` has no shield type; the legacy table does, so both are accepted. */
 const ARMOR_TYPES = ['armor', 'shield'];

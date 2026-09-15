@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia';
 
 import { actionRoutes } from './actions.js';
+import { advanceNpcTurnRoutes } from './advance-npc-turns.js';
 import { entryRoutes } from './entry.js';
 import { initiativeRoutes } from './initiative.js';
 import { intentRoutes } from './intents.js';
@@ -14,6 +15,7 @@ import { statusRoutes } from './status.js';
 // already-calculated damage log for the legacy browser integrator.
 export const combatRoutes = new Elysia({ prefix: '/v1/combat' })
   .use(entryRoutes)
+  .use(advanceNpcTurnRoutes)
   .use(initiativeRoutes)
   .use(actionRoutes)
   .use(intentRoutes)
