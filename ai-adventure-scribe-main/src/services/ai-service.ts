@@ -229,6 +229,9 @@ export class AIService {
 
         const rawResponse = await llmApiClient.generateText({
           prompt: fullPrompt,
+          // #2050 C: always send the session, not only via combatEntry (which is
+          // absent once combat is active -- the very turns being diagnosed).
+          sessionId: params.context?.sessionId,
           player_input: params.message,
           temperature: 0.9,
           maxTokens: 8192,
@@ -250,7 +253,12 @@ export class AIService {
           isFirstMessage,
         });
       } catch (providerError) {
-        logger.error('LLM API failed:', providerError);
+        // This block wraps BOTH generateText() and processDMResponse(), so the
+        // throw may be post-processing on a 200. The server request id makes
+        // that joinable to the server log line. (#2050 D, #2049)
+        logger.error('LLM API failed:', providerError, {
+          requestId: llmApiClient.lastRequestId,
+        });
         throw new Error('Failed to get DM response - AI service unavailable', {
           cause: providerError,
         });

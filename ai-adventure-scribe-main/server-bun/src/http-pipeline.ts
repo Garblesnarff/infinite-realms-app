@@ -10,17 +10,33 @@ import { httpRequestCounter, httpRequestDuration } from './lib/metrics.js';
  * This layer observes responses only; it never changes a successful body or
  * applies authentication after a handler has run.
  */
+/**
+ * One id per request, derived once and reused by every hook.
+ *
+ * Each hook used to derive its own: `onRequest` and `derive` each called
+ * `randomUUID()` independently, while `onAfterHandle` and `onError` fell back
+ * to the literal string 'unknown' when the client sent no header. That is why
+ * `request.end` lines routinely logged `requestId: "unknown"` and could not be
+ * joined to their own `request.start`. (#2050 D)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveRequestId(request: Request, store: any): string {
+  if (!store.__requestId) {
+    store.__requestId = request.headers.get('x-request-id') || randomUUID();
+  }
+  return store.__requestId as string;
+}
+
 export function createRequestPipelineApp() {
   return new Elysia()
-    .derive(({ request }) => {
-      const requestId = request.headers.get('x-request-id') || randomUUID();
-      return { requestId };
+    .derive(({ request, store }) => {
+      return { requestId: resolveRequestId(request, store) };
     })
     .onRequest(({ request, store }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (store as any).__startTime = performance.now();
 
-      const requestId = request.headers.get('x-request-id') || randomUUID();
+      const requestId = resolveRequestId(request, store);
       logger.info({
         requestId,
         method: request.method,
@@ -34,7 +50,10 @@ export function createRequestPipelineApp() {
       const durationMs = performance.now() - start;
       const url = new URL(request.url);
       const status = set.status || (response instanceof Response ? response.status : 200);
-      const requestId = request.headers.get('x-request-id') || 'unknown';
+      const requestId = resolveRequestId(request, store);
+      // Hand the id back so a client-side failure can be joined to this log line
+      // instead of matched by timestamp. (#2050 D)
+      set.headers['x-request-id'] = requestId;
 
       httpRequestCounter.inc({
         method: request.method,
@@ -60,8 +79,9 @@ export function createRequestPipelineApp() {
         msg: 'request.end',
       });
     })
-    .onError(({ error, request, set, code }) => {
-      const requestId = request.headers.get('x-request-id') || 'unknown';
+    .onError(({ error, request, set, code, store }) => {
+      const requestId = resolveRequestId(request, store);
+      set.headers['x-request-id'] = requestId;
 
       logger.error({
         requestId,

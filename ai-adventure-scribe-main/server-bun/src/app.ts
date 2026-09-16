@@ -129,6 +129,13 @@ export function createApp() {
           return allowedOrigins.includes(originHeader);
         },
         credentials: true,
+        // The browser hides every response header from cross-origin JS unless
+        // it is listed here. The app is served from infiniterealms.app while
+        // the bundle calls https://api.infiniterealms.app, so without this the
+        // client's res.headers.get('x-request-id') returns null and the whole
+        // request-id join is silently inert. `allowedHeaders` below governs
+        // the REQUEST direction and does not substitute for this. (#2050 D)
+        exposeHeaders: ['x-request-id'],
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: [
           'Content-Type',

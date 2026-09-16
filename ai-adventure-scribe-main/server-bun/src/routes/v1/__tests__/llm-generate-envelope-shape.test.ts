@@ -62,7 +62,12 @@ async function generate(text: string) {
     new Request('http://localhost/v1/llm/generate', {
       method: 'POST',
       headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt: 'p', player_input: PLAYER_INPUT, requestType: 'user' }),
+      body: JSON.stringify({
+        prompt: 'p',
+        sessionId: 'session-under-test',
+        player_input: PLAYER_INPUT,
+        requestType: 'user',
+      }),
     }),
   );
   return loggedObjects.find((l) => l.msg === 'LLM_GENERATE_ENVELOPE_SHAPE');
@@ -121,5 +126,46 @@ describe('LLM_GENERATE_ENVELOPE_SHAPE', () => {
     const all = JSON.stringify(loggedObjects);
     expect(all).not.toContain(NARRATION);
     expect(all).not.toContain('Draw your blade');
+  });
+  it('records textLength so an empty completion is distinguishable from prose (#2050 B)', async () => {
+    const prose = 'The lantern gutters and the corridor exhales.';
+    const proseLine = await generate(prose);
+    expect(proseLine?.parsed).toBe(false);
+    expect(proseLine?.textLength).toBe(prose.length);
+
+    const emptyLine = await generate('');
+    expect(emptyLine?.parsed).toBe(false);
+    expect(emptyLine?.textLength).toBe(0);
+  });
+
+  it('carries sessionId from the request body, with no combatEntry present (#2050 C)', async () => {
+    const line = await generate(JSON.stringify({ text: NARRATION, combat_actions: [] }));
+    expect(line?.sessionId).toBe('session-under-test');
+  });
+
+  it('returns x-request-id and logs the same id on start and end (#2050 D)', async () => {
+    loggedObjects = [];
+    generatedResult = {
+      text: JSON.stringify({ text: NARRATION }),
+      provider: 'openrouter',
+      model: 't/m',
+    };
+    const res = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: 'p', sessionId: 'session-under-test', requestType: 'user' }),
+      }),
+    );
+    const header = res.headers.get('x-request-id');
+    expect(header).toBeTruthy();
+    const ids = loggedObjects
+      .filter((l) => l.msg === 'request.start' || l.msg === 'request.end')
+      .map((l) => l.requestId);
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+    // one id for the whole request, and it is the one handed back
+    expect(new Set(ids).size).toBe(1);
+    expect(ids[0]).toBe(header);
+    expect(ids).not.toContain('unknown');
   });
 });

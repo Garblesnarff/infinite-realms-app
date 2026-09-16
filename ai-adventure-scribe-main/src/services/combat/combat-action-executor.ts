@@ -13,6 +13,7 @@ export {
 
 import type { DamageType } from '@/types/combat';
 
+import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
@@ -155,6 +156,7 @@ export async function executeAuthoritativeCombatIntent(
         `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/status`,
         { headers },
       );
+      logServerRequestId('/v1/combat', statusResponse);
       if (!statusResponse.ok)
         throw new Error(`Combat state unavailable (${statusResponse.status})`);
       authoritativeIntent = {
@@ -170,6 +172,7 @@ export async function executeAuthoritativeCombatIntent(
         body: JSON.stringify({ intent: authoritativeIntent, source, dmStartedAt }),
       },
     );
+    logServerRequestId('/v1/combat', response);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok)
       throw new CombatIntentRefusedError(

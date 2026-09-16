@@ -26,7 +26,10 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
-import { rewriteNarrationSegmentsInLlmText } from '../../services/dm/dm-response-schema.js';
+import {
+  parseLlmEnvelope,
+  rewriteNarrationSegmentsFromEnvelope,
+} from '../../services/dm/dm-response-schema.js';
 import {
   createUpstreamModelErrorBody,
   LLMUpstreamError,
@@ -51,30 +54,29 @@ import { LLMProviderService } from '../../services/llm-provider-service.js';
  * `rollRequests` may be lower than what the model emitted. `combatActions` is
  * untouched by both, so it does answer #2022's question directly.
  */
-function logEnvelopeShape(text: string, sessionId: string | undefined): void {
-  try {
-    const cleaned = text
-      .trim()
-      .replace(/^```(?:json)?\s*/, '')
-      .replace(/\s*```$/, '');
-    const envelope = JSON.parse(cleaned) as Record<string, unknown>;
-    if (!envelope || typeof envelope !== 'object') {
-      logger.info({ msg: 'LLM_GENERATE_ENVELOPE_SHAPE', sessionId, parsed: false });
-      return;
-    }
-    const len = (v: unknown): number | null => (Array.isArray(v) ? v.length : null);
-    logger.info({
-      msg: 'LLM_GENERATE_ENVELOPE_SHAPE',
-      sessionId,
-      parsed: true,
-      keys: Object.keys(envelope).sort(),
-      combatActions: len(envelope.combat_actions),
-      rollRequests: len(envelope.roll_requests),
-    });
-  } catch {
-    // Text-only (non-JSON) responses are a real dialect; record that, not an error.
-    logger.info({ msg: 'LLM_GENERATE_ENVELOPE_SHAPE', sessionId, parsed: false });
+function logEnvelopeShape(
+  envelope: Record<string, unknown> | null,
+  text: string,
+  sessionId: string | undefined,
+): void {
+  // textLength distinguishes an empty completion from non-JSON prose: a
+  // `parsed: false` line alone cannot, which cost a diagnosis on #2049 where a
+  // 966ms 200 turned out to be an unparseable body. Length only, never text.
+  const textLength = typeof text === 'string' ? text.length : 0;
+  if (!envelope) {
+    logger.info({ msg: 'LLM_GENERATE_ENVELOPE_SHAPE', sessionId, parsed: false, textLength });
+    return;
   }
+  const len = (v: unknown): number | null => (Array.isArray(v) ? v.length : null);
+  logger.info({
+    msg: 'LLM_GENERATE_ENVELOPE_SHAPE',
+    sessionId,
+    parsed: true,
+    textLength,
+    keys: Object.keys(envelope).sort(),
+    combatActions: len(envelope.combat_actions),
+    rollRequests: len(envelope.roll_requests),
+  });
 }
 
 const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
@@ -172,6 +174,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         responseSchema,
         metrics,
         combatEntry,
+        sessionId,
         player_input: requestedPlayerInput,
       } = body || {};
 
@@ -318,10 +321,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         });
       }
 
-      logEnvelopeShape(result.text, combatEntry?.sessionId);
+      // One parse, shared by the log line and the narration rewrite. (#2050 G)
+      const envelope = parseLlmEnvelope(result.text);
+      // sessionId must not come from combatEntry: that is only sent when combat
+      // is NOT already active, so in-combat turns logged `sessionId: null` --
+      // precisely the turns being debugged. (#2050 C)
+      logEnvelopeShape(envelope, result.text, sessionId ?? combatEntry?.sessionId);
 
       return {
-        text: rewriteNarrationSegmentsInLlmText(result.text),
+        text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
         provider: result.provider,
         model: result.model,
       };
@@ -329,6 +337,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
     {
       body: t.Object({
         prompt: t.String(),
+        // #2050 C: correlate the envelope log line to a session on every
+        // generate, not only on the combat-entry path.
+        sessionId: t.Optional(t.String({ maxLength: 255 })),
         player_input: t.Optional(t.String({ maxLength: 20_000 })),
         model: t.Optional(t.String()),
         maxTokens: t.Optional(t.Number()),

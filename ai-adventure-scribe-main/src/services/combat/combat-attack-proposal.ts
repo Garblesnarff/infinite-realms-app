@@ -3,6 +3,7 @@ import type {
   CombatRefusalDetails,
 } from '@/services/combat/combat-action-executor';
 
+import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 
@@ -44,6 +45,7 @@ export async function proposeAuthoritativeAttack(
       body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
     },
   );
+  logServerRequestId('/v1/combat', response);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok)
     throw new CombatIntentRefusedError(

@@ -1,3 +1,5 @@
+import { logServerRequestId } from './request-id-log';
+
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import { getAuthHeaders } from '@/services/auth/TokenService';
@@ -47,6 +49,8 @@ export interface GenerateTextParams {
    * the returned envelope may carry `combat_entry_pending`; the explicit `/combat/sessions/:id/enter`
    * request owns seating and initiative.
    */
+  /** #2050 C: correlates the server's envelope log line on every generate. */
+  sessionId?: string;
   combatEntry?: {
     sessionId: string;
     player: {
@@ -81,6 +85,13 @@ export interface ImageQuotaStatus {
 }
 
 class LlmApiClient {
+  /**
+   * Server request id of the most recent call through `fetchWithAuth`, so a
+   * caller that throws after a successful response can still name it. Read it
+   * immediately in the failing path; it is last-write-wins across concurrent
+   * calls and is for diagnosis only. (#2050 D)
+   */
+  lastRequestId: string | null = null;
   private useOfflineFallback = false;
   private offlineFallbackSetAt = 0;
   private static readonly OFFLINE_RESET_MS = 30_000;
@@ -98,6 +109,7 @@ class LlmApiClient {
 
     await waitForAuth();
     try {
+      const startedAt = performance.now();
       const res = await fetch(`${API_BASE_URL}${path}`, {
         ...options,
         headers: {
@@ -106,6 +118,9 @@ class LlmApiClient {
           ...options.headers,
         },
       });
+      // Kept so a caller that throws AFTER a 200 can still name the server
+      // request it was processing -- the #2049 attempt-1 shape. (#2050 D)
+      this.lastRequestId = logServerRequestId(path, res, performance.now() - startedAt);
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         let body: {
@@ -163,6 +178,7 @@ class LlmApiClient {
           responseSchema: params.responseSchema,
           requestType: params.requestType || 'user',
           metrics: params.metrics,
+          sessionId: params.sessionId,
           combatEntry: params.combatEntry,
         }),
       });

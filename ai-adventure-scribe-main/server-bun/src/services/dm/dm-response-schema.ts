@@ -542,22 +542,36 @@ export function parseDmResponse(
   return { success: true, data: parsed };
 }
 
-export function rewriteNarrationSegmentsInLlmText(text: string): string {
+/**
+ * Strip code fences and parse a model completion into a plain object.
+ * Returns null for the text-only dialect rather than throwing. (#2050 G)
+ */
+export function parseLlmEnvelope(text: string): Record<string, unknown> | null {
   try {
     const cleaned = text
       .trim()
       .replace(/^```(?:json)?\s*/, '')
       .replace(/\s*```$/, '');
     const payload = JSON.parse(cleaned) as Record<string, unknown>;
-    if (!payload || typeof payload !== 'object' || typeof payload.text !== 'string') {
-      return text;
-    }
-    const parsed = parseDmResponse(payload);
-    if (parsed.success) {
-      return JSON.stringify(parsed.data);
-    }
-    return text;
+    return payload && typeof payload === 'object' ? payload : null;
   } catch {
-    return text;
+    return null;
   }
+}
+
+/**
+ * As `rewriteNarrationSegmentsInLlmText`, but for a payload the caller has
+ * already parsed, so the route parses the completion once instead of twice.
+ */
+export function rewriteNarrationSegmentsFromEnvelope(
+  envelope: Record<string, unknown> | null,
+  originalText: string,
+): string {
+  if (!envelope || typeof envelope.text !== 'string') return originalText;
+  const parsed = parseDmResponse(envelope);
+  return parsed.success ? JSON.stringify(parsed.data) : originalText;
+}
+
+export function rewriteNarrationSegmentsInLlmText(text: string): string {
+  return rewriteNarrationSegmentsFromEnvelope(parseLlmEnvelope(text), text);
 }

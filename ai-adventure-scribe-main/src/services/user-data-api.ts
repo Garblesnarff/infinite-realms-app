@@ -12,6 +12,7 @@ export type {
   CharacterStatsPayload,
 } from '@/services/user-data-payload-helpers';
 
+import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { waitForAuth } from '@/lib/auth-gate';
 import {
   getAuthHeaders,
@@ -198,13 +199,15 @@ export type NarrativeSceneStateResponse = {
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
   const token = loadCachedSession()?.access_token;
-  return fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
   });
+  logServerRequestId(path, res);
+  return res;
 }
 
 class UserDataApiRequestError extends Error {
@@ -232,6 +235,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       },
     });
   let response = await send();
+  logServerRequestId(path, response);
 
   if (response.status === 401) {
     const session = loadCachedSession();

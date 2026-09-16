@@ -22,6 +22,7 @@ import type { ReducerAction } from './combat-reducer';
 import type { CombatEncounter } from '@/types/combat';
 import type { Dispatch } from 'react';
 
+import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
@@ -42,6 +43,7 @@ export async function readAuthoritativeCombat(sessionId: string): Promise<Author
       `${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`,
       { headers: getAuthHeaders() },
     );
+    logServerRequestId('/v1/combat', response);
     if (response.status === 404) return { state: 'none' };
     if (!response.ok) return { state: 'unknown' };
     const payload = (await response.json()) as { combat?: AuthoritativeCombatPayload };
