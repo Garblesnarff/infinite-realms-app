@@ -22,6 +22,41 @@ All work goes through a branch and a draft PR with "Do not merge — for review"
 - Report test/lint gates as DELTAS against a baseline run on `origin/main`, not as raw counts.
 - If your findings disprove the premise of your instructions, report it. Continue if the authorized scope still holds; ask before changing scope.
 
+### Before merging: check collisions and conflicts with commands that do not lie
+
+Two checks that look authoritative are not. Both produced false negatives on #2053 — they agreed with each other and both were wrong, which is the worst failure shape.
+
+**Do NOT use these:**
+
+```bash
+# LIES: --stat abbreviates long paths to ".../src/services/ai-service.ts",
+# so grep -F against full paths never matches and every collision reads clean.
+git show --stat --format="" <commit> | grep -Ff <pr-files.txt>
+
+# LIES: this git emits "changed in both" but no inline "<<<<<<<" markers,
+# so counting markers returns 0 on a branch that genuinely conflicts.
+git merge-tree $(git merge-base origin/main <head>) origin/main <head> | grep -c '^<<<<<<<'
+```
+
+**Use these instead:**
+
+```bash
+# Collisions: full paths on both sides, compared as sets.
+gh pr diff <pr> --name-only | sort > /tmp/pr-files.txt
+for c in $(git rev-list <head>..origin/main); do
+  git show --name-only --format="" "$c" | sort | comm -12 - /tmp/pr-files.txt
+done
+
+# Conflicts: perform the merge; only a real merge knows.
+git worktree add --detach /tmp/conflict-test <head>
+cd /tmp/conflict-test && git merge origin/main --no-commit --no-ff
+git diff --name-only --diff-filter=U        # empty == clean
+git merge --abort && cd - && git worktree remove --force /tmp/conflict-test
+```
+
+A clean result from the second command is the only evidence that a branch merges. `mergeable` from the GitHub API is also not evidence: it is `UNKNOWN` while GitHub recomputes, which is exactly when you are asking.
+
+
 ## 4. Respect in-flight work
 
 Before editing, check open PRs (`gh pr list`). Do not modify files that an unrelated open PR touches. The current task's own PR and explicitly authorized stacks are allowed; document conflicts with unrelated PRs on the relevant issue instead.
