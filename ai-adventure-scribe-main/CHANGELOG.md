@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.18.0...v0.19.0) (2026-09-16)
+
+
+### Features
+
+* **observability:** request-id header, envelope textLength, session correlation ([#2051](https://github.com/Garblesnarff/infinite-realms-production/issues/2051)) ([cf95aa5](https://github.com/Garblesnarff/infinite-realms-production/commit/cf95aa5633fee6e6af36ca456096ededc650c845))
+
 ## [0.18.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.17.2...v0.18.0) (2026-09-15)
 
 
