@@ -28,6 +28,8 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
     logger.info('[CombatEntry] confirmation popup mounted', {
       actorLabel: pendingSpec.actorLabel,
       combatantLabels: pendingSpec.combatantLabels,
+      declaredTargets: pendingSpec.declaredTargets ?? [],
+      otherCombatants: pendingSpec.otherCombatants ?? [],
     });
   }, [pendingSpec]);
 
@@ -57,9 +59,10 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
   if (typeof document === 'undefined') return null;
 
   const { spec } = confirmation;
-  const combatants = spec.combatantLabels.length
-    ? spec.combatantLabels.join(', ')
-    : 'the opposing side';
+  const declaredTargets = spec.declaredTargets ?? [];
+  const primaryCombatants = declaredTargets.length ? declaredTargets : spec.combatantLabels;
+  const combatants = primaryCombatants.length ? primaryCombatants.join(', ') : 'the opposing side';
+  const otherCombatants = spec.otherCombatants ?? [];
 
   const resolve = (event: React.MouseEvent<HTMLButtonElement>): void => {
     const action = event.currentTarget.dataset.action;
@@ -88,6 +91,11 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
         <p className="mt-1 text-sm text-muted-foreground">
           Strike at {combatants}? Your initiative is rolled after you confirm.
         </p>
+        {otherCombatants.length > 0 && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Also joining the fight: {otherCombatants.join(', ')}.
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button type="button" variant="fantasy" data-action="confirm" onClick={resolve}>
             [Strike]

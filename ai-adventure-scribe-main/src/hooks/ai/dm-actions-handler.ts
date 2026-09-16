@@ -201,9 +201,31 @@ export async function handleDmActionsAndTransitions(
       result = { ...result, combat_actions: [], roll_requests: [] };
     } else {
       try {
+        const combatantLabels = pendingEntry.combatants.map((combatant: any) => combatant.name);
+        const declaredTarget = pendingEntry.declaredAttack?.actorName?.trim();
+        const declaredTargets = declaredTarget ? [declaredTarget] : [];
+        const normalizeLabel = (value: string): string =>
+          value
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+        const otherCombatants = declaredTargets.length
+          ? combatantLabels.filter((label: string) => {
+              const normalizedLabel = normalizeLabel(label);
+              return !declaredTargets.some((target) => {
+                const normalizedTarget = normalizeLabel(target);
+                const escapedTarget = normalizedTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const numberedDuplicate = new RegExp(`^${escapedTarget}\\s*\\d+$`);
+                return (
+                  normalizedLabel === normalizedTarget || numberedDuplicate.test(normalizedLabel)
+                );
+              });
+            })
+          : [];
         const confirmed = await requestCombatEntryConfirmation({
           actorLabel: player.name,
-          combatantLabels: pendingEntry.combatants.map((combatant: any) => combatant.name),
+          combatantLabels,
+          ...(declaredTargets.length ? { declaredTargets, otherCombatants } : {}),
           initiativeRoll: null,
           initiativeModifier: player.initiativeModifier,
         });

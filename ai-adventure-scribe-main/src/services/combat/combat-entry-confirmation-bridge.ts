@@ -4,6 +4,10 @@ import logger from '@/lib/logger';
 export interface CombatEntryConfirmationSpec {
   actorLabel: string;
   combatantLabels: string[];
+  /** Declared target labels take precedence over the full seated roster in the card copy. */
+  declaredTargets?: string[];
+  /** Roster members not named as a declared target, shown on the second line. */
+  otherCombatants?: string[];
   initiativeRoll: number | null;
   initiativeModifier: number;
 }

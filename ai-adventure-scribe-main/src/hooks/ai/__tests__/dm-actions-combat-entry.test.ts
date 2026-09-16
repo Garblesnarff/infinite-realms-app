@@ -310,6 +310,33 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.activeEncounter).toEqual(PLAYER_TURN_ENCOUNTER);
   });
 
+  it('keeps similarly named roster members in the other-combatants line', async () => {
+    await invoke({
+      combat_transition: 'none',
+      combat_entry_pending: {
+        ...PENDING_ENTRY,
+        combatants: [
+          { name: 'Goblin', count: 1 },
+          { name: 'Goblin 2', count: 1 },
+          { name: 'Goblin Shaman', count: 1 },
+        ],
+        declaredAttack: {
+          verb: 'strike',
+          actorName: 'Goblin',
+          attackSource: 'unarmed',
+        },
+      },
+    });
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatantLabels: ['Goblin', 'Goblin 2', 'Goblin Shaman'],
+        declaredTargets: ['Goblin'],
+        otherCombatants: ['Goblin Shaman'],
+      }),
+    );
+  });
+
   it('fails closed when the entry pre-flight rejects', async () => {
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
@@ -427,6 +454,13 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
         combat_actions: [NPC_ACTION],
       },
       refresh,
+    );
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        declaredTargets: ['Vance'],
+        otherCombatants: [],
+      }),
     );
 
     expect(requestPlayerAttackRoll).toHaveBeenCalledWith({

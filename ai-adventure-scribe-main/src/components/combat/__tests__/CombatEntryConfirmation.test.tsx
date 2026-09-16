@@ -66,4 +66,62 @@ describe('CombatEntryConfirmation', () => {
       action: 'decline',
     });
   });
+
+  it('names the declared target and lists the rest of the roster separately', () => {
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'The Storyteller',
+            combatantLabels: ['Professor Emil Darkwater', 'Captain Sarah Reeves'],
+            declaredTargets: ['Professor Emil Darkwater'],
+            otherCombatants: ['Captain Sarah Reeves'],
+            initiativeRoll: null,
+            initiativeModifier: 2,
+          },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'Strike at Professor Emil Darkwater? Your initiative is rolled after you confirm.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Also joining the fight: Captain Sarah Reeves.')).toBeInTheDocument();
+    expect(screen.queryByText(/Strike at .*Captain Sarah Reeves/)).not.toBeInTheDocument();
+    expect(logger.info).toHaveBeenCalledWith(
+      '[CombatEntry] confirmation popup mounted',
+      expect.objectContaining({
+        declaredTargets: ['Professor Emil Darkwater'],
+        otherCombatants: ['Captain Sarah Reeves'],
+      }),
+    );
+  });
+
+  it('falls back to the roster when no target was declared and omits the second line', () => {
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'The Storyteller',
+            combatantLabels: ['Professor Emil Darkwater', 'Captain Sarah Reeves'],
+            initiativeRoll: null,
+            initiativeModifier: 2,
+          },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'Strike at Professor Emil Darkwater, Captain Sarah Reeves? Your initiative is rolled after you confirm.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Also joining the fight:/)).not.toBeInTheDocument();
+  });
 });
