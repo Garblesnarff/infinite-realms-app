@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.1...v0.19.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ui:** name declared combat entry targets ([#2062](https://github.com/Garblesnarff/infinite-realms-production/issues/2062)) ([06edef7](https://github.com/Garblesnarff/infinite-realms-production/commit/06edef7514ed0b2262939c41b85b16ed66a95d8b))
+
 ## [0.19.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.0...v0.19.1) (2026-09-16)
 
 
