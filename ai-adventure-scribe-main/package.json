@@ -5,7 +5,7 @@
     "server-bun",
     "cli"
   ],
-  "version": "0.19.0",
+  "version": "0.19.1",
   "type": "module",
   "scripts": {
     "prepare": "bash ../scripts/setup-git-hooks.sh",

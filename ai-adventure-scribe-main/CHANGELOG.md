@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.0...v0.19.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **combat:** preflight NPC turns before player DM calls ([#2053](https://github.com/Garblesnarff/infinite-realms-production/issues/2053)) ([394b51b](https://github.com/Garblesnarff/infinite-realms-production/commit/394b51bfc427c8d584dd330fc1bef197db0e5a34))
+
 ## [0.19.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.18.0...v0.19.0) (2026-09-16)
 
 
