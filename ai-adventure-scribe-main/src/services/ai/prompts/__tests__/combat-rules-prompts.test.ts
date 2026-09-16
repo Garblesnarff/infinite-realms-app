@@ -89,6 +89,8 @@ describe('CombatRulesPrompts', () => {
       // ignored for thirty turns. It must not survive anywhere in this section.
       expect(section).not.toContain('you MUST emit a `map_actions` move');
       expect(section).toContain('Approach before a strike is the engine');
+      expect(section).toContain('NPC turns are already resolved by the engine');
+      expect(section).toContain('do not declare or repair an NPC action');
       expect(section).toContain('</spatial_turn_contract>');
     });
 
@@ -116,12 +118,14 @@ describe('CombatRulesPrompts', () => {
       }
     });
 
-    it('works the three-roach example through both outcomes', () => {
+    it('works the three-roach example through engine-resolved NPC outcomes', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
-      // Two monster attacks declared in one turn, against digest-real ids.
-      expect(section).toContain('"purpose":"shadow-roach-1 attacks the-seeker"');
-      expect(section).toContain('"purpose":"shadow-roach-2 attacks the-seeker"');
+      // NPC turns are engine-owned; only the player's declaration is model-authored.
+      expect(section).toContain('"purpose":"the-seeker attacks shadow-roach-1"');
+      expect(section).not.toContain('"purpose":"shadow-roach-1 attacks the-seeker"');
+      expect(section).not.toContain('"purpose":"shadow-roach-2 attacks the-seeker"');
+      expect(section).toContain('Never emit or repair either roach');
       expect(section).toContain('shadow-roach-1|Shadow Roach@6,5');
       expect(section).toContain('shadow-roach-2|Shadow Roach@10,9');
       // One auto-approach outcome and one out-of-reach-becomes-move outcome.

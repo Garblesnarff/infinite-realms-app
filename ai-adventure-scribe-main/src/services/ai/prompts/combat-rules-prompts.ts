@@ -61,14 +61,15 @@ or dialogue. Describe condition only as unharmed, wounded, bloodied, or near dea
 
 **COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
-1. **DECLARE** every attack - the player's and every enemy's - as a \`"type": "attack"\` entry in
-   \`roll_requests\`, naming attacker and target by their tactical digest ids in \`purpose\`
-   (\`combat_actions\` with \`actor_id\`/\`target_ids\` is accepted for the same attack). The engine
-   rolls it, applies the damage, and reports back.
+1. **DECLARE** the current player's attack as a \`"type": "attack"\` entry in \`roll_requests\`,
+   naming attacker and target by their tactical digest ids in \`purpose\` (\`combat_actions\` with
+   \`actor_id\`/\`target_ids\` is accepted for the same attack). The engine rolls it, applies the
+   damage, and reports back.
 2. **NEVER** leave an attack undeclared. A swing that exists only in your narration is a swing
    the engine never rolled and the target never felt.
 3. **DESCRIBE** actions cinematically while maintaining mechanical accuracy
-4. **ENFORCE** turn order (player turn, then all NPCs, then player again)
+4. **ENFORCE** turn order: NPC turns are already resolved by the engine before this player
+   declaration. Never emit an NPC or monster \`combat_actions\` entry.
 `;
 
     return combatText;
@@ -88,10 +89,11 @@ When combat is detected, you MUST:
     return `
 <spatial_turn_contract> <!-- INTENTIONAL_ELICITATION_DIALECT -->
 <title>MANDATORY: DECLARE ATTACKS, DO NOT CHOREOGRAPH OR RESOLVE THEM</title>
-While combat is active, every attack is declared as an intent: who acts, what they do, and whom they
-do it to. You do NOT need to work out whether the attacker can reach its target. The engine reads
-the tactical digest, walks the attacker as far toward its target as its movement allows, and
-resolves the attack from where it ends up.
+While combat is active, the current player's attack is declared as an intent: who acts, what they do,
+and whom they do it to. You do NOT need to work out whether the attacker can reach its target. The
+engine reads the tactical digest, walks the attacker as far toward its target as its movement allows,
+and resolves the attack from where it ends up. NPC turns are already resolved by the engine before
+this declaration; do not declare or repair an NPC action.
 
 - Declare an attack as a \`roll_requests\` entry with \`"type": "attack"\` whose \`purpose\` names the
   attacker and the target by their digest ids. \`combat_actions\` is accepted for the same attack if
@@ -114,13 +116,16 @@ Worked example - three roaches converge on the party's front line. Digest:
 \`the-seeker|The Seeker@1,1 mv30/30 vs[shadow-roach-1:25ft/LoS/c0/range,shadow-roach-2:45ft/LoS/c0/range]\`
 \`shadow-roach-1|Shadow Roach@6,5 mv30/30 vs[the-seeker:25ft/LoS/c0/range]\`
 \`shadow-roach-2|Shadow Roach@10,9 mv30/30 vs[the-seeker:45ft/LoS/c0/range]\`
-On the roaches' turns you narrate the lunge and declare both attacks:
-\`roll_requests\`: \`[{"type":"attack","formula":"1d20","purpose":"shadow-roach-1 attacks the-seeker","dc":null,"ac":null,"advantage":false,"disadvantage":false},{"type":"attack","formula":"1d20","purpose":"shadow-roach-2 attacks the-seeker","dc":null,"ac":null,"advantage":false,"disadvantage":false}]\`
-The engine resolves them differently, and tells you so next turn:
+On the player's turn, declare only the player's attack:
+\`roll_requests\`: \`[{"type":"attack","formula":"1d20","purpose":"the-seeker attacks shadow-roach-1","dc":null,"ac":null,"advantage":false,"disadvantage":false}]\`
+Before this declaration, the engine already resolves the roaches' turns and supplies their results in
+\`<engine_resolved_outcomes>\`:
 - shadow-roach-1 was 25ft away with 30ft of movement: it closes to 5ft and its bite is rolled.
 - shadow-roach-2 was 45ft away: it moves its full 30ft, ends 15ft short, and its action becomes
   movement. You will be told "Shadow Roach moved 30ft, is now 15ft from The Seeker, and could not
   reach it". Narrate a roach still scrabbling closer - NOT a bite that never happened.
+Never emit or repair either roach's \`combat_actions\`; narrate the supplied engine results, then
+narrate the player's authoritative result.
 </spatial_turn_contract>`;
   }
 

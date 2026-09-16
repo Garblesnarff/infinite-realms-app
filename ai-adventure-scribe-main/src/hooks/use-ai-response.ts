@@ -3,6 +3,7 @@ import { useRef, useCallback } from 'react';
 
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest, LocalNotice } from '@/hooks/ai/types';
+import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
@@ -11,6 +12,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';
 import { fetchGameContext, buildAIContext } from '@/hooks/ai/ai-utils';
+import {
+  COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
+  NPC_FIRST_ADVANCE_FAILED_NOTICE,
+  preflightErrorStatus,
+  preflightNpcTurnsBeforePlayerDeclaration,
+} from '@/hooks/ai/combat-turn-preflight';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
@@ -175,6 +182,38 @@ export const useAIResponse = (): {
           throw new Error('Failed to fetch game context');
         }
 
+        let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
+        if (isInCombat && !isDiceRollMessage) {
+          try {
+            const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
+              sessionId,
+              activeEncounter,
+              characterId: String((gameContext.character as Record<string, unknown>).id || ''),
+              refreshCombatState,
+            });
+            activeEncounter = preflight.activeEncounter;
+            isInCombat = preflight.isInCombat;
+            preflightNpcTurns = preflight.npcTurns;
+          } catch (error) {
+            logger.warn(COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED, {
+              sessionId,
+              encounterId: activeEncounter?.id ?? null,
+              status: preflightErrorStatus(error),
+            });
+            // A failed pre-flight cannot safely send the declaration to the DM. Clear the
+            // duplicate guard so the player can retry the same message after the NPC batch settles.
+            lastSigRef.current = '';
+            return {
+              text: '',
+              sender: 'dm',
+              timestamp: new Date().toISOString(),
+              context: { emotion: 'neutral', intent: 'response' },
+              localNotice: NPC_FIRST_ADVANCE_FAILED_NOTICE,
+              localNotices: [{ text: NPC_FIRST_ADVANCE_FAILED_NOTICE, persist: true }],
+            };
+          }
+        }
+
         logger.debug('Calling DM Agent with context:', {
           gameContext,
           knownCharacters: Object.keys(voiceContext.knownCharacters).length,
@@ -267,6 +306,7 @@ export const useAIResponse = (): {
           refreshCombatState,
           aiContext,
           conversationHistory,
+          preflightNpcTurns,
           userPlan: userPlan || undefined,
           turnCount,
           playerMessage: latestMessage.text,

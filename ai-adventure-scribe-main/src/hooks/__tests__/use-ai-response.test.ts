@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAIResponse } from '../use-ai-response';
 
+import { useCombat } from '@/contexts/CombatContext';
+import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
 // Mock dependencies
@@ -43,6 +45,8 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyTacticalMapAction: vi.fn(),
     applyDmTacticalActions: vi.fn(),
+    advanceNpcTurns: vi.fn(),
+    clearPendingCombatIntent: vi.fn(),
   },
 }));
 
@@ -128,6 +132,11 @@ describe('useAIResponse', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: false, activeEncounter: null },
+      refreshCombatState: vi.fn(async () => null),
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockReset();
   });
 
   it('should generate an AI response successfully', async () => {
@@ -406,6 +415,50 @@ describe('useAIResponse', () => {
         }),
       }),
     );
+  });
+
+  it('returns the retry notice and skips chatWithDM when NPC pre-flight rejects', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { useCombat } = await import('@/contexts/CombatContext');
+    const liveEncounter = {
+      id: 'encounter-1',
+      phase: 'active',
+      currentTurnParticipantId: 'npc-1',
+      currentRound: 1,
+      participants: [
+        { id: 'player-1', characterId: 'char-1', name: 'The Player', participantType: 'player' },
+        { id: 'npc-1', name: 'The Professor', participantType: 'npc' },
+      ],
+    };
+
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter: liveEncounter },
+      refreshCombatState: vi.fn().mockResolvedValue(liveEncounter),
+    } as any);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValue(
+      Object.assign(new Error('runner unavailable'), { status: 503 }),
+    );
+
+    const { result } = renderHook(() => useAIResponse());
+    const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+    expect(response.text).toBe('');
+    expect(response.localNotice).toBe(
+      'The other combatants are still acting — try again in a moment.',
+    );
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED', {
+      sessionId: mockSessionId,
+      encounterId: 'encounter-1',
+      status: 503,
+    });
   });
 
   /**

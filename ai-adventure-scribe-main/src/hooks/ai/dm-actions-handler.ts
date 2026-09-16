@@ -6,9 +6,19 @@ import type {
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { PlayerAttackRollSpec } from '@/services/combat/player-roll-bridge';
-import type { JournalHandoutEntry, TacticalMapActionPayload } from '@/services/user-data-api';
+import type {
+  AdvanceNpcTurnsResponse,
+  JournalHandoutEntry,
+  TacticalMapActionPayload,
+} from '@/services/user-data-api';
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
+import {
+  COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
+  NPC_FIRST_ADVANCE_FAILED_NOTICE,
+  preflightErrorStatus,
+  preflightNpcTurnsBeforePlayerDeclaration,
+} from '@/hooks/ai/combat-turn-preflight';
 import logger from '@/lib/logger';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
@@ -31,6 +41,8 @@ export interface HandleDmActionsParams {
   refreshCombatState: () => Promise<any>;
   aiContext: any;
   conversationHistory: any[];
+  /** NPC turns drained before the player's declaration was sent to chatWithDM. */
+  preflightNpcTurns?: AdvanceNpcTurnsResponse;
   userPlan?: string;
   turnCount?: number;
   /** What the player typed this turn, for the zero-action guard below. */
@@ -150,9 +162,11 @@ export async function handleDmActionsAndTransitions(
     turnCount,
     playerMessage,
     isDiceRollMessage,
+    preflightNpcTurns: initialPreflightNpcTurns,
   } = params;
 
   let { result, activeEncounter, isInCombat } = params;
+  let preflightNpcTurns = initialPreflightNpcTurns;
   let responseText = result.text;
   let narrationSegments = result.narrationSegments;
   let deliveredHandouts: JournalHandoutEntry[] | undefined;
@@ -165,6 +179,7 @@ export async function handleDmActionsAndTransitions(
   let entryPlayerAttackRoll:
     | { action: StructuredCombatAction; d20?: number; autoRolled: boolean }
     | undefined;
+  let droppedNpcCombatActions = false;
 
   const appendLocalNotice = (notice: unknown, persist = true): void => {
     if (typeof notice !== 'string' || !notice.trim()) return;
@@ -329,6 +344,82 @@ export async function handleDmActionsAndTransitions(
     aiContext.gameState.round = activeEncounter?.currentRound;
   }
 
+  // Entry is the one path that seats the board during this turn. It must use the same pre-flight
+  // as an ordinary player declaration: drain every NPC now holding initiative before the queued
+  // first_action reaches the combat engine.
+  if (entryWasSeated && isInCombat && sessionId) {
+    try {
+      const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
+        sessionId,
+        activeEncounter,
+        characterId:
+          typeof params.characterRecord?.id === 'string' ? params.characterRecord.id : '',
+        refreshCombatState,
+      });
+      activeEncounter = preflight.activeEncounter;
+      isInCombat = preflight.isInCombat;
+      preflightNpcTurns = preflight.npcTurns;
+      aiContext.gameState.isInCombat = isInCombat;
+      aiContext.gameState.encounterId = activeEncounter?.id;
+      aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
+      aiContext.gameState.round = activeEncounter?.currentRound;
+    } catch (error) {
+      logger.warn(COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED, {
+        sessionId,
+        encounterId: activeEncounter?.id ?? null,
+        status: preflightErrorStatus(error),
+      });
+      responseText = '';
+      narrationSegments = undefined;
+      result = {
+        ...result,
+        text: '',
+        combat_actions: [],
+        map_actions: [],
+        handout_actions: [],
+        roll_requests: [],
+      };
+      appendLocalNotice(NPC_FIRST_ADVANCE_FAILED_NOTICE);
+      return {
+        result,
+        responseText,
+        narrationSegments,
+        deliveredHandouts,
+        isInCombat,
+        activeEncounter,
+        localNotice,
+        localNotices: localNotices.length > 0 ? localNotices : undefined,
+      };
+    }
+  }
+
+  const filterNpcCombatActions = (): void => {
+    if (!isInCombat || !activeEncounter?.participants?.length || !result.combat_actions?.length) {
+      return;
+    }
+    const playerActions = result.combat_actions.filter((action: any) =>
+      isPlayerActor(action.actor_id, activeEncounter.participants),
+    );
+    const droppedActions = result.combat_actions.filter(
+      (action: any) => !isPlayerActor(action.actor_id, activeEncounter.participants),
+    );
+    if (!droppedActions.length) return;
+    droppedNpcCombatActions = true;
+    for (const action of droppedActions) {
+      logger.warn('DM_NPC_ACTION_DROPPED', {
+        encounterId: activeEncounter.id,
+        actorId: action.actor_id,
+        actionType: action.action_type,
+        targetIds: action.target_ids,
+      });
+    }
+    result = { ...result, combat_actions: playerActions };
+  };
+
+  // Filter model-authored NPC actions before the zero-action repair and engine boundary. The
+  // engine runner is the only NPC driver now; a stray model action is telemetry, never input.
+  filterNpcCombatActions();
+
   // `/enter` is the source of truth for the player's declaration. Ask for the die from its
   // engine-generated modifier, then send the same structured action through the normal resolver.
   // If the endpoint returned no first action, retain the model batch as the documented fallback.
@@ -343,6 +434,8 @@ export async function handleDmActionsAndTransitions(
       if (
         activeEncounter &&
         playerParticipant &&
+        isInCombat &&
+        preflightNpcTurns?.combatEnded !== true &&
         isPlayerTurn(activeEncounter, playerParticipant) &&
         entryFirstAction.action_type === 'attack' &&
         ((entryFirstActionPayload as any)?.reach === undefined ||
@@ -360,6 +453,9 @@ export async function handleDmActionsAndTransitions(
         } else {
           entryPlayerAttackRoll = { action: entryFirstAction, autoRolled: true };
         }
+      }
+      if (preflightNpcTurns?.combatEnded === true) {
+        result = { ...result, combat_actions: [] };
       }
     } else {
       result = { ...result, combat_actions: [] };
@@ -406,80 +502,24 @@ export async function handleDmActionsAndTransitions(
   //
   // Placed above the `combat_actions` pipeline rather than inside it so a repaired turn takes
   // the identical path a first-try turn takes, AoE proposals included.
-  const forcedActions = entryFirstActionPresent
-    ? null
-    : await enforceCombatActionOnAttempt({
-        isInCombat,
-        hasActiveEncounter: !!activeEncounter,
-        result,
-        playerMessage,
-        isDiceRollMessage,
-        aiContext,
-        conversationHistory,
-        userPlan,
-        turnCount,
-      });
+  const forcedActions =
+    entryFirstActionPresent || droppedNpcCombatActions
+      ? null
+      : await enforceCombatActionOnAttempt({
+          isInCombat,
+          hasActiveEncounter: !!activeEncounter,
+          result,
+          playerMessage,
+          isDiceRollMessage,
+          aiContext,
+          conversationHistory,
+          userPlan,
+          turnCount,
+        });
   if (forcedActions) {
     result = { ...result, combat_actions: forcedActions.combat_actions };
     // The regenerated narration is what the corrected turn was written against.
     if (forcedActions.text) responseText = forcedActions.text;
-  }
-
-  // The first DM batch can contain both the player's opening declaration and NPC actions. If an
-  // NPC won initiative, persist the player's exact declaration against the player's participant
-  // id and let the normal engine pipeline handle only the NPC actions. The queued action is never
-  // offered to combat repair as though it belonged to the current actor.
-  if (entryWasSeated && isInCombat && activeEncounter && result.combat_actions?.length) {
-    const playerParticipant = activeEncounter.participants?.find(
-      (participant: any) =>
-        participant.participantType === 'player' &&
-        (!params.characterRecord?.id || participant.characterId === params.characterRecord.id),
-    );
-    if (playerParticipant && !isPlayerTurn(activeEncounter, playerParticipant)) {
-      const playerActions = result.combat_actions.filter((action: any) =>
-        isPlayerActor(action.actor_id, activeEncounter.participants),
-      );
-      if (playerActions.length) {
-        const declaredAction = playerActions[0];
-        const npcActions = result.combat_actions.filter(
-          (action: any) => !isPlayerActor(action.actor_id, activeEncounter.participants),
-        );
-        try {
-          const pendingResponse = await userDataApi.setPendingCombatIntent(activeEncounter.id, {
-            actorId: playerParticipant.id,
-            actionType: declaredAction.action_type,
-            targetIds: Array.isArray(declaredAction.target_ids) ? declaredAction.target_ids : [],
-            sourceText: playerMessage || result.text,
-          });
-          if (pendingResponse.ok) {
-            const currentActor = findParticipantForActor(
-              activeEncounter.currentTurnParticipantId,
-              activeEncounter.participants,
-            );
-            const currentActorName = currentActor?.name || 'the next actor';
-            appendLocalNotice(
-              `Your attack is declared. ${currentActorName} acts first — your turn comes next.`,
-            );
-            responseText = '';
-            narrationSegments = undefined;
-          } else {
-            logger.warn(
-              '[CombatEntry] server refused pending player declaration',
-              await responsePayload(pendingResponse),
-            );
-            responseText = 'Your attack was not resolved because it is not your turn yet.';
-            narrationSegments = undefined;
-          }
-        } catch (error) {
-          logger.warn('[CombatEntry] pending player declaration failed', error);
-          responseText = 'Your attack was not resolved because it is not your turn yet.';
-          narrationSegments = undefined;
-        }
-        // Whether the setter succeeded or not, never send the player's out-of-turn action to the
-        // resolver. It produced no dice or damage and must not be repaired into an NPC turn.
-        result = { ...result, combat_actions: npcActions };
-      }
-    }
   }
 
   if (sessionId && result.combat_actions?.length) {
@@ -502,11 +542,20 @@ export async function handleDmActionsAndTransitions(
     }
   }
 
-  if (isInCombat && activeEncounter && result.combat_actions?.length) {
+  const hasPreflightEngineLines = Boolean(
+    preflightNpcTurns?.results?.length || preflightNpcTurns?.transcriptLines?.length,
+  );
+  const preflightCombatEnded = preflightNpcTurns?.combatEnded === true;
+  if (
+    !preflightCombatEnded &&
+    activeEncounter &&
+    (isInCombat || hasPreflightEngineLines) &&
+    (result.combat_actions?.length || hasPreflightEngineLines)
+  ) {
     const narrationResult = await resolveDeclaredCombatActions({
       encounterId: activeEncounter.id,
       sessionId,
-      combatActions: result.combat_actions,
+      combatActions: result.combat_actions || [],
       declarationText: entryWasSeated
         ? 'Combat entry was confirmed. Narrate only authoritative engine results; the player declaration itself is not an outcome.'
         : result.text,
@@ -515,6 +564,7 @@ export async function handleDmActionsAndTransitions(
       conversationHistory,
       userPlan,
       turnCount,
+      preResolvedNpcTurns: preflightNpcTurns,
       queuedIntentActorIds: activeEncounter?.pendingIntent?.actorId
         ? [activeEncounter.pendingIntent.actorId]
         : [],

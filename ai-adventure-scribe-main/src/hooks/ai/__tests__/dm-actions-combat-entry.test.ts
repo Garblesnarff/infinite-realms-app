@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
+import logger from '@/lib/logger';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import {
   requestPlayerAttackRoll,
@@ -40,6 +41,7 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn().mockResolvedValue({ ok: true }),
     applyDmHandoutActions: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     resolveAoECast: vi.fn().mockResolvedValue({ ok: true }),
+    advanceNpcTurns: vi.fn(),
     enterCombat: vi.fn(),
     setPendingCombatIntent: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
@@ -207,13 +209,28 @@ const invoke = (
 describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(userDataApi.advanceNpcTurns).mockReset();
     vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 16 });
     vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' } }) as any,
     );
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+      results: [],
+      currentParticipant: {
+        id: 'storyteller-1',
+        name: 'The Storyteller',
+        participantType: 'player',
+      },
+      combatEnded: false,
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: ['⚙️ Engine: Vance misses.'],
+    });
     vi.mocked(userDataApi.setPendingCombatIntent).mockResolvedValue(response() as any);
+    vi.mocked(userDataApi.clearPendingCombatIntent).mockResolvedValue(response() as any);
     vi.mocked(resolveDeclaredCombatActions).mockResolvedValue({
       text: 'Vance acts first.',
       narrationSegments: [],
@@ -224,7 +241,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     await invoke({ combat_transition: 'start', scene_spec: { environment: 'tavern' } });
   });
 
-  it('confirms before initiative, then seats and queues the player action when an NPC acts first', async () => {
+  it('confirms before initiative, drains the NPC turn, then resolves the queued player action', async () => {
     const order: string[] = [];
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(async () => {
       order.push('confirmation');
@@ -234,12 +251,18 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       order.push('initiative');
       return { d20: 16 };
     });
-    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
+      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
     const outcome = await invoke(
       {
         combat_transition: 'none',
         combat_entry_pending: PENDING_ENTRY,
-        combat_actions: [PLAYER_ACTION, NPC_ACTION],
+        combat_actions: [NPC_ACTION],
       },
       refresh,
     );
@@ -267,29 +290,120 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       },
       playerInitiativeRoll: 16,
     });
-    expect(refresh).toHaveBeenCalledTimes(1);
-    expect(userDataApi.setPendingCombatIntent).toHaveBeenCalledWith('encounter-1', {
-      actorId: 'storyteller-1',
-      actionType: 'attack',
-      targetIds: ['vance'],
-      sourceText: 'I attempt to punch Vance',
-    });
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-1', 'vance-1');
     expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
       expect.objectContaining({
         encounterId: 'encounter-1',
-        combatActions: [NPC_ACTION],
-        participants: NPC_TURN_ENCOUNTER.participants,
+        combatActions: [FIRST_ACTION_COMBAT_ACTION],
+        participants: PLAYER_TURN_ENCOUNTER.participants,
+        preResolvedNpcTurns: expect.objectContaining({
+          currentParticipant: {
+            id: 'storyteller-1',
+            name: 'The Storyteller',
+            participantType: 'player',
+          },
+        }),
       }),
     );
-    expect(outcome.localNotice).toBe(
-      'Your attack is declared. Vance acts first — your turn comes next.',
+    expect(userDataApi.setPendingCombatIntent).not.toHaveBeenCalled();
+    expect(outcome.activeEncounter).toEqual(PLAYER_TURN_ENCOUNTER);
+  });
+
+  it('fails closed when the entry pre-flight rejects', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
     );
-    expect(outcome.localNotices).toEqual([
+    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValueOnce(
+      Object.assign(new Error('NPC runner unavailable'), { status: 503 }),
+    );
+    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
       {
-        text: 'Your attack is declared. Vance acts first — your turn comes next.',
-        persist: true,
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [NPC_ACTION],
       },
-    ]);
+      refresh,
+    );
+
+    expect(outcome.localNotice).toBe(
+      'The other combatants are still acting — try again in a moment.',
+    );
+    expect(outcome.result.combat_actions).toEqual([]);
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED', {
+      sessionId: 'session-1',
+      encounterId: 'encounter-1',
+      status: 503,
+    });
+  });
+
+  it('does not open the entry attack popup or execute when pre-flight ends combat', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValueOnce({
+      results: [],
+      currentParticipant: null,
+      combatEnded: true,
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: ['⚙️ Engine: Vance falls.'],
+    });
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
+      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [PLAYER_ACTION],
+      },
+      refresh,
+    );
+
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(outcome.result.combat_actions).toEqual([]);
+  });
+
+  it('clears a legacy pending intent before resolving exactly one entry action', async () => {
+    const pendingIntent = {
+      actorId: 'storyteller-1',
+      actionType: 'attack',
+      targetIds: ['vance-1'],
+      sourceText: 'I punch Vance',
+      queuedOnTurn: 1,
+      queuedOnRound: 1,
+    };
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
+      .mockResolvedValueOnce({ ...PLAYER_TURN_ENCOUNTER, pendingIntent });
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    expect(userDataApi.clearPendingCombatIntent).toHaveBeenCalledTimes(1);
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledTimes(1);
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({ queuedIntentActorIds: [] }),
+    );
   });
 
   it('uses /enter first_action and its engine modifier, ignoring model combat_actions', async () => {
@@ -332,6 +446,21 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
     expect(resolveDeclaredCombatActions).not.toHaveBeenCalledWith(
       expect.objectContaining({ combatActions: [NPC_ACTION] }),
+    );
+  });
+
+  it('drops and logs a stray NPC combat action before execution or repair', async () => {
+    const outcome = await invoke(
+      { combat_actions: [NPC_ACTION] },
+      vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER),
+      { activeEncounter: PLAYER_TURN_ENCOUNTER, isInCombat: true },
+    );
+
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(outcome.result.combat_actions).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'DM_NPC_ACTION_DROPPED',
+      expect.objectContaining({ actorId: NPC_ACTION.actor_id, encounterId: 'encounter-1' }),
     );
   });
 
@@ -528,29 +657,6 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       },
     ]);
     expect(outcome.responseText).toBe('');
-  });
-
-  it('turns a named friendly-NPC attack into an engine entry intent, never an attack outcome (#1943)', async () => {
-    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
-    const outcome = await invoke(
-      {
-        combat_transition: 'none',
-        combat_entry_pending: PENDING_ENTRY,
-        text: 'Vance catches your arm before the punch lands.',
-        combat_actions: [PLAYER_ACTION],
-      },
-      refresh,
-    );
-
-    expect(outcome.result.combat_entry).toMatchObject({ entered: true });
-    expect(outcome.result.text).toBe('');
-    expect(outcome.responseText).toBe('');
-    expect(outcome.responseText).not.toContain('catches your arm');
-    expect(outcome.narrationSegments).toBeUndefined();
-    expect(userDataApi.setPendingCombatIntent).toHaveBeenCalledWith(
-      'encounter-1',
-      expect.objectContaining({ actionType: 'attack', targetIds: ['vance'] }),
-    );
   });
 
   it('re-reads authoritative state when the server reports it seated an encounter', async () => {

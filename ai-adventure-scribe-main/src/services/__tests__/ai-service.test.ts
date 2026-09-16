@@ -10,6 +10,7 @@ import { fetchSceneState } from '../narrative/scene-state-client';
 import { SessionStateService } from '../session-state-service';
 
 import { llmApiClient } from '@/infrastructure/api';
+import logger from '@/lib/logger';
 
 // Mock dependencies
 vi.mock('@/infrastructure/api', () => ({
@@ -176,6 +177,26 @@ describe('AIService', () => {
       await expect(AIService.chatWithDM(mockParams)).rejects.toThrow(
         'Failed to get DM response - AI service unavailable',
       );
+    });
+
+    it('labels response post-processing failures separately from provider failures', async () => {
+      const mockParams: any = {
+        message: 'Post-processing failure',
+        context: { ...mockContext, sessionId: 'processing-session' },
+        conversationHistory: [],
+      };
+      const processingError = new Error('malformed response state');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+      vi.mocked(processDMResponse).mockRejectedValue(processingError);
+
+      await expect(AIService.chatWithDM(mockParams)).rejects.toBe(processingError);
+
+      expect(logger.error).toHaveBeenCalledWith('DM_RESPONSE_PROCESSING_FAILED', {
+        name: 'Error',
+        message: 'malformed response state',
+        stackHead: expect.stringContaining('Error: malformed response state'),
+      });
+      expect(logger.error).not.toHaveBeenCalledWith('LLM API failed:', processingError);
     });
   });
 

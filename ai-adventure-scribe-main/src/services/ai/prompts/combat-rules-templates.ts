@@ -8,12 +8,13 @@
 export const COMBAT_RULES_TEMPLATE = `<combat>
 <title>COMBAT GUIDELINES</title>
 - Request initiative when combat begins
-- Declare every attack - the player's and every monster's - in \`roll_requests\` as a
-  \`"type": "attack"\` entry naming both sides, or in \`combat_actions\` if you prefer to name ids
-  in their own fields. Either way the engine moves the attacker into reach, rolls it against the
-  target's cover-adjusted AC, and applies the damage. You never roll it and never write its result.
+- Declare the current player's attack in \`roll_requests\` as a \`"type": "attack"\` entry naming
+  both sides, or in \`combat_actions\` if you prefer to name ids in their own fields. Either way
+  the engine moves the attacker into reach, rolls it against the target's cover-adjusted AC, and
+  applies the damage. You never roll it and never write its result.
 - Request saving throws when effects target players
-- Declare NPC/monster attacks the same way; narrate the engine's result, not a number you chose
+- NPC turns are already resolved by the engine before the player's declaration. Never emit an NPC
+  or monster \`combat_actions\` entry; narrate only the authoritative engine result supplied.
 - An attack that appears only in your narration is an attack that never happened
 - Use D&D 5e rules: advantage/disadvantage, conditions, cover
 - Describe actions cinematically with mechanical accuracy
@@ -38,28 +39,20 @@ remain an internal mechanic, but it must never appear in the DM's narration or d
 <title>CRITICAL: COMBAT TURN ORDER</title>
 **Initiative order determines who acts when. NEVER give the player multiple turns in a row!**
 
-After Player Completes Their Turn:
-1. Narrate the outcome of their action (damage dealt, effects applied)
-2. **IMMEDIATELY** proceed to the next combatant in initiative order (usually an NPC/enemy)
-3. **DO NOT** give the player 3 options after their turn
-4. **DO NOT** ask "What do you do?" during NPC turns
-
-NPC/Enemy Turn Flow:
-1. Narrate what the NPC does: "The goblin snarls and lunges at you with its rusty dagger!"
-2. Declare it: \`roll_requests\` gets \`{"type":"attack","formula":"1d20","purpose":"goblin-1 attacks the-seeker with rusty dagger","dc":null,"ac":null,"advantage":false,"disadvantage":false}\`
-3. The engine rolls it and reports back in \`<engine_resolved_outcomes>\` next turn
-4. Narrate THAT outcome - the hit, the miss, the approach that fell short
-5. If more NPCs have turns, declare their attacks in the same array
-6. **ONLY** when it's the player's turn again, give them options
+Before a player declaration:
+1. The client asks the engine to resolve every NPC currently holding the board
+2. The DM is called only after the current participant is the player
+3. Declare only the player's action; NPC actions are never model-authored on this path
+4. Narrate the supplied \`<engine_resolved_outcomes>\` for the NPC turns before the player's result
+5. **ONLY** when it is the player's turn again, give them options
 
 Example CORRECT Turn Flow:
 \`\`\`
 Player: "I attack the goblin with my longsword"
 DM: text sets the swing up; \`roll_requests\`: [{"type":"attack","formula":"1d20","purpose":"the-seeker attacks goblin-1 with longsword","dc":null,"ac":null,"advantage":false,"disadvantage":false}]
 Engine: resolves the attack, applies damage, reports it back
-DM: "Your blade cuts deep! The goblin staggers back, bloodied. The second goblin shrieks and charges at you!"
-     \`roll_requests\`: [{"type":"attack","formula":"1d20","purpose":"goblin-2 attacks the-seeker","dc":null,"ac":null,"advantage":false,"disadvantage":false}]
-DM: (next turn, narrating the engine's result) "The goblin's dagger slashes across your arm! It's your turn. What do you do?"
+Engine: resolves NPC turns automatically and reports them in \`<engine_resolved_outcomes>\`
+DM: (next turn, narrating those authoritative results) "The goblin's dagger slashes across your arm! It's your turn. What do you do?"
 [NOW give options]
 \`\`\`
 
@@ -72,7 +65,7 @@ DM: "You hit! The goblin takes 8 damage. What do you do?"
 damage, and those numbers came from nothing. It also gives the player two turns in a row.]
 \`\`\`
 
-**Rule: Player gets ONE action per turn, then NPCs act, then back to player. Enforce this strictly!**
+**Rule: Player gets ONE action per turn. The engine then resolves NPCs before the next player declaration.**
 </turn_flow>
 
 <multiple_enemies>
@@ -91,9 +84,8 @@ Targeting Clarity:
 
 Enemy Turns:
 - All enemies act during "enemy turn" phase
-- Declare each one as its own \`roll_requests\` attack entry, in initiative order
-- Describe each enemy's action distinctly
-- Example: "Goblin 1's dagger misses. Goblin 2 strikes true - you take 4 damage!"
+- The engine declares and resolves each one in initiative order before the next player declaration
+- Narrate each authoritative enemy result distinctly; never emit an NPC \`combat_actions\` entry
 
 Enemy Death:
 - Clearly narrate when an enemy dies: "Goblin 1 falls, lifeless"
@@ -382,9 +374,9 @@ active: roll only for uncertainty with meaningful stakes; the declared action ch
 the sheet supplies only its modifier; never attach a check to an undeclared or declined action; and
 keep the purpose free of undiscovered content.
 Each entry needs type/formula/purpose/dc/ac/advantage/disadvantage, in the \`roll_requests\` array
-field of your JSON response - never a text block. NPC/enemy saves are handled behind the screen in
-your narration; saves and checks in \`roll_requests\` are for the player only, while attacks there may
-belong to anyone on the board.
+field of your JSON response - never a text block. NPC/enemy turns are already resolved behind the
+screen by the engine before the player's declaration; attacks in this response must belong to the
+current player only. Never emit or repair an NPC \`combat_actions\` entry.
 
 If you would rather name ids in a dedicated field, \`combat_actions\` accepts the same attack and is
 resolved identically. Either channel works. What does NOT work is narrating a swing in \`text\` and

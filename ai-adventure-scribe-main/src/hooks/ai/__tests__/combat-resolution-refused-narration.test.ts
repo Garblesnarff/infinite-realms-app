@@ -309,6 +309,74 @@ describe('a turn the engine accepted in full', () => {
     );
   });
 
+  it('carries pre-flight NPC engine results into the same reply as the player declaration', async () => {
+    const npcEngineResult = {
+      actorName: 'Balthazar',
+      targetName: 'The Reveler',
+      d20: 9,
+      attackBonus: 3,
+      totalAttackRoll: 12,
+      targetAC: 12,
+      hit: true,
+      finalDamage: 4,
+      damageType: 'bludgeoning',
+      targetCondition: 'wounded',
+      autoRolled: true,
+    };
+    const preflightNpcAction = action(NPC_ID, PLAYER_ID);
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [{ participantId: NPC_ID, hit: false }],
+      result: {
+        actorName: 'The Reveler',
+        targetName: 'Balthazar',
+        d20: 16,
+        attackBonus: 5,
+        totalAttackRoll: 21,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 6,
+        damageType: 'slashing',
+      },
+      boundary: null,
+    });
+    const result = await resolveDeclaredCombatActions({
+      encounterId: '10444307-0000-4000-8000-000000000003',
+      sessionId: 'session-2f420489',
+      combatActions: [action(PLAYER_ID, NPC_ID)],
+      declarationText: 'The Reveler strikes.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-2f420489', gameState: { isInCombat: true } },
+      conversationHistory: [],
+      preResolvedNpcTurns: {
+        results: [
+          {
+            action: preflightNpcAction,
+            outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }],
+            engineResult: npcEngineResult,
+            actorIsPlayer: false,
+            transcriptLines: ['⚙️ Engine: Balthazar strikes before your turn.'],
+          },
+        ],
+        currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+      },
+    });
+
+    const payload = resolutionPayload();
+    expect(payload.authoritativeCombatResults).toHaveLength(2);
+    expect(payload.authoritativeCombatResults[0]).toMatchObject({
+      actorIsPlayer: false,
+      action: { actor_id: NPC_ID },
+      engineResult: npcEngineResult,
+    });
+    expect(payload.authoritativeCombatResults[1].action.actor_id).toBe(PLAYER_ID);
+    expect(result.text).toContain('Balthazar strikes before your turn.');
+  });
+
   it('prepends the engine result to the player transcript and forwards the raw payload', async () => {
     const engineResult = {
       actorName: 'Balthazar',

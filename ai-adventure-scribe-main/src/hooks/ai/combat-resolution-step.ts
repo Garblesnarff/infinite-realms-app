@@ -56,6 +56,8 @@ export interface CombatResolutionParams {
     d20?: number;
     autoRolled: boolean;
   };
+  /** NPC actions resolved before the player's declaration reached chatWithDM. */
+  preResolvedNpcTurns?: AdvanceNpcTurnsResponse;
 }
 
 const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction): boolean =>
@@ -87,6 +89,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     participants,
     queuedIntentActorIds,
     playerAttackRoll,
+    preResolvedNpcTurns,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
@@ -164,6 +167,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     return advanced.combatEnded ? 'combat_ended' : 'turn_ended';
   };
 
+  // The pre-flight ran before the declaration was sent to the DM. Carry those already-authoritative
+  // NPC results into this same narration pass so the reply contains one ordered account of the
+  // NPC engine lines followed by the player's action.
+  const preflightBoundary = preResolvedNpcTurns
+    ? appendAutonomousNpcResults(preResolvedNpcTurns)
+    : null;
+
   const runAction = async (action: StructuredCombatAction): Promise<BatchBoundary> => {
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
@@ -228,7 +238,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     return 'turn_ended';
   };
 
-  for (let actionIndex = 0; actionIndex < targetedActions.length; actionIndex += 1) {
+  for (
+    let actionIndex = 0;
+    preflightBoundary !== 'combat_ended' && actionIndex < targetedActions.length;
+    actionIndex += 1
+  ) {
     const action = targetedActions[actionIndex];
     try {
       const boundary = await runAction(action);
