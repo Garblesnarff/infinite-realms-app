@@ -100,7 +100,107 @@ const declaredDaggerAttack = {
   weaponName: 'Dagger',
 };
 
+const quarterstaff = {
+  id: 'inventory-quarterstaff',
+  name: 'Quarterstaff',
+  damageDice: '1d6',
+  damageType: 'bludgeoning',
+  normalRange: 5,
+  magicBonus: 0,
+  finesse: false,
+  ranged: false,
+  proficient: true,
+};
+
 describe('deriveCombatEntryFirstAction', () => {
+  it.each(['punch', 'hit', 'strike'])(
+    'resolves a bare %s as Unarmed Strike even when a quarterstaff is equipped',
+    async (verb) => {
+      const firstAction = await deriveCombatEntryFirstAction(
+        {
+          sessionId: 'session-1',
+          combatState: state,
+          player: { characterId: 'character-1', name: 'Rook' },
+          declaredAttack: { verb, actorName: 'Professor Emil Darkwater' },
+        },
+        { ...deps, listEquippedWeaponProfiles: async () => [quarterstaff] },
+      );
+
+      expect(firstAction).toMatchObject({
+        type: 'attack',
+        source: 'unarmed',
+        attackSource: 'unarmed',
+        weaponId: 'unarmed-strike',
+        weaponName: 'Unarmed Strike',
+        combat_action: { weapon_id: 'unarmed-strike' },
+      });
+    },
+  );
+
+  it('resolves a bare attack to the equipped quarterstaff', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: { verb: 'attack', actorName: 'Professor Emil Darkwater' },
+      },
+      { ...deps, listEquippedWeaponProfiles: async () => [quarterstaff] },
+    );
+
+    expect(firstAction).toMatchObject({
+      source: 'weapon',
+      attackSource: 'weapon',
+      weaponId: 'inventory-quarterstaff',
+      weaponName: 'Quarterstaff',
+      combat_action: { weapon_id: 'inventory-quarterstaff' },
+    });
+  });
+
+  it('grounds a weapon word in a hit declaration to the equipped quarterstaff', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: {
+          verb: 'hit',
+          actorName: 'Professor Emil Darkwater',
+          weaponName: 'staff',
+        },
+      },
+      { ...deps, listEquippedWeaponProfiles: async () => [quarterstaff] },
+    );
+
+    expect(firstAction).toMatchObject({
+      source: 'weapon',
+      attackSource: 'weapon',
+      weaponId: 'inventory-quarterstaff',
+      weaponName: 'Quarterstaff',
+      combat_action: { weapon_id: 'inventory-quarterstaff' },
+    });
+  });
+
+  it('resolves a bare attack as unarmed when no weapon is equipped', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: { verb: 'attack', actorName: 'Professor Emil Darkwater' },
+      },
+      { ...deps, listEquippedWeaponProfiles: async () => [] },
+    );
+
+    expect(firstAction).toMatchObject({
+      source: 'unarmed',
+      attackSource: 'unarmed',
+      weaponId: 'unarmed-strike',
+      weaponName: 'Unarmed Strike',
+      combat_action: { weapon_id: 'unarmed-strike' },
+    });
+  });
+
   it('derives a punch as an unarmed attack with the engine modifier', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
       {

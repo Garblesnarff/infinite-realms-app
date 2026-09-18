@@ -14,7 +14,7 @@ import {
 } from './data-access.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { UNARMED_STRIKE } from './weapon-catalog.js';
+import { isUnarmedAttackVerb, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
 import { combatLogger } from '../../lib/logger.js';
@@ -122,20 +122,26 @@ const normalize = (value: string): string =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-const unarmedVerbs = new Set(['punch', 'kick', 'headbutt', 'shove', 'grapple', 'slap', 'elbow']);
-
 function sourceFor(declared: DeclaredAttack): CombatEntryFirstActionSource {
-  if (declared.attackSource) return declared.attackSource;
-  if (declared.spellId || declared.spellName || declared.verb.toLowerCase().startsWith('cast ')) {
+  if (
+    declared.attackSource === 'spell' ||
+    declared.spellId ||
+    declared.spellName ||
+    declared.verb.toLowerCase().startsWith('cast ')
+  ) {
     return 'spell';
   }
-  return unarmedVerbs.has(declared.verb.toLowerCase()) ? 'unarmed' : 'weapon';
+  const weaponClaim = declared.weaponName?.trim();
+  if (weaponClaim && !isUnarmedWeaponClaim(weaponClaim)) return 'weapon';
+  if (!weaponClaim && isUnarmedAttackVerb(declared.verb)) return 'unarmed';
+  return declared.attackSource ?? 'weapon';
 }
 
 function weaponOrUnarmedSource(
   declared: DeclaredAttack,
 ): Exclude<CombatEntryFirstActionSource, 'spell'> {
-  return unarmedVerbs.has(declared.verb.toLowerCase()) ? 'unarmed' : 'weapon';
+  const weaponClaim = declared.weaponName?.trim();
+  return !weaponClaim && isUnarmedAttackVerb(declared.verb) ? 'unarmed' : 'weapon';
 }
 
 function profileKnowsSpell(
@@ -282,14 +288,20 @@ export async function deriveCombatEntryFirstAction(
     });
   }
 
-  const source =
+  const requestedAttackSource =
     requestedSource === 'spell' ? weaponOrUnarmedSource(params.declaredAttack) : requestedSource;
   profile ??= await deps.getParticipantAbilityProfile(playerParticipant);
   const equipped = await deps.listEquippedWeaponProfiles(playerParticipant);
   const grounded =
-    source === 'unarmed'
+    requestedAttackSource === 'unarmed'
       ? { weapon: { ...UNARMED_STRIKE }, weaponId: undefined }
       : groundRequestedWeapon(params.declaredAttack.weaponName, equipped);
+  // An empty equipment list is a valid character state. Once grounding supplies the rules
+  // default, expose it as an unarmed source so every downstream fact agrees with the weapon.
+  const source: Exclude<CombatEntryFirstActionSource, 'spell'> =
+    requestedAttackSource === 'weapon' && grounded.weaponId === undefined
+      ? 'unarmed'
+      : requestedAttackSource;
   const map = await deps.loadActiveTacticalMap(params.sessionId);
   const approach =
     !grounded.weapon.ranged && map

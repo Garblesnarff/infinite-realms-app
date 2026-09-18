@@ -1,4 +1,6 @@
+import { isUnarmedAttackVerb, isUnarmedWeaponClaim } from './weapon-catalog.js';
 import { getSpellByName } from '../../data/spellData.js';
+import { logger } from '../../lib/logger.js';
 
 /** The actor identity the intent gate is allowed to resolve against. */
 export interface CombatIntentActor {
@@ -118,6 +120,23 @@ const matchActor = (
     });
 
   return candidates[0]?.actor ?? null;
+};
+
+const PRONOUN_TARGETS = new Set(['him', 'her', 'them', 'it']);
+
+interface ActorResolution {
+  actor: CombatIntentActor;
+  pronoun?: string;
+}
+
+const matchActorOrUnambiguousPronoun = (
+  targetText: string,
+  actors: readonly CombatIntentActor[],
+): ActorResolution | null => {
+  const actor = matchActor(targetText, actors);
+  if (actor) return { actor };
+  const pronoun = normalize(targetText);
+  return actors.length === 1 && PRONOUN_TARGETS.has(pronoun) ? { actor: actors[0], pronoun } : null;
 };
 
 const toDeclaredAttack = (verb: string, actor: CombatIntentActor): DeclaredAttack => {
@@ -263,7 +282,12 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
   );
   const directVerbMatch = directVerbPattern.exec(clause);
   if (!directVerbMatch) return null;
-  return { verb: singularVerb(directVerbMatch[1]), targetText: directVerbMatch[2] };
+  const weaponMatch = /^(.+?)\s+with\s+(?:my|the|a|his|her)\s+(.+)$/i.exec(directVerbMatch[2]);
+  return {
+    verb: singularVerb(directVerbMatch[1]),
+    targetText: weaponMatch ? stripTrailingPunctuation(weaponMatch[1]) : directVerbMatch[2],
+    ...(weaponMatch ? { weaponName: stripTrailingPunctuation(weaponMatch[2]) } : {}),
+  };
 };
 
 const resolveClauseAttack = (
@@ -298,12 +322,21 @@ const resolveClauseAttack = (
       : null;
   }
 
-  const actor = matchActor(match.targetText, actors);
-  if (!actor) return null;
-  const unarmed = new Set(['punch', 'kick', 'headbutt', 'shove', 'grapple', 'slap', 'elbow']);
+  const resolution = matchActorOrUnambiguousPronoun(match.targetText, actors);
+  if (!resolution) return null;
+  const { actor } = resolution;
+  if (resolution.pronoun) {
+    logger.info({
+      msg: 'COMBAT_INTENT_PRONOUN_RESOLVED',
+      verb: match.verb,
+      pronoun: resolution.pronoun,
+      actorName: actor.name.trim(),
+    });
+  }
+  const namedWeapon = match.weaponName && !isUnarmedWeaponClaim(match.weaponName);
   return {
     ...toDeclaredAttack(match.verb, actor),
-    attackSource: unarmed.has(match.verb) ? 'unarmed' : 'weapon',
+    attackSource: namedWeapon || !isUnarmedAttackVerb(match.verb) ? 'weapon' : 'unarmed',
     ...(match.weaponName ? { weaponName: match.weaponName } : {}),
   };
 };

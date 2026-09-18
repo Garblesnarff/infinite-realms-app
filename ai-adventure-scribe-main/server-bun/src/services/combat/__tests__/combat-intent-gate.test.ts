@@ -1,12 +1,20 @@
-import { describe, expect, it } from 'bun:test';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
-import { detectDeclaredAttack } from '../combat-intent-gate.js';
+const info = mock((_payload: Record<string, unknown>) => {});
+
+mock.module('../../../lib/logger.js', () => ({
+  logger: { info, warn: mock(() => {}), debug: mock(() => {}), error: mock(() => {}) },
+}));
+
+const { detectDeclaredAttack } = await import('../combat-intent-gate.js');
 
 const actors = [
   { name: 'Professor Emil Darkwater' },
   { name: 'Captain Sarah Reeves' },
   { name: 'The Ghoul', monsterId: 'srd:ghoul' },
 ];
+
+const soleActor = [{ name: 'Professor Emil Darkwater' }];
 
 const positiveCorpus = [
   ['i take a swing and attempt to punch the professor', 'punch', 'Professor Emil Darkwater'],
@@ -30,11 +38,59 @@ const negativeCorpus = [
 ] as const;
 
 describe('detectDeclaredAttack', () => {
+  beforeEach(() => {
+    info.mockClear();
+  });
+
   it('matches a short target token to the full narrative-ledger actor name', () => {
     expect(detectDeclaredAttack('i punch Darkwater', actors)).toEqual({
       verb: 'punch',
       actorName: 'Professor Emil Darkwater',
       attackSource: 'unarmed',
+    });
+  });
+
+  it.each(['hit', 'strike'])('classifies a bare %s as an unarmed attack', (verb) => {
+    expect(detectDeclaredAttack(`${verb} Darkwater`, actors)).toMatchObject({
+      verb,
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'unarmed',
+    });
+  });
+
+  it('captures a trailing staff claim from a raw hit phrase', () => {
+    expect(detectDeclaredAttack('hit him with my staff', soleActor)).toMatchObject({
+      verb: 'hit',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'weapon',
+      weaponName: 'staff',
+    });
+  });
+
+  it('captures a trailing sword claim from a raw strike phrase', () => {
+    expect(detectDeclaredAttack('strike him with my sword', soleActor)).toMatchObject({
+      verb: 'strike',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'weapon',
+      weaponName: 'sword',
+    });
+  });
+
+  it('keeps a raw strike without a weapon word unarmed', () => {
+    const attack = detectDeclaredAttack('I strike him', soleActor);
+
+    expect(attack).toMatchObject({
+      verb: 'strike',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'unarmed',
+    });
+    expect(attack).not.toHaveProperty('weaponName');
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith({
+      msg: 'COMBAT_INTENT_PRONOUN_RESOLVED',
+      verb: 'strike',
+      pronoun: 'him',
+      actorName: 'Professor Emil Darkwater',
     });
   });
 

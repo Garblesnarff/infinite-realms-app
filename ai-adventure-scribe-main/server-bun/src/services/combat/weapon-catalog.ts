@@ -55,6 +55,8 @@ const UNARMED_CLAIMS = new Set([
   'unarmedstrike',
   'unarmed',
   'punch',
+  'hit',
+  'strike',
   'fist',
   'fists',
   'kick',
@@ -64,6 +66,24 @@ const UNARMED_CLAIMS = new Set([
   'slap',
   'elbow',
 ]);
+
+const UNARMED_ATTACK_VERBS = new Set([
+  'punch',
+  'hit',
+  'strike',
+  'kick',
+  'headbutt',
+  'shove',
+  'grapple',
+  'slap',
+  'elbow',
+]);
+
+/** A bare attack verb describes the attack type, not the equipped weapon. */
+export function isUnarmedAttackVerb(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return UNARMED_ATTACK_VERBS.has(normalizeWeaponName(value));
+}
 
 /** A punch, kick, or explicit unarmed strike — not "whatever is equipped". */
 export function isUnarmedWeaponClaim(value: string | null | undefined): boolean {
