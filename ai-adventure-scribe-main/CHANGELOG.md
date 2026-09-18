@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.3...v0.19.4) (2026-09-18)
+
+
+### Bug Fixes
+
+* **combat:** provoke non-hostile NPCs after player damage ([#2073](https://github.com/Garblesnarff/infinite-realms-production/issues/2073)) ([918f728](https://github.com/Garblesnarff/infinite-realms-production/commit/918f728ba6aabc7aeeaabbcffb343219dea466c1))
+
 ## [0.19.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.2...v0.19.3) (2026-09-18)
 
 
