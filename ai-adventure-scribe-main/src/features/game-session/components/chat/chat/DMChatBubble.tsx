@@ -58,6 +58,7 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
       currentSegmentIndex,
       isPlaying,
       isProcessing,
+      isStalled,
       volume: _volume,
       isMuted,
       isVoiceEnabled,
@@ -181,6 +182,7 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
                 <DMBubbleVoiceSection
                   isVoiceEnabled={isVoiceEnabled}
                   isProcessing={isProcessing}
+                  isStalled={isStalled}
                   isThisMessagePlaying={isThisMessagePlaying}
                   isMuted={isMuted}
                   error={error}

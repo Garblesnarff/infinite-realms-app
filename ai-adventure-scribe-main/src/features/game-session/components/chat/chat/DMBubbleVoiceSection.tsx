@@ -4,15 +4,12 @@ import React from 'react';
 import type { VoiceSegment } from '@/services/voice-routing';
 
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DMBubbleVoiceSectionProps {
   isVoiceEnabled: boolean;
   isProcessing: boolean;
+  isStalled?: boolean;
   isThisMessagePlaying: boolean;
   isMuted: boolean;
   error?: string;
@@ -26,6 +23,7 @@ interface DMBubbleVoiceSectionProps {
 export const DMBubbleVoiceSection: React.FC<DMBubbleVoiceSectionProps> = ({
   isVoiceEnabled,
   isProcessing,
+  isStalled = false,
   isThisMessagePlaying,
   isMuted,
   error,
@@ -105,7 +103,7 @@ export const DMBubbleVoiceSection: React.FC<DMBubbleVoiceSectionProps> = ({
               ></div>
             </div>
             <span className="text-xs text-muted-foreground/80 font-mono min-w-[4rem] bg-card/50 px-2 py-1 rounded">
-              {formatTime(currentSegmentIndex, segments.length)}
+              {isStalled ? '…' : formatTime(currentSegmentIndex, segments.length)}
             </span>
           </div>
         )}
@@ -158,10 +156,7 @@ export const DMBubbleVoiceSection: React.FC<DMBubbleVoiceSectionProps> = ({
       {isProcessing &&
         isThisMessagePlaying &&
         !(currentSegmentIndex >= 0 && segments[currentSegmentIndex]) && (
-          <div
-            className="flex items-center gap-3 pt-3 border-t border-white/10"
-            aria-live="polite"
-          >
+          <div className="flex items-center gap-3 pt-3 border-t border-white/10" aria-live="polite">
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-infinite-purple/10 px-3 py-1 rounded-full">
               <div className="flex gap-1" aria-hidden="true">
                 <div className="w-1.5 h-1.5 bg-infinite-purple rounded-full animate-bounce [animation-delay:-0.3s]"></div>
@@ -174,32 +169,25 @@ export const DMBubbleVoiceSection: React.FC<DMBubbleVoiceSectionProps> = ({
         )}
 
       {/* Enhanced Current Segment Info */}
-      {isThisMessagePlaying &&
-        currentSegmentIndex >= 0 &&
-        segments[currentSegmentIndex] && (
-          <div className="flex items-center gap-3 pt-3 border-t border-white/10">
-            <div className="flex items-center gap-2 text-xs bg-gradient-to-r from-infinite-purple/10 to-infinite-teal/10 px-3 py-1 rounded-full">
-              <span className="text-infinite-gold font-bold">
-                🎭 {segments[currentSegmentIndex].character || 'Dungeon Master'}
-              </span>
-              <span className="text-muted-foreground/80 font-mono">
-                {currentSegmentIndex + 1}/{segments.length}
-              </span>
-            </div>
+      {isThisMessagePlaying && currentSegmentIndex >= 0 && segments[currentSegmentIndex] && (
+        <div className="flex items-center gap-3 pt-3 border-t border-white/10">
+          <div className="flex items-center gap-2 text-xs bg-gradient-to-r from-infinite-purple/10 to-infinite-teal/10 px-3 py-1 rounded-full">
+            <span className="text-infinite-gold font-bold">
+              🎭 {segments[currentSegmentIndex].character || 'Dungeon Master'}
+            </span>
+            <span className="text-muted-foreground/80 font-mono">
+              {currentSegmentIndex + 1}/{segments.length}
+            </span>
           </div>
-        )}
+        </div>
+      )}
 
       {/* Enhanced Error Message */}
       {error && !isProcessing && (
-        <div
-          className="flex items-center gap-3 pt-3 border-t border-destructive/20"
-          role="status"
-        >
+        <div className="flex items-center gap-3 pt-3 border-t border-destructive/20" role="status">
           <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 px-3 py-1 rounded-full">
             <AlertCircle className="h-4 w-4" aria-hidden="true" />
-            <span className="font-medium">
-              Mystical interference detected - click retry
-            </span>
+            <span className="font-medium">Mystical interference detected - click retry</span>
           </div>
         </div>
       )}
@@ -209,9 +197,7 @@ export const DMBubbleVoiceSection: React.FC<DMBubbleVoiceSectionProps> = ({
         <div className="pt-3 border-t border-white/10">
           <div className="flex items-center gap-2 text-xs text-muted-foreground/80 bg-infinite-gold/10 px-3 py-1 rounded-full animate-pulse">
             <span className="text-infinite-gold">✨</span>
-            <span className="font-medium">
-              Click play to hear the Dungeon Master's voice
-            </span>
+            <span className="font-medium">Click play to hear the Dungeon Master's voice</span>
           </div>
         </div>
       )}

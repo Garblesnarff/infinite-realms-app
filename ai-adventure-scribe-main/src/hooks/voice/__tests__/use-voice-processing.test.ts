@@ -3,8 +3,14 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { useVoiceProcessing } from '../use-voice-processing';
+import {
+  useVoiceProcessing,
+  clearVoiceSegmentAudioCache,
+  getVoiceSegmentAudioCacheSize,
+  SEGMENT_AUDIO_CACHE_MAX,
+} from '../use-voice-processing';
 
+import { logger } from '@/lib/logger';
 import { VoiceDirector } from '@/services/voice-director';
 
 // Mock VoiceDirector
@@ -55,12 +61,14 @@ describe('useVoiceProcessing', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearVoiceSegmentAudioCache();
     // Ensure default state for each test
     defaultProps.state = {
       isVoiceEnabled: true,
       isProcessing: false,
       isPlaying: false,
       isPaused: false,
+      isStalled: false,
       segments: [],
       currentSegmentIndex: -1,
     };
@@ -120,10 +128,12 @@ describe('useVoiceProcessing', () => {
     expect(VoiceDirector.generateAudio).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ voiceId: 'narrator-id' }),
+      expect.any(AbortSignal),
     );
     expect(VoiceDirector.generateAudio).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ voiceId: 'guard-id' }),
+      expect.any(AbortSignal),
     );
     expect(mockPlayAudioSegment).toHaveBeenNthCalledWith(
       1,
@@ -362,6 +372,7 @@ describe('useVoiceProcessing', () => {
     // This checks that VoiceDirector.generateAudio was called for the second request
     expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Second Request' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -378,10 +389,20 @@ describe('useVoiceProcessing', () => {
     (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments1);
     (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments1);
 
-    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: any) => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
-    });
+    (VoiceDirector.generateAudio as any).mockImplementation(
+      async (segment: any, signal?: AbortSignal) => {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve({ ...segment, audioUrl: `http://test.com/${segment.text}.mp3` }),
+            50,
+          );
+          signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      },
+    );
 
     const { result } = renderHook(() => useVoiceProcessing(defaultProps));
 
@@ -399,12 +420,179 @@ describe('useVoiceProcessing', () => {
 
     await firstCall;
 
-    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(1);
     expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: '1.1' }),
+      expect.any(AbortSignal),
     );
-    expect(VoiceDirector.generateAudio).not.toHaveBeenCalledWith(
+    expect(result.current.abortController.current?.signal.aborted).toBe(true);
+    expect(mockPlayAudioSegment).not.toHaveBeenCalledWith(
       expect.objectContaining({ text: '1.2' }),
+      expect.anything(),
     );
+  });
+
+  it('preserves playback order and logs VOICE_SEGMENT_STALL when the next segment is late', async () => {
+    const aiSegments = [
+      { type: 'dm', text: 'one' },
+      { type: 'character', text: 'two', character: 'Professor' },
+      { type: 'dm', text: 'three' },
+    ];
+    const voiceSegments = [
+      { character: 'DM', text: 'one', voiceId: 'narrator' },
+      { character: 'Professor', text: 'two', voiceId: 'villain_male' },
+      { character: 'DM', text: 'three', voiceId: 'narrator' },
+    ];
+
+    let resolveTwo: (value: unknown) => void = () => undefined;
+    const twoReady = new Promise((resolve) => {
+      resolveTwo = resolve;
+    });
+
+    (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
+    (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: { text: string }) => {
+      if (segment.text === 'two') {
+        return twoReady;
+      }
+      return { ...segment, audioUrl: `http://test.com/${segment.text}.mp3` };
+    });
+
+    const playOrder: string[] = [];
+    mockPlayAudioSegment.mockImplementation(async (segment: { text: string }) => {
+      playOrder.push(segment.text);
+    });
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    let finished: Promise<void> = Promise.resolve();
+    await act(async () => {
+      finished = result.current.speakAISegments(aiSegments as any);
+    });
+
+    await vi.waitFor(() => {
+      expect(playOrder).toEqual(['one']);
+    });
+
+    await act(async () => {
+      resolveTwo({ ...voiceSegments[1], audioUrl: 'http://test.com/two.mp3' });
+      await finished;
+    });
+
+    expect(playOrder).toEqual(['one', 'two', 'three']);
+    expect(logger.info).toHaveBeenCalledWith(
+      'VOICE_SEGMENT_STALL',
+      expect.objectContaining({ index: 1, waitMs: expect.any(Number) }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      'VOICE_SEGMENT_TIMING',
+      expect.objectContaining({
+        index: 0,
+        voice: expect.anything(),
+        requestMs: expect.any(Number),
+        readyMs: expect.any(Number),
+        gapMs: expect.any(Number),
+      }),
+    );
+  });
+
+  it('replays cached segments without fetching again', async () => {
+    const aiSegments = [
+      { type: 'dm', text: 'alpha' },
+      { type: 'character', text: 'beta', character: 'Professor' },
+      { type: 'dm', text: 'gamma' },
+    ];
+    const voiceSegments = [
+      { character: 'DM', text: 'alpha', voiceId: 'narrator' },
+      { character: 'Professor', text: 'beta', voiceId: 'villain_male' },
+      { character: 'DM', text: 'gamma', voiceId: 'narrator' },
+    ];
+
+    (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
+    (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: { text: string }) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.text}.mp3`,
+    }));
+    mockPlayAudioSegment.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    await act(async () => {
+      await result.current.speakAISegments(aiSegments as any);
+    });
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(3);
+
+    defaultProps.state.isProcessing = false;
+    await act(async () => {
+      await result.current.speakAISegments(aiSegments as any);
+    });
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(3);
+  });
+
+  it('evicts the oldest cached segment once the cache exceeds the LRU bound', async () => {
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text, voiceId: 'narrator' })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: { text: string }) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.text}.mp3`,
+    }));
+    mockPlayAudioSegment.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    for (let i = 0; i < SEGMENT_AUDIO_CACHE_MAX + 1; i++) {
+      defaultProps.state.isProcessing = false;
+      await act(async () => {
+        await result.current.speakAISegments([{ type: 'dm', text: `cap-${i}` }] as any);
+      });
+    }
+
+    expect(getVoiceSegmentAudioCacheSize()).toBe(SEGMENT_AUDIO_CACHE_MAX);
+
+    const generateCallsAfterFill = (VoiceDirector.generateAudio as any).mock.calls.length;
+    defaultProps.state.isProcessing = false;
+    await act(async () => {
+      await result.current.speakAISegments([{ type: 'dm', text: 'cap-0' }] as any);
+    });
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(generateCallsAfterFill + 1);
+  });
+
+  it('passes the abort signal into generateAudio so unmount can cancel in-flight fetches', async () => {
+    const aiSegments = [{ type: 'dm', text: 'hold' }];
+    const voiceSegments = [{ character: 'DM', text: 'hold', voiceId: 'narrator' }];
+    let seenSignal: AbortSignal | undefined;
+
+    (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
+    (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
+    (VoiceDirector.generateAudio as any).mockImplementation(
+      async (segment: { text: string }, signal?: AbortSignal) => {
+        seenSignal = signal;
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve({ ...segment, audioUrl: 'http://test.com/hold.mp3' }),
+            80,
+          );
+          signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      },
+    );
+
+    const { result, unmount } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    act(() => {
+      void result.current.speakAISegments(aiSegments as any);
+    });
+
+    await vi.waitFor(() => {
+      expect(seenSignal).toBeInstanceOf(AbortSignal);
+    });
+
+    unmount();
+    expect(seenSignal?.aborted).toBe(true);
   });
 });

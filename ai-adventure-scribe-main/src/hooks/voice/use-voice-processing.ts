@@ -13,6 +13,75 @@ import type { VoiceSegment, AISegment } from '@/services/voice-routing';
 
 import { VoiceDirector } from '@/services/voice-director';
 
+const PREFETCH_CONCURRENCY = 3;
+export const SEGMENT_AUDIO_CACHE_MAX = 32;
+
+const segmentAudioCache = new Map<string, VoiceSegment>();
+
+export function clearVoiceSegmentAudioCache(): void {
+  segmentAudioCache.clear();
+}
+
+export function getVoiceSegmentAudioCacheSize(): number {
+  return segmentAudioCache.size;
+}
+
+function rememberSegment(key: string, segment: VoiceSegment): void {
+  if (segmentAudioCache.has(key)) {
+    segmentAudioCache.delete(key);
+  }
+  segmentAudioCache.set(key, segment);
+  while (segmentAudioCache.size > SEGMENT_AUDIO_CACHE_MAX) {
+    const oldest = segmentAudioCache.keys().next().value;
+    if (oldest === undefined) break;
+    segmentAudioCache.delete(oldest);
+  }
+}
+
+function hashText(text: string): string {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return String(Math.abs(hash));
+}
+
+function segmentCacheKey(segment: VoiceSegment): string {
+  return `${segment.voiceId ?? ''}:${hashText(segment.text)}`;
+}
+
+async function generateWithCache(
+  segment: VoiceSegment,
+  signal?: AbortSignal,
+): Promise<VoiceSegment> {
+  if (segment.audioUrl) return segment;
+  const key = segmentCacheKey(segment);
+  const cached = segmentAudioCache.get(key);
+  if (cached?.audioUrl) {
+    rememberSegment(key, cached);
+    return { ...segment, audioUrl: cached.audioUrl, audioBlob: cached.audioBlob };
+  }
+  const generated = await VoiceDirector.generateAudio(segment, signal);
+  if (generated.audioUrl) {
+    rememberSegment(key, generated);
+  }
+  return generated;
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 interface VoiceProcessingProps {
   state: ProgressiveVoiceState;
   setState: React.Dispatch<React.SetStateAction<ProgressiveVoiceState>>;
@@ -41,6 +110,12 @@ export const useVoiceProcessing = ({
   // Audio management
   const abortController = React.useRef<AbortController | null>(null);
 
+  React.useEffect(() => {
+    return () => {
+      abortController.current?.abort();
+    };
+  }, []);
+
   /**
    * Progressive generation and playback
    */
@@ -48,6 +123,7 @@ export const useVoiceProcessing = ({
     async (segments: VoiceSegment[], startIndex: number = 0): Promise<void> => {
       // ⚡ Capture the current abort signal to avoid race conditions when a new request starts
       const signal = abortController.current?.signal;
+      const prefetchStartedAt = performance.now();
 
       logger.info(
         '🎪 Starting progressive processing of',
@@ -56,22 +132,58 @@ export const useVoiceProcessing = ({
         startIndex > 0 ? `from index ${startIndex}` : '',
       );
 
-      setState((prev) => ({ ...prev, isPlaying: true }));
+      setState((prev) => ({ ...prev, isPlaying: true, isStalled: false }));
 
+      const readyFlags = segments.map(() => false);
+      const timings = segments.map(() => ({ requestMs: 0, readyMs: 0 }));
+      const slots = segments.map(() => createDeferred<VoiceSegment>());
+
+      const workerCount = Math.min(PREFETCH_CONCURRENCY, segments.length);
+      let nextIndex = 0;
+      const runWorker = async () => {
+        while (true) {
+          const i = nextIndex++;
+          if (i >= segments.length) return;
+          if (signal?.aborted) {
+            readyFlags[i] = true;
+            slots[i].resolve({ ...segments[i], error: 'aborted' });
+            continue;
+          }
+          const requestStartedAt = performance.now();
+          try {
+            const generated = await generateWithCache(segments[i], signal);
+            timings[i] = {
+              requestMs: performance.now() - requestStartedAt,
+              readyMs: performance.now() - prefetchStartedAt,
+            };
+            readyFlags[i] = true;
+            slots[i].resolve(generated);
+          } catch (error) {
+            timings[i] = {
+              requestMs: performance.now() - requestStartedAt,
+              readyMs: performance.now() - prefetchStartedAt,
+            };
+            readyFlags[i] = true;
+            slots[i].resolve({
+              ...segments[i],
+              error: error instanceof Error ? error.message : 'Audio generation failed',
+            });
+          }
+        }
+      };
+      void Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+
+      let previousEndedAt = prefetchStartedAt;
       for (let i = 0; i < segments.length; i++) {
         const actualIndex = startIndex + i;
-        // Check if we should abort
         if (signal?.aborted) {
           logger.info('🛑 Processing aborted at segment', actualIndex + 1, 'due to abort signal');
           break;
         }
 
-        const segment = segments[i];
-
         try {
-          logger.info(`🎵 Processing segment ${actualIndex + 1}: ${segment.character}`);
+          logger.info(`🎵 Processing segment ${actualIndex + 1}: ${segments[i].character}`);
 
-          // Update current segment index
           setState((prev) => ({
             ...prev,
             currentSegmentIndex: actualIndex,
@@ -80,19 +192,24 @@ export const useVoiceProcessing = ({
             ),
           }));
 
-          // Generate audio for this segment (if not already generated)
-          let segmentWithAudio = segment;
-          if (!segment.audioUrl) {
-            segmentWithAudio = await VoiceDirector.generateAudio(segment);
-
-            // Update segment with audio
-            setState((prev) => ({
-              ...prev,
-              segments: prev.segments.map((s, idx) => (idx === actualIndex ? segmentWithAudio : s)),
-            }));
+          const stalled = i > 0 && !readyFlags[i];
+          const waitStartedAt = performance.now();
+          if (stalled) {
+            setState((prev) => ({ ...prev, isStalled: true }));
           }
 
-          // If generation failed, log and continue
+          const segmentWithAudio = await slots[i].promise;
+          const waitMs = performance.now() - waitStartedAt;
+          if (stalled) {
+            logger.info('VOICE_SEGMENT_STALL', { index: actualIndex, waitMs });
+            setState((prev) => ({ ...prev, isStalled: false }));
+          }
+
+          setState((prev) => ({
+            ...prev,
+            segments: prev.segments.map((s, idx) => (idx === actualIndex ? segmentWithAudio : s)),
+          }));
+
           if (segmentWithAudio.error) {
             logger.warn(
               `⚠️ Audio generation failed for segment ${actualIndex + 1}:`,
@@ -101,23 +218,31 @@ export const useVoiceProcessing = ({
             continue;
           }
 
-          // Play the audio
+          const gapMs = performance.now() - previousEndedAt;
+          logger.info('VOICE_SEGMENT_TIMING', {
+            index: actualIndex,
+            voice: segmentWithAudio.voiceId || segmentWithAudio.character,
+            requestMs: timings[i].requestMs,
+            readyMs: timings[i].readyMs,
+            gapMs,
+          });
+
           if (segmentWithAudio.audioUrl) {
             await playAudioSegment(segmentWithAudio, actualIndex);
           }
+          previousEndedAt = performance.now();
         } catch (error) {
           logger.error(`❌ Error processing segment ${actualIndex + 1}:`, error);
-          // Continue with next segment
           continue;
         }
       }
 
-      // Playback complete
       setState((prev) => ({
         ...prev,
         isPlaying: false,
         isPaused: false,
         isProcessing: false,
+        isStalled: false,
         currentSegmentIndex: -1,
       }));
 

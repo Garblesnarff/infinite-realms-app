@@ -30,6 +30,7 @@ export interface ProgressiveVoiceState {
   isPlaying: boolean;
   isPaused: boolean;
   isProcessing: boolean;
+  isStalled: boolean;
   volume: number;
   isMuted: boolean;
   isVoiceEnabled: boolean;
@@ -85,6 +86,7 @@ export const useProgressiveVoice = () => {
       isPlaying: false,
       isPaused: false,
       isProcessing: false,
+      isStalled: false,
       currentSegmentIndex: -1,
       segments: [],
     }));
@@ -119,6 +121,7 @@ export const useProgressiveVoice = () => {
     isPlaying: false,
     isPaused: false,
     isProcessing: false,
+    isStalled: false,
     volume,
     isMuted,
     isVoiceEnabled,
@@ -219,6 +222,7 @@ export const useProgressiveVoice = () => {
       isPlaying: state.isPlaying,
       isPaused: state.isPaused,
       isProcessing: state.isProcessing,
+      isStalled: state.isStalled,
       volume: state.volume,
       isMuted: state.isMuted,
       isVoiceEnabled: state.isVoiceEnabled,
@@ -249,6 +253,7 @@ export const useProgressiveVoice = () => {
       state.isPlaying,
       state.isPaused,
       state.isProcessing,
+      state.isStalled,
       state.volume,
       state.isMuted,
       state.isVoiceEnabled,

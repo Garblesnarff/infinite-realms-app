@@ -40,6 +40,7 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
     currentSegmentIndex,
     isPlaying,
     isProcessing,
+    isStalled,
     volume,
     isMuted,
     isVoiceEnabled,
@@ -163,6 +164,7 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
           <VoicePlaybackStatus
             isPlaying={isPlaying}
             isProcessing={isProcessing}
+            isStalled={isStalled}
             segments={segments}
             currentSegmentIndex={currentSegmentIndex}
             calculateProgress={calculateProgress}

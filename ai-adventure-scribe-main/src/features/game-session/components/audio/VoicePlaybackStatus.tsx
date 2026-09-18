@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 interface VoicePlaybackStatusProps {
   isPlaying: boolean;
   isProcessing: boolean;
+  isStalled?: boolean;
   segments: VoiceSegment[];
   currentSegmentIndex: number;
   calculateProgress: () => number;
@@ -23,6 +24,7 @@ interface VoicePlaybackStatusProps {
 export const VoicePlaybackStatus: React.FC<VoicePlaybackStatusProps> = ({
   isPlaying,
   isProcessing,
+  isStalled = false,
   segments,
   currentSegmentIndex,
   calculateProgress,
@@ -37,9 +39,11 @@ export const VoicePlaybackStatus: React.FC<VoicePlaybackStatusProps> = ({
         <Progress value={calculateProgress()} className="h-2" />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>
-            {currentSegmentIndex >= 0
-              ? `Segment ${currentSegmentIndex + 1} of ${segments.length}`
-              : 'Starting...'}
+            {isStalled
+              ? '…'
+              : currentSegmentIndex >= 0
+                ? `Segment ${currentSegmentIndex + 1} of ${segments.length}`
+                : 'Starting...'}
           </span>
           <span>{segments[currentSegmentIndex]?.character || 'DM'}</span>
         </div>
@@ -50,11 +54,7 @@ export const VoicePlaybackStatus: React.FC<VoicePlaybackStatusProps> = ({
         <Card className="bg-primary/5 border-primary/30">
           <CardContent className="p-3">
             <div className="flex items-start gap-3">
-              <span
-                className="text-lg"
-                role="img"
-                aria-label={segments[currentSegmentIndex].type}
-              >
+              <span className="text-lg" role="img" aria-label={segments[currentSegmentIndex].type}>
                 {getSegmentTypeIcon(segments[currentSegmentIndex].type)}
               </span>
               <div className="flex-1">

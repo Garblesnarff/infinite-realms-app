@@ -63,7 +63,10 @@ export class VoiceAudioService {
   /**
    * Generate audio for a single segment with caching
    */
-  static async generateAudio(segment: VoiceSegment): Promise<VoiceSegment> {
+  static async generateAudio(
+    segment: VoiceSegment,
+    signal?: AbortSignal,
+  ): Promise<VoiceSegment> {
     const cacheKey = VoiceAudioService.generateCacheKey(segment.voiceId, segment.text);
 
     // Check cache first
@@ -98,6 +101,7 @@ export class VoiceAudioService {
             'Content-Type': 'application/json',
             ...getAuthHeaders(),
           },
+          signal,
           body: JSON.stringify({
             text: segment.text,
             model_id: ELEVENLABS_MODEL,

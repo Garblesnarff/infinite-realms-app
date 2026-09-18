@@ -130,6 +130,7 @@ describe('useProgressiveVoice', () => {
         character: undefined,
         voice_category: undefined,
       }),
+      expect.any(AbortSignal),
     );
     await waitFor(() => expect(mockPlayAudioSegment).toHaveBeenCalled());
   });

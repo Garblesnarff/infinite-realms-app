@@ -146,6 +146,21 @@ describe('VoiceAudioService', () => {
       expect(result.isGenerating).toBe(false);
       expect(logger.error).toHaveBeenCalled();
     });
+
+    it('forwards the abort signal to fetch', async () => {
+      const controller = new AbortController();
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+      });
+
+      await VoiceAudioService.generateAudio(mockSegment, controller.signal);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(mockSegment.voiceId),
+        expect.objectContaining({ signal: controller.signal }),
+      );
+    });
   });
 
   describe('Cache Management', () => {
