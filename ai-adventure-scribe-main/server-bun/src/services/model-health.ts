@@ -1,5 +1,6 @@
 import { getConfiguredGeminiModels, getConfiguredOpenRouterModels } from './llm-model-config.js';
 import { setFetchedModelPricing } from './model-pricing.js';
+import { alert } from '../lib/alerting.js';
 import { logger } from '../lib/logger.js';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models?output_modalities=text';
@@ -128,6 +129,22 @@ const fetchGeminiModelIds = async (apiKey: string): Promise<Set<string>> => {
   return ids;
 };
 
+const alertProviderDegradation = (
+  provider: 'openrouter' | 'gemini',
+  unlistedModels: string[],
+  structuredOutputUnsupportedModels: string[],
+): void => {
+  const reasons = [
+    unlistedModels.length ? `unlisted=${unlistedModels.join(',')}` : null,
+    structuredOutputUnsupportedModels.length
+      ? `structured_output_unsupported=${structuredOutputUnsupportedModels.join(',')}`
+      : null,
+  ].filter((reason): reason is string => Boolean(reason));
+  if (reasons.length) {
+    alert('llm_model_health_degraded', { error: `${provider}: ${reasons.join('; ')}` });
+  }
+};
+
 const checkProvider = async (
   provider: 'openrouter' | 'gemini',
   models: string[],
@@ -174,6 +191,7 @@ const checkProvider = async (
           requiredParameters: ['response_format', 'structured_outputs'],
         });
       }
+      alertProviderDegradation(provider, unlistedModels, structuredOutputUnsupportedModels);
       return { configured: true, checked: true, unlistedModels, structuredOutputUnsupportedModels };
     }
 
@@ -187,6 +205,7 @@ const checkProvider = async (
         model,
       });
     }
+    alertProviderDegradation(provider, unlistedModels, []);
     return {
       configured: true,
       checked: true,
@@ -195,6 +214,9 @@ const checkProvider = async (
     };
   } catch (error) {
     logger.error({ msg: 'LLM_MODEL_HEALTH_CHECK_FAILED', provider, error });
+    alert('llm_model_health_check_failed', {
+      error: `${provider}: ${error instanceof Error ? error.message : String(error)}`,
+    });
     return {
       configured: true,
       checked: true,

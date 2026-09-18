@@ -62,6 +62,34 @@ describe('LLM provider resilience', () => {
     expect(() => getCircuitBreaker('llm:openrouter').allowOrThrow()).not.toThrow();
   });
 
+  it('fails over memory extraction when the primary model is unavailable', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.OPENROUTER_EXTRACTION_MODEL = 'stale/extraction';
+    process.env.OPENROUTER_EXTRACTION_FALLBACK_MODEL = 'fallback/extraction';
+    const requestedModels: string[] = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { model: string };
+      requestedModels.push(body.model);
+      if (body.model === 'stale/extraction') return new Response('not found', { status: 404 });
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"memories":[]}' } }],
+          usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const result = await LLMProviderService.extract({ prompt: 'extract memories' });
+
+    expect(requestedModels).toEqual(['stale/extraction', 'fallback/extraction']);
+    expect(result).toMatchObject({
+      text: '{"memories":[]}',
+      model: 'fallback/extraction',
+      provider: 'openrouter',
+    });
+  });
+
   it('retries invalid structured output once on the same model before falling back', async () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.OPENROUTER_TEXT_MODEL = 'broken/structured-model';

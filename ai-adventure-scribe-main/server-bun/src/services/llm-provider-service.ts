@@ -1,10 +1,9 @@
 import { isRetryableUpstreamStatus, LLMUpstreamError } from './llm-errors.js';
 import {
   DEFAULT_GEMINI_TEXT_MODEL,
-  DEFAULT_OPENROUTER_EXTRACTION_FALLBACK_MODEL,
-  DEFAULT_OPENROUTER_EXTRACTION_MODEL,
   DEFAULT_OPENROUTER_TEXT_MODEL,
   getGeminiModelCandidates,
+  getOpenRouterExtractionModelCandidates,
   getOpenRouterModelCandidates,
 } from './llm-model-config.js';
 import { getStructuredOutputUnsupportedModels } from './model-health.js';
@@ -50,6 +49,18 @@ export interface LLMResponse {
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
+
+const failoverReason = (status?: number): string =>
+  status ? `upstream_status_${status}` : 'provider_error';
+
+const logFailover = (from: string, to: string, status?: number): void => {
+  logger.warn({
+    msg: 'LLM_FAILOVER',
+    from,
+    to,
+    reason: failoverReason(status),
+  });
+};
 
 const retryAfterSeconds = (response: Response): number | undefined => {
   const value = response.headers.get('retry-after');
@@ -483,17 +494,9 @@ export class LLMProviderService {
           lastFailure = { status: 503, details, retryAfter: 1 };
         }
         if (retry === 0 && responseSchema) continue;
-        const nextCandidate = candidateModels[index + 1];
-        if (nextCandidate) {
-          logger.warn({
-            msg: 'LLM_OPENROUTER_FALLBACK',
-            requested: textModel,
-            failedModel: candidate,
-            upstreamStatus: lastFailure?.status,
-            using: nextCandidate,
-          });
-        }
       }
+      const nextCandidate = candidateModels[index + 1];
+      if (nextCandidate) logFailover(candidate, nextCandidate, lastFailure?.status);
     }
 
     breaker.onFailure();
@@ -579,7 +582,8 @@ export class LLMProviderService {
     let lastFailure: { status: number; details: string; retryAfter?: number } | null = null;
     let availableModels: Set<string> | null = null;
 
-    for (const candidate of candidateModels) {
+    for (let index = 0; index < candidateModels.length; index += 1) {
+      const candidate = candidateModels[index];
       const version = pickGeminiApiVersion(candidate);
       for (let retry = 0; retry < (responseSchema ? 2 : 1); retry += 1) {
         attempts.push(`${candidate} [${version}]`);
@@ -670,6 +674,8 @@ export class LLMProviderService {
         break;
       }
       if (successPayload && successModel) break;
+      const nextCandidate = candidateModels[index + 1];
+      if (nextCandidate) logFailover(candidate, nextCandidate, lastFailure?.status);
     }
 
     if (!successPayload || !successModel) {
@@ -745,17 +751,13 @@ export class LLMProviderService {
       return { error: 'Service unavailable', status: 500, text: '' };
     }
 
-    // Models to try: free primary, cheap fallback
-    const models = [
-      process.env.OPENROUTER_EXTRACTION_MODEL || DEFAULT_OPENROUTER_EXTRACTION_MODEL,
-      process.env.OPENROUTER_EXTRACTION_FALLBACK_MODEL ||
-        DEFAULT_OPENROUTER_EXTRACTION_FALLBACK_MODEL,
-    ];
+    const models = getOpenRouterExtractionModelCandidates();
     let lastFailure: { model: string; status: number; details: string } | null = null;
 
     const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
 
-    for (const model of models) {
+    for (let index = 0; index < models.length; index += 1) {
+      const model = models[index];
       try {
         const reqBody = {
           model,
@@ -780,6 +782,8 @@ export class LLMProviderService {
           const errText = await response.text();
           lastFailure = { model, status: response.status, details: errText };
           logger.warn({ msg: 'LLM_EXTRACT_MODEL_FAILED', model, status: response.status, errText });
+          const nextModel = models[index + 1];
+          if (nextModel) logFailover(model, nextModel, lastFailure.status);
           continue; // Try next model
         }
 
@@ -815,6 +819,8 @@ export class LLMProviderService {
           details: err instanceof Error ? err.message : String(err),
         };
         logger.warn({ msg: 'LLM_EXTRACT_ERROR', model, error: err });
+        const nextModel = models[index + 1];
+        if (nextModel) logFailover(model, nextModel, lastFailure.status);
         continue; // Try next model
       }
     }

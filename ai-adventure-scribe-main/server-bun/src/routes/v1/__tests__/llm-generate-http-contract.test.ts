@@ -10,12 +10,14 @@ let generatedResult: Record<string, unknown> = {
   provider: 'openrouter',
   model: 'test/model',
 };
+let streamError: unknown = new Error('upstream stream failed');
 
 // Captures for the #1688 prompt-metrics log lines. Unlike the other logger
 // methods (still no-ops -- their content isn't under test elsewhere in this
 // file), info/warn push the raw message so tests can assert on it.
 let loggedInfoLines: string[] = [];
 let loggedWarnLines: string[] = [];
+let loggedInfoEntries: Record<string, unknown>[] = [];
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -27,6 +29,9 @@ const testLogger = {
   debug: () => {},
   info: (msg: unknown) => {
     if (typeof msg === 'string') loggedInfoLines.push(msg);
+    if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
+      loggedInfoEntries.push(msg as Record<string, unknown>);
+    }
   },
   warn: (msg: unknown) => {
     if (typeof msg === 'string') loggedWarnLines.push(msg);
@@ -62,6 +67,10 @@ mock.module('../../../services/llm-provider-service.js', () => ({
       generatedInput = input;
       generatedInputs.push(input);
       return generatedQueue.shift() || generatedResult;
+    },
+    stream: async () => {
+      if (streamError) throw streamError;
+      return new ReadableStream<Uint8Array>();
     },
   },
 }));
@@ -99,7 +108,8 @@ describe('POST /v1/llm/generate HTTP contract', () => {
     expect(generatedInput?.prompt).toBe(prompt);
   });
 
-  it('returns a retryable Gemini failure as a structured 502 with a retry hint', async () => {
+  it('returns a degraded 200 envelope when all generation models fail', async () => {
+    loggedInfoEntries = [];
     generatedResult = {
       text: '',
       error: 'LLM request failed',
@@ -114,19 +124,27 @@ describe('POST /v1/llm/generate HTTP contract', () => {
         new Request('http://localhost/v1/llm/generate', {
           method: 'POST',
           headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
-          body: JSON.stringify({ prompt: 'hello' }),
+          body: JSON.stringify({ prompt: 'hello', sessionId: 'session-123' }),
         }),
       );
       const body = (await response.json()) as Record<string, unknown>;
 
-      expect(response.status).toBe(502);
-      expect(response.headers.get('retry-after')).toBe('3');
-      expect(body).toMatchObject({
-        error: 'upstream_model_error',
-        provider: 'gemini',
-        model: 'gemini-2.5-flash-lite',
-        retryable: true,
-        retry_after: 3,
+      expect(response.status).toBe(200);
+      expect(response.headers.get('retry-after')).toBeNull();
+      expect(body).toEqual({
+        parsed: false,
+        degraded: true,
+        reason: 'llm_generate_unavailable',
+        text: 'The Dungeon Master pauses. The storyteller service did not answer; try your action again.',
+      });
+      expect(
+        loggedInfoEntries.find((entry) => entry.msg === 'LLM_GENERATE_ENVELOPE_SHAPE'),
+      ).toMatchObject({
+        msg: 'LLM_GENERATE_ENVELOPE_SHAPE',
+        sessionId: 'session-123',
+        parsed: false,
+        degraded: true,
+        textLength: (body.text as string).length,
       });
     } finally {
       generatedResult = {
@@ -134,6 +152,69 @@ describe('POST /v1/llm/generate HTTP contract', () => {
         provider: 'openrouter',
         model: 'test/model',
       };
+    }
+  });
+
+  it('emits the envelope shape log with the fallback session and prose length', async () => {
+    loggedInfoEntries = [];
+    generatedResult = {
+      text: '',
+      error: 'LLM request failed',
+      provider: 'openrouter',
+      model: 'test/model',
+      upstreamStatus: 503,
+    };
+    try {
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'hello', sessionId: 'session-log-test' }),
+        }),
+      );
+      const body = (await response.json()) as { text: string };
+      const shapeLog = loggedInfoEntries.find(
+        (entry) => entry.msg === 'LLM_GENERATE_ENVELOPE_SHAPE',
+      );
+
+      expect(response.status).toBe(200);
+      expect(shapeLog).toMatchObject({
+        msg: 'LLM_GENERATE_ENVELOPE_SHAPE',
+        sessionId: 'session-log-test',
+        parsed: false,
+        degraded: true,
+        textLength: body.text.length,
+      });
+    } finally {
+      generatedResult = {
+        text: 'The frozen guests smell faintly of winter roses. What do you do?',
+        provider: 'openrouter',
+        model: 'test/model',
+      };
+    }
+  });
+
+  it('returns the same degraded 200 envelope when streaming fails upstream', async () => {
+    streamError = new Error('upstream stream failed');
+    try {
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate/stream', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'hello' }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(await response.json()).toEqual({
+        parsed: false,
+        degraded: true,
+        reason: 'llm_generate_unavailable',
+        text: 'The Dungeon Master pauses. The storyteller service did not answer; try your action again.',
+      });
+    } finally {
+      streamError = new Error('upstream stream failed');
     }
   });
 

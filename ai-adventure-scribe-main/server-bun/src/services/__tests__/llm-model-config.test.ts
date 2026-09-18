@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { getConfiguredGeminiModels } from '../llm-model-config.js';
+import {
+  getConfiguredGeminiModels,
+  getConfiguredOpenRouterModels,
+  getOpenRouterExtractionModelCandidates,
+} from '../llm-model-config.js';
 import { resetModelHealthForTests, validateConfiguredModels } from '../model-health.js';
 import geminiModelListing from './fixtures/gemini-model-list.json';
 
@@ -29,5 +33,26 @@ describe('Gemini model defaults', () => {
     expect(health.gemini.unlistedModels).toEqual([]);
     expect(getConfiguredGeminiModels()).not.toContain('gemini-2.5-flash-lite-001');
     expect(getConfiguredGeminiModels()).not.toContain('gemini-2.5-flash-lite-preview');
+  });
+});
+
+describe('OpenRouter extraction model defaults', () => {
+  it('uses the live-verified primary and fallback instead of retired IDs', () => {
+    delete process.env.OPENROUTER_EXTRACTION_MODEL;
+    delete process.env.OPENROUTER_EXTRACTION_FALLBACK_MODEL;
+    delete process.env.OPENROUTER_TEXT_MODEL;
+    delete process.env.OPENROUTER_FALLBACK_MODELS;
+
+    expect(getOpenRouterExtractionModelCandidates()).toEqual([
+      'mistralai/mistral-nemo',
+      'meta-llama/llama-3.1-8b-instruct',
+    ]);
+    expect(getConfiguredOpenRouterModels()).not.toEqual(
+      expect.arrayContaining([
+        'inclusionai/ling-2.6-flash',
+        'inclusionai/ling-2.6-1t',
+        'nex-agi/nex-n2-mini',
+      ]),
+    );
   });
 });

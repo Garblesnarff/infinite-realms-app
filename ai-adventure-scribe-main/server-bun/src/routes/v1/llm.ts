@@ -10,6 +10,7 @@
 
 import { Elysia, t } from 'elysia';
 
+import { alert } from '../../lib/alerting.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
@@ -30,11 +31,6 @@ import {
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
-import {
-  createUpstreamModelErrorBody,
-  LLMUpstreamError,
-  toUpstreamModelError,
-} from '../../services/llm-errors.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 
 /**
@@ -58,13 +54,20 @@ function logEnvelopeShape(
   envelope: Record<string, unknown> | null,
   text: string,
   sessionId: string | undefined,
+  degraded = false,
 ): void {
   // textLength distinguishes an empty completion from non-JSON prose: a
   // `parsed: false` line alone cannot, which cost a diagnosis on #2049 where a
   // 966ms 200 turned out to be an unparseable body. Length only, never text.
   const textLength = typeof text === 'string' ? text.length : 0;
   if (!envelope) {
-    logger.info({ msg: 'LLM_GENERATE_ENVELOPE_SHAPE', sessionId, parsed: false, textLength });
+    logger.info({
+      msg: 'LLM_GENERATE_ENVELOPE_SHAPE',
+      sessionId,
+      parsed: false,
+      textLength,
+      ...(degraded ? { degraded: true } : {}),
+    });
     return;
   }
   const len = (v: unknown): number | null => (Array.isArray(v) ? v.length : null);
@@ -79,11 +82,22 @@ function logEnvelopeShape(
   });
 }
 
-const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
-  if (status === 400) return 400;
-  if (status === 503) return 503;
-  return 500;
-};
+const MEMORY_EXTRACTION_DEGRADED_REASON = 'memory_extraction_unavailable';
+const LLM_GENERATE_DEGRADED_REASON = 'llm_generate_unavailable';
+const LLM_GENERATE_DEGRADED_TEXT =
+  'The Dungeon Master pauses. The storyteller service did not answer; try your action again.';
+
+const degradedGenerateEnvelope = (): {
+  parsed: false;
+  degraded: true;
+  reason: string;
+  text: string;
+} => ({
+  parsed: false as const,
+  degraded: true as const,
+  reason: LLM_GENERATE_DEGRADED_REASON,
+  text: LLM_GENERATE_DEGRADED_TEXT,
+});
 
 const extractPlayerInputFromPrompt = (prompt: string): string | undefined => {
   const match = /<player_input>\s*([\s\S]*?)\s*<\/player_input>\s*$/i.exec(prompt);
@@ -290,23 +304,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       });
 
       if (result.error) {
-        const upstreamError = toUpstreamModelError(result);
-        if (upstreamError) {
-          set.status = 502;
-          if (upstreamError.retry_after)
-            set.headers['Retry-After'] = String(upstreamError.retry_after);
-          logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
-          return upstreamError;
-        }
-        set.status = safeInternalLLMStatus(result.status);
-        if (result.retryAfter) {
-          set.headers['Retry-After'] = String(Math.max(1, result.retryAfter));
-        }
-        return {
+        logger.error({
+          msg: 'LLM_GENERATE_DEGRADED',
           error: result.error,
-          details: result.details,
-          attempts: result.attempts,
-        };
+          status: result.status,
+          provider: result.provider,
+          model: result.model,
+        });
+        const degradedEnvelope = degradedGenerateEnvelope();
+        logEnvelopeShape(null, degradedEnvelope.text, sessionId ?? combatEntry?.sessionId, true);
+        set.status = 200;
+        return degradedEnvelope;
       }
 
       if (result.usage && result.provider) {
@@ -420,18 +428,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         });
       } catch (error) {
         logger.error({ msg: 'LLM_STREAM_ERROR', error });
-        set.status = 502;
-        if (error instanceof LLMUpstreamError) {
-          const upstreamError = createUpstreamModelErrorBody(
-            error.provider,
-            error.model,
-            error.upstreamStatus,
-            error.retryable,
-          );
-          logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
-          return upstreamError;
-        }
-        return { error: 'LLM stream failed' };
+        set.status = 200;
+        return degradedGenerateEnvelope();
       }
     },
     {
@@ -456,10 +454,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
   )
 
   /**
-   * Extract memories via LLM (uses free model with paid fallback)
+   * Extract memories via LLM (uses a live-verified primary with a live-verified fallback)
    * POST /v1/llm/extract
    *
-   * Uses OPENROUTER_EXTRACTION_MODEL (free) as primary,
+   * Uses OPENROUTER_EXTRACTION_MODEL as primary,
    * falls back to OPENROUTER_EXTRACTION_FALLBACK_MODEL on error.
    */
   .post(
@@ -497,14 +495,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       });
 
       if (result.error) {
-        const upstreamError = toUpstreamModelError(result);
-        if (upstreamError) {
-          set.status = 502;
-          logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
-          return upstreamError;
-        }
-        set.status = safeInternalLLMStatus(result.status);
-        return { error: result.error };
+        alert('llm_extraction_degraded', { error: result.error });
+        set.status = 200;
+        return { memories: [], degraded: true, reason: MEMORY_EXTRACTION_DEGRADED_REASON };
       }
 
       if (result.usage && result.provider) {
