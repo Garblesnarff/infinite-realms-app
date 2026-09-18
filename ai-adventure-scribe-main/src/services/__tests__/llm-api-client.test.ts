@@ -56,6 +56,7 @@ describe('LlmApiClient', () => {
     // Reset singleton state if possible
     (llmApiClient as any).useOfflineFallback = false;
     (llmApiClient as any).offlineFallbackSetAt = 0;
+    (llmApiClient as any).lastRequestId = null;
 
     vi.useFakeTimers();
   });
@@ -374,33 +375,151 @@ describe('LlmApiClient', () => {
   });
 
   describe('Offline Fallback', () => {
-    it('should enter offline fallback mode on fetch TypeError', async () => {
+    it('does not trip offline fallback when extract fails, so generate still fetches', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ text: 'Narration' }),
+      });
+
+      await expect(llmApiClient.extractMemories('context')).resolves.toBe('');
+      await expect(llmApiClient.generateText({ prompt: 'test' })).resolves.toBe('Narration');
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch.mock.calls[1][0]).toEqual(expect.stringContaining('/v1/llm/generate'));
+      expect(logger.warn).not.toHaveBeenCalledWith('OFFLINE_FALLBACK_TRIPPED', expect.anything());
+    });
+
+    it('trips offline fallback on a generate fetch TypeError and logs the route', async () => {
       mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
 
       await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
         'Failed to fetch',
       );
 
-      // Next call should fail immediately without fetch
-      mockFetch.mockClear();
-      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
-        'API unavailable',
+      expect((llmApiClient as any).useOfflineFallback).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith('OFFLINE_FALLBACK_TRIPPED', {
+        route: '/v1/llm/generate',
+        errorName: 'TypeError',
+        errorMessage: 'Failed to fetch',
+      });
+    });
+
+    it('includes the latest server request id when the generate fallback trips', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: { get: (name: string) => (name === 'x-request-id' ? 'req-123' : null) },
+          json: () => Promise.resolve({ text: 'First response' }),
+        })
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      await expect(llmApiClient.generateText({ prompt: 'first' })).resolves.toBe('First response');
+      await expect(llmApiClient.generateText({ prompt: 'second' })).rejects.toThrow(
+        'Failed to fetch',
       );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        'OFFLINE_FALLBACK_TRIPPED',
+        expect.objectContaining({ requestId: 'req-123' }),
+      );
+    });
+
+    it('blocks optional calls while offline and logs the remaining time', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
+        'Failed to fetch',
+      );
+
+      mockFetch.mockClear();
+      await expect(llmApiClient.extractMemories('context')).resolves.toBe('');
+
       expect(mockFetch).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith('OFFLINE_FALLBACK_BLOCKED', {
+        route: '/v1/llm/extract',
+        msRemaining: 30_000,
+      });
+    });
+
+    it('never pre-fails generate while the offline flag is set', async () => {
+      (llmApiClient as any).useOfflineFallback = true;
+      (llmApiClient as any).offlineFallbackSetAt = Date.now();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ text: 'Back online narration' }),
+      });
+
+      await expect(llmApiClient.generateText({ prompt: 'test' })).resolves.toBe(
+        'Back online narration',
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('should reset offline fallback after 30 seconds', async () => {
       (llmApiClient as any).useOfflineFallback = true;
-      (llmApiClient as any).offlineFallbackSetAt = Date.now() - 31000;
+      (llmApiClient as any).offlineFallbackSetAt = Date.now();
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ text: 'Back online' }),
+        json: () => Promise.resolve({ text: 'Back online memories' }),
       });
 
-      const result = await llmApiClient.generateText({ prompt: 'test' });
-      expect(result).toBe('Back online');
+      vi.advanceTimersByTime(30_000);
+      const result = await llmApiClient.extractMemories('context');
+      expect(result).toBe('Back online memories');
       expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('aborts generate after 60 seconds and logs AbortError distinctly', async () => {
+      mockFetch.mockImplementationOnce(
+        (_url: string, options: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            options.signal?.addEventListener('abort', () => {
+              const error = new Error('The operation was aborted');
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      );
+
+      const request = llmApiClient.generateText({ prompt: 'test' });
+      const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      await rejection;
+      expect(logger.warn).toHaveBeenCalledWith(
+        'LLM_API_REQUEST_ABORTED',
+        expect.objectContaining({
+          route: '/v1/llm/generate',
+          errorName: 'AbortError',
+        }),
+      );
+      expect((llmApiClient as any).useOfflineFallback).toBe(false);
+    });
+
+    it('aborts extract after 10 seconds and logs AbortError distinctly', async () => {
+      mockFetch.mockImplementationOnce(
+        (_url: string, options: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            options.signal?.addEventListener('abort', () => {
+              const error = new Error('The operation was aborted');
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      );
+
+      const request = llmApiClient.extractMemories('context');
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(request).resolves.toBe('');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'LLM_API_REQUEST_ABORTED',
+        expect.objectContaining({
+          route: '/v1/llm/extract',
+          errorName: 'AbortError',
+        }),
+      );
     });
   });
 });

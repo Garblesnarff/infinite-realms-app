@@ -5,6 +5,34 @@ import logger from '@/lib/logger';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
+const LLM_EXTRACT_ROUTE = '/v1/llm/extract';
+
+function isGenerateRoute(path: string): boolean {
+  return path.startsWith(LLM_GENERATE_ROUTE_PREFIX);
+}
+
+function getRouteTimeoutMs(path: string): number | undefined {
+  if (isGenerateRoute(path)) return 60_000;
+  if (path === LLM_EXTRACT_ROUTE) return 10_000;
+  return undefined;
+}
+
+function getErrorName(error: unknown): string {
+  if (error && typeof error === 'object' && 'name' in error) {
+    const name = (error as { name?: unknown }).name;
+    if (typeof name === 'string' && name) return name;
+  }
+  return error instanceof Error ? error.name : 'UnknownError';
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
 
 export class ApiClientError extends Error {
   readonly status: number;
@@ -99,19 +127,43 @@ class LlmApiClient {
   private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
     if (
       this.useOfflineFallback &&
-      Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS
+      Date.now() - this.offlineFallbackSetAt >= LlmApiClient.OFFLINE_RESET_MS
     ) {
       this.useOfflineFallback = false;
     }
-    if (this.useOfflineFallback) {
+
+    if (this.useOfflineFallback && !isGenerateRoute(path)) {
+      const msRemaining = Math.max(
+        0,
+        LlmApiClient.OFFLINE_RESET_MS - (Date.now() - this.offlineFallbackSetAt),
+      );
+      logger.warn('OFFLINE_FALLBACK_BLOCKED', { route: path, msRemaining });
       throw new Error('API unavailable');
     }
 
     await waitForAuth();
+    const timeoutMs = getRouteTimeoutMs(path);
+    const timeoutController = timeoutMs === undefined ? undefined : new AbortController();
+    let removeExternalAbortListener: (() => void) | undefined;
+    if (timeoutController && options.signal) {
+      const abortFromExternalSignal = (): void => timeoutController.abort();
+      if (options.signal.aborted) {
+        abortFromExternalSignal();
+      } else {
+        options.signal.addEventListener('abort', abortFromExternalSignal, { once: true });
+        removeExternalAbortListener = () =>
+          options.signal?.removeEventListener('abort', abortFromExternalSignal);
+      }
+    }
+    const timeoutId = timeoutController
+      ? setTimeout(() => timeoutController.abort(), timeoutMs)
+      : undefined;
+
     try {
       const startedAt = performance.now();
       const res = await fetch(`${API_BASE_URL}${path}`, {
         ...options,
+        ...(timeoutController ? { signal: timeoutController.signal } : {}),
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
@@ -149,12 +201,34 @@ class LlmApiClient {
         );
       }
       return res;
-    } catch (err: any) {
-      if (err instanceof TypeError && String(err.message || '').includes('fetch')) {
+    } catch (err: unknown) {
+      const errorName = getErrorName(err);
+      const errorMessage = getErrorMessage(err);
+      if (errorName === 'AbortError') {
+        logger.warn('LLM_API_REQUEST_ABORTED', {
+          route: path,
+          errorName,
+          errorMessage,
+          ...(this.lastRequestId ? { requestId: this.lastRequestId } : {}),
+        });
+      } else if (
+        errorName === 'TypeError' &&
+        /fetch/i.test(errorMessage) &&
+        isGenerateRoute(path)
+      ) {
         this.useOfflineFallback = true;
         this.offlineFallbackSetAt = Date.now();
+        logger.warn('OFFLINE_FALLBACK_TRIPPED', {
+          route: path,
+          errorName,
+          errorMessage,
+          ...(this.lastRequestId ? { requestId: this.lastRequestId } : {}),
+        });
       }
       throw err;
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      removeExternalAbortListener?.();
     }
   }
 
