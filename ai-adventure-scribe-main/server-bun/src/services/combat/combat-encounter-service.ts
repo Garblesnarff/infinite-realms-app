@@ -45,6 +45,12 @@ import type {
   TurnOrderEntry,
 } from '../../types/combat.js';
 
+function authoredDisposition(stats: unknown): string | undefined {
+  if (!stats || typeof stats !== 'object' || Array.isArray(stats)) return undefined;
+  const disposition = (stats as Record<string, unknown>).disposition;
+  return typeof disposition === 'string' ? disposition : undefined;
+}
+
 export class CombatEncounterService {
   /**
    * Start a new combat encounter
@@ -418,7 +424,12 @@ export class CombatEncounterService {
         })),
       );
       // Ensure participants are sorted by turnOrder to match getCombatState behavior
-      participants = insertedParticipants.sort((a, b) => a.turnOrder - b.turnOrder);
+      participants = insertedParticipants
+        .sort((a, b) => a.turnOrder - b.turnOrder)
+        .map((participant) => {
+          const disposition = authoredDisposition(npcsById.get(participant.npcId ?? '')?.stats);
+          return disposition ? { ...participant, disposition } : participant;
+        });
     }
 
     // ⚡ Bolt: Construct CombatState in-memory to avoid redundant fetch of just-inserted data.
@@ -551,6 +562,7 @@ export class CombatEncounterService {
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
           with: {
+            npc: { columns: { stats: true } },
             status: true,
             conditions: { with: { condition: true } },
           },
@@ -563,7 +575,11 @@ export class CombatEncounterService {
     }
 
     // Extract participants from the joined result
-    const { participants, ...encounter } = encounterWithParticipants;
+    const { participants: participantRows, ...encounter } = encounterWithParticipants;
+    const participants = participantRows.map(({ npc, ...participant }) => {
+      const disposition = authoredDisposition(npc?.stats);
+      return disposition ? { ...participant, disposition } : participant;
+    });
 
     // Filter active participants and determine current turn in-memory
     const activeParticipants = participants.filter((p) => p.isActive);

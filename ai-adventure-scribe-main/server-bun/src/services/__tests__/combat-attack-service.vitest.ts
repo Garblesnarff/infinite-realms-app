@@ -221,6 +221,7 @@ describe('CombatAttackService', () => {
             {
               participant: {
                 id: mockTargetId,
+                name: 'The Professor',
                 armorClass: 15,
                 participantType: 'npc',
                 damageImmunities: [],
@@ -238,7 +239,7 @@ describe('CombatAttackService', () => {
               encounter: { currentRound: 1, sessionId: 'session-123' },
             },
             {
-              participant: { id: mockAttackerId, armorClass: 10 },
+              participant: { id: mockAttackerId, armorClass: 10, participantType: 'player' },
               stats: null,
               status: null,
               encounter: {},
@@ -276,6 +277,7 @@ describe('CombatAttackService', () => {
       expect(result.hit).toBe(true);
       expect(result.isCritical).toBe(true);
       expect(result.targetAC).toBe(15);
+      expect(result.transcriptLines).toEqual(['⚙️ Engine: The Professor turns hostile.']);
     });
 
     it('should throw NotFoundError if attacker is not owned', async () => {

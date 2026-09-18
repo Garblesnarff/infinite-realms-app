@@ -49,6 +49,7 @@ import { entitySlug } from '../../tactical/identity.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
+import { markPlayerDamageProvocation } from './npc-provocation.js';
 
 import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
@@ -462,6 +463,13 @@ export class CombatAttackService {
           targetHpAfter: hpResult.newCurrentHp,
         });
 
+        const transcriptLines = await markPlayerDamageProvocation({
+          encounterId,
+          source: attackerData.participant,
+          target: targetParticipant,
+          damage: appliedDamage,
+        });
+
         return {
           hit: true,
           d20: attackRoll,
@@ -488,6 +496,7 @@ export class CombatAttackService {
           isNaturalOne: hitCheck.isNaturalOne,
           isNaturalTwenty: hitCheck.isNaturalTwenty,
           autoRolled,
+          ...(transcriptLines.length ? { transcriptLines } : {}),
         };
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });
@@ -742,7 +751,7 @@ export class CombatAttackService {
                 targetParticipant,
               );
 
-              return {
+              const attackResult: AttackResult = {
                 hit: true,
                 targetAC,
                 totalAttackRoll: hitCheckResult.totalAttackRoll,
@@ -759,6 +768,16 @@ export class CombatAttackService {
                 isCritical: spellIsCrit,
                 isNaturalOne: hitCheckResult.isNaturalOne,
                 isNaturalTwenty: hitCheckResult.isNaturalTwenty,
+              };
+              const transcriptLines = await markPlayerDamageProvocation({
+                encounterId,
+                source: casterData.participant,
+                target: targetParticipant,
+                damage: attackResult.finalDamage,
+              });
+              return {
+                ...attackResult,
+                ...(transcriptLines.length ? { transcriptLines } : {}),
               };
             } catch (error) {
               logger.error({ msg: 'Failed to apply spell attack damage to HP', error });
@@ -832,7 +851,7 @@ export class CombatAttackService {
                 targetParticipant,
               );
 
-              return {
+              const saveResult: AttackResult = {
                 hit: !savedSuccessfully,
                 targetAC: 0, // Not applicable for saves
                 totalAttackRoll: saveRoll ?? 0,
@@ -849,6 +868,16 @@ export class CombatAttackService {
                 isCritical: false,
                 isNaturalOne: false,
                 isNaturalTwenty: false,
+              };
+              const transcriptLines = await markPlayerDamageProvocation({
+                encounterId,
+                source: casterData.participant,
+                target: targetParticipant,
+                damage: saveResult.finalDamage,
+              });
+              return {
+                ...saveResult,
+                ...(transcriptLines.length ? { transcriptLines } : {}),
               };
             } catch (error) {
               logger.error({ msg: 'Failed to apply spell save damage to HP', error });

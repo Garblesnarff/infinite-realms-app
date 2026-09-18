@@ -351,6 +351,10 @@ export interface CombatParticipant {
   reactionUsed: boolean;
   isDodging: boolean;
   isDisengaged: boolean;
+  /** Encounter-only memory; the authored NPC disposition is never rewritten. */
+  provoked?: boolean;
+  /** Authored disposition copied onto the server combat view for NPC turn decisions. */
+  disposition?: string;
 }
 
 /**
@@ -605,6 +609,8 @@ export interface AttackResult {
    * be able to see that the die was not theirs, and never suspect hidden dice.
    */
   autoRolled?: boolean;
+  /** Engine-only transcript facts produced during this resolution. */
+  transcriptLines?: string[];
 }
 
 /**

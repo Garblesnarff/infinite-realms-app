@@ -1,0 +1,4 @@
+-- 0014_combat_participant_provoked -- NO-OP MIGRATION.
+--
+-- The authoritative DDL is applied from the matching Supabase migration. This file advances the
+-- Drizzle snapshot chain so schema drift remains visible without replaying the same ALTER twice.

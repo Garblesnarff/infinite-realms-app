@@ -127,6 +127,10 @@ export const combatParticipants = pgTable(
     isDodging: boolean('is_dodging').notNull().default(false),
     isDisengaged: boolean('is_disengaged').notNull().default(false),
 
+    // Encounter-scoped disposition memory. Taking damage during this fight can make a bystander
+    // fight back without rewriting the campaign bible.
+    provoked: boolean('provoked').notNull().default(false),
+
     // Damage modifiers
     damageResistances: text('damage_resistances').array().default([]),
     damageImmunities: text('damage_immunities').array().default([]),

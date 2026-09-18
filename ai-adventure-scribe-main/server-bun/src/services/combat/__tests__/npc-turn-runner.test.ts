@@ -6,6 +6,7 @@ type TestParticipant = {
   id: string;
   name: string;
   participantType: string;
+  provoked?: boolean;
   isActive: boolean;
   maxHp: number;
   actionUsed: boolean;
@@ -122,6 +123,36 @@ describe('advanceNpcTurns', () => {
     expect(intents).toEqual([{ type: 'end_turn', actorId: 'npc1' }]);
     expect(result.results[0].action.action_type).toBe('end_turn');
     expect(state.currentParticipant.id).toBe('p1');
+  });
+
+  it('keeps an unprovoked neutral NPC dodging but attacks after player damage provokes it', async () => {
+    const player = participant('p1', 'player');
+    const neutral = {
+      ...participant('npc1', 'npc'),
+      disposition: 'neutral',
+    };
+    const unprovoked = harness([neutral, player], 'npc1', (intent, live) => {
+      live.currentParticipant = player;
+      return { currentParticipant: player };
+    });
+
+    await advanceNpcTurns('encounter-1', 'user-1', unprovoked.dependencies);
+    expect(unprovoked.intents).toEqual([
+      { type: 'dodge', actorId: 'npc1' },
+      { type: 'end_turn', actorId: 'npc1' },
+    ]);
+
+    neutral.provoked = true;
+    const provoked = harness([neutral, player], 'npc1', (intent, live) => {
+      live.currentParticipant = player;
+      return { hit: true, finalDamage: 1, currentParticipant: player };
+    });
+
+    await advanceNpcTurns('encounter-1', 'user-1', provoked.dependencies);
+    expect(provoked.intents).toEqual([
+      { type: 'attack', actorId: 'npc1', targetId: 'p1', weaponId: 'unarmed-strike' },
+      { type: 'end_turn', actorId: 'npc1' },
+    ]);
   });
 
   it('skips an NPC downed mid-loop and resolves the remaining initiative', async () => {

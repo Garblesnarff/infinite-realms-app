@@ -88,6 +88,8 @@ const nonHostileDisposition = (participant: Record<string, unknown>): boolean =>
   );
 };
 
+const isProvoked = (participant: Record<string, unknown>): boolean => participant.provoked === true;
+
 function chooseTarget(state: CombatState, actorId: string) {
   return state.participants.find((participant) => {
     if (participant.id === actorId || !participant.isActive || !isPlayer(participant)) return false;
@@ -118,7 +120,7 @@ function chooseAction(
   if (!canAct) return endTurn();
 
   const actorRecord = actor as unknown as Record<string, unknown>;
-  if (nonHostileDisposition(actorRecord)) {
+  if (nonHostileDisposition(actorRecord) && !isProvoked(actorRecord)) {
     return {
       actor_id: actor.id,
       action_type: 'dodge',
