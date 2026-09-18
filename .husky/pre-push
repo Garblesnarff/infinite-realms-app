@@ -41,10 +41,18 @@ fi
 # Whole-tree check, offline, ~0.5s -- cheap enough to run on every push rather
 # than working out which commits touched db/schema/*.ts. Catches drift no
 # matter which commit introduced it, including one committed --no-verify.
-if ! bash scripts/check-schema-drift.sh; then
+set +e
+bash scripts/check-schema-drift.sh
+DRIFT_STATUS=$?
+set -e
+if [ "$DRIFT_STATUS" -ne 0 ]; then
     echo ""
-    echo "Push blocked by the schema drift guard."
-    echo "db/schema/*.ts needs a migration that db/migrations/ does not provide."
+    if [ "$DRIFT_STATUS" -eq 1 ]; then
+        echo "Push blocked by the schema drift guard."
+        echo "db/schema/*.ts needs a migration that db/migrations/ does not provide."
+    else
+        echo "Push blocked: could not run the schema drift check."
+    fi
     exit 1
 fi
 

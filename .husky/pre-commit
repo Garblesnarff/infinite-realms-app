@@ -51,14 +51,22 @@ cd ai-adventure-scribe-main || exit 1
 # normal commit. Offline -- no database needed. Takes a few seconds.
 if git diff --cached --name-only --diff-filter=d | grep -qE '^ai-adventure-scribe-main/db/schema/.*\.ts$'; then
     echo "db/schema/*.ts changed -- checking for a matching migration..."
-    bash scripts/check-schema-drift.sh || {
+    set +e
+    bash scripts/check-schema-drift.sh
+    DRIFT_STATUS=$?
+    set -e
+    if [ "$DRIFT_STATUS" -ne 0 ]; then
         echo ""
-        echo "Commit blocked by the schema drift guard."
-        echo "Fix it properly (see the instructions above), or use --no-verify if you"
-        echo "genuinely know the migration is landing separately -- but the DB Guards"
-        echo "workflow will fail the push either way."
+        if [ "$DRIFT_STATUS" -eq 1 ]; then
+            echo "Commit blocked by the schema drift guard."
+            echo "Fix it properly (see the instructions above), or use --no-verify if you"
+            echo "genuinely know the migration is landing separately -- but the DB Guards"
+            echo "workflow will fail the push either way."
+        else
+            echo "Commit blocked: could not run the schema drift check."
+        fi
         exit 1
-    }
+    fi
 fi
 
 # === TypeScript Check (disabled - pre-existing errors, relying on CI) ===

@@ -31,7 +31,7 @@
 # Usage:
 #   bun run db:check-drift          # or: bash scripts/check-schema-drift.sh
 #
-# Exit codes: 0 = no drift, 1 = drift detected (or drizzle-kit failed).
+# Exit codes: 0 = no drift, 1 = drift detected, 2 = unable to run the check.
 # =============================================================================
 
 set -euo pipefail
@@ -53,9 +53,20 @@ NC=$'\033[0m'
 cleanup() { rm -rf "$SCRATCH_DIR"; }
 trap cleanup EXIT
 
+# bunx can download a temporary drizzle-kit binary when this worktree has no
+# dependencies. That binary cannot load the repo's local config, and its error
+# used to be reported by pre-push as phantom schema drift. Require the local
+# install and return a distinct status before attempting the check.
+if [ ! -d "$PROJECT_ROOT/node_modules" ] || \
+   [ ! -x "$PROJECT_ROOT/node_modules/.bin/drizzle-kit" ] || \
+   ! (cd "$PROJECT_ROOT" && bun -e "await import('drizzle-kit')") >/dev/null 2>&1; then
+  echo "${RED}✗${NC} Could not run schema drift check: cannot resolve drizzle-kit (node_modules missing — run bun install or symlink $PROJECT_ROOT/node_modules)." >&2
+  exit 2
+fi
+
 if [ ! -d "$MIGRATIONS_DIR/meta" ]; then
-  echo "${RED}✗${NC} $MIGRATIONS_DIR/meta not found -- is drizzle initialised?" >&2
-  exit 1
+  echo "${RED}✗${NC} Could not run schema drift check: $MIGRATIONS_DIR/meta not found -- is drizzle initialised?" >&2
+  exit 2
 fi
 
 rm -rf "$SCRATCH_DIR"
@@ -91,9 +102,9 @@ GENERATE_STATUS=$?
 set -e
 
 if [ $GENERATE_STATUS -ne 0 ]; then
-  echo "${RED}✗${NC} drizzle-kit generate failed (exit $GENERATE_STATUS):" >&2
+  echo "${RED}✗${NC} Could not run schema drift check: drizzle-kit generate failed (exit $GENERATE_STATUS):" >&2
   cat "$GENERATE_LOG" >&2
-  exit 1
+  exit 2
 fi
 
 # Any .sql drizzle-kit emitted into the scratch copy is DDL that db/schema/*.ts
@@ -119,7 +130,7 @@ fi
   echo ""
   while IFS= read -r sql; do
     [ -n "$sql" ] || continue
-    sed 's/^/    /' "$SCRATCH_DIR/migrations/$sql"
+    awk '{ print "    " $0 }' "$SCRATCH_DIR/migrations/$sql"
   done <<<"$EMITTED"
   echo ""
   echo "To fix, from ai-adventure-scribe-main/:"

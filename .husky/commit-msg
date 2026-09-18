@@ -23,4 +23,16 @@ if [ ! -f "$MSG_FILE" ]; then
 fi
 
 cd "$GIT_ROOT/ai-adventure-scribe-main" || exit 1
+
+# bunx can download a temporary copy of commitlint when this worktree has no
+# dependencies, but that copy still cannot resolve the repo's config preset.
+# Check the worktree-local installation first so the failure names the real
+# setup problem instead of looking like a broken commitlint configuration.
+if [ ! -d "node_modules" ] || \
+   [ ! -x "node_modules/.bin/commitlint" ] || \
+   ! bun -e "await import('@commitlint/cli'); await import('@commitlint/config-conventional')" >/dev/null 2>&1; then
+  echo "commit-msg: cannot resolve commitlint dependencies (node_modules missing — run bun install or symlink $GIT_ROOT/ai-adventure-scribe-main/node_modules)" >&2
+  exit 1
+fi
+
 exec bunx commitlint --edit "$MSG_FILE"
