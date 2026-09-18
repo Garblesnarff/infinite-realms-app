@@ -128,6 +128,87 @@ describe('VoiceConsistencyRepository', () => {
         }),
       );
     });
+
+    it('uses mappings returned as an already-parsed object', async () => {
+      mockGetMappings.mockResolvedValueOnce([
+        {
+          id: 'mapping-obj',
+          character_name: 'Professor Emil Darkwater',
+          voice_category: 'villain_male',
+          voice_id: 'voice-villain',
+          last_used: '2026-09-15T12:00:00.000Z',
+          updated_at: '2026-09-15T12:00:00.000Z',
+          appearance_count: 4,
+        },
+      ]);
+
+      const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+
+      expect(result).toEqual([
+        {
+          id: 'mapping-obj',
+          characterName: 'Professor Emil Darkwater',
+          voiceCategory: 'villain_male',
+          voiceId: 'voice-villain',
+          lastUsed: new Date('2026-09-15T12:00:00.000Z'),
+          appearanceCount: 4,
+        },
+      ]);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('parses mappings returned as a JSON string', async () => {
+      mockGetMappings.mockResolvedValueOnce(
+        JSON.stringify([
+          {
+            id: 'mapping-str',
+            character_name: 'Professor Emil Darkwater',
+            voice_category: 'villain_male',
+            voice_id: 'voice-villain',
+            last_used: '2026-09-15T12:00:00.000Z',
+            updated_at: '2026-09-15T12:00:00.000Z',
+            appearance_count: 2,
+          },
+        ]),
+      );
+
+      const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+
+      expect(result).toEqual([
+        {
+          id: 'mapping-str',
+          characterName: 'Professor Emil Darkwater',
+          voiceCategory: 'villain_male',
+          voiceId: 'voice-villain',
+          lastUsed: new Date('2026-09-15T12:00:00.000Z'),
+          appearanceCount: 2,
+        },
+      ]);
+    });
+
+    it('returns an empty map and logs VOICE_MAPPINGS_UNREADABLE on malformed mappings', async () => {
+      mockGetMappings.mockResolvedValueOnce('[object Object]');
+
+      const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+
+      expect(result).toEqual([]);
+      expect(logger.error).toHaveBeenCalledWith('VOICE_MAPPINGS_UNREADABLE', { sessionId });
+    });
+
+    it.each([null, undefined, 12])(
+      'returns an empty map and logs VOICE_MAPPINGS_UNREADABLE when mappings are %s',
+      async (payload) => {
+        mockGetMappings.mockResolvedValueOnce(payload);
+
+        const result = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+
+        expect(result).toEqual([]);
+        expect(logger.error).toHaveBeenCalledWith('VOICE_MAPPINGS_UNREADABLE', {
+          sessionId,
+          shape: typeof payload,
+        });
+      },
+    );
   });
 
   describe('saveCharacterVoiceMapping', () => {

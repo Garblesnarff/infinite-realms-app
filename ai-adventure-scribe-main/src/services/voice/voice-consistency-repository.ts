@@ -8,7 +8,32 @@
  */
 
 import logger from '@/lib/logger';
-import { issue1784Api } from '@/services/issue-1784-api';
+import { issue1784Api, type Issue1784VoiceMappingRow } from '@/services/issue-1784-api';
+
+function readVoiceMappingsPayload(value: unknown, sessionId: string): Issue1784VoiceMappingRow[] {
+  let parsed: unknown = value;
+
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      logger.error('VOICE_MAPPINGS_UNREADABLE', { sessionId });
+      return [];
+    }
+  } else if (value !== null && typeof value === 'object') {
+    parsed = value;
+  } else {
+    logger.error('VOICE_MAPPINGS_UNREADABLE', { sessionId, shape: typeof value });
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) {
+    logger.error('VOICE_MAPPINGS_UNREADABLE', { sessionId });
+    return [];
+  }
+
+  return parsed as Issue1784VoiceMappingRow[];
+}
 
 export class VoiceConsistencyRepository {
   /**
@@ -26,7 +51,10 @@ export class VoiceConsistencyRepository {
     }>
   > {
     try {
-      const data = await issue1784Api.getVoiceMappings(sessionId);
+      const data = readVoiceMappingsPayload(
+        await issue1784Api.getVoiceMappings(sessionId),
+        sessionId,
+      );
 
       if (!data || data.length === 0) {
         logger.debug(`No voice mappings found for session: ${sessionId}`);
