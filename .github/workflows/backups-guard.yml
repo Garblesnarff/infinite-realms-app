@@ -1,0 +1,27 @@
+name: Tracked Backups Guard
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-tracked-backups:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if backups contains tracked files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tracked="$(git ls-files -- 'backups/**')"
+          if [[ -n "$tracked" ]]; then
+            echo "::error::Tracked files under backups/ are not allowed."
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
+
+          echo "No tracked files under backups/."

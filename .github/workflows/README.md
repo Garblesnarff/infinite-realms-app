@@ -36,6 +36,13 @@ Jobs:
   is marked `continue-on-error: true` and will not block merges until they are
   added. See "Secrets required" below.
 
+### backups-guard.yml — Tracked Backups Guard
+Triggers: every `push` and `pull_request`.
+
+Fails when `git ls-files -- 'backups/**'` finds any tracked file under
+`backups/`. Production dumps live outside the repository, so this guard stays
+path-unfiltered to prevent a future snapshot from being committed.
+
 ### test-coverage.yml — Coverage Reporting
 Triggers: `pull_request` (any branch) and `push` to `main`/`master`/`develop`,
 both scoped to `paths: ai-adventure-scribe-main/**`.

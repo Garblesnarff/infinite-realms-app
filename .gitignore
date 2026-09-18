@@ -98,6 +98,9 @@ crewai-service/venv/
 *.sqlite3
 .beads/*.db
 
+# Production database dumps live outside the repository
+/backups/
+
 # Secrets & Credentials
 *.pem
 *.key
