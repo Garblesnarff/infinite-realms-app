@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.2...v0.19.3) (2026-09-18)
+
+
+### Bug Fixes
+
+* clarify missing dependency hook failures ([#2072](https://github.com/Garblesnarff/infinite-realms-production/issues/2072)) ([55b287b](https://github.com/Garblesnarff/infinite-realms-production/commit/55b287b4bc96e6947a1e107b58337f3882307031))
+* **client:** prevent offline fallback from blocking narration ([#2066](https://github.com/Garblesnarff/infinite-realms-production/issues/2066)) ([38b6127](https://github.com/Garblesnarff/infinite-realms-production/commit/38b61279f8461f04b6f1d1968b2f073de9d2b54f))
+* **combat:** distinguish unarmed entry verbs from weapons ([#2063](https://github.com/Garblesnarff/infinite-realms-production/issues/2063)) ([cf58e7b](https://github.com/Garblesnarff/infinite-realms-production/commit/cf58e7b051d697223af2edb619655df0fefe7821))
+* **observability:** make the request id per-request, not per-process ([#2065](https://github.com/Garblesnarff/infinite-realms-production/issues/2065)) ([dbe9625](https://github.com/Garblesnarff/infinite-realms-production/commit/dbe9625aa09b9a442626d1e5be282809842b953e)), closes [#2050](https://github.com/Garblesnarff/infinite-realms-production/issues/2050)
+* **voice:** parse session mappings only when they are a string ([#2041](https://github.com/Garblesnarff/infinite-realms-production/issues/2041)) ([529f511](https://github.com/Garblesnarff/infinite-realms-production/commit/529f51131bbd81006ba2da32c77f4fbca8f5c12d))
+* **voice:** prefetch narration segments so playback is gapless ([#2042](https://github.com/Garblesnarff/infinite-realms-production/issues/2042)) ([9c9ddbd](https://github.com/Garblesnarff/infinite-realms-production/commit/9c9ddbd4c4d35da821454e4f1e5a30af9d2bd547))
+
 ## [0.19.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.1...v0.19.2) (2026-09-16)
 
 
