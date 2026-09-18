@@ -11,32 +11,44 @@ import { httpRequestCounter, httpRequestDuration } from './lib/metrics.js';
  * applies authentication after a handler has run.
  */
 /**
- * One id per request, derived once and reused by every hook.
+ * Per-request state, keyed on the Request object itself.
  *
- * Each hook used to derive its own: `onRequest` and `derive` each called
- * `randomUUID()` independently, while `onAfterHandle` and `onError` fell back
- * to the literal string 'unknown' when the client sent no header. That is why
- * `request.end` lines routinely logged `requestId: "unknown"` and could not be
- * joined to their own `request.start`. (#2050 D)
+ * This previously lived on Elysia's `store`, which is the APPLICATION store --
+ * one object shared by every request for the life of the process, not
+ * per-request state. The id was memoized there with `if (!store.__requestId)`,
+ * so the first request after boot set it and nothing ever replaced it: after
+ * #2051 deployed, 933 request lines carried 3 distinct ids, one per restart,
+ * and every `x-request-id` response header was a constant. `__startTime` had
+ * the same flaw in a different shape -- overwritten on each request, so under
+ * concurrency one request's duration was measured from another's start.
+ *
+ * A WeakMap keyed on the Request gives one entry per request and lets the
+ * entry be collected with the request. It relies on Elysia handing the SAME
+ * Request instance to onRequest / derive / onAfterHandle / onError; the
+ * concurrency test in `http-pipeline-request-id.test.ts` asserts exactly that,
+ * rather than assuming it. (#2050 D)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function resolveRequestId(request: Request, store: any): string {
-  if (!store.__requestId) {
-    store.__requestId = request.headers.get('x-request-id') || randomUUID();
+const requestIds = new WeakMap<Request, string>();
+const startTimes = new WeakMap<Request, number>();
+
+function resolveRequestId(request: Request): string {
+  let id = requestIds.get(request);
+  if (!id) {
+    id = request.headers.get('x-request-id') || randomUUID();
+    requestIds.set(request, id);
   }
-  return store.__requestId as string;
+  return id;
 }
 
 export function createRequestPipelineApp() {
   return new Elysia()
-    .derive(({ request, store }) => {
-      return { requestId: resolveRequestId(request, store) };
+    .derive(({ request }) => {
+      return { requestId: resolveRequestId(request) };
     })
-    .onRequest(({ request, store }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (store as any).__startTime = performance.now();
+    .onRequest(({ request }) => {
+      startTimes.set(request, performance.now());
 
-      const requestId = resolveRequestId(request, store);
+      const requestId = resolveRequestId(request);
       logger.info({
         requestId,
         method: request.method,
@@ -44,13 +56,12 @@ export function createRequestPipelineApp() {
         msg: 'request.start',
       });
     })
-    .onAfterHandle(({ request, response, store, set }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const start = (store as any).__startTime || performance.now();
+    .onAfterHandle(({ request, response, set }) => {
+      const start = startTimes.get(request) ?? performance.now();
       const durationMs = performance.now() - start;
       const url = new URL(request.url);
       const status = set.status || (response instanceof Response ? response.status : 200);
-      const requestId = resolveRequestId(request, store);
+      const requestId = resolveRequestId(request);
       // Hand the id back so a client-side failure can be joined to this log line
       // instead of matched by timestamp. (#2050 D)
       set.headers['x-request-id'] = requestId;
@@ -79,8 +90,8 @@ export function createRequestPipelineApp() {
         msg: 'request.end',
       });
     })
-    .onError(({ error, request, set, code, store }) => {
-      const requestId = resolveRequestId(request, store);
+    .onError(({ error, request, set, code }) => {
+      const requestId = resolveRequestId(request);
       set.headers['x-request-id'] = requestId;
 
       logger.error({
