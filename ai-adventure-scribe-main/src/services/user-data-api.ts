@@ -13,20 +13,13 @@ export type {
 } from '@/services/user-data-payload-helpers';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { waitForAuth } from '@/lib/auth-gate';
-import {
-  getAuthHeaders,
-  loadCachedSession,
-  persistSession,
-  refreshAccessTokenOnce,
-} from '@/services/auth/TokenService';
 import {
   normalizeCharacter,
   prepareCampaignPayload,
   prepareCharacterPayload,
 } from '@/services/user-data-payload-helpers';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 /** Mirror of `EquippedLoadout` in `server-bun/src/services/combat/equipped-loadout.ts`. */
 export type EquippedWeaponProfile = {
@@ -198,14 +191,7 @@ export type NarrativeSceneStateResponse = {
 
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   await waitForAuth();
-  const token = loadCachedSession()?.access_token;
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  const res = await fetchWithAuth(path, init);
   logServerRequestId(path, res);
   return res;
 }
@@ -225,28 +211,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // Wait for AuthContext to verify/refresh the session before reading the
   // token — otherwise cold page loads race out with a stale/expired token.
   await waitForAuth();
-  const send = (): Promise<Response> =>
-    fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...init.headers,
-      },
-    });
-  let response = await send();
+  const response = await fetchWithAuth(path, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...init.headers,
+    },
+  });
   logServerRequestId(path, response);
-
-  if (response.status === 401) {
-    const session = loadCachedSession();
-    if (session?.refresh_token) {
-      const tokens = await refreshAccessTokenOnce(session.refresh_token);
-      if (tokens) {
-        persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
-        response = await send();
-      }
-    }
-  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;

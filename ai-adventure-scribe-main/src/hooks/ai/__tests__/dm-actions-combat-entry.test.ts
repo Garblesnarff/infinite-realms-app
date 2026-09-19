@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import {
@@ -669,6 +670,18 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   ])('produces a visible non-empty line for %s', async (_branch, run) => {
     const outcome = await run();
     expect(outcome.localNotice).toBeTruthy();
+  });
+
+  it('propagates a 401 from /enter as a typed session-expired error', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: vi.fn().mockResolvedValue({ error: 'Unauthorized' }),
+    } as any);
+
+    await expect(
+      invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY }),
+    ).rejects.toBeInstanceOf(SessionExpiredError);
   });
 
   it('turns a missing confirmation host into its explicit visible message', async () => {

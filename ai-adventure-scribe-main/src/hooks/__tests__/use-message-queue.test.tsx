@@ -194,6 +194,21 @@ describe('useMessageQueue', () => {
     expect(result.current.queueStatus).toBe('idle');
   });
 
+  it('does not retry a session-expired persistence failure', async () => {
+    mockInsert.mockResolvedValue({ error: { status: 401, message: 'Unauthorized' } });
+
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+    await act(async () => {
+      await expect(
+        result.current.messageMutation.mutateAsync({ text: 'Expired', sender: 'player' } as any),
+      ).rejects.toMatchObject({ status: 401 });
+    });
+
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(result.current.queueStatus).toBe('error');
+  });
+
   it('should add to queue and set error status after max retries', async () => {
     mockInsert.mockResolvedValue({ error: { message: 'Persistent failure' } });
 

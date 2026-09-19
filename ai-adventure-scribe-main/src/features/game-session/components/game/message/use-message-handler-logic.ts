@@ -14,6 +14,7 @@ import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
+import { SESSION_EXPIRED_MESSAGE, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
@@ -79,7 +80,7 @@ export const useMessageHandlerLogic = ({
   });
 
   // Extract message queue and sending-state logic
-  const { handleSendMessage, isSendingRef, actualSendMessageRef } = useMessageSendQueue();
+  const { handleSendMessage, isSending, actualSendMessageRef } = useMessageSendQueue();
 
   // Refs to track current values for async operations
   const turnCountRef = React.useRef(turnCount);
@@ -102,6 +103,7 @@ export const useMessageHandlerLogic = ({
     playerInput: string,
     providedContext?: MessageSendContext,
   ): Promise<void> => {
+    let turnCountAdvanced = false;
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
 
@@ -148,6 +150,7 @@ export const useMessageHandlerLogic = ({
         ...prev,
         turn_count: (prev.turn_count || 0) + 1,
       }));
+      turnCountAdvanced = true;
 
       // Update the ref to reflect the new turn count
       turnCountRef.current = newTurnCount;
@@ -300,8 +303,14 @@ export const useMessageHandlerLogic = ({
         }
       }
     } catch (error) {
+      const sessionExpired =
+        error instanceof SessionExpiredError ||
+        (typeof error === 'object' &&
+          error !== null &&
+          (error as { status?: unknown }).status === 401);
       handleAsyncError(error, {
-        userMessage: 'Failed to process your message',
+        userMessage: sessionExpired ? SESSION_EXPIRED_MESSAGE : 'Failed to process your message',
+        showToast: false,
         context: {
           location: 'MessageHandler.actualSendMessage',
           playerInput,
@@ -317,49 +326,63 @@ export const useMessageHandlerLogic = ({
         : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
 
       // Add a system error message to the conversation
-      try {
-        const systemErrorMessage: ChatMessage = {
-          text: recoveryMessage,
-          sender: 'system',
-          context: {
-            intent: 'error_recovery',
-            originalError: errorMessage,
-          },
-        };
-        await sendMessage(systemErrorMessage);
-      } catch (systemMessageError) {
-        handleAsyncError(systemMessageError, {
-          userMessage: 'Failed to send error recovery message',
-          logLevel: 'warn',
-          showToast: false,
-          context: { location: 'MessageHandler.errorRecovery' },
-        });
+      if (!sessionExpired) {
+        try {
+          const systemErrorMessage: ChatMessage = {
+            text: recoveryMessage,
+            sender: 'system',
+            context: {
+              intent: 'error_recovery',
+              originalError: errorMessage,
+            },
+          };
+          await sendMessage(systemErrorMessage);
+        } catch (systemMessageError) {
+          handleAsyncError(systemMessageError, {
+            userMessage: 'Failed to send error recovery message',
+            logLevel: 'warn',
+            showToast: false,
+            context: { location: 'MessageHandler.errorRecovery' },
+          });
+        }
       }
 
       // Revert turn count if AI response failed (use original value from when error occurred)
-      try {
-        const revertCount = Math.max(0, turnCountRef.current - 1);
-        await updateGameSessionState((prev: ExtendedGameSession) => ({
-          ...prev,
-          turn_count: Math.max(0, (prev.turn_count || 0) - 1),
-        }));
-        turnCountRef.current = revertCount;
-      } catch (revertError) {
-        handleAsyncError(revertError, {
-          userMessage: 'Failed to revert turn count',
-          logLevel: 'warn',
-          showToast: false,
-          context: { location: 'MessageHandler.revertTurnCount' },
-        });
+      if (turnCountAdvanced) {
+        try {
+          const revertCount = Math.max(0, turnCountRef.current - 1);
+          await updateGameSessionState((prev: ExtendedGameSession) => ({
+            ...prev,
+            turn_count: Math.max(0, (prev.turn_count || 0) - 1),
+          }));
+          turnCountRef.current = revertCount;
+        } catch (revertError) {
+          handleAsyncError(revertError, {
+            userMessage: 'Failed to revert turn count',
+            logLevel: 'warn',
+            showToast: false,
+            context: { location: 'MessageHandler.revertTurnCount' },
+          });
+        }
       }
 
       toast({
-        title: combatIntentFailure ? 'Combat action failed' : 'Processing Error',
-        description: combatIntentFailure
-          ? recoveryMessage
-          : 'I had trouble responding to your message. The conversation has been restored and you can try again.',
+        title: sessionExpired
+          ? 'Session expired'
+          : combatIntentFailure
+            ? 'Combat action failed'
+            : 'Processing Error',
+        description: sessionExpired
+          ? SESSION_EXPIRED_MESSAGE
+          : combatIntentFailure
+            ? recoveryMessage
+            : 'I had trouble responding to your message. The conversation has been restored and you can try again.',
         variant: 'destructive',
       });
+
+      // Let ChatInput retain the pending text for retry, while the send queue's
+      // finally block clears its sending state and unlocks the composer.
+      throw error;
     }
   };
 
@@ -369,6 +392,6 @@ export const useMessageHandlerLogic = ({
 
   return {
     handleSendMessage,
-    isProcessing: queueStatus === 'processing' || isSendingRef.current,
+    isProcessing: queueStatus === 'processing' || isSending,
   };
 };

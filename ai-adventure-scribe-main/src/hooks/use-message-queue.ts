@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { persistableNarrationSegments } from '@/utils/narration-segments';
@@ -14,6 +15,13 @@ import { persistableNarrationSegments } from '@/utils/narration-segments';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
 const MAX_BATCH_SIZE = 5;
+
+function isSessionExpiredError(error: unknown): boolean {
+  return (
+    error instanceof SessionExpiredError ||
+    (typeof error === 'object' && error !== null && (error as { status?: unknown }).status === 401)
+  );
+}
 
 type QueueStatus = 'idle' | 'processing' | 'error' | 'retrying';
 
@@ -133,7 +141,7 @@ export const useMessageQueue = (sessionId: string | null) => {
           logger.error(`Attempt ${retries + 1} failed:`, error);
           retries++;
 
-          if (retries === MAX_RETRIES) {
+          if (retries === MAX_RETRIES || isSessionExpiredError(error)) {
             setQueueStatus('error');
             // Queue message for later retry if max retries reached
             setMessageQueue((prev) => [...prev, message]);

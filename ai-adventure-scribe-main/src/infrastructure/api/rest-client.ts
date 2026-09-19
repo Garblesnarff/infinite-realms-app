@@ -2,11 +2,17 @@ import { logServerRequestId } from './request-id-log';
 
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import {
+  getAuthHeaders,
+  loadCachedSession,
+  persistSession,
+  refreshAccessTokenOnce,
+} from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
 const LLM_EXTRACT_ROUTE = '/v1/llm/extract';
+export const SESSION_EXPIRED_MESSAGE = 'Session expired — sign in again';
 
 function isGenerateRoute(path: string): boolean {
   return path.startsWith(LLM_GENERATE_ROUTE_PREFIX);
@@ -46,6 +52,72 @@ export class ApiClientError extends Error {
     this.retryable = retryable;
     this.retryAfterMs = retryAfterMs;
   }
+}
+
+export class SessionExpiredError extends ApiClientError {
+  constructor() {
+    super(SESSION_EXPIRED_MESSAGE, 401, false);
+    this.name = 'SessionExpiredError';
+  }
+}
+
+function isV1Route(path: string): boolean {
+  return path.startsWith('/v1/');
+}
+
+function buildRequestInit(options: RequestInit, accessToken?: string): RequestInit {
+  return {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...options.headers,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+  };
+}
+
+/**
+ * Fetch an API route and recover one expired access token before surfacing the
+ * session-expired state. Callers retain ownership of non-2xx response parsing.
+ */
+export async function fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
+  const request = (accessToken?: string): Promise<Response> =>
+    fetch(`${API_BASE_URL}${path}`, buildRequestInit(options, accessToken));
+
+  const response = await request();
+  if (response.status !== 401 || !isV1Route(path)) return response;
+
+  const session = loadCachedSession();
+  if (!session?.refresh_token) {
+    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_unavailable' });
+    throw new SessionExpiredError();
+  }
+
+  let tokens: Awaited<ReturnType<typeof refreshAccessTokenOnce>>;
+  try {
+    tokens = await refreshAccessTokenOnce(session.refresh_token, session.access_token);
+  } catch {
+    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
+    throw new SessionExpiredError();
+  }
+
+  if (!tokens) {
+    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'refresh_failed' });
+    throw new SessionExpiredError();
+  }
+
+  persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+  const retryResponse = await request(tokens.accessToken);
+  if (retryResponse.status === 401) {
+    logger.warn('AUTH_RETRY_AFTER_401', { route: path, outcome: 'session_expired' });
+    throw new SessionExpiredError();
+  }
+
+  logger.info('AUTH_RETRY_AFTER_401', {
+    route: path,
+    outcome: retryResponse.ok ? 'retry_succeeded' : 'retry_failed',
+  });
+  return retryResponse;
 }
 
 export interface LLMHistoryMessage {
@@ -161,12 +233,11 @@ class LlmApiClient {
 
     try {
       const startedAt = performance.now();
-      const res = await fetch(`${API_BASE_URL}${path}`, {
+      const res = await fetchWithAuth(path, {
         ...options,
         ...(timeoutController ? { signal: timeoutController.signal } : {}),
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
           ...options.headers,
         },
       });

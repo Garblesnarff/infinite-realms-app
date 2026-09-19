@@ -19,6 +19,7 @@ import {
   preflightErrorStatus,
   preflightNpcTurnsBeforePlayerDeclaration,
 } from '@/hooks/ai/combat-turn-preflight';
+import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
@@ -262,10 +263,9 @@ export async function handleDmActionsAndTransitions(
             ...(initiative.d20 === null ? {} : { playerInitiativeRoll: initiative.d20 }),
           });
           if (!enterResponse.ok) {
-            logger.warn(
-              '[CombatEntry] server refused explicit entry',
-              await responsePayload(enterResponse),
-            );
+            const failurePayload = await responsePayload(enterResponse);
+            logger.warn('[CombatEntry] server refused explicit entry', failurePayload);
+            if (enterResponse.status === 401) throw new SessionExpiredError();
             responseText = '';
             narrationSegments = undefined;
             appendLocalNotice(COMBAT_ENTRY_FAILURE_NOTICE);
@@ -319,6 +319,14 @@ export async function handleDmActionsAndTransitions(
         }
       } catch (error) {
         logger.warn('[CombatEntry] explicit entry failed; no attack outcome was resolved', error);
+        if (
+          error instanceof SessionExpiredError ||
+          (typeof error === 'object' &&
+            error !== null &&
+            (error as { status?: unknown }).status === 401)
+        ) {
+          throw error;
+        }
         responseText = '';
         narrationSegments = undefined;
         appendLocalNotice(

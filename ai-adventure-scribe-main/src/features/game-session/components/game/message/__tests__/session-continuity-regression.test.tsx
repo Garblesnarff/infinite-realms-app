@@ -17,6 +17,7 @@ const {
   mockGetAIResponse,
   mockOnAIResponse,
   mockSendMessage,
+  mockToast,
   mockValidateSession,
 } = vi.hoisted(() => ({
   mockExtractMemories: vi.fn().mockResolvedValue(undefined),
@@ -26,6 +27,7 @@ const {
   }),
   mockOnAIResponse: vi.fn().mockResolvedValue(undefined),
   mockSendMessage: vi.fn().mockResolvedValue(undefined),
+  mockToast: vi.fn(),
   mockValidateSession: vi.fn().mockResolvedValue(true),
 }));
 
@@ -64,7 +66,7 @@ vi.mock('@/contexts/CharacterContext', () => ({
 }));
 
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: mockToast }),
 }));
 
 vi.mock('@/utils/safetyCommands', () => ({
@@ -117,6 +119,7 @@ type DiceRollContext = {
 // ------- test helpers -------
 interface HandlerRef {
   send: (text: string, ctx?: DiceRollContext) => Promise<void>;
+  processing: { current: boolean };
 }
 
 function makeUpdateStateMock() {
@@ -128,7 +131,7 @@ function renderHandler(
   sessionId: string,
   onAIResponse?: (message: { text: string }) => Promise<void>,
 ) {
-  const ref: HandlerRef = { send: async () => {} };
+  const ref: HandlerRef = { send: async () => {}, processing: { current: false } };
   const updateGameSessionState = makeUpdateStateMock();
 
   const result = render(
@@ -140,8 +143,9 @@ function renderHandler(
       updateGameSessionState={updateGameSessionState}
       onAIResponse={onAIResponse}
     >
-      {({ handleSendMessage }) => {
+      {({ handleSendMessage, isProcessing }) => {
         ref.send = handleSendMessage;
+        ref.processing.current = isProcessing;
         return null;
       }}
     </MessageHandler>,
@@ -164,8 +168,9 @@ function rerenderHandler(
       turnCount={0}
       updateGameSessionState={updateGameSessionState}
     >
-      {({ handleSendMessage }) => {
+      {({ handleSendMessage, isProcessing }) => {
         ref.send = handleSendMessage;
+        ref.processing.current = isProcessing;
         return null;
       }}
     </MessageHandler>,
@@ -271,5 +276,27 @@ describe('session-continuity regression', () => {
     );
     await waitFor(() => expect(mockOnAIResponse).toHaveBeenCalled());
     expect(mockOnAIResponse).toHaveBeenLastCalledWith(expect.objectContaining({ text: narrative }));
+  });
+
+  it('shows the session-expired error and unlocks the composer after a 401', async () => {
+    mockSendMessage.mockRejectedValueOnce({
+      name: 'SessionExpiredError',
+      status: 401,
+      message: 'Session expired — sign in again',
+    });
+
+    const { ref } = renderHandler('session-expired');
+
+    await act(async () => {
+      await expect(ref.send('I open the door.')).rejects.toMatchObject({ status: 401 });
+    });
+
+    expect(ref.processing.current).toBe(false);
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Session expired — sign in again',
+        variant: 'destructive',
+      }),
+    );
   });
 });

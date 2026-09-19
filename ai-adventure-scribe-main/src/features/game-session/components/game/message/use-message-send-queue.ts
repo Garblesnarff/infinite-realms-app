@@ -18,6 +18,7 @@ interface QueueItem {
  */
 export const useMessageSendQueue = (): {
   handleSendMessage: (playerInput: string, context?: MessageSendContext) => Promise<void>;
+  isSending: boolean;
   isSendingRef: React.MutableRefObject<boolean>;
   actualSendMessageRef: React.MutableRefObject<
     (input: string, ctx?: MessageSendContext) => Promise<void>
@@ -26,6 +27,7 @@ export const useMessageSendQueue = (): {
   // Request queue to prevent concurrent message sends
   const sendQueueRef = React.useRef<QueueItem[]>([]);
   const isSendingRef = React.useRef(false);
+  const [isSending, setIsSending] = React.useState(false);
 
   // Ref keeps processSendQueue pointed at the latest actualSendMessage closure,
   // preventing stale sessionId / extractMemories captures when the session changes.
@@ -43,6 +45,7 @@ export const useMessageSendQueue = (): {
     }
 
     isSendingRef.current = true;
+    setIsSending(true);
     const { message: playerInput, context, resolve, reject } = sendQueueRef.current[0];
 
     try {
@@ -54,6 +57,7 @@ export const useMessageSendQueue = (): {
       // Remove processed item and continue with next
       sendQueueRef.current.shift();
       isSendingRef.current = false;
+      setIsSending(false);
 
       // Process next item if any
       if (sendQueueRef.current.length > 0) {
@@ -84,6 +88,7 @@ export const useMessageSendQueue = (): {
 
   return {
     handleSendMessage,
+    isSending,
     isSendingRef,
     actualSendMessageRef,
   };
