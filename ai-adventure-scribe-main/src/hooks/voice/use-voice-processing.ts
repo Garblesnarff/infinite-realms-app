@@ -16,7 +16,12 @@ import { VoiceDirector } from '@/services/voice-director';
 const PREFETCH_CONCURRENCY = 3;
 export const SEGMENT_AUDIO_CACHE_MAX = 32;
 
-const segmentAudioCache = new Map<string, VoiceSegment>();
+type CachedSegmentAudio = {
+  text: string;
+  segment: VoiceSegment;
+};
+
+const segmentAudioCache = new Map<string, CachedSegmentAudio>();
 
 export function clearVoiceSegmentAudioCache(): void {
   segmentAudioCache.clear();
@@ -30,7 +35,7 @@ function rememberSegment(key: string, segment: VoiceSegment): void {
   if (segmentAudioCache.has(key)) {
     segmentAudioCache.delete(key);
   }
-  segmentAudioCache.set(key, segment);
+  segmentAudioCache.set(key, { text: segment.text, segment });
   while (segmentAudioCache.size > SEGMENT_AUDIO_CACHE_MAX) {
     const oldest = segmentAudioCache.keys().next().value;
     if (oldest === undefined) break;
@@ -38,7 +43,7 @@ function rememberSegment(key: string, segment: VoiceSegment): void {
   }
 }
 
-function hashText(text: string): string {
+export function hashSegmentText(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
@@ -47,7 +52,7 @@ function hashText(text: string): string {
 }
 
 function segmentCacheKey(segment: VoiceSegment): string {
-  return `${segment.voiceId ?? ''}:${hashText(segment.text)}`;
+  return `${segment.voiceId ?? ''}:${hashSegmentText(segment.text)}`;
 }
 
 async function generateWithCache(
@@ -57,9 +62,13 @@ async function generateWithCache(
   if (segment.audioUrl) return segment;
   const key = segmentCacheKey(segment);
   const cached = segmentAudioCache.get(key);
-  if (cached?.audioUrl) {
-    rememberSegment(key, cached);
-    return { ...segment, audioUrl: cached.audioUrl, audioBlob: cached.audioBlob };
+  if (cached?.segment.audioUrl && cached.text === segment.text) {
+    rememberSegment(key, cached.segment);
+    return {
+      ...segment,
+      audioUrl: cached.segment.audioUrl,
+      audioBlob: cached.segment.audioBlob,
+    };
   }
   const generated = await VoiceDirector.generateAudio(segment, signal);
   if (generated.audioUrl) {

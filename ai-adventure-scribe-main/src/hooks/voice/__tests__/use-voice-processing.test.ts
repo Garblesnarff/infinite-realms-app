@@ -7,6 +7,7 @@ import {
   useVoiceProcessing,
   clearVoiceSegmentAudioCache,
   getVoiceSegmentAudioCacheSize,
+  hashSegmentText,
   SEGMENT_AUDIO_CACHE_MAX,
 } from '../use-voice-processing';
 
@@ -594,5 +595,49 @@ describe('useVoiceProcessing', () => {
 
     unmount();
     expect(seenSignal?.aborted).toBe(true);
+  });
+
+  it('does not return cached audio when a different text collides on the hash', async () => {
+    // Java String.hashCode / (h<<5)-h collisions: "Aa" and "BB".
+    const first = 'Aa';
+    const colliding = 'BB';
+    expect(first).not.toBe(colliding);
+    expect(hashSegmentText(first)).toBe(hashSegmentText(colliding));
+
+    (VoiceDirector.validateAISegments as any).mockImplementation((segs: any) => segs);
+    (VoiceDirector.processAISegments as any).mockImplementation((segs: any) =>
+      segs.map((s: any) => ({ character: 'DM', text: s.text, voiceId: 'narrator' })),
+    );
+    (VoiceDirector.generateAudio as any).mockImplementation(async (segment: { text: string }) => ({
+      ...segment,
+      audioUrl: `http://test.com/${segment.text}.mp3`,
+    }));
+    mockPlayAudioSegment.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useVoiceProcessing(defaultProps));
+
+    await act(async () => {
+      await result.current.speakAISegments([{ type: 'dm', text: first }] as any);
+    });
+    expect(mockPlayAudioSegment).toHaveBeenCalledWith(
+      expect.objectContaining({ text: first, audioUrl: 'http://test.com/Aa.mp3' }),
+      0,
+    );
+
+    defaultProps.state.isProcessing = false;
+    mockPlayAudioSegment.mockClear();
+    await act(async () => {
+      await result.current.speakAISegments([{ type: 'dm', text: colliding }] as any);
+    });
+
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledTimes(2);
+    expect(mockPlayAudioSegment).toHaveBeenCalledWith(
+      expect.objectContaining({ text: colliding, audioUrl: 'http://test.com/BB.mp3' }),
+      0,
+    );
+    expect(mockPlayAudioSegment).not.toHaveBeenCalledWith(
+      expect.objectContaining({ audioUrl: 'http://test.com/Aa.mp3' }),
+      expect.anything(),
+    );
   });
 });
