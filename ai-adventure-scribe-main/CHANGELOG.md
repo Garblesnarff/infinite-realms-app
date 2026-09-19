@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.4...v0.19.5) (2026-09-19)
+
+
+### Bug Fixes
+
+* **client:** recover expired sessions on 401 ([#2084](https://github.com/Garblesnarff/infinite-realms-production/issues/2084)) ([07d0961](https://github.com/Garblesnarff/infinite-realms-production/commit/07d0961a0b4ab2a0b082eca1c357a027121cec44))
+* **voice:** reject segment cache hits on hash collision ([#2083](https://github.com/Garblesnarff/infinite-realms-production/issues/2083)) ([246a063](https://github.com/Garblesnarff/infinite-realms-production/commit/246a0630ee8184ae81bbc98e613b69a17cf15156))
+
 ## [0.19.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.3...v0.19.4) (2026-09-18)
 
 
