@@ -55,6 +55,14 @@ describe('PlayableCharacterCard', () => {
     expect(screen.queryByLabelText('Strength modifier: +0')).not.toBeInTheDocument();
   });
 
+  it('uses the neutral placeholder instead of The Lost Temple art when the character has no cover', () => {
+    renderCard(baseCharacter);
+
+    const banner = document.querySelector('[aria-hidden="true"].relative.h-32') as HTMLElement;
+    expect(banner.style.backgroundImage).toContain('/card-placeholder.svg');
+    expect(banner.style.backgroundImage).not.toContain('card-background.jpeg');
+  });
+
   it('hides the stats block when the stats array is empty', () => {
     renderCard({
       ...baseCharacter,

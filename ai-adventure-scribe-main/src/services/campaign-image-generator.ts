@@ -38,7 +38,7 @@ interface ImageGenerationOptions {
  */
 export class CampaignImageGenerator {
   private maxRetries = 3;
-  private defaultFallbackImage = '/card-background.jpeg';
+  private defaultFallbackImage = '/card-placeholder.svg';
 
   /**
    * Generate a background image for a campaign

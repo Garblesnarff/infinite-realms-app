@@ -3,6 +3,7 @@ import React from 'react';
 
 import type { StarterTemplate } from '@/features/campaign/hooks/use-character-selection';
 
+import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
@@ -54,9 +55,7 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
       <div
         className="relative h-32 bg-cover bg-center transition-all duration-700 ease-out group-hover:scale-105 group-hover:brightness-110"
         style={{
-          backgroundImage: template.portrait_url
-            ? `url(${template.portrait_url})`
-            : `url(${new URL('/card-background.jpeg', import.meta.url).href})`,
+          backgroundImage: `url(${resolveCampaignArtwork(template.portrait_url)})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}

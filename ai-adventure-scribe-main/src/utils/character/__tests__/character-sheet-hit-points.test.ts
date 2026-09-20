@@ -13,6 +13,8 @@ import { transformCharacterData } from '../data-transformers';
 
 import type { Character } from '@/types/character';
 
+import { buildStarterCharacterSeed } from '@/services/character/starter-character-seeding';
+
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 /*
  * MulticlassManager is intentionally omitted: it is a mutation-preview surface, so its
@@ -92,6 +94,36 @@ describe('getCharacterSheetHitPoints', () => {
     expect(formatCharacterSheetHitPoints(first)).toBe('—');
     expect(formatCharacterSheetHitPoints(second)).toBe('—');
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows stored max HP for a freshly created premade', () => {
+    const seed = buildStarterCharacterSeed(
+      {
+        name: 'The Veteran',
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        ability_scores: {
+          strength: 16,
+          dexterity: 12,
+          constitution: 14,
+          intelligence: 10,
+          wisdom: 13,
+          charisma: 10,
+        },
+      },
+      'abyssal-descent',
+    );
+    const stats = seed.stats as {
+      current_hit_points: number;
+      max_hit_points: number;
+    };
+    const character = { id: 'fresh-premade', character_stats: stats } as Character;
+
+    expect(stats).toMatchObject({ current_hit_points: 12, max_hit_points: 12 });
+    const hitPoints = getCharacterSheetHitPoints(character);
+    expect(hitPoints).toEqual({ current: 12, maximum: 12 });
+    expect(formatCharacterSheetHitPoints(hitPoints)).toBe('12/12');
   });
 
   it('preserves a stored zero current HP', () => {

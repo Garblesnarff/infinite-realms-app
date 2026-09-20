@@ -46,10 +46,12 @@ describe('CharacterBackgroundGenerator', () => {
       const result = await characterBackgroundGenerator.generateCharacterBackground(mockCharacter);
 
       expect(result).toBe(mockUrl);
-      expect(openRouterService.generateImage).toHaveBeenCalledWith(expect.objectContaining({
-        prompt: expect.stringContaining('Thalric'),
-        model: 'google/gemini-2.5-flash-image',
-      }));
+      expect(openRouterService.generateImage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining('Thalric'),
+          model: 'google/gemini-2.5-flash-image',
+        }),
+      );
       expect(openRouterService.uploadImage).toHaveBeenCalledWith(mockBase64);
     });
 
@@ -61,10 +63,13 @@ describe('CharacterBackgroundGenerator', () => {
 
       // Mock fetch and FileReader for convertImageUrlToBase64
       const mockBlob = new Blob(['test'], { type: 'image/png' });
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        blob: vi.fn().mockResolvedValue(mockBlob),
-      }));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          blob: vi.fn().mockResolvedValue(mockBlob),
+        }),
+      );
 
       // Mock FileReader
       class MockFileReader {
@@ -85,9 +90,11 @@ describe('CharacterBackgroundGenerator', () => {
       });
 
       expect(result).toBe(mockUrl);
-      expect(openRouterService.generateImage).toHaveBeenCalledWith(expect.objectContaining({
-        referenceImage: referenceBase64,
-      }));
+      expect(openRouterService.generateImage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          referenceImage: referenceBase64,
+        }),
+      );
     });
 
     it('should use fallback image when generation fails after retries', async () => {
@@ -102,9 +109,12 @@ describe('CharacterBackgroundGenerator', () => {
 
       const result = await promise;
 
-      expect(result).toBe('/card-background.jpeg');
+      expect(result).toBe('/card-placeholder.svg');
       expect(openRouterService.generateImage).toHaveBeenCalledTimes(2);
-      expect(logger.error).toHaveBeenCalledWith('Failed to generate character background:', expect.any(Error));
+      expect(logger.error).toHaveBeenCalledWith(
+        'Failed to generate character background:',
+        expect.any(Error),
+      );
     });
 
     it('should throw error when fallback is disabled', async () => {
@@ -138,11 +148,14 @@ describe('CharacterBackgroundGenerator', () => {
     });
 
     it('should handle fetch failure during image conversion', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      }));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        }),
+      );
 
       vi.mocked(openRouterService.generateImage).mockResolvedValue('base64');
       vi.mocked(openRouterService.uploadImage).mockResolvedValue('url');
@@ -154,11 +167,13 @@ describe('CharacterBackgroundGenerator', () => {
       // Should log warning and proceed without reference image
       expect(logger.warn).toHaveBeenCalledWith(
         'Failed to convert reference image to base64, proceeding without vision input:',
-        expect.any(Error)
+        expect.any(Error),
       );
-      expect(openRouterService.generateImage).toHaveBeenCalledWith(expect.not.objectContaining({
-        referenceImage: expect.any(String),
-      }));
+      expect(openRouterService.generateImage).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          referenceImage: expect.any(String),
+        }),
+      );
     });
   });
 
@@ -174,22 +189,34 @@ describe('CharacterBackgroundGenerator', () => {
     });
 
     it('should include elven theme for elves', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Elf' }, class: { name: 'Fighter' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Elf' }, class: { name: 'Fighter' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Mystical forest or ancient elven architecture');
     });
 
     it('should include dwarven theme for dwarves', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Dwarf' }, class: { name: 'Fighter' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Dwarf' }, class: { name: 'Fighter' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Stone mountain hall or forge');
     });
 
     it('should include wizardly theme for wizards', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Human' }, class: { name: 'Wizard' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Human' }, class: { name: 'Wizard' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Arcane library or magical ritual circle');
     });
 
     it('should include martial theme for barbarians', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Human' }, class: { name: 'Barbarian' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Human' }, class: { name: 'Barbarian' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Rugged wilderness camp or ancient battleground ruins');
     });
 
@@ -200,17 +227,26 @@ describe('CharacterBackgroundGenerator', () => {
     });
 
     it('should include sorcerer theme for sorcerers', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Human' }, class: { name: 'Sorcerer' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Human' }, class: { name: 'Sorcerer' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Arcane library or magical ritual circle');
     });
 
     it('should include fighter theme for fighters', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Human' }, class: { name: 'Fighter' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Human' }, class: { name: 'Fighter' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Rugged wilderness camp or ancient battleground ruins');
     });
 
     it('should include default theme for other classes', () => {
-      const prompt = generator.createImagePrompt({ ...mockCharacter, race: { name: 'Human' }, class: { name: 'Rogue' } }, true);
+      const prompt = generator.createImagePrompt(
+        { ...mockCharacter, race: { name: 'Human' }, class: { name: 'Rogue' } },
+        true,
+      );
       expect(prompt).toContain('Theme: Classic fantasy landscape with mystical elements');
     });
 
@@ -227,10 +263,13 @@ describe('CharacterBackgroundGenerator', () => {
 
     it('should reject when FileReader errors', async () => {
       const mockBlob = new Blob(['test'], { type: 'image/png' });
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        blob: vi.fn().mockResolvedValue(mockBlob),
-      }));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          blob: vi.fn().mockResolvedValue(mockBlob),
+        }),
+      );
 
       class ErrorFileReader {
         onerror: any;
@@ -240,7 +279,9 @@ describe('CharacterBackgroundGenerator', () => {
       }
       vi.stubGlobal('FileReader', ErrorFileReader);
 
-      await expect(generator.convertImageUrlToBase64('url')).rejects.toThrow('Failed to convert image to base64');
+      await expect(generator.convertImageUrlToBase64('url')).rejects.toThrow(
+        'Failed to convert image to base64',
+      );
     });
   });
 });

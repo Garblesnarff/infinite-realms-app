@@ -53,6 +53,19 @@ function renderCard() {
 }
 
 describe('CampaignCard artwork fallback', () => {
+  it('treats persisted Lost Temple art as missing cover', () => {
+    mockUseCampaignImageHotLoading.mockReturnValue({
+      imageUrl: '/card-background.jpeg',
+      isLoading: false,
+      hasImage: true,
+    });
+
+    const { container } = renderCard();
+    const img = container.querySelector('img');
+    expect(img).toHaveAttribute('src', CAMPAIGN_ARTWORK_PLACEHOLDER);
+    expect(img?.getAttribute('src')).not.toContain('card-background.jpeg');
+  });
+
   it('never falls back to the retired card-background.jpeg art when hot-loaded artwork is missing', () => {
     mockUseCampaignImageHotLoading.mockReturnValue({
       imageUrl: '',

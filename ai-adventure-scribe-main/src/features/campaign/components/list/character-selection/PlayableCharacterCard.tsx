@@ -3,6 +3,7 @@ import React from 'react';
 
 import type { Character } from '@/features/campaign/hooks/use-character-selection';
 
+import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
@@ -28,8 +29,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
     | NonNullable<Character['character_stats']>[]
     | undefined;
   const stats = Array.isArray(cs) ? cs[0] : cs;
-  const backgroundImage =
-    character.background_image || new URL('/card-background.jpeg', import.meta.url).href;
+  const backgroundImage = resolveCampaignArtwork(character.background_image);
   const cardTitle = `Select character: ${character.name}, Level ${character.level} ${character.race} ${character.class}`;
 
   return (

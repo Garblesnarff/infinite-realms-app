@@ -9,7 +9,10 @@ import CharacterSelectionModal from './character-selection-modal';
 
 import type { CampaignCardData } from './campaign-card-types';
 
-import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
+import {
+  CAMPAIGN_ARTWORK_PLACEHOLDER,
+  resolveCampaignArtwork,
+} from '@/components/campaigns/campaign-artwork';
 import { CampaignTitleOverlay } from '@/components/campaigns/CampaignTitleOverlay';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
@@ -110,23 +113,18 @@ const CampaignCardComponent = ({
     }
   }, [campaign.id, toast, queryClient]);
 
-  // Use hot loaded image, fallback to coverImage, then the honest placeholder.
-  // The old "/card-background.jpeg" fallback baked in "The Lost Temple" art
-  // and must never be used as generic campaign artwork (see #1741).
+  // Hot loaded image, then cover, then placeholder. Never keep Lost Temple jpeg.
   const resolvedImage = useMemo(() => {
-    // Priority: hot loaded image > static cover image > default background
     if (hasImage && hotLoadedImage && hotLoadedImage !== '/campaign-background-placeholder.png') {
-      return new URL(hotLoadedImage, import.meta.url).href;
+      return resolveCampaignArtwork(new URL(hotLoadedImage, import.meta.url).href);
     }
 
     if (coverImage) {
-      return new URL(coverImage, import.meta.url).href;
+      return resolveCampaignArtwork(new URL(coverImage, import.meta.url).href);
     }
 
-    // If we don't have an image and it's loading, show the hook's own
-    // in-flight placeholder.
     if (imageLoading || !hasImage) {
-      return hotLoadedImage || CAMPAIGN_ARTWORK_PLACEHOLDER;
+      return resolveCampaignArtwork(hotLoadedImage) || CAMPAIGN_ARTWORK_PLACEHOLDER;
     }
 
     return CAMPAIGN_ARTWORK_PLACEHOLDER;

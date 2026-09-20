@@ -139,6 +139,8 @@ describe('SessionService', () => {
         intelligence: 10,
         wisdom: 11,
         charisma: 9,
+        max_hit_points: 12,
+        current_hit_points: 12,
       };
       mockContextQuery([{ session, campaign, character, stats }]);
 
@@ -153,6 +155,14 @@ describe('SessionService', () => {
         character: { ...character, character_stats: [stats] },
       });
       expect(db.select).toHaveBeenCalled();
+      expect(db.select).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stats: expect.objectContaining({
+            max_hit_points: expect.anything(),
+            current_hit_points: expect.anything(),
+          }),
+        }),
+      );
     });
 
     it('masks a session not owned by the authenticated user as not found', async () => {

@@ -129,6 +129,8 @@ export class SessionService {
           intelligence: characterStats.intelligence,
           wisdom: characterStats.wisdom,
           charisma: characterStats.charisma,
+          max_hit_points: characterStats.maxHitPoints,
+          current_hit_points: characterStats.currentHitPoints,
         },
       })
       .from(gameSessions)

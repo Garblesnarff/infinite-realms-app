@@ -26,7 +26,7 @@ interface ImageGenerationOptions {
  */
 export class CharacterBackgroundGenerator {
   private maxRetries = 2;
-  private defaultFallbackImage = '/card-background.jpeg';
+  private defaultFallbackImage = '/card-placeholder.svg';
 
   /**
    * Generate a character card background using the character sheet as reference
