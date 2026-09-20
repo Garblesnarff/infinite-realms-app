@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.10](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.9...v0.19.10) (2026-09-20)
+
+
+### Bug Fixes
+
+* **client:** show equipped armor class on character sheet ([#2110](https://github.com/Garblesnarff/infinite-realms-production/issues/2110)) ([3c8896d](https://github.com/Garblesnarff/infinite-realms-production/commit/3c8896d9018d240e5a7d1c56d45e9c29b2bbf507))
+* **security:** stop putting WorkOS tokens in WebSocket URLs ([#2096](https://github.com/Garblesnarff/infinite-realms-production/issues/2096)) ([#2111](https://github.com/Garblesnarff/infinite-realms-production/issues/2111)) ([60c2e23](https://github.com/Garblesnarff/infinite-realms-production/commit/60c2e2374c032f1853e9a25a03dde68f563d08ab))
+
 ## [0.19.9](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.8...v0.19.9) (2026-09-20)
 
 
