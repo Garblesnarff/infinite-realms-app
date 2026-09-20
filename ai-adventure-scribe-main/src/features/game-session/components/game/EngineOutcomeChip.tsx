@@ -25,9 +25,14 @@ export const EngineOutcomeChip: React.FC<{ line: string }> = ({ line }) => {
       open
       className={`mb-3 rounded-lg border bg-black/35 px-3 py-2 text-sm backdrop-blur-sm ${tone}`}
     >
-      <summary className="cursor-pointer list-none font-medium tracking-wide">
+      <summary
+        className="flex cursor-pointer list-none items-center gap-2 font-medium tracking-wide"
+        aria-label={`Engine ${outcome}`}
+      >
         <span className="uppercase text-[11px] tracking-[0.2em] opacity-80">Engine</span>
-        <span className="ml-2">{outcome}</span>
+        <span className="rounded-sm border border-current px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
+          {outcome}
+        </span>
       </summary>
       <p className="mt-2 text-xs leading-relaxed text-white/80">{detail}</p>
     </details>
