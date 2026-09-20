@@ -2,6 +2,7 @@ import { MemoryImportanceService } from './MemoryImportanceService';
 import { MemoryRepository } from './MemoryRepository';
 
 import { llmApiClient } from '@/infrastructure/api';
+import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import { stripAssetTags } from '@/lib/utils';
 import {
   normalizeMemoryType,
@@ -81,6 +82,7 @@ export class MemoryService {
     context: MemoryContext,
     userMessage: string,
     aiResponse: string,
+    onTurnPhase?: TurnPhaseReporter,
   ): Promise<MemoryExtractionResult> {
     try {
       const cleanUserMessage = sanitizeForMemoryExtraction(userMessage);
@@ -114,7 +116,9 @@ Extract 1-4 key memories in this JSON format:
 }`;
 
       // Use dedicated extraction endpoint (free model with paid fallback)
-      const text = await llmApiClient.extractMemories(extractionPrompt, 1000);
+      const text = onTurnPhase
+        ? await llmApiClient.extractMemories(extractionPrompt, 1000, onTurnPhase)
+        : await llmApiClient.extractMemories(extractionPrompt, 1000);
 
       if (!text) return { memories: [] };
 

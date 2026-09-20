@@ -14,7 +14,11 @@ import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
-import { SESSION_EXPIRED_MESSAGE, SessionExpiredError } from '@/infrastructure/api/rest-client';
+import {
+  createTurnPhaseReporter,
+  SESSION_EXPIRED_MESSAGE,
+  SessionExpiredError,
+} from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
@@ -85,6 +89,8 @@ export const useMessageHandlerLogic = ({
   // Refs to track current values for async operations
   const turnCountRef = React.useRef(turnCount);
   const messagesRef = React.useRef(messages);
+  const turnPhaseRef = React.useRef<ReturnType<typeof createTurnPhaseReporter> | null>(null);
+  const wasSendingRef = React.useRef(false);
 
   // Update refs when values change
   React.useEffect(() => {
@@ -95,6 +101,15 @@ export const useMessageHandlerLogic = ({
     messagesRef.current = messages;
   }, [messages]);
 
+  React.useEffect(() => {
+    const composerEnabled = !isSending && queueStatus !== 'processing';
+    if (wasSendingRef.current && composerEnabled) {
+      turnPhaseRef.current?.('composer enabled');
+      turnPhaseRef.current = null;
+    }
+    wasSendingRef.current = isSending;
+  }, [isSending, queueStatus]);
+
   // Assuming validateSession is still relevant or adapted
   const validateSession = useSessionValidator({ sessionId, campaignId, characterId });
 
@@ -103,6 +118,9 @@ export const useMessageHandlerLogic = ({
     playerInput: string,
     providedContext?: MessageSendContext,
   ): Promise<void> => {
+    const turnPhase = createTurnPhaseReporter();
+    turnPhaseRef.current = turnPhase;
+    turnPhase('submit');
     let turnCountAdvanced = false;
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
@@ -173,6 +191,8 @@ export const useMessageHandlerLogic = ({
       const aiResponseMessage = await getAIResponse(
         [...messagesRef.current, playerMessage],
         sessionId,
+        undefined,
+        turnPhase,
       );
       // Sanitize the AI response text first
       let processedText = sanitizeDMText(aiResponseMessage.text);
@@ -240,7 +260,9 @@ export const useMessageHandlerLogic = ({
           sanitizedAiResponseMessage.text ||
           sanitizedAiResponseMessage.narrationSegments?.length
         ) {
+          turnPhase('text shown');
           await sendMessage(sanitizedAiResponseMessage);
+          turnPhase('persist');
         }
       }
 

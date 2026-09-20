@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { llmApiClient } from '@/infrastructure/api';
+import { createTurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import * as loggerModule from '@/lib/logger';
 
 import '@/lib/auth-gate';
@@ -57,15 +58,84 @@ describe('LlmApiClient', () => {
     (llmApiClient as any).useOfflineFallback = false;
     (llmApiClient as any).offlineFallbackSetAt = 0;
     (llmApiClient as any).lastRequestId = null;
+    (llmApiClient as any).lastGenerateRequestId = null;
 
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   describe('generateText', () => {
+    it('retains the generate request id for turn-phase correlation', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name === 'x-request-id' ? 'generate-req-1' : null) },
+        json: () => Promise.resolve({ text: 'Generated response' }),
+      });
+
+      await llmApiClient.generateText({ prompt: 'Hello' });
+
+      expect(llmApiClient.lastGenerateRequestId).toBe('generate-req-1');
+    });
+
+    it('logs a full turn in order with cumulative phase timing', async () => {
+      let clock = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => ++clock);
+      const reportTurnPhase = createTurnPhaseReporter();
+
+      reportTurnPhase('submit');
+      reportTurnPhase('preflight');
+      reportTurnPhase('generate start');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name === 'x-request-id' ? 'generate-req-2' : null) },
+        json: () => Promise.resolve({ text: 'Generated response' }),
+      });
+      await llmApiClient.generateText({ prompt: 'Hello' });
+      reportTurnPhase('generate end', llmApiClient.lastGenerateRequestId);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name === 'x-request-id' ? 'extract-req-2' : null) },
+        json: () => Promise.resolve({ text: '{"memories":[]}' }),
+      });
+      await llmApiClient.extractMemories('Conversation context', 1000, reportTurnPhase);
+      reportTurnPhase('text shown');
+      reportTurnPhase('persist');
+      reportTurnPhase('composer enabled');
+
+      const phases = logger.info.mock.calls
+        .filter(([event]) => event === 'TURN_PHASE')
+        .map(([, payload]) => payload as { phase: string; ms: number; requestId: string | null });
+      expect(phases.map(({ phase }) => phase)).toEqual([
+        'submit',
+        'preflight',
+        'generate start',
+        'generate end',
+        'extract start',
+        'extract end',
+        'text shown',
+        'persist',
+        'composer enabled',
+      ]);
+
+      const cumulativeMs = phases.reduce<number[]>((totals, { ms }) => {
+        totals.push((totals.at(-1) ?? 0) + ms);
+        return totals;
+      }, []);
+      expect(
+        cumulativeMs.every((value, index) => index === 0 || value > cumulativeMs[index - 1]),
+      ).toBe(true);
+      expect(phases.slice(3).every(({ requestId }) => requestId === 'generate-req-2')).toBe(true);
+    });
+
     it('should successfully generate text using the preferred provider', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

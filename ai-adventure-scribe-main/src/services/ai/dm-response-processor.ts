@@ -5,6 +5,7 @@ import { processWorldAndMemories } from './response/world-update-processor';
 
 import type { SessionVoiceContext } from '../voice-consistency-service';
 import type { ChatMessage, NarrationSegment, GameContext, AIResponse } from './shared/types';
+import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import logger from '@/lib/logger';
@@ -23,6 +24,7 @@ interface ProcessDMResponseParams {
   combatDetection?: CombatDetectionResult;
   roll_requests?: unknown[];
   dice_rolls?: unknown[];
+  onTurnPhase?: TurnPhaseReporter;
 }
 
 /**
@@ -42,6 +44,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     combatDetection,
     roll_requests,
     dice_rolls,
+    onTurnPhase,
   } = params;
 
   const baseCombatDetection: CombatDetectionResult = combatDetection ?? {
@@ -256,6 +259,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     conversationHistory,
     userPlan,
     turnCount,
+    onTurnPhase,
   });
 
   // 4. Wrap everything into AIResponse

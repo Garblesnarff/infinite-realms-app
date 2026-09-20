@@ -4,6 +4,7 @@ import { parseXMLTagsFromResponse } from '../xml-parser';
 
 import type { MemoryContext } from '../../memory-manager';
 import type { GameContext, ChatMessage } from '../shared/types';
+import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
@@ -16,6 +17,7 @@ interface WorldUpdateParams {
   conversationHistory?: ChatMessage[];
   userPlan?: string;
   turnCount?: number;
+  onTurnPhase?: TurnPhaseReporter;
 }
 
 /**
@@ -23,7 +25,7 @@ interface WorldUpdateParams {
  * Processes XML tags for memories and world updates, or falls back to traditional extraction.
  */
 export async function processWorldAndMemories(params: WorldUpdateParams): Promise<string> {
-  const { text, context, message, conversationHistory, userPlan, turnCount } = params;
+  const { text, context, message, conversationHistory, userPlan, turnCount, onTurnPhase } = params;
 
   if (!context.sessionId) {
     return text;
@@ -42,10 +44,10 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
       ]
         .map((entry) => `${entry.role}: ${sanitizeForMemoryExtraction(entry.content)}`)
         .join('\n');
-      const summary = await llmApiClient.extractMemories(
-        `Summarize this D&D campaign chronologically. Preserve resolved quests, named NPC relationships, locations, important items, promises, deaths, and unresolved threats. Return only the concise summary.\n\n${transcript}`,
-        1200,
-      );
+      const summaryPrompt = `Summarize this D&D campaign chronologically. Preserve resolved quests, named NPC relationships, locations, important items, promises, deaths, and unresolved threats. Return only the concise summary.\n\n${transcript}`;
+      const summary = onTurnPhase
+        ? await llmApiClient.extractMemories(summaryPrompt, 1200, onTurnPhase)
+        : await llmApiClient.extractMemories(summaryPrompt, 1200);
       if (summary.trim()) {
         await MemoryManager.saveMemories([
           {
@@ -192,11 +194,10 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
         recentMessages: conversationHistory?.slice(-5).map((msg) => msg.content) || [],
       };
 
-      const extractionResult = await MemoryManager.extractMemories(
-        memoryContext,
-        message,
-        sanitizeForMemoryExtraction(text),
-      );
+      const sanitizedText = sanitizeForMemoryExtraction(text);
+      const extractionResult = onTurnPhase
+        ? await MemoryManager.extractMemories(memoryContext, message, sanitizedText, onTurnPhase)
+        : await MemoryManager.extractMemories(memoryContext, message, sanitizedText);
 
       if (extractionResult.memories.length > 0) {
         await MemoryManager.saveMemories(extractionResult.memories);

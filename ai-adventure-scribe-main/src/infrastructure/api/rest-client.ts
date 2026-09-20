@@ -14,6 +14,40 @@ const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
 const LLM_EXTRACT_ROUTE = '/v1/llm/extract';
 export const SESSION_EXPIRED_MESSAGE = 'Session expired — sign in again';
 
+export type TurnPhase =
+  | 'submit'
+  | 'preflight'
+  | 'generate start'
+  | 'generate end'
+  | 'text shown'
+  | 'extract start'
+  | 'extract end'
+  | 'persist'
+  | 'composer enabled';
+
+export type TurnPhaseReporter = (phase: TurnPhase, requestId?: string | null) => void;
+
+/** `ms` is the elapsed delta from the previous phase, not cumulative turn time. */
+export function logTurnPhase(phase: TurnPhase, deltaMs: number, requestId: string | null): void {
+  logger.info('TURN_PHASE', {
+    phase,
+    ms: Math.max(0, Math.round(deltaMs)),
+    requestId,
+  });
+}
+
+export function createTurnPhaseReporter(): TurnPhaseReporter {
+  let previousAt = performance.now();
+  let currentRequestId: string | null = null;
+
+  return (phase, requestId) => {
+    const now = performance.now();
+    if (requestId) currentRequestId = requestId;
+    logTurnPhase(phase, phase === 'submit' ? 0 : now - previousAt, currentRequestId);
+    previousAt = now;
+  };
+}
+
 function isGenerateRoute(path: string): boolean {
   return path.startsWith(LLM_GENERATE_ROUTE_PREFIX);
 }
@@ -192,6 +226,7 @@ class LlmApiClient {
    * calls and is for diagnosis only. (#2050 D)
    */
   lastRequestId: string | null = null;
+  lastGenerateRequestId: string | null = null;
   private useOfflineFallback = false;
   private offlineFallbackSetAt = 0;
   private static readonly OFFLINE_RESET_MS = 30_000;
@@ -304,6 +339,7 @@ class LlmApiClient {
   }
 
   async generateText(params: GenerateTextParams): Promise<string> {
+    this.lastGenerateRequestId = null;
     const preferredProvider =
       params.provider ||
       (import.meta.env.VITE_LLM_PROVIDER as 'openrouter' | 'gemini' | undefined) ||
@@ -365,6 +401,7 @@ class LlmApiClient {
             params.onStream(chunk);
           }
         }
+        this.lastGenerateRequestId = this.lastRequestId;
         return raw;
       }
       const data = (await res.json()) as {
@@ -373,6 +410,7 @@ class LlmApiClient {
         model?: string;
       };
       params.onResponseMetadata?.({ provider: data.provider, model: data.model });
+      this.lastGenerateRequestId = this.lastRequestId;
       return data?.text ?? '';
     } catch (err: any) {
       const msg = String(err?.message || '');
@@ -388,6 +426,7 @@ class LlmApiClient {
           model?: string;
         };
         params.onResponseMetadata?.({ provider: data.provider, model: data.model });
+        this.lastGenerateRequestId = this.lastRequestId;
         return data?.text ?? '';
       }
       if (preferredProvider === 'gemini' && (isGeminiConfigErr || retryableProviderFailure)) {
@@ -398,6 +437,7 @@ class LlmApiClient {
           model?: string;
         };
         params.onResponseMetadata?.({ provider: data.provider, model: data.model });
+        this.lastGenerateRequestId = this.lastRequestId;
         return data?.text ?? '';
       }
       throw err;
@@ -457,7 +497,12 @@ class LlmApiClient {
     }
   }
 
-  async extractMemories(prompt: string, maxTokens = 1000): Promise<string> {
+  async extractMemories(
+    prompt: string,
+    maxTokens = 1000,
+    onTurnPhase?: TurnPhaseReporter,
+  ): Promise<string> {
+    onTurnPhase?.('extract start');
     try {
       const res = await this.fetchWithAuth('/v1/llm/extract', {
         method: 'POST',
@@ -468,6 +513,8 @@ class LlmApiClient {
     } catch (error) {
       logger.warn('[LLMApiClient] Memory extraction failed', error);
       return '';
+    } finally {
+      onTurnPhase?.('extract end');
     }
   }
 }

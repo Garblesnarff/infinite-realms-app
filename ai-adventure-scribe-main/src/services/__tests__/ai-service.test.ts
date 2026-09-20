@@ -143,6 +143,30 @@ describe('AIService', () => {
       expect(result).toEqual(mockProcessedResponse);
     });
 
+    it('does not label turn-phase logging failures as provider failures', async () => {
+      const mockParams: any = {
+        message: 'Turn phase logging failure',
+        context: mockContext,
+        conversationHistory: [],
+        onTurnPhase: vi.fn(() => {
+          throw new Error('telemetry unavailable');
+        }),
+      };
+
+      vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);
+      vi.mocked(ContextBuilder.build).mockResolvedValue('Build prompt');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'Processed Text' } as any);
+
+      await expect(AIService.chatWithDM(mockParams)).resolves.toEqual({ text: 'Processed Text' });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[AIService] Turn-phase logging failed:',
+        expect.any(Error),
+      );
+      expect(logger.error).not.toHaveBeenCalledWith('LLM API failed:', expect.anything());
+    });
+
     it('should use provided memories if available', async () => {
       const mockParams: any = {
         message: 'Message with memories',

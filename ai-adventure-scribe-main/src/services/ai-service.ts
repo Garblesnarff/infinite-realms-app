@@ -17,6 +17,7 @@ import { dmResponseSchema } from '../../server-bun/src/services/dm/dm-response-s
 import type { AIResponse, ChatMessage, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
 import type { SessionVoiceContext } from './voice-consistency-service';
+import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
@@ -33,6 +34,18 @@ function keyFor(sessionId: string | undefined, message: string, historyLen: numb
 }
 
 export { formatConversationHistoryMessage } from './ai/shared/conversation-history';
+
+function reportTurnPhase(
+  onTurnPhase: TurnPhaseReporter | undefined,
+  phase: Parameters<TurnPhaseReporter>[0],
+  requestId?: string | null,
+): void {
+  try {
+    onTurnPhase?.(phase, requestId);
+  } catch (loggingError) {
+    logger.warn('[AIService] Turn-phase logging failed:', loggingError);
+  }
+}
 
 export class AIService {
   /**
@@ -77,6 +90,7 @@ export class AIService {
     turnCount?: number;
     relevantMemories?: Memory[];
     onProviderResponse?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
+    onTurnPhase?: TurnPhaseReporter;
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -230,6 +244,7 @@ export class AIService {
             ? { sessionId: params.context.sessionId, player: entryPlayer }
             : undefined;
 
+        reportTurnPhase(params.onTurnPhase, 'generate start');
         rawResponse = await llmApiClient.generateText({
           prompt: fullPrompt,
           // #2050 C: always send the session, not only via combatEntry (which is
@@ -244,6 +259,11 @@ export class AIService {
           metrics: promptMetrics,
           combatEntry,
         });
+        reportTurnPhase(
+          params.onTurnPhase,
+          'generate end',
+          llmApiClient.lastGenerateRequestId ?? llmApiClient.lastRequestId,
+        );
       } catch (providerError) {
         logger.error('LLM API failed:', providerError);
         throw new Error('Failed to get DM response - AI service unavailable', {
@@ -261,6 +281,7 @@ export class AIService {
           turnCount: params.turnCount,
           voiceContext,
           isFirstMessage,
+          onTurnPhase: params.onTurnPhase,
         });
       } catch (processingError) {
         const error =

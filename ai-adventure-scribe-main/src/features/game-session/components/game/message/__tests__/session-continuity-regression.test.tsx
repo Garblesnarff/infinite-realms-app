@@ -201,6 +201,8 @@ describe('session-continuity regression', () => {
     expect(mockGetAIResponse).toHaveBeenCalledWith(
       expect.any(Array),
       'session-B', // must NOT be stale "session-A"
+      undefined,
+      expect.any(Function),
     );
   });
 
@@ -254,6 +256,8 @@ describe('session-continuity regression', () => {
     expect(mockGetAIResponse).toHaveBeenCalledWith(
       expect.any(Array),
       'session-B', // not stale "session-A"
+      undefined,
+      expect.any(Function),
     );
   });
 

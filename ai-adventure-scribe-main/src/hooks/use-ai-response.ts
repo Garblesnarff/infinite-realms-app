@@ -3,6 +3,7 @@ import { useRef, useCallback } from 'react';
 
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest, LocalNotice } from '@/hooks/ai/types';
+import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
@@ -101,6 +102,7 @@ export const useAIResponse = (): {
     messages: ChatMessage[],
     sessionId: string,
     turnCount?: number,
+    onTurnPhase?: TurnPhaseReporter,
   ) => Promise<EnhancedChatMessage>;
 } => {
   const { setGamePhase, state: gameState } = useGame();
@@ -122,6 +124,7 @@ export const useAIResponse = (): {
       messages: ChatMessage[],
       sessionId: string,
       turnCount?: number,
+      onTurnPhase?: TurnPhaseReporter,
     ): Promise<EnhancedChatMessage> => {
       try {
         logger.info('Getting AI response for session:', sessionId);
@@ -280,6 +283,8 @@ export const useAIResponse = (): {
           currentTurn: activeEncounter?.currentTurnParticipantId,
         });
 
+        onTurnPhase?.('preflight');
+
         // Call AIService
         let result = await AIService.chatWithDM({
           message: latestMessage.text,
@@ -288,6 +293,7 @@ export const useAIResponse = (): {
           userPlan: userPlan || undefined,
           turnCount,
           relevantMemories,
+          onTurnPhase,
         });
 
         // Extract response data (result type has both snake_case and camelCase variants)
