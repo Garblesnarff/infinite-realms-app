@@ -1,74 +1,323 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
-REPO_ROOT="${INFINITE_REALMS_REPO_ROOT:-/var/www/infiniterealms}"
-APP_DIR="${INFINITE_REALMS_APP_DIR:-${REPO_ROOT}/ai-adventure-scribe-main}"
-LOG_DIR="${INFINITE_REALMS_LOG_DIR:-/var/log/infiniterealms}"
-BUN_BIN="${BUN_BIN:-/usr/local/bin/bun}"
-PM2_PROCESS="${PM2_PROCESS:-infiniterealms-bun}"
-SMOKE_ENV="${API_SMOKE_ENV_FILE:-/etc/infiniterealms/llm-smoke.env}"
-MARKER_FILE="${LOG_DIR}/DEPLOY_FAILED_SMOKE"
+# Production deploy, run from root cron every 15 minutes.
+#
+# Order of operations (see #2093): fetch -> build into a staging dir OUTSIDE
+# the repo -> secret-scan the staged bundle -> `pm2 restart` -> only then
+# publish into dist/, which is nginx's docroot. The server is always restarted
+# BEFORE the client bundle goes live, so any skew is new-API/old-client.
+#
+# TO PAUSE DEPLOYS (stranger-test runs): `touch /var/lib/infiniterealms-deploy/HOLD`.
+# While that file exists this script does nothing and exits 0; `rm` it to
+# resume. A hold older than 3h pages Slack so a forgotten one cannot silently
+# stop prod from tracking main. See the "deploy hold" block below.
+#
+# cron runs with a minimal PATH that lacks bun (/root/.bun/bin). Without this,
+# the deploy advances git via `git reset --hard` but dies at `bun install`
+# ("bun: command not found"), leaving prod half-deployed. (pm2/git are in /usr/bin.)
+# Overridable (default unchanged) so the build/restart failure branches can be
+# exercised with stub binaries instead of the real bun and pm2 — same reason
+# monitor-infiniterealms.sh takes MONITOR_PATH.
+export PATH="${DEPLOY_BIN_PATH:-/root/.bun/bin}:$PATH"
 
-mkdir -p "$LOG_DIR"
-exec > >(tee -a "${LOG_DIR}/auto-deploy.log") 2>&1
+# Overridable purely so the failure paths can be exercised against a scratch
+# repo without touching production — same reason monitor-infiniterealms.sh takes
+# MONITOR_* overrides. Default is unchanged.
+cd "${DEPLOY_REPO_DIR:-/var/www/infiniterealms/ai-adventure-scribe-main}"
+# Absolute path to the app dir, captured before any subshell changes cwd.
+PWD_REPO=$(pwd)
 
-cd "$REPO_ROOT" || exit 1
-previous_sha="$(git rev-parse HEAD)"
-git fetch origin main || exit 1
-git reset --hard origin/main || exit 1
-deployed_sha="$(git rev-parse HEAD)"
+ts() { date '+[%F %T]'; }
 
-pm2 restart "$PM2_PROCESS" --update-env || exit 1
+# --- fetch-failure alerting (added 2026-08-11) --------------------------------
+# On 2026-08-11 the box's GitHub token expired and `git fetch` failed for ~2h
+# (8 cron cycles). Under `set -e` that exited with git's stderr and nothing
+# else, so the log was indistinguishable from a quiet "No changes" run: prod
+# silently stopped tracking main and no monitor could tell. Failures now write
+# a greppable `DEPLOY FAILED` line AND page Slack.
+#
+# State-change semantics deliberately match monitor-infiniterealms.sh: alert on
+# the first failure, then at most one reminder per REPEAT_SECONDS while it stays
+# broken, then one RECOVERED. Cron runs every 15 min, so alerting every cycle
+# would produce ~96 messages/day — the exact flood that made the old monitor's
+# alerts worthless.
+ALERTS_ENV=${DEPLOY_ALERTS_ENV:-/etc/infiniterealms/alerts.env}
+ALERT_FILE=${DEPLOY_ALERT_FILE:-/var/log/infiniterealms/alerts.log}
+STATE_DIR=${DEPLOY_STATE_DIR:-/var/lib/infiniterealms-deploy}
+REPEAT_SECONDS=${DEPLOY_REPEAT_SECONDS:-3600}
+NOTIFY=${DEPLOY_NOTIFY:-1}
+mkdir -p "$STATE_DIR"
 
-if [[ -r "$SMOKE_ENV" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "$SMOKE_ENV"
-  set +a
-fi
+# Credentials are embedded in the remote URL, so any git error text is assumed
+# to be secret-bearing until proven otherwise. No token has ever reached this
+# log and none is going to start now.
+scrub() { sed -e 's#://[^@/]*@#://REDACTED@#g' -e 's#gh[pousr]_[A-Za-z0-9]\{16,\}#REDACTED#g'; }
 
-# Give PM2 up to 30 seconds to bind the HTTP port before running the journey once.
-base_url="${API_SMOKE_BASE_URL:-${LLM_SMOKE_BASE_URL:-http://localhost:8888}}"
-for _attempt in {1..15}; do
-  if curl --silent --show-error --fail --max-time 2 "${base_url%/}/health" >/dev/null; then
-    break
+post_slack() {
+  [ "$NOTIFY" = "1" ] || { echo "$(ts) [dry-run] slack: $1"; return 0; }
+  [ -r "$ALERTS_ENV" ] || return 0
+  command -v jq > /dev/null 2>&1 || return 0
+  # Subshell so the webhook never leaks into the environment of the build,
+  # `bun install`, or anything else this script goes on to run.
+  (
+    # shellcheck disable=SC1090
+    . "$ALERTS_ENV"
+    [ -n "${SLACK_ALERT_WEBHOOK_URL:-}" ] || exit 0
+    curl -s -m 10 -X POST -H 'Content-type: application/json' \
+      --data "$(jq -n --arg t "$1" '{text: $t}')" \
+      "$SLACK_ALERT_WEBHOOK_URL" > /dev/null 2>&1
+  ) || true
+}
+
+# Alerting must never be able to fail the deploy it is reporting on, so every
+# path here is best-effort and returns success.
+emit() {
+  echo "$(ts) $1" >> "$ALERT_FILE" 2>/dev/null || true
+  post_slack "$1"
+  return 0
+}
+
+# record_state <check> <ok|fail> <detail>
+record_state() {
+  local check=$1 status=$2 detail=$3 now
+  local file="$STATE_DIR/$check.state" prev=ok since notified=0
+  now=$(date +%s); since=$now
+
+  if [ -r "$file" ]; then
+    read -r prev since notified < "$file" || true
+    prev=${prev:-ok}; since=${since:-$now}; notified=${notified:-0}
   fi
-  sleep 2
-done
 
-smoke_output="$(mktemp)"
-trap 'rm -f "$smoke_output"' EXIT
+  if [ "$status" = fail ]; then
+    if [ "$prev" != fail ]; then
+      emit "🔴 DEPLOY FAILED: $check — $detail"
+      echo "fail $now $now" > "$file"
+    elif [ $((now - notified)) -ge "$REPEAT_SECONDS" ]; then
+      emit "🔴 DEPLOY STILL FAILING ($(( (now - since) / 60 ))m): $check — $detail"
+      echo "fail $since $now" > "$file"
+    else
+      echo "fail $since $notified" > "$file"
+    fi
+    return 0
+  fi
 
-if (
-  cd "$APP_DIR" &&
-    API_SMOKE_REQUIRE_AUTH=1 API_SMOKE_ALLOW_INFRA_SKIPS=0 "$BUN_BIN" run scripts/api-smoke.ts
-) 2>&1 | tee "$smoke_output"; then
-  rm -f "$MARKER_FILE"
-  echo "DEPLOY SMOKE PASSED sha=${deployed_sha}"
+  if [ "$prev" = fail ]; then
+    emit "✅ DEPLOY RECOVERED: $check — was broken $(( (now - since) / 60 ))m"
+  fi
+  echo "ok $now 0" > "$file"
+  return 0
+}
+
+# `--frozen-lockfile` catches a package.json/bun.lock mismatch (good — same
+# check CI would do), but on failure it used to kill the whole script via
+# set -e, leaving prod on the old build/PM2 process indefinitely: every later
+# run sees "no changes" (HEAD already matches origin) and does nothing, so
+# the deploy silently stalls until someone notices and fixes it by hand.
+# Fall back to a plain install so the deploy still completes, but log an
+# ALERT line so the drift doesn't go unnoticed (it'll keep firing every run
+# until a synced bun.lock is committed upstream).
+install_deps() {
+  local dir="$1" label="$2"
+  if (cd "$dir" && bun install --frozen-lockfile); then
+    record_state "lockfile_$label" ok ""
+    return 0
+  fi
+  echo "$(ts) ALERT: $label bun.lock is out of sync with package.json (frozen install failed). Falling back to a regular 'bun install' so the deploy isn't blocked. Commit a refreshed lockfile to stop this fallback firing every run."
+  # This line predates the alerting below and assumed someone reads the log.
+  # Nobody does — that assumption is what the 2026-08-11 fetch outage disproved
+  # — so route it through the same rate-limited channel as everything else.
+  record_state "lockfile_$label" fail "$label bun.lock is out of sync with package.json; deploy fell back to a non-frozen 'bun install'. Commit a refreshed lockfile."
+  (cd "$dir" && bun install)
+}
+
+# --- deploy hold (added 2026-09-20, #2093) -----------------------------------
+# The cron fires every 15 min unconditionally, so "no deploys during a stranger
+# test run" was enforced only by a human reading GitHub comments in time. A
+# deploy mid-run restarts pm2 and drops in-flight turns — the #2093 failure.
+#
+# Playtest now gates the cron directly instead of asking Hetzner to be awake:
+# `touch` this file when posting "run N started", `rm` it at "run N ended".
+# While it exists this script does nothing at all — no fetch, no build, no
+# restart — and exits 0 so cron stays quiet.
+#
+# A hold left behind is the 2026-05-12 drift shape (prod silently stops
+# tracking main and every later run still says it is "fine"), so a stale hold
+# pages through the same rate-limited channel as every other failure rather
+# than waiting to be noticed. Removing the file clears it to RECOVERED.
+HOLD_FILE=${DEPLOY_HOLD_FILE:-$STATE_DIR/HOLD}
+HOLD_STALE_SECONDS=${DEPLOY_HOLD_STALE_SECONDS:-10800}
+if [ -e "$HOLD_FILE" ]; then
+  HOLD_SINCE=$(stat -c %Y "$HOLD_FILE" 2>/dev/null || echo 0)
+  HOLD_AGE=$(( $(date +%s) - HOLD_SINCE ))
+  echo "$(ts) Held: $HOLD_FILE present (${HOLD_AGE}s). No fetch, no build, no restart."
+  if [ "$HOLD_AGE" -ge "$HOLD_STALE_SECONDS" ]; then
+    record_state hold fail "deploy held $(( HOLD_AGE / 60 ))m by $HOLD_FILE — prod is NOT tracking main. If the stranger-test run has ended, remove the file."
+  fi
+  exit 0
+fi
+record_state hold ok ""
+
+PREV_HEAD=$(git rev-parse HEAD)
+
+# Explicitly branched rather than left to `set -e`: a bare non-zero exit here
+# logs git's stderr and nothing a monitor can key on. The `if !` form is also
+# required — under `set -e` a failing assignment would abort before the alert.
+if ! FETCH_ERR=$(git fetch --quiet origin main 2>&1); then
+  DETAIL=$(printf '%s' "$FETCH_ERR" | scrub | grep -v '^$' | tail -1)
+  echo "$(ts) DEPLOY FAILED: git fetch origin main — ${DETAIL:-no error output}"
+  echo "$(ts) Production stays at $PREV_HEAD and will NOT track main until this is fixed."
+  record_state fetch fail "${DETAIL:-no error output} (prod pinned at ${PREV_HEAD:0:8})"
+  exit 1
+fi
+record_state fetch ok ""
+
+NEW_HEAD=$(git rev-parse origin/main)
+
+if [[ "$PREV_HEAD" == "$NEW_HEAD" ]]; then
+  echo "$(ts) No changes (HEAD: $PREV_HEAD)"
   exit 0
 fi
 
-failed_checks="$(sed -n 's/^FAIL \([^ ]*\).*/\1/p' "$smoke_output" | paste -sd, -)"
-failed_checks="${failed_checks:-api-smoke-process}"
-rollback_command="cd ${REPO_ROOT} && git reset --hard ${previous_sha} && pm2 restart ${PM2_PROCESS} --update-env"
-alert="DEPLOY FAILED SMOKE | sha=${deployed_sha} | checks=${failed_checks} | no automatic rollback performed | rollback: ${rollback_command}"
-
-echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-echo "$alert"
-echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
-if [[ -n "${SLACK_ALERT_WEBHOOK_URL:-}" ]]; then
-  payload="$($BUN_BIN -e 'console.log(JSON.stringify({text: process.argv[1]}))' "$alert")"
-  if ! curl --silent --show-error --fail \
-    --header 'Content-Type: application/json' \
-    --data "$payload" \
-    "$SLACK_ALERT_WEBHOOK_URL"; then
-    printf '%s\n' "$alert" >"$MARKER_FILE"
-    echo "Slack alert failed; wrote ${MARKER_FILE} for cron mail/operator inspection"
-  fi
-else
-  printf '%s\n' "$alert" >"$MARKER_FILE"
-  echo "SLACK_ALERT_WEBHOOK_URL unset; wrote ${MARKER_FILE} for cron mail/operator inspection"
+# Only deploy if origin is strictly ahead of local. If local has commits
+# origin doesn't (e.g., a hotfix made on the server), leave it alone — never
+# reset away local work. Push the local commits manually instead.
+if ! git merge-base --is-ancestor "$PREV_HEAD" "$NEW_HEAD"; then
+  echo "$(ts) Skipping: local HEAD ($PREV_HEAD) is not an ancestor of origin/main ($NEW_HEAD). Push local commits or rebase."
+  exit 0
 fi
 
-exit 1
+echo "$(ts) Deploying $PREV_HEAD -> $NEW_HEAD"
+git reset --hard origin/main
+install_deps . "root"
+install_deps server-bun "server-bun"
+# Everything from here on runs AFTER `git reset --hard`, which is what makes a
+# failure here worse than a fetch failure rather than better: git has already
+# advanced, so the next cron run sees PREV_HEAD == NEW_HEAD, logs "No changes"
+# and exits without retrying. A half-deploy therefore persists silently and
+# indefinitely — the exact stall described in install_deps() above, and the same
+# shape as the 124-commit drift of 2026-05-12. These branches exist so that
+# state pages someone instead of waiting to be noticed.
+#
+# Build output is left streaming to the cron log rather than captured, so the
+# operator gets the real compiler error; the Slack message just says where to
+# look. No auto-rollback: reverting a half-applied deploy unattended is a bigger
+# risk than stopping and shouting.
+#
+# ORDERING (issue #2093, changed 2026-09-20). This used to run `bun run build`
+# straight into `dist/`, which IS nginx's docroot — so the build *was* the
+# publish, and the new client bundle went live while pm2 still served the old
+# API. Every successful deploy had a client/server skew window, and a browser
+# that had loaded index.html before the build then asked for content-hashed
+# chunks that no longer existed on disk.
+#
+# Now the build goes to a staging directory OUTSIDE the repo, the server
+# restarts first, and only then is the bundle swapped into dist/. This inverts
+# the skew to new-API/old-client, which is the safe direction: an old client
+# only ever requests chunks that still exist. It keeps ONE server process — no
+# cluster mode, no second port, no nginx change.
+STAGING_ROOT=${DEPLOY_STAGING_ROOT:-/var/lib/infiniterealms-deploy/staging}
+STAGING_DIST="$STAGING_ROOT/dist"
+mkdir -p "$STAGING_ROOT"
+
+# vite writes the bundle to the staging dir instead of the live docroot.
+# --emptyOutDir is required because the target is outside the project root;
+# without it vite refuses to clear the directory and stale chunks accumulate.
+if ! bunx vite build --outDir "$STAGING_DIST" --emptyOutDir; then
+  echo "$(ts) DEPLOY FAILED: vite build — build output above"
+  record_state build fail "vite build failed at ${NEW_HEAD:0:8}. git ALREADY advanced, so later runs will report 'No changes' without retrying. dist/ and the server are both UNCHANGED (still ${PREV_HEAD:0:8}) — prod is consistent, just stale. Fix and redeploy by hand. See /var/log/infiniterealms/auto-deploy.log"
+  exit 1
+fi
+
+# `bun run build` is `vite build && node scripts/check-client-build-secrets.mjs`,
+# and that checker hardcodes BUILD_ROOT = <cwd>/dist. Running it from the
+# staging root points it at the bundle just built rather than the live one —
+# the scan MUST see the new bundle, because the whole point is to catch a
+# secret before it is published. Splitting the two halves of `bun run build`
+# here is what buys that; do not collapse it back.
+if ! (cd "$STAGING_ROOT" && node "$PWD_REPO/scripts/check-client-build-secrets.mjs"); then
+  echo "$(ts) DEPLOY FAILED: client build secret check — output above"
+  record_state build fail "client build secret check FAILED at ${NEW_HEAD:0:8}. A secret may be baked into the staged bundle. NOTHING was published: dist/ and the server are both still ${PREV_HEAD:0:8}. Do not publish $STAGING_DIST by hand until this is resolved."
+  exit 1
+fi
+record_state build ok ""
+
+# Server first. While this runs, dist/ still holds the OLD bundle, so a browser
+# mid-session keeps getting chunks that exist. A failure here leaves the server
+# old-or-down against an old client — consistent, and recoverable by pm2 alone.
+#
+# No `--update-env`, deliberately. That flag replaces the process environment
+# with the CALLER's, and the caller here is cron, whose environment is the
+# minimal one this script has to patch PATH for at the top. That is exactly how
+# #1888 happened: SLACK_ALERT_WEBHOOK_URL lived only as inherited pm2 process
+# env, so a restart from an unsourced shell silently disabled every Slack alert
+# with no error and no log line. ecosystem.production.config.cjs now parses
+# /etc/infiniterealms/alerts.env and folds it in itself, so a plain restart
+# carries the webhook and `--update-env` would only re-introduce the dependence
+# on whatever environment happened to invoke the script. Do not add it back.
+if ! pm2 restart infiniterealms-bun; then
+  echo "$(ts) DEPLOY FAILED: pm2 restart infiniterealms-bun — pm2 output above"
+  record_state pm2_restart fail "pm2 restart failed at ${NEW_HEAD:0:8}. The client bundle was NOT published, so dist/ still matches the pre-deploy server (${PREV_HEAD:0:8}) — no version skew. Check 'pm2 list' and 'pm2 logs infiniterealms-bun'"
+  exit 1
+fi
+record_state pm2_restart ok ""
+
+# Publish. rsync --delete makes dist/ match staging exactly, clearing the
+# previous build's hashed chunks. Per-file replacement is not atomic, so this
+# is deliberately the LAST step and the shortest possible window.
+#
+# --checksum is NOT optional here. rsync's default quick check compares size
+# and mtime only, and it silently skipped a changed file in testing: the git
+# reset and the build landed in the same clock second and the two versions
+# happened to be the same byte count, so rsync copied nothing, exited 0, and
+# the deploy reported success while the OLD bundle stayed live. Content-hashed
+# chunk names make that unlikely for the JS, but index.html keeps its name
+# across every build and is exactly the file this would strand. A publish step
+# that can no-op without saying so is worse than one that is slow.
+# Snapshot the live bundle first so the rsync below has something to fall back
+# to. `cp -al` hardlinks rather than copies: ~143M of dist/ costs no extra space
+# and no meaningful time, and because rsync publishes each file by writing a
+# temp and renaming over it, the snapshot keeps the OLD inode rather than
+# watching it change underneath. Requires dist/ and STAGING_ROOT on one
+# filesystem — both are on /dev/sda1.
+#
+# Losing the snapshot is not a reason to strand the server on new code with an
+# old bundle, so a failure here warns and publishes anyway.
+DIST_PREV="$STAGING_ROOT/dist.prev"
+rm -rf "$DIST_PREV"
+if ! cp -al dist "$DIST_PREV" 2> /dev/null; then
+  echo "$(ts) WARNING: could not snapshot dist/ to $DIST_PREV — publishing with no rollback copy."
+  rm -rf "$DIST_PREV"
+fi
+
+if ! rsync -a --checksum --delete "$STAGING_DIST/" dist/; then
+  echo "$(ts) DEPLOY FAILED: rsync staging -> dist — rsync output above"
+  # This is the one branch that leaves a REAL skew: pm2 is already on the new
+  # code and dist/ is now old-or-partial, so a browser can ask for a chunk that
+  # exists in neither tree. Swapping the snapshot back makes the docroot
+  # internally consistent again — old client against new API, which is the
+  # direction the whole reorder exists to guarantee — instead of leaving a
+  # half-written docroot serving 404s for hashed chunks.
+  ROLLBACK_NOTE="NO dist.prev snapshot was available, so dist/ is PARTIAL and may 404 on hashed chunks. Republish by hand: rsync -a --checksum --delete $STAGING_DIST/ dist/ && chown -R www-data:www-data dist"
+  if [ -d "$DIST_PREV" ] && rsync -a --delete "$DIST_PREV/" dist/; then
+    chown -R www-data:www-data dist
+    echo "$(ts) Rolled dist/ back to the pre-deploy bundle from $DIST_PREV"
+    ROLLBACK_NOTE="dist/ was rolled back to the pre-deploy bundle (${PREV_HEAD:0:8}); the SERVER is on ${NEW_HEAD:0:8}, so prod is old-client/new-API and serving. Retry the publish: rsync -a --checksum --delete $STAGING_DIST/ dist/ && chown -R www-data:www-data dist"
+  else
+    echo "$(ts) Rollback FAILED or unavailable — dist/ is partial"
+  fi
+  record_state publish fail "rsync of the client bundle into dist/ failed at ${NEW_HEAD:0:8}. $ROLLBACK_NOTE"
+  exit 1
+fi
+
+# nginx serves dist as www-data; a root-run build leaves root-owned files.
+chown -R www-data:www-data dist
+record_state publish ok ""
+
+# $DIST_PREV is deliberately left in place after a success: it is the previous
+# bundle, and it is the fastest manual rollback available if the new one turns
+# out to be bad (rsync -a --delete "$DIST_PREV/" dist/ && chown -R www-data:www-data dist).
+# The next run replaces it. Its hardlinks have diverged by now, so it does cost
+# a real copy of the old bundle on disk until then.
+
+echo "$(ts) Deploy complete ($NEW_HEAD)"
