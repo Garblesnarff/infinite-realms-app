@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.8](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.7...v0.19.8) (2026-09-20)
+
+
+### Documentation
+
+* **agents:** make app-root AGENTS.md a real file ([#2104](https://github.com/Garblesnarff/infinite-realms-production/issues/2104)) ([#2107](https://github.com/Garblesnarff/infinite-realms-production/issues/2107)) ([ebe94a4](https://github.com/Garblesnarff/infinite-realms-production/commit/ebe94a4a6edec923fbf73b916b1449a2c2c1543a))
+
 ## [0.19.7](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.6...v0.19.7) (2026-09-20)
 
 
