@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.7](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.6...v0.19.7) (2026-09-20)
+
+
+### Bug Fixes
+
+* **client:** personality randomize errors and session mappings parse ([#2077](https://github.com/Garblesnarff/infinite-realms-production/issues/2077)) ([#2089](https://github.com/Garblesnarff/infinite-realms-production/issues/2089)) ([c504e12](https://github.com/Garblesnarff/infinite-realms-production/commit/c504e12a4d117b5ad0ee90da8c34d6526e6fa396))
+* **combat:** do not treat de-escalation speech as an attack ([#2088](https://github.com/Garblesnarff/infinite-realms-production/issues/2088)) ([1268d7d](https://github.com/Garblesnarff/infinite-realms-production/commit/1268d7d7d38e0196219c548c624f7c20f9efbca5))
+* **ui:** coverless campaign placeholder and first-load HP ([#2077](https://github.com/Garblesnarff/infinite-realms-production/issues/2077)) ([#2091](https://github.com/Garblesnarff/infinite-realms-production/issues/2091)) ([1b88448](https://github.com/Garblesnarff/infinite-realms-production/commit/1b88448408552443a7c6912ee1bb8963a3cc7692))
+
 ## [0.19.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.5...v0.19.6) (2026-09-20)
 
 
