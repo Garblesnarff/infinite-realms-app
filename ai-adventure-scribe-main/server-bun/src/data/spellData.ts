@@ -39,6 +39,29 @@ export interface Spell {
   };
 }
 
+/**
+ * The deliberately narrow player-combat spell surface for issue #2085.
+ *
+ * Keep this list server-owned and explicit: the combat resolver must not silently grow to
+ * whatever happens to be present in the full SRD table, and an unlisted spell must be refused
+ * rather than narrated as though it resolved.
+ */
+export const PLAYER_COMBAT_SPELL_IDS = [
+  'acid-splash',
+  'fire-bolt',
+  'ray-of-frost',
+  'chill-touch',
+  'eldritch-blast',
+  'sacred-flame',
+  'magic-missile',
+] as const;
+
+const PLAYER_COMBAT_SPELL_ID_SET = new Set<string>(PLAYER_COMBAT_SPELL_IDS);
+
+export function isPlayerCombatSpell(spell: Spell | undefined): boolean {
+  return !!spell && PLAYER_COMBAT_SPELL_ID_SET.has(spell.id);
+}
+
 // Class-to-spell mappings for D&D 5E classes
 export const classSpellMappings = {
   Bard: {

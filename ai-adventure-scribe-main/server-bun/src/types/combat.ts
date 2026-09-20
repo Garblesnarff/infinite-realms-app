@@ -611,6 +611,13 @@ export interface AttackResult {
   autoRolled?: boolean;
   /** Engine-only transcript facts produced during this resolution. */
   transcriptLines?: string[];
+  /** Spell-resolution facts used to build the authoritative DM engine line. */
+  spellName?: string;
+  saveAbility?: string;
+  saveRoll?: number;
+  saveDC?: number;
+  saved?: boolean;
+  autoHit?: boolean;
 }
 
 /**
@@ -622,7 +629,9 @@ export interface SpellAttackInput {
   targetIds: string[];
   spellId?: string;
   spellName: string;
-  slotLevel?: number;
+  slotLevel?: number | null;
+  /** The player's kept natural d20 for attack-roll spells; absent means the engine rolls. */
+  d20?: number;
 }
 
 /**

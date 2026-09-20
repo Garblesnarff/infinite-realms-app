@@ -52,3 +52,113 @@ export function describeResolvedAttack(
     'Narrate this outcome; it already happened.'
   );
 }
+
+export type ResolvedSpellOutcome = {
+  hit?: boolean;
+  d20?: number;
+  attackBonus?: number;
+  totalAttackRoll?: number;
+  targetAC?: number;
+  saveAbility?: string;
+  saveRoll?: number;
+  saveDC?: number;
+  saved?: boolean;
+  autoHit?: boolean;
+  finalDamage?: number;
+  damageType?: string;
+  targetNewHp?: number;
+  targetIsConscious?: boolean;
+  targetIsDead?: boolean;
+};
+
+const displaySaveAbility = (ability: string): string => {
+  const names: Record<string, string> = {
+    str: 'STR',
+    strength: 'STR',
+    dex: 'DEX',
+    dexterity: 'DEX',
+    con: 'CON',
+    constitution: 'CON',
+    int: 'INT',
+    intelligence: 'INT',
+    wis: 'WIS',
+    wisdom: 'WIS',
+    cha: 'CHA',
+    charisma: 'CHA',
+  };
+  return names[ability.toLowerCase()] ?? ability.toUpperCase();
+};
+
+const damageLine = (outcome: ResolvedSpellOutcome): string => {
+  const damage = Number(outcome.finalDamage ?? 0);
+  return damage > 0 ? `${damage} ${outcome.damageType ?? 'untyped'} damage.` : 'No damage.';
+};
+
+const authoritativeSpellTrailer = (targetLabel: string, outcome: ResolvedSpellOutcome): string => {
+  const hp =
+    outcome.targetNewHp == null ? '' : `${targetLabel} is now at ${outcome.targetNewHp} HP`;
+  const state = outcome.targetIsDead
+    ? 'is DEAD'
+    : outcome.targetIsConscious === false
+      ? 'is UNCONSCIOUS'
+      : '';
+  const targetFacts = [hp, state].filter(Boolean).join(' and ');
+  return `${targetFacts ? `${targetFacts}. ` : ''}Narrate this outcome; it already happened.`;
+};
+
+const resolvedSpellLine = (
+  targetLabel: string,
+  outcome: ResolvedSpellOutcome,
+  resolution: string,
+): string =>
+  `${resolution} ${damageLine(outcome)} ${authoritativeSpellTrailer(targetLabel, outcome)}`;
+
+/** The engine line the DM receives for one of the bounded player spell actions. */
+export function describeResolvedSpell(
+  actorLabel: string,
+  targetLabel: string,
+  spellName: string,
+  outcome: ResolvedSpellOutcome,
+): string {
+  if (outcome.autoHit) {
+    return resolvedSpellLine(
+      targetLabel,
+      outcome,
+      `${actorLabel} cast ${spellName} at ${targetLabel} — AUTO-HIT.`,
+    );
+  }
+  if (outcome.saveAbility && outcome.saveRoll != null && outcome.saveDC != null) {
+    const result = outcome.saved ? 'PASS' : 'FAIL';
+    return resolvedSpellLine(
+      targetLabel,
+      outcome,
+      `${actorLabel} cast ${spellName} at ${targetLabel} — ${displaySaveAbility(
+        outcome.saveAbility,
+      )} save ${outcome.saveRoll} vs DC ${outcome.saveDC} — ${result}.`,
+    );
+  }
+  if (outcome.d20 != null && outcome.attackBonus != null && outcome.totalAttackRoll != null) {
+    const result = outcome.hit ? 'HIT' : 'MISS';
+    return resolvedSpellLine(
+      targetLabel,
+      outcome,
+      `${actorLabel} cast ${spellName} at ${targetLabel} — spell attack ${outcome.d20} + ${
+        outcome.attackBonus
+      } = ${outcome.totalAttackRoll} vs AC ${outcome.targetAC ?? '?'} — ${result}.`,
+    );
+  }
+  return resolvedSpellLine(
+    targetLabel,
+    outcome,
+    `${actorLabel} cast ${spellName} at ${targetLabel} — NO RESULT.`,
+  );
+}
+
+/** A refused spell is an engine fact, never an invitation for the DM to fill in an outcome. */
+export function describeRefusedSpell(
+  actorLabel: string,
+  spellName: string,
+  reason: string,
+): string {
+  return `Engine: ${actorLabel}'s spell "${spellName}" was refused (${reason}). No roll, no damage, no wound.`;
+}

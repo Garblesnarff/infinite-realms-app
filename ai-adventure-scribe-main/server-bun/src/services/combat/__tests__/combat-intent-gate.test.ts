@@ -108,11 +108,13 @@ describe('detectDeclaredAttack', () => {
 
   it('requires a damaging spell for cast intent', () => {
     expect(detectDeclaredAttack('Cast Light at the ghoul', actors)).toBeNull();
+    expect(detectDeclaredAttack('Cast Fireball at the ghoul', actors)).toBeNull();
     expect(detectDeclaredAttack('cast Magic Missile at the ghoul', actors)).toEqual({
       verb: 'cast Magic Missile',
       actorName: 'The Ghoul',
       monsterId: 'srd:ghoul',
       attackSource: 'spell',
+      weaponName: 'spell:Magic Missile',
       spellId: 'magic-missile',
       spellName: 'Magic Missile',
     });
@@ -154,10 +156,7 @@ describe('detectDeclaredAttack', () => {
 
   it('still detects an attack after a de-escalation clause in the same turn', () => {
     expect(
-      detectDeclaredAttack(
-        "I don't want to hurt you, but I swing my sword at him",
-        soleActor,
-      ),
+      detectDeclaredAttack("I don't want to hurt you, but I swing my sword at him", soleActor),
     ).toMatchObject({
       verb: 'swing',
       actorName: 'Professor Emil Darkwater',

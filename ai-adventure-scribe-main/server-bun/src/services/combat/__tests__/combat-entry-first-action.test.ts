@@ -319,7 +319,7 @@ describe('deriveCombatEntryFirstAction', () => {
     expect(firstAction?.roll_request).toBeUndefined();
   });
 
-  it('falls back to the grounded weapon and logs when the declared spell is not known', async () => {
+  it('refuses an unknown or out-of-scope declared spell without fabricating a weapon attack', async () => {
     const warnings: unknown[] = [];
     const firstAction = await deriveCombatEntryFirstAction(
       {
@@ -336,17 +336,13 @@ describe('deriveCombatEntryFirstAction', () => {
       { ...deps, logger: { warn: (data: unknown) => warnings.push(data) } },
     );
 
-    expect(firstAction).toMatchObject({
-      type: 'attack',
-      source: 'weapon',
-      weaponId: 'inventory-dagger',
-      combat_action: { action_type: 'attack', weapon_id: 'inventory-dagger' },
-    });
+    expect(firstAction).toBeNull();
     expect(warnings).toEqual([
       expect.objectContaining({
-        msg: 'FIRST_ACTION_SPELL_NOT_KNOWN',
+        msg: 'FIRST_ACTION_SPELL_REFUSED',
         spellId: 'fireball',
         participantId: 'participant-player',
+        reason: 'unsupported_spell',
       }),
     ]);
   });

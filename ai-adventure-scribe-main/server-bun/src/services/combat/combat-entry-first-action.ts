@@ -16,7 +16,7 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { isUnarmedAttackVerb, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
-import { getSpellById, getSpellByName } from '../../data/spellData.js';
+import { getSpellById, getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
 import { combatLogger } from '../../lib/logger.js';
 import { planApproach } from '../../tactical/approach.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
@@ -142,16 +142,6 @@ function sourceFor(declared: DeclaredAttack): CombatEntryFirstActionSource {
   return declared.attackSource ?? 'weapon';
 }
 
-function weaponOrUnarmedSource(
-  declared: DeclaredAttack,
-): Exclude<CombatEntryFirstActionSource, 'spell'> {
-  const weaponClaim = declared.weaponName?.trim();
-  return !weaponClaim &&
-    (isUnarmedAttackVerb(declared.verb) || declared.verb.toLowerCase() === 'attack')
-    ? 'unarmed'
-    : 'weapon';
-}
-
 function profileKnowsSpell(
   profile: Awaited<ReturnType<typeof getParticipantAbilityProfile>>,
   spell: { id: string; name: string },
@@ -260,7 +250,7 @@ export async function deriveCombatEntryFirstAction(
         params.declaredAttack.spellName || params.declaredAttack.verb.replace(/^cast\s+/i, ''),
       );
     profile = await deps.getParticipantAbilityProfile(playerParticipant);
-    if (spell?.damage && profileKnowsSpell(profile, spell)) {
+    if (spell && isPlayerCombatSpell(spell) && spell.damage && profileKnowsSpell(profile, spell)) {
       const slotLevel = spell.level > 0 ? spell.level : null;
       return {
         type: 'spell',
@@ -287,17 +277,24 @@ export async function deriveCombatEntryFirstAction(
     }
 
     deps.logger.warn({
-      msg: 'FIRST_ACTION_SPELL_NOT_KNOWN',
+      msg: 'FIRST_ACTION_SPELL_REFUSED',
       sessionId: params.sessionId,
       participantId: playerParticipant.id,
       characterId: playerParticipant.characterId ?? null,
       spellId: spell?.id ?? params.declaredAttack.spellId ?? null,
       spellName: spell?.name ?? params.declaredAttack.spellName ?? params.declaredAttack.verb,
+      reason: !spell
+        ? 'unknown_spell'
+        : !isPlayerCombatSpell(spell)
+          ? 'unsupported_spell'
+          : 'spell_not_known',
     });
+    // Never turn a refused spell declaration into a fabricated weapon attack. The caller can
+    // begin combat without an opening action and the normal refusal path will explain the miss.
+    return null;
   }
 
-  const requestedAttackSource =
-    requestedSource === 'spell' ? weaponOrUnarmedSource(params.declaredAttack) : requestedSource;
+  const requestedAttackSource = requestedSource;
   profile ??= await deps.getParticipantAbilityProfile(playerParticipant);
   const equipped = await deps.listEquippedWeaponProfiles(playerParticipant);
   const grounded =

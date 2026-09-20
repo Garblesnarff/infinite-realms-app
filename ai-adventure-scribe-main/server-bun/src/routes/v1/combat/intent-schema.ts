@@ -35,7 +35,10 @@ const spellFields = {
   targetIds: t.Array(participantId, { minItems: 1, maxItems: 100 }),
   spellId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   spellName: t.String({ minLength: 1, maxLength: 255 }),
-  slotLevel: t.Optional(t.Number({ minimum: 1, maximum: 9 })),
+  slotLevel: t.Optional(t.Union([t.Number({ minimum: 1, maximum: 9 }), t.Null()])),
+  // Like weapon attacks, spell-attack popups may supply the player's kept natural d20. Save
+  // spells ignore this field; the resolver still owns save rolls, DCs, damage, and HP writes.
+  d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
 };
 
 const defensiveFields = {

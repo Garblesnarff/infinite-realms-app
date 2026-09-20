@@ -40,7 +40,7 @@ import { checkHit, checkAutoCrit } from './hit-check.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { getSpellById, getSpellByName } from '../../data/spellData.js';
+import { getSpellById, getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
 import { rollD20 } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -73,6 +73,40 @@ import type {
  */
 function isProvidedD20(value: number | undefined): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 20;
+}
+
+type SpellDamageProfile = { damageDice: string; damageBonus: number };
+
+/** Parse the compact damage notation used by the server's spell table. */
+function parseSpellDamageNotation(value: string): SpellDamageProfile | null {
+  const match = /^(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?$/i.exec(value.trim());
+  if (!match) return null;
+  const count = Number(match[1]);
+  const sides = Number(match[2]);
+  const modifier = Number(match[4] ?? 0) * (match[3] === '-' ? -1 : 1);
+  return { damageDice: `${count}d${sides}`, damageBonus: modifier };
+}
+
+function spellDamageProfile(
+  spellId: string,
+  notation: string | undefined,
+  slotLevel: number,
+): SpellDamageProfile | null {
+  if (!notation) return null;
+  const parsed = parseSpellDamageNotation(notation);
+  if (!parsed) return null;
+  if (spellId !== 'magic-missile') return parsed;
+
+  // Magic Missile is the one leveled spell in the bounded issue scope. All darts are directed
+  // at the single target supplied by the current combat action, so resolve their total as one
+  // damage roll while preserving the per-dart +1 modifier.
+  const darts = 3 + Math.max(0, slotLevel - 1);
+  const diceMatch = /^(\d+)d(\d+)$/i.exec(parsed.damageDice);
+  if (!diceMatch) return null;
+  return {
+    damageDice: `${Number(diceMatch[1]) * darts}d${diceMatch[2]}`,
+    damageBonus: parsed.damageBonus * darts,
+  };
 }
 
 export class CombatAttackService {
@@ -513,11 +547,10 @@ export class CombatAttackService {
     input: SpellAttackInput,
     userId: string,
   ): Promise<SpellAttackResult> {
-    const { casterId, expectedVersion, targetIds, spellId, spellName, slotLevel } = input;
+    const { casterId, expectedVersion, targetIds, spellId, spellName, slotLevel, d20 } = input;
 
     await this.assertCurrentTurn(encounterId, casterId, userId);
     const spell = spellId ? getSpellById(spellId) : getSpellByName(spellName);
-    if (!spell) throw new NotFoundError('Spell', spellId || spellName);
 
     // ⚡ Bolt: Batch fetch both caster and all targets with their stats in a single query.
     // This reduces database round-trips from 2 to 1 for participant data.
@@ -535,6 +568,39 @@ export class CombatAttackService {
     }
     const casterData = allParticipantDataMap.get(casterId)!;
     const casterProfile = await getParticipantAbilityProfile(casterData.participant);
+    if (!spell) {
+      throw new BusinessLogicError(`Spell refused: unknown spell "${spellName}"`, {
+        reason: 'unknown_spell',
+        spell: spellName,
+      });
+    }
+    if (!isPlayerCombatSpell(spell)) {
+      throw new BusinessLogicError(
+        `Spell refused: ${spell.name} is outside the player combat scope`,
+        {
+          reason: 'unsupported_spell',
+          spell: spell.name,
+        },
+      );
+    }
+    if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
+      throw new BusinessLogicError(`Spell refused: ${spell.name} needs a spell slot level`, {
+        reason: 'missing_spell_slot_level',
+        spell: spell.name,
+      });
+    }
+    if (
+      !spell.damage ||
+      (!spell.attackType && !spell.saveAbility && spell.id !== 'magic-missile')
+    ) {
+      throw new BusinessLogicError(
+        `Spell refused: ${spell.name} has no supported combat resolution`,
+        {
+          reason: 'unsupported_spell_resolution',
+          spell: spell.name,
+        },
+      );
+    }
     if (
       casterData.participant.characterId &&
       !casterProfile.spellIds.includes(spell.id.toLowerCase()) &&
@@ -623,14 +689,15 @@ export class CombatAttackService {
       const proficiencyBonus = this.proficiencyBonus(casterProfile.level);
       const spellAttackBonus = spellModifier + proficiencyBonus;
       const saveDC = 8 + spellAttackBonus;
-      const damageDice = this.damageDiceForLevel(
+      const rawDamageDice = this.damageDiceForLevel(
         spell.damageByLevel,
         spell.level,
-        slotLevel,
+        slotLevel ?? undefined,
         casterProfile.level,
       );
       const damageType = spell.damageType as DamageType | undefined;
       const effectiveSlotLevel = Math.max(spell.level, slotLevel || spell.level);
+      const damageProfile = spellDamageProfile(spell.id, rawDamageDice, effectiveSlotLevel);
       const healing = this.healingDice(spell.id, effectiveSlotLevel);
 
       const results: AttackResult[] = [];
@@ -687,10 +754,84 @@ export class CombatAttackService {
         // Aggregate resistances using the extracted module
         const defenses = aggregateResistances(targetParticipant, targetStats);
 
-        if (spell.attackType) {
+        if (spell.id === 'magic-missile') {
+          if (!damageProfile || !damageType) {
+            throw new BusinessLogicError(`Spell refused: ${spell.name} has no damage profile`, {
+              reason: 'unresolved_spell',
+              spell: spell.name,
+            });
+          }
+          const damageCalc = calculateDamage({
+            ...damageProfile,
+            damageType,
+            isCritical: false,
+            resistances: defenses.resistances,
+            vulnerabilities: defenses.vulnerabilities,
+            immunities: defenses.immunities,
+          });
+          try {
+            const hpResult = await CombatHPService.applyDamage(
+              targetId,
+              encounterId,
+              {
+                damageAmount: damageCalc.finalDamage,
+                damageType,
+                sourceParticipantId: casterId,
+                sourceDescription: spell.name,
+                ignoreResistances: true,
+                ignoreImmunities: true,
+              },
+              userId,
+              targetParticipant,
+            );
+            const attackResult: AttackResult = {
+              hit: true,
+              targetAC,
+              totalAttackRoll: 0,
+              damage: damageCalc.baseDamage,
+              damageType,
+              damageBeforeResistances: damageCalc.damageBeforeResistances,
+              effectiveResistance: damageCalc.effectiveResistance,
+              effectiveVulnerability: damageCalc.effectiveVulnerability,
+              effectiveImmunity: damageCalc.effectiveImmunity,
+              finalDamage: hpResult.damageDealt ?? damageCalc.finalDamage,
+              targetNewHp: hpResult.newCurrentHp,
+              targetIsConscious: hpResult.isConscious,
+              targetIsDead: hpResult.isDead,
+              targetCondition: healthConditionForCombat(
+                hpResult.newCurrentHp,
+                targetParticipant.maxHp,
+                hpResult.isConscious,
+                hpResult.isDead,
+              ),
+              isCritical: false,
+              isNaturalOne: false,
+              isNaturalTwenty: false,
+              autoHit: true,
+              spellName: spell.name,
+            };
+            const transcriptLines = await markPlayerDamageProvocation({
+              encounterId,
+              source: casterData.participant,
+              target: targetParticipant,
+              damage: attackResult.finalDamage,
+            });
+            return {
+              ...attackResult,
+              ...(transcriptLines.length ? { transcriptLines } : {}),
+            };
+          } catch (error) {
+            logger.error({ msg: 'Failed to apply Magic Missile damage to HP', error });
+            throw new InternalServerError('Magic Missile resolved but damage application failed', {
+              error,
+            });
+          }
+        } else if (spell.attackType) {
           // Spell attack roll
           const attackRules = spellRules.get(targetId);
-          const attackRoll = rollD20(attackRules?.advantage, attackRules?.disadvantage);
+          const attackRoll = isProvidedD20(d20)
+            ? d20
+            : rollD20(attackRules?.advantage, attackRules?.disadvantage);
           const hitCheckResult = checkHit({
             attackRoll,
             attackBonus: spellAttackBonus,
@@ -700,6 +841,8 @@ export class CombatAttackService {
           if (!hitCheckResult.hit) {
             return {
               hit: false,
+              d20: attackRoll,
+              attackBonus: spellAttackBonus,
               targetAC,
               totalAttackRoll: hitCheckResult.totalAttackRoll,
               effectiveResistance: false,
@@ -709,11 +852,12 @@ export class CombatAttackService {
               isCritical: false,
               isNaturalOne: hitCheckResult.isNaturalOne,
               isNaturalTwenty: hitCheckResult.isNaturalTwenty,
+              spellName: spell.name,
             };
           }
 
           // Hit - calculate damage
-          if (damageDice && damageType) {
+          if (damageProfile && damageType) {
             // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
             const targetConditionsForTarget = await getActiveConditionNames(targetId);
             const autoCrit = checkAutoCrit(
@@ -723,8 +867,7 @@ export class CombatAttackService {
             const spellIsCrit = hitCheckResult.isCritical || autoCrit;
 
             const damageCalc = calculateDamage({
-              damageDice,
-              damageBonus: 0,
+              ...damageProfile,
               damageType,
               isCritical: spellIsCrit,
               resistances: defenses.resistances,
@@ -742,7 +885,7 @@ export class CombatAttackService {
                   damageAmount: damageCalc.finalDamage,
                   damageType,
                   sourceParticipantId: casterId,
-                  sourceDescription: spellName,
+                  sourceDescription: spell.name,
                   ignoreResistances: true, // Already applied in damage calculation
                   ignoreImmunities: true, // Already applied in damage calculation
                   isCriticalHit: spellIsCrit,
@@ -753,6 +896,8 @@ export class CombatAttackService {
 
               const attackResult: AttackResult = {
                 hit: true,
+                d20: attackRoll,
+                attackBonus: spellAttackBonus,
                 targetAC,
                 totalAttackRoll: hitCheckResult.totalAttackRoll,
                 damage: damageCalc.baseDamage,
@@ -765,9 +910,16 @@ export class CombatAttackService {
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
+                targetCondition: healthConditionForCombat(
+                  hpResult.newCurrentHp,
+                  targetParticipant.maxHp,
+                  hpResult.isConscious,
+                  hpResult.isDead,
+                ),
                 isCritical: spellIsCrit,
                 isNaturalOne: hitCheckResult.isNaturalOne,
                 isNaturalTwenty: hitCheckResult.isNaturalTwenty,
+                spellName: spell.name,
               };
               const transcriptLines = await markPlayerDamageProvocation({
                 encounterId,
@@ -815,10 +967,9 @@ export class CombatAttackService {
           const saveRoll = rollD20() + saveBonus;
           const savedSuccessfully = saveRoll >= saveDC;
 
-          if (damageDice && damageType) {
+          if (damageProfile && damageType) {
             const damageCalc = calculateDamage({
-              damageDice,
-              damageBonus: 0,
+              ...damageProfile,
               damageType,
               isCritical: false, // Spells with saves don't crit
               resistances: defenses.resistances,
@@ -843,7 +994,7 @@ export class CombatAttackService {
                   damageAmount: finalDamage,
                   damageType,
                   sourceParticipantId: casterId,
-                  sourceDescription: spellName,
+                  sourceDescription: spell.name,
                   ignoreResistances: true, // Already applied in damage calculation
                   ignoreImmunities: true, // Already applied in damage calculation
                 },
@@ -865,9 +1016,20 @@ export class CombatAttackService {
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
+                targetCondition: healthConditionForCombat(
+                  hpResult.newCurrentHp,
+                  targetParticipant.maxHp,
+                  hpResult.isConscious,
+                  hpResult.isDead,
+                ),
                 isCritical: false,
                 isNaturalOne: false,
                 isNaturalTwenty: false,
+                spellName: spell.name,
+                saveAbility: namedAbility,
+                saveRoll,
+                saveDC,
+                saved: savedSuccessfully,
               };
               const transcriptLines = await markPlayerDamageProvocation({
                 encounterId,
@@ -887,7 +1049,10 @@ export class CombatAttackService {
             }
           }
         }
-        return null;
+        throw new BusinessLogicError(`Spell refused: ${spell.name} produced no combat result`, {
+          reason: 'unresolved_spell',
+          spell: spell.name,
+        });
       });
 
       const resolutionResults = await Promise.all(resolutionPromises);

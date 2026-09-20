@@ -119,7 +119,16 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
       input: { casterId: string; targetIds: string[] },
     ) {
       spellInputs.push(input);
-      return { results: [] };
+      return {
+        results: input.targetIds.map(() => ({
+          hit: true,
+          autoHit: true,
+          finalDamage: 0,
+          targetNewHp: 30,
+          targetIsDead: false,
+          spellName: 'Thunderwave',
+        })),
+      };
     }
   },
 }));

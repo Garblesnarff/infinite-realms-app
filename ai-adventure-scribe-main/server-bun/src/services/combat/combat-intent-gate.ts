@@ -1,5 +1,5 @@
 import { isUnarmedAttackVerb, isUnarmedWeaponClaim } from './weapon-catalog.js';
-import { getSpellByName } from '../../data/spellData.js';
+import { getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
 
 /** The actor identity the intent gate is allowed to resolve against. */
@@ -330,12 +330,15 @@ const resolveClauseAttack = (
 
   if (match.spellName) {
     const spell = getSpellByName(match.spellName);
-    if (!spell?.damage) return null;
+    if (!spell?.damage || !isPlayerCombatSpell(spell)) return null;
     const actor = matchActor(match.targetText, actors);
     return actor
       ? {
           ...toDeclaredAttack(`cast ${spell.name}`, actor),
           attackSource: 'spell',
+          // The legacy declaration shape calls this field `weaponName`; keep the explicit
+          // spell namespace so downstream grounding can never mistake a spell for a weapon.
+          weaponName: `spell:${spell.name}`,
           spellId: spell.id,
           spellName: spell.name,
         }

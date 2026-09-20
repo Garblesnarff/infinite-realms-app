@@ -54,13 +54,15 @@ describe('PersonalityService', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/personality/random/traits?background=Soldier&alignment=Lawful+Good'),
+        expect.stringContaining(
+          '/v1/personality/random/traits?background=Soldier&alignment=Lawful+Good',
+        ),
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer mock-token',
             'Content-Type': 'application/json',
           }),
-        })
+        }),
       );
       expect(result).toEqual(mockData);
     });
@@ -73,7 +75,7 @@ describe('PersonalityService', () => {
       });
 
       await expect(service.getRandomPersonalityElement('traits')).rejects.toThrow(
-        'API request failed: 500 Internal Server Error'
+        'API request failed: 500 Internal Server Error',
       );
     });
 
@@ -84,14 +86,18 @@ describe('PersonalityService', () => {
       const result = await service.getRandomPersonalityElement('traits');
 
       // Should return first item from fallbackData.traits due to Math.random() = 0
-      expect(result.text).toBe("I idolize a particular hero of my faith, and constantly refer to that person's deeds and example.");
+      expect(result.text).toBe(
+        "I idolize a particular hero of my faith, and constantly refer to that person's deeds and example.",
+      );
       expect(result.id).toContain('fallback-');
 
       // Subsequent calls should use fallback immediately without calling fetch
       mockFetch.mockClear();
       const secondResult = await service.getRandomPersonalityElement('ideals');
       expect(mockFetch).not.toHaveBeenCalled();
-      expect(secondResult.ideal).toBe('Tradition. The ancient traditions of worship and sacrifice must be preserved and upheld.');
+      expect(secondResult.ideal).toBe(
+        'Tradition. The ancient traditions of worship and sacrifice must be preserved and upheld.',
+      );
     });
   });
 
@@ -112,7 +118,7 @@ describe('PersonalityService', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/personality/batch/random?background=Acolyte'),
-        expect.any(Object)
+        expect.any(Object),
       );
       expect(result).toEqual(mockBatchData);
     });
@@ -138,11 +144,14 @@ describe('PersonalityService', () => {
         json: async () => ({ data: mockElements }),
       });
 
-      const result = await service.getPersonalityElements('traits', { limit: 5, background: 'Sage' });
+      const result = await service.getPersonalityElements('traits', {
+        limit: 5,
+        background: 'Sage',
+      });
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/personality/traits?background=Sage&limit=5'),
-        expect.any(Object)
+        expect.any(Object),
       );
       expect(result).toEqual(mockElements);
     });
@@ -209,7 +218,7 @@ describe('PersonalityService', () => {
           headers: {
             'Content-Type': 'application/json',
           },
-        })
+        }),
       );
     });
 

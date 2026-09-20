@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- the single mutation gateway for every combat intent; splitting
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
+import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { concludeEncounter } from './combat-ending.js';
@@ -20,6 +21,7 @@ import {
 } from './death-saves-service.js';
 import { isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
+import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
@@ -29,9 +31,8 @@ import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entit
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { getSpellById, getSpellByName } from '../../data/spellData.js';
+import { getSpellById, getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
-import { logger } from '../../lib/logger.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { AttackRollInput, SpellAttackInput } from '../../types/combat.js';
@@ -66,7 +67,9 @@ export type CombatIntent =
       targetIds: string[];
       spellId?: string;
       spellName: string;
-      slotLevel?: number;
+      slotLevel?: number | null;
+      /** The player's own attack die for attack-roll spells, when the popup rolled it. */
+      d20?: number;
       expectedVersion: number;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion: number }
@@ -158,6 +161,12 @@ type AttackVisibilityContext = {
   weaponSubstituted: boolean;
   actorIsPlayer: boolean;
   normalizeAutoRolled?: boolean;
+};
+
+type SpellResolutionVisibility = Parameters<typeof describeResolvedSpell>[3] & {
+  spellName?: string;
+  targetNewHp?: number;
+  targetIsDead?: boolean;
 };
 
 /** Keep the engine's descriptive attack facts attached to the mutation response. */
@@ -608,12 +617,14 @@ export async function executeCombatIntent(
   source: CombatActionSource,
   dmStartedAt?: number,
 ): Promise<unknown> {
+  let stateForUnresolved: CombatState | null = null;
   try {
     // A completed encounter still retains its participant rows, but its tactical board is gone.
     // Check the authoritative encounter status before loading that board or resolving a slug;
     // otherwise a valid post-victory follow-through becomes the misleading 404 "Combat
     // participant not found" that #1744 observed.
     const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    stateForUnresolved = state;
     if (state.encounter.status !== 'active') {
       logger.info({
         msg: 'COMBAT_INTENT_AFTER_CONCLUSION',
@@ -783,10 +794,45 @@ export async function executeCombatIntent(
           spellId: intent.spellId,
           spellName: intent.spellName,
           slotLevel: intent.slotLevel,
+          d20: intent.d20,
           expectedVersion: intent.expectedVersion,
         } satisfies SpellAttackInput,
         userId,
       );
+      const rawSpellResults = (result as { results?: unknown[] }).results;
+      const spellResults = (
+        Array.isArray(rawSpellResults) ? rawSpellResults : []
+      ) as SpellResolutionVisibility[];
+      if (!spellResults.length) {
+        throw new BusinessLogicError(
+          `Spell refused: ${intent.spellName} produced no combat result`,
+          {
+            reason: 'unresolved_spell',
+            spell: intent.spellName,
+          },
+        );
+      }
+      const actorLabel = actor.name ?? intent.actorId;
+      for (const [index, outcome] of spellResults.entries()) {
+        const targetId = intent.targetIds[index];
+        if (!targetId) continue;
+        const targetLabel = await participantLabel(encounterId, targetId, userId);
+        await recordDmTacticalFact(
+          encounter.sessionId,
+          describeResolvedSpell(
+            actorLabel,
+            targetLabel,
+            outcome.spellName ?? intent.spellName,
+            outcome,
+          ),
+        );
+        const targetIsPlayer =
+          state.participants.find((participant) => participant.id === targetId)?.participantType ===
+          'player';
+        if (targetIsPlayer && outcome.targetNewHp === 0 && outcome.targetIsDead !== true) {
+          await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+        }
+      }
     } else if (intent.type === 'dash') {
       result = await claimTurnActionAndResolve(
         intent.actorId,
@@ -876,6 +922,45 @@ export async function executeCombatIntent(
       source,
       reason: error instanceof Error ? error.message : 'unknown',
     });
+    const unresolvedActorIsPlayer = stateForUnresolved
+      ? stateForUnresolved.participants.find((participant) => participant.id === submitted.actorId)
+          ?.participantType === 'player'
+      : source === 'dm';
+    if (unresolvedActorIsPlayer && (submitted.type === 'spell' || submitted.type === 'attack')) {
+      const reason = error instanceof Error ? error.message : 'unknown';
+      const actorLabel =
+        stateForUnresolved?.participants.find((participant) => participant.id === submitted.actorId)
+          ?.name ?? submitted.actorId;
+      const spellName =
+        submitted.type === 'spell'
+          ? submitted.spellName || submitted.spellId || 'unknown spell'
+          : null;
+      logger.warn({
+        msg: 'PLAYER_ACTION_UNRESOLVED',
+        encounterId,
+        actorId: submitted.actorId,
+        actionType: submitted.type === 'spell' ? 'cast_spell' : 'attack',
+        spell: spellName,
+        reason,
+      });
+      const sessionId = stateForUnresolved?.encounter.sessionId;
+      if (sessionId) {
+        try {
+          await recordDmTacticalFact(
+            sessionId,
+            submitted.type === 'spell'
+              ? describeRefusedSpell(actorLabel, spellName!, reason)
+              : `Engine: ${actorLabel}'s attack was refused (${reason}). No roll, no damage, no wound.`,
+          );
+        } catch (factError) {
+          logger.warn({
+            msg: 'PLAYER_ACTION_UNRESOLVED_FACT_FAILED',
+            encounterId,
+            factError,
+          });
+        }
+      }
+    }
     // A killing blow can commit and the call still throw on the way out -- the HP
     // write lands, then something downstream fails. The success path is the only
     // thing that calls endCombatIfResolved, so without this the last hostile is at
@@ -961,7 +1046,9 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     .map((id) => getSpellById(id) ?? getSpellByName(id))
     .filter(
       (spell, index, all) =>
-        spell && all.findIndex((candidate) => candidate?.id === spell.id) === index,
+        spell &&
+        isPlayerCombatSpell(spell) &&
+        all.findIndex((candidate) => candidate?.id === spell.id) === index,
     );
   const hasAvailableSpell = spells.some((spell) => {
     const usesBonusAction = spell!.castingTime.toLowerCase().includes('bonus action');
