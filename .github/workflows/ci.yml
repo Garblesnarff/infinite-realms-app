@@ -57,6 +57,11 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      # Repo-root AGENTS.md is a byte-identical copy of
+      # ai-adventure-scribe-main/AGENTS.md (#2104/#2107). Fail here if they drift.
+      - name: AGENTS.md copies must match
+        working-directory: .
+        run: cmp -s AGENTS.md ai-adventure-scribe-main/AGENTS.md
       - run: bun run lint
       - run: bunx tsc --noEmit
       # The runner is deliberately CPU-capped (4 of 8 cores, CPUWeight 20) so a

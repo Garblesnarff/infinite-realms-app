@@ -62,6 +62,8 @@ export default defineConfig({
       'tests/**/*.{test,spec}.{ts,tsx}',
     ],
     exclude: [
+      // macOS AppleDouble sidecars (`._*.test.ts`) on non-APFS volumes match include globs.
+      '**/._*',
       // Standard build/dependency output - never contains tests we want to run.
       'node_modules/**',
       'dist/**',
