@@ -62,6 +62,7 @@ export async function loadCharacterBySession(
       class: characterClass as CharacterClass | null,
       level: characterData.level,
       background: characterBackground as CharacterBackground | null,
+      armorClass: characterData.character_stats?.[0]?.armor_class ?? undefined,
       description: characterData.description,
       abilityScores: characterData.character_stats?.[0]
         ? buildAbilityScores({

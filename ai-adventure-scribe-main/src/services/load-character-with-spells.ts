@@ -197,6 +197,9 @@ export async function loadCharacterWithSpells(
       class: characterClass as CharacterClass | null,
       level: characterData.level || 1,
       background: characterBackground as CharacterBackground | null,
+      // The server stores and seats this AC value; do not recompute it from
+      // ability scores after the character API has already supplied it.
+      armorClass: stats?.armor_class ?? undefined,
       abilityScores: buildAbilityScores({
         strength: stats?.strength || 10,
         dexterity: stats?.dexterity || 10,

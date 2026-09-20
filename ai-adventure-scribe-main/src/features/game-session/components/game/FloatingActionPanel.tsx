@@ -9,6 +9,10 @@ import { useCombat } from '@/contexts/CombatContext';
 import { useCharacterStats } from '@/hooks/use-character-stats';
 import logger from '@/lib/logger';
 import {
+  getCharacterSheetArmorClass,
+  MISSING_ARMOR_CLASS_LABEL,
+} from '@/utils/character/character-sheet-armor-class';
+import {
   formatCharacterSheetHitPoints,
   getCharacterSheetHitPoints,
 } from '@/utils/character/character-sheet-hit-points';
@@ -45,7 +49,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
         return {
           currentHp: sheetHitPoints.current,
           maxHp: sheetHitPoints.maximum,
-          armorClass: 10,
+          armorClass: character ? getCharacterSheetArmorClass(character) : null,
           proficiency: 2,
         };
       }
@@ -58,6 +62,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
     }, [sheetHitPoints, stats]);
 
     const { currentHp, maxHp, armorClass, proficiency } = displayStats;
+    const armorClassDisplay = armorClass ?? MISSING_ARMOR_CLASS_LABEL;
     const hpDisplay = formatCharacterSheetHitPoints({ current: currentHp, maximum: maxHp });
     const hpAriaLabel =
       currentHp !== null && maxHp !== null
@@ -160,11 +165,11 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               </div>
               <div
                 role="group"
-                aria-label={`Armor Class: ${armorClass}`}
+                aria-label={`Armor Class: ${armorClassDisplay}`}
                 className="p-2 rounded-lg bg-blue-500/10 border border-blue-400/20"
               >
                 <Shield aria-hidden="true" className="h-4 w-4 mx-auto text-blue-400 mb-1" />
-                <div className="text-xs font-bold text-card-foreground">{armorClass}</div>
+                <div className="text-xs font-bold text-card-foreground">{armorClassDisplay}</div>
                 <div className="text-[10px] text-muted-foreground">AC</div>
               </div>
               <div

@@ -12,6 +12,7 @@ import {
   IRThumb,
 } from '@/components/ui/ir-primitives';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { MISSING_ARMOR_CLASS_LABEL } from '@/utils/character/character-sheet-armor-class';
 import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { CompanionPartyStrip } from '@/webmcp/CompanionPartyStrip';
 
@@ -53,7 +54,7 @@ const CoreStats: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
       label="HP"
       value={formatCharacterSheetHitPoints({ current: c.hpCurrent, maximum: c.hpMax })}
     />
-    <IRStatTile label="AC" value={c.ac} />
+    <IRStatTile label="AC" value={c.ac ?? MISSING_ARMOR_CLASS_LABEL} />
     <IRStatTile label="INIT" value={c.initiative} />
     <IRStatTile label="SPD" value={`${c.speed} ft`} />
   </div>

@@ -205,7 +205,7 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     xpMax: 300,
     hpCurrent: null,
     hpMax: null,
-    ac: 10,
+    ac: null,
     initiative: '+0',
     speed: 30,
     abilityScores: ABILITY_ORDER.map((a) => ({ label: a.label, score: 10, modifier: '+0' })),

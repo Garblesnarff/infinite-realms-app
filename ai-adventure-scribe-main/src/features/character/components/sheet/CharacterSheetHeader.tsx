@@ -6,43 +6,16 @@ import type { Character } from '@/types/character';
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 import {
+  getCharacterSheetArmorClass,
+  MISSING_ARMOR_CLASS_LABEL,
+} from '@/utils/character/character-sheet-armor-class';
+import {
   formatCharacterSheetHitPoints,
   getCharacterSheetHitPoints,
 } from '@/utils/character/character-sheet-hit-points';
 
 interface CharacterSheetHeaderProps {
   character: Character;
-}
-
-function calculateArmorClass(character: Character): number {
-  const abilityScores = character.abilityScores || {
-    dexterity: { modifier: 0 },
-    constitution: { modifier: 0 },
-    wisdom: { modifier: 0 },
-  };
-  let armorClass = 10 + abilityScores.dexterity.modifier;
-
-  // Check for unarmored defense (Barbarian/monk without armor)
-  const hasUnarmoredDefense =
-    character.class &&
-    (character.class.name.toLowerCase() === 'barbarian' ||
-      character.class.name.toLowerCase() === 'monk');
-
-  const isWearingArmor = character.equippedArmor !== undefined && character.equippedArmor !== '';
-
-  // If character has unarmored defense and is not wearing armor, use unarmored AC
-  if (hasUnarmoredDefense && !isWearingArmor) {
-    switch (character.class!.name.toLowerCase()) {
-      case 'barbarian':
-        armorClass = 10 + abilityScores.dexterity.modifier + abilityScores.constitution.modifier;
-        break;
-      case 'monk':
-        armorClass = 10 + abilityScores.dexterity.modifier + abilityScores.wisdom.modifier;
-        break;
-    }
-  }
-
-  return armorClass;
 }
 
 export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ character }) => {
@@ -94,7 +67,9 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           <div className="text-center">
             <div className="flex items-center gap-1 text-infinite-teal">
               <Shield className="w-4 h-4" />
-              <span className="font-bold">{calculateArmorClass(character)}</span>
+              <span className="font-bold">
+                {getCharacterSheetArmorClass(character) ?? MISSING_ARMOR_CLASS_LABEL}
+              </span>
             </div>
             <div className="text-xs text-muted-foreground">AC</div>
           </div>

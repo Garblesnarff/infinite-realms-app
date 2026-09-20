@@ -79,6 +79,12 @@ const casterSheet: CharacterSheetVM = {
 };
 
 describe('RightSheet attacks list', () => {
+  it('renders an em dash when AC is missing from stored character stats', () => {
+    render(<RightSheet c={{ ...sheet, ac: null }} />);
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
   it('lists attacks without a dead View All Attacks control', () => {
     render(<RightSheet c={sheet} />);
 

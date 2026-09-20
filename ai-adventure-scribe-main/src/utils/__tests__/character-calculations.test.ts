@@ -403,6 +403,7 @@ describe('character-calculations', () => {
         character_stats: {
           current_hit_points: 20,
           max_hit_points: 20,
+          armor_class: 11,
         },
       };
 
@@ -410,7 +411,7 @@ describe('character-calculations', () => {
 
       expect(stats.proficiencyBonus).toBe(2);
       expect(stats.hitPoints).toBe(20); // Stored HP is authoritative.
-      expect(stats.armorClass).toBe(11); // 10 + 1 (Dex)
+      expect(stats.armorClass).toBe(11); // Stored AC is authoritative.
       expect(stats.speed).toBe(30);
       expect(stats.allTraits).toContain('Darkvision');
       expect(stats.allLanguages).toContain('Common');
@@ -421,7 +422,7 @@ describe('character-calculations', () => {
       const stats = calculateAllCharacterStats({} as Character);
       expect(stats.proficiencyBonus).toBe(2);
       expect(stats.hitPoints).toBeNull();
-      expect(stats.armorClass).toBe(10);
+      expect(stats.armorClass).toBeNull();
       expect(stats.speed).toBe(30);
     });
 

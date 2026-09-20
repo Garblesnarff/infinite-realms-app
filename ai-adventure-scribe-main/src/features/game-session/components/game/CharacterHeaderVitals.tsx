@@ -3,13 +3,14 @@ import React from 'react';
 
 import type { CombatHP } from './use-combat-hp';
 
+import { MISSING_ARMOR_CLASS_LABEL } from '@/utils/character/character-sheet-armor-class';
 import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 interface CharacterHeaderVitalsProps {
   combatHP: CombatHP | null;
   currentHp: number | null;
   maxHp: number | null;
-  armorClass: number;
+  armorClass: number | null;
   proficiency: number;
 }
 
@@ -86,12 +87,15 @@ export const CharacterHeaderVitals: React.FC<CharacterHeaderVitalsProps> = React
           </>
         )}
       </div>
-      <div className="flex items-center gap-1" aria-label={`Armor Class: ${armorClass}`}>
+      <div
+        className="flex items-center gap-1"
+        aria-label={`Armor Class: ${armorClass ?? MISSING_ARMOR_CLASS_LABEL}`}
+      >
         <Shield className="w-4 h-4 text-blue-400" aria-hidden="true" />
         <span className="font-semibold" aria-hidden="true">
           AC:
         </span>
-        <span aria-hidden="true">{armorClass}</span>
+        <span aria-hidden="true">{armorClass ?? MISSING_ARMOR_CLASS_LABEL}</span>
       </div>
       <div className="flex items-center gap-1" aria-label={`Proficiency Bonus: +${proficiency}`}>
         <Zap className="w-4 h-4 text-green-400" aria-hidden="true" />

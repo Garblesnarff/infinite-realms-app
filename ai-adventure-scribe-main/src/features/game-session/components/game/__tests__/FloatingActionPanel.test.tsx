@@ -69,15 +69,13 @@ describe('FloatingActionPanel', () => {
     });
 
     const { container } = render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
+      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />,
     );
     expect(container.firstChild).toBeNull();
   });
 
   it('renders the collapsed trigger when not visible', () => {
-    render(
-      <FloatingActionPanel isVisible={false} onToggle={mockOnToggle} combatMode={false} />
-    );
+    render(<FloatingActionPanel isVisible={false} onToggle={mockOnToggle} combatMode={false} />);
 
     const button = screen.getByRole('button', { name: /open quick actions/i });
     expect(button).toBeDefined();
@@ -87,9 +85,7 @@ describe('FloatingActionPanel', () => {
   });
 
   it('renders with pulse animation in combat mode when collapsed', () => {
-    render(
-      <FloatingActionPanel isVisible={false} onToggle={mockOnToggle} combatMode={true} />
-    );
+    render(<FloatingActionPanel isVisible={false} onToggle={mockOnToggle} combatMode={true} />);
 
     const button = screen.getByRole('button', { name: /open quick actions/i });
     expect(button.className).toContain('animate-pulse');
@@ -97,9 +93,7 @@ describe('FloatingActionPanel', () => {
   });
 
   it('renders the full panel when visible', () => {
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
 
     expect(screen.getByText(/quick actions/i)).toBeDefined();
     expect(screen.getByText('Gimli • Level 5')).toBeDefined();
@@ -112,9 +106,7 @@ describe('FloatingActionPanel', () => {
   });
 
   it('toggles expansion state', () => {
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
 
     // Should not show perception by default
     expect(screen.queryByTitle(/make a perception check/i)).toBeNull();
@@ -132,27 +124,21 @@ describe('FloatingActionPanel', () => {
   });
 
   it('shows combat actions when in combat mode', () => {
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={true} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={true} />);
 
     expect(screen.getByTitle(/roll initiative/i)).toBeDefined();
     expect(screen.getByTitle(/make an attack roll/i)).toBeDefined();
   });
 
   it('hides combat actions when not in combat mode', () => {
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
 
     expect(screen.queryByTitle(/roll initiative/i)).toBeNull();
     expect(screen.queryByTitle(/make an attack roll/i)).toBeNull();
   });
 
   it('calls logger when quick roll buttons are clicked', () => {
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={true} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={true} />);
 
     fireEvent.click(screen.getByTitle(/roll a d20/i));
     expect(logger.info).toHaveBeenCalledWith('Quick rolling d20');
@@ -165,9 +151,7 @@ describe('FloatingActionPanel', () => {
   });
 
   it('calls onToggle when close button is clicked', () => {
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
 
     const closeButton = screen.getByRole('button', { name: /close quick actions/i });
     fireEvent.click(closeButton);
@@ -177,13 +161,11 @@ describe('FloatingActionPanel', () => {
   it('handles missing stats gracefully', () => {
     (useCharacterStats as any).mockReturnValue(null);
 
-    render(
-      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />
-    );
+    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
 
-    // HP remains on the stored sheet while derived stat calculations are absent.
+    // Stored HP remains available while missing AC stays visibly unavailable.
     expect(screen.getByLabelText(/hit points: 31 out of 45/i)).toBeDefined();
-    expect(screen.getByLabelText(/armor class: 10/i)).toBeDefined();
+    expect(screen.getByLabelText(/armor class: —/i)).toBeDefined();
     expect(screen.getByLabelText(/proficiency bonus: \+2/i)).toBeDefined();
   });
 });

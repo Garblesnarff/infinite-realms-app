@@ -2,6 +2,7 @@ import { Heart, Shield, Zap, Sword } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { MISSING_ARMOR_CLASS_LABEL } from '@/utils/character/character-sheet-armor-class';
 import {
   formatCharacterSheetHitPoints,
   getCharacterSheetHitPoints,
@@ -73,7 +74,12 @@ export const StatsBar: React.FC = React.memo(() => {
         label="HP"
         color="text-red-600"
       />
-      <StatBadge icon={Shield} value={armorClass} label="AC" color="text-blue-600" />
+      <StatBadge
+        icon={Shield}
+        value={armorClass ?? MISSING_ARMOR_CLASS_LABEL}
+        label="AC"
+        color="text-blue-600"
+      />
       <StatBadge icon={Zap} value={`+${proficiency}`} label="PROF" color="text-green-600" />
       <StatBadge
         icon={Sword}

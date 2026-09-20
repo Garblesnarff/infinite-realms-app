@@ -64,6 +64,7 @@ const monkRow = {
       intelligence: 18,
       wisdom: 16,
       charisma: 8,
+      armor_class: 15,
     },
   ],
 };
@@ -84,12 +85,7 @@ describe('loadCharacterWithSpells hydrates proficiencies (#1827)', () => {
   it('reads the persisted proficiency columns off the row', async () => {
     const character = await loadCharacterWithSpells(monkRow.id);
 
-    expect(character?.skillProficiencies).toEqual([
-      'Arcana',
-      'History',
-      'Acrobatics',
-      'Athletics',
-    ]);
+    expect(character?.skillProficiencies).toEqual(['Arcana', 'History', 'Acrobatics', 'Athletics']);
     expect(character?.savingThrowProficiencies).toEqual(['strength', 'dexterity']);
     expect(character?.toolProficiencies).toEqual(['Calligrapher’s supplies']);
     expect(character?.languages).toEqual(['Common', 'Giant']);
@@ -121,12 +117,7 @@ describe('loadCharacterWithSpells hydrates proficiencies (#1827)', () => {
 
     const character = await loadCharacterWithSpells(monkRow.id);
 
-    expect(character?.skillProficiencies).toEqual([
-      'Arcana',
-      'History',
-      'Acrobatics',
-      'Athletics',
-    ]);
+    expect(character?.skillProficiencies).toEqual(['Arcana', 'History', 'Acrobatics', 'Athletics']);
     expect(calculateSkillModifiers(loaded(character))['Athletics'].modifier).toBe(5);
   });
 
@@ -148,16 +139,21 @@ describe('loadCharacterBySession hydrates proficiencies (#1827)', () => {
   it('carries the same proficiencies through the session path', async () => {
     const character = await loadCharacterBySession('session-1');
 
-    expect(character?.skillProficiencies).toEqual([
-      'Arcana',
-      'History',
-      'Acrobatics',
-      'Athletics',
-    ]);
+    expect(character?.skillProficiencies).toEqual(['Arcana', 'History', 'Acrobatics', 'Athletics']);
     expect(character?.savingThrowProficiencies).toEqual(['strength', 'dexterity']);
 
     const skills = calculateSkillModifiers(loaded(character));
     expect(skills['Athletics'].modifier).toBe(5);
     expect(skills['Perception'].modifier).toBe(3);
+  });
+});
+
+describe('character loaders preserve stored armor class (#2079)', () => {
+  it('keeps the server-authoritative AC on both character hydration paths', async () => {
+    const direct = await loadCharacterWithSpells(monkRow.id);
+    const session = await loadCharacterBySession('session-1');
+
+    expect(direct?.armorClass).toBe(15);
+    expect(session?.armorClass).toBe(15);
   });
 });

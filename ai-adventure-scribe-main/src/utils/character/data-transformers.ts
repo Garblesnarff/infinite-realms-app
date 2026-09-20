@@ -246,6 +246,9 @@ export const transformCharacterData = (
     class: resolveClass(characterData.class),
     level: characterData.level,
     background: resolveBackground(characterData.background),
+    // Combat seats this same stored value into combat_participants. Keep it on
+    // the DTO so existing-character sheets do not replace equipped AC with 10 + DEX.
+    armorClass: statsData?.armor_class ?? undefined,
     // character_stats is the server-authoritative source for combat HP. Keep
     // it on the hydrated character so the sheet cannot replace stored values
     // with a fresh formula.

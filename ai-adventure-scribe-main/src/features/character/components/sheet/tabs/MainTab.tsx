@@ -11,6 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombatState } from '@/features/character/hooks/use-combat-state';
 import { useCharacterStats } from '@/hooks/use-character-stats';
+import {
+  getCharacterSheetArmorClass,
+  MISSING_ARMOR_CLASS_LABEL,
+} from '@/utils/character/character-sheet-armor-class';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 interface MainTabProps {
@@ -49,7 +53,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
   } = useCombatState(maxHp ?? 0, currentHp ?? 0);
 
   const proficiencyBonus = stats?.proficiencyBonus ?? 2;
-  const armorClass = stats?.armorClass ?? 10;
+  const armorClass = getCharacterSheetArmorClass(character);
   const initiativeModifier = stats?.initiative ?? 0;
   const passivePerception = stats?.passivePerception ?? 10;
 
@@ -88,7 +92,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
               <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-infinite-teal/15 rounded-full">
                 <Shield className="w-6 h-6 text-infinite-teal" />
               </div>
-              <div className="text-2xl font-bold">{armorClass}</div>
+              <div className="text-2xl font-bold">{armorClass ?? MISSING_ARMOR_CLASS_LABEL}</div>
               <div className="text-xs text-muted-foreground">Armor Class</div>
             </div>
 

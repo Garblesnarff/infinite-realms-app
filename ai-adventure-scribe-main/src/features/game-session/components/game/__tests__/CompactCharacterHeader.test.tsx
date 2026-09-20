@@ -87,6 +87,7 @@ describe('CompactCharacterHeader', () => {
       character_stats: {
         current_hit_points: 55,
         max_hit_points: 55,
+        armor_class: 15,
       },
     };
 
@@ -102,7 +103,7 @@ describe('CompactCharacterHeader', () => {
     // Stored current/max HP is displayed directly.
     expect(screen.getByLabelText(/Hit Points: 55/)).toBeInTheDocument();
 
-    // AC (Barbarian): 10 + 2 (DEX) + 3 (CON) = 15
+    // AC is read from the stored sheet value.
     expect(screen.getByLabelText(/Armor Class: 15/)).toBeInTheDocument();
 
     // Proficiency: floor((5-1)/4) + 2 = 1 + 2 = 3
@@ -151,6 +152,9 @@ describe('CompactCharacterHeader', () => {
         dexterity: { modifier: 4 },
         wisdom: { modifier: 3 },
       },
+      character_stats: {
+        armor_class: 17,
+      },
     };
 
     (useCharacter as any).mockReturnValue({
@@ -159,7 +163,7 @@ describe('CompactCharacterHeader', () => {
 
     render(<CompactCharacterHeader />);
 
-    // AC: 10 + 4 (DEX) + 3 (WIS) = 17
+    // AC is read from the stored sheet value.
     expect(screen.getByLabelText(/Armor Class: 17/)).toBeInTheDocument();
   });
 

@@ -32,7 +32,7 @@ describe('StatsBar', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('calculates and displays standard stats for a level 1 Fighter', () => {
+  it('reads and displays stored AC for a level 1 Fighter', () => {
     const mockCharacter = {
       level: 1,
       class: { name: 'Fighter', hitDie: 10 },
@@ -48,6 +48,7 @@ describe('StatsBar', () => {
       character_stats: {
         current_hit_points: 12,
         max_hit_points: 12,
+        armor_class: 13,
       },
     };
 
@@ -59,7 +60,7 @@ describe('StatsBar', () => {
 
     expect(getStatValue('HP')).toBe('12/12');
 
-    // AC: 10 + 3 = 13
+    // AC is read from the stored sheet value.
     expect(getStatValue('AC')).toBe('13');
 
     // PROF: +2
@@ -120,7 +121,7 @@ describe('StatsBar', () => {
     expect(getStatValue('INIT')).toBe('-1');
   });
 
-  it('calculates Barbarian Unarmored Defense correctly', () => {
+  it('reads stored Barbarian AC', () => {
     const mockCharacter = {
       level: 1,
       class: { name: 'Barbarian', hitDie: 12 },
@@ -136,6 +137,7 @@ describe('StatsBar', () => {
       character_stats: {
         current_hit_points: 15,
         max_hit_points: 15,
+        armor_class: 15,
       },
     };
 
@@ -146,11 +148,11 @@ describe('StatsBar', () => {
     render(<StatsBar />);
 
     expect(getStatValue('HP')).toBe('15/15');
-    // AC: 10 + 2 (DEX) + 3 (CON) = 15
+    // AC is read from the stored sheet value.
     expect(getStatValue('AC')).toBe('15');
   });
 
-  it('calculates Monk Unarmored Defense correctly', () => {
+  it('reads stored Monk AC', () => {
     const mockCharacter = {
       level: 1,
       class: { name: 'Monk', hitDie: 8 },
@@ -163,6 +165,9 @@ describe('StatsBar', () => {
         charisma: { modifier: 0 },
       },
       equippedArmor: '',
+      character_stats: {
+        armor_class: 17,
+      },
     };
 
     (useCharacter as any).mockReturnValue({
@@ -171,7 +176,7 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    // AC: 10 + 4 (DEX) + 3 (WIS) = 17
+    // AC is read from the stored sheet value.
     expect(getStatValue('AC')).toBe('17');
   });
 
@@ -202,7 +207,7 @@ describe('StatsBar', () => {
     expect(getStatValue('HP')).toBe('20/20');
   });
 
-  it('verifies fixed AC calculation with shield', () => {
+  it('reads stored AC with a shield', () => {
     const mockCharacter = {
       level: 1,
       class: { name: 'Fighter', hitDie: 10 },
@@ -216,6 +221,9 @@ describe('StatsBar', () => {
       },
       equippedArmor: '',
       equippedShield: 'Shield', // This should add +2
+      character_stats: {
+        armor_class: 14,
+      },
     };
 
     (useCharacter as any).mockReturnValue({
@@ -224,7 +232,7 @@ describe('StatsBar', () => {
 
     render(<StatsBar />);
 
-    // Expected AC: 10 + 2 + 2 = 14.
+    // AC is read from the stored sheet value.
     expect(getStatValue('AC')).toBe('14');
   });
 });

@@ -19,6 +19,7 @@ import {
   calculateArmorClass,
   calculateCarryingCapacity,
 } from '@/utils/character/basic-math';
+import { getCharacterSheetArmorClass } from '@/utils/character/character-sheet-armor-class';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 /**
@@ -30,7 +31,7 @@ export interface CharacterStats {
   proficiencyBonus: number;
   hitPoints: number | null;
   hitDie: string;
-  armorClass: number;
+  armorClass: number | null;
   initiative: number;
   speed: number;
 
@@ -296,7 +297,7 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     // missing stored HP remains null instead of being synthesized.
     hitPoints: getCharacterSheetHitPoints(character).maximum,
     hitDie: `1d${character.class?.hitDie || 8}`,
-    armorClass: calculateArmorClass(character),
+    armorClass: getCharacterSheetArmorClass(character),
     initiative: character.abilityScores?.dexterity?.modifier || 0,
     speed: Math.max(0, encumbrance.effectiveSpeed - armorSpeedPenalty),
 

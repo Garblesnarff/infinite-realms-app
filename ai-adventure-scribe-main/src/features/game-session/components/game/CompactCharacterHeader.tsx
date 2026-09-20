@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
+import { getCharacterSheetArmorClass } from '@/utils/character/character-sheet-armor-class';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
@@ -57,7 +58,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
     const charStats = calculateAllCharacterStats(character);
 
     return {
-      armorClass: charStats.armorClass,
+      armorClass: getCharacterSheetArmorClass(character),
       proficiency: charStats.proficiencyBonus,
     };
   }, [character]);

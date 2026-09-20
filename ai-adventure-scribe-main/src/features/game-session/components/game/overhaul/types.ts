@@ -105,7 +105,7 @@ export interface CharacterSheetVM {
   avatarUrl?: string;
   hpCurrent: number | null;
   hpMax: number | null;
-  ac: number;
+  ac: number | null;
   initiative: string; // "+3"
   speed: number; // 30
   abilityScores: AbilityScoreVM[];
