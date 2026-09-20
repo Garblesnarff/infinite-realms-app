@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.5...v0.19.6) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ui:** separate Engine label from HIT/MISS badge ([#2092](https://github.com/Garblesnarff/infinite-realms-production/issues/2092)) ([d469cee](https://github.com/Garblesnarff/infinite-realms-production/commit/d469ceefd661ebd135547b875a26af682cbae82d)), closes [#2075](https://github.com/Garblesnarff/infinite-realms-production/issues/2075)
+
 ## [0.19.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.4...v0.19.5) (2026-09-19)
 
 
