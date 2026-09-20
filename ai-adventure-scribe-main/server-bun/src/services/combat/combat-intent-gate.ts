@@ -144,10 +144,14 @@ interface ActorResolution {
 const matchActorOrUnambiguousPronoun = (
   targetText: string,
   actors: readonly CombatIntentActor[],
+  previousApproachTarget?: CombatIntentActor | null,
 ): ActorResolution | null => {
   const actor = matchActor(targetText, actors);
   if (actor) return { actor };
   const pronoun = normalize(targetText);
+  if (previousApproachTarget && PRONOUN_TARGETS.has(pronoun)) {
+    return { actor: previousApproachTarget, pronoun };
+  }
   return actors.length === 1 && PRONOUN_TARGETS.has(pronoun) ? { actor: actors[0], pronoun } : null;
 };
 
@@ -219,6 +223,18 @@ const stripLeadingPlayerIntent = (value: string): string =>
       '',
     )
     .trim();
+
+/** Keep the target from an approach clause so a following "attack it" remains one intent. */
+const resolveApproachTarget = (
+  rawClause: string,
+  actors: readonly CombatIntentActor[],
+): CombatIntentActor | null => {
+  const clause = stripLeadingPlayerIntent(stripTrailingPunctuation(rawClause.trim()));
+  const match = /^(?:move|walk|run|advance|approach|close)\s+(?:toward|towards|to)\s+(.+)$/i.exec(
+    clause,
+  );
+  return match ? matchActor(match[1], actors) : null;
+};
 
 const isInsideQuote = (value: string, index: number): boolean => {
   let quote: 'straight' | 'curly' | null = null;
@@ -313,6 +329,7 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
 const resolveClauseAttack = (
   rawClause: string,
   actors: readonly CombatIntentActor[],
+  previousApproachTarget?: CombatIntentActor | null,
 ): DeclaredAttack | null => {
   const clause = stripTrailingPunctuation(rawClause.trim());
   if (!clause || DECLARATION_BLOCK_PATTERN.test(clause.replace(/[’‘]/g, "'"))) return null;
@@ -345,7 +362,11 @@ const resolveClauseAttack = (
       : null;
   }
 
-  const resolution = matchActorOrUnambiguousPronoun(match.targetText, actors);
+  const resolution = matchActorOrUnambiguousPronoun(
+    match.targetText,
+    actors,
+    previousApproachTarget,
+  );
   if (!resolution) return null;
   const { actor } = resolution;
   if (resolution.pronoun) {
@@ -381,9 +402,11 @@ export function detectDeclaredAttack(
 
   const clauses = splitIntoClauses(playerInput.trim().replace(/\s+/g, ' '));
   let declaredAttack: DeclaredAttack | null = null;
+  let previousApproachTarget: CombatIntentActor | null = null;
   for (const clause of clauses) {
     if (isCombatDeescalationSpeech(clause)) continue;
-    const match = resolveClauseAttack(clause, actors);
+    previousApproachTarget = resolveApproachTarget(clause, actors) ?? previousApproachTarget;
+    const match = resolveClauseAttack(clause, actors, previousApproachTarget);
     if (match) declaredAttack = match;
   }
   return declaredAttack;

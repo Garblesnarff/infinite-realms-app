@@ -17,6 +17,12 @@ import { getDistance } from '../../tactical/engine.js';
 
 import type { Point } from '../../tactical/types.js';
 
+export type ApproachRefusalReason =
+  | 'no_geometry'
+  | 'no_reachable_adjacent_cell'
+  | 'movement_exhausted'
+  | 'move_refused';
+
 export type ApproachResult =
   /** Already within reach; no movement was needed or spent. */
   | { kind: 'in_reach'; distanceFeet: number }
@@ -28,11 +34,18 @@ export type ApproachResult =
    */
   | {
       kind: 'unreachable';
+      startingDistanceFeet: number;
       distanceFeet: number;
       movedFeet: number;
+      movementAvailableFeet: number;
+      movementRemainingFeet: number;
+      pathCostFeet: number;
       from: Point;
       to: Point;
       reachFeet: number;
+      blockingCell?: Point;
+      blockingObstacle?: string;
+      reason: Exclude<ApproachRefusalReason, 'no_geometry'>;
     }
   /** No board, or the actor/target is not on it: geometry cannot speak, so it does not. */
   | { kind: 'no_geometry' };
@@ -49,17 +62,53 @@ export async function approachForAttack(
   reachFeet: number,
 ): Promise<ApproachResult> {
   const map = await loadActiveTacticalMap(sessionId);
-  if (!map) return { kind: 'no_geometry' };
+  if (!map) {
+    logApproachPlan({
+      sessionId,
+      actorId,
+      targetId,
+      from: null,
+      to: null,
+      distance: null,
+      path: [],
+      reason: 'no_geometry',
+    });
+    return { kind: 'no_geometry' };
+  }
   const actor = map.entities.find((entity) => entity.id === actorId);
   const target = map.entities.find((entity) => entity.id === targetId);
-  if (!actor || !target) return { kind: 'no_geometry' };
+  if (!actor || !target) {
+    logApproachPlan({
+      sessionId,
+      actorId,
+      targetId,
+      from: actor ? { x: actor.x, y: actor.y } : null,
+      to: target ? { x: target.x, y: target.y } : null,
+      distance: actor && target ? getDistance(actor, target) : null,
+      path: [],
+      reason: 'no_geometry',
+    });
+    return { kind: 'no_geometry' };
+  }
 
   const from: Point = { x: actor.x, y: actor.y };
   const startingDistance = getDistance(actor, target);
   if (startingDistance <= reachFeet) return { kind: 'in_reach', distanceFeet: startingDistance };
 
   const plan = planApproach(map, actorId, targetId, reachFeet);
-  if (!plan) return { kind: 'no_geometry' };
+  if (!plan) {
+    logApproachPlan({
+      sessionId,
+      actorId,
+      targetId,
+      from,
+      to: null,
+      distance: startingDistance,
+      path: [],
+      reason: 'no_geometry',
+    });
+    return { kind: 'no_geometry' };
+  }
 
   let movedFeet = 0;
   let to = from;
@@ -81,13 +130,34 @@ export async function approachForAttack(
         { sessionId, actorId, targetId, plan, refusal: (move as { refusal?: unknown }).refusal },
         '[tactical] auto-approach move was refused by the engine',
       );
+      logApproachPlan({
+        sessionId,
+        actorId,
+        targetId,
+        from,
+        to: from,
+        distance: startingDistance,
+        path: plan.path,
+        startingDistance,
+        movementRemaining: actor.movementRemaining,
+        pathCost: plan.pathCostFeet ?? plan.costFeet,
+        ...(plan.blockingCell ? { blockingCell: plan.blockingCell } : {}),
+        reason: 'move_refused',
+      });
       return {
         kind: 'unreachable',
+        startingDistanceFeet: startingDistance,
         distanceFeet: startingDistance,
         movedFeet: 0,
+        movementAvailableFeet: actor.movementRemaining,
+        movementRemainingFeet: actor.movementRemaining,
+        pathCostFeet: plan.pathCostFeet ?? plan.costFeet,
         from,
         to: from,
         reachFeet,
+        ...(plan.blockingCell ? { blockingCell: plan.blockingCell } : {}),
+        ...(plan.blockingObstacle ? { blockingObstacle: plan.blockingObstacle } : {}),
+        reason: 'move_refused',
       };
     }
   }
@@ -97,14 +167,57 @@ export async function approachForAttack(
       ? { kind: 'approached', distanceFeet: plan.resultingDistanceFeet, movedFeet, from, to }
       : { kind: 'in_reach', distanceFeet: plan.resultingDistanceFeet };
 
+  const movementRemainingFeet = Math.max(0, actor.movementRemaining - movedFeet);
+  const reason: Exclude<ApproachRefusalReason, 'no_geometry'> =
+    movementRemainingFeet <= 0 ? 'movement_exhausted' : 'no_reachable_adjacent_cell';
+  logApproachPlan({
+    sessionId,
+    actorId,
+    targetId,
+    from,
+    to,
+    distance: plan.resultingDistanceFeet,
+    path: plan.path,
+    startingDistance,
+    movementRemaining: movementRemainingFeet,
+    movementAvailable: actor.movementRemaining,
+    pathCost: plan.pathCostFeet ?? plan.costFeet,
+    ...(plan.blockingCell ? { blockingCell: plan.blockingCell } : {}),
+    reason,
+  });
   return {
     kind: 'unreachable',
+    startingDistanceFeet: startingDistance,
     distanceFeet: plan.resultingDistanceFeet,
     movedFeet,
+    movementAvailableFeet: actor.movementRemaining,
+    movementRemainingFeet,
+    pathCostFeet: plan.pathCostFeet ?? plan.costFeet,
     from,
     to,
     reachFeet,
+    ...(plan.blockingCell ? { blockingCell: plan.blockingCell } : {}),
+    ...(plan.blockingObstacle ? { blockingObstacle: plan.blockingObstacle } : {}),
+    reason,
   };
+}
+
+function logApproachPlan(params: {
+  sessionId: string;
+  actorId: string;
+  targetId: string;
+  from: Point | null;
+  to: Point | null;
+  distance: number | null;
+  path: Point[];
+  startingDistance?: number;
+  movementRemaining?: number;
+  movementAvailable?: number;
+  pathCost?: number;
+  blockingCell?: Point;
+  reason: ApproachRefusalReason;
+}): void {
+  combatLogger.warn({ event: 'APPROACH_PLAN', ...params }, 'APPROACH_PLAN');
 }
 
 /**
@@ -115,16 +228,21 @@ export function describeUnreachableApproach(
   actorLabel: string,
   targetLabel: string,
   result: Extract<ApproachResult, { kind: 'unreachable' }>,
-  intent: string,
+  _intent: string,
 ): string {
-  const movement = result.movedFeet > 0 ? `moved ${result.movedFeet}ft` : 'could not move';
+  const blocker = result.blockingCell
+    ? ` (${result.blockingObstacle ?? 'obstacle'} at ${result.blockingCell.x},${result.blockingCell.y})`
+    : '';
+  const startingDistance = result.startingDistanceFeet ?? result.distanceFeet + result.movedFeet;
+  const movementAvailable =
+    result.movementAvailableFeet ?? result.movedFeet + (result.movementRemainingFeet ?? 0);
+  const pathCost = result.pathCostFeet ?? result.movedFeet;
   return (
-    `${actorLabel} ${movement}, is now ${result.distanceFeet}ft from ${targetLabel}, and could not ` +
-    `reach it (needs ${result.reachFeet}ft). Its action this turn was movement, not ${intent}. ` +
-    'Narrate the approach, not a strike.'
+    `${actorLabel} could not reach ${targetLabel}: started ${startingDistance} ft away; ` +
+    `${pathCost} ft path${blocker} with ${movementAvailable} ft of movement; moved ` +
+    `${result.movedFeet} ft, now ${result.distanceFeet} ft away; no attack was rolled.`
   );
 }
-
 
 /** What the intent gateway records when an attack could not survive its own approach. */
 export type MovementOnlyResult = {
@@ -136,7 +254,15 @@ export type MovementOnlyResult = {
   reachFeet: number;
   from: Point;
   to: Point;
+  startingDistanceFeet: number;
+  movementRemainingFeet: number;
+  movementAvailableFeet: number;
+  pathCostFeet: number;
+  blockingCell?: Point;
+  blockingObstacle?: string;
+  /** Stable result discriminator retained for existing combat consumers. */
   reason: 'out_of_reach_after_full_movement';
+  refusalReason: Exclude<ApproachRefusalReason, 'no_geometry'>;
   narrative: string;
 };
 
@@ -192,7 +318,14 @@ export async function decideAttackApproach(params: {
       reachFeet: approach.reachFeet,
       from: approach.from,
       to: approach.to,
+      startingDistanceFeet: approach.startingDistanceFeet,
+      movementRemainingFeet: approach.movementRemainingFeet,
+      movementAvailableFeet: approach.movementAvailableFeet,
+      pathCostFeet: approach.pathCostFeet,
+      ...(approach.blockingCell ? { blockingCell: approach.blockingCell } : {}),
+      ...(approach.blockingObstacle ? { blockingObstacle: approach.blockingObstacle } : {}),
       reason: 'out_of_reach_after_full_movement',
+      refusalReason: approach.reason,
       narrative,
     },
   };

@@ -334,11 +334,15 @@ const actionsFrom = (response: DMResponse) => {
   return { accepted, actions };
 };
 
-const postIntent = (body: unknown) =>
+const postIntent = (body: unknown, requestId?: string) =>
   app.handle(
     new Request(`http://localhost/v1/combat/${ENCOUNTER_ID}/intent`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer valid-token' },
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer valid-token',
+        ...(requestId ? { 'x-request-id': requestId } : {}),
+      },
       body: JSON.stringify(body),
     }),
   );
@@ -440,7 +444,7 @@ describe('the run-10 body, verbatim', () => {
   });
 
   it('is still rejected — honestly — when a player sends it', async () => {
-    const response = await postIntent({ ...RUN_10_BODY, source: 'player' });
+    const response = await postIntent({ ...RUN_10_BODY, source: 'player' }, 'req-schema-2094');
     const body = (await response.json()) as {
       error: string;
       stage: string;
@@ -462,6 +466,13 @@ describe('the run-10 body, verbatim', () => {
     // The lie that hid this for a whole run.
     expect(JSON.stringify(body)).not.toContain('Internal Server Error');
     expect(attackInputs).toHaveLength(0);
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        requestId: 'req-schema-2094',
+        field: 'expectedVersion',
+        reason: expect.stringContaining('expectedVersion'),
+      }),
+    );
   });
 });
 

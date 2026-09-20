@@ -10,7 +10,7 @@
  * This module is pure: it reads a map and returns where the actor should stand. Applying,
  * persisting, and broadcasting the move stays with the tactical action service.
  */
-import { getDistance, getReachableMoves } from './engine.js';
+import { bresenham, canOccupy, findPath, getDistance, getReachableMoves } from './engine.js';
 
 import type { MapEntity, Point, TacticalMap } from './types.js';
 
@@ -18,13 +18,53 @@ export type ApproachPlan = {
   /** Where the actor should stand; equal to its current cell when no move is needed. */
   destination: Point;
   costFeet: number;
+  /** The engine path to the selected destination, including the current cell. */
+  path: Point[];
   /** Distance to the target once standing there. */
   resultingDistanceFeet: number;
   /** Whether that distance is within the attack's reach. */
   inReach: boolean;
+  /** The cheapest path cost to any cell from which the attack would be in reach. */
+  pathCostFeet: number | null;
+  /** A map cell that explains why a direct route is longer or unavailable, when present. */
+  blockingCell?: Point;
+  blockingObstacle?: string;
 };
 
 const at = (entity: MapEntity, { x, y }: Point): MapEntity => ({ ...entity, x, y });
+
+const cellIsBlocking = (map: TacticalMap, point: Point): boolean =>
+  Boolean(map.cells[point.y]?.[point.x]?.blocksMovement);
+
+const blockingCellFor = (
+  map: TacticalMap,
+  actor: MapEntity,
+  target: MapEntity,
+  reachFeet: number,
+): Point | null => {
+  const directBlocker = bresenham({ x: actor.x, y: actor.y }, { x: target.x, y: target.y })
+    .slice(1, -1)
+    .find((point) => cellIsBlocking(map, point));
+  if (directBlocker) return directBlocker;
+
+  // When every useful destination is sealed, the direct segment may miss the actual wall. Pick
+  // a blocked cell in the target's reach ring so the refusal still names a concrete obstacle.
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const point = { x, y };
+      if (cellIsBlocking(map, point) && getDistance(at(actor, point), target) <= reachFeet)
+        return point;
+    }
+  }
+  return null;
+};
+
+const obstacleNameAt = (map: TacticalMap, point: Point | null): string | undefined => {
+  if (!point) return undefined;
+  const cell = map.cells[point.y]?.[point.x];
+  if (!cell?.blocksMovement) return undefined;
+  return cell.decoration ?? (cell.terrain === 'floor' ? 'obstacle' : cell.terrain);
+};
 
 /**
  * The cell to attack from: the cheapest one inside reach, or — when reach is unattainable
@@ -61,10 +101,45 @@ export function planApproach(
     return b.cell.costFeet < a.cell.costFeet ? b : a;
   });
 
+  // `getReachableMoves` is intentionally budget-limited because its result drives movement.
+  // For narration we also need the route that would have reached melee with unlimited movement;
+  // otherwise a detour around a wall is incorrectly reported as a 30ft path when it costs 35ft.
+  const fullPathCandidates: Array<{ path: Point[]; costFeet: number; distance: number }> = [];
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const destination = { x, y };
+      if (!canOccupy(map, actor, x, y) || getDistance(at(actor, destination), target) > reachFeet)
+        continue;
+      const path = findPath(map, actorId, x, y);
+      if (path)
+        fullPathCandidates.push({
+          path: path.path,
+          costFeet: path.costFeet,
+          distance: getDistance(at(actor, destination), target),
+        });
+    }
+  }
+  const fullPath = fullPathCandidates.sort(
+    (left, right) => left.costFeet - right.costFeet || left.distance - right.distance,
+  )[0];
+  const blockingCell = blockingCellFor(map, actor, target, reachFeet);
+
+  const path = findPath(map, actorId, best.cell.x, best.cell.y)?.path ?? [
+    { x: actor.x, y: actor.y },
+  ];
+
   return {
     destination: { x: best.cell.x, y: best.cell.y },
     costFeet: best.cell.costFeet,
+    path,
     resultingDistanceFeet: best.distance,
     inReach: best.inReach,
+    pathCostFeet: fullPath?.costFeet ?? null,
+    ...(blockingCell
+      ? {
+          blockingCell,
+          blockingObstacle: obstacleNameAt(map, blockingCell),
+        }
+      : {}),
   };
 }

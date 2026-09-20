@@ -65,6 +65,7 @@ const buildMap = (): TacticalMap => ({
 
 let activeMap: TacticalMap = buildMap();
 const broadcasts: Array<Record<string, unknown>> = [];
+const approachWarnings: Array<Record<string, unknown>> = [];
 
 mock.module('../tactical-map-store.js', () => ({
   loadActiveTacticalMap: async () => activeMap,
@@ -90,14 +91,24 @@ mock.module('../../../lib/logger.js', () => ({
   logger: {
     debug: () => {},
     info: () => {},
-    warn: () => {},
+    warn: (payload: Record<string, unknown>) => {
+      approachWarnings.push(payload);
+    },
     error: () => {},
     child: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
   },
-  combatLogger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+  combatLogger: {
+    debug: () => {},
+    info: () => {},
+    warn: (payload: Record<string, unknown>) => {
+      approachWarnings.push(payload);
+    },
+    error: () => {},
+  },
 }));
 
-const { approachForAttack } = await import('../combat-approach-service.js');
+const { approachForAttack, decideAttackApproach, describeUnreachableApproach } =
+  await import('../combat-approach-service.js');
 const { resolveAttackRules } = await import('../combat-rules.js');
 const { getDistance } = await import('../../../tactical/engine.js');
 
@@ -106,9 +117,56 @@ const entityOf = (id: string) => activeMap.entities.find((entity) => entity.id =
 beforeEach(() => {
   activeMap = buildMap();
   broadcasts.length = 0;
+  approachWarnings.length = 0;
 });
 
 describe('approachForAttack', () => {
+  test('a one-step approach at 10ft moves 5ft into melee range', async () => {
+    activeMap.entities[1] = { ...activeMap.entities[1], x: 3, y: 1 };
+
+    const result = await approachForAttack(SESSION_ID, 'shadow-roach-1', 'the-seeker', 5);
+
+    expect(result).toMatchObject({ kind: 'approached', distanceFeet: 5, movedFeet: 5 });
+    expect(entityOf('shadow-roach-1').movementRemaining).toBe(25);
+    expect(getDistance(entityOf('shadow-roach-1'), entityOf('the-seeker'))).toBe(5);
+  });
+
+  test('a 15ft approach moves into range so the caller can make one attack roll', async () => {
+    activeMap.entities[1] = { ...activeMap.entities[1], x: 4, y: 1 };
+
+    const result = await approachForAttack(SESSION_ID, 'shadow-roach-1', 'the-seeker', 5);
+
+    expect(result).toMatchObject({ kind: 'approached', distanceFeet: 5, movedFeet: 10 });
+    expect(entityOf('shadow-roach-1').movementRemaining).toBe(20);
+    expect(getDistance(entityOf('shadow-roach-1'), entityOf('the-seeker'))).toBe(5);
+  });
+
+  test('a 40ft approach becomes movement-only when 30ft cannot reach', async () => {
+    activeMap.entities[1] = { ...activeMap.entities[1], x: 9, y: 1 };
+
+    const decision = await decideAttackApproach({
+      sessionId: SESSION_ID,
+      actorId: 'shadow-roach-1',
+      actorLabel: 'Shadow Roach',
+      targetId: 'the-seeker',
+      targetLabel: 'The Seeker',
+      weapon: { name: 'Bite', ranged: false, normalRange: 5 },
+    });
+
+    expect(decision).toMatchObject({
+      movementOnly: true,
+      result: {
+        movedFeet: 30,
+        distanceFeet: 10,
+        reason: 'out_of_reach_after_full_movement',
+        refusalReason: 'movement_exhausted',
+      },
+    });
+    expect(approachWarnings).toContainEqual(
+      expect.objectContaining({ event: 'APPROACH_PLAN', reason: 'movement_exhausted' }),
+    );
+  });
+
   test('a reachable target is closed on, and the move lands on the stored board', async () => {
     const result = await approachForAttack(SESSION_ID, 'shadow-roach-1', 'the-seeker', 5);
 
@@ -145,14 +203,66 @@ describe('approachForAttack', () => {
 
     expect(result).toMatchObject({
       kind: 'unreachable',
+      startingDistanceFeet: 60,
       movedFeet: 30,
       distanceFeet: 30,
+      movementRemainingFeet: 0,
+      pathCostFeet: 55,
       reachFeet: 5,
     });
     expect(entityOf('shadow-roach-2').movementRemaining).toBe(0);
     // It moved: an attacker that cannot reach still advances rather than standing still.
     expect(entityOf('shadow-roach-2').x).toBeLessThan(13);
     expect(broadcasts.some((payload) => payload.type === 'entity_moved')).toBe(true);
+    expect(approachWarnings).toContainEqual(
+      expect.objectContaining({
+        event: 'APPROACH_PLAN',
+        reason: 'movement_exhausted',
+        from: { x: 13, y: 1 },
+        to: expect.any(Object),
+        distance: 30,
+        path: expect.any(Array),
+      }),
+    );
+  });
+
+  test('blocked adjacent cells produce a reasoned refusal instead of a silent no-op', async () => {
+    activeMap.entities[1] = { ...activeMap.entities[1], x: 3, y: 1 };
+    for (const [x, y] of [
+      [2, 0],
+      [2, 1],
+      [2, 2],
+      [3, 0],
+      [3, 2],
+      [4, 0],
+      [4, 1],
+      [4, 2],
+    ] as Array<[number, number]>) {
+      activeMap.cells[y][x].blocksMovement = true;
+    }
+
+    const result = await approachForAttack(SESSION_ID, 'shadow-roach-1', 'the-seeker', 5);
+
+    expect(result).toMatchObject({
+      kind: 'unreachable',
+      movedFeet: 0,
+      reason: 'no_reachable_adjacent_cell',
+    });
+    const narrative = describeUnreachableApproach(
+      'Shadow Roach',
+      'The Seeker',
+      result as Extract<typeof result, { kind: 'unreachable' }>,
+      'an attack with its Bite',
+    );
+    expect(narrative).toContain('no attack was rolled');
+    expect(narrative).toMatch(/obstacle at \d+,\d+/);
+    expect(approachWarnings).toContainEqual(
+      expect.objectContaining({
+        event: 'APPROACH_PLAN',
+        reason: 'no_reachable_adjacent_cell',
+        path: expect.any(Array),
+      }),
+    );
   });
 
   test('a board with no such entity reports no geometry rather than guessing', async () => {

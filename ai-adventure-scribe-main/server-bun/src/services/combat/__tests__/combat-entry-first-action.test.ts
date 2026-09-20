@@ -362,11 +362,31 @@ describe('deriveCombatEntryFirstAction', () => {
     expect(firstAction).toMatchObject({
       type: 'move',
       reach: { inReach: false, distanceFeet: 10, movedFeetIfApproached: 30 },
-      notice: 'You close 30 ft. Professor Emil Darkwater is still 10 ft away. Your turn is spent.',
+      notice:
+        'You close 30 ft. Professor Emil Darkwater is still 10 ft away because movement ran out before you reached the required distance. Your turn is spent.',
       combat_action: { action_type: 'move', x: 7, y: 0, movement_feet: 30 },
     });
     expect(firstAction?.roll_request).toBeUndefined();
     expect(map.entities[0]).toMatchObject({ x: 1, y: 0 });
+  });
+
+  it('turns a one-step 10ft melee approach into an attack after moving 5ft', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: declaredDaggerAttack,
+      },
+      { ...deps, loadActiveTacticalMap: async () => openMap(3) },
+    );
+
+    expect(firstAction).toMatchObject({
+      type: 'attack',
+      reach: { inReach: true, distanceFeet: 5, movedFeetIfApproached: 5 },
+      combat_action: { action_type: 'attack' },
+    });
+    expect(firstAction?.roll_request).toBeDefined();
   });
 
   it('returns a reachable melee attack after previewing the full movement', async () => {

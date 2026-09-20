@@ -29,6 +29,8 @@ export interface CombatEntryReach {
   inReach: boolean;
   distanceFeet: number;
   movedFeetIfApproached: number;
+  path: Array<{ x: number; y: number }>;
+  refusalReason?: 'movement_exhausted' | 'no_reachable_adjacent_cell';
 }
 
 export interface CombatEntryRollRequest {
@@ -326,17 +328,32 @@ export async function deriveCombatEntryFirstAction(
     !grounded.weapon.ranged && map
       ? planApproach(map, playerParticipant.id, targetParticipant.id, grounded.weapon.normalRange)
       : null;
+  const mapActor = map?.entities.find((entity) => entity.id === playerParticipant.id);
+  const refusalReason =
+    approach && !approach.inReach
+      ? !mapActor ||
+        mapActor.movementRemaining <= 0 ||
+        approach.costFeet >= mapActor.movementRemaining
+        ? ('movement_exhausted' as const)
+        : ('no_reachable_adjacent_cell' as const)
+      : undefined;
   const reach: CombatEntryReach | undefined = approach
     ? {
         inReach: approach.inReach,
         distanceFeet: approach.resultingDistanceFeet,
         movedFeetIfApproached: approach.costFeet,
+        path: approach.path,
+        ...(refusalReason ? { refusalReason } : {}),
       }
     : undefined;
 
   if (approach && !approach.inReach) {
     const targetDistance = approach.resultingDistanceFeet;
     const moved = approach.costFeet;
+    const reasonText =
+      refusalReason === 'movement_exhausted'
+        ? 'movement ran out before you reached the required distance'
+        : 'no reachable adjacent cell was available';
     return {
       type: 'move',
       actor: playerParticipant.id,
@@ -350,7 +367,10 @@ export async function deriveCombatEntryFirstAction(
       spellId: null,
       slotLevel: null,
       reach,
-      notice: `You close ${moved} ft. ${targetLabel} is still ${targetDistance} ft away. Your turn is spent.`,
+      notice:
+        moved > 0
+          ? `You close ${moved} ft. ${targetLabel} is still ${targetDistance} ft away because ${reasonText}. Your turn is spent.`
+          : `You could not move closer to ${targetLabel}; it is still ${targetDistance} ft away because ${reasonText}. Your turn is spent.`,
       combat_action: {
         actor_id: playerParticipant.id,
         action_type: 'move',

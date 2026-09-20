@@ -8,6 +8,7 @@ import {
 } from './intent-schema.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
+import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import {
   executeCombatIntent,
@@ -65,7 +66,8 @@ export const intentRoutes = new Elysia()
   )
   .post(
     '/:encounterId/intent',
-    async ({ request, params, body, set }) => {
+    async (context) => {
+      const { request, params, body, set } = context;
       const { user, error } = await authenticateRequest(request);
       if (error || !user) {
         set.status = 401;
@@ -90,8 +92,22 @@ export const intentRoutes = new Elysia()
       }
       // --- Bad payload: 422 naming the variant that refused it, before any work happens. ---
       if (!combatIntentRequestValidator?.Check(payload)) {
+        const rejection = describeIntentRejection(payload);
+        const contextRequestId = (context as { requestId?: unknown }).requestId;
+        const requestId =
+          typeof contextRequestId === 'string'
+            ? contextRequestId
+            : request.headers.get('x-request-id') || 'unknown';
+        logger.warn(
+          {
+            requestId,
+            field: rejection.missing[0] ?? (rejection.variant ? 'intent' : 'intent.type'),
+            reason: rejection.detail,
+          },
+          'COMBAT_INTENT_SCHEMA_REJECTED',
+        );
         set.status = 422;
-        return describeIntentRejection(payload);
+        return rejection;
       }
       try {
         // A proposal claims nothing and resolves nothing: it answers what the attack would be

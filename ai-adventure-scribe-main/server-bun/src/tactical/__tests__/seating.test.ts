@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'bun:test';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { seatEntityWithinReach } from '../seating.js';
 
-const map = {
+const makeMap = () => ({
   id: 'map-1',
   sessionId: 'session-1',
   width: 8,
@@ -37,10 +37,16 @@ const map = {
       size: 'medium' as const,
       type: 'monster' as const,
       speedFeet: 30,
-      movementRemaining: 0,
+      movementRemaining: 30,
     },
   ],
-};
+});
+
+let map = makeMap();
+
+beforeEach(() => {
+  map = makeMap();
+});
 
 describe('seatEntityWithinReach', () => {
   it('seats a conversational target at five feet or less', () => {
@@ -52,7 +58,7 @@ describe('seatEntityWithinReach', () => {
     expect(
       Math.max(Math.abs(player.x - target.x), Math.abs(player.y - target.y)) * 5,
     ).toBeLessThanOrEqual(5);
-    expect(target.movementRemaining).toBe(30);
+    expect(target.movementRemaining).toBe(10);
   });
 
   it('returns no placement when every candidate cell is blocked', () => {
@@ -62,5 +68,29 @@ describe('seatEntityWithinReach', () => {
     };
 
     expect(seatEntityWithinReach(blockedMap, 'target', 'player')).toBeNull();
+  });
+
+  it('debits a full thirty-foot entry seating approach', () => {
+    const entryMap = {
+      ...map,
+      width: 10,
+      cells: map.cells.map((row) => [
+        ...row,
+        ...Array.from({ length: 2 }, () => ({
+          terrain: 'floor' as const,
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0 as const,
+          elevation: 0,
+        })),
+      ]),
+      entities: map.entities.map((entity) =>
+        entity.id === 'target' ? { ...entity, x: 8, movementRemaining: 30 } : entity,
+      ),
+    };
+
+    seatEntityWithinReach(entryMap, 'target', 'player');
+
+    expect(entryMap.entities.find((entity) => entity.id === 'target')?.movementRemaining).toBe(0);
   });
 });

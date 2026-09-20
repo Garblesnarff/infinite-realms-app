@@ -1,4 +1,4 @@
-import { canOccupy, getDistance } from './engine.js';
+import { canOccupy, findPath, getDistance } from './engine.js';
 
 import type { MapEntity, TacticalMap } from './types.js';
 
@@ -44,8 +44,9 @@ export function seatEntityWithinReach(
   )[0];
   if (!best) return null;
 
+  const pathCostFeet = findPath(map, target.id, best.x, best.y)?.costFeet ?? 0;
   target.x = best.x;
   target.y = best.y;
-  target.movementRemaining = target.speedFeet;
+  target.movementRemaining = Math.max(0, target.movementRemaining - pathCostFeet);
   return { distanceFeet: best.distanceFeet };
 }

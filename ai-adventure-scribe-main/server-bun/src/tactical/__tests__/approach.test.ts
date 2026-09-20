@@ -68,6 +68,20 @@ describe('planApproach', () => {
     expect(plan.costFeet).toBe(20);
   });
 
+  test('a target 10ft away is reached by the one-step adjacent cell', () => {
+    const map = board([entity('roach', 5, 5, 'monster'), entity('seeker', 7, 5, 'pc')]);
+    const plan = planApproach(map, 'roach', 'seeker', 5)!;
+
+    expect(plan).toMatchObject({
+      costFeet: 5,
+      resultingDistanceFeet: 5,
+      inReach: true,
+    });
+    expect(plan.destination).not.toEqual({ x: 5, y: 5 });
+    expect(plan.path).toHaveLength(2);
+    expect(getDistance({ ...map.entities[0], ...plan.destination }, map.entities[1])).toBe(5);
+  });
+
   test('an unreachable target still produces the closest cell the actor can afford', () => {
     // 60ft apart with 30ft of speed: the roach cannot arrive, but it must not stand still.
     const map = board([entity('roach', 2, 2, 'monster'), entity('seeker', 14, 2, 'pc')]);
@@ -78,6 +92,7 @@ describe('planApproach', () => {
     expect(plan.costFeet).toBe(30);
     expect(plan.resultingDistanceFeet).toBe(30);
     expect(plan.destination).not.toEqual({ x: 2, y: 2 });
+    expect(plan.pathCostFeet).toBe(55);
   });
 
   test('the plan paths around a wall rather than through it', () => {
@@ -96,6 +111,19 @@ describe('planApproach', () => {
       true,
     );
     expect(map.cells[plan.destination.y][plan.destination.x].blocksMovement).toBe(false);
+  });
+
+  test('reports the full route cost and direct wall that blocks the cheapest approach', () => {
+    const map = board([entity('roach', 1, 1, 'monster'), entity('seeker', 8, 8, 'pc')], [[5, 5]]);
+
+    expect(planApproach(map, 'roach', 'seeker', 5)).toMatchObject({
+      costFeet: 30,
+      pathCostFeet: 35,
+      blockingCell: { x: 5, y: 5 },
+      blockingObstacle: 'wall',
+      resultingDistanceFeet: 10,
+      inReach: false,
+    });
   });
 
   test('reach beyond 5ft is honoured, so a polearm stops further out', () => {

@@ -77,6 +77,20 @@ describe('detectDeclaredAttack', () => {
     });
   });
 
+  it('keeps an approach target when the attack follows as a pronoun', () => {
+    expect(
+      detectDeclaredAttack('I move toward the Chiropteran Hulk and attack it with my sword', [
+        { name: 'Chiropteran Hulk' },
+        { name: 'The Veteran' },
+      ]),
+    ).toMatchObject({
+      verb: 'attack',
+      actorName: 'Chiropteran Hulk',
+      attackSource: 'weapon',
+      weaponName: 'sword',
+    });
+  });
+
   it('keeps a raw strike without a weapon word unarmed', () => {
     const attack = detectDeclaredAttack('I strike him', soleActor);
 
