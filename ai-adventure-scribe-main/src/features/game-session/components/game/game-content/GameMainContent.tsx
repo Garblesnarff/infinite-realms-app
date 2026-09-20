@@ -13,6 +13,7 @@ import { StatsBar } from '../StatsBar';
 import { TimelineRail } from '../TimelineRail';
 
 import type { SpellCastHandlerRef } from '../spell-cast-handler';
+import type { CombatTurnPreflightStatus } from '@/hooks/ai/combat-turn-preflight';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import { CombatStatus } from '@/components/combat/CombatStatus';
@@ -194,7 +195,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               onAIResponse={innerHandleAIResponse}
               spellCastHandlerRef={spellCastHandlerRef}
             >
-              {({ handleSendMessage, isProcessing }) => (
+              {({ handleSendMessage, isProcessing, combatTurnUiState, onResumeTurn }) => (
                 <>
                   <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
                     <MessageList
@@ -276,6 +277,36 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     </div>
                   )}
 
+                  {(['unknown', 'failed', 'running'] as CombatTurnPreflightStatus[]).includes(
+                    combatTurnUiState.preflight,
+                  ) && (
+                    <div
+                      className="border-t border-amber-200 bg-amber-50 p-3"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div className="flex items-center justify-between gap-3 text-amber-800">
+                        <span className="text-sm font-medium">
+                          {combatTurnUiState.preflight === 'running'
+                            ? 'Checking whose turn it is…'
+                            : combatTurnUiState.preflight === 'failed'
+                              ? `Combat turn refresh failed: ${combatTurnUiState.error ?? 'Unknown error.'}`
+                              : 'Combat turn state needs to be refreshed.'}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          aria-label="Resume turn"
+                          onClick={() => void onResumeTurn()}
+                          disabled={combatTurnUiState.preflight === 'running'}
+                        >
+                          {combatTurnUiState.preflight === 'running' ? 'Resuming…' : 'Resume turn'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Input Area at bottom - sticky */}
                   <div
                     className="border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)] sticky bottom-0 left-0 right-0 shrink-0"
@@ -283,7 +314,13 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   >
                     <ChatInput
                       onSendMessage={handleSendMessage}
-                      isDisabled={isProcessing || hasPendingRolls}
+                      isDisabled={
+                        isProcessing ||
+                        hasPendingRolls ||
+                        combatTurnUiState.preflight === 'unknown' ||
+                        combatTurnUiState.preflight === 'failed' ||
+                        combatTurnUiState.preflight === 'running'
+                      }
                     />
                   </div>
                 </>

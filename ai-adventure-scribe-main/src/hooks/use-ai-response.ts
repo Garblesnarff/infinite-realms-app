@@ -1,5 +1,5 @@
 // External/SDK Imports
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest, LocalNotice } from '@/hooks/ai/types';
@@ -16,8 +16,13 @@ import { fetchGameContext, buildAIContext } from '@/hooks/ai/ai-utils';
 import {
   COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
   NPC_FIRST_ADVANCE_FAILED_NOTICE,
+  combatTurnErrorMessage,
+  combatTurnUiStateForEncounter,
+  INITIAL_COMBAT_TURN_UI_STATE,
   preflightErrorStatus,
   preflightNpcTurnsBeforePlayerDeclaration,
+  reconcileCombatTurnAfterAction,
+  type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
@@ -104,13 +109,49 @@ export const useAIResponse = (): {
     turnCount?: number,
     onTurnPhase?: TurnPhaseReporter,
   ) => Promise<EnhancedChatMessage>;
+  combatTurnUiState: CombatTurnUiState;
+  resumeCombatTurn: () => Promise<void>;
 } => {
   const { setGamePhase, state: gameState } = useGame();
   const { refreshCombatState } = useCombat();
   const { user, userPlan } = useAuth();
+  const [combatTurnUiState, setCombatTurnUiState] = useState<CombatTurnUiState>(
+    INITIAL_COMBAT_TURN_UI_STATE,
+  );
   const lastSigRef = useRef<string>('');
+  const lastCombatSessionIdRef = useRef<string>('');
+  const lastCombatCharacterIdRef = useRef<string>('');
+  const lastCombatEncounterRef = useRef<Awaited<ReturnType<typeof refreshCombatState>>>();
   // Track processed roll request signatures to prevent infinite re-parsing loops
   const processedRollRequestsRef = useRef<Set<string>>(new Set());
+
+  const resumeCombatTurn = useCallback(async (): Promise<void> => {
+    const sessionId = lastCombatSessionIdRef.current;
+    if (!sessionId) return;
+
+    setCombatTurnUiState((previous) => ({ ...previous, preflight: 'running', error: undefined }));
+    try {
+      const reconciliation = await reconcileCombatTurnAfterAction({
+        sessionId,
+        activeEncounter: lastCombatEncounterRef.current,
+        characterId: lastCombatCharacterIdRef.current,
+        refreshCombatState,
+      });
+      lastCombatEncounterRef.current = reconciliation.activeEncounter;
+      setCombatTurnUiState(reconciliation.uiState);
+    } catch (error) {
+      logger.warn('COMBAT_TURN_RESUME_FAILED', {
+        sessionId,
+        encounterId: lastCombatEncounterRef.current?.id ?? null,
+        status: preflightErrorStatus(error),
+      });
+      setCombatTurnUiState((previous) => ({
+        ...previous,
+        preflight: 'failed',
+        error: combatTurnErrorMessage(error),
+      }));
+    }
+  }, [refreshCombatState]);
 
   /**
    * Calls the DM Agent to generate a response based on chat history and game context.
@@ -130,6 +171,7 @@ export const useAIResponse = (): {
         logger.info('Getting AI response for session:', sessionId);
 
         const latestMessage = messages[messages.length - 1];
+        lastCombatSessionIdRef.current = sessionId;
 
         // Guard against repeated message processing
         const sig = `${sessionId}|${latestMessage.text}|${messages.length}`;
@@ -185,18 +227,30 @@ export const useAIResponse = (): {
           throw new Error('Failed to fetch game context');
         }
 
+        const characterRecord = gameContext.character as Record<string, unknown>;
+        const characterId = String(characterRecord.id || '');
+        lastCombatCharacterIdRef.current = characterId;
+        lastCombatEncounterRef.current = activeEncounter;
+        setCombatTurnUiState(
+          combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId, 'running'),
+        );
+
         let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
         if (isInCombat && !isDiceRollMessage) {
           try {
             const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
               sessionId,
               activeEncounter,
-              characterId: String((gameContext.character as Record<string, unknown>).id || ''),
+              characterId,
               refreshCombatState,
             });
-            activeEncounter = preflight.activeEncounter;
+            activeEncounter = preflight.activeEncounter as typeof activeEncounter;
             isInCombat = preflight.isInCombat;
             preflightNpcTurns = preflight.npcTurns;
+            lastCombatEncounterRef.current = activeEncounter;
+            setCombatTurnUiState(
+              combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+            );
           } catch (error) {
             logger.warn(COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED, {
               sessionId,
@@ -206,6 +260,9 @@ export const useAIResponse = (): {
             // A failed pre-flight cannot safely send the declaration to the DM. Clear the
             // duplicate guard so the player can retry the same message after the NPC batch settles.
             lastSigRef.current = '';
+            setCombatTurnUiState(
+              combatTurnUiStateForEncounter(activeEncounter, true, characterId, 'unknown'),
+            );
             return {
               text: '',
               sender: 'dm',
@@ -242,7 +299,6 @@ export const useAIResponse = (): {
         }));
 
         // Create AI context with combat awareness
-        const characterRecord = gameContext.character as Record<string, unknown>;
         const aiContext = buildAIContext({
           sessionId,
           userId: user?.id,
@@ -327,6 +383,27 @@ export const useAIResponse = (): {
         activeEncounter = dmActionsResult.activeEncounter;
         const localNotice = dmActionsResult.localNotice;
         const localNotices = dmActionsResult.localNotices;
+
+        // Combat resolution and the autonomous NPC loop advance the server outside the browser
+        // reducer. Re-read that truth before returning control to the UI so a player handoff is
+        // reflected in both the composer and the action panel in the same turn.
+        if (sessionId && isInCombat) {
+          const reconciliation = await reconcileCombatTurnAfterAction({
+            sessionId,
+            activeEncounter,
+            characterId,
+            refreshCombatState,
+          });
+          activeEncounter = reconciliation.activeEncounter as typeof activeEncounter;
+          isInCombat = reconciliation.isInCombat;
+          lastCombatEncounterRef.current = activeEncounter;
+          setCombatTurnUiState(reconciliation.uiState);
+        } else {
+          lastCombatEncounterRef.current = activeEncounter;
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+          );
+        }
 
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
@@ -446,5 +523,5 @@ export const useAIResponse = (): {
     ],
   );
 
-  return { getAIResponse };
+  return { getAIResponse, combatTurnUiState, resumeCombatTurn };
 };

@@ -4,6 +4,7 @@ import { useMessageHandlerLogic } from './use-message-handler-logic';
 
 import type { MessageSendContext } from '../../chat/MessageList';
 import type { SpellCastHandlerRef } from '../spell-cast-handler';
+import type { CombatTurnUiState } from '@/hooks/ai/combat-turn-preflight';
 import type { ChatMessage } from '@/types/game';
 import type React from 'react';
 
@@ -19,11 +20,14 @@ interface MessageHandlerProps {
   children: (props: {
     handleSendMessage: (message: string, context?: MessageSendContext) => Promise<void>;
     isProcessing: boolean;
+    combatTurnUiState: CombatTurnUiState;
+    onResumeTurn: () => Promise<void>;
   }) => React.ReactNode;
 }
 
 export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
-  const { handleSendMessage, isProcessing } = useMessageHandlerLogic(props);
+  const { handleSendMessage, isProcessing, combatTurnUiState, resumeCombatTurn } =
+    useMessageHandlerLogic(props);
 
   useEffect(() => {
     if (!props.spellCastHandlerRef) return;
@@ -39,5 +43,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
   return props.children({
     handleSendMessage,
     isProcessing,
+    combatTurnUiState,
+    onResumeTurn: resumeCombatTurn,
   });
 };

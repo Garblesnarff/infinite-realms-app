@@ -11,7 +11,7 @@ type CombatParticipant = {
   participantType?: string;
 };
 
-type ActiveEncounter = {
+export type ActiveEncounter = {
   id?: string;
   phase?: string;
   currentTurnParticipantId?: string | null;
@@ -42,6 +42,21 @@ export type CombatTurnPreflightResult = {
   npcTurns?: AdvanceNpcTurnsResponse;
 };
 
+export type CombatTurnPreflightStatus = 'idle' | 'running' | 'ready' | 'unknown' | 'failed';
+
+export type CombatTurnUiState = {
+  holder: string | null;
+  pendingIntent: string | null;
+  preflight: CombatTurnPreflightStatus;
+  error?: string;
+};
+
+export const INITIAL_COMBAT_TURN_UI_STATE: CombatTurnUiState = {
+  holder: null,
+  pendingIntent: null,
+  preflight: 'idle',
+};
+
 function playerParticipantForCharacter(
   encounter: ActiveEncounter | null | undefined,
   characterId?: string,
@@ -65,6 +80,53 @@ function isPlayerTurn(
     player &&
     (participantId === player.id || slugify(player.name ?? '') === participantId),
   );
+}
+
+export function combatTurnUiStateForEncounter(
+  encounter: ActiveEncounter | null | undefined,
+  isInCombat: boolean,
+  characterId?: string,
+  preflight?: CombatTurnPreflightStatus,
+): CombatTurnUiState {
+  const player = playerParticipantForCharacter(encounter, characterId);
+  const holder = encounter?.currentTurnParticipantId ?? null;
+  const defaultPreflight: CombatTurnPreflightStatus = !isInCombat
+    ? 'idle'
+    : holder && player && isPlayerTurn(holder, player)
+      ? 'ready'
+      : 'unknown';
+
+  return {
+    holder,
+    pendingIntent: encounter?.pendingIntent?.actorId ?? null,
+    preflight: preflight ?? defaultPreflight,
+  };
+}
+
+export function logCombatTurnUiState(state: CombatTurnUiState & { isSending: boolean }): void {
+  logger.info('TURN_UI_STATE', {
+    holder: state.holder,
+    isSending: state.isSending,
+    pendingIntent: state.pendingIntent,
+    preflight: state.preflight,
+  });
+}
+
+export function combatTurnErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : 'Unable to refresh the combat turn state.';
+}
+
+function failedCombatTurnUiState(
+  encounter: ActiveEncounter | null | undefined,
+  characterId: string | undefined,
+  error: unknown,
+): CombatTurnUiState {
+  return {
+    ...combatTurnUiStateForEncounter(encounter, true, characterId, 'failed'),
+    error: combatTurnErrorMessage(error),
+  };
 }
 
 function pendingIntentForEncounter(
@@ -156,4 +218,76 @@ export async function preflightNpcTurnsBeforePlayerDeclaration(params: {
     isInCombat: !npcTurns.combatEnded && refreshedEncounter?.phase === 'active',
     npcTurns,
   };
+}
+
+/**
+ * Reconcile browser combat state after a player action has been resolved and the NPC loop has run.
+ * The refresh is intentional even when the old render said it was the player's turn: resolution
+ * advances initiative outside the reducer, so the old encounter cannot decide whether the UI is
+ * ready for another declaration.
+ */
+export async function reconcileCombatTurnAfterAction<T extends ActiveEncounter>(params: {
+  sessionId: string;
+  activeEncounter: T | null | undefined;
+  characterId?: string;
+  refreshCombatState: () => Promise<T | null | undefined>;
+}): Promise<{
+  activeEncounter: T | null | undefined;
+  isInCombat: boolean;
+  uiState: CombatTurnUiState;
+}> {
+  const { sessionId, activeEncounter, characterId, refreshCombatState } = params;
+
+  let refreshedEncounter: T | null | undefined;
+  try {
+    refreshedEncounter = await refreshCombatState();
+  } catch (error) {
+    logger.warn('COMBAT_TURN_POST_ACTION_REFRESH_FAILED', {
+      sessionId,
+      encounterId: activeEncounter?.id ?? null,
+      status: preflightErrorStatus(error),
+    });
+    return {
+      activeEncounter,
+      isInCombat: activeEncounter?.phase === 'active',
+      uiState: failedCombatTurnUiState(activeEncounter, characterId, error),
+    };
+  }
+
+  if (refreshedEncounter?.phase !== 'active') {
+    return {
+      activeEncounter: refreshedEncounter,
+      isInCombat: false,
+      uiState: combatTurnUiStateForEncounter(refreshedEncounter, false, characterId),
+    };
+  }
+
+  try {
+    const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
+      sessionId,
+      activeEncounter: refreshedEncounter,
+      characterId,
+      refreshCombatState,
+    });
+    return {
+      activeEncounter: preflight.activeEncounter as T | null | undefined,
+      isInCombat: preflight.isInCombat,
+      uiState: combatTurnUiStateForEncounter(
+        preflight.activeEncounter,
+        preflight.isInCombat,
+        characterId,
+      ),
+    };
+  } catch (error) {
+    logger.warn('COMBAT_TURN_POST_ACTION_PREFLIGHT_FAILED', {
+      sessionId,
+      encounterId: refreshedEncounter.id ?? null,
+      status: preflightErrorStatus(error),
+    });
+    return {
+      activeEncounter: refreshedEncounter,
+      isInCombat: true,
+      uiState: failedCombatTurnUiState(refreshedEncounter, characterId, error),
+    };
+  }
 }

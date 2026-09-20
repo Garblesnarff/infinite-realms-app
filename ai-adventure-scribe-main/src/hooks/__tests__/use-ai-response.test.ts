@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAIResponse } from '../use-ai-response';
@@ -447,18 +447,90 @@ describe('useAIResponse', () => {
     );
 
     const { result } = renderHook(() => useAIResponse());
-    const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+    await act(async () => {
+      const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
 
-    expect(response.text).toBe('');
-    expect(response.localNotice).toBe(
-      'The other combatants are still acting — try again in a moment.',
-    );
+      expect(response.text).toBe('');
+      expect(response.localNotice).toBe(
+        'The other combatants are still acting — try again in a moment.',
+      );
+    });
     expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    expect(result.current.combatTurnUiState).toMatchObject({
+      holder: 'npc-1',
+      preflight: 'unknown',
+    });
     expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED', {
       sessionId: mockSessionId,
       encounterId: 'encounter-1',
       status: 503,
     });
+  });
+
+  it('runs resumeCombatTurn after a preflight catch transitions the UI back to ready', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { useCombat } = await import('@/contexts/CombatContext');
+
+    const npcEncounter = {
+      id: 'encounter-1',
+      phase: 'active',
+      currentTurnParticipantId: 'npc-1',
+      participants: [
+        { id: 'player-1', characterId: 'char-1', name: 'The Player', participantType: 'player' },
+        { id: 'npc-1', name: 'The Professor', participantType: 'npc' },
+      ],
+    };
+    const playerEncounter = { ...npcEncounter, currentTurnParticipantId: 'player-1' };
+    let resolveResumeRefresh: ((encounter: typeof playerEncounter) => void) | undefined;
+    const refreshCombatState = vi
+      .fn()
+      .mockResolvedValueOnce(npcEncounter)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveResumeRefresh = resolve;
+          }),
+      );
+
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter: npcEncounter },
+      refreshCombatState,
+    } as any);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'campaign-1',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValueOnce(
+      Object.assign(new Error('runner unavailable'), { status: 503 }),
+    );
+
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await result.current.getAIResponse(mockMessages as any, mockSessionId);
+    });
+
+    expect(result.current.combatTurnUiState).toMatchObject({
+      holder: 'npc-1',
+      preflight: 'unknown',
+    });
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+
+    const resumePromise = result.current.resumeCombatTurn();
+    await waitFor(() => expect(result.current.combatTurnUiState.preflight).toBe('running'));
+    resolveResumeRefresh?.(playerEncounter);
+    await act(async () => {
+      await resumePromise;
+    });
+
+    expect(result.current.combatTurnUiState).toEqual({
+      holder: 'player-1',
+      pendingIntent: null,
+      preflight: 'ready',
+    });
+    expect(refreshCombatState).toHaveBeenCalledTimes(2);
   });
 
   /**

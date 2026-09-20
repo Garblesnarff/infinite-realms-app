@@ -9,6 +9,13 @@ const state = vi.hoisted(() => ({
   hasPendingRolls: false,
   pendingRequests: [] as Array<{ type: string }>,
   lastChapterLabel: undefined as string | undefined,
+  combatTurnUiState: {
+    holder: null as string | null,
+    pendingIntent: null as string | null,
+    preflight: 'idle' as 'idle' | 'running' | 'ready' | 'unknown' | 'failed',
+    error: undefined as string | undefined,
+  },
+  resumeCombatTurn: vi.fn(),
 }));
 
 vi.mock('@/contexts/MessageContext', () => ({
@@ -89,8 +96,16 @@ vi.mock('../message/MessageHandler', () => ({
     children: (args: {
       handleSendMessage: typeof sendMessage;
       isProcessing: boolean;
+      combatTurnUiState: typeof state.combatTurnUiState;
+      onResumeTurn: typeof state.resumeCombatTurn;
     }) => React.ReactNode;
-  }) => children({ handleSendMessage: sendMessage, isProcessing: false }),
+  }) =>
+    children({
+      handleSendMessage: sendMessage,
+      isProcessing: false,
+      combatTurnUiState: state.combatTurnUiState,
+      onResumeTurn: state.resumeCombatTurn,
+    }),
 }));
 
 const baseProps = {
@@ -125,6 +140,13 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.hasPendingRolls = false;
     state.pendingRequests = [];
     state.lastChapterLabel = undefined;
+    state.combatTurnUiState = {
+      holder: null,
+      pendingIntent: null,
+      preflight: 'idle',
+      error: undefined,
+    };
+    state.resumeCombatTurn.mockClear();
     sendMessage.mockClear();
   });
 
@@ -156,6 +178,54 @@ describe('GameMainContent overhaul behavior contract', () => {
     render(<GameMainContent {...baseProps} />);
 
     expect(screen.getByText('Please complete the saving throw roll above')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('enables the composer after a move-only action and the NPC turn hand back to the player', () => {
+    state.combatTurnUiState = {
+      holder: 'player-1',
+      pendingIntent: null,
+      preflight: 'ready',
+      error: undefined,
+    };
+
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+
+    expect(screen.getByTestId('chat-input')).not.toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Resume turn' })).toBeNull();
+  });
+
+  it('shows Resume turn for an unknown holder and reruns the recovery preflight', () => {
+    state.combatTurnUiState = {
+      holder: null,
+      pendingIntent: null,
+      preflight: 'unknown',
+      error: undefined,
+    };
+
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+
+    const resumeButton = screen.getByRole('button', { name: 'Resume turn' });
+    expect(resumeButton).toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
+
+    fireEvent.click(resumeButton);
+    expect(state.resumeCombatTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the reconciliation error when combat turn recovery fails', () => {
+    state.combatTurnUiState = {
+      holder: 'npc-1',
+      pendingIntent: null,
+      preflight: 'failed',
+      error: 'NPC turn runner unavailable',
+    };
+
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Combat turn refresh failed: NPC turn runner unavailable',
+    );
     expect(screen.getByTestId('chat-input')).toBeDisabled();
   });
 

@@ -12,6 +12,11 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
+import {
+  INITIAL_COMBAT_TURN_UI_STATE,
+  logCombatTurnUiState,
+  type CombatTurnUiState,
+} from '@/hooks/ai/combat-turn-preflight';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -68,10 +73,16 @@ export const useMessageHandlerLogic = ({
 }: UseMessageHandlerLogicProps): {
   handleSendMessage: (playerInput: string, context?: MessageSendContext) => Promise<void>;
   isProcessing: boolean;
+  combatTurnUiState: CombatTurnUiState;
+  resumeCombatTurn: () => Promise<void>;
 } => {
   const { messages, sendMessage, queueStatus } = useMessageContext();
   const { extractMemories } = useMemoryContext();
-  const { getAIResponse } = useAIResponse();
+  const {
+    getAIResponse,
+    combatTurnUiState = INITIAL_COMBAT_TURN_UI_STATE,
+    resumeCombatTurn = async () => {},
+  } = useAIResponse();
   const { processAiResponse } = useGame();
   const { toast } = useToast();
   const { state: characterState } = useCharacter();
@@ -412,8 +423,14 @@ export const useMessageHandlerLogic = ({
   // Synchronous assignment (not useEffect) ensures it's updated before any render-triggered call.
   actualSendMessageRef.current = actualSendMessage;
 
+  React.useEffect(() => {
+    logCombatTurnUiState({ ...combatTurnUiState, isSending });
+  }, [combatTurnUiState, isSending]);
+
   return {
     handleSendMessage,
     isProcessing: queueStatus === 'processing' || isSending,
+    combatTurnUiState,
+    resumeCombatTurn,
   };
 };

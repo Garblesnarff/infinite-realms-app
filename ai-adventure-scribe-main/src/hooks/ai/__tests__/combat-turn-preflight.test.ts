@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { preflightNpcTurnsBeforePlayerDeclaration } from '../combat-turn-preflight';
+import {
+  preflightNpcTurnsBeforePlayerDeclaration,
+  reconcileCombatTurnAfterAction,
+} from '../combat-turn-preflight';
 
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -118,6 +121,102 @@ describe('combat player-turn pre-flight', () => {
       sessionId: 'session-1',
       encounterId: 'encounter-1',
       actorId: 'player-1',
+    });
+  });
+
+  it('reconciles a move-only action followed by an NPC hit back to an enabled player turn', async () => {
+    const refreshCombatState = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN)
+      .mockResolvedValueOnce(PLAYER_TURN);
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValueOnce({
+      results: [
+        {
+          action: {
+            actor_id: 'npc-1',
+            action_type: 'attack',
+            target_ids: ['player-1'],
+            weapon_id: 'claw',
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+          outcomes: [{ finalDamage: 5, hit: true }],
+          actorIsPlayer: false,
+          transcriptLines: ['Chiropteran Hulk HIT, 5 damage'],
+        },
+      ],
+      currentParticipant: { id: 'player-1', name: 'The Player', participantType: 'player' },
+      combatEnded: false,
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: ['Chiropteran Hulk HIT, 5 damage'],
+    });
+
+    const result = await reconcileCombatTurnAfterAction({
+      sessionId: 'session-1',
+      activeEncounter: PLAYER_TURN,
+      characterId: 'character-1',
+      refreshCombatState,
+    });
+
+    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-1', 'npc-1');
+    expect(refreshCombatState).toHaveBeenCalledTimes(2);
+    expect(result.uiState).toEqual({
+      holder: 'player-1',
+      pendingIntent: null,
+      preflight: 'ready',
+    });
+    expect(result.isInCombat).toBe(true);
+  });
+
+  it('marks a failed post-action refresh and preserves the error for the UI', async () => {
+    const refreshError = new Error('combat state refresh unavailable');
+    const refreshCombatState = vi.fn().mockRejectedValue(refreshError);
+
+    const result = await reconcileCombatTurnAfterAction({
+      sessionId: 'session-1',
+      activeEncounter: PLAYER_TURN,
+      characterId: 'character-1',
+      refreshCombatState,
+    });
+
+    expect(result.uiState).toEqual({
+      holder: 'player-1',
+      pendingIntent: null,
+      preflight: 'failed',
+      error: 'combat state refresh unavailable',
+    });
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_TURN_POST_ACTION_REFRESH_FAILED', {
+      sessionId: 'session-1',
+      encounterId: 'encounter-1',
+      status: null,
+    });
+  });
+
+  it('marks a failed NPC pre-flight and preserves the error for the UI', async () => {
+    const preflightError = new Error('NPC turn runner unavailable');
+    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValueOnce(preflightError);
+    const refreshCombatState = vi.fn().mockResolvedValue(NPC_TURN);
+
+    const result = await reconcileCombatTurnAfterAction({
+      sessionId: 'session-1',
+      activeEncounter: PLAYER_TURN,
+      characterId: 'character-1',
+      refreshCombatState,
+    });
+
+    expect(result.uiState).toEqual({
+      holder: 'npc-1',
+      pendingIntent: null,
+      preflight: 'failed',
+      error: 'NPC turn runner unavailable',
+    });
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_TURN_POST_ACTION_PREFLIGHT_FAILED', {
+      sessionId: 'session-1',
+      encounterId: 'encounter-1',
+      status: null,
     });
   });
 });
