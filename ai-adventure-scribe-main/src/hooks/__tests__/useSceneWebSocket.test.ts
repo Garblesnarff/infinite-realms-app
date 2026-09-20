@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   reportClientFailure: vi.fn(),
+  mintWsTicket: vi.fn(),
 }));
 
 import { useSceneWebSocket } from '../useSceneWebSocket';
@@ -27,6 +28,11 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: { reportClientFailure: mocks.reportClientFailure },
 }));
 
+vi.mock('@/services/ws-ticket-client', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, mintWsTicket: mocks.mintWsTicket };
+});
+
 import { useAuth } from '@/contexts/AuthContext';
 
 describe('useSceneWebSocket', () => {
@@ -42,6 +48,7 @@ describe('useSceneWebSocket', () => {
     vi.useFakeTimers();
 
     (useAuth as any).mockReturnValue({ session: mockSession });
+    mocks.mintWsTicket.mockResolvedValue('ws-ticket-1');
 
     mockWsInstance = {
       send: vi.fn(),
@@ -66,20 +73,32 @@ describe('useSceneWebSocket', () => {
     vi.useRealTimers();
   });
 
-  it('should initialize and connect on mount', () => {
-    renderHook(() => useSceneWebSocket({ sceneId }));
+  async function flushConnect(): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
 
-    expect(global.WebSocket).toHaveBeenCalledWith(
-      expect.stringContaining(`ws?token=${mockSession.access_token}&sessionId=scene:${sceneId}`),
-    );
+  it('should initialize and connect on mount', async () => {
+    renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
+
+    const wsUrl = vi.mocked(global.WebSocket).mock.calls[0][0] as string;
+    expect(mocks.mintWsTicket).toHaveBeenCalledWith({ sessionId: `scene:${sceneId}` });
+    expect(wsUrl).toContain('/ws?ticket=ws-ticket-1');
+    expect(wsUrl).toContain(`sessionId=${encodeURIComponent(`scene:${sceneId}`)}`);
+    expect(wsUrl).not.toMatch(/access_token/i);
+    expect(wsUrl).not.toMatch(/[?&]token=/i);
+    expect(wsUrl).not.toContain(mockSession.access_token);
     expect(mockWsInstance.onopen).toBeDefined();
     expect(mockWsInstance.onmessage).toBeDefined();
     expect(mockWsInstance.onerror).toBeDefined();
     expect(mockWsInstance.onclose).toBeDefined();
   });
 
-  it('should transition to connected state on open and send join message', () => {
+  it('should transition to connected state on open and send join message', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     expect(result.current.isConnected).toBe(false);
     expect(result.current.connectionState).toBe('connecting');
@@ -96,10 +115,11 @@ describe('useSceneWebSocket', () => {
     );
   });
 
-  it('should handle incoming messages', () => {
+  it('should handle incoming messages', async () => {
     const onMessage = vi.fn();
     const onTokenUpdate = vi.fn();
     renderHook(() => useSceneWebSocket({ sceneId, onMessage, onTokenUpdate }));
+    await flushConnect();
 
     const testMessage = { type: 'welcome', data: { message: 'hello' } };
     act(() => {
@@ -119,8 +139,9 @@ describe('useSceneWebSocket', () => {
     expect(onTokenUpdate).toHaveBeenCalledWith(tokenUpdateMessage.data);
   });
 
-  it('should send messages when connection is open', () => {
+  it('should send messages when connection is open', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -135,8 +156,9 @@ describe('useSceneWebSocket', () => {
     expect(mockWsInstance.send).toHaveBeenCalledWith(JSON.stringify(testMsg));
   });
 
-  it('should handle disconnection and auto-reconnect', () => {
+  it('should handle disconnection and auto-reconnect', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -156,14 +178,16 @@ describe('useSceneWebSocket', () => {
     act(() => {
       vi.advanceTimersByTime(3000);
     });
+    await flushConnect();
 
     // Second connection attempt
     expect(global.WebSocket).toHaveBeenCalledTimes(2);
     expect(result.current.connectionState).toBe('reconnecting');
   });
 
-  it('should not reconnect if maxReconnectAttempts is reached', () => {
+  it('should not reconnect if maxReconnectAttempts is reached', async () => {
     renderHook(() => useSceneWebSocket({ sceneId, maxReconnectAttempts: 1 }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onclose({ code: 1000 });
@@ -173,6 +197,7 @@ describe('useSceneWebSocket', () => {
     act(() => {
       vi.advanceTimersByTime(3000);
     });
+    await flushConnect();
     expect(global.WebSocket).toHaveBeenCalledTimes(2);
 
     act(() => {
@@ -183,11 +208,13 @@ describe('useSceneWebSocket', () => {
     act(() => {
       vi.advanceTimersByTime(3000);
     });
+    await flushConnect();
     expect(global.WebSocket).toHaveBeenCalledTimes(2);
   });
 
-  it('should handle manual disconnect', () => {
+  it('should handle manual disconnect', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -211,8 +238,9 @@ describe('useSceneWebSocket', () => {
     expect(global.WebSocket).toHaveBeenCalledTimes(1);
   });
 
-  it('should handle manual reconnect', () => {
+  it('should handle manual reconnect', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -228,12 +256,14 @@ describe('useSceneWebSocket', () => {
     act(() => {
       vi.advanceTimersByTime(100);
     });
+    await flushConnect();
 
     expect(global.WebSocket).toHaveBeenCalledTimes(2);
   });
 
-  it('should cleanup on unmount', () => {
+  it('should cleanup on unmount', async () => {
     const { unmount } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -245,8 +275,9 @@ describe('useSceneWebSocket', () => {
     expect(mockWsInstance.close).toHaveBeenCalled();
   });
 
-  it('should handle websocket error', () => {
+  it('should handle websocket error', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onerror(new Error('WS Error'));
@@ -255,8 +286,9 @@ describe('useSceneWebSocket', () => {
     expect(result.current.connectionState).toBe('error');
   });
 
-  it('should handle invalid JSON messages', () => {
+  it('should handle invalid JSON messages', async () => {
     renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onmessage({ data: 'invalid json' });
@@ -268,8 +300,9 @@ describe('useSceneWebSocket', () => {
     );
   });
 
-  it('should warn when sending message while disconnected', () => {
+  it('should warn when sending message while disconnected', async () => {
     const { result } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     act(() => {
       result.current.sendMessage({ type: 'welcome' });
@@ -288,8 +321,9 @@ describe('useSceneWebSocket', () => {
     expect(global.WebSocket).not.toHaveBeenCalled();
   });
 
-  it('should maintain referential stability of returned methods and state when connectionState does not change', () => {
+  it('should maintain referential stability of returned methods and state when connectionState does not change', async () => {
     const { result, rerender } = renderHook(() => useSceneWebSocket({ sceneId }));
+    await flushConnect();
 
     const firstReturn = result.current;
 

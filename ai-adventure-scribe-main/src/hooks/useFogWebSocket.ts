@@ -17,6 +17,7 @@ import {
   createMalformedPeerFrameReportState,
   reportMalformedPeerFrame,
 } from '@/services/websocket-observability';
+import { appendWsTicket, mintWsTicket } from '@/services/ws-ticket-client';
 
 /**
  * Fog WebSocket message types
@@ -209,38 +210,43 @@ export const useFogWebSocket = function (
         wsRef.current = null;
       }
 
-      try {
-        const wsUrl = `${url}?token=${encodeURIComponent(token)}`;
-        const ws = new WebSocket(wsUrl);
+      void (async () => {
+        try {
+          const ticket = await mintWsTicket({
+            sessionId: 'lobby',
+          });
+          const wsUrl = appendWsTicket(url, ticket);
+          const ws = new WebSocket(wsUrl);
 
-        ws.onopen = function onopen() {
-          logger.debug('WebSocket opened');
-        };
+          ws.onopen = function onopen() {
+            logger.debug('WebSocket opened');
+          };
 
-        ws.onmessage = handleMessage;
+          ws.onmessage = handleMessage;
 
-        ws.onerror = function onerror(error) {
-          logger.error('WebSocket error', { error });
-        };
+          ws.onerror = function onerror(error) {
+            logger.error('WebSocket error', { error });
+          };
 
-        ws.onclose = function onclose() {
-          logger.debug('WebSocket closed');
-          setIsConnected(false);
-          wsRef.current = null;
+          ws.onclose = function onclose() {
+            logger.debug('WebSocket closed');
+            setIsConnected(false);
+            wsRef.current = null;
 
-          // Attempt to reconnect after 3 seconds
-          if (autoConnect) {
-            reconnectTimeoutRef.current = setTimeout(function () {
-              logger.info('Attempting to reconnect WebSocket...');
-              connect();
-            }, 3000);
-          }
-        };
+            // Attempt to reconnect after 3 seconds
+            if (autoConnect) {
+              reconnectTimeoutRef.current = setTimeout(function () {
+                logger.info('Attempting to reconnect WebSocket...');
+                connect();
+              }, 3000);
+            }
+          };
 
-        wsRef.current = ws;
-      } catch (error) {
-        logger.error('Error creating WebSocket', { error });
-      }
+          wsRef.current = ws;
+        } catch (error) {
+          logger.error('Error creating WebSocket', { error });
+        }
+      })();
     },
     [url, token, autoConnect, handleMessage],
   );

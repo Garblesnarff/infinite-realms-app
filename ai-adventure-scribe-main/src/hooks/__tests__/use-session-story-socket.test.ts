@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { getAccessToken } from '@/services/auth/TokenService';
@@ -7,6 +7,7 @@ import { getAccessToken } from '@/services/auth/TokenService';
 const mocks = vi.hoisted(() => ({
   reportClientFailure: vi.fn(),
   warn: vi.fn(),
+  mintWsTicket: vi.fn(),
 }));
 
 vi.mock('@/services/auth/TokenService', () => ({
@@ -21,6 +22,11 @@ vi.mock('@/lib/logger', () => ({
   default: { warn: mocks.warn },
 }));
 
+vi.mock('@/services/ws-ticket-client', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, mintWsTicket: mocks.mintWsTicket };
+});
+
 describe('useSessionStorySocket', () => {
   const sessionId = 'test-session-123';
   const mockToken = 'mock-access-token';
@@ -31,6 +37,7 @@ describe('useSessionStorySocket', () => {
     vi.clearAllMocks();
     vi.resetModules();
     vi.mocked(getAccessToken).mockReturnValue(mockToken);
+    mocks.mintWsTicket.mockResolvedValue('ws-ticket-1');
 
     mockWsInstance = {
       send: vi.fn(),
@@ -62,34 +69,45 @@ describe('useSessionStorySocket', () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
     expect(global.WebSocket).not.toHaveBeenCalled();
+    expect(mocks.mintWsTicket).not.toHaveBeenCalled();
   });
 
-  it('should initialize WebSocket with correct parameters using ws protocol for http API URL', async () => {
+  it('should initialize WebSocket with a ticket and never put token in the URL', async () => {
     vi.stubEnv('VITE_API_URL', 'http://localhost:8888');
     const { useSessionStorySocket } = await import('../use-session-story-socket');
 
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
 
-    expect(global.WebSocket).toHaveBeenCalledWith(
-      `ws://localhost:8888/ws?token=${encodeURIComponent(mockToken)}&sessionId=${encodeURIComponent(sessionId)}`,
+    await waitFor(() => expect(global.WebSocket).toHaveBeenCalled());
+    const url = vi.mocked(global.WebSocket).mock.calls[0][0] as string;
+    expect(url).toBe(
+      `ws://localhost:8888/ws?ticket=ws-ticket-1&sessionId=${encodeURIComponent(sessionId)}`,
     );
+    expect(url).not.toMatch(/access_token/i);
+    expect(url).not.toMatch(/[?&]token=/i);
+    expect(url).not.toContain(mockToken);
   });
 
-  it('should initialize WebSocket with correct parameters using wss protocol for https API URL', async () => {
+  it('should initialize WebSocket with wss and a ticket for https API URL', async () => {
     vi.stubEnv('VITE_API_URL', 'https://api.infiniterealms.app');
     const { useSessionStorySocket } = await import('../use-session-story-socket');
 
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
 
-    expect(global.WebSocket).toHaveBeenCalledWith(
-      `wss://api.infiniterealms.app/ws?token=${encodeURIComponent(mockToken)}&sessionId=${encodeURIComponent(sessionId)}`,
+    await waitFor(() => expect(global.WebSocket).toHaveBeenCalled());
+    const url = vi.mocked(global.WebSocket).mock.calls[0][0] as string;
+    expect(url).toBe(
+      `wss://api.infiniterealms.app/ws?ticket=ws-ticket-1&sessionId=${encodeURIComponent(sessionId)}`,
     );
+    expect(url).not.toMatch(/access_token/i);
+    expect(url).not.toMatch(/[?&]token=/i);
   });
 
   it('should execute onRemoteMessage callback when a chat message is received', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     const onRemoteMessage = vi.fn();
     renderHook(() => useSessionStorySocket(sessionId, onRemoteMessage));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
 
     act(() => {
       mockWsInstance.onmessage({ data: JSON.stringify({ type: 'chat', text: 'hello' }) });
@@ -101,6 +119,7 @@ describe('useSessionStorySocket', () => {
   it('should dispatch tactical-map-delta custom event when tactical map messages are received', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
 
     const tacticalTypes = [
       'map_created',
@@ -137,6 +156,7 @@ describe('useSessionStorySocket', () => {
   it('should dispatch campaign-journal-updated custom event when handout messages are received', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
 
     const handoutTypes = ['handout_delivered', 'handout_degraded'];
 
@@ -161,6 +181,7 @@ describe('useSessionStorySocket', () => {
   it('should dispatch combat-state-updated and map_created events on combat_state_updated with tacticalMap', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
 
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     const payload = {
@@ -195,6 +216,7 @@ describe('useSessionStorySocket', () => {
   it('should dispatch only combat-state-updated when combat_state_updated is received without tacticalMap', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
 
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     const payload = {
@@ -220,6 +242,7 @@ describe('useSessionStorySocket', () => {
   it('should handle and ignore malformed JSON message frames without throwing', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(mockWsInstance.onmessage).toBeTruthy());
 
     expect(() => {
       act(() => {
@@ -238,6 +261,7 @@ describe('useSessionStorySocket', () => {
   it('should return a function to send chat messages and send if socket is open', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     const { result } = renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(global.WebSocket).toHaveBeenCalled());
 
     // Before OPEN state
     mockWsInstance.readyState = 0; // CONNECTING
@@ -259,6 +283,7 @@ describe('useSessionStorySocket', () => {
   it('should close WebSocket connection on unmount', async () => {
     const { useSessionStorySocket } = await import('../use-session-story-socket');
     const { unmount } = renderHook(() => useSessionStorySocket(sessionId, () => {}));
+    await waitFor(() => expect(global.WebSocket).toHaveBeenCalled());
 
     unmount();
 

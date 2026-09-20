@@ -21,6 +21,7 @@ import {
   createMalformedPeerFrameReportState,
   reportMalformedPeerFrame,
 } from '@/services/websocket-observability';
+import { appendWsTicket, mintWsTicket } from '@/services/ws-ticket-client';
 
 // WebSocket message types matching server
 export type WebSocketMessageType =
@@ -161,65 +162,71 @@ export function useSceneWebSocket(options: UseSceneWebSocketOptions): UseSceneWe
     const isReconnect = reconnectAttemptsRef.current > 0;
     setConnectionState(isReconnect ? 'reconnecting' : 'connecting');
 
-    // Determine WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = import.meta.env.VITE_WS_URL || window.location.host;
-    const wsUrl = `${protocol}//${host}/ws?token=${session.access_token}&sessionId=scene:${sceneId}`;
+    const roomId = `scene:${sceneId}`;
 
-    logger.info('[WebSocket] Connecting to scene', {
-      sceneId,
-      url: wsUrl.replace(session.access_token, '***'),
-    });
+    void (async () => {
+      try {
+        const ticket = await mintWsTicket({ sessionId: roomId });
+        const wsUrl = appendWsTicket(`${protocol}//${host}/ws`, ticket, roomId);
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+        logger.info('[WebSocket] Connecting to scene', { sceneId });
 
-    ws.onopen = () => {
-      logger.info('[WebSocket] Connected to scene', { sceneId });
-      setConnectionState('connected');
-      reconnectAttemptsRef.current = 0;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-      // Join the scene room
-      sendMessage({
-        type: 'scene:join',
-        sceneId,
-      });
-    };
+        ws.onopen = () => {
+          logger.info('[WebSocket] Connected to scene', { sceneId });
+          setConnectionState('connected');
+          reconnectAttemptsRef.current = 0;
 
-    ws.onmessage = handleMessage;
+          // Join the scene room
+          sendMessage({
+            type: 'scene:join',
+            sceneId,
+          });
+        };
 
-    ws.onerror = (error) => {
-      logger.error('[WebSocket] Error', { error, sceneId });
-      setConnectionState('error');
-    };
+        ws.onmessage = handleMessage;
 
-    ws.onclose = (event) => {
-      logger.info('[WebSocket] Disconnected', {
-        sceneId,
-        code: event.code,
-        reason: event.reason,
-      });
-      wsRef.current = null;
-      setConnectionState('disconnected');
+        ws.onerror = (error) => {
+          logger.error('[WebSocket] Error', { error, sceneId });
+          setConnectionState('error');
+        };
 
-      // Auto-reconnect if enabled and not manually disconnected
-      if (
-        autoReconnect &&
-        !isManualDisconnectRef.current &&
-        (maxReconnectAttempts === 0 || reconnectAttemptsRef.current < maxReconnectAttempts)
-      ) {
-        reconnectAttemptsRef.current += 1;
-        logger.info('[WebSocket] Reconnecting', {
-          sceneId,
-          attempt: reconnectAttemptsRef.current,
-          maxAttempts: maxReconnectAttempts || 'unlimited',
-        });
+        ws.onclose = (event) => {
+          logger.info('[WebSocket] Disconnected', {
+            sceneId,
+            code: event.code,
+            reason: event.reason,
+          });
+          wsRef.current = null;
+          setConnectionState('disconnected');
 
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, reconnectDelay);
+          // Auto-reconnect if enabled and not manually disconnected
+          if (
+            autoReconnect &&
+            !isManualDisconnectRef.current &&
+            (maxReconnectAttempts === 0 || reconnectAttemptsRef.current < maxReconnectAttempts)
+          ) {
+            reconnectAttemptsRef.current += 1;
+            logger.info('[WebSocket] Reconnecting', {
+              sceneId,
+              attempt: reconnectAttemptsRef.current,
+              maxAttempts: maxReconnectAttempts || 'unlimited',
+            });
+
+            reconnectTimeoutRef.current = setTimeout(() => {
+              connect();
+            }, reconnectDelay);
+          }
+        };
+      } catch (error) {
+        logger.error('[WebSocket] Error', { error, sceneId });
+        setConnectionState('error');
       }
-    };
+    })();
   }, [
     sceneId,
     session?.access_token,

@@ -5,8 +5,7 @@ import {
   createMalformedPeerFrameReportState,
   reportMalformedPeerFrame,
 } from '@/services/websocket-observability';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+import { buildSessionStoryWsUrl, mintWsTicket } from '@/services/ws-ticket-client';
 
 export function useSessionStorySocket(sessionId: string | null, onRemoteMessage: () => void) {
   const socketRef = useRef<WebSocket | null>(null);
@@ -18,56 +17,66 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
     if (typeof window === 'undefined') return;
     const token = getAccessToken();
     if (!sessionId || !token) return;
-    const base = new URL(API_BASE_URL);
-    const protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(
-      `${protocol}//${base.host}/ws?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`,
-    );
-    socketRef.current = socket;
-    socket.onmessage = (event) => {
+    let cancelled = false;
+
+    void (async () => {
       try {
-        const message = JSON.parse(String(event.data));
-        if (message.type === 'chat') callbackRef.current();
-        if (
-          [
-            'map_created',
-            'entity_moved',
-            'entity_placed',
-            'entity_removed',
-            'movement_updated',
-            'cell_updated',
-            'map_destroyed',
-            'tactical_action_queue',
-            'tactical_degraded',
-            'aoe_preview',
-            'aoe_cast',
-          ].includes(message.type)
-        ) {
-          window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));
-        }
-        if (['handout_delivered', 'handout_degraded'].includes(message.type)) {
-          window.dispatchEvent(new CustomEvent('campaign-journal-updated', { detail: message }));
-        }
-        if (message.type === 'combat_state_updated') {
-          window.dispatchEvent(new CustomEvent('combat-state-updated', { detail: message }));
-          if (message.tacticalMap) {
-            window.dispatchEvent(
-              new CustomEvent('tactical-map-delta', {
-                detail: { type: 'map_created', map: message.tacticalMap },
-              }),
-            );
+        const ticket = await mintWsTicket({ sessionId });
+        if (cancelled) return;
+        const socket = new WebSocket(buildSessionStoryWsUrl(ticket, sessionId));
+        socketRef.current = socket;
+        socket.onmessage = (event) => {
+          try {
+            const message = JSON.parse(String(event.data));
+            if (message.type === 'chat') callbackRef.current();
+            if (
+              [
+                'map_created',
+                'entity_moved',
+                'entity_placed',
+                'entity_removed',
+                'movement_updated',
+                'cell_updated',
+                'map_destroyed',
+                'tactical_action_queue',
+                'tactical_degraded',
+                'aoe_preview',
+                'aoe_cast',
+              ].includes(message.type)
+            ) {
+              window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));
+            }
+            if (['handout_delivered', 'handout_degraded'].includes(message.type)) {
+              window.dispatchEvent(
+                new CustomEvent('campaign-journal-updated', { detail: message }),
+              );
+            }
+            if (message.type === 'combat_state_updated') {
+              window.dispatchEvent(new CustomEvent('combat-state-updated', { detail: message }));
+              if (message.tacticalMap) {
+                window.dispatchEvent(
+                  new CustomEvent('tactical-map-delta', {
+                    detail: { type: 'map_created', map: message.tacticalMap },
+                  }),
+                );
+              }
+            }
+          } catch (error) {
+            reportMalformedPeerFrame(malformedFrameStateRef.current, {
+              channel: 'session-story',
+              sessionId: sessionId ?? undefined,
+              error,
+            });
           }
-        }
-      } catch (error) {
-        reportMalformedPeerFrame(malformedFrameStateRef.current, {
-          channel: 'session-story',
-          sessionId: sessionId ?? undefined,
-          error,
-        });
+        };
+      } catch {
+        // Ticket mint failed; the socket is never opened.
       }
-    };
+    })();
+
     return () => {
-      socket.close();
+      cancelled = true;
+      socketRef.current?.close();
       socketRef.current = null;
     };
   }, [sessionId]);

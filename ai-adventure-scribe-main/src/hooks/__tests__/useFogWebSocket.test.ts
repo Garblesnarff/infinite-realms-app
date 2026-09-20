@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   reportClientFailure: vi.fn(),
+  mintWsTicket: vi.fn(),
 }));
 
 // Mock dependencies BEFORE importing the module under test
@@ -19,6 +20,11 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { reportClientFailure: mocks.reportClientFailure },
 }));
+
+vi.mock('@/services/ws-ticket-client', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, mintWsTicket: mocks.mintWsTicket };
+});
 
 import { useFogWebSocket } from '../useFogWebSocket';
 
@@ -38,6 +44,7 @@ describe('useFogWebSocket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    mocks.mintWsTicket.mockResolvedValue('ws-ticket-1');
 
     mockWsInstance = {
       send: vi.fn(),
@@ -62,10 +69,20 @@ describe('useFogWebSocket', () => {
     vi.useRealTimers();
   });
 
-  it('should initialize and connect on mount when token is provided', () => {
-    renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+  async function flushConnect(): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
 
-    expect(global.WebSocket).toHaveBeenCalledWith(`${url}?token=${token}`);
+  it('should initialize and connect on mount when token is provided', async () => {
+    renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
+
+    const wsUrl = vi.mocked(global.WebSocket).mock.calls[0][0] as string;
+    expect(wsUrl).toBe(`${url}?ticket=ws-ticket-1`);
+    expect(wsUrl).not.toMatch(/access_token/i);
+    expect(wsUrl).not.toMatch(/[?&]token=/i);
     expect(mockWsInstance.onmessage).toBeDefined();
     expect(mockWsInstance.onclose).toBeDefined();
   });
@@ -75,8 +92,9 @@ describe('useFogWebSocket', () => {
     expect(global.WebSocket).not.toHaveBeenCalled();
   });
 
-  it('should transition to connected state on welcome message', () => {
+  it('should transition to connected state on welcome message', async () => {
     const { result } = renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     expect(result.current.isConnected).toBe(false);
 
@@ -91,8 +109,9 @@ describe('useFogWebSocket', () => {
     );
   });
 
-  it('should handle incoming fog:reveal messages', () => {
+  it('should handle incoming fog:reveal messages', async () => {
     renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     const revealMessage = {
       type: 'fog:reveal',
@@ -112,8 +131,9 @@ describe('useFogWebSocket', () => {
     );
   });
 
-  it('should handle incoming fog:conceal messages', () => {
+  it('should handle incoming fog:conceal messages', async () => {
     renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     const concealMessage = {
       type: 'fog:conceal',
@@ -133,8 +153,9 @@ describe('useFogWebSocket', () => {
     );
   });
 
-  it('should queue messages when disconnected and flush on connect', () => {
+  it('should queue messages when disconnected and flush on connect', async () => {
     const { result } = renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     const revealData = [{ id: 'area-1', points: [] }] as any;
     act(() => {
@@ -159,8 +180,9 @@ describe('useFogWebSocket', () => {
     );
   });
 
-  it('should handle disconnection and auto-reconnect', () => {
+  it('should handle disconnection and auto-reconnect', async () => {
     const { result } = renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onmessage({ data: JSON.stringify({ type: 'welcome' }) });
@@ -177,12 +199,14 @@ describe('useFogWebSocket', () => {
     act(() => {
       vi.advanceTimersByTime(3000);
     });
+    await flushConnect();
 
     expect(global.WebSocket).toHaveBeenCalledTimes(2);
   });
 
-  it('should send leave message and close connection on disconnect', () => {
+  it('should send leave message and close connection on disconnect', async () => {
     const { result } = renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -200,8 +224,9 @@ describe('useFogWebSocket', () => {
     expect(result.current.isConnected).toBe(false);
   });
 
-  it('should cleanup on unmount', () => {
+  it('should cleanup on unmount', async () => {
     const { unmount } = renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -212,8 +237,9 @@ describe('useFogWebSocket', () => {
     expect(mockWsInstance.close).toHaveBeenCalled();
   });
 
-  it('should send conceal messages', () => {
+  it('should send conceal messages', async () => {
     const { result } = renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -233,8 +259,9 @@ describe('useFogWebSocket', () => {
     );
   });
 
-  it('should handle WebSocket errors', () => {
+  it('should handle WebSocket errors', async () => {
     renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onerror(new Error('WS Error'));
@@ -253,8 +280,9 @@ describe('useFogWebSocket', () => {
     expect(global.WebSocket).not.toHaveBeenCalled();
   });
 
-  it('should not send reveal/conceal if sceneId is missing', () => {
+  it('should not send reveal/conceal if sceneId is missing', async () => {
     const { result } = renderHook(() => useFogWebSocket({ url, token }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.readyState = 1; // OPEN
@@ -268,8 +296,9 @@ describe('useFogWebSocket', () => {
     expect(mockWsInstance.send).not.toHaveBeenCalled();
   });
 
-  it('should handle invalid JSON messages', () => {
+  it('should handle invalid JSON messages', async () => {
     renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onmessage({ data: 'invalid json' });
@@ -281,8 +310,9 @@ describe('useFogWebSocket', () => {
     );
   });
 
-  it('should handle messages with missing data or areas', () => {
+  it('should handle messages with missing data or areas', async () => {
     renderHook(() => useFogWebSocket({ url, token, sceneId }, mockCallbacks));
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onmessage({ data: JSON.stringify({ type: 'fog:reveal' }) });
@@ -295,7 +325,7 @@ describe('useFogWebSocket', () => {
     expect(mockCallbacks.onConceal).not.toHaveBeenCalled();
   });
 
-  it('should handle WebSocket onclose without autoConnect', () => {
+  it('should handle WebSocket onclose without autoConnect', async () => {
     const { result } = renderHook(() =>
       useFogWebSocket({ url, token, sceneId, autoConnect: false }, mockCallbacks),
     );
@@ -304,6 +334,7 @@ describe('useFogWebSocket', () => {
     act(() => {
       result.current.connect();
     });
+    await flushConnect();
 
     act(() => {
       mockWsInstance.onmessage({ data: JSON.stringify({ type: 'welcome' }) });
@@ -323,13 +354,14 @@ describe('useFogWebSocket', () => {
     expect(global.WebSocket).toHaveBeenCalledTimes(1);
   });
 
-  it('should update callbacks without reconnecting', () => {
+  it('should update callbacks without reconnecting', async () => {
     const { rerender } = renderHook(
       ({ callbacks }) => useFogWebSocket({ url, token, sceneId }, callbacks),
       {
         initialProps: { callbacks: mockCallbacks },
       },
     );
+    await flushConnect();
 
     expect(global.WebSocket).toHaveBeenCalledTimes(1);
 
@@ -361,13 +393,14 @@ describe('useFogWebSocket', () => {
     expect(mockCallbacks.onReveal).not.toHaveBeenCalled();
   });
 
-  it('should maintain referential stability of returned methods and state when isConnected does not change', () => {
+  it('should maintain referential stability of returned methods and state when isConnected does not change', async () => {
     const { result, rerender } = renderHook(
       ({ callbacks }) => useFogWebSocket({ url, token, sceneId }, callbacks),
       {
         initialProps: { callbacks: mockCallbacks },
       },
     );
+    await flushConnect();
 
     const firstReturn = result.current;
 

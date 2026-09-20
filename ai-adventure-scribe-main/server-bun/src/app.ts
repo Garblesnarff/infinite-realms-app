@@ -9,6 +9,7 @@ import { register } from './lib/metrics';
 import { createRequestPipelineApp } from './http-pipeline.js';
 import { appRouter, createContext } from './trpc/index.js';
 import { wsPlugin } from './ws';
+import { wsTicketRoutes } from './routes/v1/ws-ticket';
 import { blogRoutes } from './routes/blog.js';
 import { chronicleRoutes } from './routes/chronicle.js';
 import { landingRoutes } from './routes/landing.js';
@@ -366,6 +367,9 @@ export function createApp() {
 
   // LLM documentation routes (llms.txt standard)
   app.use(llmsRoutes);
+
+  // Short-lived one-time tickets for the WebSocket upgrade (no token in the URL)
+  app.use(wsTicketRoutes);
 
   // WebSocket support for real-time Foundry VTT collaboration
   app.use(wsPlugin);
