@@ -6,15 +6,16 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { personalityService } from '@/services/personalityService';
+import { describeCaughtError } from '@/utils/describe-caught-error';
 
-/**
- * Safely extract text from a PersonalityElement based on field type
- * Uses fallback logic: tries field-specific property first, then 'text', then empty string
- */
 export const extractPersonalityText = (
-  element: PersonalityElement,
+  element: PersonalityElement | null | undefined,
   fieldType: 'traits' | 'ideals' | 'bonds' | 'flaws',
 ): string => {
+  if (!element || typeof element !== 'object') {
+    return '';
+  }
+
   switch (fieldType) {
     case 'traits':
       return element.text ?? '';
@@ -29,9 +30,6 @@ export const extractPersonalityText = (
   }
 };
 
-/**
- * Hook for managing personality selection in character creation
- */
 export const usePersonalitySelection = () => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
@@ -125,7 +123,7 @@ export const usePersonalitySelection = () => {
           duration: 1500,
         });
       } catch (error) {
-        logger.error('Error randomizing personality element:', error);
+        logger.error('Error randomizing personality element:', describeCaughtError(error));
         toast({
           title: 'Error',
           description: 'Failed to randomize. Please try again.',
@@ -148,11 +146,15 @@ export const usePersonalitySelection = () => {
   const handleRandomizeAll = useCallback(async () => {
     try {
       const options = {
-        background: selectedBackground?.id,
-        alignment: state.character?.alignment,
+        background: typeof selectedBackground?.id === 'string' ? selectedBackground.id : undefined,
+        alignment:
+          typeof state.character?.alignment === 'string' ? state.character.alignment : undefined,
       };
 
       const batchData = await personalityService.getBatchRandomPersonality(options);
+      if (!batchData || typeof batchData !== 'object') {
+        throw new Error('Batch personality response was empty');
+      }
 
       if (batchData.traits && batchData.traits2) {
         const trait1 = extractPersonalityText(batchData.traits, 'traits');
@@ -195,7 +197,7 @@ export const usePersonalitySelection = () => {
         duration: 2000,
       });
     } catch (error) {
-      logger.error('Error randomizing all personality elements:', error);
+      logger.error('Error randomizing all personality elements:', describeCaughtError(error));
       toast({
         title: 'Error',
         description: 'Failed to randomize all fields. Please try again.',

@@ -185,6 +185,35 @@ function processMetadata(metadata?: LogMetadata): LogMetadata | undefined {
 }
 
 /**
+ * `logger.*(msg, error)` used to serialize as "{}" because Error name/message/stack
+ * are non-enumerable. Wrap a bare Error so processMetadata can copy those fields.
+ */
+function asLogMetadata(value: object): LogMetadata {
+  return value instanceof Error ? { error: value } : (value as LogMetadata);
+}
+
+function emit(
+  level: LogLevel,
+  write: (...args: unknown[]) => void,
+  message: unknown,
+  rest: unknown[],
+): void {
+  if (
+    typeof message === 'string' &&
+    rest.length === 1 &&
+    typeof rest[0] === 'object' &&
+    rest[0] !== null &&
+    !Array.isArray(rest[0])
+  ) {
+    const processed = processMetadata(asLogMetadata(rest[0]));
+    const formatted = formatMetadata(processed);
+    write(...format(level, [message, formatted].filter(Boolean)));
+    return;
+  }
+  write(...format(level, [message, ...rest]));
+}
+
+/**
  * Logger instance with support for multiple log levels and structured metadata
  */
 export const logger = {
@@ -204,21 +233,7 @@ export const logger = {
    */
   debug: (message: unknown, ...rest: unknown[]) => {
     if (enabledLevels.debug) {
-      // If first arg is a string and second is an object (new signature)
-      if (
-        typeof message === 'string' &&
-        rest.length === 1 &&
-        typeof rest[0] === 'object' &&
-        rest[0] !== null &&
-        !Array.isArray(rest[0])
-      ) {
-        const processed = processMetadata(rest[0] as LogMetadata);
-        const formatted = formatMetadata(processed);
-        console.debug(...format('debug', [message, formatted].filter(Boolean)));
-      } else {
-        // Backward compatible: pass all args as-is
-        console.debug(...format('debug', [message, ...rest]));
-      }
+      emit('debug', console.debug, message, rest);
     }
   },
 
@@ -238,21 +253,7 @@ export const logger = {
    */
   info: (message: unknown, ...rest: unknown[]) => {
     if (enabledLevels.info) {
-      // If first arg is a string and second is an object (new signature)
-      if (
-        typeof message === 'string' &&
-        rest.length === 1 &&
-        typeof rest[0] === 'object' &&
-        rest[0] !== null &&
-        !Array.isArray(rest[0])
-      ) {
-        const processed = processMetadata(rest[0] as LogMetadata);
-        const formatted = formatMetadata(processed);
-        console.info(...format('info', [message, formatted].filter(Boolean)));
-      } else {
-        // Backward compatible: pass all args as-is
-        console.info(...format('info', [message, ...rest]));
-      }
+      emit('info', console.info, message, rest);
     }
   },
 
@@ -272,21 +273,7 @@ export const logger = {
    */
   warn: (message: unknown, ...rest: unknown[]) => {
     if (enabledLevels.warn) {
-      // If first arg is a string and second is an object (new signature)
-      if (
-        typeof message === 'string' &&
-        rest.length === 1 &&
-        typeof rest[0] === 'object' &&
-        rest[0] !== null &&
-        !Array.isArray(rest[0])
-      ) {
-        const processed = processMetadata(rest[0] as LogMetadata);
-        const formatted = formatMetadata(processed);
-        console.warn(...format('warn', [message, formatted].filter(Boolean)));
-      } else {
-        // Backward compatible: pass all args as-is
-        console.warn(...format('warn', [message, ...rest]));
-      }
+      emit('warn', console.warn, message, rest);
     }
   },
 
@@ -307,21 +294,7 @@ export const logger = {
    */
   error: (message: unknown, ...rest: unknown[]) => {
     if (enabledLevels.error) {
-      // If first arg is a string and second is an object (new signature)
-      if (
-        typeof message === 'string' &&
-        rest.length === 1 &&
-        typeof rest[0] === 'object' &&
-        rest[0] !== null &&
-        !Array.isArray(rest[0])
-      ) {
-        const processed = processMetadata(rest[0] as LogMetadata);
-        const formatted = formatMetadata(processed);
-        console.error(...format('error', [message, formatted].filter(Boolean)));
-      } else {
-        // Backward compatible: pass all args as-is
-        console.error(...format('error', [message, ...rest]));
-      }
+      emit('error', console.error, message, rest);
     }
   },
 };

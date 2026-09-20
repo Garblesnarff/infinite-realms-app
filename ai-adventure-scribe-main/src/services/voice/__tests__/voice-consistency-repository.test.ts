@@ -129,6 +129,26 @@ describe('VoiceConsistencyRepository', () => {
       );
     });
 
+    it('does not JSON.parse an already-parsed mappings object', async () => {
+      const parseSpy = vi.spyOn(JSON, 'parse');
+      mockGetMappings.mockResolvedValueOnce([
+        {
+          id: 'mapping-obj',
+          character_name: 'Professor Emil Darkwater',
+          voice_category: 'villain_male',
+          voice_id: 'voice-villain',
+          last_used: '2026-09-15T12:00:00.000Z',
+          updated_at: '2026-09-15T12:00:00.000Z',
+          appearance_count: 4,
+        },
+      ]);
+
+      await VoiceConsistencyRepository.getSessionMappings(sessionId);
+
+      expect(parseSpy).not.toHaveBeenCalled();
+      parseSpy.mockRestore();
+    });
+
     it('uses mappings returned as an already-parsed object', async () => {
       mockGetMappings.mockResolvedValueOnce([
         {

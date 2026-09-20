@@ -9,13 +9,14 @@
 
 import logger from '@/lib/logger';
 import { issue1784Api, type Issue1784VoiceMappingRow } from '@/services/issue-1784-api';
+import { parseJsonIfString } from '@/utils/parse-json-if-string';
 
 function readVoiceMappingsPayload(value: unknown, sessionId: string): Issue1784VoiceMappingRow[] {
   let parsed: unknown = value;
 
   if (typeof value === 'string') {
     try {
-      parsed = JSON.parse(value);
+      parsed = parseJsonIfString(value);
     } catch {
       logger.error('VOICE_MAPPINGS_UNREADABLE', { sessionId });
       return [];

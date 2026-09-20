@@ -1,10 +1,12 @@
 import { waitForAuth } from '@/lib/auth-gate';
+import { logger } from '@/lib/logger';
 import {
   getAuthHeaders,
   loadCachedSession,
   persistSession,
   refreshAccessTokenOnce,
 } from '@/services/auth/TokenService';
+import { parseJsonIfString } from '@/utils/parse-json-if-string';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -93,9 +95,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const bodyText = await response.text().catch(() => '');
   let payload: { error?: string | { message?: string }; message?: string; code?: string } | null =
     null;
-  if (bodyText) {
+  if (typeof bodyText === 'string' && bodyText) {
     try {
-      payload = JSON.parse(bodyText) as typeof payload;
+      payload = parseJsonIfString(bodyText) as typeof payload;
     } catch {
       payload = null;
     }
@@ -110,7 +112,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (response.status === 204 || !bodyText) return undefined as T;
-  return JSON.parse(bodyText) as T;
+  // Reuse the first parse. A second JSON.parse(bodyText) is redundant, and a
+  // JSON.parse of a non-string (or of the coerced "[object Object]" body)
+  // is the session-mappings SyntaxError from #2077.
+  if (payload !== null) return payload as T;
+  logger.warn('ISSUE1784_BODY_UNPARSEABLE', {
+    path,
+    status: response.status,
+    bodyHead: bodyText.slice(0, 80),
+  });
+  return bodyText as T;
 }
 
 export const issue1784Api = {

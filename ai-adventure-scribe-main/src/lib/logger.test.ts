@@ -110,6 +110,17 @@ describe('Logger Utility', () => {
       const error = new Error('Test error');
       logger.error('Error occurred:', error);
       expect(consoleSpy.error).toHaveBeenCalled();
+      const logged = consoleSpy.error.mock.calls[0].join(' ');
+      expect(logged).toContain('Error occurred:');
+      expect(logged).toContain('Test error');
+    });
+
+    it('logs name and message when a bare Error is passed to warn', () => {
+      logger.warn('msg', new Error('x'));
+      const logged = consoleSpy.warn.mock.calls[0].join(' ');
+      expect(logged).toContain('msg');
+      expect(logged).toContain('Error');
+      expect(logged).toContain('x');
     });
   });
 

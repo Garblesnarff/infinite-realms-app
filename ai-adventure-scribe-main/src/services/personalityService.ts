@@ -1,3 +1,4 @@
+import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 
@@ -34,6 +35,7 @@ export class PersonalityService {
     }
 
     try {
+      await waitForAuth();
       const response = await fetch(`${API_BASE_URL}${url}`, {
         ...options,
         headers: {
