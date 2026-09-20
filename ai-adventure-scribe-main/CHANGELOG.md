@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.11](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.10...v0.19.11) (2026-09-20)
+
+
+### Bug Fixes
+
+* **combat:** repair approach planning for one-step attacks ([#2099](https://github.com/Garblesnarff/infinite-realms-production/issues/2099) [#2094](https://github.com/Garblesnarff/infinite-realms-production/issues/2094)) ([#2101](https://github.com/Garblesnarff/infinite-realms-production/issues/2101)) ([7a235c4](https://github.com/Garblesnarff/infinite-realms-production/commit/7a235c4433afdfc7bc0b0da836fc279e966e5786))
+
 ## [0.19.10](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.9...v0.19.10) (2026-09-20)
 
 
