@@ -2,7 +2,7 @@
 
 **What this is**: Essential context, gotchas, and locations that save you time when working on InfiniteRealms.
 
-**What this isn't**: Detailed implementation docs; use the relevant docs and code for architecture and implementation details.
+**What this isn't**: Agent operating rules (those live in [AGENTS.md](./AGENTS.md)) or detailed implementation docs (read the code).
 
 ---
 
@@ -10,8 +10,8 @@
 
 ### Production Environment
 - **This is a PRODUCTION codebase on a Hetzner VPS**
-- Changes to `main` deploy to production; agent publication follows the repository root rules.
-- **Publication rules**: Follow the repository root [AGENTS.md](../AGENTS.md): work through a branch and draft PR; merge only with explicit permission naming the PR.
+- Changes to `main` deploy to production; agent publication follows [AGENTS.md](./AGENTS.md).
+- **Publication rules**: Follow [AGENTS.md](./AGENTS.md): work through a branch and draft PR; merge only with explicit permission naming the PR. This file is Claude-specific context, not a substitute for those rules.
 - User may not be technical - explain clearly, double-check your assumptions
 
 ### 🔒 SECURITY - NEVER COMMIT SECRETS
@@ -173,8 +173,8 @@ ai-adventure-scribe-main/
 │   ├── data/                # D&D reference data (spells, feats, levels)
 │   ├── agents/              # Multi-agent system
 │   └── hooks/               # React hooks
-├── AGENTS.md                # Compatibility symlink to this quick reference
-└── CLAUDE.md                # App-specific assistant quick reference
+├── AGENTS.md                # Canonical agent operating rules (real file, not a symlink)
+└── CLAUDE.md                # This file — Claude-specific context only
 ```
 
 **Important**:
@@ -394,7 +394,7 @@ docker logs supabase-edge-functions # Edge function logs
 docker logs supabase-auth           # GoTrue auth logs
 docker logs supabase-kong           # API gateway logs
 
-# Git workflow: use the repository root AGENTS.md publication rules.
+# Git workflow: use AGENTS.md publication rules.
 git add <scoped-paths>
 git commit -m "..."
 ```
@@ -512,7 +512,7 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 - Clear README with setup and links to the relevant architecture documentation
 - Examples over abstractions (see existing code)
 - Hands-on learning (fix a bug, make a PR)
-- Centralized docs (root `AGENTS.md`, `docs/`, and this file)
+- Centralized docs (`AGENTS.md` at this app root, `docs/`, and this file)
 
 **Avoid**:
 - Passive learning (reading docs for days)
@@ -548,7 +548,7 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 
 ## Resources
 
-- **Agent operating rules**: repository root `AGENTS.md`. See `docs/` for architecture and design guidance.
+- **Agent operating rules**: [AGENTS.md](./AGENTS.md) (canonical). A copy also lives at the repository root. See `docs/` for architecture and design guidance.
 - **Bun Docs**: https://bun.sh/docs
 - **Elysia Docs**: https://elysiajs.com/introduction.html
 - **D&D 5E SRD**: https://dnd.wizards.com/resources/systems-reference-document

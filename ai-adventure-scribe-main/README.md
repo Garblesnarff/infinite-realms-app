@@ -39,6 +39,7 @@ InfiniteRealms implements comprehensive database optimizations for production-sc
 - Database size: Controlled growth with 90-day retention policy
 
 **📚 Documentation:**
+- [Agent operating rules](AGENTS.md) — canonical. `CLAUDE.md` is Claude-specific context only; do not treat it as `AGENTS.md`.
 - [Database Optimizations Overview](docs/DATABASE_OPTIMIZATIONS.md)
 - [Migration Guide](docs/MIGRATION_GUIDE.md)
 - [Performance Report](docs/PERFORMANCE_REPORT.md)

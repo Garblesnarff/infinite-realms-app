@@ -1,6 +1,6 @@
 ## Ground rules — READ FIRST
 
-**Never merge PRs. Never push to `main`.** Only Rob merges; merges auto-deploy to production. Full rules for all AI agents: see `AGENTS.md` at the repo root. These apply to every Claude Code session (local, Hetzner, cloud) and every other agent.
+**Never merge PRs. Never push to `main`.** Only Rob merges; merges auto-deploy to production. Full rules for all AI agents: see [`ai-adventure-scribe-main/AGENTS.md`](ai-adventure-scribe-main/AGENTS.md) (canonical; copied at repo-root `AGENTS.md`). `ai-adventure-scribe-main/CLAUDE.md` is Claude-specific context only. These apply to every Claude Code session (local, Hetzner, cloud) and every other agent.
 
 ## Agent skills
 
