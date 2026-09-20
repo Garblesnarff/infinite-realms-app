@@ -178,6 +178,7 @@ describe('the floor stays out of the way of every dialect above it', () => {
   test('a turn that is only a save still infers the attack the prose describes', () => {
     const inference = inferProseAttackIntent(
       response({
+        text: 'You slash at Shadow Roach 1 with the blade as the floor gives way.',
         roll_requests: [
           {
             type: 'save' as const,
@@ -213,9 +214,10 @@ describe('the floor stays out of the way of every dialect above it', () => {
 
 describe('attack language', () => {
   test.each([
-    ['the run 9 paragraph, which carries a weapon and no verb', RUN_9_SEQ_12],
     ['a verb with no weapon', 'The roach lunges at you across the flagstones.'],
-    ['a natural weapon', 'Its mandibles close on your forearm.'],
+    ['a natural weapon with an attack verb', 'Its mandibles slash your forearm.'],
+    ['an instrument phrase with a weapon', 'You go for it with the dagger.'],
+    ['drawing a held weapon', RUN_9_SEQ_12],
   ])('%s reads as an attack', (_name, text) => {
     expect(hasAttackLanguage(text)).toBe(true);
   });
@@ -224,7 +226,25 @@ describe('attack language', () => {
     ['pure scene-setting', 'The chamber is silent. Water drips from the vaulted ceiling.'],
     ['a withheld strike', 'You hold your blade and wait for it to move first.'],
     ['dialogue', '"Stay back," you tell the trembling scribe behind you.'],
+    [
+      'de-escalation speech naming a weapon',
+      'Professor, put the dagger down. We can end this without anyone getting hurt.',
+    ],
+    ['a weapon mentioned in observation, not a strike', 'That dagger looks old.'],
+    ['pointing at a weapon', 'He pointed at the dagger on the table.'],
+    ['draws as a non-attack verb', 'She draws water from the well.'],
+    ['blade meets without an attack verb or with-phrase', 'My blade meets his.'],
   ])('%s does not', (_name, text) => {
     expect(hasAttackLanguage(text)).toBe(false);
+  });
+
+  test('in combat, observing a dagger does not infer an attack or a roll', () => {
+    expect(
+      inferProseAttackIntent(
+        response({ text: 'That dagger looks old.' }),
+        promptFor('the-seeker'),
+        true,
+      ),
+    ).toBeNull();
   });
 });

@@ -190,6 +190,7 @@ describeWithDb('combat intent roster and player-intent seating', () => {
       verb: 'punch',
       actorName: 'Ledger Warden',
       attackSource: 'unarmed',
+      weaponStated: false,
     });
 
     const player = {

@@ -18,6 +18,11 @@ export interface DeclaredAttack {
   monsterId?: string;
   attackSource?: 'unarmed' | 'weapon' | 'spell';
   weaponName?: string;
+  /**
+   * True only when the player named the weapon (e.g. "with the dagger").
+   * A missing weapon on "I attack" is Unarmed Strike, not an inferred blade.
+   */
+  weaponStated?: boolean;
   spellId?: string;
   spellName?: string;
 }
@@ -71,6 +76,13 @@ const VERB_TOKEN_PATTERN =
 
 const DECLARATION_BLOCK_PATTERN =
   /\b(?:don't|do not|won't|never|not going to|should\s+i|can\s+i|could\s+i|what\s+if|if\s+i)\b/i;
+
+const DEESCALATION_SPEECH_PATTERN =
+  /\bput\b[\s\S]{0,40}\bdown\b|\bdon'?t want to hurt\b|\bwe can end this\b|\bsurrender\b|\bwithout anyone getting hurt\b|\bstop (?:this|fighting|attacking)\b/i;
+
+export function isCombatDeescalationSpeech(text: string): boolean {
+  return DEESCALATION_SPEECH_PATTERN.test(text.replace(/[’‘]/g, "'"));
+}
 
 const normalize = (value: string): string =>
   value
@@ -181,7 +193,7 @@ const splitIntoClauses = (input: string): string[] => {
       continue;
     }
 
-    const delimiter = /^(?:and|then)(?=\s|$)/i.exec(input.slice(index));
+    const delimiter = /^(?:and|then|but)(?=\s|$)/i.exec(input.slice(index));
     const before = input[index - 1];
     const after = input[index + (delimiter?.[0].length ?? 0)];
     if (
@@ -201,6 +213,7 @@ const splitIntoClauses = (input: string): string[] => {
 
 const stripLeadingPlayerIntent = (value: string): string =>
   value
+    .replace(/^(?:but|however|yet|so)\s+/i, '')
     .replace(
       /^(?:(?:i|i'll|we|we'll)\s+)?(?:(?:try|attempt)\s+to\s+|want\s+to\s+|(?:i'm|i am)\s+going\s+to\s+|let\s+me\s+)?/i,
       '',
@@ -274,7 +287,14 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
   if (fireMatch) return { verb: 'fire at', targetText: fireMatch[1] };
 
   const goForMatch = /^go\s+for\s+(.+)$/i.exec(clause);
-  if (goForMatch) return { verb: 'go for', targetText: goForMatch[1] };
+  if (goForMatch) {
+    const weaponMatch = /^(.+?)\s+with\s+(?:my|the|a|his|her)\s+(.+)$/i.exec(goForMatch[1]);
+    return {
+      verb: 'go for',
+      targetText: weaponMatch ? weaponMatch[1] : goForMatch[1],
+      ...(weaponMatch ? { weaponName: stripTrailingPunctuation(weaponMatch[2]) } : {}),
+    };
+  }
 
   const directVerbPattern = new RegExp(
     `^(${DIRECT_ATTACK_VERBS.join('|')})(?:es|s)?\\b(?:\\s+(?:at|on))?\\s+(.+)$`,
@@ -333,11 +353,13 @@ const resolveClauseAttack = (
       actorName: actor.name.trim(),
     });
   }
-  const namedWeapon = match.weaponName && !isUnarmedWeaponClaim(match.weaponName);
+  const namedWeapon = Boolean(match.weaponName && !isUnarmedWeaponClaim(match.weaponName));
+  const unarmedVerb = isUnarmedAttackVerb(match.verb) || match.verb === 'attack';
   return {
     ...toDeclaredAttack(match.verb, actor),
-    attackSource: namedWeapon || !isUnarmedAttackVerb(match.verb) ? 'weapon' : 'unarmed',
-    ...(match.weaponName ? { weaponName: match.weaponName } : {}),
+    attackSource: namedWeapon || !unarmedVerb ? 'weapon' : 'unarmed',
+    weaponStated: namedWeapon,
+    ...(namedWeapon ? { weaponName: match.weaponName } : {}),
   };
 };
 
@@ -357,6 +379,7 @@ export function detectDeclaredAttack(
   const clauses = splitIntoClauses(playerInput.trim().replace(/\s+/g, ' '));
   let declaredAttack: DeclaredAttack | null = null;
   for (const clause of clauses) {
+    if (isCombatDeescalationSpeech(clause)) continue;
     const match = resolveClauseAttack(clause, actors);
     if (match) declaredAttack = match;
   }

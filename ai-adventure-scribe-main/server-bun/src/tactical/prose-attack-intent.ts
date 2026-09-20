@@ -19,6 +19,7 @@
 import { collectEntityMentions } from './attack-pair.js';
 import { parseTacticalDigest } from './digest-parse.js';
 import { combatLogger } from '../lib/logger.js';
+import { isCombatDeescalationSpeech } from '../services/combat/combat-intent-gate.js';
 
 import type { DigestEntity, TacticalDigest } from './digest-parse.js';
 import type { DMResponse, DMTargetedCombatAction } from '../services/dm/dm-response-schema.js';
@@ -30,18 +31,42 @@ import type { DMResponse, DMTargetedCombatAction } from '../services/dm/dm-respo
  * only the weapon — which is precisely why the noun family is not optional.
  */
 const ATTACK_VERBS =
-  /\b(?:attacks?|attacking|strikes?|striking|swings?|swinging|slash(?:es|ing)?|stabs?|stabbing|lunges?|lunging|thrusts?|thrusting|hacks?|hacking|slices?|slicing|cleaves?|cleaving|bites?|biting|claws?|clawing|mauls?|mauling|charges?|charging|pounces?|pouncing|snaps? at|swipes?|swiping|parr(?:y|ies|ying)|shoots?|shooting|fires?|firing|looses?|loosing|hurls?|hurling|blasts?|blasting|smash(?:es|ing)?|bashes|bashing|punch(?:es|ing|ed)?|kicks?|kicking|drives? .{0,20}\binto\b)\b/i;
+  /\b(?:attacks?|attacking|strikes?|striking|swings?|swinging|slash(?:es|ing)?|stabs?|stabbing|lunges?|lunging|thrusts?|thrusting|hacks?|hacking|slices?|slicing|cleaves?|cleaving|bites?|biting|claws?|clawing|mauls?|mauling|charges?|charging|pounces?|pouncing|snaps? at|swipes?|swiping|parr(?:y|ies|ying)|shoots?|shooting|fires?|firing|looses?|loosing|hurls?|hurling|blasts?|blasting|smash(?:es|ing)?|bashes|bashing|punch(?:es|ing|ed)?|kicks?|kicking|drives? .{0,20}\binto\b|wield(?:s|ing)?|brandish(?:es|ing)?)\b/i;
 
-const ATTACK_NOUNS =
-  /\b(?:blade|sword|longsword|shortsword|greatsword|rapier|scimitar|dagger|axe|greataxe|handaxe|mace|hammer|warhammer|maul|spear|glaive|halberd|pike|quarterstaff|staff|club|flail|whip|bow|longbow|shortbow|crossbow|sling|javelin|dart|bolt|arrow|fangs?|talons?|claws?|mandibles?|pincers?|stinger|weapon)\b/i;
+const WEAPON_NOUN =
+  'blade|sword|longsword|shortsword|greatsword|rapier|scimitar|dagger|axe|greataxe|handaxe|mace|hammer|warhammer|maul|spear|glaive|halberd|pike|quarterstaff|staff|club|flail|whip|bow|longbow|shortbow|crossbow|sling|javelin|dart|bolt|arrow|fangs?|talons?|claws?|mandibles?|pincers?|stinger|weapon';
+
+const ATTACK_NOUNS = new RegExp(`\\b(?:${WEAPON_NOUN})\\b`, 'i');
+
+const INSTRUMENT_WEAPON = new RegExp(
+  `\\bwith\\s+(?:my|the|a|his|her)\\s+(?:${WEAPON_NOUN})\\b`,
+  'i',
+);
+
+/** Combat draw of a held weapon, not "draws water". */
+const DRAW_WEAPON = new RegExp(
+  `\\bdraw(?:s|ing|n)?\\s+(?:your|my|the|his|her)\\s+(?:${WEAPON_NOUN})\\b`,
+  'i',
+);
 
 /** Narration that has already conceded the strike did not happen must not become one. */
 const NEGATED =
   /\b(?:without\s+(?:attacking|striking)|holds?\s+(?:your|its|their|his|her)\s+(?:blade|attack|strike)|does\s+not\s+attack|refuses?\s+to\s+(?:attack|strike))\b/i;
 
+const splitNarrationClauses = (text: string): string[] =>
+  text
+    .split(/(?<=[.!?;,])\s+|\s+\b(?:and|then|but)\b\s+/i)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+
 export function hasAttackLanguage(text: string): boolean {
   if (NEGATED.test(text)) return false;
-  return ATTACK_VERBS.test(text) || ATTACK_NOUNS.test(text);
+  return splitNarrationClauses(text).some((clause) => {
+    if (isCombatDeescalationSpeech(clause)) return false;
+    if (ATTACK_VERBS.test(clause)) return true;
+    if (DRAW_WEAPON.test(clause)) return true;
+    return ATTACK_NOUNS.test(clause) && INSTRUMENT_WEAPON.test(clause);
+  });
 }
 
 /**

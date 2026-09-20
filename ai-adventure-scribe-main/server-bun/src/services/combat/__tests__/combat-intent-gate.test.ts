@@ -47,6 +47,7 @@ describe('detectDeclaredAttack', () => {
       verb: 'punch',
       actorName: 'Professor Emil Darkwater',
       attackSource: 'unarmed',
+      weaponStated: false,
     });
   });
 
@@ -115,6 +116,9 @@ describe('detectDeclaredAttack', () => {
       spellId: 'magic-missile',
       spellName: 'Magic Missile',
     });
+    expect(detectDeclaredAttack('cast Magic Missile at the ghoul', actors)).not.toMatchObject({
+      weaponStated: true,
+    });
   });
 
   it.each(positiveCorpus)('detects %s as %s against %s', (input, verb, actorName) => {
@@ -127,4 +131,67 @@ describe('detectDeclaredAttack', () => {
       expect(detectDeclaredAttack(input, actors)).toBeNull();
     },
   );
+
+  it('does not treat in-combat de-escalation speech as a declared attack', () => {
+    const umeboshi = [{ name: 'Professor Umeboshi' }];
+    expect(
+      detectDeclaredAttack(
+        'Professor, put the dagger down. We can end this without anyone getting hurt.',
+        umeboshi,
+      ),
+    ).toBeNull();
+  });
+
+  it('detects a stated dagger as a weapon attack', () => {
+    expect(detectDeclaredAttack('I stab her with the dagger', soleActor)).toMatchObject({
+      verb: 'stab',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'weapon',
+      weaponName: 'dagger',
+      weaponStated: true,
+    });
+  });
+
+  it('still detects an attack after a de-escalation clause in the same turn', () => {
+    expect(
+      detectDeclaredAttack(
+        "I don't want to hurt you, but I swing my sword at him",
+        soleActor,
+      ),
+    ).toMatchObject({
+      verb: 'swing',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'weapon',
+      weaponName: 'sword',
+      weaponStated: true,
+    });
+  });
+
+  it('does not treat a bare weapon observation as a declared attack', () => {
+    expect(detectDeclaredAttack('That dagger looks old.', actors)).toBeNull();
+    expect(detectDeclaredAttack('He pointed at the dagger on the table.', actors)).toBeNull();
+    expect(detectDeclaredAttack('She draws water from the well.', actors)).toBeNull();
+    expect(detectDeclaredAttack('My blade meets his.', soleActor)).toBeNull();
+  });
+
+  it('detects go for him with the dagger as a stated dagger attack', () => {
+    expect(detectDeclaredAttack('I go for him with the dagger', soleActor)).toMatchObject({
+      verb: 'go for',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'weapon',
+      weaponName: 'dagger',
+      weaponStated: true,
+    });
+  });
+
+  it('treats I attack with no weapon as an Unarmed Strike', () => {
+    const attack = detectDeclaredAttack('I attack the professor', actors);
+    expect(attack).toMatchObject({
+      verb: 'attack',
+      actorName: 'Professor Emil Darkwater',
+      attackSource: 'unarmed',
+      weaponStated: false,
+    });
+    expect(attack).not.toHaveProperty('weaponName');
+  });
 });

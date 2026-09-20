@@ -137,7 +137,7 @@ describe('deriveCombatEntryFirstAction', () => {
     },
   );
 
-  it('resolves a bare attack to the equipped quarterstaff', async () => {
+  it('resolves a bare attack with no stated weapon as Unarmed Strike', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
       {
         sessionId: 'session-1',
@@ -149,11 +149,11 @@ describe('deriveCombatEntryFirstAction', () => {
     );
 
     expect(firstAction).toMatchObject({
-      source: 'weapon',
-      attackSource: 'weapon',
-      weaponId: 'inventory-quarterstaff',
-      weaponName: 'Quarterstaff',
-      combat_action: { weapon_id: 'inventory-quarterstaff' },
+      source: 'unarmed',
+      attackSource: 'unarmed',
+      weaponId: 'unarmed-strike',
+      weaponName: 'Unarmed Strike',
+      combat_action: { weapon_id: 'unarmed-strike' },
     });
   });
 
@@ -259,6 +259,38 @@ describe('deriveCombatEntryFirstAction', () => {
       weaponName: 'Dagger',
       roll_request: { modifier: 5 },
     });
+  });
+
+  it('does not auto-swap an inferred weapon to Unarmed Strike', async () => {
+    const warnings: unknown[] = [];
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: {
+          verb: 'attack',
+          actorName: 'Professor Emil Darkwater',
+          attackSource: 'weapon',
+          weaponName: 'blade',
+          weaponStated: false,
+        },
+      },
+      {
+        ...deps,
+        listEquippedWeaponProfiles: async () => [quarterstaff],
+        logger: { warn: (data: unknown) => warnings.push(data) },
+      },
+    );
+
+    expect(firstAction).toBeNull();
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        msg: 'INFERRED_WEAPON_DROPPED',
+        requested: 'blade',
+        weaponStated: false,
+      }),
+    ]);
   });
 
   it('routes a damaging cantrip through the spell action path', async () => {

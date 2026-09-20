@@ -133,7 +133,12 @@ function sourceFor(declared: DeclaredAttack): CombatEntryFirstActionSource {
   }
   const weaponClaim = declared.weaponName?.trim();
   if (weaponClaim && !isUnarmedWeaponClaim(weaponClaim)) return 'weapon';
-  if (!weaponClaim && isUnarmedAttackVerb(declared.verb)) return 'unarmed';
+  if (
+    !weaponClaim &&
+    (isUnarmedAttackVerb(declared.verb) || declared.verb.toLowerCase() === 'attack')
+  ) {
+    return 'unarmed';
+  }
   return declared.attackSource ?? 'weapon';
 }
 
@@ -141,7 +146,10 @@ function weaponOrUnarmedSource(
   declared: DeclaredAttack,
 ): Exclude<CombatEntryFirstActionSource, 'spell'> {
   const weaponClaim = declared.weaponName?.trim();
-  return !weaponClaim && isUnarmedAttackVerb(declared.verb) ? 'unarmed' : 'weapon';
+  return !weaponClaim &&
+    (isUnarmedAttackVerb(declared.verb) || declared.verb.toLowerCase() === 'attack')
+    ? 'unarmed'
+    : 'weapon';
 }
 
 function profileKnowsSpell(
@@ -294,8 +302,22 @@ export async function deriveCombatEntryFirstAction(
   const equipped = await deps.listEquippedWeaponProfiles(playerParticipant);
   const grounded =
     requestedAttackSource === 'unarmed'
-      ? { weapon: { ...UNARMED_STRIKE }, weaponId: undefined }
+      ? { weapon: { ...UNARMED_STRIKE }, weaponId: undefined, grounded: true, requested: null }
       : groundRequestedWeapon(params.declaredAttack.weaponName, equipped);
+  const weaponStated =
+    params.declaredAttack.weaponStated ?? Boolean(params.declaredAttack.weaponName?.trim());
+  if (requestedAttackSource === 'weapon' && grounded.grounded === false) {
+    const swappedToUnarmed = !grounded.weaponId || grounded.weapon.id === UNARMED_STRIKE.id;
+    if (!weaponStated || swappedToUnarmed) {
+      deps.logger.warn({
+        msg: weaponStated ? 'DECLARED_WEAPON_NOT_EQUIPPED' : 'INFERRED_WEAPON_DROPPED',
+        sessionId: params.sessionId,
+        requested: grounded.requested,
+        weaponStated,
+      });
+      return null;
+    }
+  }
   // An empty equipment list is a valid character state. Once grounding supplies the rules
   // default, expose it as an unarmed source so every downstream fact agrees with the weapon.
   const source: Exclude<CombatEntryFirstActionSource, 'spell'> =
