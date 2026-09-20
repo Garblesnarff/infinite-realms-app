@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.9](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.8...v0.19.9) (2026-09-20)
+
+
+### Bug Fixes
+
+* **client:** recover combat UI after NPC handoff ([#2100](https://github.com/Garblesnarff/infinite-realms-production/issues/2100)) ([7da2509](https://github.com/Garblesnarff/infinite-realms-production/commit/7da25096e713361bdda703e940d02dc9064d27d9))
+* resolve scoped player combat spells ([#2085](https://github.com/Garblesnarff/infinite-realms-production/issues/2085)) ([#2090](https://github.com/Garblesnarff/infinite-realms-production/issues/2090)) ([2ba1a85](https://github.com/Garblesnarff/infinite-realms-production/commit/2ba1a85ff1efcf9fc8e9194f58869ed960c58d26))
+
 ## [0.19.8](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.7...v0.19.8) (2026-09-20)
 
 
