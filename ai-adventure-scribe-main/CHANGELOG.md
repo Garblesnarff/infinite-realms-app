@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.12](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.11...v0.19.12) (2026-09-20)
+
+
+### Bug Fixes
+
+* **client:** spell-attack popup and target-save card ([#2085](https://github.com/Garblesnarff/infinite-realms-production/issues/2085) item 3) ([#2102](https://github.com/Garblesnarff/infinite-realms-production/issues/2102)) ([cec8e8e](https://github.com/Garblesnarff/infinite-realms-production/commit/cec8e8eb73c3220fb710174c3e08a6284ba9bed9))
+
+
+### CI/CD
+
+* lockstep AGENTS.md copies and ignore AppleDouble vitest sidecars ([#2108](https://github.com/Garblesnarff/infinite-realms-production/issues/2108)) ([#2115](https://github.com/Garblesnarff/infinite-realms-production/issues/2115)) ([f33c988](https://github.com/Garblesnarff/infinite-realms-production/commit/f33c9888567920429e5aa322d765ea453ef56721))
+
 ## [0.19.11](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.10...v0.19.11) (2026-09-20)
 
 
