@@ -48,7 +48,7 @@ export function usePlayerRollHost(): void {
                 advantage: spec.advantage,
                 disadvantage: spec.disadvantage,
               },
-              ac: spec.targetAc,
+              ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 ? {} : { ac: spec.targetAc }),
               combatAttackRoll: true,
             };
         const rollId = requestDiceRoll(
@@ -76,9 +76,12 @@ export function usePlayerRollHost(): void {
 
 /** "Longsword attack vs Sentient Glaze — 1d20+7 vs AC 15 (advantage)" */
 export function describeAttackRoll(spec: PlayerAttackRollSpec): string {
+  const edge = spec.advantage ? ' (advantage)' : spec.disadvantage ? ' (disadvantage)' : '';
+  if (spec.kind === 'spell-attack') {
+    return `${spec.weaponName} spell attack vs ${spec.targetLabel}${edge}`;
+  }
   const modifier = attackModifierForRoll(spec);
   const sign = modifier >= 0 ? '+' : '';
-  const edge = spec.advantage ? ' (advantage)' : spec.disadvantage ? ' (disadvantage)' : '';
   return (
     `${spec.weaponName} attack vs ${spec.targetLabel} — ` +
     `1d20${sign}${modifier} vs AC ${spec.targetAc}${edge}`

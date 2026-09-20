@@ -12,10 +12,13 @@ import {
 } from '@/services/combat/combat-action-executor';
 import {
   formatCombatEngineOutcome,
+  formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
 } from '@/services/combat/combat-outcome-transcript';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
+import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
+import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { userDataApi } from '@/services/user-data-api';
 import { slugify } from '@/utils/slug';
 
@@ -128,11 +131,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     participants?.find((participant) => participant.id === actorId)?.name ?? actorId;
   const recordRefusal = (action: StructuredCombatAction, refusal: CombatIntentRefusedError) => {
     const queued = isQueuedIntentActor(action.actor_id);
+    const actorIsPlayer = isPlayerActor(action.actor_id, participants);
     refusedActions.push({
       resolved: false,
       ...(queued ? { queued: true } : {}),
       actor: labelFor(action.actor_id),
-      actorIsPlayer: isPlayerActor(action.actor_id, participants),
+      actorIsPlayer,
       action: action.action_type,
       targets: action.target_ids?.map(labelFor) ?? [],
       engineRefusal: refusal.message,
@@ -142,6 +146,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         ? labelFor(refusal.details.currentParticipantId)
         : (refusal.details?.currentParticipantSlug ?? null),
     });
+    if (action.action_type === 'cast_spell') {
+      const spell = playerCombatSpellLabel(action.spell_id, action.spell_id);
+      engineTranscriptLines.push(
+        formatRefusedSpellOutcome(labelFor(action.actor_id), spell, refusal.message),
+      );
+      if (actorIsPlayer) {
+        logger.warn('PLAYER_ACTION_UNRESOLVED', { actionType: 'cast_spell', spell });
+      }
+    }
   };
   type BatchBoundary = 'turn_ended' | 'combat_ended';
 
@@ -183,18 +196,17 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     } else {
       const entryRoll =
         playerAttackRoll && sameAction(playerAttackRoll.action, action) ? playerAttackRoll : null;
+      const actorLabel =
+        participants?.find((participant) => participant.id === action.actor_id)?.name ??
+        action.actor_id;
       playerDie = entryRoll
         ? entryRoll
-        : !isQueuedIntentActor(action.actor_id) &&
-            action.action_type === 'attack' &&
-            isPlayerActor(action.actor_id, participants)
-          ? await askPlayerForAttackDie({
-              encounterId,
-              action,
-              actorLabel:
-                participants?.find((participant) => participant.id === action.actor_id)?.name ??
-                action.actor_id,
-            })
+        : !isQueuedIntentActor(action.actor_id) && isPlayerActor(action.actor_id, participants)
+          ? action.action_type === 'attack'
+            ? await askPlayerForAttackDie({ encounterId, action, actorLabel })
+            : action.action_type === 'cast_spell'
+              ? await askPlayerForSpellCast({ action, actorLabel, participants })
+              : null
           : null;
       playerDieByAction.set(action, playerDie);
     }
@@ -310,6 +322,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       );
       if (!corrected?.length) {
         logger.warn('[CombatRepair] outcome=failed no usable corrected action; surfacing');
+        if (action.action_type === 'cast_spell' && engineTranscriptLines.length) {
+          // A refused spell already has an engine line. Do not swallow it behind a thrown error.
+          break;
+        }
         throw error;
       }
       // The corrected turn replaces the refused one. A second refusal is not repaired again.

@@ -36,6 +36,20 @@ describe('EngineOutcomeChip', () => {
     expect(screen.queryByText('EngineHIT')).not.toBeInTheDocument();
   });
 
+  it('renders AUTO-HIT and REFUSED badges from spell engine lines', () => {
+    const { rerender } = render(
+      <EngineOutcomeChip line="⚙️ Engine: Rook cast Magic Missile at Professor Umeboshi — AUTO-HIT. 8 force damage." />,
+    );
+    expect(screen.getByLabelText('Engine AUTO-HIT')).toBeInTheDocument();
+    expect(screen.getByText('AUTO-HIT')).toBeInTheDocument();
+
+    rerender(
+      <EngineOutcomeChip line={'⚙️ Engine: Rook\'s spell "Meteor Swarm" was refused (unknown spell). No roll, no damage, no wound.'} />,
+    );
+    expect(screen.getByLabelText('Engine REFUSED')).toBeInTheDocument();
+    expect(screen.getByText('REFUSED')).toBeInTheDocument();
+  });
+
   it('keeps the Engine label and MISS badge as separate nodes', () => {
     render(
       <EngineOutcomeChip line="⚙️ Engine: The Storyteller rolled 2 + 4 = 6 vs AC 12 — MISS." />,

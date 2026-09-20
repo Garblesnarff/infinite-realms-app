@@ -434,6 +434,65 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
   });
 
+  it('opens a Fire Bolt spell-attack popup from /enter first_action', async () => {
+    const spellAction = {
+      actor_id: 'storyteller-1',
+      action_type: 'cast_spell',
+      target_ids: ['vance-1'],
+      weapon_id: null,
+      spell_id: 'fire-bolt',
+      slot_level: null,
+      movement_feet: 0,
+    };
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({
+        encounter: { id: 'encounter-1' },
+        first_action: {
+          type: 'spell',
+          actor: 'storyteller-1',
+          actorLabel: 'The Storyteller',
+          target: 'vance-1',
+          targetLabel: 'Vance',
+          source: 'spell',
+          attackSource: 'spell',
+          weaponId: null,
+          weaponName: null,
+          spellId: 'fire-bolt',
+          slotLevel: null,
+          combat_action: spellAction,
+        },
+      }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [NPC_ACTION],
+      },
+      refresh,
+    );
+
+    expect(requestPlayerAttackRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'spell-attack',
+        weaponName: 'Fire Bolt',
+        targetLabel: 'Vance',
+      }),
+    );
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [spellAction],
+        playerAttackRoll: expect.objectContaining({
+          action: spellAction,
+          d20: 17,
+          autoRolled: false,
+        }),
+      }),
+    );
+  });
+
   it('uses /enter first_action and its engine modifier, ignoring model combat_actions', async () => {
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,

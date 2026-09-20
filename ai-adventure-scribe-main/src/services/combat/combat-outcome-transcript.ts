@@ -5,6 +5,10 @@
  * facts into transcript text while deliberately leaving numeric HP out; the engine supplies the
  * condition tier instead.
  */
+import { formatSpellEngineOutcome } from './combat-spell-transcript';
+
+export { formatRefusedSpellOutcome } from './combat-spell-transcript';
+
 export interface CombatTranscriptAction {
   action_type?: string;
   actor_id?: string;
@@ -29,7 +33,15 @@ export interface CombatEngineResult {
   targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   targetIsConscious?: boolean;
   targetIsDead?: boolean;
+  targetNewHp?: number;
   autoRolled?: boolean;
+  spellName?: string;
+  saveAbility?: string;
+  saveRoll?: number;
+  saveDC?: number;
+  saved?: boolean;
+  autoHit?: boolean;
+  results?: CombatEngineResult[];
   weaponResolution?: {
     requested?: string | null;
     resolved?: string;
@@ -73,7 +85,11 @@ export function formatCombatEngineOutcome(
   action: CombatTranscriptAction,
   value: unknown,
 ): string | null {
-  if (action.action_type !== 'attack' || !isRecord(value)) return null;
+  if (!isRecord(value)) return null;
+  if (action.action_type === 'cast_spell') {
+    return formatSpellEngineOutcome(action, value as CombatEngineResult);
+  }
+  if (action.action_type !== 'attack') return null;
   const result = value as CombatEngineResult;
   const actor = result.actorName ?? action.actor_id ?? 'Actor';
   const target = result.targetName ?? action.target_ids?.[0] ?? 'target';

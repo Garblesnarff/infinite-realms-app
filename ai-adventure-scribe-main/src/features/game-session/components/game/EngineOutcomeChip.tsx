@@ -7,16 +7,18 @@ import React from 'react';
  */
 export function summarizeEngineLine(line: string): { outcome: string; detail: string } {
   const detail = line.replace(/^[ \t]*⚙(?:️)?[ \t]*Engine:\s*/, '').trim();
-  const outcomeMatch = detail.match(/\b(CRITICAL HIT|HIT|MISS)\b/);
-  return { outcome: outcomeMatch?.[1] ?? 'Engine', detail };
+  const outcomeMatch = detail.match(/\b(CRITICAL HIT|AUTO-HIT|HIT|MISS|PASS|FAIL)\b/);
+  if (outcomeMatch) return { outcome: outcomeMatch[1], detail };
+  if (/\bwas refused\b/i.test(detail)) return { outcome: 'REFUSED', detail };
+  return { outcome: 'Engine', detail };
 }
 
 export const EngineOutcomeChip: React.FC<{ line: string }> = ({ line }) => {
   const { outcome, detail } = summarizeEngineLine(line);
   const tone =
-    outcome === 'MISS'
+    outcome === 'MISS' || outcome === 'REFUSED' || outcome === 'FAIL'
       ? 'border-white/15 text-white/80'
-      : outcome.includes('HIT')
+      : outcome.includes('HIT') || outcome === 'PASS'
         ? 'border-infinite-gold/50 text-infinite-gold'
         : 'border-white/20 text-white/85';
 

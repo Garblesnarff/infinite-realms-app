@@ -332,6 +332,55 @@ describe('combat-action-executor', () => {
       ]);
     });
 
+    it('sends the player attack-popup d20 on a spell intent', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'cast_spell' as const,
+        target_ids: ['target-1'],
+        weapon_id: null,
+        spell_id: 'fire-bolt',
+        slot_level: null,
+        movement_feet: 0,
+      };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: { results: [] } }),
+      });
+
+      await executeStructuredCombatAction(encounterId, action, 17);
+
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(body.intent).toEqual(
+        expect.objectContaining({
+          type: 'spell',
+          spellId: 'fire-bolt',
+          d20: 17,
+        }),
+      );
+    });
+
+    it('omits d20 on a save-spell payload when the player did not throw one', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'cast_spell' as const,
+        target_ids: ['target-1'],
+        weapon_id: null,
+        spell_id: 'acid-splash',
+        slot_level: null,
+        movement_feet: 0,
+      };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: { results: [] } }),
+      });
+
+      await executeStructuredCombatAction(encounterId, action);
+
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(body.intent.type).toBe('spell');
+      expect(body.intent).not.toHaveProperty('d20');
+    });
+
     it('should handle dash, dodge, and disengage actions correctly and return empty array', async () => {
       const actions = ['dash', 'dodge', 'disengage'].map((type) => ({
         actor_id: 'actor-1',

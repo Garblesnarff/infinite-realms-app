@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatCombatEngineOutcome,
+  formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
 } from '../combat-outcome-transcript';
 
@@ -89,3 +90,88 @@ describe('combat outcome transcript', () => {
     expect(prependCombatEngineTranscript('The narration.', [])).toBe('The narration.');
   });
 });
+
+const spell = {
+  actor_id: 'rook',
+  action_type: 'cast_spell',
+  target_ids: ['professor-umeboshi'],
+};
+
+describe('spell engine lines', () => {
+  it('renders an attack-roll spell from engine fields, without inventing damage on a miss', () => {
+    const line = formatCombatEngineOutcome(spell, {
+      results: [
+        {
+          actorName: 'Rook',
+          targetName: 'Professor Umeboshi',
+          spellName: 'Fire Bolt',
+          d20: 17,
+          attackBonus: 5,
+          totalAttackRoll: 22,
+          targetAC: 12,
+          hit: true,
+          finalDamage: 6,
+          damageType: 'fire',
+        },
+      ],
+    });
+
+    expect(line).toBe(
+      '⚙️ Engine: Rook cast Fire Bolt at Professor Umeboshi — spell attack 17 + 5 = 22 vs AC 12 — HIT. 6 fire damage.',
+    );
+  });
+
+  it('renders a save spell PASS/FAIL from engine fields', () => {
+    const line = formatCombatEngineOutcome(spell, {
+      results: [
+        {
+          actorName: 'Rook',
+          targetName: 'Professor Umeboshi',
+          spellName: 'Acid Splash',
+          saveAbility: 'dex',
+          saveRoll: 9,
+          saveDC: 13,
+          saved: false,
+          hit: true,
+          finalDamage: 4,
+          damageType: 'acid',
+        },
+      ],
+    });
+
+    expect(line).toBe(
+      '⚙️ Engine: Rook cast Acid Splash at Professor Umeboshi — DEX save 9 vs DC 13 — FAIL. 4 acid damage.',
+    );
+  });
+
+  it('renders Magic Missile as AUTO-HIT with engine damage and death', () => {
+    const line = formatCombatEngineOutcome(spell, {
+      results: [
+        {
+          actorName: 'Rook',
+          targetName: 'Professor Umeboshi',
+          spellName: 'Magic Missile',
+          autoHit: true,
+          hit: true,
+          finalDamage: 8,
+          damageType: 'force',
+          targetNewHp: 0,
+          targetIsDead: true,
+        },
+      ],
+    });
+
+    expect(line).toBe(
+      '⚙️ Engine: Rook cast Magic Missile at Professor Umeboshi — AUTO-HIT. 8 force damage. Professor Umeboshi is now at 0 HP and is DEAD.',
+    );
+  });
+
+  it('renders a refused spell with no roll, damage, or wound', () => {
+    expect(
+      formatRefusedSpellOutcome('Rook', 'Meteor Swarm', 'unknown spell'),
+    ).toBe(
+      '⚙️ Engine: Rook\'s spell "Meteor Swarm" was refused (unknown spell). No roll, no damage, no wound.',
+    );
+  });
+});
+

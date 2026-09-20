@@ -29,6 +29,8 @@ export interface PlayerAttackRollSpec {
   targetAc: number;
   advantage: boolean;
   disadvantage: boolean;
+  /** Spell attacks reuse this popup but must not claim a weapon AC line. */
+  kind?: 'weapon' | 'spell-attack';
 }
 
 /** What the entry gate asks for before it seats the encounter. */

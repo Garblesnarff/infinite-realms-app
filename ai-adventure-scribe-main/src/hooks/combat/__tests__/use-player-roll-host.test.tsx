@@ -96,6 +96,32 @@ describe('usePlayerRollHost teardown', () => {
     unmount();
   });
 
+  it('describes a spell-attack popup without claiming an AC line', async () => {
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      kind: 'spell-attack',
+      actorLabel: 'Rook',
+      targetLabel: 'Professor Umeboshi',
+      weaponName: 'Fire Bolt',
+      attackBonus: 0,
+      targetAc: 0,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    expect(requestDiceRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Fire Bolt spell attack vs Professor Umeboshi',
+        combatAttackRoll: true,
+      }),
+    );
+    expect(requestDiceRoll.mock.calls[0][0].ac).toBeUndefined();
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
+
   it('calls the initiative commit signal before the roll animation starts', async () => {
     const { unmount } = renderHook(() => usePlayerRollHost());
     const pending = requestPlayerInitiativeRoll({

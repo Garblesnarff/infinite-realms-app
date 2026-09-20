@@ -15,6 +15,7 @@ import type { DamageType } from '@/types/combat';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { getAuthHeaders } from '@/services/auth/TokenService';
+import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -79,8 +80,10 @@ export type ClientCombatIntent =
       targetIds: string[];
       spellId?: string;
       spellName: string;
-      slotLevel?: number;
+      slotLevel?: number | null;
       expectedVersion?: number;
+      /** Player's attack-roll die from the spell popup. Absent for saves and auto-hit. */
+      d20?: number;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   | { type: 'end_turn'; actorId: string }
@@ -216,16 +219,20 @@ export async function executeStructuredCombatActionWithBoundary(
       'dm',
       dmStartedAt,
     );
-  } else if (action.action_type === 'cast_spell' && action.spell_id) {
+  } else if (action.action_type === 'cast_spell') {
+    const spellName = playerCombatSpellLabel(action.spell_id, action.spell_id);
     result = await executeAuthoritativeCombatIntent(
       encounterId,
       {
         type: 'spell',
         actorId: action.actor_id,
         targetIds: action.target_ids,
-        spellId: action.spell_id,
-        spellName: action.spell_id,
-        slotLevel: action.slot_level || undefined,
+        ...(action.spell_id ? { spellId: action.spell_id } : {}),
+        spellName,
+        ...(typeof action.slot_level === 'number' && action.slot_level >= 1
+          ? { slotLevel: action.slot_level }
+          : {}),
+        d20: providedD20,
       },
       'dm',
       dmStartedAt,

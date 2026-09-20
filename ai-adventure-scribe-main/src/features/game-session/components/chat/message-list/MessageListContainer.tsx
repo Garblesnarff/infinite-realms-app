@@ -11,8 +11,10 @@ import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConf
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCombat } from '@/contexts/CombatContext';
+import { SpellTargetSaveCard } from '@/features/game-session/components/game/SpellTargetSaveCard';
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
+import { useSpellTargetSaveHost } from '@/hooks/combat/use-spell-target-save-host';
 import { markPlayerRollCommitted } from '@/services/combat/player-roll-bridge';
 
 interface MessageListContainerProps {
@@ -63,6 +65,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
+    const spellTargetSave = useSpellTargetSaveHost();
     const {
       currentRoll,
       batchProgress,
@@ -120,6 +123,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
           confirmation={entryConfirmation}
           onSpaceChange={onCombatEntrySpaceChange}
         />
+        <SpellTargetSaveCard pending={spellTargetSave} />
 
         <PendingIntentConfirmation
           encounter={combatState.activeEncounter}

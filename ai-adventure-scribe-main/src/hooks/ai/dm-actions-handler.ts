@@ -28,6 +28,7 @@ import {
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
 } from '@/services/combat/player-roll-bridge';
+import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
 import { slugify } from '@/utils/slug';
@@ -466,22 +467,36 @@ export async function handleDmActionsAndTransitions(
         playerParticipant &&
         isInCombat &&
         preflightNpcTurns?.combatEnded !== true &&
-        isPlayerTurn(activeEncounter, playerParticipant) &&
-        entryFirstAction.action_type === 'attack' &&
-        ((entryFirstActionPayload as any)?.reach === undefined ||
-          (entryFirstActionPayload as any)?.reach?.inReach === true)
+        isPlayerTurn(activeEncounter, playerParticipant)
       ) {
-        // The server always supplies this for an attack; malformed payloads use engine rolling.
-        const actualRollSpec = asEntryAttackRollSpec(entryFirstActionPayload);
-        if (actualRollSpec) {
-          const roll = await requestPlayerAttackRoll(actualRollSpec);
+        if (
+          entryFirstAction.action_type === 'attack' &&
+          ((entryFirstActionPayload as any)?.reach === undefined ||
+            (entryFirstActionPayload as any)?.reach?.inReach === true)
+        ) {
+          // The server always supplies this for an attack; malformed payloads use engine rolling.
+          const actualRollSpec = asEntryAttackRollSpec(entryFirstActionPayload);
+          if (actualRollSpec) {
+            const roll = await requestPlayerAttackRoll(actualRollSpec);
+            entryPlayerAttackRoll = {
+              action: entryFirstAction,
+              ...(roll.d20 === null ? {} : { d20: roll.d20 }),
+              autoRolled: roll.d20 === null,
+            };
+          } else {
+            entryPlayerAttackRoll = { action: entryFirstAction, autoRolled: true };
+          }
+        } else if (entryFirstAction.action_type === 'cast_spell') {
+          const spellRoll = await askPlayerForSpellCast({
+            action: entryFirstAction,
+            actorLabel: playerParticipant.name,
+            participants: activeEncounter.participants,
+          });
           entryPlayerAttackRoll = {
             action: entryFirstAction,
-            ...(roll.d20 === null ? {} : { d20: roll.d20 }),
-            autoRolled: roll.d20 === null,
+            ...(spellRoll.d20 === undefined ? {} : { d20: spellRoll.d20 }),
+            autoRolled: spellRoll.autoRolled,
           };
-        } else {
-          entryPlayerAttackRoll = { action: entryFirstAction, autoRolled: true };
         }
       }
       if (preflightNpcTurns?.combatEnded === true) {
