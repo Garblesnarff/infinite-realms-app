@@ -45,6 +45,17 @@ const authedRequest = (body: unknown) =>
   });
 
 describe('POST /v1/telemetry/client-failure', () => {
+  it('no bearer and no body currently returns 422 (desired 401)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/telemetry/client-failure', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    // Desired: 401. TypeBox body schema currently runs before requireAuth (#2120).
+    expect(response.status).toBe(422);
+  });
+
   it('rejects unauthenticated requests with 401', async () => {
     const response = await app.handle(
       new Request('http://localhost/v1/telemetry/client-failure', {

@@ -77,6 +77,18 @@ describe('character equipment update route', () => {
     expect(updateCharacter).not.toHaveBeenCalled();
   });
 
+  it('no bearer and no body currently returns 422 (desired 401)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/characters/character-1/damage', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    // Desired: 401. TypeBox body schema currently runs before requireAuth (#2120).
+    expect(response.status).toBe(422);
+  });
+
   it('returns 404 for a cross-user equipment update', async () => {
     const response = await app.handle(requestFor('foreign-token'));
 

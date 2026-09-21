@@ -70,6 +70,17 @@ const app = new Elysia().use(
 );
 
 describe('narrative fact HTTP boundary', () => {
+  it('no bearer and no body currently returns 422 (desired 401)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/narrative-facts/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    // Desired: 401. TypeBox body schema currently runs before requireAuth (#2120).
+    expect(response.status).toBe(422);
+  });
+
   it('rejects anonymous scene-state reads before the handler runs', async () => {
     calls.length = 0;
     const response = await app.handle(

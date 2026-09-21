@@ -9,6 +9,8 @@
  */
 /* eslint-disable no-console */
 
+import { isAppleDoubleSidecar } from './apple-double.ts';
+
 type TestCounts = {
   pass: number;
   skip: number;
@@ -51,7 +53,9 @@ function parseCounts(output: string): TestCounts {
   };
 }
 
-const files = Array.from(new Bun.Glob('src/**/*.test.ts').scanSync({ cwd: process.cwd() })).sort();
+const files = Array.from(new Bun.Glob('src/**/*.test.ts').scanSync({ cwd: process.cwd() }))
+  .filter((file) => !isAppleDoubleSidecar(file))
+  .sort();
 
 if (files.length === 0) {
   throw new Error('server-vitest isolated runner found no src/**/*.test.ts files');
