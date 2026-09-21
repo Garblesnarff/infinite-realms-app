@@ -2,6 +2,7 @@ import { MemoryImportanceService } from './MemoryImportanceService';
 import { MemoryRepository } from './MemoryRepository';
 
 import { llmApiClient } from '@/infrastructure/api';
+import logger from '@/lib/logger';
 import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import { stripAssetTags } from '@/lib/utils';
 import {
@@ -139,7 +140,10 @@ Extract 1-4 key memories in this JSON format:
       } catch {
         return { memories: [] };
       }
-    } catch {
+    } catch (error) {
+      // Keep extraction non-fatal for callers, but make failures visible when this path is
+      // deliberately moved off the turn's critical render path (#2095).
+      logger.warn('[MemoryService] Memory extraction failed (non-fatal):', error);
       return { memories: [] };
     }
   }

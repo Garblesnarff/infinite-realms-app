@@ -1,6 +1,6 @@
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { ContextBuilder } from './ai/context-builder';
-import { processDMResponse } from './ai/dm-response-processor';
+import { processDMResponse, runDeferredDMResponseWork } from './ai/dm-response-processor';
 import { formatConversationHistoryMessage } from './ai/shared/conversation-history';
 import { measurePromptSections } from './ai/shared/prompt-metrics';
 import {
@@ -91,6 +91,8 @@ export class AIService {
     relevantMemories?: Memory[];
     onProviderResponse?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
     onTurnPhase?: TurnPhaseReporter;
+    /** Called after the envelope parses, before combat/roll handling or deferred writes. */
+    onTextReady?: (response: AIResponse) => Promise<void> | void;
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -272,7 +274,7 @@ export class AIService {
       }
 
       try {
-        return await processDMResponse({
+        const responseParams = {
           rawResponse,
           context: params.context,
           message: params.message,
@@ -282,7 +284,22 @@ export class AIService {
           voiceContext,
           isFirstMessage,
           onTurnPhase: params.onTurnPhase,
-        });
+          deferSideEffects: Boolean(params.onTextReady),
+        };
+        const processedResponse = await processDMResponse(responseParams);
+
+        // The UI owns the render boundary. Once it confirms that the parsed response is ready,
+        // bookkeeping can start without making the player wait for memory/world/voice work.
+        if (params.onTextReady) {
+          await params.onTextReady(processedResponse);
+          void runDeferredDMResponseWork(responseParams, processedResponse).catch((error) => {
+            // The worker already logs each branch; this catches an unexpected orchestration
+            // failure so it never becomes an unhandled rejection in the browser.
+            logger.error('[AIService] Deferred response work failed:', error);
+          });
+        }
+
+        return processedResponse;
       } catch (processingError) {
         const error =
           processingError instanceof Error ? processingError : new Error(String(processingError));

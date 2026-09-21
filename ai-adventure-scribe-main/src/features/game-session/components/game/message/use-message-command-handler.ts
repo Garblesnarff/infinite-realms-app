@@ -20,6 +20,8 @@ interface UseMessageCommandHandlerProps {
   onAIResponse?: (message: ChatMessage) => Promise<void>;
 }
 
+type TextReadyHandler = (message: ChatMessage) => Promise<void> | void;
+
 export const useMessageCommandHandler = ({
   sessionId,
   updateGameSessionState,
@@ -102,7 +104,10 @@ export const useMessageCommandHandler = ({
     return { isSafetyCommand: false };
   };
 
-  const handleDiceCommand = async (playerInput: string): Promise<{ isDiceCommand: boolean }> => {
+  const handleDiceCommand = async (
+    playerInput: string,
+    onTextReady?: TextReadyHandler,
+  ): Promise<{ isDiceCommand: boolean }> => {
     const diceCommand = parseDiceCommand(playerInput);
     if (!diceCommand) {
       return { isDiceCommand: false };
@@ -151,12 +156,23 @@ export const useMessageCommandHandler = ({
 
       await sendMessage(diceRollMessage);
 
+      let earlyResponse: ChatMessage | null = null;
       const aiResponseMessage = await getAIResponse(
         [...messagesRef.current, diceRollMessage],
         sessionId,
+        undefined,
+        undefined,
+        onTextReady
+          ? async (message) => {
+              earlyResponse = message;
+              await onTextReady(message);
+            }
+          : undefined,
       );
 
-      await sendMessage(aiResponseMessage);
+      if (!earlyResponse || earlyResponse.text !== aiResponseMessage.text) {
+        await sendMessage(aiResponseMessage);
+      }
 
       if (onAIResponse) {
         try {

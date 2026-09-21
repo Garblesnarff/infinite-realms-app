@@ -21,6 +21,16 @@ interface WorldUpdateParams {
 }
 
 /**
+ * Remove world-update XML from the text shown to the player without waiting for any of the
+ * persistence or extraction work below. The response pipeline uses this synchronous projection
+ * before the first render; processWorldAndMemories still owns the actual writes afterwards.
+ */
+export function narrativeWithoutWorldUpdates(text: string): string {
+  const xmlParsed = parseXMLTagsFromResponse(text);
+  return xmlParsed.hadTags ? xmlParsed.narrative : text;
+}
+
+/**
  * Extracted from dm-response-processor.ts
  * Processes XML tags for memories and world updates, or falls back to traditional extraction.
  */

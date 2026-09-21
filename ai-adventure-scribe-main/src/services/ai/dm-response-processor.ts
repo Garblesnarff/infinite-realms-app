@@ -1,7 +1,10 @@
 /* eslint-disable max-lines, @typescript-eslint/no-explicit-any, no-useless-escape */
 import { applyAssetPostProcessing, insertAssetTags, getCachedAssets } from './asset-processor';
 import { voiceConsistencyService } from '../voice-consistency-service';
-import { processWorldAndMemories } from './response/world-update-processor';
+import {
+  narrativeWithoutWorldUpdates,
+  processWorldAndMemories,
+} from './response/world-update-processor';
 
 import type { SessionVoiceContext } from '../voice-consistency-service';
 import type { ChatMessage, NarrationSegment, GameContext, AIResponse } from './shared/types';
@@ -25,6 +28,164 @@ interface ProcessDMResponseParams {
   roll_requests?: unknown[];
   dice_rolls?: unknown[];
   onTurnPhase?: TurnPhaseReporter;
+  /** Skip post-response side effects so the caller can render first. */
+  deferSideEffects?: boolean;
+}
+
+const DEFERRED_RESPONSE_TIMEOUT_MS = 20_000;
+
+function responseTextForDeferredWork(rawResponse: string, fallback: string): string {
+  try {
+    const cleaned = rawResponse
+      .trim()
+      .replace(/^```(?:json)?\s*/, '')
+      .replace(/\s*```$/, '');
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    return typeof parsed.text === 'string' ? parsed.text : fallback;
+  } catch {
+    // Plain-text responses with an XML envelope need the original source for deferred
+    // persistence. Otherwise retain the already-cleaned projection for legacy plain text.
+    return /<(?:memories|world_updates)\b/i.test(rawResponse) ? rawResponse : fallback;
+  }
+}
+
+async function withDeferredTimeout<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${DEFERRED_RESPONSE_TIMEOUT_MS}ms`)),
+      DEFERRED_RESPONSE_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([operation(), timeout]);
+  } catch (error) {
+    logger.error(`[DMResponse] Deferred ${label} failed:`, error);
+    throw error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function assignResponseVoices(
+  params: ProcessDMResponseParams,
+  result: AIResponse,
+): Promise<void> {
+  if (!result.narrationSegments?.length || !params.context.sessionId || !params.voiceContext)
+    return;
+
+  const normalizedSegments = result.narrationSegments.map((segment: NarrationSegment) => ({
+    ...segment,
+    type:
+      segment.type === 'dm'
+        ? 'narration'
+        : segment.type === 'character'
+          ? 'dialogue'
+          : (segment.type as string),
+  }));
+
+  await voiceConsistencyService.processVoiceAssignments(
+    params.context.sessionId,
+    stripEngineGeneratedLinesFromSegments(normalizedSegments),
+  );
+  logger.info('🎪 Processed voice assignments for character consistency');
+}
+
+async function importStructuredEnemies(result: AIResponse): Promise<unknown[]> {
+  const combatantEntries = result.combatants || [];
+  if (!combatantEntries.length) return [];
+
+  const monsterCatalog = new Map(
+    (await import('@/services/encounters/srd-loader'))
+      .loadMonsters()
+      .flatMap((monster) => [
+        [monster.id.toLowerCase(), monster] as const,
+        [monster.name.toLowerCase(), monster] as const,
+      ]),
+  );
+
+  return combatantEntries.flatMap((entry: any) => {
+    const monster = monsterCatalog.get(String(entry.monster_id || entry.name).toLowerCase());
+    if (!monster) return [];
+    return Array.from({ length: Math.max(1, Number(entry.count) || 1) }, () => ({
+      monsterId: monster.id,
+      name: monster.name,
+      type: ['humanoid', 'beast', 'undead', 'dragon', 'construct'].includes(monster.type || '')
+        ? monster.type
+        : 'unknown',
+      estimatedCR: String(monster.cr),
+      description: `${monster.size || ''} ${monster.type || ''}`.trim(),
+      suggestedHP: monster.hitPoints || 1,
+      suggestedAC: monster.armorClass || 10,
+    }));
+  });
+}
+
+async function addStructuredEnemies(result: AIResponse): Promise<AIResponse> {
+  const structuredEnemies = await importStructuredEnemies(result);
+  if (!structuredEnemies.length || !result.combatDetection) return result;
+
+  return {
+    ...result,
+    combatDetection: {
+      ...result.combatDetection,
+      enemies: structuredEnemies,
+    },
+  };
+}
+
+/**
+ * Run the non-critical response work after the first message render. Every independent branch
+ * has its own timeout so one slow extractor or world update cannot hold the turn open.
+ */
+export async function runDeferredDMResponseWork(
+  params: ProcessDMResponseParams,
+  result: AIResponse,
+): Promise<void> {
+  const sourceText = responseTextForDeferredWork(params.rawResponse, result.text);
+  const tasks: Promise<unknown>[] = [
+    withDeferredTimeout('memory and world updates', () =>
+      processWorldAndMemories({
+        text: sourceText,
+        context: params.context,
+        message: params.message,
+        conversationHistory: params.conversationHistory,
+        userPlan: params.userPlan,
+        turnCount: params.turnCount,
+        onTurnPhase: params.onTurnPhase,
+      }),
+    ),
+  ];
+
+  await Promise.allSettled(tasks);
+}
+
+/** Preserve the old fully-processed return shape for direct callers that do not opt in to defer. */
+export async function processDMResponseSideEffects(
+  params: ProcessDMResponseParams,
+  result: AIResponse,
+): Promise<AIResponse> {
+  try {
+    await assignResponseVoices(params, result);
+  } catch (voiceError) {
+    logger.warn('Voice assignment processing failed (non-fatal):', voiceError);
+  }
+
+  const sourceText = responseTextForDeferredWork(params.rawResponse, result.text);
+  const processedText = await processWorldAndMemories({
+    text: sourceText,
+    context: params.context,
+    message: params.message,
+    conversationHistory: params.conversationHistory,
+    userPlan: params.userPlan,
+    turnCount: params.turnCount,
+    onTurnPhase: params.onTurnPhase,
+  });
+  return {
+    ...result,
+    text: processedText,
+  };
 }
 
 /**
@@ -35,16 +196,12 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   const {
     rawResponse,
     context,
-    message,
-    conversationHistory,
-    userPlan,
-    turnCount,
     voiceContext,
     isFirstMessage,
     combatDetection,
     roll_requests,
     dice_rolls,
-    onTurnPhase,
+    deferSideEffects,
   } = params;
 
   const baseCombatDetection: CombatDetectionResult = combatDetection ?? {
@@ -227,70 +384,14 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     }));
   }
 
-  // 2. Process voice assignments if we have structured data
-  if (result.narrationSegments && context.sessionId && voiceContext) {
-    try {
-      // Normalize segment types for compatibility
-      const normalizedSegments = result.narrationSegments.map((segment: NarrationSegment) => ({
-        ...segment,
-        type:
-          segment.type === 'dm'
-            ? 'narration'
-            : segment.type === 'character'
-              ? 'dialogue'
-              : (segment.type as string),
-      }));
+  // World-update tags are an internal envelope, not player-facing text. Strip them synchronously
+  // so parsing can hand the UI a clean response before any persistence begins.
+  result.text = narrativeWithoutWorldUpdates(result.text);
 
-      await voiceConsistencyService.processVoiceAssignments(
-        context.sessionId,
-        stripEngineGeneratedLinesFromSegments(normalizedSegments),
-      );
-      logger.info('🎪 Processed voice assignments for character consistency');
-    } catch (voiceError) {
-      logger.warn('Voice assignment processing failed (non-fatal):', voiceError);
-    }
-  }
-
-  // 3. Process world and memory updates (XML-tagged or fallback)
-  result.text = await processWorldAndMemories({
-    text: result.text,
-    context,
-    message,
-    conversationHistory,
-    userPlan,
-    turnCount,
-    onTurnPhase,
-  });
-
-  // 4. Wrap everything into AIResponse
+  // 2. Wrap everything into AIResponse. Voice and memory/world writes are deliberately scheduled
+  // by AIService after its onTextReady callback when requested; combat stats are resolved below.
   const transition = structuredResponse?.combat_transition as 'none' | 'start' | 'end' | undefined;
-  const combatantEntries = structuredResponse?.combatants || [];
-  const monsterCatalog = combatantEntries.length
-    ? new Map(
-        (await import('@/services/encounters/srd-loader'))
-          .loadMonsters()
-          .flatMap((monster) => [
-            [monster.id.toLowerCase(), monster] as const,
-            [monster.name.toLowerCase(), monster] as const,
-          ]),
-      )
-    : new Map();
-  const structuredEnemies = combatantEntries.flatMap((entry: any) => {
-    const monster = monsterCatalog.get(String(entry.monster_id || entry.name).toLowerCase());
-    if (!monster) return [];
-    return Array.from({ length: Math.max(1, Number(entry.count) || 1) }, () => ({
-      monsterId: monster.id,
-      name: monster.name,
-      type: ['humanoid', 'beast', 'undead', 'dragon', 'construct'].includes(monster.type || '')
-        ? monster.type
-        : 'unknown',
-      estimatedCR: String(monster.cr),
-      description: `${monster.size || ''} ${monster.type || ''}`.trim(),
-      suggestedHP: monster.hitPoints || 1,
-      suggestedAC: monster.armorClass || 10,
-    }));
-  });
-  const enhancedResult: AIResponse = {
+  let enhancedResult: AIResponse = {
     ...result,
     options: structuredResponse?.options,
     roll_requests: structuredResponse?.roll_requests || roll_requests,
@@ -312,10 +413,18 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
       combatType: baseCombatDetection.combatType,
       shouldStartCombat: transition === 'start',
       shouldEndCombat: transition === 'end',
-      enemies: structuredEnemies.length ? structuredEnemies : baseCombatDetection.enemies || [],
+      enemies: baseCombatDetection.enemies || [],
       combatActions: baseCombatDetection.combatActions || [],
     },
   };
 
+  // SRD catalog lookup is local and fast, but the resolved stats are required by combat entry.
+  // Keep it ahead of the render callback and handleDmActionsAndTransitions; only LLM-independent
+  // memory/world work belongs in the detached deferred path.
+  enhancedResult = await addStructuredEnemies(enhancedResult);
+
+  if (deferSideEffects) return enhancedResult;
+
+  enhancedResult = await processDMResponseSideEffects(params, enhancedResult);
   return enhancedResult;
 }

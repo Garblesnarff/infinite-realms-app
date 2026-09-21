@@ -609,6 +609,36 @@ describe('processDMResponse', () => {
       expect(result.combat_actions).toHaveLength(1);
       expect(result.text).toBe('The goblin reaches for its blade.');
     });
+
+    it('resolves SRD enemy stats before the deferred combat response returns', async () => {
+      const result = await processDMResponse({
+        ...defaultParams,
+        deferSideEffects: true,
+        rawResponse: JSON.stringify({
+          text: 'A goblin steps from the shadows.',
+          combat_transition: 'start',
+          combatants: [{ monster_id: 'srd:goblin', name: 'Goblin', count: 1 }],
+          combat_entry_pending: {
+            trigger: 'combat_transition',
+            detail: 'combat_transition="start"',
+            combatants: [{ name: 'Goblin', monsterId: 'srd:goblin', count: 1 }],
+            sceneSpec: null,
+            sceneSpecSynthesized: false,
+          },
+        }),
+      });
+
+      expect(result.combatDetection?.enemies).toEqual([
+        expect.objectContaining({
+          monsterId: 'srd:goblin',
+          name: 'Goblin',
+          type: 'humanoid',
+          suggestedHP: 7,
+          suggestedAC: 15,
+        }),
+      ]);
+    });
+
     it('should include combat detection results in the final response', async () => {
       const combatDetection = {
         isCombat: true,

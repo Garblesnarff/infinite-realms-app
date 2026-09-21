@@ -4,6 +4,7 @@ import { useRef, useCallback, useState } from 'react';
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest, LocalNotice } from '@/hooks/ai/types';
 import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
+import type { AIResponse } from '@/services/ai-service';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
@@ -88,6 +89,24 @@ export interface EnhancedChatMessage extends ChatMessage {
   };
 }
 
+const DEFERRED_TASK_TIMEOUT_MS = 20_000;
+
+function runDeferredTask(label: string, task: () => Promise<unknown>): void {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${DEFERRED_TASK_TIMEOUT_MS}ms`)),
+      DEFERRED_TASK_TIMEOUT_MS,
+    );
+  });
+
+  void Promise.race([Promise.resolve().then(task), timeout])
+    .catch((error) => logger.error(`[useAIResponse] Deferred ${label} failed:`, error))
+    .finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    });
+}
+
 // Re-export RollRequest for backward compatibility
 export type { RollRequest } from '@/types/roll-request';
 
@@ -108,6 +127,7 @@ export const useAIResponse = (): {
     sessionId: string,
     turnCount?: number,
     onTurnPhase?: TurnPhaseReporter,
+    onTextReady?: (message: EnhancedChatMessage) => Promise<void> | void,
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
@@ -166,6 +186,7 @@ export const useAIResponse = (): {
       sessionId: string,
       turnCount?: number,
       onTurnPhase?: TurnPhaseReporter,
+      onTextReady?: (message: EnhancedChatMessage) => Promise<void> | void,
     ): Promise<EnhancedChatMessage> => {
       try {
         logger.info('Getting AI response for session:', sessionId);
@@ -350,6 +371,50 @@ export const useAIResponse = (): {
           turnCount,
           relevantMemories,
           onTurnPhase,
+          ...(onTextReady
+            ? {
+                onTextReady: async (parsedResult: AIResponse) => {
+                  const earlyRollRequests = (parsedResult.roll_requests || []) as RollRequest[];
+                  const earlyShouldStartCombat =
+                    !!parsedResult.combatDetection?.shouldStartCombat ||
+                    parsedResult.combat_transition === 'start';
+                  let earlyText = parsedResult.text;
+                  if (
+                    !isInCombat &&
+                    !earlyShouldStartCombat &&
+                    earlyRollRequests.length === 0 &&
+                    parsedResult.options?.length
+                  ) {
+                    earlyText = `${earlyText.trim()}\n\n${parsedResult.options.join('\n')}`;
+                  }
+
+                  await onTextReady({
+                    text: earlyText,
+                    sender: 'dm',
+                    timestamp: new Date().toISOString(),
+                    context: {
+                      emotion: 'neutral',
+                      intent: 'response',
+                      combat_transition: parsedResult.combat_transition ?? 'none',
+                      scene_spec: parsedResult.scene_spec != null,
+                    },
+                    narrationSegments: parsedResult.narrationSegments,
+                    diceRolls: (parsedResult.dice_rolls || []) as DiceRoll[],
+                    rollRequests: earlyRollRequests,
+                    sceneSpec: (parsedResult.scene_spec as SceneSpec | null | undefined) ?? null,
+                    combatDetection: {
+                      isCombat: parsedResult.combatDetection?.isCombat || false,
+                      confidence: parsedResult.combatDetection?.confidence || 1,
+                      combatType: parsedResult.combatDetection?.combatType || 'none',
+                      shouldStartCombat: earlyShouldStartCombat,
+                      shouldEndCombat: !!parsedResult.combatDetection?.shouldEndCombat,
+                      enemies: parsedResult.combatDetection?.enemies || [],
+                      combatActions: parsedResult.combatDetection?.combatActions || [],
+                    },
+                  });
+                },
+              }
+            : {}),
         });
 
         // Extract response data (result type has both snake_case and camelCase variants)
@@ -416,8 +481,11 @@ export const useAIResponse = (): {
           characterId: (characterRecord.id as string) || 'player',
         });
 
-        // Log outgoing roll requests (delegated to session-logger)
-        await logRollRequests(sessionId, processedRolls.playerRollRequests);
+        // Log outgoing roll requests off the critical path; the processed requests themselves
+        // already gate the dice UI and composer state below.
+        runDeferredTask('roll request logging', () =>
+          logRollRequests(sessionId, processedRolls.playerRollRequests),
+        );
 
         // Update game phase based on combat detection (delegated to game-phase-updater)
         updateGamePhase({
@@ -427,22 +495,20 @@ export const useAIResponse = (): {
           setGamePhase,
         });
 
-        // Process voice assignments if we have narration segments
+        // Voice mapping is useful, but it must not delay text or combat/roll gating.
         if (narrationSegments && narrationSegments.length > 0) {
           logger.info(
             'Received structured response with',
             narrationSegments.length,
             'narration segments',
           );
-          try {
+          runDeferredTask('voice assignment', async () => {
             await voiceConsistencyService.processVoiceAssignments(
               sessionId,
               stripEngineGeneratedLinesFromSegments(narrationSegments),
             );
             logger.info('Processed voice assignments successfully');
-          } catch (voiceError) {
-            logger.warn('Warning: Failed to process voice assignments:', voiceError);
-          }
+          });
         } else {
           logger.info('Received text-only response');
         }
@@ -473,7 +539,9 @@ export const useAIResponse = (): {
           if (result.options?.length) {
             finalResponseText = `${finalResponseText.trim()}\n\n${result.options.join('\n')}`;
           } else {
-            finalResponseText = await ensureActionOptions(finalResponseText);
+            runDeferredTask('action options', async () => {
+              await ensureActionOptions(finalResponseText);
+            });
           }
         }
 

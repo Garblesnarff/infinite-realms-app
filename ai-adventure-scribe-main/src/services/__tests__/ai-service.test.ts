@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { generateCampaignDescription, generateCampaignName } from '../ai/campaign-generator';
 import { ContextBuilder } from '../ai/context-builder';
-import { processDMResponse } from '../ai/dm-response-processor';
+import { processDMResponse, runDeferredDMResponseWork } from '../ai/dm-response-processor';
 import { AIService } from '../ai-service';
 import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
@@ -35,6 +35,7 @@ vi.mock('../ai/context-builder', () => ({
 
 vi.mock('../ai/dm-response-processor', () => ({
   processDMResponse: vi.fn(),
+  runDeferredDMResponseWork: vi.fn(),
 }));
 
 vi.mock('../ai/campaign-generator', () => ({
@@ -221,6 +222,34 @@ describe('AIService', () => {
         stackHead: expect.stringContaining('Error: malformed response state'),
       });
       expect(logger.error).not.toHaveBeenCalledWith('LLM API failed:', processingError);
+    });
+
+    it('calls the render boundary before starting deferred response work', async () => {
+      const events: string[] = [];
+      const mockParams: any = {
+        message: 'Render before bookkeeping',
+        context: { ...mockContext, sessionId: 'render-boundary-session' },
+        conversationHistory: [],
+        onTextReady: vi.fn(() => {
+          events.push('text shown');
+        }),
+      };
+
+      vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);
+      vi.mocked(ContextBuilder.build).mockResolvedValue('Build prompt');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'Parsed response' } as any);
+      vi.mocked(runDeferredDMResponseWork).mockImplementation(async () => {
+        events.push('deferred work');
+      });
+
+      await AIService.chatWithDM(mockParams);
+      await Promise.resolve();
+
+      expect(events).toEqual(['text shown', 'deferred work']);
+      expect(processDMResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ deferSideEffects: true }),
+      );
     });
   });
 

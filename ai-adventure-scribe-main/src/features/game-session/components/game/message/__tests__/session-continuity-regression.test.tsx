@@ -19,6 +19,8 @@ const {
   mockSendMessage,
   mockToast,
   mockValidateSession,
+  mockParseDiceCommand,
+  mockRollDice,
 } = vi.hoisted(() => ({
   mockExtractMemories: vi.fn().mockResolvedValue(undefined),
   mockGetAIResponse: vi.fn().mockResolvedValue({
@@ -29,6 +31,8 @@ const {
   mockSendMessage: vi.fn().mockResolvedValue(undefined),
   mockToast: vi.fn(),
   mockValidateSession: vi.fn().mockResolvedValue(true),
+  mockParseDiceCommand: vi.fn(),
+  mockRollDice: vi.fn(),
 }));
 
 // ------- module mocks (hoisted to top by Vitest; must appear before imports) -------
@@ -75,7 +79,7 @@ vi.mock('@/utils/safetyCommands', () => ({
 }));
 
 vi.mock('@/utils/diceCommandParser', () => ({
-  parseDiceCommand: vi.fn().mockReturnValue(null),
+  parseDiceCommand: mockParseDiceCommand,
 }));
 
 vi.mock('@/utils/chatSanitizer', () => ({
@@ -86,7 +90,7 @@ vi.mock('@/utils/roll-request/validate', () => ({
   truncateAtRollRequest: (text: string) => text,
 }));
 
-vi.mock('@/utils/diceUtils', () => ({ rollDice: vi.fn() }));
+vi.mock('@/utils/diceUtils', () => ({ rollDice: mockRollDice }));
 
 vi.mock('@/utils/error-handler', () => ({ handleAsyncError: vi.fn() }));
 
@@ -185,6 +189,14 @@ describe('session-continuity regression', () => {
     mockSendMessage.mockResolvedValue(undefined);
     mockExtractMemories.mockResolvedValue(undefined);
     mockGetAIResponse.mockResolvedValue({ text: 'The goblin snarls.', rollRequests: [] });
+    mockParseDiceCommand.mockReturnValue(null);
+    mockRollDice.mockReturnValue({
+      results: [15],
+      keptResults: [15],
+      total: 15,
+      naturalRoll: 15,
+      critical: false,
+    });
   });
 
   it('dispatches getAIResponse with the current sessionId after a prop change (stale-closure regression)', async () => {
@@ -202,6 +214,7 @@ describe('session-continuity regression', () => {
       expect.any(Array),
       'session-B', // must NOT be stale "session-A"
       undefined,
+      expect.any(Function),
       expect.any(Function),
     );
   });
@@ -258,7 +271,53 @@ describe('session-continuity regression', () => {
       'session-B', // not stale "session-A"
       undefined,
       expect.any(Function),
+      expect.any(Function),
     );
+  });
+
+  it('keeps the composer blocked when a dice turn starts combat preflight without another roll', async () => {
+    mockParseDiceCommand.mockReturnValue({
+      isValid: true,
+      formula: '1d20',
+      dieType: 20,
+      count: 1,
+      modifier: 0,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    const combatResponse = {
+      text: 'Combat begins.',
+      sender: 'dm',
+      rollRequests: [],
+      context: { combat_transition: 'start' },
+      combatDetection: { shouldStartCombat: true },
+    };
+    let resolveAIResponse: ((response: typeof combatResponse) => void) | undefined;
+    const pendingAIResponse = new Promise<typeof combatResponse>((resolve) => {
+      resolveAIResponse = resolve;
+    });
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((response: typeof combatResponse) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(combatResponse);
+      return pendingAIResponse;
+    });
+
+    const { ref } = renderHandler('session-dice-combat-preflight');
+    let sendPromise: Promise<void>;
+    await act(async () => {
+      sendPromise = ref.send('Roll a d20');
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalled());
+    });
+
+    await waitFor(() => expect(ref.processing.current).toBe(true));
+
+    await act(async () => {
+      resolveAIResponse?.(combatResponse);
+      await sendPromise;
+    });
   });
 
   it('persists engine lines but strips them from the combat callback input', async () => {
@@ -302,5 +361,60 @@ describe('session-continuity regression', () => {
         variant: 'destructive',
       }),
     );
+  });
+
+  it('renders the DM response before response memory extraction resolves', async () => {
+    const events: string[] = [];
+    const extractionResolvers: Array<() => void> = [];
+    mockExtractMemories.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          events.push('extraction started');
+          extractionResolvers.push(resolve);
+        }),
+    );
+    mockSendMessage.mockImplementation(async (message: { sender?: string }) => {
+      if (message.sender === 'dm') events.push('text shown');
+    });
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const response = { text: 'The lantern flame steadies.', sender: 'dm', rollRequests: [] };
+      const onTextReady = args[4] as ((message: typeof response) => Promise<void>) | undefined;
+      await onTextReady?.(response);
+      return response;
+    });
+
+    const { ref } = renderHandler('session-render-before-extraction');
+    await act(async () => {
+      await ref.send('I light the lantern.');
+    });
+
+    await waitFor(() => expect(events).toContain('text shown'));
+    expect(events.indexOf('text shown')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('extraction started')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('text shown')).toBeLessThan(events.indexOf('extraction started'));
+    expect(ref.processing.current).toBe(false);
+
+    extractionResolvers.forEach((resolve) => resolve());
+  });
+
+  it('unlocks the composer when response memory extraction fails', async () => {
+    mockExtractMemories.mockRejectedValue(new Error('extract failed'));
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const response = {
+        text: 'The door opens onto moonlit stone.',
+        sender: 'dm',
+        rollRequests: [],
+      };
+      const onTextReady = args[4] as ((message: typeof response) => Promise<void>) | undefined;
+      await onTextReady?.(response);
+      return response;
+    });
+
+    const { ref } = renderHandler('session-extraction-failure');
+    await act(async () => {
+      await ref.send('I open the door.');
+    });
+
+    expect(ref.processing.current).toBe(false);
   });
 });

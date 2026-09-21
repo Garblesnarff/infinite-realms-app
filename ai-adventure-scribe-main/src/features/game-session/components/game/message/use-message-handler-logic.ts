@@ -46,6 +46,23 @@ interface UseMessageHandlerLogicProps {
  * to reduce render cycle overhead and stabilize identity.
  */
 const headerMode = String(import.meta?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short').toLowerCase();
+const DEFERRED_TASK_TIMEOUT_MS = 20_000;
+
+function runDeferredTask(label: string, task: () => Promise<unknown>): void {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${DEFERRED_TASK_TIMEOUT_MS}ms`)),
+      DEFERRED_TASK_TIMEOUT_MS,
+    );
+  });
+
+  void Promise.race([Promise.resolve().then(task), timeout])
+    .catch((error) => logger.error(`[MessageHandler] Deferred ${label} failed:`, error))
+    .finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    });
+}
 
 const toHeaderExcerpt = (raw: string, limit = 220) => {
   if (!raw) return '';
@@ -76,7 +93,7 @@ export const useMessageHandlerLogic = ({
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
 } => {
-  const { messages, sendMessage, queueStatus } = useMessageContext();
+  const { messages, sendMessage } = useMessageContext();
   const { extractMemories } = useMemoryContext();
   const {
     getAIResponse,
@@ -102,6 +119,17 @@ export const useMessageHandlerLogic = ({
   const messagesRef = React.useRef(messages);
   const turnPhaseRef = React.useRef<ReturnType<typeof createTurnPhaseReporter> | null>(null);
   const wasSendingRef = React.useRef(false);
+  const [composerBlocked, setComposerBlockedState] = React.useState(false);
+  const composerBlockedRef = React.useRef(false);
+
+  const setComposerBlocked = React.useCallback((blocked: boolean) => {
+    composerBlockedRef.current = blocked;
+    setComposerBlockedState(blocked);
+    if (!blocked) {
+      turnPhaseRef.current?.('composer enabled');
+      turnPhaseRef.current = null;
+    }
+  }, []);
 
   // Update refs when values change
   React.useEffect(() => {
@@ -113,13 +141,12 @@ export const useMessageHandlerLogic = ({
   }, [messages]);
 
   React.useEffect(() => {
-    const composerEnabled = !isSending && queueStatus !== 'processing';
-    if (wasSendingRef.current && composerEnabled) {
+    if (wasSendingRef.current && !isSending && !composerBlockedRef.current) {
       turnPhaseRef.current?.('composer enabled');
       turnPhaseRef.current = null;
     }
     wasSendingRef.current = isSending;
-  }, [isSending, queueStatus]);
+  }, [isSending]);
 
   // Assuming validateSession is still relevant or adapted
   const validateSession = useSessionValidator({ sessionId, campaignId, characterId });
@@ -131,8 +158,11 @@ export const useMessageHandlerLogic = ({
   ): Promise<void> => {
     const turnPhase = createTurnPhaseReporter();
     turnPhaseRef.current = turnPhase;
+    setComposerBlocked(true);
     turnPhase('submit');
     let turnCountAdvanced = false;
+    let textShown = false;
+    let earlyMessage: ChatMessage | null = null;
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
 
@@ -147,8 +177,22 @@ export const useMessageHandlerLogic = ({
       }
 
       // Check if this is a dice roll command
-      const diceCommandResult = await handleDiceCommand(playerInput);
+      let diceRollPending = false;
+      let combatPreflightPending = false;
+      const diceCommandResult = await handleDiceCommand(playerInput, async (earlyResponse) => {
+        diceRollPending = Boolean(earlyResponse.rollRequests?.length);
+        combatPreflightPending = Boolean(
+          diceRollPending ||
+          earlyResponse.combatDetection?.shouldStartCombat ||
+          earlyResponse.context?.combat_transition === 'start',
+        );
+        turnPhase('text shown');
+        runDeferredTask('dice DM message persistence', () => sendMessage(earlyResponse));
+        setComposerBlocked(combatPreflightPending);
+        if (!combatPreflightPending) setComposerBlocked(false);
+      });
       if (diceCommandResult.isDiceCommand) {
+        if (!combatPreflightPending) setComposerBlocked(false);
         return;
       }
 
@@ -184,14 +228,6 @@ export const useMessageHandlerLogic = ({
       // Update the ref to reflect the new turn count
       turnCountRef.current = newTurnCount;
 
-      logger.info('[Memory Flow] Extracting memories from player input');
-      // Skip extraction for dice roll results — the formatted roll text
-      // (e.g., "Stealth Check: 15 (nat 13+2) vs DC 13 ✓") is transient scaffolding,
-      // not a durable game memory. The AI response that follows the roll IS extracted.
-      if (providedContext?.intent !== 'dice_roll') {
-        await extractMemories(playerInput); // Assuming this is non-critical path for state update
-      }
-
       // Optional: System acknowledgment (can be removed if AI response is fast)
       // const systemMessage: ChatMessage = { text: "Processing...", sender: 'system', context: { intent: 'acknowledgment' } };
       // await sendMessage(systemMessage);
@@ -204,6 +240,49 @@ export const useMessageHandlerLogic = ({
         sessionId,
         undefined,
         turnPhase,
+        async (earlyResponse) => {
+          const hasEarlyRollRequests = Boolean(earlyResponse.rollRequests?.length);
+          const combatGatePending = Boolean(
+            hasEarlyRollRequests ||
+            earlyResponse.combatDetection?.shouldStartCombat ||
+            earlyResponse.context?.combat_transition === 'start',
+          );
+          const earlyText = hasEarlyRollRequests
+            ? truncateAtRollRequest(sanitizeDMText(earlyResponse.text))
+            : sanitizeDMText(earlyResponse.text);
+
+          earlyMessage = { ...earlyResponse, text: earlyText };
+          textShown = Boolean(earlyText || earlyResponse.narrationSegments?.length);
+          if (textShown) {
+            // MessageQueue is optimistic: the message enters the rendered cache before its
+            // persistence request resolves. Mark the render boundary before any critical action
+            // handling and let the persistence failure be logged independently.
+            turnPhase('text shown');
+            setComposerBlocked(combatGatePending);
+            runDeferredTask('DM message persistence', () => sendMessage(earlyMessage!));
+
+            if (providedContext?.intent !== 'dice_roll') {
+              runDeferredTask('player memory extraction', () => extractMemories(playerInput));
+            }
+
+            const narrativeOnly = parseMessageOptions(earlyText).content;
+            if (narrativeOnly) {
+              runDeferredTask('AI response memory extraction', () =>
+                extractMemories(narrativeOnly),
+              );
+            }
+
+            if (earlyText) {
+              const blurb = headerMode === 'off' ? '' : toHeaderExcerpt(earlyText);
+              runDeferredTask('scene-state persistence', () =>
+                updateGameSessionState((prev: ExtendedGameSession) => ({
+                  ...prev,
+                  current_scene_description: blurb,
+                })),
+              );
+            }
+          }
+        },
       );
       // Sanitize the AI response text first
       let processedText = sanitizeDMText(aiResponseMessage.text);
@@ -244,41 +323,49 @@ export const useMessageHandlerLogic = ({
           ? [{ text: aiResponseMessage.localNotice, persist: true }]
           : []);
       for (const notice of localNotices) {
-        await sendMessage({
-          text: notice.text,
-          sender: 'system',
-          timestamp: new Date().toISOString(),
-          persist: notice.persist,
-          context: { intent: 'combat_pending_intent' },
-        });
+        runDeferredTask('local notice persistence', () =>
+          sendMessage({
+            text: notice.text,
+            sender: 'system',
+            timestamp: new Date().toISOString(),
+            persist: notice.persist,
+            context: { intent: 'combat_pending_intent' },
+          }),
+        );
+      }
+
+      // The early callback normally rendered the parsed envelope. Combat resolution may replace
+      // the text with authoritative engine narration; persist that continuation only when it
+      // differs, so the initial DM response is visible while the gate runs.
+      if (
+        (!textShown || (earlyMessage && sanitizedAiResponseMessage.text !== earlyMessage.text)) &&
+        (sanitizedAiResponseMessage.text || sanitizedAiResponseMessage.narrationSegments?.length)
+      ) {
+        if (!textShown) {
+          turnPhase('text shown');
+          setComposerBlocked(
+            Boolean(hasRollRequests || sanitizedAiResponseMessage.combatDetection?.isCombat),
+          );
+        }
+        runDeferredTask('DM continuation persistence', () =>
+          sendMessage(sanitizedAiResponseMessage),
+        );
       }
 
       if (hasRollRequests) {
-        // DO NOT display AI message - suppress the narrative completely
-        // Only process the roll requests (show the dice popup)
-        // The narrative will come from a NEW AI response after the roll completes
-        logger.info(
-          '🎲 Suppressing AI narrative - roll requested. Showing',
-          sanitizedAiResponseMessage.rollRequests.length,
-          'dice popup(s) only.',
-        );
-        processAiResponse(sanitizedAiResponseMessage.rollRequests);
-      } else {
-        // No roll requests - display the message normally
-        // A queued out-of-turn declaration intentionally has no DM outcome to display. The
-        // system notice above is the complete response when the NPC batch was empty.
-        if (
-          sanitizedAiResponseMessage.text ||
-          sanitizedAiResponseMessage.narrationSegments?.length
-        ) {
-          turnPhase('text shown');
-          await sendMessage(sanitizedAiResponseMessage);
-          turnPhase('persist');
-        }
+        processAiResponse(sanitizedAiResponseMessage.rollRequests || []);
       }
 
-      // Only process combat detection, voice, scene updates, and memories
-      // when the message is actually displayed (not when suppressed for roll requests)
+      if (
+        !hasRollRequests &&
+        !sanitizedAiResponseMessage.combatDetection?.shouldStartCombat &&
+        sanitizedAiResponseMessage.context?.combat_transition !== 'start'
+      ) {
+        setComposerBlocked(false);
+      }
+
+      // Combat detection still runs after the first render; roll-request turns already have their
+      // critical gate handled above and do not need a second transcript callback here.
       if (!hasRollRequests) {
         // Process AI response for combat detection and other features
         if (onAIResponse) {
@@ -315,23 +402,26 @@ export const useMessageHandlerLogic = ({
 
         // Update current_scene_description with short blurb (not full reply)
         if (sanitizedAiResponseMessage.text) {
-          const blurb =
-            headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
-          await updateGameSessionState((prev: ExtendedGameSession) => ({
-            ...prev,
-            current_scene_description: blurb,
-          }));
-
-          // CRITICAL FIX (#1654): sanitizedAiResponseMessage.text is the FULL DM turn,
-          // which by contract ends with lettered/numbered action options the player never
-          // chose. Feeding that straight into extractMemories caused option text (e.g.
-          // "Rush to the kitchen, follow his order...") to be stored as story memories,
-          // polluting later DM context. Strip the options first via the same helper the
-          // UI uses to render the narrative, and only extract if narrative remains.
-          const narrativeOnly = parseMessageOptions(sanitizedAiResponseMessage.text).content;
-          if (narrativeOnly) {
-            logger.info('[Memory Flow] Extracting memories from AI response:', narrativeOnly);
-            await extractMemories(narrativeOnly); // Non-critical path
+          // The parsed response callback already scheduled scene persistence and narrative
+          // extraction. Keep the fallback for callers/tests that do not provide onTextReady.
+          if (!textShown) {
+            if (providedContext?.intent !== 'dice_roll') {
+              runDeferredTask('player memory extraction', () => extractMemories(playerInput));
+            }
+            const blurb =
+              headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
+            runDeferredTask('scene-state persistence', () =>
+              updateGameSessionState((prev: ExtendedGameSession) => ({
+                ...prev,
+                current_scene_description: blurb,
+              })),
+            );
+            const narrativeOnly = parseMessageOptions(sanitizedAiResponseMessage.text).content;
+            if (narrativeOnly) {
+              runDeferredTask('AI response memory extraction', () =>
+                extractMemories(narrativeOnly),
+              );
+            }
           }
         }
       }
@@ -429,7 +519,7 @@ export const useMessageHandlerLogic = ({
 
   return {
     handleSendMessage,
-    isProcessing: queueStatus === 'processing' || isSending,
+    isProcessing: isSending && composerBlocked,
     combatTurnUiState,
     resumeCombatTurn,
   };
