@@ -526,6 +526,67 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
+    it('latches one roll id until the server result clears the prompt', async () => {
+      let resolveSend!: () => void;
+      mockOnSendFullMessage.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+      );
+      mockUseGame.completeDiceRoll.mockImplementation(() => {
+        mockUseGame.state.diceRollQueue = {
+          currentRollId: null,
+          pendingRolls: [],
+        };
+      });
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      let submission!: Promise<void>;
+      act(() => {
+        submission = result.current.handleManualResult(18);
+        void result.current.handleManualResult(19);
+      });
+
+      expect(result.current.pendingRollId).toBe('roll-1');
+      expect(mockOnSendFullMessage).toHaveBeenCalledTimes(1);
+      expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
+
+      resolveSend();
+      await act(async () => {
+        await submission;
+      });
+
+      expect(result.current.pendingRollId).toBeNull();
+      expect(result.current.currentRoll).toBeNull();
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
+    });
+
+    it('releases the latch and keeps the prompt visible after a timeout error', async () => {
+      mockOnSendFullMessage.mockRejectedValueOnce(new Error('request timed out'));
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(18);
+      });
+
+      expect(result.current.pendingRollId).toBeNull();
+      expect(result.current.rollError).toBe('Roll timed out. Please try again.');
+      expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
+      expect(result.current.currentRoll?.id).toBe('roll-1');
+    });
+
     it('should handle manual result in batch', async () => {
       const batchId = 'batch-1';
       const roll1 = { ...activeRoll, id: 'roll-1', batchId };

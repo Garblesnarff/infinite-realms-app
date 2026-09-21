@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import type {
   PlayerAttackRollSpec,
@@ -25,8 +25,9 @@ import { setPlayerRollHost, settlePendingPlayerRoll } from '@/services/combat/pl
  * is already mid-resolution, and narrating the die as a fresh player utterance would put the
  * same attack through the engine twice.
  */
-export function usePlayerRollHost(): void {
+export function usePlayerRollHost(): string | null {
   const { requestDiceRoll, cancelDiceRoll } = useGame();
+  const [pendingRollId, setPendingRollId] = useState<string | null>(null);
 
   useEffect(() => {
     setPlayerRollHost({
@@ -55,11 +56,16 @@ export function usePlayerRollHost(): void {
           request as Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>,
         );
 
-        registerSettler(rollId, settle);
+        setPendingRollId(rollId);
+        registerSettler(rollId, (outcome) => {
+          setPendingRollId(null);
+          settle(outcome);
+        });
         return {
           rollId,
           dismiss: () => {
             unregisterSettler(rollId);
+            setPendingRollId(null);
             cancelDiceRoll(rollId);
           },
         };
@@ -69,9 +75,12 @@ export function usePlayerRollHost(): void {
       // An unmounted message list cannot answer the queue. Settle before releasing the host so
       // the initiative timer is cleared and the awaiting entry pipeline falls back safely.
       settlePendingPlayerRoll({ d20: null });
+      setPendingRollId(null);
       setPlayerRollHost(null);
     };
   }, [requestDiceRoll, cancelDiceRoll]);
+
+  return pendingRollId;
 }
 
 /** "Longsword attack vs Sentient Glaze — 1d20+7 vs AC 15 (advantage)" */

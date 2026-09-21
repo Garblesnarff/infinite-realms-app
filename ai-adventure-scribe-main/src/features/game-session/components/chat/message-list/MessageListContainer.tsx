@@ -68,12 +68,13 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     const spellTargetSave = useSpellTargetSaveHost();
     const {
       currentRoll,
-      batchProgress,
       rollRequest,
       handleDiceRoll,
       handleManualResult,
       handleCancelRoll,
       lastRollRef: _lastRollRef,
+      pendingRollId,
+      rollError,
     } = useMessageDiceRolls({ onSendMessage, onSendFullMessage });
 
     // Combat asks the player for their own attack die through this popup. Registered here
@@ -231,6 +232,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
             <DiceRollRequest
               key={currentRoll.id}
               request={rollRequest}
+              requestId={currentRoll.id}
+              pendingRollId={pendingRollId}
+              rollError={rollError}
               onRoll={handleDiceRoll}
               onManualResult={handleManualResult}
               onRollCommit={
@@ -239,7 +243,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                   : undefined
               }
               onCancel={handleCancelRoll}
-              batchProgress={batchProgress}
               className="shadow-2xl animate-in slide-in-from-bottom-4 duration-300"
             />
           </div>

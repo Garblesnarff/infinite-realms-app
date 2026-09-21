@@ -18,6 +18,7 @@ import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-sess
 
 import { CombatStatus } from '@/components/combat/CombatStatus';
 import { SafetyBanner } from '@/components/safety/SafetyBanner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
@@ -241,26 +242,51 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     </div>
                   )}
 
-                  {/* Typing Indicator - shows when AI is responding */}
-                  {queueStatus === 'processing' && (
+                  {/* Roll requests take priority over the generic processing status. */}
+                  {hasPendingRolls ? (
                     <div
                       className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
                       style={{ zIndex: Z_INDEX.DROPDOWN }}
+                      role="status"
+                      aria-live="polite"
                     >
-                      <div className="flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full shadow-lg">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-infinite-gold to-infinite-teal flex items-center justify-center">
-                          <span className="text-xs font-medium text-white">DM</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                          <div className="w-1.5 h-1.5 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                          <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce"></div>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-medium">
-                          Dungeon Master is thinking...
+                      <div className="flex items-center gap-3 rounded-full border border-orange-300/70 bg-orange-50/95 px-4 py-2 shadow-lg backdrop-blur-sm">
+                        <Dice6
+                          className="h-5 w-5 animate-pulse text-orange-600"
+                          aria-hidden="true"
+                        />
+                        <span className="text-sm font-semibold text-orange-800">
+                          Your roll:{' '}
+                          {pendingRequests.length === 1
+                            ? pendingRequests[0].purpose || pendingRequests[0].type
+                            : `${pendingRequests.length} pending rolls`}
                         </span>
+                        <Badge variant="warning" className="animate-pulse">
+                          Roll required
+                        </Badge>
                       </div>
                     </div>
+                  ) : (
+                    queueStatus === 'processing' && (
+                      <div
+                        className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
+                        style={{ zIndex: Z_INDEX.DROPDOWN }}
+                      >
+                        <div className="flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full shadow-lg">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-infinite-gold to-infinite-teal flex items-center justify-center">
+                            <span className="text-xs font-medium text-white">DM</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                            <div className="w-1.5 h-1.5 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                            <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce"></div>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-medium">
+                            Dungeon Master is thinking...
+                          </span>
+                        </div>
+                      </div>
+                    )
                   )}
 
                   {/* Pending Roll Indicator */}

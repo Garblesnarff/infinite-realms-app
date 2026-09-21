@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 
 import type { RollRequest } from '@/types/roll-request';
 
@@ -18,7 +18,7 @@ export function isNumericFormula(formula: string): boolean {
 
 interface UseDiceRollRequestProps {
   request: RollRequest;
-  onManualResult: (result: number) => void;
+  onManualResult: (result: number) => void | Promise<void>;
   onRollCommit?: () => void;
 }
 
@@ -38,6 +38,8 @@ export function useDiceRollRequest({
   const [hasDisadvantage, setHasDisadvantage] = useState(request.disadvantage || false);
   const [showDiceAnimation, setShowDiceAnimation] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const { state: characterState } = useCharacter();
   const character = characterState.character;
@@ -165,16 +167,32 @@ export function useDiceRollRequest({
   const effectiveManualMode = manualMode || (!!character && resolvedFormula === null);
 
   const handleAutoRoll = useCallback(() => {
+    if (isRolling || isSubmittingRef.current) return;
     // Commit before starting the animation: the initiative bridge must stop its fallback timer
     // while the player's roll is visibly in flight.
     onRollCommit?.();
     // Show the animated dice rolling
     setShowDiceAnimation(true);
     setIsRolling(true);
-  }, [onRollCommit]);
+  }, [isRolling, onRollCommit]);
+
+  const submitResult = useCallback(
+    async (totalResult: number) => {
+      if (isSubmittingRef.current) return;
+      isSubmittingRef.current = true;
+      setIsSubmitting(true);
+      try {
+        await onManualResult(totalResult);
+      } finally {
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+      }
+    },
+    [onManualResult],
+  );
 
   const handleDiceRollComplete = useCallback(
-    (result: number | unknown, _details?: unknown) => {
+    async (result: number | unknown, _details?: unknown) => {
       // After animation completes, submit the result
       setIsRolling(false);
 
@@ -189,17 +207,17 @@ export function useDiceRollRequest({
         totalResult = 0;
       }
 
-      onManualResult(totalResult);
+      await submitResult(totalResult);
     },
-    [onManualResult],
+    [submitResult],
   );
 
   const handleManualSubmit = useCallback(() => {
     const result = parseInt(manualResult);
     if (!isNaN(result) && result >= 1) {
-      onManualResult(result);
+      void submitResult(result);
     }
-  }, [manualResult, onManualResult]);
+  }, [manualResult, submitResult]);
 
   const toggleAdvantage = useCallback(() => {
     setHasAdvantage((prev) => {
@@ -242,6 +260,7 @@ export function useDiceRollRequest({
       hasDisadvantage,
       showDiceAnimation,
       isRolling,
+      isSubmitting,
       character,
       rollCalculation,
       resolvedFormula,
@@ -261,6 +280,7 @@ export function useDiceRollRequest({
       hasDisadvantage,
       showDiceAnimation,
       isRolling,
+      isSubmitting,
       character,
       rollCalculation,
       resolvedFormula,

@@ -1,10 +1,12 @@
+/* eslint-disable max-lines */
+
 /**
  * Dice Roll Request Component
  * Displays when the DM requests a dice roll from the player
  */
 
 import { Info } from 'lucide-react';
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 
 import { DEFAULT_TYPE_CONFIG, ROLL_TYPE_CONFIG } from './dice-roll-type-config';
 import { DiceRollActionButtons } from './DiceRollActionButtons';
@@ -17,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { DiceRollEmbed } from '@/features/game-session/components';
 import { useDiceRollRequest } from '@/hooks/game/use-dice-roll-request';
+import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 export type { RollRequest } from '@/types/roll-request';
@@ -27,6 +30,9 @@ interface DiceRollRequestProps {
   onManualResult: (result: number) => void;
   onRollCommit?: () => void;
   onCancel?: () => void;
+  requestId?: string;
+  pendingRollId?: string | null;
+  rollError?: string | null;
   className?: string;
 }
 
@@ -35,7 +41,18 @@ interface DiceRollRequestProps {
  * Shows when DM requests a roll, allows player to roll or input manually
  */
 export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
-  ({ request, onRoll: _onRoll, onManualResult, onRollCommit, onCancel, className }) => {
+  ({
+    request,
+    onRoll: _onRoll,
+    onManualResult,
+    onRollCommit,
+    onCancel,
+    requestId,
+    pendingRollId,
+    rollError,
+    className,
+  }) => {
+    const promptRef = useRef<HTMLDivElement>(null);
     const {
       manualMode,
       manualResult,
@@ -44,6 +61,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       hasDisadvantage,
       showDiceAnimation,
       isRolling,
+      isSubmitting,
       character,
       rollCalculation,
       resolvedFormula,
@@ -58,9 +76,43 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
     } = useDiceRollRequest({ request, onManualResult, onRollCommit });
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
+    const isRollPending = Boolean(requestId && pendingRollId === requestId);
+    const isRollInFlight = isRolling || isSubmitting || isRollPending;
+
+    useEffect(() => {
+      promptRef.current?.focus();
+      logger.info('ROLL_PROMPT_SHOWN', {
+        requestId: requestId ?? 'unknown',
+        check: request.purpose,
+      });
+    }, [requestId, request.purpose]);
+
+    const handleRollClick = useCallback(() => {
+      if (isRollInFlight) return;
+      logger.info('ROLL_SUBMITTED', { requestId: requestId ?? 'unknown' });
+      handleAutoRoll();
+    }, [handleAutoRoll, isRollInFlight, requestId]);
+
+    const handleManualSubmitClick = useCallback(() => {
+      if (isRollInFlight) return;
+      logger.info('ROLL_SUBMITTED', { requestId: requestId ?? 'unknown' });
+      handleManualSubmit();
+    }, [handleManualSubmit, isRollInFlight, requestId]);
 
     return (
-      <Card className={cn('w-full max-w-md mx-auto border-2 shadow-lg', config.color, className)}>
+      <Card
+        ref={promptRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-label={`${request.purpose} roll request`}
+        data-testid="dice-roll-request"
+        className={cn(
+          'w-full max-w-md mx-auto border-2 shadow-lg ring-2 ring-orange-400/80 shadow-orange-300/30',
+          'animate-pulse',
+          config.color,
+          className,
+        )}
+      >
         <div className="p-4">
           {/* Header */}
           <div className="flex items-center gap-3 mb-4">
@@ -68,6 +120,9 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               {config.icon}
               <span className="font-semibold text-slate-700">{config.label} Requested</span>
             </div>
+            <Badge variant="warning" className="ml-auto animate-pulse">
+              Roll required
+            </Badge>
           </div>
 
           {/* Purpose */}
@@ -124,16 +179,25 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                   Loading character data…
                 </div>
               ) : showDiceAnimation && resolvedFormula ? (
-                // Show animated dice rolling
-                <div className="bg-slate-50 rounded-lg p-4 border-2 border-dashed border-slate-200">
-                  <DiceRollEmbed
-                    expression={resolvedFormula}
+                <div className="space-y-3">
+                  <div className="bg-slate-50 rounded-lg p-4 border-2 border-dashed border-slate-200">
+                    <DiceRollEmbed
+                      expression={resolvedFormula}
+                      purpose={request.purpose}
+                      onRoll={handleDiceRollComplete}
+                      autoRoll={true}
+                      showAnimation={true}
+                      advantage={hasAdvantage && !hasDisadvantage}
+                      disadvantage={hasDisadvantage && !hasAdvantage}
+                    />
+                  </div>
+                  <DiceRollActionButtons
+                    formula={rollCalculation.formula}
                     purpose={request.purpose}
-                    onRoll={handleDiceRollComplete}
-                    autoRoll={true}
-                    showAnimation={true}
-                    advantage={hasAdvantage && !hasDisadvantage}
-                    disadvantage={hasDisadvantage && !hasAdvantage}
+                    isRolling={isRollInFlight}
+                    onAutoRoll={handleRollClick}
+                    onEnterManually={handleEnterManually}
+                    onCancel={onCancel}
                   />
                 </div>
               ) : (
@@ -141,8 +205,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                 <DiceRollActionButtons
                   formula={rollCalculation.formula}
                   purpose={request.purpose}
-                  isRolling={isRolling}
-                  onAutoRoll={handleAutoRoll}
+                  isRolling={isRollInFlight}
+                  onAutoRoll={handleRollClick}
                   onEnterManually={handleEnterManually}
                   onCancel={onCancel}
                 />
@@ -154,10 +218,16 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               manualResult={manualResult}
               resolvedFormula={resolvedFormula}
               onManualResultChange={setManualResult}
-              onSubmit={handleManualSubmit}
+              onSubmit={handleManualSubmitClick}
               onBackToRoll={handleBackToRoll}
               onCancel={onCancel}
             />
+          )}
+
+          {rollError && (
+            <p role="alert" className="mt-3 text-center text-sm font-medium text-red-700">
+              {rollError}
+            </p>
           )}
 
           {/* Hint Text */}

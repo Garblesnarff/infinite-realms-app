@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DiceRollRequest } from '../DiceRollRequest';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import logger from '@/lib/logger';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
 
 // Mock dependencies
@@ -237,6 +238,64 @@ describe('DiceRollRequest', () => {
 
     fireEvent.click(screen.getByTestId('mock-roll-button'));
     expect(mockOnManualResult).toHaveBeenCalledWith(15);
+  });
+
+  it('latches the roll button while the result is awaiting the server', async () => {
+    let resolveSubmission!: () => void;
+    const onManualResult = vi.fn(
+      () => new Promise<void>((resolve) => (resolveSubmission = resolve)),
+    );
+    const { rerender } = render(
+      <DiceRollRequest
+        request={defaultRequest}
+        requestId="roll-1"
+        onRoll={mockOnRoll}
+        onManualResult={onManualResult}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
+    const rollButton = screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i });
+    expect(rollButton).toBeDisabled();
+    expect(rollButton).toHaveTextContent('Rolling...');
+
+    rerender(
+      <DiceRollRequest
+        request={defaultRequest}
+        requestId="roll-1"
+        onRoll={mockOnRoll}
+        onManualResult={onManualResult}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i })).toBeDisabled();
+    fireEvent.click(screen.getByTestId('mock-roll-button'));
+    expect(onManualResult).toHaveBeenCalledWith(15);
+
+    resolveSubmission();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }),
+      ).not.toBeDisabled();
+    });
+  });
+
+  it('focuses and logs a visible roll prompt', () => {
+    render(
+      <DiceRollRequest
+        request={defaultRequest}
+        requestId="roll-42"
+        onRoll={mockOnRoll}
+        onManualResult={mockOnManualResult}
+      />,
+    );
+
+    expect(screen.getByTestId('dice-roll-request')).toHaveFocus();
+    expect(screen.getByText('Roll required')).toBeInTheDocument();
+    expect(logger.info).toHaveBeenCalledWith('ROLL_PROMPT_SHOWN', {
+      requestId: 'roll-42',
+      check: 'Test purpose',
+    });
   });
 
   it('handles auto-roll with numeric result', () => {

@@ -7,7 +7,7 @@ import { GameMainContent } from '../game-content/GameMainContent';
 const state = vi.hoisted(() => ({
   queueStatus: 'idle',
   hasPendingRolls: false,
-  pendingRequests: [] as Array<{ type: string }>,
+  pendingRequests: [] as Array<{ type: string; purpose?: string }>,
   lastChapterLabel: undefined as string | undefined,
   combatTurnUiState: {
     holder: null as string | null,
@@ -174,9 +174,10 @@ describe('GameMainContent overhaul behavior contract', () => {
 
   it('blocks input while a dice request is pending', () => {
     state.hasPendingRolls = true;
-    state.pendingRequests = [{ type: 'saving throw' }];
+    state.pendingRequests = [{ type: 'saving throw', purpose: 'Wisdom saving throw' }];
     render(<GameMainContent {...baseProps} />);
 
+    expect(screen.getByRole('status')).toHaveTextContent('Your roll: Wisdom saving throw');
     expect(screen.getByText('Please complete the saving throw roll above')).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
   });

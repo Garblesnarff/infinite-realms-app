@@ -1,4 +1,4 @@
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, useState } from 'react';
 
 import type { MessageSendContext, DiceRollContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
@@ -37,6 +37,12 @@ interface UseMessageDiceRollsProps {
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
 }
 
+function getRollErrorMessage(error: unknown): string {
+  return error instanceof Error && /timed out|timeout/i.test(error.message)
+    ? 'Roll timed out. Please try again.'
+    : 'Roll submission failed. Please try again.';
+}
+
 /**
  * Hook to manage dice roll queue and submission logic for MessageList
  */
@@ -51,10 +57,15 @@ export function useMessageDiceRolls({
   handleManualResult: (result: number) => Promise<void>;
   handleCancelRoll: () => void;
   lastRollRef: MutableRefObject<LastRollMeta | null>;
+  pendingRollId: string | null;
+  rollError: string | null;
 } {
   const { state, getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll, clearBatch } = useGame();
 
   const lastRollRef = useRef<LastRollMeta | null>(null);
+  const pendingRollIdRef = useRef<string | null>(null);
+  const [pendingRollId, setPendingRollId] = useState<string | null>(null);
+  const [rollError, setRollError] = useState<string | null>(null);
 
   /**
    * Format a single dice roll with enhanced context for both AI and human readability
@@ -115,6 +126,11 @@ export function useMessageDiceRolls({
     settleCombatAttackRoll(currentRoll.id, null);
     settleCombatInitiativeRoll(currentRoll.id, null);
     cancelDiceRoll(currentRoll.id);
+    if (pendingRollIdRef.current === currentRoll.id) {
+      pendingRollIdRef.current = null;
+      setPendingRollId(null);
+    }
+    setRollError(null);
   }, [currentRoll, cancelDiceRoll]);
 
   // Handle dice roll from queue with batching support
@@ -131,6 +147,14 @@ export function useMessageDiceRolls({
         logger.warn('[useMessageDiceRolls] No current dice roll in queue');
         return;
       }
+
+      // Keep the prompt latched to this queue id until the server accepts the result. The ref
+      // closes the same-tick double-click window; the state keeps the disabled UI stable across
+      // renders while the async response is in flight.
+      if (pendingRollIdRef.current) return;
+      pendingRollIdRef.current = roll.id;
+      setPendingRollId(roll.id);
+      setRollError(null);
 
       try {
         const diceMatch = formula.match(/(\d+)d(\d+)([+-]\d+)?/);
@@ -162,8 +186,6 @@ export function useMessageDiceRolls({
           });
         }
 
-        completeDiceRoll(roll.id, rollResult);
-
         const completedRoll = { ...roll, result: rollResult };
         const formattedRoll = formatDiceRoll(completedRoll);
         const outcome = getDiceRollOutcome(completedRoll);
@@ -172,6 +194,7 @@ export function useMessageDiceRolls({
         // stop: sending it to the DM as a new player message would put the same attack through
         // the engine a second time, which is the divergence this whole feature exists to avoid.
         if (settleCombatAttackRoll(roll.id, rollResult.naturalRoll ?? rollResult.total)) {
+          completeDiceRoll(roll.id, rollResult);
           logger.info('[useMessageDiceRolls] combat attack die returned to the engine');
           lastRollRef.current = {
             kind: 'attack',
@@ -182,6 +205,7 @@ export function useMessageDiceRolls({
           return;
         }
         if (settleCombatInitiativeRoll(roll.id, rollResult.naturalRoll ?? rollResult.total)) {
+          completeDiceRoll(roll.id, rollResult);
           logger.info('[useMessageDiceRolls] combat initiative die returned to the entry flow');
           lastRollRef.current = {
             kind: 'initiative',
@@ -222,6 +246,7 @@ export function useMessageDiceRolls({
 
         if (roll.batchId && !willCompleteBatch) {
           await onSendMessage(diceRollMessage);
+          completeDiceRoll(roll.id, rollResult);
           logger.info('[useMessageDiceRolls] Batch roll persisted, waiting for remaining rolls');
         } else {
           if (onSendFullMessage) {
@@ -233,6 +258,8 @@ export function useMessageDiceRolls({
           } else {
             await onSendMessage(diceRollMessage);
           }
+
+          completeDiceRoll(roll.id, rollResult);
 
           if (roll.batchId) {
             logger.info('[useMessageDiceRolls] Batch complete! Clearing batch state');
@@ -257,10 +284,16 @@ export function useMessageDiceRolls({
           nat: rollResult.naturalRoll,
         };
       } catch (error) {
+        setRollError(getRollErrorMessage(error));
         handleAsyncError(error, {
           userMessage: 'Failed to process dice roll',
           context: { location: 'useMessageDiceRolls.handleDiceRoll' },
         });
+      } finally {
+        if (pendingRollIdRef.current === roll.id) {
+          pendingRollIdRef.current = null;
+          setPendingRollId(null);
+        }
       }
     },
     [
@@ -282,6 +315,11 @@ export function useMessageDiceRolls({
         logger.warn('[useMessageDiceRolls] No current dice roll in queue');
         return;
       }
+
+      if (pendingRollIdRef.current) return;
+      pendingRollIdRef.current = roll.id;
+      setPendingRollId(roll.id);
+      setRollError(null);
 
       try {
         let numericResult: number;
@@ -316,8 +354,6 @@ export function useMessageDiceRolls({
           });
         }
 
-        completeDiceRoll(roll.id, { total: numericResult });
-
         const completedRoll = {
           ...roll,
           result: { total: numericResult },
@@ -349,10 +385,12 @@ export function useMessageDiceRolls({
         // die for an attack already mid-resolution, and still must not reach the DM as a
         // message. The typed number IS the natural face, since the popup asks for a bare d20.
         if (settleCombatAttackRoll(roll.id, numericResult)) {
+          completeDiceRoll(roll.id, { total: numericResult });
           logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');
           return;
         }
         if (settleCombatInitiativeRoll(roll.id, numericResult)) {
+          completeDiceRoll(roll.id, { total: numericResult });
           logger.info(
             '[useMessageDiceRolls] manual combat initiative die returned to the entry flow',
           );
@@ -367,6 +405,7 @@ export function useMessageDiceRolls({
             context: diceRollContext,
           };
           await onSendMessage(playerMessage);
+          completeDiceRoll(roll.id, { total: numericResult });
           logger.info(
             '[useMessageDiceRolls] Manual batch roll persisted, waiting for remaining rolls',
           );
@@ -386,16 +425,24 @@ export function useMessageDiceRolls({
             await onSendMessage(playerMessage);
           }
 
+          completeDiceRoll(roll.id, { total: numericResult });
+
           if (roll.batchId) {
             logger.info('[useMessageDiceRolls] Batch complete (manual)! Clearing batch state');
             clearBatch();
           }
         }
       } catch (error) {
+        setRollError(getRollErrorMessage(error));
         handleAsyncError(error, {
           userMessage: 'Failed to process dice result',
           context: { location: 'useMessageDiceRolls.handleManualResult' },
         });
+      } finally {
+        if (pendingRollIdRef.current === roll.id) {
+          pendingRollIdRef.current = null;
+          setPendingRollId(null);
+        }
       }
     },
     [
@@ -417,5 +464,7 @@ export function useMessageDiceRolls({
     handleManualResult,
     handleCancelRoll,
     lastRollRef,
+    pendingRollId,
+    rollError,
   };
 }
