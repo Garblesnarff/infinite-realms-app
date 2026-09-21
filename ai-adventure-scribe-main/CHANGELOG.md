@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.19.13](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.12...v0.19.13) (2026-09-21)
+
+
+### Bug Fixes
+
+* **client:** make roll prompts explicit and latched ([#2131](https://github.com/Garblesnarff/infinite-realms-production/issues/2131)) ([5663e85](https://github.com/Garblesnarff/infinite-realms-production/commit/5663e85765944970c7e476d56819567f33393818))
+* **client:** render DM turns before deferred work ([#2118](https://github.com/Garblesnarff/infinite-realms-production/issues/2118)) ([97bef20](https://github.com/Garblesnarff/infinite-realms-production/commit/97bef2029a30dd04977d627ae8997766e83a039d))
+* **client:** retry turn POSTs on network errors and keep the composer text ([#2132](https://github.com/Garblesnarff/infinite-realms-production/issues/2132)) ([cda0e06](https://github.com/Garblesnarff/infinite-realms-production/commit/cda0e06930af766935bdd12d5979d05fd3f1bb9b))
+* **combat:** preserve prose NPC identity and attacks ([#2125](https://github.com/Garblesnarff/infinite-realms-production/issues/2125)) ([6cc9187](https://github.com/Garblesnarff/infinite-realms-production/commit/6cc9187c503c50bf247b56ad487829c6f8787de5))
+* **server:** 401 then 400 on POST /v1/ws/ticket ([#2120](https://github.com/Garblesnarff/infinite-realms-production/issues/2120)) ([#2122](https://github.com/Garblesnarff/infinite-realms-production/issues/2122)) ([3e59bcc](https://github.com/Garblesnarff/infinite-realms-production/commit/3e59bcc7fa0c12552404b1b3f49785a1f8d4134d))
+
 ## [0.19.12](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.11...v0.19.12) (2026-09-20)
 
 
