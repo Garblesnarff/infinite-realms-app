@@ -3,12 +3,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { createTurnPhaseReporter } from '@/infrastructure/api/rest-client';
+import { createTurnPhaseReporter, NETWORK_RETRY_BUDGET_MS } from '@/infrastructure/api/rest-client';
 import * as loggerModule from '@/lib/logger';
 
 import '@/lib/auth-gate';
 
 const logger = (loggerModule as any).default;
+
+const exhaustNetworkRetryBudget = async (): Promise<void> => {
+  let remainingMs = NETWORK_RETRY_BUDGET_MS;
+  for (const delayMs of [1_000, 2_000, 4_000, 8_000]) {
+    await vi.advanceTimersByTimeAsync(delayMs);
+    remainingMs -= delayMs;
+  }
+  await vi.advanceTimersByTimeAsync(remainingMs);
+};
 
 // Mock auth-gate
 vi.mock('@/lib/auth-gate', () => ({
@@ -446,25 +455,33 @@ describe('LlmApiClient', () => {
 
   describe('Offline Fallback', () => {
     it('does not trip offline fallback when extract fails, so generate still fetches', async () => {
-      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ text: 'Narration' }),
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/v1/llm/extract')) {
+          return Promise.reject(new TypeError('Failed to fetch'));
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ text: 'Narration' }),
+        });
       });
 
-      await expect(llmApiClient.extractMemories('context')).resolves.toBe('');
+      const extractRequest = llmApiClient.extractMemories('context');
+      await exhaustNetworkRetryBudget();
+      await expect(extractRequest).resolves.toBe('');
       await expect(llmApiClient.generateText({ prompt: 'test' })).resolves.toBe('Narration');
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(mockFetch.mock.calls[1][0]).toEqual(expect.stringContaining('/v1/llm/generate'));
+      expect(mockFetch).toHaveBeenCalledTimes(5);
+      expect(mockFetch.mock.calls[4][0]).toEqual(expect.stringContaining('/v1/llm/generate'));
       expect(logger.warn).not.toHaveBeenCalledWith('OFFLINE_FALLBACK_TRIPPED', expect.anything());
     });
 
     it('trips offline fallback on a generate fetch TypeError and logs the route', async () => {
       mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
 
-      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
-        'Failed to fetch',
-      );
+      const request = llmApiClient.generateText({ prompt: 'test' });
+      const rejection = expect(request).rejects.toThrow('Failed to fetch');
+      await exhaustNetworkRetryBudget();
+      await rejection;
 
       expect((llmApiClient as any).useOfflineFallback).toBe(true);
       expect(logger.warn).toHaveBeenCalledWith('OFFLINE_FALLBACK_TRIPPED', {
@@ -482,12 +499,13 @@ describe('LlmApiClient', () => {
           headers: { get: (name: string) => (name === 'x-request-id' ? 'req-123' : null) },
           json: () => Promise.resolve({ text: 'First response' }),
         })
-        .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+        .mockRejectedValue(new TypeError('Failed to fetch'));
 
       await expect(llmApiClient.generateText({ prompt: 'first' })).resolves.toBe('First response');
-      await expect(llmApiClient.generateText({ prompt: 'second' })).rejects.toThrow(
-        'Failed to fetch',
-      );
+      const request = llmApiClient.generateText({ prompt: 'second' });
+      const rejection = expect(request).rejects.toThrow('Failed to fetch');
+      await exhaustNetworkRetryBudget();
+      await rejection;
 
       expect(logger.warn).toHaveBeenCalledWith(
         'OFFLINE_FALLBACK_TRIPPED',
@@ -496,10 +514,11 @@ describe('LlmApiClient', () => {
     });
 
     it('blocks optional calls while offline and logs the remaining time', async () => {
-      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-      await expect(llmApiClient.generateText({ prompt: 'test' })).rejects.toThrow(
-        'Failed to fetch',
-      );
+      mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
+      const request = llmApiClient.generateText({ prompt: 'test' });
+      const rejection = expect(request).rejects.toThrow('Failed to fetch');
+      await exhaustNetworkRetryBudget();
+      await rejection;
 
       mockFetch.mockClear();
       await expect(llmApiClient.extractMemories('context')).resolves.toBe('');

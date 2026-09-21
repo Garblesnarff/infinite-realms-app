@@ -21,8 +21,10 @@ import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
 import {
   createTurnPhaseReporter,
+  isNetworkError,
   SESSION_EXPIRED_MESSAGE,
   SessionExpiredError,
+  subscribeToNetworkRetry,
 } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
@@ -90,6 +92,7 @@ export const useMessageHandlerLogic = ({
 }: UseMessageHandlerLogicProps): {
   handleSendMessage: (playerInput: string, context?: MessageSendContext) => Promise<void>;
   isProcessing: boolean;
+  isReconnecting: boolean;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
 } => {
@@ -121,6 +124,9 @@ export const useMessageHandlerLogic = ({
   const wasSendingRef = React.useRef(false);
   const [composerBlocked, setComposerBlockedState] = React.useState(false);
   const composerBlockedRef = React.useRef(false);
+  const [isReconnecting, setIsReconnecting] = React.useState(false);
+
+  React.useEffect(() => subscribeToNetworkRetry(setIsReconnecting), []);
 
   const setComposerBlocked = React.useCallback((blocked: boolean) => {
     composerBlockedRef.current = blocked;
@@ -431,6 +437,7 @@ export const useMessageHandlerLogic = ({
         (typeof error === 'object' &&
           error !== null &&
           (error as { status?: unknown }).status === 401);
+      const networkError = isNetworkError(error);
       handleAsyncError(error, {
         userMessage: sessionExpired ? SESSION_EXPIRED_MESSAGE : 'Failed to process your message',
         showToast: false,
@@ -449,7 +456,7 @@ export const useMessageHandlerLogic = ({
         : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
 
       // Add a system error message to the conversation
-      if (!sessionExpired) {
+      if (!sessionExpired && !networkError) {
         try {
           const systemErrorMessage: ChatMessage = {
             text: recoveryMessage,
@@ -517,9 +524,12 @@ export const useMessageHandlerLogic = ({
     logCombatTurnUiState({ ...combatTurnUiState, isSending });
   }, [combatTurnUiState, isSending]);
 
+  const isProcessing = isSending && composerBlocked;
+
   return {
     handleSendMessage,
-    isProcessing: isSending && composerBlocked,
+    isProcessing,
+    isReconnecting: isProcessing && isReconnecting,
     combatTurnUiState,
     resumeCombatTurn,
   };

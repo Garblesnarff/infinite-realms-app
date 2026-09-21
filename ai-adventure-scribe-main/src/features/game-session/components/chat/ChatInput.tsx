@@ -17,6 +17,7 @@ import { mightBeDiceCommand, getDiceCommandSuggestions } from '@/utils/diceComma
 interface ChatInputProps {
   onSendMessage: (message: string) => void | Promise<void>;
   isDisabled: boolean;
+  isReconnecting?: boolean;
 }
 
 /**
@@ -29,7 +30,8 @@ interface ChatInputProps {
  * @param onSendMessage - Callback function to handle message submission
  * @param isDisabled - Boolean to disable input during message processing
  */
-export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, isDisabled }) => {
+export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
+  const { onSendMessage, isDisabled, isReconnecting = false } = props;
   const [input, setInput] = useState(loadPendingInput);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
@@ -149,6 +151,11 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
   };
 
   const canSend = input.trim().length > 0 && !isDisabled;
+  const sendLabel = isReconnecting
+    ? 'Reconnecting…'
+    : isDisabled
+      ? 'Sending message...'
+      : 'Send message';
 
   return (
     <TooltipProvider>
@@ -290,7 +297,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
                       ? 'bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95'
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   }`}
-                  aria-label={isDisabled ? 'Sending message...' : 'Send message'}
+                  aria-label={sendLabel}
                 >
                   {!canSend && isDisabled ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -300,15 +307,17 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" align="end">
-                <p>{isDisabled ? 'Sending message...' : 'Send message'}</p>
+                <p>{sendLabel}</p>
               </TooltipContent>
             </Tooltip>
           </div>
 
           {/* Helper text */}
           <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
-            <span>
-              {showDiceSuggestions ? (
+            <span role={isReconnecting ? 'status' : undefined} aria-live="polite">
+              {isReconnecting ? (
+                'Reconnecting…'
+              ) : showDiceSuggestions ? (
                 <>
                   Type <code className="bg-gray-100 px-1 rounded">/roll 1d20</code> for dice rolls
                 </>

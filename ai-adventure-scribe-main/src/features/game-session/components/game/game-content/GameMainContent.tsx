@@ -196,7 +196,13 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               onAIResponse={innerHandleAIResponse}
               spellCastHandlerRef={spellCastHandlerRef}
             >
-              {({ handleSendMessage, isProcessing, combatTurnUiState, onResumeTurn }) => (
+              {({
+                handleSendMessage,
+                isProcessing,
+                isReconnecting,
+                combatTurnUiState,
+                onResumeTurn,
+              }) => (
                 <>
                   <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
                     <MessageList
@@ -340,6 +346,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   >
                     <ChatInput
                       onSendMessage={handleSendMessage}
+                      isReconnecting={isReconnecting}
                       isDisabled={
                         isProcessing ||
                         hasPendingRolls ||

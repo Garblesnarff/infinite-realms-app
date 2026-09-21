@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
-import { SessionExpiredError } from '@/infrastructure/api/rest-client';
+import { isNetworkError, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { persistableNarrationSegments } from '@/utils/narration-segments';
@@ -140,11 +140,15 @@ export const useMessageQueue = (sessionId: string | null) => {
         } catch (error) {
           logger.error(`Attempt ${retries + 1} failed:`, error);
           retries++;
+          const networkError = isNetworkError(error);
 
-          if (retries === MAX_RETRIES || isSessionExpiredError(error)) {
+          if (retries === MAX_RETRIES || isSessionExpiredError(error) || networkError) {
             setQueueStatus('error');
-            // Queue message for later retry if max retries reached
-            setMessageQueue((prev) => [...prev, message]);
+            // The REST client owns the bounded network retry. Keep the turn in the composer
+            // instead of retrying the same persistence request again from this queue.
+            if (!networkError) {
+              setMessageQueue((prev) => [...prev, message]);
+            }
             throw error;
           }
 
@@ -167,7 +171,9 @@ export const useMessageQueue = (sessionId: string | null) => {
 
       toast({
         title: 'Error',
-        description: 'Message will be retried automatically',
+        description: isNetworkError(error)
+          ? 'Your turn is still in the composer so you can resend it.'
+          : 'Message will be retried automatically',
         variant: 'destructive',
       });
     },

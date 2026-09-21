@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { accessToken, fetchMock, loadCachedSessionMock, persistSessionMock, refreshMock } =
   vi.hoisted(() => ({
@@ -20,7 +20,12 @@ vi.mock('@/services/auth/TokenService', () => ({
   refreshAccessTokenOnce: refreshMock,
 }));
 
-import { fetchWithAuth, SessionExpiredError } from '../rest-client';
+import {
+  fetchWithAuth,
+  isNetworkError,
+  SessionExpiredError,
+  subscribeToNetworkRetry,
+} from '../rest-client';
 
 import logger from '@/lib/logger';
 
@@ -39,6 +44,57 @@ describe('fetchWithAuth', () => {
       access_token: 'old-access',
       refresh_token: 'refresh-token',
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries network failures with backoff and returns the successful response', async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(response(200, { ok: true }));
+    const retryStates: boolean[] = [];
+    const unsubscribe = subscribeToNetworkRetry((isRetrying) => retryStates.push(isRetrying));
+
+    const request = fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    await expect(request).resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(retryStates).toEqual([false, true, false]);
+    expect(isNetworkError(new TypeError('Failed to fetch'))).toBe(true);
+    unsubscribe();
+  });
+
+  it('stops retrying after the network budget and leaves non-network errors alone', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const request = fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' });
+    const rejection = expect(request).rejects.toThrow('Failed to fetch');
+    for (const delayMs of [1_000, 2_000, 4_000, 8_000, 5_000]) {
+      await vi.advanceTimersByTimeAsync(delayMs);
+    }
+
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(isNetworkError(new TypeError('invalid request argument'))).toBe(false);
+  });
+
+  it('does not retry an HTTP error response', async () => {
+    fetchMock.mockResolvedValueOnce(response(503));
+
+    await expect(
+      fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' }),
+    ).resolves.toMatchObject({
+      status: 503,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes once and retries a 401 with the new Authorization header', async () => {

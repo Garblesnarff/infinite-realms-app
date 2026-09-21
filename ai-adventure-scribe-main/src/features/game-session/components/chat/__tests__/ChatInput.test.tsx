@@ -134,6 +134,26 @@ describe('ChatInput', () => {
     expect(screen.getByLabelText(/attach file/i)).toBeDisabled();
   });
 
+  it('shows reconnecting status while a network retry is active', () => {
+    render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={true} isReconnecting={true} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting…');
+    expect(screen.getByRole('button', { name: /reconnecting/i })).toBeDisabled();
+  });
+
+  it('preserves the composed turn after the send budget is exhausted', async () => {
+    const onSendMessage = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+    render(<ChatInput onSendMessage={onSendMessage} isDisabled={false} />);
+    const textarea = screen.getByPlaceholderText(/describe what your character would like to do/i);
+
+    await user.type(textarea, 'Keep this turn available');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue('Keep this turn available');
+    });
+  });
+
   it('does not send empty messages', async () => {
     render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
     const sendButton = screen.getByRole('button', { name: /send message/i });

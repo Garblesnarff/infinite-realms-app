@@ -20,13 +20,14 @@ interface MessageHandlerProps {
   children: (props: {
     handleSendMessage: (message: string, context?: MessageSendContext) => Promise<void>;
     isProcessing: boolean;
+    isReconnecting: boolean;
     combatTurnUiState: CombatTurnUiState;
     onResumeTurn: () => Promise<void>;
   }) => React.ReactNode;
 }
 
 export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
-  const { handleSendMessage, isProcessing, combatTurnUiState, resumeCombatTurn } =
+  const { handleSendMessage, isProcessing, isReconnecting, combatTurnUiState, resumeCombatTurn } =
     useMessageHandlerLogic(props);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
   return props.children({
     handleSendMessage,
     isProcessing,
+    isReconnecting,
     combatTurnUiState,
     onResumeTurn: resumeCombatTurn,
   });

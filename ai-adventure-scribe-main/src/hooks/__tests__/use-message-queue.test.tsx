@@ -209,6 +209,25 @@ describe('useMessageQueue', () => {
     expect(result.current.queueStatus).toBe('error');
   });
 
+  it('does not retry a network failure after the REST retry budget is spent', async () => {
+    mockInsert.mockResolvedValue({ error: new TypeError('Failed to fetch') });
+
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+    await act(async () => {
+      await expect(
+        result.current.messageMutation.mutateAsync({
+          text: 'Keep this turn',
+          sender: 'player',
+        } as any),
+      ).rejects.toThrow('Failed to fetch');
+    });
+
+    expect(mockSaveSessionMessages).toHaveBeenCalledTimes(1);
+    expect(result.current.queueStatus).toBe('error');
+    expect(result.current.queueLength).toBe(0);
+  });
+
   it('should add to queue and set error status after max retries', async () => {
     mockInsert.mockResolvedValue({ error: { message: 'Persistent failure' } });
 

@@ -12,6 +12,27 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
 const LLM_EXTRACT_ROUTE = '/v1/llm/extract';
+export const NETWORK_RETRY_BUDGET_MS = 20_000;
+const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
+const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
+
+export type NetworkRetryListener = (isRetrying: boolean) => void;
+
+const networkRetryListeners = new Set<NetworkRetryListener>();
+let activeNetworkRetries = 0;
+
+function notifyNetworkRetryListeners(): void {
+  const isRetrying = activeNetworkRetries > 0;
+  for (const listener of networkRetryListeners) {
+    listener(isRetrying);
+  }
+}
+
+export function subscribeToNetworkRetry(listener: NetworkRetryListener): () => void {
+  networkRetryListeners.add(listener);
+  listener(activeNetworkRetries > 0);
+  return () => networkRetryListeners.delete(listener);
+}
 export const SESSION_EXPIRED_MESSAGE = 'Session expired — sign in again';
 
 export type TurnPhase =
@@ -74,6 +95,84 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function isNetworkError(error: unknown): boolean {
+  const errorName = getErrorName(error);
+  const errorMessage = getErrorMessage(error);
+  return (
+    errorName === 'TypeError' &&
+    /failed to fetch|network(?:error| error)|load failed/i.test(errorMessage)
+  );
+}
+
+function waitForNetworkRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timerId);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new DOMException('The request was aborted.', 'AbortError'));
+    };
+
+    const timerId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    }
+  });
+}
+
+async function requestWithNetworkRetry(
+  path: string,
+  request: () => Promise<Response>,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const startedAt = Date.now();
+  let delayMs = NETWORK_RETRY_INITIAL_DELAY_MS;
+  let isRetrying = false;
+  let attempt = 0;
+
+  try {
+    while (true) {
+      try {
+        return await request();
+      } catch (error) {
+        if (!isNetworkError(error)) throw error;
+
+        const elapsedMs = Date.now() - startedAt;
+        const remainingMs = NETWORK_RETRY_BUDGET_MS - elapsedMs;
+        if (remainingMs <= 0) throw error;
+
+        const retryDelayMs = Math.min(delayMs, remainingMs);
+        if (!isRetrying) {
+          isRetrying = true;
+          activeNetworkRetries += 1;
+          notifyNetworkRetryListeners();
+        }
+        attempt += 1;
+        logger.warn('API_NETWORK_RETRY', {
+          route: path,
+          attempt,
+          delayMs: retryDelayMs,
+          elapsedMs,
+        });
+        await waitForNetworkRetry(retryDelayMs, signal);
+        delayMs = Math.min(delayMs * 2, NETWORK_RETRY_MAX_DELAY_MS);
+      }
+    }
+  } finally {
+    if (isRetrying) {
+      activeNetworkRetries = Math.max(0, activeNetworkRetries - 1);
+      notifyNetworkRetryListeners();
+    }
+  }
+}
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly retryable: boolean;
@@ -116,7 +215,11 @@ function buildRequestInit(options: RequestInit, accessToken?: string): RequestIn
  */
 export async function fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
   const request = (accessToken?: string): Promise<Response> =>
-    fetch(`${API_BASE_URL}${path}`, buildRequestInit(options, accessToken));
+    requestWithNetworkRetry(
+      path,
+      () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(options, accessToken)),
+      options.signal,
+    );
 
   const response = await request();
   if (response.status !== 401 || !isV1Route(path)) return response;
