@@ -116,6 +116,14 @@ async function resolveUserPlan(
  * Required authentication plugin
  * Returns 401 if token is missing or invalid
  * Attaches user to context on success
+ *
+ * This is a `.resolve()` hook (beforeHandle). Elysia still parses TypeBox
+ * `body` schemas before it runs, so a required `body: t.Object(...)` on the
+ * same route 422s unauthenticated callers with a missing body (#2120). Do not
+ * move this to `.onRequest()`: unscoped `onRequest` on this plugin leaks to
+ * every route in the app (including public ones), and `{ as: 'scoped' }` on
+ * `onRequest` crashes this Elysia version's composer. Routes that must 401
+ * regardless of body should validate the body in the handler.
  */
 export const requireAuth = new Elysia({ name: 'require-auth' }).resolve(
   { as: 'scoped' },

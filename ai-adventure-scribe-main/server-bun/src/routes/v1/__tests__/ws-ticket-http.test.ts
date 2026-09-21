@@ -45,6 +45,28 @@ describe('POST /v1/ws/ticket', () => {
     expect(response.status).toBe(401);
   });
 
+  it('returns 401 with no bearer and no body', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/ws/ticket', { method: 'POST' }),
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: 'Unauthorized' });
+  });
+
+  it('returns 400 when an authenticated caller omits sessionId', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/ws/ticket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          authorization: 'Bearer valid-user-token',
+        },
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'sessionId is required' });
+  });
+
   it('mints a short-lived ticket for an authenticated caller', async () => {
     const response = await app.handle(
       new Request('http://localhost/v1/ws/ticket', {
