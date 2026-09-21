@@ -20,6 +20,7 @@ import { getSpellById, getSpellByName, isPlayerCombatSpell } from '../../data/sp
 import { combatLogger } from '../../lib/logger.js';
 import { planApproach } from '../../tactical/approach.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
+import { isUnresolvedNpcName, resolveSceneCombatant } from '../../tactical/seating.js';
 
 import type { DeclaredAttack } from './combat-intent-gate.js';
 
@@ -177,7 +178,7 @@ function findTarget(
   const claim = declared.actorSlug || declared.actorName;
   const claimSlug = slugify(claim);
   const claimName = normalize(declared.actorName);
-  return participants.find((participant) => {
+  const exact = participants.find((participant) => {
     if (player && participant.id === player.id) return false;
     return (
       participant.id === claim ||
@@ -188,6 +189,16 @@ function findTarget(
       claimName.endsWith(` ${normalize(participant.name)}`)
     );
   });
+  if (exact) return exact;
+
+  // A prose declaration can arrive with the hostile still carrying the old synthetic seat
+  // label. If there is exactly one unresolved hostile, its id remains authoritative and the
+  // display name is repaired from the declaration below.
+  const unresolved = participants.filter(
+    (participant) =>
+      (!player || participant.id !== player.id) && isUnresolvedNpcName(participant.name),
+  );
+  return unresolved.length === 1 ? unresolved[0] : undefined;
 }
 
 function attackFormula(modifier: number): string {
@@ -241,7 +252,10 @@ export async function deriveCombatEntryFirstAction(
   if (!playerParticipant || !targetParticipant) return null;
 
   const requestedSource = sourceFor(params.declaredAttack);
-  const targetLabel = targetParticipant.name;
+  const targetLabel = resolveSceneCombatant({
+    candidateName: targetParticipant.name,
+    sceneEntityName: params.declaredAttack.actorName,
+  }).name;
   const actorLabel = playerParticipant.name;
   let profile: Awaited<ReturnType<typeof getParticipantAbilityProfile>> | undefined;
 

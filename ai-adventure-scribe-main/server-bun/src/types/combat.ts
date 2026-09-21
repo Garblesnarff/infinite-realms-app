@@ -376,6 +376,10 @@ export interface CreateParticipantInput {
   initiativeRoll?: number;
   hpCurrent?: number | null;
   hpMax?: number | null;
+  /** Prose-entry context used once to ground an NPC identity/loadout; never persisted. */
+  sceneDescription?: string | null;
+  sceneEntityName?: string | null;
+  source?: string | null;
 }
 
 /**

@@ -334,12 +334,23 @@ export interface CombatEntryParticipantInput {
   initiativeRoll?: number;
   hpCurrent?: number | null;
   hpMax?: number | null;
+  /** Input-only prose context. The encounter service resolves it once and stores the result. */
+  sceneDescription?: string | null;
+  sceneEntityName?: string | null;
+  source?: string | null;
+}
+
+export interface CombatEntrySceneContext {
+  sceneDescription?: string | null;
+  sceneEntityName?: string | null;
+  source?: string | null;
 }
 
 /** The start payload the gate hands the encounter service, player first. */
 export function buildEntryParticipants(
   player: CombatEntryPlayer,
   combatants: DerivedCombatant[],
+  sceneContext: CombatEntrySceneContext = {},
 ): CombatEntryParticipantInput[] {
   const participants: CombatEntryParticipantInput[] = [
     {
@@ -360,6 +371,11 @@ export function buildEntryParticipants(
         name: combatant.count === 1 ? combatant.name : `${combatant.name} ${index + 1}`,
         initiativeModifier: 0,
         ...(combatant.monsterId ? { monsterId: combatant.monsterId } : {}),
+        ...(sceneContext.sceneDescription
+          ? { sceneDescription: sceneContext.sceneDescription }
+          : {}),
+        ...(sceneContext.sceneEntityName ? { sceneEntityName: sceneContext.sceneEntityName } : {}),
+        ...(sceneContext.source ? { source: sceneContext.source } : {}),
       });
     }
   }
@@ -559,7 +575,11 @@ export async function seatCombatEntry(
       return null;
     }
 
-    const participants = buildEntryParticipants(player, combatants);
+    const participants = buildEntryParticipants(player, combatants, {
+      sceneDescription: sceneSpec.sceneDescription,
+      sceneEntityName: declaredAttack?.actorName ?? seatingHint?.targetName,
+      source: trigger,
+    });
     if (playerInitiativeRoll !== undefined && participants[0]) {
       participants[0] = { ...participants[0], initiativeRoll: playerInitiativeRoll };
     }

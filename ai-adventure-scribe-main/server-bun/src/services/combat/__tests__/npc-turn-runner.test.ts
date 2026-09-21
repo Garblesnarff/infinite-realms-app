@@ -10,6 +10,7 @@ type TestParticipant = {
   isActive: boolean;
   maxHp: number;
   actionUsed: boolean;
+  monsterAttack?: unknown;
   status: {
     currentHp: number;
     isConscious: boolean;
@@ -73,6 +74,36 @@ function harness(
 }
 
 describe('advanceNpcTurns', () => {
+  it('prefers a stored scene-grounded attack over the Unarmed Strike fallback', async () => {
+    const player = participant('p1', 'player');
+    const npc = {
+      ...participant('npc1', 'monster'),
+      name: 'Chiropteran Hulk',
+      monsterAttack: {
+        source: 'scene',
+        attacks: [
+          {
+            name: 'Sonic Screech',
+            attackBonus: 0,
+            damageDice: '4d6',
+            damageBonus: 0,
+            damageType: 'thunder',
+            normalRange: 30,
+            ranged: true,
+          },
+        ],
+      },
+    };
+    const { intents, dependencies } = harness([npc, player], 'npc1');
+
+    await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+    expect(intents[0]).toMatchObject({
+      type: 'attack',
+      weaponId: 'monster-attack:Sonic Screech',
+    });
+  });
+
   it('runs the NPC after a faster player turn and stops when the player is current', async () => {
     const player = participant('p1', 'player');
     const npc = participant('npc1', 'monster');

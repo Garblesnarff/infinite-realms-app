@@ -34,7 +34,7 @@
 import type { DamageType } from '../../types/combat.js';
 
 /** Where a monster's attack numbers came from. Ordered by precedence, strongest first. */
-export type AttackProfileSource = 'authored' | 'catalog' | 'derived' | 'generic';
+export type AttackProfileSource = 'authored' | 'catalog' | 'derived' | 'generic' | 'scene' | 'role';
 
 /** One attack a monster can make. Damage is split so the engine can crit the dice alone. */
 export interface MonsterAttack {

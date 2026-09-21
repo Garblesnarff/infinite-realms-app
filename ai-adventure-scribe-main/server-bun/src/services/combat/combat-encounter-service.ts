@@ -36,6 +36,11 @@ import {
 import { isCompanionsEnabled } from '../../lib/companion-feature.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import {
+  isUnresolvedNpcName,
+  resolveSceneCombatant,
+  UNKNOWN_CREATURE,
+} from '../../tactical/seating.js';
 
 import type { EntitySize } from '../../tactical/types.js';
 import type {
@@ -194,13 +199,28 @@ export class CombatEncounterService {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
         const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;
+        const sceneResolution = resolveSceneCombatant({
+          candidateName: input.name,
+          sceneEntityName: input.sceneEntityName,
+          sceneDescription: input.sceneDescription,
+        });
+        const lookupName =
+          !input.characterId && isUnresolvedNpcName(input.name) ? sceneResolution.name : input.name;
         // Structured DM combatants carry an id instead of a database row. Resolving it walks
         // the ladder -- campaign-authored bible stats, then the SRD catalog, then generic NPC
         // numbers -- and every rung down is logged rather than silently swallowed.
         const monster =
           !input.characterId && !input.npcId
-            ? resolveCombatantStats(campaignIndex, input.monsterId, input.name, { sessionId })
+            ? resolveCombatantStats(campaignIndex, input.monsterId, lookupName, { sessionId })
             : null;
+        const participantName =
+          !input.characterId && isUnresolvedNpcName(input.name)
+            ? resolveSceneCombatant({
+                candidateName: input.name,
+                sceneEntityName: npc?.name ?? monster?.monsterName ?? sceneResolution.name,
+                fallbackName: sceneResolution.name,
+              }).name
+            : input.name;
         // Characters and NPCs keep historical HP/speed placeholders. AC 10 is a legal
         // unarmored value, so a missing AC source writes NULL rather than inventing 10
         // (#1871). Monsters still fall through to SRD or generic-NPC numbers.
@@ -285,7 +305,44 @@ export class CombatEncounterService {
           : null;
         const maxHp = scaled ? scaled.maxHp : rawMaxHp;
         const currentHp = scaled ? scaled.currentHp : rawCurrentHp;
-        const attackProfile = scaled?.attackProfile ?? monster?.attackProfile ?? null;
+        const resolvedAttackProfile = scaled?.attackProfile ?? monster?.attackProfile ?? null;
+        const npcHasAuthoredAttacks =
+          Boolean(Array.isArray(npcStats.actions) && npcStats.actions.length) ||
+          Boolean(Array.isArray(npcStats.attacks) && npcStats.attacks.length);
+        const sceneAttackMayGround = !input.characterId && (!input.npcId || !npcHasAuthoredAttacks);
+        const sceneAttackMayOverride = Boolean(
+          sceneResolution.attackProfile &&
+          (!resolvedAttackProfile ||
+            resolvedAttackProfile.source === 'derived' ||
+            resolvedAttackProfile.source === 'generic'),
+        );
+        const attackProfile =
+          sceneAttackMayGround && sceneAttackMayOverride && sceneResolution.attackProfile
+            ? sceneResolution.attackProfile
+            : resolvedAttackProfile;
+
+        if (!input.characterId && participantName === UNKNOWN_CREATURE) {
+          logger.warn({
+            msg: 'COMBAT_SEAT_UNNAMED',
+            encounterId: encounter.id,
+            source: input.source ?? 'combat-entry',
+          });
+        }
+
+        if (
+          sceneAttackMayGround &&
+          sceneAttackMayOverride &&
+          sceneResolution.attackProfile &&
+          attackProfile === sceneResolution.attackProfile
+        ) {
+          logger.info({
+            msg: 'NPC_LOADOUT_GROUNDED',
+            encounterId: encounter.id,
+            npc: participantName,
+            source: sceneResolution.attackSource ?? 'scene',
+            weapon: sceneResolution.attackProfile.attacks[0]?.name ?? null,
+          });
+        }
 
         if (monster) {
           // One line per combatant naming the attack it will actually swing and the rung that
@@ -302,7 +359,7 @@ export class CombatEncounterService {
           logger.info({
             msg: 'COMBAT_MONSTER_ATTACK_PROFILE',
             sessionId,
-            combatantName: input.name,
+            combatantName: participantName,
             monsterId: input.monsterId ?? null,
             resolvedAs: monster.monsterName,
             statSource: monster.source,
@@ -357,7 +414,7 @@ export class CombatEncounterService {
           encounterId: encounter.id,
           characterId: input.characterId || null,
           npcId: input.npcId || null,
-          name: input.name,
+          name: participantName,
           initiative,
           initiativeModifier,
           armorClass,

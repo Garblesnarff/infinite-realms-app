@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { seatEntityWithinReach } from '../seating.js';
+import { resolveSceneCombatant, seatEntityWithinReach, UNKNOWN_CREATURE } from '../seating.js';
 
 const makeMap = () => ({
   id: 'map-1',
@@ -92,5 +92,32 @@ describe('seatEntityWithinReach', () => {
     seatEntityWithinReach(entryMap, 'target', 'player');
 
     expect(entryMap.entities.find((entity) => entity.id === 'target')?.movementRemaining).toBe(0);
+  });
+});
+
+describe('resolveSceneCombatant', () => {
+  it('replaces a synthetic prose seat with the named creature and its scene attack', () => {
+    const result = resolveSceneCombatant({
+      candidateName: 'Player 1',
+      sceneDescription:
+        'The Chiropteran Hulk beats its wings. Sonic Screech: Cone 30ft. 4d6 thunder damage.',
+    });
+
+    expect(result).toMatchObject({
+      name: 'Chiropteran Hulk',
+      source: 'scene',
+      attackSource: 'scene',
+      attackProfile: { source: 'scene', attacks: [{ name: 'Sonic Screech', damageDice: '4d6' }] },
+    });
+  });
+
+  it('uses a creature type from the scene before admitting an unknown seat', () => {
+    expect(
+      resolveSceneCombatant({
+        candidateName: 'NPC 1',
+        sceneDescription: 'A hulking guard blocks the only exit.',
+      }).name,
+    ).toBe('Hulking Guard');
+    expect(resolveSceneCombatant({ candidateName: 'Player 1' }).name).toBe(UNKNOWN_CREATURE);
   });
 });

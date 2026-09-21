@@ -90,6 +90,33 @@ const nonHostileDisposition = (participant: Record<string, unknown>): boolean =>
 
 const isProvoked = (participant: Record<string, unknown>): boolean => participant.provoked === true;
 
+function storedMonsterWeapon(participant: Record<string, unknown>): WeaponRuleProfile | null {
+  const profile = participant.monsterAttack;
+  if (!isRecord(profile) || !Array.isArray(profile.attacks)) return null;
+  const attack = profile.attacks.find((candidate) => isRecord(candidate));
+  if (
+    !isRecord(attack) ||
+    typeof attack.name !== 'string' ||
+    typeof attack.damageDice !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    id: `monster-attack:${attack.name}`,
+    name: attack.name,
+    damageDice: attack.damageDice,
+    damageType: typeof attack.damageType === 'string' ? attack.damageType : 'bludgeoning',
+    normalRange: Number(attack.normalRange) || 5,
+    ...(Number(attack.longRange) ? { longRange: Number(attack.longRange) } : {}),
+    magicBonus: 0,
+    finesse: false,
+    ranged: attack.ranged === true,
+    proficient: true,
+    fixedAttackBonus: Number(attack.attackBonus) || 0,
+    fixedDamageBonus: Number(attack.damageBonus) || 0,
+  };
+}
+
 function chooseTarget(state: CombatState, actorId: string) {
   return state.participants.find((participant) => {
     if (participant.id === actorId || !participant.isActive || !isPlayer(participant)) return false;
@@ -133,13 +160,14 @@ function chooseAction(
   }
 
   const target = chooseTarget(state, actor.id);
-  if (!target || !weapon) return endTurn();
+  const actionWeapon = storedMonsterWeapon(actorRecord) ?? weapon;
+  if (!target || !actionWeapon) return endTurn();
 
   return {
     actor_id: actor.id,
     action_type: 'attack',
     target_ids: [target.id],
-    weapon_id: weapon.id,
+    weapon_id: actionWeapon.id,
     spell_id: null,
     slot_level: null,
     movement_feet: 0,

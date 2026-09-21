@@ -157,6 +157,12 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
     return candidates.map((candidate) => candidateToProfile(candidate, character?.class));
   }
 
+  // Scene-grounded attacks are resolved once at seating and stored on the participant. They
+  // take precedence over the generic Unarmed Strike fallback even when the seat also points at
+  // an NPC row that has no authored actions.
+  const storedMonsterWeapons = monsterAttackProfiles(participant);
+  if (storedMonsterWeapons.length) return storedMonsterWeapons;
+
   if (participant.npcId) {
     const npc = await db.query.npcs.findFirst({ where: eq(npcs.id, participant.npcId) });
     const stats = (npc?.stats ?? {}) as Record<string, any>;
@@ -183,7 +189,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
   // A structured DM combatant: no character sheet, no NPC row, and until now no weapon at
   // all. Its attack profile was resolved and stored when combat started (see
   // `combat-encounter-service.startCombat`), so this reads a decision rather than making one.
-  return monsterAttackProfiles(participant);
+  return storedMonsterWeapons;
 }
 
 /**

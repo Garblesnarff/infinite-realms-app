@@ -10,6 +10,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   buildEntryParticipants,
+  buildCombatSeatingTranscript,
   deriveEntryCombatants,
   detectCombatEntry,
   detectCombatEntryTrigger,
@@ -310,6 +311,48 @@ describe('buildEntryParticipants', () => {
     ]);
     expect(participants[0]).toMatchObject({ characterId: 'character-1', initiativeModifier: 2 });
     expect(participants[1].monsterId).toBe('srd:goblin');
+  });
+
+  it('carries prose scene identity into every hostile seat', () => {
+    const participants = buildEntryParticipants(PLAYER, [{ name: 'Player 1', count: 1 }], {
+      sceneDescription: 'The Chiropteran Hulk raises its blade.',
+      sceneEntityName: 'Player 1',
+      source: 'player_intent',
+    });
+
+    expect(participants[1]).toMatchObject({
+      name: 'Player 1',
+      sceneDescription: 'The Chiropteran Hulk raises its blade.',
+      sceneEntityName: 'Player 1',
+      source: 'player_intent',
+    });
+  });
+
+  it('renders the resolved NPC name in the server-owned initiative line', () => {
+    expect(
+      buildCombatSeatingTranscript(
+        [
+          {
+            id: 'player',
+            name: PLAYER.name,
+            initiative: 18,
+            initiativeModifier: 2,
+            characterId: PLAYER.characterId,
+            turnOrder: 0,
+          },
+          {
+            id: 'hulk',
+            name: 'Chiropteran Hulk',
+            initiative: 15,
+            initiativeModifier: 0,
+            participantType: 'monster',
+            turnOrder: 1,
+          },
+        ],
+        PLAYER,
+        16,
+      ),
+    ).toContain('Chiropteran Hulk: 15 + 0 = 15.');
   });
 });
 

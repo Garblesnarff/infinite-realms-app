@@ -113,6 +113,26 @@ const quarterstaff = {
 };
 
 describe('deriveCombatEntryFirstAction', () => {
+  it('uses the declared scene name when the seated target still has a synthetic label', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: {
+          ...state,
+          participants: [state.participants[0], { ...state.participants[1], name: 'Player 1' }],
+        },
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: { verb: 'punch', actorName: 'Chiropteran Hulk' },
+      },
+      deps,
+    );
+
+    expect(firstAction).toMatchObject({
+      targetLabel: 'Chiropteran Hulk',
+      roll_request: { purpose: 'Unarmed Strike attack against Chiropteran Hulk' },
+    });
+  });
+
   it.each(['punch', 'hit', 'strike'])(
     'resolves a bare %s as Unarmed Strike even when a quarterstaff is equipped',
     async (verb) => {
