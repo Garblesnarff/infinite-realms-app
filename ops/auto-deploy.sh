@@ -8,6 +8,12 @@ set -euo pipefail
 # publish into dist/, which is nginx's docroot. The server is always restarted
 # BEFORE the client bundle goes live, so any skew is new-API/old-client.
 #
+# FLAGS (both optional; cron passes neither):
+#   --deploy-now  deploy even when origin/main has not moved — rebuild, restart
+#                 and republish at the current HEAD. Refuses while HOLD exists.
+#   --dry-run     report what a run would do and touch nothing: no reset, no
+#                 install, no build, no restart, no publish, no state writes.
+#
 # TO PAUSE DEPLOYS (stranger-test runs): `touch /var/lib/infiniterealms-deploy/HOLD`.
 # While that file exists this script does nothing and exits 0; `rm` it to
 # resume. A hold older than 3h pages Slack so a forgotten one cannot silently
@@ -20,6 +26,41 @@ set -euo pipefail
 # exercised with stub binaries instead of the real bun and pm2 — same reason
 # monitor-infiniterealms.sh takes MONITOR_PATH.
 export PATH="${DEPLOY_BIN_PATH:-/root/.bun/bin}:$PATH"
+
+# --- flags (added 2026-09-21, #2124) -----------------------------------------
+# cron invokes the script with no arguments and gets exactly the old behavior.
+# Anything unrecognised is a hard error rather than a silent ignore: a typo'd
+# `--dryrun` that quietly performed a REAL deploy is the failure this guards.
+DEPLOY_FORCE=0
+DRY_RUN=0
+usage() {
+  cat <<'USAGE'
+usage: auto-deploy.sh [--deploy-now] [--dry-run]
+
+  --deploy-now  Deploy even when origin/main has not moved: rebuild, restart
+                and republish at the current HEAD. Refuses (exit 1) while the
+                deploy HOLD file exists.
+  --dry-run     Print the steps a run would take and change nothing — no
+                `git reset`, no `bun install`, no build, no `pm2 restart`, no
+                publish into dist/, no state files, no Slack.
+USAGE
+}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --deploy-now) DEPLOY_FORCE=1 ;;
+    --dry-run) DRY_RUN=1 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "auto-deploy.sh: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 
 # Overridable purely so the failure paths can be exercised against a scratch
 # repo without touching production — same reason monitor-infiniterealms.sh takes
@@ -47,6 +88,9 @@ ALERT_FILE=${DEPLOY_ALERT_FILE:-/var/log/infiniterealms/alerts.log}
 STATE_DIR=${DEPLOY_STATE_DIR:-/var/lib/infiniterealms-deploy}
 REPEAT_SECONDS=${DEPLOY_REPEAT_SECONDS:-3600}
 NOTIFY=${DEPLOY_NOTIFY:-1}
+# A dry run must not page anyone, whatever DEPLOY_NOTIFY says.
+[ "$DRY_RUN" = 1 ] && NOTIFY=0
+
 mkdir -p "$STATE_DIR"
 
 # Credentials are embedded in the remote URL, so any git error text is assumed
@@ -79,7 +123,27 @@ emit() {
 }
 
 # record_state <check> <ok|fail> <detail>
+# Every command that changes production goes through run(), so --dry-run is a
+# property of one function rather than a flag threaded through a dozen call
+# sites. #2124: the DEPLOY_* overrides looked like a dry-run facility and were
+# not one — `pm2 restart infiniterealms-bun` was hardcoded, so a "verification"
+# run restarted production on 2026-09-20 when origin/main moved underneath it.
+run() {
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "$(ts) [dry-run] would run: $*"
+    return 0
+  fi
+  "$@"
+}
+
 record_state() {
+  # State files drive the Slack rate-limiter; a dry run must not move that
+  # cursor, or a real failure afterwards is filed as "still failing" and the
+  # first alert is never sent.
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "$(ts) [dry-run] would record_state $1 $2${3:+ — $3}"
+    return 0
+  fi
   local check=$1 status=$2 detail=$3 now
   local file="$STATE_DIR/$check.state" prev=ok since notified=0
   now=$(date +%s); since=$now
@@ -119,6 +183,10 @@ record_state() {
 # until a synced bun.lock is committed upstream).
 install_deps() {
   local dir="$1" label="$2"
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "$(ts) [dry-run] would run: bun install --frozen-lockfile in $dir ($label)"
+    return 0
+  fi
   if (cd "$dir" && bun install --frozen-lockfile); then
     record_state "lockfile_$label" ok ""
     return 0
@@ -151,6 +219,15 @@ if [ -e "$HOLD_FILE" ]; then
   HOLD_SINCE=$(stat -c %Y "$HOLD_FILE" 2>/dev/null || echo 0)
   HOLD_AGE=$(( $(date +%s) - HOLD_SINCE ))
   echo "$(ts) Held: $HOLD_FILE present (${HOLD_AGE}s). No fetch, no build, no restart."
+  # --deploy-now is an operator saying "go now", and the single thing the hold
+  # exists to stop is a deploy landing inside a stranger-test run (#2093). So
+  # the flag does NOT override the hold: it exits non-zero, because a human who
+  # typed the command is reading the output and a silent exit 0 would read as
+  # "deployed". `rm` the hold first if the run really has ended.
+  if [ "$DEPLOY_FORCE" = 1 ]; then
+    echo "$(ts) Refusing --deploy-now: deploys are held. Remove $HOLD_FILE when the run has ended, then re-run."
+    exit 1
+  fi
   if [ "$HOLD_AGE" -ge "$HOLD_STALE_SECONDS" ]; then
     record_state hold fail "deploy held $(( HOLD_AGE / 60 ))m by $HOLD_FILE — prod is NOT tracking main. If the stranger-test run has ended, remove the file."
   fi
@@ -175,20 +252,33 @@ record_state fetch ok ""
 NEW_HEAD=$(git rev-parse origin/main)
 
 if [[ "$PREV_HEAD" == "$NEW_HEAD" ]]; then
-  echo "$(ts) No changes (HEAD: $PREV_HEAD)"
-  exit 0
+  if [ "$DEPLOY_FORCE" != 1 ]; then
+    echo "$(ts) No changes (HEAD: $PREV_HEAD)"
+    exit 0
+  fi
+  # --deploy-now: origin/main has not moved, so there is nothing to reset to,
+  # but the operator wants this commit rebuilt, restarted and republished --
+  # the case where a merge landed between two cron ticks, or where dist/ and
+  # the running server have drifted from HEAD. Skipping the reset is the point:
+  # it is the one step that can destroy state, and at an identical SHA it can
+  # only do harm.
+  echo "$(ts) --deploy-now: no new commits; rebuilding, restarting and republishing at $PREV_HEAD"
 fi
 
 # Only deploy if origin is strictly ahead of local. If local has commits
 # origin doesn't (e.g., a hotfix made on the server), leave it alone — never
 # reset away local work. Push the local commits manually instead.
+# Not overridable by --deploy-now: refusing to reset away local commits is a
+# safety property, not a convenience.
 if ! git merge-base --is-ancestor "$PREV_HEAD" "$NEW_HEAD"; then
   echo "$(ts) Skipping: local HEAD ($PREV_HEAD) is not an ancestor of origin/main ($NEW_HEAD). Push local commits or rebase."
   exit 0
 fi
 
-echo "$(ts) Deploying $PREV_HEAD -> $NEW_HEAD"
-git reset --hard origin/main
+if [[ "$PREV_HEAD" != "$NEW_HEAD" ]]; then
+  echo "$(ts) Deploying $PREV_HEAD -> $NEW_HEAD"
+  run git reset --hard origin/main
+fi
 install_deps . "root"
 install_deps server-bun "server-bun"
 # Everything from here on runs AFTER `git reset --hard`, which is what makes a
@@ -218,12 +308,12 @@ install_deps server-bun "server-bun"
 # cluster mode, no second port, no nginx change.
 STAGING_ROOT=${DEPLOY_STAGING_ROOT:-/var/lib/infiniterealms-deploy/staging}
 STAGING_DIST="$STAGING_ROOT/dist"
-mkdir -p "$STAGING_ROOT"
+run mkdir -p "$STAGING_ROOT"
 
 # vite writes the bundle to the staging dir instead of the live docroot.
 # --emptyOutDir is required because the target is outside the project root;
 # without it vite refuses to clear the directory and stale chunks accumulate.
-if ! bunx vite build --outDir "$STAGING_DIST" --emptyOutDir; then
+if ! run bunx vite build --outDir "$STAGING_DIST" --emptyOutDir; then
   echo "$(ts) DEPLOY FAILED: vite build — build output above"
   record_state build fail "vite build failed at ${NEW_HEAD:0:8}. git ALREADY advanced, so later runs will report 'No changes' without retrying. dist/ and the server are both UNCHANGED (still ${PREV_HEAD:0:8}) — prod is consistent, just stale. Fix and redeploy by hand. See /var/log/infiniterealms/auto-deploy.log"
   exit 1
@@ -235,7 +325,9 @@ fi
 # the scan MUST see the new bundle, because the whole point is to catch a
 # secret before it is published. Splitting the two halves of `bun run build`
 # here is what buys that; do not collapse it back.
-if ! (cd "$STAGING_ROOT" && node "$PWD_REPO/scripts/check-client-build-secrets.mjs"); then
+if [ "$DRY_RUN" = 1 ]; then
+  echo "$(ts) [dry-run] would run: check-client-build-secrets.mjs against $STAGING_DIST"
+elif ! (cd "$STAGING_ROOT" && node "$PWD_REPO/scripts/check-client-build-secrets.mjs"); then
   echo "$(ts) DEPLOY FAILED: client build secret check — output above"
   record_state build fail "client build secret check FAILED at ${NEW_HEAD:0:8}. A secret may be baked into the staged bundle. NOTHING was published: dist/ and the server are both still ${PREV_HEAD:0:8}. Do not publish $STAGING_DIST by hand until this is resolved."
   exit 1
@@ -255,7 +347,7 @@ record_state build ok ""
 # /etc/infiniterealms/alerts.env and folds it in itself, so a plain restart
 # carries the webhook and `--update-env` would only re-introduce the dependence
 # on whatever environment happened to invoke the script. Do not add it back.
-if ! pm2 restart infiniterealms-bun; then
+if ! run pm2 restart infiniterealms-bun; then
   echo "$(ts) DEPLOY FAILED: pm2 restart infiniterealms-bun — pm2 output above"
   record_state pm2_restart fail "pm2 restart failed at ${NEW_HEAD:0:8}. The client bundle was NOT published, so dist/ still matches the pre-deploy server (${PREV_HEAD:0:8}) — no version skew. Check 'pm2 list' and 'pm2 logs infiniterealms-bun'"
   exit 1
@@ -284,13 +376,17 @@ record_state pm2_restart ok ""
 # Losing the snapshot is not a reason to strand the server on new code with an
 # old bundle, so a failure here warns and publishes anyway.
 DIST_PREV="$STAGING_ROOT/dist.prev"
-rm -rf "$DIST_PREV"
-if ! cp -al dist "$DIST_PREV" 2> /dev/null; then
-  echo "$(ts) WARNING: could not snapshot dist/ to $DIST_PREV — publishing with no rollback copy."
+if [ "$DRY_RUN" = 1 ]; then
+  echo "$(ts) [dry-run] would snapshot dist/ to $DIST_PREV"
+else
   rm -rf "$DIST_PREV"
+  if ! cp -al dist "$DIST_PREV" 2> /dev/null; then
+    echo "$(ts) WARNING: could not snapshot dist/ to $DIST_PREV — publishing with no rollback copy."
+    rm -rf "$DIST_PREV"
+  fi
 fi
 
-if ! rsync -a --checksum --delete "$STAGING_DIST/" dist/; then
+if ! run rsync -a --checksum --delete "$STAGING_DIST/" dist/; then
   echo "$(ts) DEPLOY FAILED: rsync staging -> dist — rsync output above"
   # This is the one branch that leaves a REAL skew: pm2 is already on the new
   # code and dist/ is now old-or-partial, so a browser can ask for a chunk that
@@ -311,7 +407,7 @@ if ! rsync -a --checksum --delete "$STAGING_DIST/" dist/; then
 fi
 
 # nginx serves dist as www-data; a root-run build leaves root-owned files.
-chown -R www-data:www-data dist
+run chown -R www-data:www-data dist
 record_state publish ok ""
 
 # $DIST_PREV is deliberately left in place after a success: it is the previous
@@ -320,4 +416,8 @@ record_state publish ok ""
 # The next run replaces it. Its hardlinks have diverged by now, so it does cost
 # a real copy of the old bundle on disk until then.
 
-echo "$(ts) Deploy complete ($NEW_HEAD)"
+if [ "$DRY_RUN" = 1 ]; then
+  echo "$(ts) [dry-run] complete — nothing was changed (would have deployed $NEW_HEAD)"
+else
+  echo "$(ts) Deploy complete ($NEW_HEAD)"
+fi
