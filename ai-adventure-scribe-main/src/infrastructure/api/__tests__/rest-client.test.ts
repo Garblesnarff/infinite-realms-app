@@ -85,6 +85,20 @@ describe('fetchWithAuth', () => {
     expect(isNetworkError(new TypeError('invalid request argument'))).toBe(false);
   });
 
+  it('stops retrying after a custom retryBudgetMs of waits', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const request = fetchWithAuth('/v1/llm/extract', { retryBudgetMs: 5_000 });
+    const rejection = expect(request).rejects.toThrow('Failed to fetch');
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it('does not retry an HTTP error response', async () => {
     fetchMock.mockResolvedValueOnce(response(503));
 

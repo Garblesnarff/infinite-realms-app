@@ -3,20 +3,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { createTurnPhaseReporter, NETWORK_RETRY_BUDGET_MS } from '@/infrastructure/api/rest-client';
+import {
+  BACKGROUND_LLM_RETRY_BUDGET_MS,
+  createTurnPhaseReporter,
+} from '@/infrastructure/api/rest-client';
 import * as loggerModule from '@/lib/logger';
 
 import '@/lib/auth-gate';
 
 const logger = (loggerModule as any).default;
 
-const exhaustNetworkRetryBudget = async (): Promise<void> => {
-  let remainingMs = NETWORK_RETRY_BUDGET_MS;
+const exhaustNetworkRetryBudget = async (
+  budgetMs: number = BACKGROUND_LLM_RETRY_BUDGET_MS,
+): Promise<void> => {
+  let remainingMs = budgetMs;
   for (const delayMs of [1_000, 2_000, 4_000, 8_000]) {
-    await vi.advanceTimersByTimeAsync(delayMs);
-    remainingMs -= delayMs;
+    if (remainingMs <= 0) return;
+    const waitMs = Math.min(delayMs, remainingMs);
+    await vi.advanceTimersByTimeAsync(waitMs);
+    remainingMs -= waitMs;
   }
-  await vi.advanceTimersByTimeAsync(remainingMs);
+  if (remainingMs > 0) await vi.advanceTimersByTimeAsync(remainingMs);
 };
 
 // Mock auth-gate
@@ -134,6 +141,13 @@ describe('LlmApiClient', () => {
         'persist',
         'composer enabled',
       ]);
+
+      const persistPhase = phases.find(({ phase }) => phase === 'persist');
+      expect(persistPhase).toMatchObject({
+        phase: 'persist',
+        requestId: 'generate-req-2',
+      });
+      expect(persistPhase?.ms).toBeGreaterThanOrEqual(0);
 
       const cumulativeMs = phases.reduce<number[]>((totals, { ms }) => {
         totals.push((totals.at(-1) ?? 0) + ms);

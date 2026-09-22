@@ -13,8 +13,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
 const LLM_EXTRACT_ROUTE = '/v1/llm/extract';
 export const NETWORK_RETRY_BUDGET_MS = 20_000;
+export const BACKGROUND_LLM_RETRY_BUDGET_MS = 5_000;
 const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
 const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
+
+export type FetchWithAuthOptions = RequestInit & { retryBudgetMs?: number };
 
 export type NetworkRetryListener = (isRetrying: boolean) => void;
 
@@ -131,6 +134,7 @@ async function requestWithNetworkRetry(
   path: string,
   request: () => Promise<Response>,
   signal?: AbortSignal,
+  retryBudgetMs: number = NETWORK_RETRY_BUDGET_MS,
 ): Promise<Response> {
   const startedAt = Date.now();
   let delayMs = NETWORK_RETRY_INITIAL_DELAY_MS;
@@ -145,7 +149,7 @@ async function requestWithNetworkRetry(
         if (!isNetworkError(error)) throw error;
 
         const elapsedMs = Date.now() - startedAt;
-        const remainingMs = NETWORK_RETRY_BUDGET_MS - elapsedMs;
+        const remainingMs = retryBudgetMs - elapsedMs;
         if (remainingMs <= 0) throw error;
 
         const retryDelayMs = Math.min(delayMs, remainingMs);
@@ -213,12 +217,17 @@ function buildRequestInit(options: RequestInit, accessToken?: string): RequestIn
  * Fetch an API route and recover one expired access token before surfacing the
  * session-expired state. Callers retain ownership of non-2xx response parsing.
  */
-export async function fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
+export async function fetchWithAuth(
+  path: string,
+  options: FetchWithAuthOptions = {},
+): Promise<Response> {
+  const { retryBudgetMs = NETWORK_RETRY_BUDGET_MS, ...requestInit } = options;
   const request = (accessToken?: string): Promise<Response> =>
     requestWithNetworkRetry(
       path,
-      () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(options, accessToken)),
-      options.signal,
+      () => fetch(`${API_BASE_URL}${path}`, buildRequestInit(requestInit, accessToken)),
+      requestInit.signal,
+      retryBudgetMs,
     );
 
   const response = await request();
@@ -334,7 +343,7 @@ class LlmApiClient {
   private offlineFallbackSetAt = 0;
   private static readonly OFFLINE_RESET_MS = 30_000;
 
-  private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
+  private async fetchWithAuth(path: string, options: FetchWithAuthOptions = {}): Promise<Response> {
     if (
       this.useOfflineFallback &&
       Date.now() - this.offlineFallbackSetAt >= LlmApiClient.OFFLINE_RESET_MS
@@ -451,6 +460,7 @@ class LlmApiClient {
     const makeReq = async (provider: 'openrouter' | 'gemini', model?: string) =>
       this.fetchWithAuth(params.onStream ? '/v1/llm/generate/stream' : '/v1/llm/generate', {
         method: 'POST',
+        retryBudgetMs: BACKGROUND_LLM_RETRY_BUDGET_MS,
         body: JSON.stringify({
           prompt: params.prompt,
           player_input: params.player_input,
@@ -609,6 +619,7 @@ class LlmApiClient {
     try {
       const res = await this.fetchWithAuth('/v1/llm/extract', {
         method: 'POST',
+        retryBudgetMs: BACKGROUND_LLM_RETRY_BUDGET_MS,
         body: JSON.stringify({ prompt, maxTokens }),
       });
       const data = await res.json();

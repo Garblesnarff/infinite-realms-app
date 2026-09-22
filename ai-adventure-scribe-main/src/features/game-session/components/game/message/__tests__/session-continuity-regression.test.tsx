@@ -106,6 +106,8 @@ vi.mock('@/features/game-session/components/game/session/SessionValidator', () =
 // ------- imports (after mocks) -------
 import { MessageHandler } from '../MessageHandler';
 
+import logger from '@/lib/logger';
+
 // ------- shared types -------
 type DiceRollContext = {
   intent: 'dice_roll';
@@ -392,6 +394,12 @@ describe('session-continuity regression', () => {
     expect(events.indexOf('text shown')).toBeGreaterThanOrEqual(0);
     expect(events.indexOf('extraction started')).toBeGreaterThanOrEqual(0);
     expect(events.indexOf('text shown')).toBeLessThan(events.indexOf('extraction started'));
+    await waitFor(() => {
+      expect(logger.info).toHaveBeenCalledWith(
+        'TURN_PHASE',
+        expect.objectContaining({ phase: 'persist' }),
+      );
+    });
     expect(ref.processing.current).toBe(false);
 
     extractionResolvers.forEach((resolve) => resolve());

@@ -193,7 +193,10 @@ export const useMessageHandlerLogic = ({
           earlyResponse.context?.combat_transition === 'start',
         );
         turnPhase('text shown');
-        runDeferredTask('dice DM message persistence', () => sendMessage(earlyResponse));
+        runDeferredTask('dice DM message persistence', async () => {
+          await sendMessage(earlyResponse);
+          turnPhase('persist');
+        });
         setComposerBlocked(combatPreflightPending);
         if (!combatPreflightPending) setComposerBlocked(false);
       });
@@ -265,7 +268,10 @@ export const useMessageHandlerLogic = ({
             // handling and let the persistence failure be logged independently.
             turnPhase('text shown');
             setComposerBlocked(combatGatePending);
-            runDeferredTask('DM message persistence', () => sendMessage(earlyMessage!));
+            runDeferredTask('DM message persistence', async () => {
+              await sendMessage(earlyMessage!);
+              turnPhase('persist');
+            });
 
             if (providedContext?.intent !== 'dice_roll') {
               runDeferredTask('player memory extraction', () => extractMemories(playerInput));
@@ -353,9 +359,10 @@ export const useMessageHandlerLogic = ({
             Boolean(hasRollRequests || sanitizedAiResponseMessage.combatDetection?.isCombat),
           );
         }
-        runDeferredTask('DM continuation persistence', () =>
-          sendMessage(sanitizedAiResponseMessage),
-        );
+        runDeferredTask('DM continuation persistence', async () => {
+          await sendMessage(sanitizedAiResponseMessage);
+          turnPhase('persist');
+        });
       }
 
       if (hasRollRequests) {
