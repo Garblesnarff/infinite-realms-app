@@ -5,3 +5,4 @@
  */
 
 export * from './use-character-selection';
+export * from './use-campaigns-list';

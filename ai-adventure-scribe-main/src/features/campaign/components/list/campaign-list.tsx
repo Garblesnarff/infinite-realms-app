@@ -6,8 +6,7 @@
  *
  * Dependencies:
  * - React Query (tanstack)
- * - Supabase client (src/integrations/supabase/client.ts)
- * - Toast hook (src/hooks/use-toast.ts)
+ * - useCampaignsList (src/features/campaign/hooks/use-campaigns-list.ts)
  * - CampaignCard (src/components/campaign-list/campaign-card.tsx)
  * - CampaignSkeleton (src/components/campaign-list/campaign-skeleton.tsx)
  * - EmptyState (src/components/campaign-list/empty-state.tsx)
@@ -18,7 +17,6 @@
 // ============================
 // SDK/library imports
 // ============================
-import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 // ============================
@@ -32,14 +30,13 @@ import { useMemo } from 'react';
 // ============================
 // Feature components
 // ============================
+
 import { MemoizedCampaignCard } from './campaign-card';
+import CampaignsLoadError from './campaigns-load-error';
 import EmptyState from './empty-state';
+import { useCampaignsList } from '../../hooks/use-campaigns-list';
 
 import { FantasyLoader } from '@/components/ui/fantasy-loader';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Props for CampaignList component
@@ -60,9 +57,6 @@ interface CampaignListProps {
  * @returns {JSX.Element} List of campaign cards or appropriate feedback state
  */
 const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListProps) => {
-  const { toast } = useToast();
-  const { user } = useAuth();
-
   // map known campaign names to public cover images
   const getCoverFor = useMemo(
     () => (name: string | null) => {
@@ -76,44 +70,22 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
     [],
   );
 
-  // Fetch campaigns from Supabase with proper error handling and filtering/sorting
-  const {
-    data: campaigns,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ['campaigns', searchTerm, sortBy, user?.id],
-    queryFn: async () => {
-      // Require authenticated user for data isolation
-      if (!user?.id) {
-        logger.warn('No authenticated user - cannot fetch campaigns');
-        return [];
-      }
+  // One shared, user-scoped request; search and sort are applied client-side
+  // so typing never changes the query key (#2149).
+  const { data, isLoading, error, refetch, isFetching } = useCampaignsList();
 
-      try {
-        // Only select minimal fields needed for campaign list view
-        // Excludes heavy JSONB fields (setting_details, thematic_elements, style_config, rules_config)
-        const data = await userDataApi.listCampaigns();
-        const needle = searchTerm.toLowerCase();
-        return data
-          .filter(
-            (campaign) =>
-              !needle ||
-              campaign.name?.toLowerCase().includes(needle) ||
-              campaign.genre?.toLowerCase().includes(needle),
-          )
-          .sort((a, b) => String(b[sortBy] || '').localeCompare(String(a[sortBy] || '')));
-      } catch (err) {
-        logger.error('Error fetching campaigns:', err);
-        toast({
-          title: 'Error loading campaigns',
-          description: 'There was a problem loading your campaigns. Please try again.',
-          variant: 'destructive',
-        });
-        throw err;
-      }
-    },
-  });
+  const campaigns = useMemo(() => {
+    if (!data) return data;
+    const needle = searchTerm.toLowerCase();
+    return data
+      .filter(
+        (campaign) =>
+          !needle ||
+          campaign.name?.toLowerCase().includes(needle) ||
+          campaign.genre?.toLowerCase().includes(needle),
+      )
+      .sort((a, b) => String(b[sortBy] || '').localeCompare(String(a[sortBy] || '')));
+  }, [data, searchTerm, sortBy]);
 
   // Show loading state with FantasyLoader
   if (isLoading) {
@@ -129,19 +101,9 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
     );
   }
 
-  // Show error state with retry option
+  // A failed load (including 429) is never an empty roster.
   if (error) {
-    return (
-      <div className="text-center space-y-4">
-        <p className="text-destructive">Error loading campaigns</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-sm text-muted-foreground hover:text-primary underline"
-        >
-          Click here to try again
-        </button>
-      </div>
-    );
+    return <CampaignsLoadError onRetry={() => void refetch()} isRetrying={isFetching} />;
   }
 
   // Show empty state if no campaigns

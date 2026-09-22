@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,9 +12,17 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import CampaignsLoadError from '@/features/campaign/components/list/campaigns-load-error';
+import {
+  type CampaignListRow,
+  useCampaignsList,
+} from '@/features/campaign/hooks/use-campaigns-list';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+
+const selectActiveCampaigns = (campaigns: CampaignListRow[]): CampaignListRow[] =>
+  campaigns.filter((campaign) => campaign.status === 'active');
 
 interface CampaignSelectionModalProps {
   isOpen: boolean;
@@ -37,16 +44,15 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Fetch available campaigns
-  const { data: campaigns, isLoading } = useQuery({
-    queryKey: ['available-campaigns', characterId],
-    queryFn: async () => {
-      // Only select minimal fields needed for campaign selection
-      // Excludes heavy JSONB fields (setting_details, thematic_elements, style_config, rules_config)
-      const data = await userDataApi.listCampaigns();
-      return data.filter((campaign) => campaign.status === 'active');
-    },
-  });
+  // Every character card mounts this modal closed, so the request waits until
+  // it opens and shares the user's campaigns cache entry (#2149).
+  const {
+    data: campaigns,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useCampaignsList({ enabled: isOpen, select: selectActiveCampaigns });
 
   /**
    * Handles starting a new game session
@@ -94,6 +100,8 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
               <Skeleton className="h-24 w-full" />
               <Skeleton className="h-24 w-full" />
             </div>
+          ) : error ? (
+            <CampaignsLoadError onRetry={() => void refetch()} isRetrying={isFetching} />
           ) : campaigns?.length ? (
             <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
               {campaigns.map((campaign) => (
