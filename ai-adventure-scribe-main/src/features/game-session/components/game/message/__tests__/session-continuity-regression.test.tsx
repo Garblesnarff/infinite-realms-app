@@ -17,6 +17,8 @@ const {
   mockGetAIResponse,
   mockOnAIResponse,
   mockSendMessage,
+  mockUpdateMessage,
+  mockProcessAiResponse,
   mockToast,
   mockValidateSession,
   mockParseDiceCommand,
@@ -29,6 +31,8 @@ const {
   }),
   mockOnAIResponse: vi.fn().mockResolvedValue(undefined),
   mockSendMessage: vi.fn().mockResolvedValue(undefined),
+  mockUpdateMessage: vi.fn(),
+  mockProcessAiResponse: vi.fn(),
   mockToast: vi.fn(),
   mockValidateSession: vi.fn().mockResolvedValue(true),
   mockParseDiceCommand: vi.fn(),
@@ -53,6 +57,7 @@ vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({
     messages: [],
     sendMessage: mockSendMessage,
+    updateMessage: mockUpdateMessage,
     queueStatus: 'idle' as const,
     isLoading: false,
     isFetchingMore: false,
@@ -62,7 +67,7 @@ vi.mock('@/contexts/MessageContext', () => ({
 }));
 
 vi.mock('@/contexts/GameContext', () => ({
-  useGame: () => ({ processAiResponse: vi.fn(), state: {} }),
+  useGame: () => ({ processAiResponse: mockProcessAiResponse, state: {} }),
 }));
 
 vi.mock('@/contexts/CharacterContext', () => ({
@@ -84,10 +89,6 @@ vi.mock('@/utils/diceCommandParser', () => ({
 
 vi.mock('@/utils/chatSanitizer', () => ({
   sanitizeDMText: (text: string) => text,
-}));
-
-vi.mock('@/utils/roll-request/validate', () => ({
-  truncateAtRollRequest: (text: string) => text,
 }));
 
 vi.mock('@/utils/diceUtils', () => ({ rollDice: mockRollDice }));
@@ -322,6 +323,44 @@ describe('session-continuity regression', () => {
     });
   });
 
+  it('shows the roll prompt immediately without rendering declaration-turn outcome text', async () => {
+    const rollRequests = [{ type: 'attack', formula: '1d20+5', purpose: 'Longsword attack' }];
+    const rollResponse = {
+      text: 'Your blade scrapes past its frame, failing to find purchase.',
+      sender: 'dm',
+      rollRequests,
+    };
+    let resolveAIResponse: ((response: typeof rollResponse) => void) | undefined;
+    const pendingAIResponse = new Promise<typeof rollResponse>((resolve) => {
+      resolveAIResponse = resolve;
+    });
+
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((response: typeof rollResponse) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(rollResponse);
+      return pendingAIResponse;
+    });
+
+    const { ref } = renderHandler('session-roll-prompt');
+    let sendPromise: Promise<void>;
+    await act(async () => {
+      sendPromise = ref.send('I attack the ooze with my sword.');
+      await waitFor(() => expect(mockProcessAiResponse).toHaveBeenCalledWith(rollRequests));
+    });
+
+    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
+      0,
+    );
+    expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveAIResponse?.(rollResponse);
+      await sendPromise;
+    });
+  });
+
   it('persists engine lines but strips them from the combat callback input', async () => {
     const engineLine = '⚙️ Engine: The Storyteller rolled 16 + 4 = 20 vs AC 12 — HIT. 3 damage.';
     const narrative = 'The ward shatters and the corridor falls silent.';
@@ -375,7 +414,9 @@ describe('session-continuity regression', () => {
           extractionResolvers.push(resolve);
         }),
     );
-    mockSendMessage.mockImplementation(async (message: { sender?: string }) => {
+    // The early DM render is cache-only now: `updateMessage` is the render, `sendMessage` is
+    // the single persistence of the authoritative text.
+    mockUpdateMessage.mockImplementation((message: { sender?: string }) => {
       if (message.sender === 'dm') events.push('text shown');
     });
     mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
@@ -391,6 +432,12 @@ describe('session-continuity regression', () => {
     });
 
     await waitFor(() => expect(events).toContain('text shown'));
+    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
+      1,
+    );
+    expect(
+      mockUpdateMessage.mock.calls.filter(([message]) => message.sender === 'dm').length,
+    ).toBeGreaterThanOrEqual(1);
     expect(events.indexOf('text shown')).toBeGreaterThanOrEqual(0);
     expect(events.indexOf('extraction started')).toBeGreaterThanOrEqual(0);
     expect(events.indexOf('text shown')).toBeLessThan(events.indexOf('extraction started'));
@@ -403,6 +450,165 @@ describe('session-continuity regression', () => {
     expect(ref.processing.current).toBe(false);
 
     extractionResolvers.forEach((resolve) => resolve());
+  });
+
+  it('updates the early DM message in place when final text differs', async () => {
+    const earlyResponse = {
+      text: 'The blade arcs toward the ooze.',
+      sender: 'dm',
+      rollRequests: [],
+    };
+    const finalResponse = {
+      ...earlyResponse,
+      text: 'The blade arcs toward the ooze. The engine confirms the strike lands.',
+    };
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((response: typeof earlyResponse) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(earlyResponse);
+      return finalResponse;
+    });
+
+    const { ref } = renderHandler('session-final-text-replacement');
+    await act(async () => {
+      await ref.send('I swing at the ooze.');
+    });
+
+    // Exactly one persisted row, and it carries the final text — the early draft is never
+    // written to dialogue_history (#2139).
+    const dmMessages = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
+    expect(dmMessages).toHaveLength(1);
+    const persistedMessage = dmMessages[0]?.[0];
+    expect(persistedMessage.text).toBe(finalResponse.text);
+    expect(
+      mockSendMessage.mock.calls.filter(([message]) => message.text === earlyResponse.text),
+    ).toHaveLength(0);
+    expect(mockUpdateMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: persistedMessage.id,
+        text: finalResponse.text,
+      }),
+    );
+    // The early render used the same row id, so the UI replaced it instead of appending.
+    const earlyRender = mockUpdateMessage.mock.calls.find(
+      ([message]) => message.text === earlyResponse.text,
+    );
+    expect(earlyRender?.[0].id).toBe(persistedMessage.id);
+  });
+
+  /**
+   * #2139: the engine can resolve an in-combat turn inside `handleDmActionsAndTransitions`,
+   * after the early callback. `use-ai-response` marks those turns `suppressRender`, and the
+   * handler must render nothing until the final narration is back.
+   */
+  it('renders nothing before resolution on an in-combat turn without roll requests', async () => {
+    const earlyResponse = {
+      text: 'Terra swings her longsword at Click, the blade skating off its plating.',
+      sender: 'dm',
+      rollRequests: [],
+      combatDetection: { isCombat: true, shouldStartCombat: false },
+    };
+    const finalResponse = {
+      ...earlyResponse,
+      text: '⚙️ Engine: Terra rolled 14 + 5 = 19 vs AC 12 — HIT. 7 damage.\n\nThe longsword bites deep.',
+    };
+    let resolveAIResponse: ((response: typeof finalResponse) => void) | undefined;
+    const pendingAIResponse = new Promise<typeof finalResponse>((resolve) => {
+      resolveAIResponse = resolve;
+    });
+
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((
+            response: typeof earlyResponse,
+            options: { suppressRender: boolean },
+          ) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(earlyResponse, { suppressRender: true });
+      return pendingAIResponse;
+    });
+
+    const { ref } = renderHandler('session-in-combat-attack');
+    let sendPromise: Promise<void>;
+    await act(async () => {
+      sendPromise = ref.send('I attack Click with my longsword.');
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalled());
+    });
+
+    // Nothing rendered and nothing persisted while the engine is still resolving the turn.
+    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
+      0,
+    );
+    expect(mockUpdateMessage).not.toHaveBeenCalled();
+    expect(mockProcessAiResponse).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveAIResponse?.(finalResponse);
+      await sendPromise;
+    });
+
+    // The resolved narration is rendered and persisted exactly once, with the final text.
+    const dmMessages = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
+    expect(dmMessages).toHaveLength(1);
+    expect(dmMessages[0]?.[0].text).toBe(finalResponse.text);
+  });
+
+  /**
+   * `rollTurnStarted` is sticky for the invocation so the roll prompt is never fired twice.
+   * It must not also swallow narration: once the engine has resolved the roll and the final
+   * response carries no pending request, that text is rendered and saved once.
+   */
+  it('renders the final DM message once after a roll turn resolves', async () => {
+    const rollRequests = [{ type: 'attack', formula: '1d20+5', purpose: 'Longsword attack' }];
+    const rollResponse = {
+      text: 'Your blade scrapes past its frame, failing to find purchase.',
+      sender: 'dm',
+      rollRequests,
+    };
+    const resolvedResponse = {
+      text: '⚙️ Engine: 18 vs AC 12 — HIT. 6 damage.\n\nThe ooze recoils, hissing.',
+      sender: 'dm',
+      rollRequests: [],
+    };
+    let resolveAIResponse: ((response: typeof resolvedResponse) => void) | undefined;
+    const pendingAIResponse = new Promise<typeof resolvedResponse>((resolve) => {
+      resolveAIResponse = resolve;
+    });
+
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((
+            response: typeof rollResponse,
+            options: { suppressRender: boolean },
+          ) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(rollResponse, { suppressRender: true });
+      return pendingAIResponse;
+    });
+
+    const { ref } = renderHandler('session-roll-resolved');
+    let sendPromise: Promise<void>;
+    await act(async () => {
+      sendPromise = ref.send('I attack the ooze with my sword.');
+      await waitFor(() => expect(mockProcessAiResponse).toHaveBeenCalledWith(rollRequests));
+    });
+
+    // Declaration prose is never shown while the roll is outstanding.
+    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
+      0,
+    );
+
+    await act(async () => {
+      resolveAIResponse?.(resolvedResponse);
+      await sendPromise;
+    });
+
+    const dmMessages = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
+    expect(dmMessages).toHaveLength(1);
+    expect(dmMessages[0]?.[0].text).toBe(resolvedResponse.text);
+    // The prompt fired once, from the early callback only.
+    expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
   });
 
   it('unlocks the composer when response memory extraction fails', async () => {

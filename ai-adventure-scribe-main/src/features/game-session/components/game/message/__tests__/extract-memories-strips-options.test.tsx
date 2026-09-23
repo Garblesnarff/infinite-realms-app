@@ -79,10 +79,6 @@ vi.mock('@/utils/chatSanitizer', () => ({
   sanitizeDMText: (text: string) => text,
 }));
 
-vi.mock('@/utils/roll-request/validate', () => ({
-  truncateAtRollRequest: (text: string) => text,
-}));
-
 vi.mock('@/utils/diceUtils', () => ({ rollDice: vi.fn() }));
 
 vi.mock('@/utils/error-handler', () => ({ handleAsyncError: vi.fn() }));
@@ -132,8 +128,7 @@ function renderHandler(sessionId: string) {
 
 // A DM turn shaped like the live playtest capture from issue #1654: narrative
 // followed by three lettered, bolded action options.
-const NARRATIVE =
-  'A crash of metal signals a fresh disaster.';
+const NARRATIVE = 'A crash of metal signals a fresh disaster.';
 const AI_RESPONSE_WITH_OPTIONS = [
   NARRATIVE,
   '',
@@ -187,9 +182,7 @@ describe('extractMemories option stripping (#1654)', () => {
 
     // Find the updater call that sets current_scene_description and inspect its result.
     const sceneUpdates = updateGameSessionState.mock.calls
-      .map(([updater]: [(prev: Record<string, unknown>) => Record<string, unknown>]) =>
-        updater({}),
-      )
+      .map(([updater]: [(prev: Record<string, unknown>) => Record<string, unknown>]) => updater({}))
       .filter((result: Record<string, unknown>) => 'current_scene_description' in result);
 
     expect(sceneUpdates.length).toBeGreaterThan(0);

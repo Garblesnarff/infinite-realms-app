@@ -68,6 +68,18 @@ export interface StructuredAIResponse {
   roll_requests?: RollRequest[];
 }
 
+/**
+ * Render guidance handed to the early-text callback.
+ *
+ * `suppressRender` is set for any turn the engine may still resolve after the text has been
+ * parsed but before the final narration exists (roll requests, combat entry, or an in-combat
+ * turn). Rendering the declaration prose on those turns shows a hit or miss the dice have not
+ * decided yet — see #2139.
+ */
+export interface TextReadyOptions {
+  suppressRender: boolean;
+}
+
 export interface EnhancedChatMessage extends ChatMessage {
   narrationSegments?: NarrationSegment[];
   diceRolls?: DiceRoll[];
@@ -127,7 +139,7 @@ export const useAIResponse = (): {
     sessionId: string,
     turnCount?: number,
     onTurnPhase?: TurnPhaseReporter,
-    onTextReady?: (message: EnhancedChatMessage) => Promise<void> | void,
+    onTextReady?: (message: EnhancedChatMessage, options: TextReadyOptions) => Promise<void> | void,
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
@@ -186,7 +198,10 @@ export const useAIResponse = (): {
       sessionId: string,
       turnCount?: number,
       onTurnPhase?: TurnPhaseReporter,
-      onTextReady?: (message: EnhancedChatMessage) => Promise<void> | void,
+      onTextReady?: (
+        message: EnhancedChatMessage,
+        options: TextReadyOptions,
+      ) => Promise<void> | void,
     ): Promise<EnhancedChatMessage> => {
       try {
         logger.info('Getting AI response for session:', sessionId);
@@ -378,40 +393,46 @@ export const useAIResponse = (): {
                   const earlyShouldStartCombat =
                     !!parsedResult.combatDetection?.shouldStartCombat ||
                     parsedResult.combat_transition === 'start';
+                  // The engine can still resolve this turn after the text is parsed:
+                  // `requestPlayerAttackRoll` and combat resolution both run inside
+                  // `handleDmActionsAndTransitions`, which executes after this callback. Rendering
+                  // the declaration prose first shows an outcome the dice have not decided yet
+                  // (#2139), so any turn the engine may resolve suppresses the early render.
+                  // Non-combat, non-roll turns keep it (the #2095 fast-render win).
+                  const suppressRender =
+                    isInCombat || earlyShouldStartCombat || earlyRollRequests.length > 0;
                   let earlyText = parsedResult.text;
-                  if (
-                    !isInCombat &&
-                    !earlyShouldStartCombat &&
-                    earlyRollRequests.length === 0 &&
-                    parsedResult.options?.length
-                  ) {
+                  if (!suppressRender && parsedResult.options?.length) {
                     earlyText = `${earlyText.trim()}\n\n${parsedResult.options.join('\n')}`;
                   }
 
-                  await onTextReady({
-                    text: earlyText,
-                    sender: 'dm',
-                    timestamp: new Date().toISOString(),
-                    context: {
-                      emotion: 'neutral',
-                      intent: 'response',
-                      combat_transition: parsedResult.combat_transition ?? 'none',
-                      scene_spec: parsedResult.scene_spec != null,
+                  await onTextReady(
+                    {
+                      text: earlyText,
+                      sender: 'dm',
+                      timestamp: new Date().toISOString(),
+                      context: {
+                        emotion: 'neutral',
+                        intent: 'response',
+                        combat_transition: parsedResult.combat_transition ?? 'none',
+                        scene_spec: parsedResult.scene_spec != null,
+                      },
+                      narrationSegments: parsedResult.narrationSegments,
+                      diceRolls: (parsedResult.dice_rolls || []) as DiceRoll[],
+                      rollRequests: earlyRollRequests,
+                      sceneSpec: (parsedResult.scene_spec as SceneSpec | null | undefined) ?? null,
+                      combatDetection: {
+                        isCombat: parsedResult.combatDetection?.isCombat || false,
+                        confidence: parsedResult.combatDetection?.confidence || 1,
+                        combatType: parsedResult.combatDetection?.combatType || 'none',
+                        shouldStartCombat: earlyShouldStartCombat,
+                        shouldEndCombat: !!parsedResult.combatDetection?.shouldEndCombat,
+                        enemies: parsedResult.combatDetection?.enemies || [],
+                        combatActions: parsedResult.combatDetection?.combatActions || [],
+                      },
                     },
-                    narrationSegments: parsedResult.narrationSegments,
-                    diceRolls: (parsedResult.dice_rolls || []) as DiceRoll[],
-                    rollRequests: earlyRollRequests,
-                    sceneSpec: (parsedResult.scene_spec as SceneSpec | null | undefined) ?? null,
-                    combatDetection: {
-                      isCombat: parsedResult.combatDetection?.isCombat || false,
-                      confidence: parsedResult.combatDetection?.confidence || 1,
-                      combatType: parsedResult.combatDetection?.combatType || 'none',
-                      shouldStartCombat: earlyShouldStartCombat,
-                      shouldEndCombat: !!parsedResult.combatDetection?.shouldEndCombat,
-                      enemies: parsedResult.combatDetection?.enemies || [],
-                      combatActions: parsedResult.combatDetection?.combatActions || [],
-                    },
-                  });
+                    { suppressRender },
+                  );
                 },
               }
             : {}),

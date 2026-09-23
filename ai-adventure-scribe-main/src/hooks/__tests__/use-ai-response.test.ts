@@ -616,4 +616,100 @@ describe('useAIResponse', () => {
     expect(userDataApi.applyTacticalMapAction).not.toHaveBeenCalled();
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
   });
+  /**
+   * #2139: `requestPlayerAttackRoll` and combat resolution both run inside
+   * `handleDmActionsAndTransitions`, AFTER the early-text callback. An in-combat declaration
+   * turn therefore carries no structured `roll_requests` at parse time and still gets resolved
+   * by the engine, so the early render must be suppressed on combat turns too — not only on
+   * turns that already carry a roll request.
+   */
+  it('suppresses the early render on an in-combat turn that carries no roll requests', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { useCombat } = await import('@/contexts/CombatContext');
+    const liveEncounter = {
+      id: 'encounter-1',
+      phase: 'active',
+      currentTurnParticipantId: 'player-1',
+      currentRound: 1,
+      participants: [
+        { id: 'player-1', characterId: 'char-1', name: 'Terra', participantType: 'player' },
+      ],
+    };
+
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter: liveEncounter },
+      refreshCombatState: vi.fn().mockResolvedValue(liveEncounter),
+    } as any);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ turns: [] } as any);
+
+    const parsed = {
+      text: 'Terra swings her longsword at Click.',
+      roll_requests: [],
+      combatDetection: { isCombat: true },
+    };
+    (AIService.chatWithDM as any).mockImplementation(async (params: any) => {
+      await params.onTextReady?.(parsed);
+      return parsed;
+    });
+
+    const onTextReady = vi.fn();
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        onTextReady,
+      );
+    });
+
+    expect(onTextReady).toHaveBeenCalledTimes(1);
+    expect(onTextReady.mock.calls[0][1]).toEqual({ suppressRender: true });
+  });
+
+  it('keeps the early render on a non-combat turn with no roll requests', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+
+    const parsed = {
+      text: 'The tavern door creaks open.',
+      roll_requests: [],
+      combatDetection: { isCombat: false },
+    };
+    (AIService.chatWithDM as any).mockImplementation(async (params: any) => {
+      await params.onTextReady?.(parsed);
+      return parsed;
+    });
+
+    const onTextReady = vi.fn();
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        onTextReady,
+      );
+    });
+
+    expect(onTextReady).toHaveBeenCalledTimes(1);
+    expect(onTextReady.mock.calls[0][1]).toEqual({ suppressRender: false });
+    expect(onTextReady.mock.calls[0][0]).toMatchObject({ text: parsed.text, sender: 'dm' });
+  });
 });

@@ -32,7 +32,6 @@ import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
-import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 
 interface UseMessageHandlerLogicProps {
   sessionId: string;
@@ -96,7 +95,7 @@ export const useMessageHandlerLogic = ({
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
 } => {
-  const { messages, sendMessage } = useMessageContext();
+  const { messages, sendMessage, updateMessage } = useMessageContext();
   const { extractMemories } = useMemoryContext();
   const {
     getAIResponse,
@@ -169,6 +168,8 @@ export const useMessageHandlerLogic = ({
     let turnCountAdvanced = false;
     let textShown = false;
     let earlyMessage: ChatMessage | null = null;
+    let rollTurnStarted = false;
+    let textPhaseEmitted = false;
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
 
@@ -249,29 +250,51 @@ export const useMessageHandlerLogic = ({
         sessionId,
         undefined,
         turnPhase,
-        async (earlyResponse) => {
+        async (earlyResponse, textReadyOptions) => {
           const hasEarlyRollRequests = Boolean(earlyResponse.rollRequests?.length);
           const combatGatePending = Boolean(
             hasEarlyRollRequests ||
             earlyResponse.combatDetection?.shouldStartCombat ||
             earlyResponse.context?.combat_transition === 'start',
           );
-          const earlyText = hasEarlyRollRequests
-            ? truncateAtRollRequest(sanitizeDMText(earlyResponse.text))
-            : sanitizeDMText(earlyResponse.text);
 
-          earlyMessage = { ...earlyResponse, text: earlyText };
+          // `use-ai-response` always supplies this. The fallback keeps a structured roll
+          // request suppressed even for a caller that does not pass render guidance.
+          const suppressRender = textReadyOptions?.suppressRender ?? hasEarlyRollRequests;
+
+          if (suppressRender) {
+            // The engine may resolve this turn before the final narration exists — a roll
+            // request, combat entry, or any in-combat turn (`requestPlayerAttackRoll` runs
+            // inside `handleDmActionsAndTransitions`, after this callback). Declaration-turn
+            // prose can describe a hit or miss the dice have not decided yet, so nothing is
+            // rendered here; the composer stays blocked until resolution.
+            if (hasEarlyRollRequests) {
+              // The structured roll request is the authoritative UI boundary, so the prompt
+              // still goes up immediately. This 'text shown' marks that prompt, not narration.
+              rollTurnStarted = true;
+              turnPhase('text shown');
+              textPhaseEmitted = true;
+              processAiResponse(earlyResponse.rollRequests ?? []);
+            }
+            return;
+          }
+
+          const earlyText = sanitizeDMText(earlyResponse.text);
+
+          earlyMessage = {
+            ...earlyResponse,
+            id: earlyResponse.id ?? crypto.randomUUID(),
+            text: earlyText,
+          };
           textShown = Boolean(earlyText || earlyResponse.narrationSegments?.length);
           if (textShown) {
-            // MessageQueue is optimistic: the message enters the rendered cache before its
-            // persistence request resolves. Mark the render boundary before any critical action
-            // handling and let the persistence failure be logged independently.
+            // Render-only: the row enters the message cache but is NOT persisted here. The
+            // final authoritative text is saved once below, so dialogue_history never keeps an
+            // early draft that the UI has already replaced (#2139).
             turnPhase('text shown');
+            textPhaseEmitted = true;
             setComposerBlocked(combatGatePending);
-            runDeferredTask('DM message persistence', async () => {
-              await sendMessage(earlyMessage!);
-              turnPhase('persist');
-            });
+            updateMessage(earlyMessage);
 
             if (providedContext?.intent !== 'dice_roll') {
               runDeferredTask('player memory extraction', () => extractMemories(playerInput));
@@ -297,15 +320,7 @@ export const useMessageHandlerLogic = ({
         },
       );
       // Sanitize the AI response text first
-      let processedText = sanitizeDMText(aiResponseMessage.text);
-
-      // CRITICAL: Truncate at roll request to prevent premature outcome narrative
-      // The AI may generate outcome text AFTER the roll request block - we must NOT display it
-      // The player should only see text BEFORE the roll request; outcome comes in NEW response after roll
-      if (aiResponseMessage.rollRequests && aiResponseMessage.rollRequests.length > 0) {
-        processedText = truncateAtRollRequest(processedText);
-        logger.info('🎲 Truncated AI response at roll request to prevent premature outcome');
-      }
+      const processedText = sanitizeDMText(aiResponseMessage.text);
 
       const sanitizedAiResponseMessage: ChatMessage = {
         ...aiResponseMessage,
@@ -322,9 +337,10 @@ export const useMessageHandlerLogic = ({
       }
 
       // Check if this response contains roll requests
-      const hasRollRequests =
+      const hasRollRequests = Boolean(
         sanitizedAiResponseMessage.rollRequests &&
-        sanitizedAiResponseMessage.rollRequests.length > 0;
+        sanitizedAiResponseMessage.rollRequests.length > 0,
+      );
 
       // Engine-authored notices may have different persistence owners. The seating transcript
       // is already written by the server's `/enter` endpoint, while decline/failure/no-host and
@@ -346,26 +362,43 @@ export const useMessageHandlerLogic = ({
         );
       }
 
-      // The early callback normally rendered the parsed envelope. Combat resolution may replace
-      // the text with authoritative engine narration; persist that continuation only when it
-      // differs, so the initial DM response is visible while the gate runs.
+      // A roll is still pending: the player has not rolled, so no narration may be shown or
+      // saved for this turn. Everything else renders — including a turn whose early render was
+      // suppressed and which the engine has since resolved, so the resolved narration can never
+      // be eaten by the sticky `rollTurnStarted` flag.
       if (
-        (!textShown || (earlyMessage && sanitizedAiResponseMessage.text !== earlyMessage.text)) &&
+        !hasRollRequests &&
         (sanitizedAiResponseMessage.text || sanitizedAiResponseMessage.narrationSegments?.length)
       ) {
-        if (!textShown) {
+        const finalMessage: ChatMessage = earlyMessage
+          ? {
+              ...sanitizedAiResponseMessage,
+              id: earlyMessage.id,
+              timestamp: earlyMessage.timestamp,
+            }
+          : sanitizedAiResponseMessage;
+
+        if (!textPhaseEmitted) {
           turnPhase('text shown');
-          setComposerBlocked(
-            Boolean(hasRollRequests || sanitizedAiResponseMessage.combatDetection?.isCombat),
-          );
+          textPhaseEmitted = true;
         }
+        if (!textShown) {
+          setComposerBlocked(Boolean(sanitizedAiResponseMessage.combatDetection?.isCombat));
+        } else if (earlyMessage) {
+          // The early response is already the visible DM row. Replace that row in place so
+          // engine-authored final narration cannot append a duplicate paragraph/message.
+          updateMessage(finalMessage);
+        }
+
+        // The single persistence point for DM narration on this turn. The early render is
+        // cache-only, so dialogue_history receives the authoritative text exactly once.
         runDeferredTask('DM continuation persistence', async () => {
-          await sendMessage(sanitizedAiResponseMessage);
+          await sendMessage(finalMessage);
           turnPhase('persist');
         });
       }
 
-      if (hasRollRequests) {
+      if (hasRollRequests && !rollTurnStarted) {
         processAiResponse(sanitizedAiResponseMessage.rollRequests || []);
       }
 
@@ -377,8 +410,8 @@ export const useMessageHandlerLogic = ({
         setComposerBlocked(false);
       }
 
-      // Combat detection still runs after the first render; roll-request turns already have their
-      // critical gate handled above and do not need a second transcript callback here.
+      // Combat detection still runs after the first render; turns still waiting on a roll have
+      // their critical gate handled above and do not need a second transcript callback here.
       if (!hasRollRequests) {
         // Process AI response for combat detection and other features
         if (onAIResponse) {

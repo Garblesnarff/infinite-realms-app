@@ -49,6 +49,7 @@ interface MessageContextType {
   hasMore: boolean;
   loadMore: () => void;
   sendMessage: (message: ChatMessage) => Promise<void>;
+  updateMessage: (message: ChatMessage) => void;
   queueStatus: 'idle' | 'processing' | 'error' | 'retrying';
 }
 
@@ -72,7 +73,7 @@ export const MessageProvider: React.FC<{
   } = useMessages(sessionId, {
     pollForCompanions,
   });
-  const { messageMutation, queueStatus } = useMessageQueue(sessionId);
+  const { messageMutation, queueStatus, updateMessage } = useMessageQueue(sessionId);
   const { mutateAsync } = messageMutation;
   const queryClient = useQueryClient();
   const handleRemoteMessage = useCallback(() => {
@@ -99,9 +100,10 @@ export const MessageProvider: React.FC<{
       hasMore,
       loadMore,
       sendMessage,
+      updateMessage,
       queueStatus,
     }),
-    [messages, isLoading, isFetching, hasMore, loadMore, sendMessage, queueStatus],
+    [messages, isLoading, isFetching, hasMore, loadMore, sendMessage, updateMessage, queueStatus],
   );
 
   return <MessageContext.Provider value={value}>{children}</MessageContext.Provider>;

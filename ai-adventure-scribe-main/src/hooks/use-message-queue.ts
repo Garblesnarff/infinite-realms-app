@@ -36,6 +36,43 @@ export const useMessageQueue = (sessionId: string | null) => {
   const queryClient = useQueryClient();
 
   /**
+   * Render a message without persisting it: inserts it into the rendered message cache when it
+   * is not there yet, and replaces it in place when it is.
+   *
+   * This is the render half of `messageMutation` on its own. It exists so a turn can show DM
+   * text immediately while the authoritative text is still being resolved, and then persist
+   * exactly once — `dialogue_history` never receives an early draft that the UI later replaced
+   * (#2139). Callers that want the row saved must still call `sendMessage`.
+   */
+  const updateMessage = useCallback(
+    (updatedMessage: ChatMessage): void => {
+      if (!sessionId || !updatedMessage.id) return;
+
+      const messageQueries = queryClient.getQueryCache().findAll({
+        queryKey: ['messages', sessionId],
+      });
+      messageQueries.forEach((query) => {
+        queryClient.setQueryData(
+          query.queryKey,
+          (old: { messages: ChatMessage[]; hasMore: boolean } | undefined) => {
+            if (!old?.messages) return old;
+            const exists = old.messages.some((message) => message.id === updatedMessage.id);
+            return {
+              ...old,
+              messages: exists
+                ? old.messages.map((message) =>
+                    message.id === updatedMessage.id ? updatedMessage : message,
+                  )
+                : [...old.messages, updatedMessage],
+            };
+          },
+        );
+      });
+    },
+    [queryClient, sessionId],
+  );
+
+  /**
    * Handles message persistence with enhanced retry logic and backoff
    * Generates message IDs on the frontend to avoid race conditions with database replication
    */
@@ -250,7 +287,8 @@ export const useMessageQueue = (sessionId: string | null) => {
       queueStatus,
       queueLength: messageQueue.length,
       retryQueuedMessages,
+      updateMessage,
     }),
-    [messageMutation, queueStatus, messageQueue.length, retryQueuedMessages],
+    [messageMutation, queueStatus, messageQueue.length, retryQueuedMessages, updateMessage],
   );
 };

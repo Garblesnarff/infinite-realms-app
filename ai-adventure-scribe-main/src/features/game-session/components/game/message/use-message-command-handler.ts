@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
+import type { TextReadyOptions } from '@/hooks/use-ai-response';
 import type { ChatMessage } from '@/types/game';
 
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -20,7 +21,7 @@ interface UseMessageCommandHandlerProps {
   onAIResponse?: (message: ChatMessage) => Promise<void>;
 }
 
-type TextReadyHandler = (message: ChatMessage) => Promise<void> | void;
+type TextReadyHandler = (message: ChatMessage, options: TextReadyOptions) => Promise<void> | void;
 
 export const useMessageCommandHandler = ({
   sessionId,
@@ -163,9 +164,9 @@ export const useMessageCommandHandler = ({
         undefined,
         undefined,
         onTextReady
-          ? async (message) => {
+          ? async (message, textReadyOptions) => {
               earlyResponse = message;
-              await onTextReady(message);
+              await onTextReady(message, textReadyOptions);
             }
           : undefined,
       );

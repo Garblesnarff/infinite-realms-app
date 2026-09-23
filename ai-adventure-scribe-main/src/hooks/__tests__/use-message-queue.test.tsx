@@ -119,6 +119,23 @@ describe('useMessageQueue', () => {
     expect(result.current.queueStatus).toBe('idle');
   });
 
+  it('updates an existing cached message without adding a second row', () => {
+    queryClient.setQueryData(['messages', sessionId, 0], {
+      messages: [{ id: 'dm-1', text: 'Early text', sender: 'dm' }],
+      hasMore: false,
+    });
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+    act(() => {
+      result.current.updateMessage({ id: 'dm-1', text: 'Final text', sender: 'dm' });
+    });
+
+    expect(queryClient.getQueryData(['messages', sessionId, 0])).toEqual({
+      messages: [{ id: 'dm-1', text: 'Final text', sender: 'dm' }],
+      hasMore: false,
+    });
+  });
+
   it('persists narration_segments with the session message', async () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const narrationSegments = [
