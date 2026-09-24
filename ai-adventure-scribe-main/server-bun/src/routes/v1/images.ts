@@ -170,7 +170,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         return { error: authError || 'Unauthorized' };
       }
 
-      const { prompt, referenceImages, model, quality: _quality } = body || {};
+      const { prompt, referenceImages, quality: _quality } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
@@ -226,12 +226,9 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           return { error: 'Service unavailable' };
         }
 
-        // If caller passed an OpenAI image model, pick a valid OpenRouter image-capable default instead
-        const isOpenAIModel = typeof model === 'string' && /^gpt-image/i.test(model);
-        const imageModel =
-          !model || isOpenAIModel
-            ? process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image'
-            : model;
+        // #2157/#2158: the image model is server-controlled. gemini-2.5-flash-image
+        // retires on 2026-10-02; Nano Banana 2 keeps reference-image support.
+        const imageModel = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image';
 
         // Build message content based on whether we have reference images
         let content: any = prompt;
