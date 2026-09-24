@@ -12,6 +12,8 @@ interface PlayableCharacterCardProps {
   character: Character;
   onSelect: (character: Character) => void;
   getModifier: (score?: number) => string;
+  /** Label on the card's button; the account-roster fallback uses "Use here". */
+  actionLabel?: string;
 }
 
 /**
@@ -22,6 +24,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
   character,
   onSelect,
   getModifier,
+  actionLabel = 'Start Adventure',
 }) => {
   // normalizeCharacter wraps stats in an array; older payloads still send an object.
   const cs = character.character_stats as
@@ -184,7 +187,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
             aria-hidden="true"
           >
             <Play className="h-4 w-4 mr-2" />
-            Start Adventure
+            {actionLabel}
           </Button>
         </div>
       </CardContent>

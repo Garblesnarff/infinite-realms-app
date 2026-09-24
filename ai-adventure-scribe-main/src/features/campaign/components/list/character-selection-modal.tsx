@@ -26,6 +26,9 @@ interface CharacterSelectionModalProps {
  * Modal component for selecting a character to play a campaign
  * For starter campaigns: shows pre-built character templates
  * For regular campaigns: shows user's existing characters
+ * For non-starter campaigns, when nothing is bound to the campaign: shows the
+ * whole account roster, each with "Use here". Starter campaigns never fall back
+ * to the roster: empty templates means the template load failed (#2193 review).
  */
 const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
   isOpen,
@@ -39,6 +42,7 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
     isStarterCampaign,
     templates,
     characters,
+    accountCharacters,
     loadError,
     retryLoad,
     handleSelectTemplate,
@@ -99,20 +103,49 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
                 />
               ))}
             </div>
-          ) : (
-            // Empty state
+          ) : !isStarterCampaign && accountCharacters && accountCharacters.length > 0 ? (
+            // Nothing is bound to this campaign yet: offer the account roster (#2142).
+            // Gated on !isStarterCampaign: for a pre-built, empty templates means the
+            // template load failed, and hiding that behind "Use here" is wrong.
+            <div>
+              <p className="text-muted-foreground mb-4">
+                No characters are linked to this campaign yet. Use one of your characters here, or
+                create a new one.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {accountCharacters.map((character) => (
+                  <PlayableCharacterCard
+                    key={character.id}
+                    character={character}
+                    onSelect={startGameWithCharacter}
+                    getModifier={getModifier}
+                    actionLabel="Use here"
+                  />
+                ))}
+              </div>
+              <div className="text-center mt-6">
+                <Button variant="outline" onClick={handleCreateCharacter}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create a New Character
+                </Button>
+              </div>
+            </div>
+          ) : isStarterCampaign ? (
+            // Starter with no templates: the template load failed. Say so plainly,
+            // with no roster fallback and no Create button (pre-#2142 behavior).
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-4">
-                {isStarterCampaign
-                  ? 'No character templates available for this campaign.'
-                  : "You don't have any characters yet."}
+                No character templates available for this campaign.
               </p>
-              {!isStarterCampaign && (
-                <Button onClick={handleCreateCharacter}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Your First Character
-                </Button>
-              )}
+            </div>
+          ) : (
+            // The account has no characters at all: create-only state
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">You don't have any characters yet.</p>
+              <Button onClick={handleCreateCharacter}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Character
+              </Button>
             </div>
           )}
         </div>

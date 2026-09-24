@@ -74,6 +74,11 @@ export interface UseCharacterSelectionReturn {
   isStarterCampaign: boolean;
   templates: StarterTemplate[] | undefined;
   characters: Character[] | undefined;
+  /**
+   * The whole account roster, loaded only when the campaign-bound list came back
+   * empty (#2142). Undefined while the bound list has entries.
+   */
+  accountCharacters: Character[] | undefined;
   loadError: Error | null;
   retryLoad: () => void;
   starterCampaignId: string | null | undefined;
@@ -145,15 +150,35 @@ export function useCharacterSelection({
     enabled: !!user?.id && !starterCampaignId && !starterLoading && !starterLinkError,
   });
 
-  const isLoading = starterLoading || (starterCampaignId ? templatesLoading : charactersLoading);
+  const boundLoading = starterLoading || (starterCampaignId ? templatesLoading : charactersLoading);
   const isStarterCampaign = !!starterCampaignId;
-  const loadError = (starterLinkError ||
+  const boundError = (starterLinkError ||
     (starterCampaignId ? templatesError : charactersError)) as Error | null;
-  const retryLoad = () => {
+  const boundList = starterCampaignId ? templates : characters;
+  // #2142: a campaign with nothing bound to it (an old or brand-new custom campaign)
+  // must not hide the account's characters behind "no characters yet".
+  const boundListEmpty = !boundLoading && !boundError && boundList?.length === 0;
+
+  const {
+    data: accountCharacters,
+    isLoading: accountLoading,
+    error: accountError,
+    refetch: refetchAccountCharacters,
+  } = useQuery({
+    queryKey: ['characters', 'account', user?.id],
+    queryFn: async () => userDataApi.listCharacters() as Promise<Character[]>,
+    enabled: !!user?.id && isOpen && boundListEmpty,
+  });
+
+  const isLoading = boundLoading || (boundListEmpty && accountLoading);
+  const loadError = boundError || (boundListEmpty ? (accountError as Error | null) : null);
+  const retryLoad = (): void => {
     if (starterLinkError) {
       void refetchStarterLink();
-    } else {
+    } else if (boundError) {
       void (starterCampaignId ? refetchTemplates() : refetchCharacters());
+    } else {
+      void refetchAccountCharacters();
     }
   };
 
@@ -211,11 +236,22 @@ export function useCharacterSelection({
   };
 
   /**
-   * Handles creating a new character
+   * Handles creating a new character.
+   *
+   * Deliberately synchronous, unlike the setTimeout(0) in handleSelectTemplate and
+   * startGameWithCharacter. The onClose()-first ordering inside a single task is the
+   * #2142 fix itself: CampaignHub's onClose navigates with { replace: true } to drop
+   * ?startSession, and the old navigate-then-onClose order let that replace cancel
+   * this navigation. Keeping both calls in one synchronous sequence makes the ordering
+   * explicit instead of hiding it behind a timer. (The existing "handles
+   * handleCreateCharacter" test also asserts the navigate happens in the same task.)
    */
   const handleCreateCharacter = (): void => {
-    navigate(`/app/characters/create?campaign=${campaignId}`);
+    // Close first: CampaignHub's onClose navigates (replace) to drop ?startSession,
+    // and running it after this navigation cancelled it, so Create only closed
+    // the modal (#2142).
     onClose();
+    navigate(`/app/characters/create?campaign=${encodeURIComponent(campaignId)}`);
   };
 
   /**
@@ -234,6 +270,7 @@ export function useCharacterSelection({
     isStarterCampaign,
     templates,
     characters,
+    accountCharacters: boundListEmpty ? accountCharacters : undefined,
     loadError,
     retryLoad,
     starterCampaignId,
