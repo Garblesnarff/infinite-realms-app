@@ -77,6 +77,12 @@ of "run 9 started" on #2093 arms a 3h hold: keep those words to the testers'
 own marker comments. Fixture cases: `bash ops/tests/open-run-markers.sh`
 (needs only bash + jq).
 
+`--dry-run` also names the newest marker it found, so "no open run" is visible
+rather than inferred from silence (#2201):
+`[dry-run] would record_state run_check ok — newest: run 9 ended` (or
+`newest: no run markers on #2093`). The cron path does not make that extra
+read. Fixture cases: `bash ops/tests/newest-run-marker.sh`.
+
 If GitHub cannot be read, the deploy proceeds on the HOLD file alone and a
 rate-limited `run_check` alert fires. Overrides: `DEPLOY_RUN_ISSUE`,
 `DEPLOY_RUN_REPO`, `DEPLOY_RUN_HOLD_MAX_AGE_SECONDS`, `DEPLOY_GH_BIN`.

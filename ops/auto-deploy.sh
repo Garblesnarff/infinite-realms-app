@@ -276,8 +276,41 @@ open_run() {
       | if . == null then empty else "\(.n)\t\(.at)\t\(.line)" end'
 }
 
+# Prints "<N>\t<started|ended>" for the newest marker on the issue, or nothing
+# if there are none. Dry-run only (#2201): an operator reading "run_check ok"
+# could not tell "no open run" from "the check saw nothing". Within one comment
+# the later marker wins ("run 8 ended; run 9 started" -> 9 started). Fixtures:
+# ops/tests/newest-run-marker.sh.
+newest_run() {
+  "$GH_BIN" api --paginate "repos/$RUN_REPO/issues/$RUN_ISSUE/comments?per_page=100" |
+    jq -rs '
+      add
+      | map(. as $c
+          | [($c.body // "") | capture("\\brun\\s+#?(?<n>[A-Za-z]?[0-9]+)\\s+(?<ev>started|ended)\\b"; "gi")]
+          | to_entries[]
+          | {n: (.value.n | ascii_upcase), ev: (.value.ev | ascii_downcase),
+             k: [($c.created_at | fromdateiso8601), .key]})
+      | max_by(.k)
+      | if . == null then empty else "\(.n)\t\(.ev)" end'
+}
+
+# The text the dry run appends to "run_check ok", e.g. "newest: run 9 ended".
+newest_run_detail() {
+  local newest
+  if ! newest=$(newest_run 2>/dev/null); then
+    echo "newest: unknown (second read of #$RUN_ISSUE failed)"
+  elif [ -z "$newest" ]; then
+    echo "newest: no run markers on #$RUN_ISSUE"
+  else
+    echo "newest: run ${newest%%$'\t'*} ${newest#*$'\t'}"
+  fi
+}
+
 if RUN_OPEN=$(open_run 2>/dev/null); then
-  record_state run_check ok ""
+  # Only a dry run pays for the second read; the cron path is unchanged.
+  RUN_NEWEST=""
+  if [ "$DRY_RUN" = 1 ]; then RUN_NEWEST=$(newest_run_detail); fi
+  record_state run_check ok "$RUN_NEWEST"
   if [ -n "$RUN_OPEN" ]; then
     IFS=$'\t' read -r RUN_N RUN_AT RUN_LINE <<< "$RUN_OPEN"
     RUN_AGE=$(( $(date +%s) - RUN_AT ))

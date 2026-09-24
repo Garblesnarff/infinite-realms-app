@@ -52,7 +52,7 @@ import { securedGameDataRoutes } from './routes/v1/secured-game-data';
 import { worldBuilderRoutes } from './routes/v1/world-builder';
 import { blogApiRoutes } from './routes/v1/blog';
 import { llmsRoutes } from './routes/llms.js';
-import { getModelHealthStatus } from './services/model-health.js';
+import { buildHealthPayload } from './lib/health-payload.js';
 
 export function createApp() {
   if (
@@ -184,22 +184,12 @@ export function createApp() {
       }),
     )
     // Health check endpoint
-    .get(
-      '/health',
-      () => ({
-        status: getModelHealthStatus().status,
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        modelHealth: getModelHealthStatus(),
-      }),
-      {
-        detail: {
-          tags: ['Health'],
-          description: 'Health check endpoint',
-        },
+    .get('/health', () => buildHealthPayload(), {
+      detail: {
+        tags: ['Health'],
+        description: 'Health check endpoint',
       },
-    )
+    })
     // Prometheus metrics endpoint
     .get(
       '/metrics',
