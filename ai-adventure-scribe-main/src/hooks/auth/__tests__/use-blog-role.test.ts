@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useBlogRole } from '../use-blog-role';
 
@@ -29,11 +29,15 @@ describe('useBlogRole', () => {
     window.localStorage.clear();
     (isOffline as any).mockReturnValue(false);
 
-    // Default env mocks
-    (import.meta as any).env.MODE = 'production';
-    (import.meta as any).env.VITE_DEV_BLOG_ADMIN_EMAIL = undefined;
-    (import.meta as any).env.VITE_BLOG_ADMIN_DEV_OVERRIDE = undefined;
-    (import.meta as any).env.VITE_API_URL = undefined;
+    // Production: DEV is unset, and neither override var is set.
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('DEV', '');
+    vi.stubEnv('VITE_DEV_BLOG_ADMIN_EMAIL', undefined);
+    vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('should return null role by default when no user is provided', async () => {
@@ -89,8 +93,9 @@ describe('useBlogRole', () => {
   });
 
   it('should grant admin in dev mode when override is enabled', async () => {
-    (import.meta as any).env.MODE = 'development';
-    (import.meta as any).env.VITE_BLOG_ADMIN_DEV_OVERRIDE = 'true';
+    vi.stubEnv('MODE', 'development');
+    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', 'true');
 
     const { result } = renderHook(() => useBlogRole({ user: mockUser }));
 
@@ -100,15 +105,27 @@ describe('useBlogRole', () => {
   });
 
   it('should grant admin in dev mode when email matches VITE_DEV_BLOG_ADMIN_EMAIL', async () => {
-    (import.meta as any).env.MODE = 'development';
-    (import.meta as any).env.VITE_DEV_BLOG_ADMIN_EMAIL = 'test@example.com';
-    (import.meta as any).env.VITE_BLOG_ADMIN_DEV_OVERRIDE = 'false';
+    vi.stubEnv('MODE', 'development');
+    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('VITE_DEV_BLOG_ADMIN_EMAIL', 'test@example.com');
+    vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', 'false');
 
     const { result } = renderHook(() => useBlogRole({ user: mockUser }));
 
     await waitFor(() => {
       expect(result.current.blogRole).toBe('admin');
     });
+  });
+
+  it('returns null for a signed-in user in production when no override vars are set', async () => {
+    const { result } = renderHook(() => useBlogRole({ user: mockUser }));
+
+    await act(async () => {
+      await result.current.refreshBlogRole();
+    });
+
+    expect(result.current.blogRole).toBeNull();
+    expect(result.current.isBlogAdmin).toBe(false);
   });
 
   it('should return null when offline', async () => {
@@ -122,8 +139,9 @@ describe('useBlogRole', () => {
   });
 
   it('should clear blog role when user logs out', async () => {
-    (import.meta as any).env.MODE = 'development';
-    (import.meta as any).env.VITE_BLOG_ADMIN_DEV_OVERRIDE = 'true';
+    vi.stubEnv('MODE', 'development');
+    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('VITE_BLOG_ADMIN_DEV_OVERRIDE', 'true');
 
     const { result, rerender } = renderHook(({ user }) => useBlogRole({ user }), {
       initialProps: { user: mockUser as any },

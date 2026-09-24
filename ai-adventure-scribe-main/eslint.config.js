@@ -203,6 +203,15 @@ export default tseslint.config(
           message:
             'Read WorkOS tokens through services/auth/TokenService instead of localStorage directly.',
         },
+        {
+          // Vite replaces `import.meta.env` only in that exact form. `import.meta?.env`
+          // is shipped as a runtime read, and `import.meta.env` is undefined in the
+          // production bundle (#2211). `import.meta.env?.X` (optional after env) is fine.
+          selector:
+            "MemberExpression[optional=true][property.name='env'][object.type='MetaProperty'][object.property.name='meta']",
+          message:
+            'Use import.meta.env.X (or import.meta.env?.X). Vite does not replace import.meta?.env, so the value is undefined in the production bundle.',
+        },
       ],
     },
   },

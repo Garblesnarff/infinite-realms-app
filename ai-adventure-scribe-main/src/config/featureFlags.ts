@@ -14,18 +14,29 @@ const parseBoolean = (value: unknown): boolean => {
  * 4530 rows, 0 embeddings, nine months, no error anywhere. Embedding is now unconditional and
  * happens on the server (server-bun MemoryService.insert), so there is nothing left to gate.
  */
-const worldBuilderEnabled = parseBoolean(import.meta?.env?.VITE_ENABLE_WORLD_BUILDER);
-const campaignCharacterFlowEnabled = parseBoolean(
-  import.meta?.env?.VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW,
-);
-const multiplayerInvitesEnabled = parseBoolean(import.meta?.env?.VITE_ENABLE_MULTIPLAYER_INVITES);
-const customCampaignsEnabled = parseBoolean(import.meta?.env?.VITE_ENABLE_CUSTOM_CAMPAIGNS);
+// Read at call time. Vite inlines `import.meta.env.VITE_*` in the production bundle;
+// in tests, `vi.stubEnv` updates the same names. A missing value stays false.
+const worldBuilderEnabled = (): boolean => parseBoolean(import.meta.env.VITE_ENABLE_WORLD_BUILDER);
+const campaignCharacterFlowEnabled = (): boolean =>
+  parseBoolean(import.meta.env.VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW);
+const multiplayerInvitesEnabled = (): boolean =>
+  parseBoolean(import.meta.env.VITE_ENABLE_MULTIPLAYER_INVITES);
+const customCampaignsEnabled = (): boolean =>
+  parseBoolean(import.meta.env.VITE_ENABLE_CUSTOM_CAMPAIGNS);
 
 export const featureFlags = {
-  worldBuilder: worldBuilderEnabled,
-  campaignCharacterFlow: campaignCharacterFlowEnabled,
-  multiplayerInvites: multiplayerInvitesEnabled,
-  customCampaigns: customCampaignsEnabled,
+  get worldBuilder(): boolean {
+    return worldBuilderEnabled();
+  },
+  get campaignCharacterFlow(): boolean {
+    return campaignCharacterFlowEnabled();
+  },
+  get multiplayerInvites(): boolean {
+    return multiplayerInvitesEnabled();
+  },
+  get customCampaigns(): boolean {
+    return customCampaignsEnabled();
+  },
 };
 
 export const isWorldBuilderEnabled = (): boolean => featureFlags.worldBuilder;

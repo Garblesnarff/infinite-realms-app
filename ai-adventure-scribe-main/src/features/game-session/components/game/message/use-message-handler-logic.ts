@@ -47,7 +47,7 @@ interface UseMessageHandlerLogicProps {
  * ⚡ Bolt: Static configuration and helper functions hoisted outside the hook
  * to reduce render cycle overhead and stabilize identity.
  */
-const headerMode = String(import.meta?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short').toLowerCase();
+const headerMode = String(import.meta.env.VITE_SCENE_SUMMARY_HEADER ?? 'short').toLowerCase();
 const DEFERRED_TASK_TIMEOUT_MS = 20_000;
 
 function runDeferredTask(label: string, task: () => Promise<unknown>): void {

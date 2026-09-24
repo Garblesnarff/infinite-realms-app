@@ -56,10 +56,13 @@ export function useBlogRole({ user }: UseBlogRoleProps): {
         return;
       }
 
-      // Dev override: allow admin access in non-production without email setup
-      const devAdminEmail = import.meta?.env?.VITE_DEV_BLOG_ADMIN_EMAIL as string | undefined;
-      const devOverrideRaw = import.meta?.env?.VITE_BLOG_ADMIN_DEV_OVERRIDE as string | undefined;
-      const isDev = import.meta?.env?.MODE !== 'production';
+      // Dev override: allow admin access in vite dev without email setup.
+      // `import.meta.env.DEV` is boolean false in a production bundle. Vite does
+      // not replace optional chaining on `import.meta`, so a missing value must
+      // not count as dev — that granted every signed-in user admin.
+      const devAdminEmail = import.meta.env.VITE_DEV_BLOG_ADMIN_EMAIL as string | undefined;
+      const devOverrideRaw = import.meta.env.VITE_BLOG_ADMIN_DEV_OVERRIDE as string | undefined;
+      const isDev = import.meta.env.DEV;
       const enableDevOverride =
         devOverrideRaw === 'true' ||
         devOverrideRaw === '1' ||

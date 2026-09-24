@@ -85,7 +85,7 @@ export function useGameData(
 
         // Derive DM role: env override or campaign owner
         try {
-          const envVal = String(import.meta?.env?.VITE_FORCE_DM || '');
+          const envVal = String(import.meta.env.VITE_FORCE_DM || '');
           const forceDM = ['true', '1', 'yes', 'on'].includes(envVal.toLowerCase());
           // Campaign type doesn't declare user_id even though CAMPAIGN_SELECT_COLUMNS
           // selects it (the query result genuinely has it) - cast to the real queried shape.

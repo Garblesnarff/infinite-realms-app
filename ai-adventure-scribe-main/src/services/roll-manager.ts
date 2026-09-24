@@ -63,7 +63,7 @@ interface RollHistoryRow {
 
 function flagEnabled(): boolean {
   try {
-    const v = String(import.meta?.env?.VITE_ENABLE_ROLL_HISTORY ?? 'false').toLowerCase();
+    const v = String(import.meta.env.VITE_ENABLE_ROLL_HISTORY ?? 'false').toLowerCase();
     return ['1', 'true', 'yes', 'on'].includes(v);
   } catch {
     return false;
