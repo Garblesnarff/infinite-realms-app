@@ -142,6 +142,11 @@ export const useMessageQueue = (sessionId: string | null) => {
                 handouts: message.context.handouts || null,
                 combat_transition: message.context.combat_transition || null,
                 scene_spec: Boolean(message.context.scene_spec),
+                combat_engine_blocks:
+                  message.context.combatEngineBlocks ??
+                  message.context.combat_engine_blocks ??
+                  null,
+                combat_ended: Boolean(message.context.combatEnded ?? message.context.combat_ended),
                 narration_segments: narrationSegments,
               }
             : narrationSegments
@@ -242,6 +247,11 @@ export const useMessageQueue = (sessionId: string | null) => {
                 handouts: message.context.handouts || null,
                 combat_transition: message.context.combat_transition || null,
                 scene_spec: Boolean(message.context.scene_spec),
+                combat_engine_blocks:
+                  message.context.combatEngineBlocks ??
+                  message.context.combat_engine_blocks ??
+                  null,
+                combat_ended: Boolean(message.context.combatEnded ?? message.context.combat_ended),
                 narration_segments: narrationSegments,
               }
             : narrationSegments

@@ -8,6 +8,7 @@ import type { AIResponse } from '@/services/ai-service';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
+import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -284,6 +285,8 @@ export const useAIResponse = (): {
           combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId, 'running'),
         );
 
+        const combatWasActiveAtRequestStart = isInCombat;
+        const combatRoundAtRequestStart = activeEncounter?.currentRound;
         let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
         if (isInCombat && !isDiceRollMessage) {
           try {
@@ -402,6 +405,16 @@ export const useAIResponse = (): {
           ...(onTextReady
             ? {
                 onTextReady: async (parsedResult: AIResponse) => {
+                  // A combat response is not display-ready until the authoritative player and
+                  // NPC sequence has been resolved. Rendering this speculative DM text early lets
+                  // the delayed `/advance-npc-turns` response land after it in the transcript
+                  // (#2127). Preflight can end combat and clear `isInCombat`, so its NPC turns
+                  // are checked on their own.
+                  const combatSequencePending = Boolean(
+                    isInCombat ||
+                    preflightNpcTurns?.results?.length ||
+                    preflightNpcTurns?.combatEnded,
+                  );
                   const earlyRollRequests = (parsedResult.roll_requests || []) as RollRequest[];
                   const earlyShouldStartCombat =
                     !!parsedResult.combatDetection?.shouldStartCombat ||
@@ -413,11 +426,13 @@ export const useAIResponse = (): {
                   // (#2139), so any turn the engine may resolve suppresses the early render.
                   // Non-combat, non-roll turns keep it (the #2095 fast-render win).
                   const suppressRender =
-                    isInCombat || earlyShouldStartCombat || earlyRollRequests.length > 0;
+                    combatSequencePending || earlyShouldStartCombat || earlyRollRequests.length > 0;
                   // Combat turns hand their roll requests to the engine, not to the dice popup
                   // (#2190). Only a narrative roll turn outside combat may prompt early.
                   const earlyRollPromptAllowed =
-                    earlyRollRequests.length > 0 && !isInCombat && !earlyShouldStartCombat;
+                    earlyRollRequests.length > 0 &&
+                    !combatSequencePending &&
+                    !earlyShouldStartCombat;
                   let earlyText = parsedResult.text;
                   if (!suppressRender && parsedResult.options?.length) {
                     earlyText = `${earlyText.trim()}\n\n${parsedResult.options.join('\n')}`;
@@ -472,6 +487,7 @@ export const useAIResponse = (): {
           aiContext,
           conversationHistory,
           preflightNpcTurns,
+          combatRound: combatRoundAtRequestStart,
           userPlan: userPlan || undefined,
           turnCount,
           playerMessage: latestMessage.text,
@@ -486,6 +502,9 @@ export const useAIResponse = (): {
         activeEncounter = dmActionsResult.activeEncounter;
         const localNotice = dmActionsResult.localNotice;
         const localNotices = dmActionsResult.localNotices;
+        const combatEngineBlocks = (
+          result as AIResponse & { combatEngineBlocks?: CombatEngineBlock[] }
+        ).combatEngineBlocks;
 
         // Combat resolution and the autonomous NPC loop advance the server outside the browser
         // reducer. Re-read that truth before returning control to the UI so a player handoff is
@@ -596,6 +615,8 @@ export const useAIResponse = (): {
             npcRollResults:
               processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
             handouts: deliveredHandouts,
+            combatEngineBlocks,
+            combatEnded: combatWasActiveAtRequestStart && !isInCombat,
           },
           narrationSegments,
           diceRolls,

@@ -1,6 +1,7 @@
 import type { Campaign } from './campaign';
 import type { Memory } from './memory';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
+import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
 export type SpeakerType = 'player' | 'dm' | 'system' | 'companion';
@@ -18,6 +19,8 @@ export interface MessageContext {
   emotion?: string | null;
   intent?: string | null;
   combat_transition?: 'none' | 'start' | 'end' | null;
+  combatEngineBlocks?: CombatEngineBlock[];
+  combatEnded?: boolean;
   scene_spec?: boolean | null;
   previouslyOn?: boolean;
   handouts?: JournalHandoutEntry[];

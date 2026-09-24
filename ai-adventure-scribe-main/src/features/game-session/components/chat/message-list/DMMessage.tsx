@@ -14,6 +14,7 @@ import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
 import { extractEngineGeneratedLines } from '@/utils/engine-lines';
+import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
 import { resolveNarrationSegments } from '@/utils/narration-segments';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 import { parseAssetTags } from '../../../utils/parse-asset-tags';
@@ -66,6 +67,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       text = text.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '').trim();
       const { lines: engineLines, fiction } = extractEngineGeneratedLines(text);
       text = fiction;
+      const combatEngineBlocks = combatEngineBlocksFromContext(message.context);
 
       // 2. Parse and remove asset tags, extracting referenced assets
       const { cleanContent, assets: assetTags } = parseAssetTags(text);
@@ -77,11 +79,20 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         ...narrative,
         assetTags,
         cleanContent,
-        engineLines,
+        engineLines: combatEngineBlocks.length ? [] : engineLines,
+        combatEngineBlocks,
       };
-    }, [displayContent]);
+    }, [displayContent, message.context]);
 
-    const { content, charCount, paragraphCount, assetTags, cleanContent, engineLines } = processed;
+    const {
+      content,
+      charCount,
+      paragraphCount,
+      assetTags,
+      cleanContent,
+      engineLines,
+      combatEngineBlocks,
+    } = processed;
 
     // Set scene background based on referenced assets (priority: location > scene > monster > npc)
     useEffect(() => {
@@ -123,7 +134,11 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
 
     // Don't render if content is empty after removing roll requests — unless the
     // engine still has a fact to show as a chip.
-    if ((!cleanContent || cleanContent.length === 0 || !content) && engineLines.length === 0) {
+    if (
+      (!cleanContent || cleanContent.length === 0 || !content) &&
+      engineLines.length === 0 &&
+      combatEngineBlocks.length === 0
+    ) {
       return null;
     }
     const exceedsClampThreshold = charCount > 800 || paragraphCount > 4;
@@ -154,6 +169,21 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               ◆ Previously on your adventure...
             </div>
           )}
+          {combatEngineBlocks.map((block) => (
+            <section
+              key={`combat-engine-${block.sequence}`}
+              aria-label={`Combat engine round ${block.round}`}
+              className="mb-3 rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2"
+              data-testid="combat-engine-block"
+            >
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-200/70">
+                Round {block.round} · {block.source === 'npc' ? 'NPC turn' : 'Player turn'}
+              </div>
+              {block.lines.map((line, index) => (
+                <EngineOutcomeChip key={`${block.sequence}-${index}-${line}`} line={line} />
+              ))}
+            </section>
+          ))}
           {engineLines.map((line) => (
             <EngineOutcomeChip key={line} line={line} />
           ))}

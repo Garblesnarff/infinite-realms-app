@@ -110,6 +110,12 @@ export interface CombatRefusalDetails {
   roster?: string;
   resource?: string;
   id?: string;
+  reason?: string;
+  stage?: string;
+  dialect?: string;
+  variant?: string;
+  detail?: string;
+  missing?: string[];
   currentParticipantId?: string | null;
   currentParticipantSlug?: string | null;
 }
@@ -177,12 +183,44 @@ export async function executeAuthoritativeCombatIntent(
     );
     logServerRequestId('/v1/combat', response);
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok)
+    if (!response.ok) {
+      const payloadRecord = isRecord(payload) ? payload : {};
+      const rawDetails = isRecord(payloadRecord.details) ? payloadRecord.details : {};
+      const stage =
+        typeof payloadRecord.stage === 'string'
+          ? payloadRecord.stage
+          : typeof rawDetails.stage === 'string'
+            ? rawDetails.stage
+            : undefined;
+      const reason =
+        typeof payloadRecord.reason === 'string'
+          ? payloadRecord.reason
+          : typeof rawDetails.reason === 'string'
+            ? rawDetails.reason
+            : stage === 'intent_schema'
+              ? 'COMBAT_INTENT_SCHEMA_REJECTED'
+              : undefined;
+      const details: CombatRefusalDetails = {
+        ...(rawDetails as CombatRefusalDetails),
+        ...(stage ? { stage } : {}),
+        ...(reason ? { reason } : {}),
+        ...(typeof payloadRecord.dialect === 'string' ? { dialect: payloadRecord.dialect } : {}),
+        ...(typeof payloadRecord.variant === 'string' ? { variant: payloadRecord.variant } : {}),
+        ...(typeof payloadRecord.detail === 'string' ? { detail: payloadRecord.detail } : {}),
+        ...(Array.isArray(payloadRecord.missing)
+          ? {
+              missing: payloadRecord.missing.filter(
+                (field): field is string => typeof field === 'string',
+              ),
+            }
+          : {}),
+      };
       throw new CombatIntentRefusedError(
-        String(payload.error || `Combat action rejected (${response.status})`),
+        String(payloadRecord.error || `Combat action rejected (${response.status})`),
         response.status,
-        (payload as { details?: CombatRefusalDetails }).details,
+        Object.keys(details).length > 0 ? details : undefined,
       );
+    }
     return payload.result;
   } catch (error) {
     // Repairable DM refusals are handled by the structured combat loop. Surface player-owned

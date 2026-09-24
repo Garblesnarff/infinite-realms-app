@@ -15,6 +15,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
+import { useDeferredCombatSummary } from '@/features/game-session/hooks/use-deferred-combat-summary';
 import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useGameSession } from '@/hooks/use-game-session';
 import { useInitialGreeting } from '@/hooks/use-initial-greeting';
@@ -250,7 +251,6 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
     campaignId: campaignIdForHandler || undefined,
   });
   const { state: combatState } = useCombat();
-  const prevInCombatRef = React.useRef(combatState.isInCombat);
 
   useStaleClientCheck({ isInCombat: combatState.isInCombat, sessionId });
 
@@ -299,33 +299,15 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
     [handleAIResponse],
   );
 
-  React.useEffect(() => {
-    if (prevInCombatRef.current && !combatState.isInCombat) {
-      const enc = combatState.activeEncounter;
-      const rounds = enc?.currentRound || enc?.roundsElapsed || 1;
-      const participants = (enc?.participants || []).map((p) => ({
-        name: p.name,
-        damageDealt: (enc?.actions || [])
-          .filter((a) => a.participantId === p.id && a.damageDealt)
-          .reduce((s, a) => s + (a.damageDealt || 0), 0),
-        damageTaken: Math.max(0, (p.maxHitPoints || 0) - (p.currentHitPoints || 0)),
-        status: p.isDead ? 'dead' : p.isUnconscious ? 'unconscious' : 'ok',
-      }));
-      const totalDamage = participants.reduce((s, x) => s + x.damageDealt, 0);
-      sendMessage({
-        text: 'Combat has ended.',
-        sender: 'system',
-        context: {
-          combatData: {
-            type: 'summary',
-            summary: { rounds, totalDamage, participants, outcome: 'Combat concluded' },
-          },
-        },
-      });
-      setShowTracker(false);
-    }
-    prevInCombatRef.current = combatState.isInCombat;
-  }, [combatState.isInCombat, combatState.activeEncounter, sendMessage]);
+  const hideCombatTracker = useCallback(() => setShowTracker(false), [setShowTracker]);
+  useDeferredCombatSummary({
+    isInCombat: combatState.isInCombat,
+    activeEncounter: combatState.activeEncounter,
+    messages,
+    messagesLoading,
+    sendMessage,
+    onCombatEnded: hideCombatTracker,
+  });
 
   // ⚡ Bolt: Stable callback for scene blurb toggle
   const handleSceneBlurbToggle = useCallback(() => {

@@ -1,4 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  combatRefusalReason,
+  redactedCombatIntent,
+  repairedTurnNotice,
+  turnNotice,
+} from './combat-notice';
+
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 
@@ -20,6 +27,12 @@ import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-a
 import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { userDataApi } from '@/services/user-data-api';
+import {
+  combatRoundFrom,
+  combatSequenceFrom,
+  orderCombatEngineBlocks,
+  type CombatEngineBlock,
+} from '@/utils/combat-engine-blocks';
 import { slugify } from '@/utils/slug';
 
 /**
@@ -50,7 +63,13 @@ export interface CombatResolutionParams {
   userPlan?: string;
   turnCount?: number;
   /** The encounter's participants, so the player's own attacks can be told apart. */
-  participants?: Array<{ id: string; name?: string; participantType?: string }>;
+  participants?: Array<{
+    id: string;
+    name?: string;
+    participantType?: string;
+    turnOrder?: number;
+    initiative?: number;
+  }>;
   /** Actors whose refused declarations are already queued for their next legal turn. */
   queuedIntentActorIds?: string[];
   /** The entry endpoint already proposed this first action, and its die was requested upstream. */
@@ -61,6 +80,8 @@ export interface CombatResolutionParams {
   };
   /** NPC actions resolved before the player's declaration reached chatWithDM. */
   preResolvedNpcTurns?: AdvanceNpcTurnsResponse;
+  /** Encounter round at the start of this resolution, used for older server payloads. */
+  combatRound?: number;
 }
 
 const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction): boolean =>
@@ -93,10 +114,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     queuedIntentActorIds,
     playerAttackRoll,
     preResolvedNpcTurns,
+    combatRound,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
-  const engineTranscriptLines: string[] = [];
+  const engineBlocks: CombatEngineBlock[] = [];
   /**
    * The actions the engine refused. They produced no roll, no damage, and no state change, so
    * they carry no outcome — and a narration pass that is never told about them writes one
@@ -109,6 +131,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   /** Whose turn it is once everything the engine accepted has been applied. */
   let turnHolder: { id?: string; name?: string } | null = null;
   let encounterAlreadyConcluded = false;
+  let playerDeclarationWasRefused = false;
+  /**
+   * The player's declaration was refused and the repair replaced it with the turn holder's own
+   * action. The refusal leaves the narration payload (the repaired turn is what happened), but
+   * the player still has to be told whose turn it is when it is not theirs (#1744).
+   */
+  let playerRefusalRepaired = false;
   const targetedActions = combatActions.filter(
     (action: any): action is StructuredCombatAction => 'target_ids' in action,
   );
@@ -129,9 +158,35 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     queuedActorIds.has(actorId) || queuedActorSlugs.has(slugify(actorId));
   const labelFor = (actorId: string): string =>
     participants?.find((participant) => participant.id === actorId)?.name ?? actorId;
+  const appendEngineBlock = ({
+    source,
+    actorId,
+    lines,
+    round,
+    serverSequence,
+  }: {
+    source: CombatEngineBlock['source'];
+    actorId?: string;
+    lines: string[];
+    round: number;
+    serverSequence?: number;
+  }): void => {
+    const cleanLines = lines.filter((line): line is string => typeof line === 'string' && !!line);
+    if (!cleanLines.length) return;
+    engineBlocks.push({
+      sequence: engineBlocks.length,
+      ...(serverSequence === undefined ? {} : { serverSequence }),
+      round,
+      source,
+      ...(actorId ? { actor: labelFor(actorId) } : {}),
+      lines: cleanLines,
+    });
+  };
   const recordRefusal = (action: StructuredCombatAction, refusal: CombatIntentRefusedError) => {
     const queued = isQueuedIntentActor(action.actor_id);
     const actorIsPlayer = isPlayerActor(action.actor_id, participants);
+    const reason = combatRefusalReason(refusal);
+    if (actorIsPlayer) playerDeclarationWasRefused = true;
     refusedActions.push({
       resolved: false,
       ...(queued ? { queued: true } : {}),
@@ -140,17 +195,25 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       action: action.action_type,
       targets: action.target_ids?.map(labelFor) ?? [],
       engineRefusal: refusal.message,
+      refusalReason: reason,
       // The engine names the turn holder on every out-of-turn refusal (#1700). It is the one
       // thing the player actually needs to be told, and it was being discarded.
       currentTurn: refusal.details?.currentParticipantId
         ? labelFor(refusal.details.currentParticipantId)
         : (refusal.details?.currentParticipantSlug ?? null),
     });
+    logger.warn('[CombatRepair] rejected intent', {
+      reason,
+      intent: redactedCombatIntent(action),
+    });
     if (action.action_type === 'cast_spell') {
       const spell = playerCombatSpellLabel(action.spell_id, action.spell_id);
-      engineTranscriptLines.push(
-        formatRefusedSpellOutcome(labelFor(action.actor_id), spell, refusal.message),
-      );
+      appendEngineBlock({
+        source: actorIsPlayer ? 'player' : 'npc',
+        actorId: action.actor_id,
+        lines: [formatRefusedSpellOutcome(labelFor(action.actor_id), spell, refusal.message)],
+        round: combatRound ?? 1,
+      });
       if (actorIsPlayer) {
         logger.warn('PLAYER_ACTION_UNRESOLVED', { actionType: 'cast_spell', spell });
       }
@@ -158,7 +221,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   };
   type BatchBoundary = 'turn_ended' | 'combat_ended';
 
-  const appendAutonomousNpcResults = (advanced: AdvanceNpcTurnsResponse): BatchBoundary => {
+  const appendAutonomousNpcResults = (
+    advanced: AdvanceNpcTurnsResponse,
+    afterPlayerAction = false,
+  ): BatchBoundary => {
+    const defaultRound = combatRoundFrom(advanced, combatRound ?? 1);
+    const playerOrder = participants?.find(
+      (participant) => participant.participantType === 'player',
+    )?.turnOrder;
     for (const npcResult of advanced.results) {
       const { transcriptLines, ...authoritativeResult } = npcResult;
       resolvedActions.push({
@@ -166,15 +236,43 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         actorIsPlayer: false,
       });
       const engineTranscript = formatCombatEngineOutcome(npcResult.action, npcResult.engineResult);
-      if (engineTranscript) engineTranscriptLines.push(engineTranscript);
-      engineTranscriptLines.push(...transcriptLines);
+      const npcOrder = participants?.find(
+        (participant) => participant.id === npcResult.action.actor_id,
+      )?.turnOrder;
+      // Legacy payloads carry no round, so it is inferred from turn order. This assumes at most
+      // one round wrap per `advanceNpcTurns` batch: every NPC seated before the player is put
+      // in the next round, and nothing is put two rounds ahead. A batch that crosses more than
+      // one round boundary would be labelled short. Server round/sequence metadata (#2127
+      // follow-up) replaces this inference wherever it is present.
+      const wrapsRound =
+        afterPlayerAction &&
+        typeof playerOrder === 'number' &&
+        typeof npcOrder === 'number' &&
+        npcOrder < playerOrder;
+      const inferredRound =
+        afterPlayerAction &&
+        (wrapsRound || typeof playerOrder !== 'number' || typeof npcOrder !== 'number')
+          ? defaultRound + 1
+          : defaultRound;
+      appendEngineBlock({
+        source: 'npc',
+        actorId: npcResult.action.actor_id,
+        lines: [...(engineTranscript ? [engineTranscript] : []), ...transcriptLines],
+        round: combatRoundFrom(npcResult, inferredRound),
+        serverSequence: combatSequenceFrom(npcResult),
+      });
     }
     // Death-save lines are attached to their result above. The top-level stream carries the
     // safety-cap line, which has no individual action to attach to.
     if (advanced.capReached) {
-      engineTranscriptLines.push(
-        ...advanced.transcriptLines.filter((line) => line.includes('NPC turn loop stopped after')),
-      );
+      appendEngineBlock({
+        source: 'npc',
+        lines: advanced.transcriptLines.filter((line) =>
+          line.includes('NPC turn loop stopped after'),
+        ),
+        round: defaultRound,
+        serverSequence: combatSequenceFrom(advanced),
+      });
     }
     if (advanced.currentParticipant) turnHolder = advanced.currentParticipant;
     return advanced.combatEnded ? 'combat_ended' : 'turn_ended';
@@ -222,7 +320,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       return 'combat_ended';
     }
     const engineTranscript = formatCombatEngineOutcome(action, execution.result);
-    if (engineTranscript) engineTranscriptLines.push(engineTranscript);
+    appendEngineBlock({
+      source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
+      actorId: action.actor_id,
+      lines: engineTranscript ? [engineTranscript] : [],
+      round: combatRoundFrom(execution.result, combatRound ?? 1),
+      serverSequence: combatSequenceFrom(execution.result),
+    });
     resolvedActions.push({
       action,
       outcomes: execution.outcomes,
@@ -245,7 +349,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
     if (sessionId && isPlayerActor(action.actor_id, participants)) {
       const advanced = await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
-      return appendAutonomousNpcResults(advanced);
+      return appendAutonomousNpcResults(advanced, true);
     }
     return 'turn_ended';
   };
@@ -277,7 +381,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         npcTurnRecoverySpent = true;
         const refusalIndex = refusedActions.length - 1;
         const advanced = await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId);
-        const recoveryBoundary = appendAutonomousNpcResults(advanced);
+        const recoveryBoundary = appendAutonomousNpcResults(advanced, true);
         if (recoveryBoundary === 'combat_ended') break;
         try {
           const retryBoundary = await runAction(action);
@@ -309,6 +413,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         continue;
       }
       repairSpent = true;
+      const repairRefusalIndex = refusedActions.length - 1;
       const repaired = await repairRefusedCombatAction({
         refusal: error,
         refusedAction: action,
@@ -322,7 +427,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       );
       if (!corrected?.length) {
         logger.warn('[CombatRepair] outcome=failed no usable corrected action; surfacing');
-        if (action.action_type === 'cast_spell' && engineTranscriptLines.length) {
+        if (action.action_type === 'cast_spell' && engineBlocks.length) {
           // A refused spell already has an engine line. Do not swallow it behind a thrown error.
           break;
         }
@@ -337,6 +442,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           logger.info(`[CombatBatch] boundary=${correctedBoundary} dropped=${dropped}`);
         }
         if (correctedBoundary) break;
+      }
+      // The corrected action was accepted, so the original refusal is no longer an unresolved
+      // player notice. Keep it only when the repair itself was refused.
+      const [repairedRefusal] = refusedActions.splice(repairRefusalIndex, 1);
+      if (repairedRefusal?.actorIsPlayer && correctedBoundary !== 'combat_ended') {
+        playerRefusalRepaired = true;
       }
       logger.info('[CombatRepair] outcome=repaired');
       if (correctedBoundary) break;
@@ -358,7 +469,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
    * it as established fact. A repaired turn's real actions are in `authoritativeCombatResults`
    * and need no prose to be narrated from.
    */
-  const setupText = refusedPlayerActions.length
+  const setupText = playerDeclarationWasRefused
     ? 'The declaration for this turn was refused by the engine and is void. Narrate only the ' +
       'authoritative results supplied, and state whose turn it is.'
     : encounterAlreadyConcluded
@@ -371,6 +482,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     participants?.find((participant) => participant.id === turnHolder?.id)?.name ??
     turnHolder?.name ??
     'Player';
+  const orderedEngineBlocks = orderCombatEngineBlocks(engineBlocks);
+  const orderedEngineTranscriptLines = orderedEngineBlocks.flatMap((block) => block.lines);
   const narration = await AIService.chatWithDM({
     message: JSON.stringify({
       authoritativeCombatResults: resolvedActions,
@@ -408,14 +521,31 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     turnCount,
   });
 
-  const narratedText = prependCombatEngineTranscript(narration?.text ?? '', engineTranscriptLines);
+  const narratedText = prependCombatEngineTranscript(
+    narration?.text ?? '',
+    orderedEngineTranscriptLines,
+  );
   const handedOffText =
     playerTurn && !encounterAlreadyConcluded
       ? ensurePlayerTurnHandoff(narratedText, playerName)
       : narratedText;
   if (!refusedPlayerActions.length) {
-    return engineTranscriptLines.length || handedOffText !== narratedText
-      ? { ...narration, text: handedOffText }
+    // After a successful repair the refusal is stale only if the turn came back to the player —
+    // the handoff line then says so. If a creature still holds the turn, the player is told who
+    // deterministically; a prompt instruction alone is the #1744 lockout.
+    const repairNotice =
+      playerRefusalRepaired && !playerTurn && !encounterAlreadyConcluded
+        ? repairedTurnNotice(turnHolder)
+        : null;
+    if (repairNotice) {
+      return {
+        ...narration,
+        combatEngineBlocks: orderedEngineBlocks,
+        text: `${narratedText}\n\n${repairNotice}`.trim(),
+      };
+    }
+    return orderedEngineTranscriptLines.length || handedOffText !== narratedText
+      ? { ...narration, text: handedOffText, combatEngineBlocks: orderedEngineBlocks }
       : narration;
   }
   // Whose turn it is, stated by the engine rather than hoped for from the model. The prompt above
@@ -425,10 +555,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     `[CombatRepair] player_action_refused actor=${refusedPlayerActions[0].actor} ` +
       `turn=${String(refusedPlayerActions[0].currentTurn ?? 'unknown')}`,
   );
-  const notice = turnNotice(turnHolder, isPlayerActor(turnHolder?.id ?? '', participants));
+  const notice = turnNotice(
+    turnHolder,
+    isPlayerActor(turnHolder?.id ?? '', participants),
+    String(refusedPlayerActions[0].refusalReason ?? ''),
+  );
   const refusedText = `${narratedText}\n\n${notice}`.trim();
   return {
     ...narration,
+    combatEngineBlocks: orderedEngineBlocks,
     text:
       playerTurn && !encounterAlreadyConcluded
         ? ensurePlayerTurnHandoff(refusedText, playerName)
@@ -440,25 +575,4 @@ function ensurePlayerTurnHandoff(text: string, playerName: string): string {
   const handoff = `${playerName}, what do you do?`;
   if (text.trimEnd().toLowerCase().endsWith(handoff.toLowerCase())) return text;
   return `${text}\n\n${handoff}`.trim();
-}
-
-/**
- * The one line the player is owed when their declaration was refused: it did not happen, and
- * here is who the fight is waiting on. Engine-authored, so it cannot describe an outcome.
- *
- * The "your turn now" case is the common one since #1744 — the NPC's turn ends on the spending
- * of its action, so by the time this is written the order has usually come round to the player.
- * Telling them their action was not resolved without telling them they can simply take it again
- * would leave them exactly as stuck as the silence did.
- */
-function turnNotice(
-  turnHolder: { id?: string; name?: string } | null,
-  holderIsPlayer: boolean,
-): string {
-  if (holderIsPlayer)
-    return '*(Your action was declared out of turn and was not resolved — it is your turn now.)*';
-  const who = turnHolder?.name ?? turnHolder?.id;
-  return who
-    ? `*(Your declared action has not been resolved — it is ${who}'s turn.)*`
-    : '*(Your declared action has not been resolved — it is not your turn yet.)*';
 }

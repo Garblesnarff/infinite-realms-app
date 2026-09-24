@@ -160,21 +160,13 @@ describe('a player action the engine refused', () => {
     expect(result.text).not.toContain('bloodied');
   });
 
-  it('reaches the narration pass named as a refusal, carrying no outcome', async () => {
+  it('withholds the refusal from the narration after a successful repair', async () => {
     await run();
 
     const payload = resolutionPayload();
-    expect(payload.refusedActions).toHaveLength(1);
-    expect(payload.refusedActions[0]).toMatchObject({
-      resolved: false,
-      actor: 'The Reveler',
-      actorIsPlayer: true,
-      action: 'attack',
-      currentTurn: 'Balthazar',
-    });
-    // No hit, no damage, no new hit points — the engine rolled nothing for it.
-    expect(JSON.stringify(payload.refusedActions[0])).not.toContain('finalDamage');
-    expect(payload.refusedActionsNote).toContain('did not happen');
+    expect(payload.refusedActions).toBeUndefined();
+    expect(payload.authoritativeCombatResults).toHaveLength(1);
+    expect(payload.authoritativeCombatResults[0].action.actor_id).toBe(NPC_ID);
   });
 
   it('narrates the accepted actions only', async () => {
@@ -188,24 +180,28 @@ describe('a player action the engine refused', () => {
     expect(payload.authoritativeCombatResults[0].outcomes[0]).toMatchObject({ finalDamage: 4 });
   });
 
-  it('surfaces whose turn it is, without asking the model to remember', async () => {
+  it('drops the stale refusal notice when the repair hands the turn back to the player', async () => {
     const result = await run();
 
-    // The engine advanced onto the player when Balthazar spent his action, so the honest thing
-    // to tell them is that they can act now — the lockout in #1744 was a player who was never
-    // told anything at all.
-    expect(result.text).toContain('not resolved');
-    expect(result.text).toContain('your turn now');
+    // The engine advanced onto the player when Balthazar spent his action. The refusal is stale,
+    // and the handoff line is what tells the player it is their turn now.
+    expect(result.text).not.toContain('declared out of turn');
+    expect(result.text).not.toContain('acts next');
+    expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
   });
 
-  it("names the creature the fight is waiting on when it is still not the player's turn", async () => {
+  it("names the creature the fight is waiting on when the repair leaves it the creature's turn", async () => {
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: NPC_ID, name: 'Balthazar' },
     });
 
     const result = await run();
 
-    expect(result.text).toContain("it is Balthazar's turn");
+    // The #1744 lockout was a player who was never told anything at all. The line is written by
+    // this layer, not left to the model, and it no longer calls the repaired turn "out of turn".
+    expect(result.text.trimEnd().endsWith('*(Balthazar acts next.)*')).toBe(true);
+    expect(result.text).not.toContain('declared out of turn');
+    expect(result.text).not.toContain('what do you do?');
   });
 
   it('still throws when the engine refused everything and the repair could not help', async () => {
@@ -243,6 +239,73 @@ describe('a player action the engine refused', () => {
 
     expect(repairRefusedCombatAction).not.toHaveBeenCalled();
     expect(resolutionPayload().refusedActions[0]).toMatchObject({ queued: true });
+  });
+
+  describe('when the recovery retry is refused again', () => {
+    /** Balthazar's stale turn is settled, but the player's retried attack is still refused. */
+    const runFailedRecovery = (holder: {
+      id: string;
+      name: string;
+      participantType: string;
+    }): ReturnType<typeof run> => {
+      advanceNpcTurns.mockResolvedValue({
+        results: [
+          {
+            action: action(NPC_ID, PLAYER_ID),
+            outcomes: [{ participantId: PLAYER_ID, hit: false }],
+            engineResult: { actorName: 'Balthazar', targetName: 'The Reveler', hit: false },
+            actorIsPlayer: false,
+            transcriptLines: [],
+          },
+        ],
+        currentParticipant: holder,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+      });
+      return run({ sessionId: 'session-2f420489' });
+    };
+
+    it('reaches the narration pass named as a refusal, carrying no outcome', async () => {
+      await runFailedRecovery({ id: NPC_ID, name: 'Balthazar', participantType: 'monster' });
+
+      const payload = resolutionPayload();
+      expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+      expect(payload.refusedActions.length).toBeGreaterThan(0);
+      expect(payload.refusedActions[0]).toMatchObject({
+        resolved: false,
+        actor: 'The Reveler',
+        actorIsPlayer: true,
+        action: 'attack',
+        currentTurn: 'Balthazar',
+      });
+      // No hit, no damage, no new hit points — the engine rolled nothing for it.
+      expect(JSON.stringify(payload.refusedActions)).not.toContain('finalDamage');
+      expect(payload.refusedActionsNote).toContain('did not happen');
+    });
+
+    it('tells the player it is their turn now when the turn came back to them', async () => {
+      const result = await runFailedRecovery({
+        id: PLAYER_ID,
+        name: 'The Reveler',
+        participantType: 'player',
+      });
+
+      expect(result.text).toContain('not resolved');
+      expect(result.text).toContain('your turn now');
+    });
+
+    it("names the creature the fight is waiting on when it is still not the player's turn", async () => {
+      const result = await runFailedRecovery({
+        id: NPC_ID,
+        name: 'Balthazar',
+        participantType: 'monster',
+      });
+
+      expect(result.text).toContain("it is Balthazar's turn");
+    });
   });
 });
 
@@ -551,6 +614,10 @@ describe('a turn the engine accepted in full', () => {
     expect(result.text).toContain('The Reveler');
     expect(result.text).toContain('Balthazar');
     expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
+    expect(result.combatEngineBlocks).toMatchObject([
+      { source: 'player', round: 1 },
+      { source: 'npc', round: 2 },
+    ]);
   });
 
   it('settles a stale NPC holder and retries the refused player action once', async () => {

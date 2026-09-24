@@ -45,6 +45,8 @@ export interface HandleDmActionsParams {
   conversationHistory: any[];
   /** NPC turns drained before the player's declaration was sent to chatWithDM. */
   preflightNpcTurns?: AdvanceNpcTurnsResponse;
+  /** Round captured before preflight advances the authoritative encounter. */
+  combatRound?: number;
   userPlan?: string;
   turnCount?: number;
   /** What the player typed this turn, for the zero-action guard below. */
@@ -165,6 +167,7 @@ export async function handleDmActionsAndTransitions(
     playerMessage,
     isDiceRollMessage,
     preflightNpcTurns: initialPreflightNpcTurns,
+    combatRound,
   } = params;
 
   let { result, activeEncounter, isInCombat } = params;
@@ -614,6 +617,7 @@ export async function handleDmActionsAndTransitions(
         ? [activeEncounter.pendingIntent.actorId]
         : [],
       playerAttackRoll: entryPlayerAttackRoll,
+      combatRound: combatRound ?? activeEncounter.currentRound,
     });
     result = narrationResult;
     responseText = narrationResult.text;

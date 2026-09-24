@@ -679,6 +679,84 @@ describe('useAIResponse', () => {
   });
 
   /**
+   * #2127: a preflight that ends combat clears `isInCombat`, but its NPC turns still belong
+   * ahead of this turn's DM text. The early render must stay suppressed so the transcript
+   * cannot show the speculative narration before the engine's NPC blocks.
+   */
+  it('suppresses the early render when preflight NPC turns ended combat', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { useCombat } = await import('@/contexts/CombatContext');
+    const liveEncounter = {
+      id: 'encounter-1',
+      phase: 'active',
+      currentTurnParticipantId: 'npc-1',
+      currentRound: 2,
+      participants: [
+        { id: 'player-1', characterId: 'char-1', name: 'Terra', participantType: 'player' },
+        { id: 'npc-1', name: 'Click', participantType: 'npc' },
+      ],
+    };
+
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter: liveEncounter },
+      // Turn start sees the live fight; the post-preflight refresh sees it ended.
+      refreshCombatState: vi.fn().mockResolvedValueOnce(liveEncounter).mockResolvedValue(null),
+    } as any);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+      results: [
+        {
+          action: {
+            actor_id: 'npc-1',
+            action_type: 'attack',
+            target_ids: ['player-1'],
+            weapon_id: null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+          outcomes: [],
+          actorIsPlayer: false,
+          transcriptLines: ['Click attacks Terra.'],
+        },
+      ],
+      currentParticipant: null,
+      combatEnded: true,
+    } as any);
+
+    const parsed = { text: 'The dust settles.', roll_requests: [] };
+    (AIService.chatWithDM as any).mockImplementation(async (params: any) => {
+      await params.onTextReady?.(parsed);
+      return parsed;
+    });
+
+    const onTextReady = vi.fn();
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        onTextReady,
+      );
+    });
+
+    expect(userDataApi.advanceNpcTurns).toHaveBeenCalled();
+    expect(onTextReady).toHaveBeenCalledTimes(1);
+    expect(onTextReady.mock.calls[0][1]).toEqual({
+      suppressRender: true,
+      earlyRollPromptAllowed: false,
+    });
+  });
+
+  /**
    * #2190: on a combat-start turn the DM's `roll_requests` are an engine declaration channel,
    * not player dice prompts. The early callback must be told it may not prompt with them.
    */

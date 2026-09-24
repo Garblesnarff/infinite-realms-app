@@ -121,12 +121,19 @@ export type AdvanceNpcTurnsResponse = {
       slot_level: number | null;
       movement_feet: number;
     };
+    /** Forward-compatible ordering metadata from the authoritative engine stream. */
+    round?: number;
+    sequence?: number;
+    sequenceNumber?: number;
+    order?: number;
     outcomes: Array<Record<string, unknown>>;
     engineResult?: unknown;
     actorIsPlayer: false;
     transcriptLines: string[];
   }>;
   currentParticipant: { id: string; name: string; participantType: string } | null;
+  round?: number;
+  sequence?: number;
   combatEnded: boolean;
   iterationCount: number;
   iterationCap: number;
