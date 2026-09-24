@@ -39,6 +39,7 @@ import { sessionsRoutes } from './routes/v1/sessions';
 import { sessionMessageRoutes } from './routes/v1/session-messages';
 import { companionRoutes } from './routes/v1/companions';
 import { memoryRoutes } from './routes/v1/memories';
+import { memoryExtractionRoutes } from './routes/v1/memory-extraction';
 import { narrativeFactRoutes } from './routes/v1/narrative-facts.js';
 import { personalityRoutes } from './routes/v1/personality';
 import { adminRoutes } from './routes/v1/admin';
@@ -328,6 +329,7 @@ export function createApp() {
   app.use(sessionMessageRoutes);
   app.use(companionRoutes);
   app.use(memoryRoutes);
+  app.use(memoryExtractionRoutes);
   app.use(narrativeFactRoutes);
 
   // Personality routes (D&D personality elements)

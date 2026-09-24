@@ -10,6 +10,30 @@ import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
+/**
+ * Most transcript characters sent with the 20-turn summary job (#2186). The server refuses
+ * prompts over MEMORY_EXTRACTION_PROMPT_MAX_CHARS (80k, server-bun/src/routes/v1/memory-extraction.ts);
+ * 40 whole messages have no bound of their own, so the transcript is trimmed to fit under it.
+ */
+export const SUMMARY_TRANSCRIPT_MAX_CHARS = 70_000;
+
+/** Keep the newest lines that fit in the budget; the oldest are dropped first. */
+export function fitTranscriptToBudget(lines: string[], maxChars: number): string {
+  const kept: string[] = [];
+  let length = 0;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const added = lines[i].length + (kept.length > 0 ? 1 : 0);
+    if (length + added > maxChars) {
+      // The newest line alone is over budget: keep its end, which is the latest text.
+      if (kept.length === 0) kept.push(lines[i].slice(-maxChars));
+      break;
+    }
+    kept.push(lines[i]);
+    length += added;
+  }
+  return kept.reverse().join('\n');
+}
+
 interface WorldUpdateParams {
   text: string;
   context: GameContext;
@@ -45,32 +69,29 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
   // the current embedding query. Every 20 turns, store an abstractive campaign summary.
   if (turnCount !== undefined && turnCount > 0 && turnCount % 20 === 0) {
     try {
-      const transcript = [
-        ...(conversationHistory || []).slice(-40),
-        {
-          role: 'assistant' as const,
-          content: text,
-        },
-      ]
-        .map((entry) => `${entry.role}: ${sanitizeForMemoryExtraction(entry.content)}`)
-        .join('\n');
-      const summaryPrompt = `Summarize this D&D campaign chronologically. Preserve resolved quests, named NPC relationships, locations, important items, promises, deaths, and unresolved threats. Return only the concise summary.\n\n${transcript}`;
-      const summary = onTurnPhase
-        ? await llmApiClient.extractMemories(summaryPrompt, 1200, onTurnPhase)
-        : await llmApiClient.extractMemories(summaryPrompt, 1200);
-      if (summary.trim()) {
-        await MemoryManager.saveMemories([
+      const transcript = fitTranscriptToBudget(
+        [
+          ...(conversationHistory || []).slice(-40),
           {
-            session_id: context.sessionId,
-            campaign_id: context.campaignId,
-            content: summary.trim(),
-            type: 'story_beat',
-            memory_type: 'campaign_summary',
-            importance: 5,
-            metadata: { source: 'periodic_summary', turn: turnCount },
+            role: 'assistant' as const,
+            content: text,
           },
-        ]);
-      }
+        ].map((entry) => `${entry.role}: ${sanitizeForMemoryExtraction(entry.content)}`),
+        SUMMARY_TRANSCRIPT_MAX_CHARS,
+      );
+      const summaryPrompt = `Summarize this D&D campaign chronologically. Preserve resolved quests, named NPC relationships, locations, important items, promises, deaths, and unresolved threats. Return only the concise summary.\n\n${transcript}`;
+      // The server stores the summary itself when the model finishes (#2148); not awaited.
+      const summaryJob = {
+        sessionId: context.sessionId,
+        characterId: context.characterId || undefined,
+        kind: 'summary' as const,
+        prompt: summaryPrompt,
+        maxTokens: 1200,
+        turn: turnCount,
+      };
+      void (onTurnPhase
+        ? llmApiClient.submitMemoryExtraction(summaryJob, onTurnPhase)
+        : llmApiClient.submitMemoryExtraction(summaryJob));
     } catch (summaryError) {
       logger.warn('Periodic campaign summarization failed (non-fatal):', summaryError);
     }
@@ -205,15 +226,12 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
       };
 
       const sanitizedText = sanitizeForMemoryExtraction(text);
-      const extractionResult = onTurnPhase
-        ? await MemoryManager.extractMemories(memoryContext, message, sanitizedText, onTurnPhase)
-        : await MemoryManager.extractMemories(memoryContext, message, sanitizedText);
-
-      if (extractionResult.memories.length > 0) {
-        await MemoryManager.saveMemories(extractionResult.memories);
-        logger.info(
-          `🧠 Extracted and saved ${extractionResult.memories.length} memories (fallback API call)`,
-        );
+      // Fire and forget: the server extracts and saves the memories itself (#2148). Nothing
+      // on this path waits for the model.
+      if (onTurnPhase) {
+        MemoryManager.extractMemories(memoryContext, message, sanitizedText, onTurnPhase);
+      } else {
+        MemoryManager.extractMemories(memoryContext, message, sanitizedText);
       }
     } catch (memoryError) {
       logger.warn('Memory extraction failed (non-fatal):', memoryError);

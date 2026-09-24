@@ -30,6 +30,39 @@ import { httpRequestCounter, httpRequestDuration } from './lib/metrics.js';
  */
 const requestIds = new WeakMap<Request, string>();
 const startTimes = new WeakMap<Request, number>();
+const detachDisconnectListeners = new WeakMap<Request, () => void>();
+
+/**
+ * Log when the client goes away before the response is sent (#2148).
+ *
+ * #2144 could not tell a client abort from a slow success: the browser gave up on
+ * /v1/llm/extract at 10 s, the server carried on and logged a 200 at 13–44 s, and nothing on
+ * the server side said the caller had already left. Bun aborts `request.signal` when the
+ * connection closes, so one listener per request answers that. It is detached once the response
+ * has gone out, so a normal close after a finished response is never reported as a disconnect.
+ */
+function watchForClientDisconnect(request: Request): void {
+  const signal = request.signal;
+  if (!signal || signal.aborted) return;
+  const onAbort = (): void => {
+    detachDisconnectListeners.delete(request);
+    const start = startTimes.get(request);
+    logger.warn({
+      requestId: resolveRequestId(request),
+      method: request.method,
+      url: new URL(request.url).pathname,
+      elapsedMs: start === undefined ? undefined : Math.round(performance.now() - start),
+      msg: 'request.client_disconnected',
+    });
+  };
+  signal.addEventListener('abort', onAbort, { once: true });
+  detachDisconnectListeners.set(request, () => signal.removeEventListener('abort', onAbort));
+}
+
+function stopWatchingForClientDisconnect(request: Request): void {
+  detachDisconnectListeners.get(request)?.();
+  detachDisconnectListeners.delete(request);
+}
 
 function resolveRequestId(request: Request): string {
   let id = requestIds.get(request);
@@ -55,6 +88,10 @@ export function createRequestPipelineApp() {
         url: new URL(request.url).pathname,
         msg: 'request.start',
       });
+      watchForClientDisconnect(request);
+    })
+    .onAfterResponse(({ request }) => {
+      stopWatchingForClientDisconnect(request);
     })
     .onAfterHandle(({ request, response, set }) => {
       const start = startTimes.get(request) ?? performance.now();

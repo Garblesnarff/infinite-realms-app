@@ -11,13 +11,23 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 const LLM_GENERATE_ROUTE_PREFIX = '/v1/llm/generate';
-const LLM_EXTRACT_ROUTE = '/v1/llm/extract';
+const MEMORY_EXTRACTION_JOBS_ROUTE = '/v1/memory-extraction/jobs';
 export const NETWORK_RETRY_BUDGET_MS = 20_000;
 export const BACKGROUND_LLM_RETRY_BUDGET_MS = 5_000;
 const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
 const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
 
 export type FetchWithAuthOptions = RequestInit & { retryBudgetMs?: number };
+
+export interface MemoryExtractionJob {
+  sessionId: string;
+  characterId?: string;
+  /** 'memories' parses a JSON list of memories; 'summary' stores the text as one summary row. */
+  kind: 'memories' | 'summary';
+  prompt: string;
+  maxTokens?: number;
+  turn?: number;
+}
 
 export type NetworkRetryListener = (isRetrying: boolean) => void;
 
@@ -77,8 +87,10 @@ function isGenerateRoute(path: string): boolean {
 }
 
 function getRouteTimeoutMs(path: string): number | undefined {
+  // Memory extraction has no timeout: the server answers 202 at once and finishes the job
+  // itself (#2148). The 10 s timeout that used to sit here aborted every production extraction
+  // and logged each one as LLM_API_REQUEST_ABORTED.
   if (isGenerateRoute(path)) return 60_000;
-  if (path === LLM_EXTRACT_ROUTE) return 10_000;
   return undefined;
 }
 
@@ -610,23 +622,34 @@ class LlmApiClient {
     }
   }
 
-  async extractMemories(
-    prompt: string,
-    maxTokens = 1000,
+  /**
+   * Hand a memory extraction to the server and return without waiting for it (#2148).
+   *
+   * The server replies 202 as soon as it has accepted the job, then calls the model and writes
+   * the memories itself; they reach the next turn from the DB like every other memory. Nothing
+   * comes back to parse here. The only retry is the 5 s background network budget (#2137), and
+   * this never rejects — a lost extraction must never surface in the turn.
+   */
+  async submitMemoryExtraction(
+    job: MemoryExtractionJob,
     onTurnPhase?: TurnPhaseReporter,
-  ): Promise<string> {
+  ): Promise<void> {
     onTurnPhase?.('extract start');
     try {
-      const res = await this.fetchWithAuth('/v1/llm/extract', {
+      await this.fetchWithAuth(MEMORY_EXTRACTION_JOBS_ROUTE, {
         method: 'POST',
         retryBudgetMs: BACKGROUND_LLM_RETRY_BUDGET_MS,
-        body: JSON.stringify({ prompt, maxTokens }),
+        body: JSON.stringify({
+          session_id: job.sessionId,
+          ...(job.characterId ? { character_id: job.characterId } : {}),
+          kind: job.kind,
+          prompt: job.prompt,
+          ...(job.maxTokens ? { max_tokens: job.maxTokens } : {}),
+          ...(job.turn !== undefined ? { turn: job.turn } : {}),
+        }),
       });
-      const data = await res.json();
-      return data?.text ?? '';
     } catch (error) {
-      logger.warn('[LLMApiClient] Memory extraction failed', error);
-      return '';
+      logger.warn('[LLMApiClient] Memory extraction was not accepted', error);
     } finally {
       onTurnPhase?.('extract end');
     }

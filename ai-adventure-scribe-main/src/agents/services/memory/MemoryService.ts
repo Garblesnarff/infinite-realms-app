@@ -2,7 +2,6 @@ import { MemoryImportanceService } from './MemoryImportanceService';
 import { MemoryRepository } from './MemoryRepository';
 
 import { llmApiClient } from '@/infrastructure/api';
-import logger from '@/lib/logger';
 import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import { stripAssetTags } from '@/lib/utils';
 import {
@@ -75,21 +74,23 @@ export class MemoryService {
   }
 
   /**
-   * Extract memories from conversation using dedicated extraction endpoint.
-   * Uses free model (DeepSeek V3.1 Nex-N1) with paid fallback (ByteDance Seed 1.6 Flash).
-   * This is ~99% cheaper than using the main LLM model for extraction.
+   * Ask the server to extract memories from this exchange, and do not wait for it (#2148).
+   *
+   * The server owns the job: it calls the model, parses the reply, and writes the rows itself.
+   * This used to wait for the model's text and save the memories from the browser, but the
+   * browser gave up at 10 s and the model takes 13–44 s, so no production turn ever got its
+   * memories. Returns immediately; the submit never rejects.
    */
-  static async extractMemories(
+  static extractMemories(
     context: MemoryContext,
     userMessage: string,
     aiResponse: string,
     onTurnPhase?: TurnPhaseReporter,
-  ): Promise<MemoryExtractionResult> {
-    try {
-      const cleanUserMessage = sanitizeForMemoryExtraction(userMessage);
-      const cleanAiResponse = sanitizeForMemoryExtraction(aiResponse);
+  ): void {
+    const cleanUserMessage = sanitizeForMemoryExtraction(userMessage);
+    const cleanAiResponse = sanitizeForMemoryExtraction(aiResponse);
 
-      const extractionPrompt = `You are a memory extraction system for a D&D campaign. Extract important memories from this conversation exchange.
+    const extractionPrompt = `You are a memory extraction system for a D&D campaign. Extract important memories from this conversation exchange.
 
 CONTEXT:
 - Session: ${context.sessionId}
@@ -116,35 +117,15 @@ Extract 1-4 key memories in this JSON format:
   ]
 }`;
 
-      // Use dedicated extraction endpoint (free model with paid fallback)
-      const text = onTurnPhase
-        ? await llmApiClient.extractMemories(extractionPrompt, 1000, onTurnPhase)
-        : await llmApiClient.extractMemories(extractionPrompt, 1000);
-
-      if (!text) return { memories: [] };
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return { memories: [] };
-
-      try {
-        const extracted = JSON.parse(jsonMatch[0]) as MemoryExtractionResult;
-        return {
-          ...extracted,
-          memories: Array.isArray(extracted.memories)
-            ? extracted.memories.map((memory) => ({
-                ...memory,
-                type: normalizeMemoryType(memory.type),
-              }))
-            : [],
-        };
-      } catch {
-        return { memories: [] };
-      }
-    } catch (error) {
-      // Keep extraction non-fatal for callers, but make failures visible when this path is
-      // deliberately moved off the turn's critical render path (#2095).
-      logger.warn('[MemoryService] Memory extraction failed (non-fatal):', error);
-      return { memories: [] };
-    }
+    const job = {
+      sessionId: context.sessionId,
+      characterId: context.characterId || undefined,
+      kind: 'memories' as const,
+      prompt: extractionPrompt,
+      maxTokens: 1000,
+    };
+    void (onTurnPhase
+      ? llmApiClient.submitMemoryExtraction(job, onTurnPhase)
+      : llmApiClient.submitMemoryExtraction(job));
   }
 }

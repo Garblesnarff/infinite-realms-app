@@ -51,21 +51,7 @@ vi.mock('@/utils/memory/importance', () => ({
 vi.mock('@/infrastructure/api', () => ({
   llmApiClient: {
     generateText: vi.fn().mockResolvedValue('Mock response'),
-    extractMemories: vi.fn().mockResolvedValue(
-      JSON.stringify({
-        memories: [
-          {
-            session_id: 'session-123',
-            type: 'quest',
-            category: 'main_quest',
-            content: 'Find the Dragon Scroll',
-            importance: 5,
-            emotional_tone: 'intense',
-            metadata: {},
-          },
-        ],
-      }),
-    ),
+    submitMemoryExtraction: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -76,21 +62,7 @@ describe('Memory Service Integration', () => {
     vi.clearAllMocks();
 
     mockInsert = baseMockInsert;
-    vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
-      JSON.stringify({
-        memories: [
-          {
-            session_id: 'session-123',
-            type: 'quest',
-            category: 'main_quest',
-            content: 'Find the Dragon Scroll',
-            importance: 5,
-            emotional_tone: 'intense',
-            metadata: {},
-          },
-        ],
-      }),
-    );
+    vi.mocked(llmApiClient.submitMemoryExtraction).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -138,7 +110,7 @@ describe('Memory Service Integration', () => {
     it('strips asset markers from the extraction prompt and persisted memory', async () => {
       const input = '[ASSET:npc:sergeant-vance] Sergeant Vance steps forward.';
 
-      await MemoryService.extractMemories(
+      MemoryService.extractMemories(
         {
           sessionId: 'session-123',
           campaignId: 'campaign-456',
@@ -150,7 +122,8 @@ describe('Memory Service Integration', () => {
         input,
       );
 
-      const extractionPrompt = vi.mocked(llmApiClient.extractMemories).mock.calls[0]?.[0] as string;
+      const extractionPrompt = vi.mocked(llmApiClient.submitMemoryExtraction).mock.calls[0]?.[0]
+        .prompt as string;
       expect(extractionPrompt).toContain('DM: Sergeant Vance steps forward.');
       expect(extractionPrompt).not.toContain('[ASSET:');
 
@@ -172,11 +145,6 @@ describe('Memory Service Integration', () => {
     });
 
     it('should extract memories from conversation context', async () => {
-      mockInsert.mockResolvedValue({
-        data: null,
-        error: null,
-      });
-
       const context = {
         sessionId: 'session-123',
         campaignId: 'campaign-456',
@@ -188,42 +156,30 @@ describe('Memory Service Integration', () => {
         recentMessages: ['You approach the ancient temple'],
       };
 
-      const result = await MemoryService.extractMemories(
+      MemoryService.extractMemories(
         context,
         'I search for the sacred relic',
         'The high priest reveals a hidden chamber containing the relic',
       );
 
-      expect(result.memories).toBeInstanceOf(Array);
-      expect(result.memories.length).toBeGreaterThan(0);
-      expect(result.memories[0]).toHaveProperty('type');
-      expect(result.memories[0]).toHaveProperty('content');
-      expect(result.memories[0]).toHaveProperty('importance');
+      // The server owns parsing and persistence (#2148); the browser submits one job.
+      expect(llmApiClient.submitMemoryExtraction).toHaveBeenCalledTimes(1);
+      const job = vi.mocked(llmApiClient.submitMemoryExtraction).mock.calls[0][0];
+      expect(job).toMatchObject({
+        sessionId: 'session-123',
+        characterId: 'char-789',
+        kind: 'memories',
+        maxTokens: 1000,
+      });
+      expect(job.prompt).toContain('Location: Ancient Temple');
+      expect(job.prompt).toContain('Active NPCs: High Priest');
+      expect(job.prompt).toContain('Player: I search for the sacred relic');
     });
 
-    it('normalizes compound extractor types before they are written', async () => {
-      vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
-        JSON.stringify({
-          memories: [
-            {
-              session_id: 'session-123',
-              type: 'event|npc|combat',
-              content: 'The guard joined the battle.',
-              importance: 4,
-              metadata: {},
-            },
-            {
-              session_id: 'session-123',
-              type: 'unknown|event',
-              content: 'An unrecognized category.',
-              importance: 2,
-              metadata: {},
-            },
-          ],
-        }),
-      );
-
-      const result = await MemoryService.extractMemories(
+    // Compound-type normalization of extracted memories moved to the server with the write
+    // (server-bun memory-extraction-job.test.ts). The browser path no longer writes them at all.
+    it('writes nothing from the browser for an extraction: the server persists it', async () => {
+      MemoryService.extractMemories(
         {
           sessionId: 'session-123',
           campaignId: 'campaign-456',
@@ -234,8 +190,10 @@ describe('Memory Service Integration', () => {
         'I draw my sword',
         'The guard joins the fight.',
       );
+      await Promise.resolve();
 
-      expect(result.memories.map((memory) => memory.type)).toEqual(['event', 'general']);
+      expect(llmApiClient.submitMemoryExtraction).toHaveBeenCalledTimes(1);
+      expect(mockInsert).not.toHaveBeenCalled();
     });
 
     it('normalizes types again at the memory write boundary', async () => {
@@ -258,11 +216,9 @@ describe('Memory Service Integration', () => {
       expect(mockInsert.mock.calls[0][0][0]).not.toHaveProperty('embedding');
     });
 
-    it('should save extracted memories', async () => {
-      mockInsert.mockResolvedValue({
-        data: null,
-        error: null,
-      });
+    it('returns without waiting for the extraction to finish (#2148)', () => {
+      // A submit that never settles: extractMemories must still return synchronously.
+      vi.mocked(llmApiClient.submitMemoryExtraction).mockReturnValue(new Promise(() => {}));
 
       const context = {
         sessionId: 'session-123',
@@ -272,16 +228,14 @@ describe('Memory Service Integration', () => {
         recentMessages: ['A dragon appears'],
       };
 
-      const result = await MemoryService.extractMemories(
+      const result = MemoryService.extractMemories(
         context,
         'I attack with my sword',
         'You strike the dragon!',
       );
 
-      if (result.memories.length > 0) {
-        await MemoryService.saveMemories(result.memories);
-        expect(mockInsert).toHaveBeenCalled();
-      }
+      expect(result).toBeUndefined();
+      expect(llmApiClient.submitMemoryExtraction).toHaveBeenCalledTimes(1);
     });
   });
 });

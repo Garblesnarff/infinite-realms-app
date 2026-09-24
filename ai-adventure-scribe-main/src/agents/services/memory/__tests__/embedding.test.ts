@@ -45,7 +45,7 @@ vi.mock('@/utils/memory/importance', () => ({
 
 vi.mock('@/infrastructure/api', () => ({
   llmApiClient: {
-    extractMemories: vi.fn().mockResolvedValue(''),
+    submitMemoryExtraction: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

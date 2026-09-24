@@ -13,6 +13,16 @@ import '@/lib/auth-gate';
 
 const logger = (loggerModule as any).default;
 
+const extractionJob = (
+  overrides: Partial<Parameters<typeof llmApiClient.submitMemoryExtraction>[0]> = {},
+) => ({
+  sessionId: 'session-1',
+  kind: 'memories' as const,
+  prompt: 'Conversation context',
+  maxTokens: 1000,
+  ...overrides,
+});
+
 const exhaustNetworkRetryBudget = async (
   budgetMs: number = BACKGROUND_LLM_RETRY_BUDGET_MS,
 ): Promise<void> => {
@@ -120,9 +130,9 @@ describe('LlmApiClient', () => {
         ok: true,
         status: 200,
         headers: { get: (name: string) => (name === 'x-request-id' ? 'extract-req-2' : null) },
-        json: () => Promise.resolve({ text: '{"memories":[]}' }),
+        json: () => Promise.resolve({ jobId: 'job-1', status: 'accepted' }),
       });
-      await llmApiClient.extractMemories('Conversation context', 1000, reportTurnPhase);
+      await llmApiClient.submitMemoryExtraction(extractionJob(), reportTurnPhase);
       reportTurnPhase('text shown');
       reportTurnPhase('persist');
       reportTurnPhase('composer enabled');
@@ -438,30 +448,39 @@ describe('LlmApiClient', () => {
     });
   });
 
-  describe('extractMemories', () => {
-    it('should successfully extract memories', async () => {
+  describe('submitMemoryExtraction (#2148)', () => {
+    it('posts the job to the server and returns once it is accepted', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ text: '["memory 1"]' }),
+        status: 202,
+        json: () => Promise.resolve({ jobId: 'job-1', status: 'accepted' }),
       });
 
-      const result = await llmApiClient.extractMemories('Conversation context');
+      await expect(
+        llmApiClient.submitMemoryExtraction(extractionJob({ characterId: 'char-1', turn: 3 })),
+      ).resolves.toBeUndefined();
 
-      expect(result).toBe('["memory 1"]');
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/v1/llm/extract'),
-        expect.anything(),
+        expect.stringContaining('/v1/memory-extraction/jobs'),
+        expect.objectContaining({ method: 'POST' }),
       );
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
+        session_id: 'session-1',
+        character_id: 'char-1',
+        kind: 'memories',
+        prompt: 'Conversation context',
+        max_tokens: 1000,
+        turn: 3,
+      });
     });
 
-    it('should return empty string and log warning on error', async () => {
+    it('never rejects, and logs a warning, when the job is not accepted', async () => {
       mockFetch.mockRejectedValue(new Error('API Error'));
 
-      const result = await llmApiClient.extractMemories('context');
+      await expect(llmApiClient.submitMemoryExtraction(extractionJob())).resolves.toBeUndefined();
 
-      expect(result).toBe('');
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Memory extraction failed'),
+        expect.stringContaining('Memory extraction was not accepted'),
         expect.any(Error),
       );
     });
@@ -470,7 +489,7 @@ describe('LlmApiClient', () => {
   describe('Offline Fallback', () => {
     it('does not trip offline fallback when extract fails, so generate still fetches', async () => {
       mockFetch.mockImplementation((url: string) => {
-        if (url.includes('/v1/llm/extract')) {
+        if (url.includes('/v1/memory-extraction/jobs')) {
           return Promise.reject(new TypeError('Failed to fetch'));
         }
         return Promise.resolve({
@@ -479,9 +498,9 @@ describe('LlmApiClient', () => {
         });
       });
 
-      const extractRequest = llmApiClient.extractMemories('context');
+      const extractRequest = llmApiClient.submitMemoryExtraction(extractionJob());
       await exhaustNetworkRetryBudget();
-      await expect(extractRequest).resolves.toBe('');
+      await expect(extractRequest).resolves.toBeUndefined();
       await expect(llmApiClient.generateText({ prompt: 'test' })).resolves.toBe('Narration');
 
       expect(mockFetch).toHaveBeenCalledTimes(5);
@@ -535,11 +554,11 @@ describe('LlmApiClient', () => {
       await rejection;
 
       mockFetch.mockClear();
-      await expect(llmApiClient.extractMemories('context')).resolves.toBe('');
+      await expect(llmApiClient.submitMemoryExtraction(extractionJob())).resolves.toBeUndefined();
 
       expect(mockFetch).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith('OFFLINE_FALLBACK_BLOCKED', {
-        route: '/v1/llm/extract',
+        route: '/v1/memory-extraction/jobs',
         msRemaining: 30_000,
       });
     });
@@ -564,12 +583,11 @@ describe('LlmApiClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ text: 'Back online memories' }),
+        json: () => Promise.resolve({ jobId: 'job-1', status: 'accepted' }),
       });
 
       vi.advanceTimersByTime(30_000);
-      const result = await llmApiClient.extractMemories('context');
-      expect(result).toBe('Back online memories');
+      await llmApiClient.submitMemoryExtraction(extractionJob());
       expect(mockFetch).toHaveBeenCalled();
     });
 
@@ -600,29 +618,31 @@ describe('LlmApiClient', () => {
       expect((llmApiClient as any).useOfflineFallback).toBe(false);
     });
 
-    it('aborts extract after 10 seconds and logs AbortError distinctly', async () => {
+    // Was "aborts extract after 10 seconds and logs AbortError distinctly". That abort threw
+    // away every production extraction (#2148): the server now answers 202 at once, so the
+    // submit carries no client timeout and never logs LLM_API_REQUEST_ABORTED.
+    it('never aborts a memory extraction submit or logs LLM_API_REQUEST_ABORTED for it', async () => {
+      let resolveFetch: ((value: unknown) => void) | undefined;
+      let signal: AbortSignal | undefined;
       mockFetch.mockImplementationOnce(
         (_url: string, options: RequestInit) =>
-          new Promise((_resolve, reject) => {
-            options.signal?.addEventListener('abort', () => {
-              const error = new Error('The operation was aborted');
-              error.name = 'AbortError';
-              reject(error);
-            });
+          new Promise((resolve) => {
+            signal = options.signal ?? undefined;
+            resolveFetch = resolve;
           }),
       );
 
-      const request = llmApiClient.extractMemories('context');
-      await vi.advanceTimersByTimeAsync(10_000);
+      const request = llmApiClient.submitMemoryExtraction(extractionJob());
+      await vi.advanceTimersByTimeAsync(60_000);
 
-      await expect(request).resolves.toBe('');
-      expect(logger.warn).toHaveBeenCalledWith(
-        'LLM_API_REQUEST_ABORTED',
-        expect.objectContaining({
-          route: '/v1/llm/extract',
-          errorName: 'AbortError',
-        }),
-      );
+      expect(signal).toBeUndefined();
+      resolveFetch!({
+        ok: true,
+        status: 202,
+        json: () => Promise.resolve({ jobId: 'job-1', status: 'accepted' }),
+      });
+      await expect(request).resolves.toBeUndefined();
+      expect(logger.warn).not.toHaveBeenCalledWith('LLM_API_REQUEST_ABORTED', expect.anything());
     });
   });
 });

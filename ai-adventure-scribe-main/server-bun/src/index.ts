@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { logAlertingConfiguration } from './lib/alerting.js';
 import { logger } from './lib/logger';
+import { logAbandonedMemoryExtractionJobs } from './services/memory-extraction-job.js';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
 // Note: Environment validation is done in lib/env.ts
@@ -21,6 +22,8 @@ function shutdown(signal: string): Promise<void> {
 
   shutdownPromise = (async () => {
     logger.info({ msg: `Received ${signal}, shutting down gracefully...` });
+    // Extraction jobs run after their 202, so no open request holds them; they die with the process.
+    logAbandonedMemoryExtractionJobs(signal);
 
     const server = app.server;
     const forceCloseTimer = setTimeout(() => {

@@ -2,8 +2,13 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { processWorldAndMemories } from '../world-update-processor';
+import {
+  fitTranscriptToBudget,
+  processWorldAndMemories,
+  SUMMARY_TRANSCRIPT_MAX_CHARS,
+} from '../world-update-processor';
 
+import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { parseXMLTagsFromResponse } from '@/services/ai/xml-parser';
 import { MemoryManager } from '@/services/memory-manager';
@@ -14,6 +19,12 @@ vi.mock('@/services/memory-manager', () => ({
   MemoryManager: {
     saveMemories: vi.fn(),
     extractMemories: vi.fn(),
+  },
+}));
+
+vi.mock('@/infrastructure/api', () => ({
+  llmApiClient: {
+    submitMemoryExtraction: vi.fn(),
   },
 }));
 
@@ -70,10 +81,9 @@ describe('processWorldAndMemories', () => {
       memories: [],
       worldUpdates: { npcs: [], locations: [], quests: [] },
     });
-    // Ensure MemoryManager.extractMemories returns an object with memories array by default
-    (MemoryManager.extractMemories as any).mockResolvedValue({
-      memories: [],
-    });
+    // Extraction is fire-and-forget since #2148: it returns nothing to wait on.
+    (MemoryManager.extractMemories as any).mockReturnValue(undefined);
+    (llmApiClient.submitMemoryExtraction as any).mockResolvedValue(undefined);
     // Ensure WorldBuilderService.respondToPlayerAction returns a valid object by default
     (WorldBuilderService.respondToPlayerAction as any).mockResolvedValue({
       npcs: [],
@@ -227,10 +237,59 @@ describe('processWorldAndMemories', () => {
   });
 
   describe('Fallback Extraction', () => {
-    it('should use fallback extraction when XML tags are absent', async () => {
-      (MemoryManager.extractMemories as any).mockResolvedValue({
-        memories: [{ content: 'Fallback Memory' }],
+    it('does not wait on the extraction submit (#2148)', async () => {
+      // A submit that never settles must not hold the deferred path open.
+      (llmApiClient.submitMemoryExtraction as any).mockReturnValue(new Promise(() => {}));
+      (MemoryManager.extractMemories as any).mockImplementation(() => {
+        void llmApiClient.submitMemoryExtraction({} as any);
       });
+
+      await expect(processWorldAndMemories({ ...defaultParams, turnCount: 20 })).resolves.toBe(
+        'DM Response',
+      );
+
+      expect(MemoryManager.extractMemories).toHaveBeenCalled();
+      expect(llmApiClient.submitMemoryExtraction).toHaveBeenCalledWith({
+        sessionId: 'session-123',
+        characterId: 'character-789',
+        kind: 'summary',
+        prompt: expect.stringContaining('Summarize this D&D campaign'),
+        maxTokens: 1200,
+        turn: 20,
+      });
+      expect(MemoryManager.saveMemories).not.toHaveBeenCalled();
+    });
+
+    it('trims a long summary transcript to its budget, keeping the newest messages (#2186)', async () => {
+      const longHistory = Array.from({ length: 40 }, (_, i) => ({
+        role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: `turn-${i} ${'x'.repeat(5_000)}`,
+      }));
+
+      await processWorldAndMemories({
+        ...defaultParams,
+        conversationHistory: longHistory as any,
+        turnCount: 20,
+      });
+
+      const summaryCall = (llmApiClient.submitMemoryExtraction as any).mock.calls.find(
+        ([job]: [{ kind: string }]) => job.kind === 'summary',
+      );
+      const prompt: string = summaryCall[0].prompt;
+      // 40 × 5k chars would be ~200k; the prompt stays under the server's 80k cap.
+      expect(prompt.length).toBeLessThanOrEqual(SUMMARY_TRANSCRIPT_MAX_CHARS + 500);
+      expect(prompt).toContain('turn-39');
+      expect(prompt).toContain('sanitized-DM Response');
+      expect(prompt).not.toContain('turn-0 ');
+    });
+
+    it('fitTranscriptToBudget keeps whole newest lines, and the tail of an oversize newest line', () => {
+      expect(fitTranscriptToBudget(['aaaa', 'bbbb', 'cccc'], 9)).toBe('bbbb\ncccc');
+      expect(fitTranscriptToBudget(['aaaa', 'bbbb'], 100)).toBe('aaaa\nbbbb');
+      expect(fitTranscriptToBudget(['old', 'abcdefgh'], 3)).toBe('fgh');
+    });
+
+    it('should use fallback extraction when XML tags are absent', async () => {
       (WorldBuilderService.respondToPlayerAction as any).mockResolvedValue({
         npcs: [{ name: 'New NPC' }],
         locations: [],
@@ -241,8 +300,8 @@ describe('processWorldAndMemories', () => {
 
       expect(result).toBe('DM Response');
       expect(MemoryManager.extractMemories).toHaveBeenCalled();
-      // We know that if extractionResult.memories.length > 0, it calls saveMemories
-      expect(MemoryManager.saveMemories).toHaveBeenCalled();
+      // The server saves what it extracts (#2148); the browser writes nothing for this path.
+      expect(MemoryManager.saveMemories).not.toHaveBeenCalled();
       expect(WorldBuilderService.respondToPlayerAction).toHaveBeenCalled();
 
       expect(logger.debug).toHaveBeenCalledWith(
@@ -306,7 +365,9 @@ describe('processWorldAndMemories', () => {
     });
 
     it('should handle fallback extraction errors gracefully', async () => {
-      (MemoryManager.extractMemories as any).mockRejectedValue(new Error('Extract Error'));
+      (MemoryManager.extractMemories as any).mockImplementation(() => {
+        throw new Error('Extract Error');
+      });
       (WorldBuilderService.respondToPlayerAction as any).mockRejectedValue(
         new Error('Expansion Error'),
       );
