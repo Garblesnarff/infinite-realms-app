@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { SRD_CLASS_TABLE } from '../../../../shared/srd-class-data';
 import {
+  findUnresolvedCharacterData,
   parseJsonField,
   parseSpellListField,
   transformAbilityScores,
@@ -313,10 +314,101 @@ describe('data-transformers', () => {
           [],
         );
 
-        expect(character.race).toBeNull();
+        // #2150: an unknown race/background keeps its stored name with default traits
+        // (no bonuses, no proficiencies) instead of null, so the sheet never dereferences
+        // null. An unknown class stays null: hit dice and spellcasting must not be guessed.
+        expect(character.race).toEqual({
+          id: 'unknown-unknownrace',
+          name: 'Unknown Race',
+          description: '',
+          abilityScoreIncrease: {},
+          speed: 30,
+          traits: [],
+          languages: [],
+          subraces: [],
+        });
         expect(character.class).toBeNull();
-        expect(character.background).toBeNull();
+        expect(character.background).toMatchObject({
+          name: 'Unknown Background',
+          skillProficiencies: [],
+          toolProficiencies: [],
+          feature: { name: 'Unknown Background', description: '' },
+        });
         expect(logger.warn).toHaveBeenCalledTimes(3);
+      });
+
+      it('resolves the premade-only Satyr race and backgrounds (#2150)', () => {
+        const reveler = transformCharacterData(
+          { ...mockCharacterRow, race: 'Satyr', class: 'Barbarian', background: 'Entertainer' },
+          mockStats,
+          [],
+        );
+        const pactBound = transformCharacterData(
+          { ...mockCharacterRow, race: 'Tiefling', class: 'Warlock', background: 'Haunted One' },
+          mockStats,
+          [],
+        );
+        const seeker = transformCharacterData(
+          { ...mockCharacterRow, race: 'Catfolk', class: 'Ranger', background: 'Anthropologist' },
+          mockStats,
+          [],
+        );
+
+        expect(reveler.race).toMatchObject({ id: 'satyr', name: 'Satyr', speed: 35 });
+        expect(pactBound.background).toMatchObject({
+          id: 'haunted-one',
+          feature: { name: 'Heart of Darkness' },
+        });
+        expect(seeker.background).toMatchObject({
+          id: 'anthropologist',
+          feature: { name: 'Adept Linguist' },
+        });
+      });
+
+      it('does not offer premade-only races and backgrounds in the creation wizard', () => {
+        expect(races.some((race) => race.id === 'satyr')).toBe(false);
+        expect(backgrounds.some((background) => background.id === 'haunted-one')).toBe(false);
+      });
+    });
+
+    describe('findUnresolvedCharacterData', () => {
+      it('names each stored value the client tables do not know', () => {
+        expect(
+          findUnresolvedCharacterData({
+            race: 'Starborn Owlkin',
+            subrace: 'Moonfeather',
+            class: 'Chronomancer',
+            background: 'Lighthouse Keeper',
+          }),
+        ).toEqual([
+          'Unknown race: Starborn Owlkin',
+          'Unknown class: Chronomancer',
+          'Unknown background: Lighthouse Keeper',
+        ]);
+      });
+
+      it('names an unknown subrace of a known race', () => {
+        expect(
+          findUnresolvedCharacterData({
+            race: 'Elf',
+            subrace: 'Moon Elf',
+            class: 'Druid',
+            background: 'Outlander',
+          }),
+        ).toEqual(['Unknown subrace: Moon Elf']);
+      });
+
+      it('is empty for every starter premade', () => {
+        for (const premade of [
+          { race: 'Satyr', subrace: null, class: 'Barbarian', background: 'Entertainer' },
+          { race: 'Elf', subrace: 'Drow', class: 'Druid', background: 'Outlander' },
+          { race: 'Tiefling', subrace: null, class: 'Warlock', background: 'Haunted One' },
+          { race: 'Catfolk', subrace: null, class: 'Ranger', background: 'Anthropologist' },
+          { race: 'Half-Elf', subrace: null, class: 'Bard', background: 'Entertainer' },
+          { race: 'Halfling', subrace: null, class: 'Rogue', background: 'Charlatan' },
+        ]) {
+          expect(findUnresolvedCharacterData(premade)).toEqual([]);
+        }
       });
     });
 

@@ -13,6 +13,7 @@ import { halfling } from './halfling';
 import { human } from './human';
 import { lizardfolk } from './lizardfolk';
 import { ravenfolk } from './ravenfolk';
+import { satyr } from './satyr';
 import { seaborn } from './seaborn';
 import { serpentfolk } from './serpentfolk';
 import { stoneGiant } from './stone-giant';
@@ -43,3 +44,12 @@ export const baseRaces: CharacterRace[] = [
 ];
 
 export const races = baseRaces;
+
+/**
+ * Races that premade characters use but the creation wizard does not offer. Stored
+ * characters resolve against `lookupRaces` so a premade never lands on the sheet with an
+ * unknown race (#2150).
+ */
+export const premadeOnlyRaces: CharacterRace[] = [satyr];
+
+export const lookupRaces: CharacterRace[] = [...baseRaces, ...premadeOnlyRaces];

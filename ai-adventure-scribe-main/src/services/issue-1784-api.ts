@@ -121,7 +121,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     status: response.status,
     bodyHead: bodyText.slice(0, 80),
   });
-  return bodyText as T;
+  // Returning the raw text typed as T let callers .map a string: an equipment body
+  // of "[object Object]…" became "i.map is not a function" on the sheet (#2150).
+  throw new Issue1784ApiError(
+    `Unparseable response body from ${path}`,
+    response.status,
+    'BODY_UNPARSEABLE',
+  );
 }
 
 export const issue1784Api = {

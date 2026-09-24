@@ -10,7 +10,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 
 import { waitForAuth } from '@/lib/auth-gate';
 import { logger } from '@/lib/logger';
-import { issue1784Api } from '@/services/issue-1784-api';
+import { Issue1784ApiError, issue1784Api } from '@/services/issue-1784-api';
 
 describe('issue1784Api.getVoiceMappings', () => {
   const fetchMock = vi.fn();
@@ -33,17 +33,19 @@ describe('issue1784Api.getVoiceMappings', () => {
     ]);
   });
 
-  it('does not JSON.parse an already-coerced "[object Object]" body a second time', async () => {
+  it('rejects an already-coerced "[object Object]" body instead of returning it as T (#2150)', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       text: async () => '[object Object]',
     });
 
-    await expect(issue1784Api.getVoiceMappings('session-1')).resolves.toBe('[object Object]');
+    const error = await issue1784Api.getVoiceMappings('session-1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Issue1784ApiError);
+    expect(error).toMatchObject({ status: 200, code: 'BODY_UNPARSEABLE' });
   });
 
-  it('logs ISSUE1784_BODY_UNPARSEABLE before returning raw unparseable body', async () => {
+  it('logs ISSUE1784_BODY_UNPARSEABLE before rejecting an unparseable body', async () => {
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -51,11 +53,28 @@ describe('issue1784Api.getVoiceMappings', () => {
       text: async () => '[object Object]',
     });
 
-    await expect(issue1784Api.getVoiceMappings('session-1')).resolves.toBe('[object Object]');
+    await expect(issue1784Api.getVoiceMappings('session-1')).rejects.toBeInstanceOf(
+      Issue1784ApiError,
+    );
     expect(warnSpy).toHaveBeenCalledWith('ISSUE1784_BODY_UNPARSEABLE', {
       path: '/v1/sessions/session-1/voice-mappings',
       status: 200,
       bodyHead: '[object Object]',
+    });
+  });
+
+  it('rejects the "[object Object]…" equipment body seen on prod (#2150)', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '[object Object][object Object][object Object]',
+    });
+
+    await expect(issue1784Api.getCharacterEquipment('character-1')).rejects.toMatchObject({
+      name: 'Issue1784ApiError',
+      status: 200,
+      code: 'BODY_UNPARSEABLE',
     });
   });
 });

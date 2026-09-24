@@ -7,9 +7,9 @@ import type {
   Subrace,
 } from '@/types/character';
 
-import { backgrounds } from '@/data/backgroundOptions';
+import { lookupBackgrounds } from '@/data/backgroundOptions';
 import { classes } from '@/data/classes';
-import { races } from '@/data/races';
+import { lookupRaces } from '@/data/races';
 import logger from '@/lib/logger';
 import {
   parseOptionalProficiencyList,
@@ -98,8 +98,8 @@ type NamedCharacterData = {
  * Database rows hold display names, while the static records expose both ids and display names.
  * Normalize both forms so `Half-Orc`, `half-orc`, and `Half Orc` resolve to the same record.
  */
-const normalizeCharacterDataKey = (value: string | null | undefined): string =>
-  (value || '')
+const normalizeCharacterDataKey = (value: unknown): string =>
+  (typeof value === 'string' ? value : '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
@@ -132,14 +132,8 @@ const resolveCharacterData = <T extends NamedCharacterData>(
   return null;
 };
 
-const resolveRace = (storedName: string | null | undefined): CharacterRace | null =>
-  resolveCharacterData('race', races, storedName);
-
 const resolveClass = (storedName: string | null | undefined): CharacterClass | null =>
   resolveCharacterData('class', classes, storedName);
-
-const resolveBackground = (storedName: string | null | undefined): CharacterBackground | null =>
-  resolveCharacterData('background', backgrounds, storedName);
 
 const resolveSubrace = (
   race: CharacterRace | null,
@@ -147,6 +141,81 @@ const resolveSubrace = (
 ): Subrace | null => {
   if (!race || !normalizeCharacterDataKey(storedName)) return null;
   return resolveCharacterData('subrace', race.subraces || [], storedName);
+};
+
+/** The stored name, trimmed, when it names anything at all. */
+const storedLabel = (value: unknown): string | null =>
+  normalizeCharacterDataKey(value) ? (value as string).trim() : null;
+
+const placeholderId = (label: string): string => `unknown-${normalizeCharacterDataKey(label)}`;
+
+/**
+ * Seed data and the client tables drift (The Reveler's `Satyr`, #2150). A race the client
+ * does not know still renders under its stored name, with no bonuses or traits, instead
+ * of leaving `character.race` null for every downstream reader to trip over.
+ */
+const placeholderRace = (label: string): CharacterRace => ({
+  id: placeholderId(label),
+  name: label,
+  description: '',
+  abilityScoreIncrease: {},
+  speed: 30,
+  traits: [],
+  languages: [],
+  subraces: [],
+});
+
+const placeholderBackground = (label: string): CharacterBackground => ({
+  id: placeholderId(label),
+  name: label,
+  description: '',
+  skillProficiencies: [],
+  toolProficiencies: [],
+  languages: 0,
+  equipment: [],
+  feature: { name: label, description: '' },
+});
+
+const resolveRace = (storedName: string | null | undefined): CharacterRace | null => {
+  const label = storedLabel(storedName);
+  if (!label) return null;
+  return resolveCharacterData('race', lookupRaces, label) ?? placeholderRace(label);
+};
+
+const resolveBackground = (storedName: string | null | undefined): CharacterBackground | null => {
+  const label = storedLabel(storedName);
+  if (!label) return null;
+  return (
+    resolveCharacterData('background', lookupBackgrounds, label) ?? placeholderBackground(label)
+  );
+};
+
+/**
+ * Stored names the client tables could not resolve, as short reasons the sheet can show
+ * ("Unknown race: Satyr"). Empty when every stored name resolved.
+ */
+export const findUnresolvedCharacterData = (
+  characterData: Pick<CharacterRow, 'race' | 'subrace' | 'class' | 'background'>,
+): string[] => {
+  const unresolved: string[] = [];
+  const race = storedLabel(characterData.race);
+  const subrace = storedLabel(characterData.subrace);
+  const characterClass = storedLabel(characterData.class);
+  const background = storedLabel(characterData.background);
+
+  const knownRace = race ? findCharacterData(lookupRaces, race) : undefined;
+  if (race && !knownRace) unresolved.push(`Unknown race: ${race}`);
+  if (knownRace && subrace && !findCharacterData(knownRace.subraces || [], subrace)) {
+    unresolved.push(`Unknown subrace: ${subrace}`);
+  }
+  if (characterClass && !findCharacterData(classes, characterClass)) {
+    unresolved.push(`Unknown class: ${characterClass}`);
+  }
+  if (background && !findCharacterData(lookupBackgrounds, background)) {
+    unresolved.push(`Unknown background: ${background}`);
+  }
+
+  return unresolved;
 };
 
 export const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {

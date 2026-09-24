@@ -68,12 +68,7 @@ export const backgrounds: CharacterBackground[] = [
     skillProficiencies: ['Deception', 'Sleight of Hand'],
     toolProficiencies: ['Disguise kit', 'Forgery kit'],
     languages: 0,
-    equipment: [
-      'Fine clothes',
-      'Disguise kit',
-      'Tools of the con of your choice',
-      '15 gp',
-    ],
+    equipment: ['Fine clothes', 'Disguise kit', 'Tools of the con of your choice', '15 gp'],
     feature: {
       name: 'False Identity',
       description:
@@ -84,7 +79,9 @@ export const backgrounds: CharacterBackground[] = [
       'Flattery is my preferred trick for getting what I want.',
     ],
     suggestedIdeals: ['Independence. I am a free spirit—no one tells me what to do.'],
-    suggestedBonds: ['I owe everything to my mentor—a horrible person who is probably rotting in jail somewhere.'],
+    suggestedBonds: [
+      'I owe everything to my mentor—a horrible person who is probably rotting in jail somewhere.',
+    ],
     suggestedFlaws: ["I can't resist swindling people who are more powerful than me."],
   },
   {
@@ -371,3 +368,44 @@ export const backgrounds: CharacterBackground[] = [
     ],
   },
 ];
+
+/**
+ * Backgrounds that starter premades use but the creation wizard does not offer
+ * (The Pact-Bound: Haunted One; The Seeker: Anthropologist — see
+ * supabase/migrations/20260103_seed_starter_character_templates.sql). Stored characters
+ * resolve against `lookupBackgrounds` so the sheet can show their feature (#2150).
+ */
+export const premadeOnlyBackgrounds: CharacterBackground[] = [
+  {
+    id: 'haunted-one',
+    name: 'Haunted One',
+    description:
+      'Something terrible from your past follows you still, and it has left you wary of the dark and the things that live in it.',
+    skillProficiencies: ['Investigation', 'Survival'],
+    toolProficiencies: [],
+    languages: 2,
+    equipment: ["Monster hunter's pack", 'Trinket of special significance', 'Common clothes'],
+    feature: {
+      name: 'Heart of Darkness',
+      description:
+        'Common folk recognise the shadow you carry and, when trouble comes, will offer you what help they can and even take up arms beside you.',
+    },
+  },
+  {
+    id: 'anthropologist',
+    name: 'Anthropologist',
+    description:
+      'You have spent your life studying other cultures, learning their customs, their languages and the stories they tell.',
+    skillProficiencies: ['Insight', 'Religion'],
+    toolProficiencies: [],
+    languages: 2,
+    equipment: ['Leather-bound diary', 'Ink and pen', "Traveler's clothes", 'Trinket', '10 gp'],
+    feature: {
+      name: 'Adept Linguist',
+      description:
+        'Given a little time listening to a language, you can make yourself understood to its speakers even without sharing a tongue.',
+    },
+  },
+];
+
+export const lookupBackgrounds: CharacterBackground[] = [...backgrounds, ...premadeOnlyBackgrounds];

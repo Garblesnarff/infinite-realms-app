@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previo
 import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 import {
+  findUnresolvedCharacterData,
   transformCharacterData,
   type CharacterRow,
   type CharacterStatsRow,
@@ -49,6 +50,11 @@ import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
  */
 export const useCharacterData = (characterId: string | undefined) => {
   const [character, setCharacter] = useState<Character | null>(null);
+  // Stored race/class/background names the client tables do not know ("Unknown race:
+  // Satyr"). The sheet still renders; these tell the reader why a section looks bare.
+  const [unresolvedData, setUnresolvedData] = useState<string[]>([]);
+  // The equipment request failed; the sheet renders without equipment and says so (#2150).
+  const [equipmentUnavailable, setEquipmentUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -87,6 +93,8 @@ export const useCharacterData = (characterId: string | undefined) => {
   const fetchCharacter = useCallback(async () => {
     if (!validateCharacterId(characterId)) return;
 
+    // Which step threw, so the toast and the log say more than "failed" (#2150).
+    let stage = 'fetching the character';
     try {
       setLoading(true);
 
@@ -132,6 +140,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         return;
       }
 
+      stage = 'reading the character data';
       // Extract character data and stats
       const characterRecord = Array.isArray(characterData) ? characterData[0] : characterData;
       const statsData = Array.isArray(characterRecord.character_stats)
@@ -150,12 +159,23 @@ export const useCharacterData = (characterId: string | undefined) => {
         equipmentData as CharacterEquipmentRow[] | null,
       );
 
+      const unresolved = findUnresolvedCharacterData(characterRecord as CharacterRow);
+      if (unresolved.length > 0) {
+        logger.warn('Character sheet rendering with unresolved character data', {
+          characterId,
+          unresolved,
+        });
+      }
+
+      setUnresolvedData(unresolved);
+      setEquipmentUnavailable(Boolean(equipmentResult.error));
       setCharacter(transformedCharacter);
     } catch (error) {
-      logger.error('Error fetching character:', error);
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.error(`Error ${stage}`, { characterId, stage, reason, error });
       toast({
-        title: 'Error',
-        description: 'Failed to load character data. Please try again.',
+        title: 'Failed to load character data',
+        description: `Error while ${stage}: ${reason}`,
         variant: 'destructive',
       });
       navigate('/app/characters');
@@ -173,9 +193,11 @@ export const useCharacterData = (characterId: string | undefined) => {
   return useMemo(
     () => ({
       character,
+      unresolvedData,
+      equipmentUnavailable,
       loading,
       refetch: fetchCharacter,
     }),
-    [character, loading, fetchCharacter],
+    [character, unresolvedData, equipmentUnavailable, loading, fetchCharacter],
   );
 };

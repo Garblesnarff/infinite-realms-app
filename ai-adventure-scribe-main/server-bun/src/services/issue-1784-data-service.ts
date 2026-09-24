@@ -255,7 +255,9 @@ export class Issue1784DataService {
       WHERE character_id = ${characterId}
       ORDER BY created_at NULLS LAST, id
     `;
-    return rows as unknown as CharacterEquipmentRow[];
+    // postgres.js resolves to a RowList (an Array subclass). Elysia <= 1.4.22 does not
+    // JSON-serialize a subclass and sends "[object Object]..." with status 200 (#2150).
+    return [...rows] as unknown as CharacterEquipmentRow[];
   }
 
   static async upsertCharacterEquipment(
@@ -367,7 +369,8 @@ export class Issue1784DataService {
       WHERE session_id = ${sessionId}
       ORDER BY created_at NULLS LAST, id
     `;
-    return rows as unknown as VoiceMappingRow[];
+    // Plain array for the same reason as getCharacterEquipment (#2150).
+    return [...rows] as unknown as VoiceMappingRow[];
   }
 
   static async upsertVoiceMapping(

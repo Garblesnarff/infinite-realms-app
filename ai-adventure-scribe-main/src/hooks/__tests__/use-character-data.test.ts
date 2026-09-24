@@ -34,14 +34,16 @@ vi.mock('@/utils/validation', () => ({
   isValidUUID: vi.fn(),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
+vi.mock('@/lib/logger', () => {
+  const logger = {
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
-  },
-}));
+  };
+  // data-transformers imports the default export.
+  return { logger, default: logger };
+});
 
 // Use the same path as in the source file for mocking sensitivity
 vi.mock('../lib/logger', () => ({
@@ -122,6 +124,7 @@ describe('useCharacterData', () => {
 
     expect(userDataApi.getCharacter).toHaveBeenCalledWith(mockCharacterId);
     expect(issue1784Api.getCharacterEquipment).toHaveBeenCalledWith(mockCharacterId);
+    expect(result.current.equipmentUnavailable).toBe(false);
   });
 
   it('should handle invalid character ID UUID', async () => {
@@ -175,11 +178,89 @@ describe('useCharacterData', () => {
     renderHook(() => useCharacterData(mockCharacterId));
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/app/characters'));
+    // #2150: the real reason reaches the toast and the log, not a catch-all string.
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Error',
+        title: 'Failed to load character data',
+        description: 'Error while fetching the character: Supabase error',
       }),
     );
+    expect(logger.error).toHaveBeenCalledWith(
+      'Error fetching the character',
+      expect.objectContaining({
+        characterId: mockCharacterId,
+        reason: 'Supabase error',
+        error: expect.any(Error),
+      }),
+    );
+  });
+
+  it('names the stage when reading the payload throws (#2150)', async () => {
+    // A payload whose field access throws partway through the transform.
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(
+      new Proxy(
+        { id: mockCharacterId, name: 'Broken', race: 'Human', class: 'Fighter', level: 1 },
+        {
+          get: (target: Record<string, unknown>, prop: string) => {
+            if (prop === 'cantrips') throw new TypeError('cantrips is unreadable');
+            return target[prop];
+          },
+        },
+      ),
+    );
+
+    renderHook(() => useCharacterData(mockCharacterId));
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'Error while reading the character data: cantrips is unreadable',
+        }),
+      ),
+    );
+  });
+
+  it('reports stored names the client tables do not know (#2150)', async () => {
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue({
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name: 'The Reveler',
+      race: 'Starborn Owlkin',
+      class: 'Barbarian',
+      level: 1,
+      character_stats: [],
+    });
+
+    const { result } = renderHook(() => useCharacterData(mockCharacterId));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.character?.race?.name).toBe('Starborn Owlkin');
+    expect(result.current.unresolvedData).toEqual(['Unknown race: Starborn Owlkin']);
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it('loads the character without equipment when the equipment request fails (#2150)', async () => {
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue({
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name: 'The Reveler',
+      race: 'Human',
+      class: 'Barbarian',
+      level: 1,
+      character_stats: [],
+    });
+    vi.mocked(issue1784Api.getCharacterEquipment).mockRejectedValue(
+      new Error('Unparseable response body from /v1/characters/x/equipment'),
+    );
+
+    const { result } = renderHook(() => useCharacterData(mockCharacterId));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.character?.name).toBe('The Reveler');
+    expect(result.current.character?.equipment).toEqual([]);
+    expect(result.current.equipmentUnavailable).toBe(true);
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('should handle character data as an array from Supabase', async () => {

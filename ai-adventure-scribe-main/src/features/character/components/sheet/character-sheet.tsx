@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import CharacterSheetTabs from './character-sheet-tabs';
 
 import { CharacterSheetSkeleton } from '@/components/skeletons/CharacterSheetSkeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IRPanel } from '@/components/ui/ir-primitives';
 import { useCharacterData } from '@/hooks/use-character-data';
 
@@ -14,7 +15,8 @@ import { useCharacterData } from '@/hooks/use-character-data';
  */
 const CharacterSheet: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { character, loading, refetch } = useCharacterData(id);
+  const { character, unresolvedData, equipmentUnavailable, loading, refetch } =
+    useCharacterData(id);
 
   // Show loading state while fetching data
   if (loading) {
@@ -28,6 +30,21 @@ const CharacterSheet: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {unresolvedData.length > 0 && (
+        <Alert className="mb-4" data-testid="character-unresolved-data">
+          <AlertDescription>
+            {unresolvedData.join('. ')}. Showing the stored name with default traits.
+          </AlertDescription>
+        </Alert>
+      )}
+      {equipmentUnavailable && (
+        <Alert className="mb-4" data-testid="character-equipment-unavailable">
+          <AlertDescription>
+            Equipment unavailable: this character&apos;s equipment could not be loaded. The rest of
+            the sheet is shown.
+          </AlertDescription>
+        </Alert>
+      )}
       <IRPanel className="p-6">
         <CharacterSheetTabs character={character} onCharacterUpdate={refetch} />
       </IRPanel>
