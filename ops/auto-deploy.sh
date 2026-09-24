@@ -18,6 +18,8 @@ set -euo pipefail
 # While that file exists this script does nothing and exits 0; `rm` it to
 # resume. A hold older than 3h pages Slack so a forgotten one cannot silently
 # stop prod from tracking main. See the "deploy hold" block below.
+# An unmatched "run N started" comment on #2093 under 3h old holds the same
+# way; see the "open stranger-test run" block.
 #
 # cron runs with a minimal PATH that lacks bun (/root/.bun/bin). Without this,
 # the deploy advances git via `git reset --hard` but dies at `bun install`
@@ -234,6 +236,65 @@ if [ -e "$HOLD_FILE" ]; then
   exit 0
 fi
 record_state hold ok ""
+
+# --- open stranger-test run (added 2026-09-22, #2093) -------------------------
+# The HOLD file only works if Playtest remembers to `touch` it. Playtest always
+# posts "run N started" / "run N ended" on #2093, so read those comments too:
+# a started run with no later matching "ended", started under
+# RUN_HOLD_MAX_AGE_SECONDS ago, is treated exactly like HOLD. Older than that it
+# is assumed to be a forgotten "ended" and ignored, so a missed comment cannot
+# stop prod tracking main.
+#
+# Uses the box's existing `gh` login; the token never leaves gh. If GitHub
+# cannot be read the deploy proceeds (the HOLD file is still the primary
+# control) and the failure pages through record_state, rate-limited like
+# everything else.
+RUN_ISSUE=${DEPLOY_RUN_ISSUE:-2093}
+RUN_REPO=${DEPLOY_RUN_REPO:-Garblesnarff/infinite-realms-production}
+RUN_HOLD_MAX_AGE_SECONDS=${DEPLOY_RUN_HOLD_MAX_AGE_SECONDS:-10800}
+GH_BIN=${DEPLOY_GH_BIN:-gh}
+
+# Prints "<N>\t<started epoch>\t<first line of the started comment>" for the
+# newest run with no later "ended", or nothing. One comment may carry several
+# markers (e.g. "run 8 ended, run 9 started"), so match globally. Run ids may
+# carry one letter prefix (Muse posts "run M2 started"); the id is upper-cased
+# so "run M2 started" pairs with "run m2 ended". Fixtures:
+# ops/tests/open-run-markers.sh.
+open_run() {
+  "$GH_BIN" api --paginate "repos/$RUN_REPO/issues/$RUN_ISSUE/comments?per_page=100" |
+    jq -rs '
+      add
+      | map(. as $c
+          | ($c.body // "") | capture("\\brun\\s+#?(?<n>[A-Za-z]?[0-9]+)\\s+(?<ev>started|ended)\\b"; "gi")
+          | {n: (.n | ascii_upcase), ev: (.ev | ascii_downcase), at: ($c.created_at | fromdateiso8601),
+             line: (($c.body // "") | split("\n")[0] | .[0:200])})
+      | group_by(.n)
+      | map({s: (map(select(.ev == "started")) | max_by(.at)),
+             e: (map(select(.ev == "ended") | .at) | max)})
+      | map(select(.s != null and (.e == null or .e < .s.at)) | .s)
+      | max_by(.at)
+      | if . == null then empty else "\(.n)\t\(.at)\t\(.line)" end'
+}
+
+if RUN_OPEN=$(open_run 2>/dev/null); then
+  record_state run_check ok ""
+  if [ -n "$RUN_OPEN" ]; then
+    IFS=$'\t' read -r RUN_N RUN_AT RUN_LINE <<< "$RUN_OPEN"
+    RUN_AGE=$(( $(date +%s) - RUN_AT ))
+    if [ "$RUN_AGE" -lt "$RUN_HOLD_MAX_AGE_SECONDS" ]; then
+      echo "$(ts) Held: run $RUN_N in progress (started $(( RUN_AGE / 60 ))m ago on #$RUN_ISSUE: $RUN_LINE). No fetch, no build, no restart."
+      if [ "$DEPLOY_FORCE" = 1 ]; then
+        echo "$(ts) Refusing --deploy-now: run $RUN_N has no \"run $RUN_N ended\" comment on #$RUN_ISSUE."
+        exit 1
+      fi
+      exit 0
+    fi
+    echo "$(ts) Ignoring run $RUN_N: started $(( RUN_AGE / 60 ))m ago with no \"ended\" comment (older than ${RUN_HOLD_MAX_AGE_SECONDS}s)."
+  fi
+else
+  echo "$(ts) WARNING: could not read run comments on #$RUN_ISSUE; proceeding on the HOLD file alone."
+  record_state run_check fail "could not read #$RUN_ISSUE comments via gh; open stranger-test runs are NOT being detected"
+fi
 
 PREV_HEAD=$(git rev-parse HEAD)
 

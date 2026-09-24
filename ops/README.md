@@ -59,6 +59,28 @@ rate-limited Slack alert, because a forgotten hold is indistinguishable from a
 healthy quiet deploy log — that is the shape of the 2026-05-12 drift. Removing
 the file clears the alert to RECOVERED.
 
+### Open run on #2093
+
+The HOLD file only works if Playtest remembers to `touch` it, so the script
+also reads #2093's comments (via the box's existing `gh` login; the token is
+never printed). The newest `run N started` with no later `run N ended` is
+treated exactly like HOLD if it is under `DEPLOY_RUN_HOLD_MAX_AGE_SECONDS`
+(default 10800 = 3h) old: it logs `Held: run N in progress (...)` with the
+comment's first line (session id, bundle) and exits 0, and `--deploy-now` exits
+1. An unmatched `started` older than that is logged as `Ignoring run N` and the
+deploy proceeds, so a forgotten `ended` cannot stall prod past 3h.
+
+Run ids are digits with an optional one-letter prefix (`run 9`, Muse's
+`run M3`), matched case-insensitively; `run M2 started` pairs with
+`run m2 ended`. Markers are matched anywhere in a comment, so a prose mention
+of "run 9 started" on #2093 arms a 3h hold: keep those words to the testers'
+own marker comments. Fixture cases: `bash ops/tests/open-run-markers.sh`
+(needs only bash + jq).
+
+If GitHub cannot be read, the deploy proceeds on the HOLD file alone and a
+rate-limited `run_check` alert fires. Overrides: `DEPLOY_RUN_ISSUE`,
+`DEPLOY_RUN_REPO`, `DEPLOY_RUN_HOLD_MAX_AGE_SECONDS`, `DEPLOY_GH_BIN`.
+
 ## Rollback of the publish step
 
 Before publishing, the live `dist/` is hardlink-snapshotted to
