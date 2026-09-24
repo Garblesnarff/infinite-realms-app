@@ -1,5 +1,7 @@
 import { DiceRoll } from '@dice-roller/rpg-dice-roller';
 
+import { parseLibraryRoll } from './parse-library-roll';
+
 import type { Character } from '@/types/character';
 
 import { calculateProficiencyBonus } from '@/utils/character/basic-math';
@@ -56,34 +58,19 @@ export class DiceEngine {
     }
 
     const roll = new DiceRoll(finalExpression);
-
-    // Extract individual die results
-    const rolls = [];
-    let naturalRoll: number | undefined;
-
-    // Parse the roll output to extract individual dice
-    for (const die of roll.rolls) {
-      if (die.sides === 20 && rolls.length === 0) {
-        naturalRoll = die.value;
-      }
-      rolls.push({
-        dice: die.sides,
-        value: die.value,
-        critical: die.sides === 20 && (die.value === 20 || die.value === 1),
-      });
-    }
-
-    // Determine if this is a critical hit/miss for d20 rolls
-    const isCritical = naturalRoll === 20;
+    const rolls = parseLibraryRoll(roll.rolls, finalExpression);
+    const naturalRoll = rolls.find((face) => face.dice === 20)?.value;
+    const diceSum = rolls.reduce((sum, face) => sum + face.value, 0);
+    const modifiers = rolls.length > 0 ? roll.total - diceSum : 0;
 
     return {
       expression: finalExpression,
       total: roll.total,
       rolls,
-      modifiers: roll.total - rolls.reduce((sum, r) => sum + r.value, 0),
+      modifiers,
       advantage: (advantage && !disadvantage) || false,
       disadvantage: (disadvantage && !advantage) || false,
-      critical: isCritical,
+      critical: naturalRoll === 20,
       naturalRoll,
       timestamp: Date.now(),
       purpose,

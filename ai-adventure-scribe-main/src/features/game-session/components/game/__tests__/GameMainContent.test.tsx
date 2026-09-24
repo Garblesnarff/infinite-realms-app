@@ -8,6 +8,13 @@ const state = vi.hoisted(() => ({
   queueStatus: 'idle',
   hasPendingRolls: false,
   pendingRequests: [] as Array<{ type: string; purpose?: string }>,
+  currentRoll: null as null | {
+    id: string;
+    status: 'pending' | 'completed' | 'cancelled';
+    description: string;
+    purpose?: string;
+    requestType: string;
+  },
   lastChapterLabel: undefined as string | undefined,
   combatTurnUiState: {
     holder: null as string | null,
@@ -20,6 +27,19 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({ queueStatus: state.queueStatus }),
+}));
+vi.mock('@/contexts/GameContext', () => ({
+  useGame: () => ({
+    state: {
+      diceRollQueue: {
+        pendingRolls: state.currentRoll ? [state.currentRoll] : [],
+        currentRollId: state.currentRoll?.id,
+        isProcessingRoll: false,
+        completedBatchRolls: [],
+      },
+    },
+    getCurrentDiceRoll: () => state.currentRoll,
+  }),
 }));
 vi.mock('@/hooks/use-pending-rolls', () => ({
   usePendingRolls: () => ({
@@ -139,6 +159,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.queueStatus = 'idle';
     state.hasPendingRolls = false;
     state.pendingRequests = [];
+    state.currentRoll = null;
     state.lastChapterLabel = undefined;
     state.combatTurnUiState = {
       holder: null,
@@ -194,6 +215,28 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByTestId('chat-input')).not.toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Resume turn' })).toBeNull();
+  });
+
+  it('shows the dice-queue attack on the roll pill ahead of the combat checking pill', () => {
+    state.currentRoll = {
+      id: 'attack-1',
+      status: 'pending',
+      requestType: 'attack',
+      description: 'Longsword attack vs …',
+    };
+    state.combatTurnUiState = {
+      holder: null,
+      pendingIntent: null,
+      preflight: 'running',
+      error: undefined,
+    };
+
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
+    expect(screen.queryByText('Checking whose turn it is…')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume turn' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
   });
 
   it('shows Resume turn for an unknown holder and reruns the recovery preflight', () => {

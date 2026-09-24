@@ -2,6 +2,7 @@ import { Dice6, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
 import { GamePanelControls } from './GamePanelControls';
+import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
 import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
@@ -22,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
+import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { usePendingRolls } from '@/hooks/use-pending-rolls';
 import { stripAssetTags } from '@/lib/utils';
@@ -93,7 +95,19 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
   }) => {
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
     const { queueStatus } = useMessageContext();
+    const { state: gameState, getCurrentDiceRoll } = useGame();
     const { hasPendingRolls, pendingRequests } = usePendingRolls();
+    const queuedRoll = currentQueueRoll(gameState.diceRollQueue, getCurrentDiceRoll());
+    const queuedLabel = queuedRoll ? queueRollLabel(queuedRoll) : null;
+    const chatRollLabel = hasPendingRolls
+      ? pendingRequests.length === 1
+        ? pendingRequests[0].purpose || pendingRequests[0].type
+        : `${pendingRequests.length} pending rolls`
+      : null;
+    // The dice queue is the combat source of truth. It wins over a chat-parsed
+    // request and over the "Checking whose turn it is…" bar.
+    const rollPillLabel = queuedLabel ?? chatRollLabel;
+    const rollBlocksInput = Boolean(queuedRoll) || hasPendingRolls;
     const sceneBlurb = stripAssetTags(sessionData.current_scene_description || '');
     const overhaul = useOverhaulViewModel({
       chapterLabel: resolveCampaignChapterLabel(sessionData.turn_count),
@@ -249,7 +263,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   )}
 
                   {/* Roll requests take priority over the generic processing status. */}
-                  {hasPendingRolls ? (
+                  {rollPillLabel ? (
                     <div
                       className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
                       style={{ zIndex: Z_INDEX.DROPDOWN }}
@@ -262,10 +276,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           aria-hidden="true"
                         />
                         <span className="text-sm font-semibold text-orange-800">
-                          Your roll:{' '}
-                          {pendingRequests.length === 1
-                            ? pendingRequests[0].purpose || pendingRequests[0].type
-                            : `${pendingRequests.length} pending rolls`}
+                          Your roll: {rollPillLabel}
                         </span>
                         <Badge variant="warning" className="animate-pulse">
                           Roll required
@@ -309,35 +320,38 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     </div>
                   )}
 
-                  {(['unknown', 'failed', 'running'] as CombatTurnPreflightStatus[]).includes(
-                    combatTurnUiState.preflight,
-                  ) && (
-                    <div
-                      className="border-t border-amber-200 bg-amber-50 p-3"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      <div className="flex items-center justify-between gap-3 text-amber-800">
-                        <span className="text-sm font-medium">
-                          {combatTurnUiState.preflight === 'running'
-                            ? 'Checking whose turn it is…'
-                            : combatTurnUiState.preflight === 'failed'
-                              ? `Combat turn refresh failed: ${combatTurnUiState.error ?? 'Unknown error.'}`
-                              : 'Combat turn state needs to be refreshed.'}
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          aria-label="Resume turn"
-                          onClick={() => void onResumeTurn()}
-                          disabled={combatTurnUiState.preflight === 'running'}
-                        >
-                          {combatTurnUiState.preflight === 'running' ? 'Resuming…' : 'Resume turn'}
-                        </Button>
+                  {!rollPillLabel &&
+                    (['unknown', 'failed', 'running'] as CombatTurnPreflightStatus[]).includes(
+                      combatTurnUiState.preflight,
+                    ) && (
+                      <div
+                        className="border-t border-amber-200 bg-amber-50 p-3"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <div className="flex items-center justify-between gap-3 text-amber-800">
+                          <span className="text-sm font-medium">
+                            {combatTurnUiState.preflight === 'running'
+                              ? 'Checking whose turn it is…'
+                              : combatTurnUiState.preflight === 'failed'
+                                ? `Combat turn refresh failed: ${combatTurnUiState.error ?? 'Unknown error.'}`
+                                : 'Combat turn state needs to be refreshed.'}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            aria-label="Resume turn"
+                            onClick={() => void onResumeTurn()}
+                            disabled={combatTurnUiState.preflight === 'running'}
+                          >
+                            {combatTurnUiState.preflight === 'running'
+                              ? 'Resuming…'
+                              : 'Resume turn'}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {/* Input Area at bottom - sticky */}
                   <div
@@ -349,7 +363,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       isReconnecting={isReconnecting}
                       isDisabled={
                         isProcessing ||
-                        hasPendingRolls ||
+                        rollBlocksInput ||
                         combatTurnUiState.preflight === 'unknown' ||
                         combatTurnUiState.preflight === 'failed' ||
                         combatTurnUiState.preflight === 'running'

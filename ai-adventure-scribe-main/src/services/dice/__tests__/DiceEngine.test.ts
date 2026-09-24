@@ -13,8 +13,8 @@ describe('DiceEngine', () => {
       constitution: { score: 12, modifier: 1 },
       intelligence: { score: 10, modifier: 0 },
       wisdom: { score: 8, modifier: -1 },
-      charisma: { score: 11, modifier: 0 }
-    }
+      charisma: { score: 11, modifier: 0 },
+    },
   } as Character;
 
   beforeEach(() => {
@@ -28,7 +28,24 @@ describe('DiceEngine', () => {
       expect(result.expression).toBe('1d20+5');
       expect(result.total).toBeGreaterThanOrEqual(6);
       expect(result.total).toBeLessThanOrEqual(25);
-      expect(result.rolls.length).toBeGreaterThanOrEqual(1);
+      expect(result.rolls).toHaveLength(1);
+      expect(result.rolls[0].dice).toBe(20);
+      expect(result.modifiers).toBe(5);
+      expect(result.naturalRoll).toBe(result.rolls[0].value);
+      expect(result.total).toBe(result.rolls[0].value + result.modifiers);
+    });
+
+    it('separates a 1d20+4 face from its modifier instead of reporting +0', () => {
+      const result = DiceEngine.roll('1d20+4');
+      expect(result.modifiers).toBe(4);
+      expect(result.rolls).toHaveLength(1);
+      expect(result.total).toBe((result.naturalRoll ?? 0) + 4);
+    });
+
+    it('keeps a negative modifier on the die face', () => {
+      const result = DiceEngine.roll('1d20-2');
+      expect(result.modifiers).toBe(-2);
+      expect(result.total).toBe((result.naturalRoll ?? 0) - 2);
     });
 
     it('should handle advantage on d20 rolls', () => {
@@ -127,13 +144,17 @@ describe('DiceEngine', () => {
     });
 
     it('should honor preferredAbility for finesse weapons', () => {
-      const formula = DiceEngine.getWeaponDamageFormula('rapier', mockCharacter as Character, 'dex');
+      const formula = DiceEngine.getWeaponDamageFormula(
+        'rapier',
+        mockCharacter as Character,
+        'dex',
+      );
       expect(formula).toBe('1d8+2');
     });
 
     it('should handle negative modifiers', () => {
       const weakChar = {
-        abilityScores: { strength: { modifier: -2 } }
+        abilityScores: { strength: { modifier: -2 } },
       } as Character;
       const formula = DiceEngine.getWeaponDamageFormula('club', weakChar);
       expect(formula).toBe('1d4-2');
@@ -141,7 +162,7 @@ describe('DiceEngine', () => {
 
     it('should handle zero modifiers', () => {
       const avgChar = {
-        abilityScores: { strength: { modifier: 0 } }
+        abilityScores: { strength: { modifier: 0 } },
       } as Character;
       const formula = DiceEngine.getWeaponDamageFormula('club', avgChar);
       expect(formula).toBe('1d4');
@@ -190,13 +211,21 @@ describe('DiceEngine', () => {
 
   describe('createDamageRollRequest', () => {
     it('should create normal damage request', () => {
-      const request = DiceEngine.createDamageRollRequest('longsword', false, mockCharacter as Character);
+      const request = DiceEngine.createDamageRollRequest(
+        'longsword',
+        false,
+        mockCharacter as Character,
+      );
       expect(request.formula).toBe('1d8+3');
       expect(request.purpose).toBe('Damage roll for longsword');
     });
 
     it('should create critical damage request', () => {
-      const request = DiceEngine.createDamageRollRequest('longsword', true, mockCharacter as Character);
+      const request = DiceEngine.createDamageRollRequest(
+        'longsword',
+        true,
+        mockCharacter as Character,
+      );
       expect(request.formula).toBe('2d8+3');
       expect(request.purpose).toBe('Critical damage roll for longsword');
     });
@@ -206,7 +235,7 @@ describe('DiceEngine', () => {
     it('should identify critical hit', () => {
       const mockResult = {
         naturalRoll: 20,
-        rolls: [{ dice: 20, value: 20 }]
+        rolls: [{ dice: 20, value: 20 }],
       } as unknown as Parameters<typeof DiceEngine.isCriticalHit>[0];
       expect(DiceEngine.isCriticalHit(mockResult)).toBe(true);
       expect(DiceEngine.isCriticalMiss(mockResult)).toBe(false);
@@ -215,18 +244,21 @@ describe('DiceEngine', () => {
     it('should identify critical miss', () => {
       const mockResult = {
         naturalRoll: 1,
-        rolls: [{ dice: 20, value: 1 }]
+        rolls: [{ dice: 20, value: 1 }],
       } as unknown as Parameters<typeof DiceEngine.isCriticalMiss>[0];
       expect(DiceEngine.isCriticalHit(mockResult)).toBe(false);
       expect(DiceEngine.isCriticalMiss(mockResult)).toBe(true);
     });
 
     it('should return false if natural roll is not 20/1 even if some dice is', () => {
-        const mockResult = {
-          naturalRoll: 19,
-          rolls: [{ dice: 20, value: 19 }, { dice: 6, value: 6 }]
-        } as unknown as Parameters<typeof DiceEngine.isCriticalHit>[0];
-        expect(DiceEngine.isCriticalHit(mockResult)).toBe(false);
+      const mockResult = {
+        naturalRoll: 19,
+        rolls: [
+          { dice: 20, value: 19 },
+          { dice: 6, value: 6 },
+        ],
+      } as unknown as Parameters<typeof DiceEngine.isCriticalHit>[0];
+      expect(DiceEngine.isCriticalHit(mockResult)).toBe(false);
     });
   });
 
@@ -246,7 +278,7 @@ describe('DiceEngine', () => {
     it('should cancel out when both exist', () => {
       const sources = [
         { advantage: true, source: 'vow' },
-        { disadvantage: true, source: 'blind' }
+        { disadvantage: true, source: 'blind' },
       ];
       const result = DiceEngine.resolveAdvantage(sources);
       expect(result).toEqual({ advantage: false, disadvantage: false, canceledOut: true });

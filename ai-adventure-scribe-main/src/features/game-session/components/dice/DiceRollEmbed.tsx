@@ -4,6 +4,7 @@ import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Play, Volume2, AlertCircle } 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 import { Dice3DSection } from './Dice3DSection';
+import { formatRollBreakdown } from './format-roll-breakdown';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -299,14 +300,13 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                 </motion.div>
               )}
 
-              {/* Modifiers */}
-              {result.modifiers !== 0 && (
-                <motion.div variants={cardItem} className="text-xs text-gray-600">
-                  Base: {(result.total || 0) - (result.modifiers || 0)}{' '}
-                  {(result.modifiers || 0) >= 0 ? '+' : ''}
-                  {result.modifiers || 0}
-                </motion.div>
-              )}
+              <motion.div
+                variants={cardItem}
+                className="text-xs text-gray-600"
+                data-testid="roll-breakdown"
+              >
+                {formatRollBreakdown(result)}
+              </motion.div>
 
               {/* Natural Roll for d20s */}
               {result.naturalRoll && (
