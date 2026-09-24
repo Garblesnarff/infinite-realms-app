@@ -9,11 +9,20 @@
  * Character-card manifest rows must use the starter template_key as the entity
  * slug; display names are not stable identifiers for this template-scoped asset.
  *
+ * --check-links is a read-only mode that runs the real matching logic against
+ * the database and writes nothing: no storage upload, no DB update. It needs
+ * the same Supabase credentials as --apply. For each manifest row it prints
+ * LINK <campaign>/<type>/<slug> -> N rows or NO MATCH <campaign>/<type>/<slug>
+ * (with the nearest real slugs of that type as hints for a human — never an
+ * automatic fallback), prints a summary, and exits non-zero when any row has
+ * no match, so it can gate an art delivery before --apply.
+ *
  * Usage:
  *   bun scripts/upload-campaign-assets.ts <source-dir>
  *   bun scripts/upload-campaign-assets.ts <source-dir> --apply
  *   bun scripts/upload-campaign-assets.ts <source-dir> --apply --force
  *   bun scripts/upload-campaign-assets.ts <source-dir> --campaign=abyssal-descent
+ *   bun scripts/upload-campaign-assets.ts <source-dir> --check-links
  */
 
 import { readFile, stat } from 'node:fs/promises';
@@ -62,6 +71,7 @@ export interface CliOptions {
   campaignFilter?: string;
   dryRun: boolean;
   force: boolean;
+  checkLinks: boolean;
 }
 
 export interface UploadSummary {
@@ -174,7 +184,7 @@ const CHUNK_TYPES_BY_ASSET_TYPE: Record<
   scene: ['scene', 'encounter', 'session_outline'],
 };
 
-const USAGE = `Usage: bun scripts/upload-campaign-assets.ts <source-dir> [--apply] [--force] [--campaign=<slug>]`;
+const USAGE = `Usage: bun scripts/upload-campaign-assets.ts <source-dir> [--apply] [--force] [--campaign=<slug>] [--check-links]`;
 
 function normalizeHeader(value: string): string {
   return value
@@ -419,6 +429,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let campaignFilter: string | undefined;
   let force = false;
   let apply = false;
+  let checkLinks = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -434,6 +445,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       apply = true;
     } else if (argument === '--dry-run') {
       apply = false;
+    } else if (argument === '--check-links') {
+      checkLinks = true;
     } else if (argument.startsWith('--campaign=')) {
       campaignFilter = normalizeManifestSlug(
         argument.slice('--campaign='.length),
@@ -449,7 +462,11 @@ export function parseCliArgs(argv: string[]): CliOptions {
     }
   }
 
-  return { sourceDir, campaignFilter, dryRun: !apply, force };
+  if (apply && checkLinks) {
+    throw new Error('Cannot combine --apply with --check-links: check-links is read-only');
+  }
+
+  return { sourceDir, campaignFilter, dryRun: !apply, force, checkLinks };
 }
 
 export function getSupabaseConfig(env: NodeJS.ProcessEnv = process.env): SupabaseConfig {
@@ -536,21 +553,34 @@ function metadataWithImageUrl(metadata: unknown, publicUrl: string): Record<stri
   return { ...existing, image_url: publicUrl };
 }
 
-async function linkAsset(
-  client: SupabaseClient,
-  asset: CampaignAsset,
+/** A database row that an asset would be linked to. Pure data: no client, no writes. */
+export type LinkTarget =
+  | { kind: 'chunk'; row: ChunkRow }
+  | { kind: 'campaign'; row: CampaignRow }
+  | { kind: 'template'; row: CharacterTemplateRow };
+
+/** Which preloaded DB rows the matcher needs for an asset type. */
+function linkDataKind(type: CampaignAssetType): 'chunks' | 'templates' | 'campaign' {
+  if (type === 'card' || type === 'banner') return 'campaign';
+  if (type === 'portrait' || type === 'character_card') return 'templates';
+  return 'chunks';
+}
+
+/**
+ * Pure matcher: given an asset, its campaign row, and the preloaded chunk /
+ * template rows for that campaign, return the rows the asset would link to.
+ * Throws the same no-match errors --apply relies on, so --check-links and
+ * --apply share one matcher and cannot drift apart.
+ */
+export function findLinkTargets(
+  asset: ManifestAsset,
   campaign: CampaignRow,
-  chunks: ChunkRow[] | undefined,
-  templates: CharacterTemplateRow[] | undefined,
-): Promise<number> {
+  chunks?: ChunkRow[],
+  templates?: CharacterTemplateRow[],
+): LinkTarget[] {
   if (asset.type === 'card' || asset.type === 'banner') {
-    const column = asset.type === 'card' ? 'cover_image_url' : 'banner_image_url';
-    const { error } = await client
-      .from('starter_campaigns')
-      .update({ [column]: asset.publicUrl })
-      .eq('id', campaign.id);
-    if (error) throw new Error(`Could not update ${column}: ${errorMessage(error)}`);
-    return 1;
+    // The campaign row itself is the target; findCampaign already proved it exists.
+    return [{ kind: 'campaign', row: campaign }];
   }
 
   if (asset.type === 'portrait' || asset.type === 'character_card') {
@@ -565,18 +595,7 @@ async function linkAsset(
         `No starter_character_templates row for ${campaign.slug}/${asset.entitySlug}`,
       );
     }
-
-    for (const template of matches) {
-      const column = asset.type === 'portrait' ? 'portrait_url' : 'card_image_url';
-      const { error } = await client
-        .from('starter_character_templates')
-        .update({ [column]: asset.publicUrl })
-        .eq('id', template.id);
-      if (error) {
-        throw new Error(`Could not update ${column} for ${template.name}: ${errorMessage(error)}`);
-      }
-    }
-    return matches.length;
+    return matches.map((row) => ({ kind: 'template', row }) as const);
   }
 
   const matches = (chunks || []).filter(
@@ -590,19 +609,55 @@ async function linkAsset(
       `No campaign_chunks row for ${campaign.slug}/${asset.type}/${asset.entitySlug}`,
     );
   }
+  return matches.map((row) => ({ kind: 'chunk', row }) as const);
+}
 
-  for (const chunk of matches) {
+async function linkAsset(
+  client: SupabaseClient,
+  asset: CampaignAsset,
+  campaign: CampaignRow,
+  chunks: ChunkRow[] | undefined,
+  templates: CharacterTemplateRow[] | undefined,
+): Promise<number> {
+  const targets = findLinkTargets(asset, campaign, chunks, templates);
+
+  for (const target of targets) {
+    if (target.kind === 'campaign') {
+      const column = asset.type === 'card' ? 'cover_image_url' : 'banner_image_url';
+      const { error } = await client
+        .from('starter_campaigns')
+        .update({ [column]: asset.publicUrl })
+        .eq('id', target.row.id);
+      if (error) throw new Error(`Could not update ${column}: ${errorMessage(error)}`);
+      continue;
+    }
+
+    if (target.kind === 'template') {
+      const column = asset.type === 'portrait' ? 'portrait_url' : 'card_image_url';
+      const { error } = await client
+        .from('starter_character_templates')
+        .update({ [column]: asset.publicUrl })
+        .eq('id', target.row.id);
+      if (error) {
+        throw new Error(
+          `Could not update ${column} for ${target.row.name}: ${errorMessage(error)}`,
+        );
+      }
+      continue;
+    }
+
     const { error } = await client
       .from('campaign_chunks')
-      .update({ metadata: metadataWithImageUrl(chunk.metadata, asset.publicUrl) })
-      .eq('id', chunk.id);
+      .update({ metadata: metadataWithImageUrl(target.row.metadata, asset.publicUrl) })
+      .eq('id', target.row.id);
     if (error) {
       throw new Error(
-        `Could not update image_url for ${chunk.entity_name}: ${errorMessage(error)}`,
+        `Could not update image_url for ${target.row.entity_name}: ${errorMessage(error)}`,
       );
     }
   }
-  return matches.length;
+
+  return targets.length;
 }
 
 async function storageObjectExists(
@@ -628,6 +683,169 @@ async function uploadObject(
     upsert: true,
   });
   if (error) throw new Error(`Could not upload ${asset.storagePath}: ${errorMessage(error)}`);
+}
+
+function levenshteinDistance(first: string, second: string): number {
+  if (first === second) return 0;
+  const previous = Array.from({ length: second.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= first.length; row += 1) {
+    let diagonal = previous[0];
+    previous[0] = row;
+    for (let column = 1; column <= second.length; column += 1) {
+      const saved = previous[column];
+      previous[column] = Math.min(
+        previous[column] + 1,
+        previous[column - 1] + 1,
+        diagonal + (first[row - 1] === second[column - 1] ? 0 : 1),
+      );
+      diagonal = saved;
+    }
+  }
+  return previous[second.length];
+}
+
+/**
+ * Nearest real slugs to a miss, for human hints only. Never an automatic
+ * fallback: the caller prints these, the matcher never acts on them.
+ */
+export function nearestRealSlugs(candidates: string[], target: string, limit = 3): string[] {
+  const unique = [...new Set(candidates)].filter((candidate) => candidate.length > 0);
+  return unique
+    .map((candidate) => ({ candidate, distance: levenshteinDistance(target, candidate) }))
+    .sort(
+      (first, second) =>
+        first.distance - second.distance || first.candidate.localeCompare(second.candidate),
+    )
+    .slice(0, limit)
+    .map((entry) => entry.candidate);
+}
+
+/** Real slugs of the same type that a manifest slug failed to match, for hints. */
+function candidateSlugsForHints(
+  type: CampaignAssetType,
+  chunks: ChunkRow[] | undefined,
+  templates: CharacterTemplateRow[] | undefined,
+): string[] {
+  const linkData = linkDataKind(type);
+  if (linkData === 'chunks') {
+    return (chunks || []).flatMap((chunk) =>
+      chunkMatchesAssetType(chunk, type) && chunk.entity_name !== null
+        ? [slugForLookup(chunk.entity_name)]
+        : [],
+    );
+  }
+  if (linkData === 'templates') {
+    return (templates || []).flatMap((template) => {
+      const slugs = [slugForLookup(template.template_key)];
+      if (type === 'portrait') slugs.push(slugForLookup(template.name));
+      return slugs;
+    });
+  }
+  return [];
+}
+
+export function isCampaignMissingError(error: unknown): boolean {
+  return errorMessage(error).startsWith('No starter_campaigns row exists');
+}
+
+export interface CheckLinksOptions {
+  sourceDir: string;
+  campaignFilter?: string;
+  /** Authenticated client; --check-links never calls update() or storage.upload(). */
+  client: SupabaseClient;
+}
+
+export interface CheckLinksSummary {
+  total: number;
+  linked: number;
+  noMatch: number;
+  campaignNotFound: number;
+  failed: number;
+}
+
+/**
+ * Read-only link check: runs the same matcher --apply uses against the real
+ * database and writes nothing. Prints LINK / NO MATCH per manifest row and a
+ * summary; callers should exit non-zero when anything missed.
+ */
+export async function runCheckLinks(options: CheckLinksOptions): Promise<CheckLinksSummary> {
+  const sourceDir = resolve(options.sourceDir);
+  const manifestPath = join(sourceDir, MANIFEST_PATH);
+  const manifestText = await readFile(manifestPath, 'utf8');
+  const summary: CheckLinksSummary = {
+    total: 0,
+    linked: 0,
+    noMatch: 0,
+    campaignNotFound: 0,
+    failed: 0,
+  };
+  const manifest = parseManifestCsv(manifestText, options.campaignFilter, (error, manifestLine) => {
+    summary.failed += 1;
+    console.error(`Failed manifest row ${manifestLine}: ${errorMessage(error)}`);
+  });
+  summary.total = manifest.length + summary.failed;
+
+  if (summary.total === 0) {
+    throw new Error(
+      options.campaignFilter
+        ? `No manifest rows found for campaign "${options.campaignFilter}"`
+        : `No assets found in ${manifestPath}`,
+    );
+  }
+
+  const client = options.client;
+  const campaignCache = new Map<string, CampaignRow>();
+  const chunkCache = new Map<string, ChunkRow[]>();
+  const templateCache = new Map<string, CharacterTemplateRow[]>();
+
+  for (const manifestAsset of manifest) {
+    const label = `${manifestAsset.campaignSlug}/${manifestAsset.type}/${manifestAsset.entitySlug}`;
+    try {
+      const campaign =
+        campaignCache.get(manifestAsset.campaignSlug) ||
+        (await findCampaign(client, manifestAsset.campaignSlug));
+      campaignCache.set(manifestAsset.campaignSlug, campaign);
+
+      const linkData = linkDataKind(manifestAsset.type);
+      if (linkData === 'chunks' && !chunkCache.has(campaign.id)) {
+        chunkCache.set(campaign.id, await findChunks(client, campaign.id));
+      }
+      if (linkData === 'templates' && !templateCache.has(campaign.id)) {
+        templateCache.set(campaign.id, await findCharacterTemplates(client, campaign.id));
+      }
+
+      const targets = findLinkTargets(
+        manifestAsset,
+        campaign,
+        chunkCache.get(campaign.id),
+        templateCache.get(campaign.id),
+      );
+      summary.linked += 1;
+      console.log(`LINK ${label} → ${targets.length} row${targets.length === 1 ? '' : 's'}`);
+    } catch (error) {
+      if (isCampaignMissingError(error)) {
+        summary.campaignNotFound += 1;
+      } else {
+        summary.noMatch += 1;
+      }
+      console.error(`NO MATCH ${label}`);
+      console.error(`  ${errorMessage(error)}`);
+      const campaign = campaignCache.get(manifestAsset.campaignSlug);
+      if (campaign) {
+        const hints = nearestRealSlugs(
+          candidateSlugsForHints(
+            manifestAsset.type,
+            chunkCache.get(campaign.id),
+            templateCache.get(campaign.id),
+          ),
+          manifestAsset.entitySlug,
+        );
+        for (const hint of hints) console.error(`  hint: ${hint}`);
+      }
+    }
+  }
+
+  return summary;
 }
 
 export async function runUpload(options: RunOptions): Promise<UploadSummary> {
@@ -701,19 +919,11 @@ export async function runUpload(options: RunOptions): Promise<UploadSummary> {
         summary.uploaded += 1;
       }
 
-      if (
-        asset.type !== 'card' &&
-        asset.type !== 'banner' &&
-        asset.type !== 'portrait' &&
-        asset.type !== 'character_card'
-      ) {
-        if (!chunkCache.has(campaign.id))
-          chunkCache.set(campaign.id, await findChunks(client, campaign.id));
+      const linkData = linkDataKind(asset.type);
+      if (linkData === 'chunks' && !chunkCache.has(campaign.id)) {
+        chunkCache.set(campaign.id, await findChunks(client, campaign.id));
       }
-      if (
-        (asset.type === 'portrait' || asset.type === 'character_card') &&
-        !templateCache.has(campaign.id)
-      ) {
+      if (linkData === 'templates' && !templateCache.has(campaign.id)) {
         templateCache.set(campaign.id, await findCharacterTemplates(client, campaign.id));
       }
 
@@ -748,6 +958,16 @@ function printSummary(summary: UploadSummary, dryRun: boolean): void {
   console.log(`  Failed: ${summary.failed}`);
 }
 
+function printCheckLinksSummary(summary: CheckLinksSummary): void {
+  console.log('\nLink check summary');
+  console.log('  Mode: CHECK LINKS (read-only, nothing written)');
+  console.log(`  Assets: ${summary.total}`);
+  console.log(`  Would link: ${summary.linked}`);
+  console.log(`  No match: ${summary.noMatch}`);
+  console.log(`  Campaign not found: ${summary.campaignNotFound}`);
+  console.log(`  Failed: ${summary.failed}`);
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   let options: CliOptions;
   try {
@@ -762,6 +982,25 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (!options.sourceDir) {
     console.error(USAGE);
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.checkLinks) {
+    try {
+      const supabaseConfig = getSupabaseConfig();
+      const summary = await runCheckLinks({
+        sourceDir: options.sourceDir,
+        campaignFilter: options.campaignFilter,
+        client: createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey),
+      });
+      printCheckLinksSummary(summary);
+      if (summary.noMatch > 0 || summary.campaignNotFound > 0 || summary.failed > 0) {
+        process.exitCode = 1;
+      }
+    } catch (error) {
+      console.error(errorMessage(error));
+      process.exitCode = 1;
+    }
     return;
   }
 
