@@ -18,7 +18,7 @@
 #### **Technology Stack**
 *   **Frontend**: React, Vite, TypeScript, Tailwind CSS, Shadcn UI
 *   **Backend & Database**: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
-*   **AI Integration**: Google Gemini, CrewAI (Agent Orchestration), ElevenLabs (Text-to-Speech), OpenAI Embeddings
+*   **AI Integration**: Google Gemini, ElevenLabs (Text-to-Speech), OpenAI Embeddings <!-- CrewAI (Agent Orchestration) removed 2026-02-15 in 9331e06a (#2192) -->
 *   **State Management**: TanStack Query, React Context
 *   **Testing**: Vitest, React Testing Library
 

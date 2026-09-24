@@ -1,8 +1,9 @@
 import React, { lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Routes, Route } from 'react-router-dom';
 
 import { withRouteSuspense } from './route-suspense';
 
+import { isCustomCampaignsEnabled } from '@/config/featureFlags';
 import { ProtectedRoute } from '@/features/auth';
 import Breadcrumbs from '@/shared/components/layout/breadcrumbs';
 import Navigation from '@/shared/components/layout/navigation';
@@ -56,7 +57,17 @@ export const ProtectedAppRoutes: React.FC = () => (
             <Route path="/characters/new" element={withRouteSuspense(<CharacterCreateEntry />)} />
           )}
           <Route path="/character/:id" element={withRouteSuspense(<CharacterSheet />)} />
-          <Route path="/campaigns/create" element={withRouteSuspense(<CampaignWizard />)} />
+          {/*
+            Custom campaign wizard (#2192): off for beta users. The wizard saves a
+            campaign row but no playable content, so the route redirects to the
+            campaign list (Index) while the flag is off. Existing campaigns are
+            untouched — only the wizard entry points are gated.
+          */}
+          {isCustomCampaignsEnabled() ? (
+            <Route path="/campaigns/create" element={withRouteSuspense(<CampaignWizard />)} />
+          ) : (
+            <Route path="/campaigns/create" element={<Navigate to="/app/" replace />} />
+          )}
           <Route
             path="/campaigns/:campaignId/scenes/:sceneId"
             element={withRouteSuspense(<BattleMapPage />)}

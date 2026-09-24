@@ -19,13 +19,16 @@ const campaignCharacterFlowEnabled = parseBoolean(
   import.meta?.env?.VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW,
 );
 const multiplayerInvitesEnabled = parseBoolean(import.meta?.env?.VITE_ENABLE_MULTIPLAYER_INVITES);
+const customCampaignsEnabled = parseBoolean(import.meta?.env?.VITE_ENABLE_CUSTOM_CAMPAIGNS);
 
 export const featureFlags = {
   worldBuilder: worldBuilderEnabled,
   campaignCharacterFlow: campaignCharacterFlowEnabled,
   multiplayerInvites: multiplayerInvitesEnabled,
+  customCampaigns: customCampaignsEnabled,
 };
 
 export const isWorldBuilderEnabled = (): boolean => featureFlags.worldBuilder;
 export const isCampaignCharacterFlowEnabled = (): boolean => featureFlags.campaignCharacterFlow;
 export const isMultiplayerInvitesEnabled = (): boolean => featureFlags.multiplayerInvites;
+export const isCustomCampaignsEnabled = (): boolean => featureFlags.customCampaigns;

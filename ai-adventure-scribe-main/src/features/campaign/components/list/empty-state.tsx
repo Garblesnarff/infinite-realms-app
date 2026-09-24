@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { isCustomCampaignsEnabled } from '@/config/featureFlags';
 
 /**
  * EmptyState component
@@ -19,15 +20,22 @@ const EmptyState = () => {
       <p className="text-muted-foreground mb-6">
         You haven't created any campaigns yet. Your tales await.
       </p>
-      <div className="flex items-center justify-center">
-        <Button
-          onClick={() => navigate('/app/campaigns/create')}
-          className="flex items-center gap-2 bg-infinite-gold text-infinite-dark"
-        >
-          <Plus className="w-4 h-4" />
-          Create Campaign
-        </Button>
-      </div>
+      {/*
+        #2192: the wizard is hidden from beta users while the flag is off.
+        Existing campaigns stay reachable through the campaign list; only this
+        wizard entry point is gated.
+      */}
+      {isCustomCampaignsEnabled() && (
+        <div className="flex items-center justify-center">
+          <Button
+            onClick={() => navigate('/app/campaigns/create')}
+            className="flex items-center gap-2 bg-infinite-gold text-infinite-dark"
+          >
+            <Plus className="w-4 h-4" />
+            Create Campaign
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

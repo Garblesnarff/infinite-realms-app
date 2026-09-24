@@ -6,6 +6,7 @@ import { ErrorBoundary, CampaignErrorFallback } from '@/components/error';
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
 import { Button } from '@/components/ui/button';
 import { IRPanel } from '@/components/ui/ir-primitives';
+import { isCustomCampaignsEnabled } from '@/config/featureFlags';
 import { Z_INDEX } from '@/constants/z-index';
 import { CampaignList } from '@/features/campaign/components';
 
@@ -38,15 +39,18 @@ const Index = () => {
             are forged in the fires of imagination
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-md mx-auto">
-            <Button
-              onClick={() => navigate('/app/campaigns/create')}
-              variant="ir-gold"
-              size="lg"
-              className="px-8 py-4 text-lg"
-            >
-              <Plus className="w-6 h-6 mr-2" />
-              Create Epic Saga
-            </Button>
+            {/* #2192: custom campaign wizard is hidden from beta users while the flag is off */}
+            {isCustomCampaignsEnabled() && (
+              <Button
+                onClick={() => navigate('/app/campaigns/create')}
+                variant="ir-gold"
+                size="lg"
+                className="px-8 py-4 text-lg"
+              >
+                <Plus className="w-6 h-6 mr-2" />
+                Create Epic Saga
+              </Button>
+            )}
             <Button
               variant="outline"
               size="lg"
