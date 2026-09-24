@@ -18,7 +18,7 @@ import type { RollRequest } from '@/types/roll-request';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { DiceRollEmbed } from '@/features/game-session/components';
-import { useDiceRollRequest } from '@/hooks/game/use-dice-roll-request';
+import { useDiceRollRequest, type RollResultHandler } from '@/hooks/game/use-dice-roll-request';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
@@ -26,8 +26,11 @@ export type { RollRequest } from '@/types/roll-request';
 
 interface DiceRollRequestProps {
   request: RollRequest;
-  onRoll: (formula: string, advantage?: boolean, disadvantage?: boolean) => void;
-  onManualResult: (result: number) => void;
+  /**
+   * Receives every result the popup produces — the animated roll's total with its natural face,
+   * or a hand-entered number with no details.
+   */
+  onManualResult: RollResultHandler;
   onRollCommit?: () => void;
   onCancel?: () => void;
   requestId?: string;
@@ -43,7 +46,6 @@ interface DiceRollRequestProps {
 export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
   ({
     request,
-    onRoll: _onRoll,
     onManualResult,
     onRollCommit,
     onCancel,

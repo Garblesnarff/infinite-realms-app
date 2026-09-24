@@ -351,11 +351,24 @@ export const useMessageHandlerLogic = ({
         return;
       }
 
-      // Check if this response contains roll requests
-      const hasRollRequests = Boolean(
-        sanitizedAiResponseMessage.rollRequests &&
-        sanitizedAiResponseMessage.rollRequests.length > 0,
-      );
+      // Same boundary as the early path: `attack` and `initiative` entries are the DM's engine
+      // declaration channel and the engine prompts for those dice itself. `dm-actions-handler`
+      // strips them on combat entry, but an in-combat turn that is not an entry turn does not go
+      // through that filter, so the raw list can still carry one (#2190 / #2200). Every gate
+      // below reads the filtered list: a turn whose only requests are engine-channel ones is a
+      // resolved turn, and must show its narration, unblock the composer and reach
+      // `onAIResponse` like any other. Counting the raw list there withheld the text, queued no
+      // popup, skipped combat detection and never released the composer block. An engine prompt the player still owes cannot reach
+      // this point: `requestPlayerAttackRoll` is awaited inside `handleDmActionsAndTransitions`,
+      // so the composer stays blocked from submit until that roll settles.
+      const rawRollRequests = sanitizedAiResponseMessage.rollRequests ?? [];
+      const narrativeRollRequests = rawRollRequests.filter(isNarrativeRollRequest);
+      const hasRollRequests = narrativeRollRequests.length > 0;
+      if (rawRollRequests.length > narrativeRollRequests.length) {
+        logger.info('[RollPrompt] final roll prompt withheld engine-channel requests', {
+          requestTypes: rawRollRequests.map((request) => request.type),
+        });
+      }
 
       // Engine-authored notices may have different persistence owners. The seating transcript
       // is already written by the server's `/enter` endpoint, while decline/failure/no-host and
@@ -414,7 +427,7 @@ export const useMessageHandlerLogic = ({
       }
 
       if (hasRollRequests && !rollTurnStarted) {
-        processAiResponse(sanitizedAiResponseMessage.rollRequests || []);
+        processAiResponse(narrativeRollRequests);
       }
 
       if (

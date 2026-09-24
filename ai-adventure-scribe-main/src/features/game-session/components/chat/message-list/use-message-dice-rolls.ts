@@ -1,6 +1,7 @@
 import { useMemo, useRef, useCallback, useState } from 'react';
 
 import type { MessageSendContext, DiceRollContext } from '../MessageList';
+import type { RolledResultDetails } from '@/hooks/game/use-dice-roll-request';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { DiceRollRequest } from '@/utils/diceRolls';
@@ -56,7 +57,7 @@ export function useMessageDiceRolls({
   batchProgress: { current: number; total: number } | null;
   rollRequest: RollRequest | null;
   handleDiceRoll: (formula: string, advantage?: boolean, disadvantage?: boolean) => Promise<void>;
-  handleManualResult: (result: number) => Promise<void>;
+  handleManualResult: (result: number, details?: RolledResultDetails) => Promise<void>;
   handleCancelRoll: () => void;
   lastRollRef: MutableRefObject<LastRollMeta | null>;
   pendingRollId: string | null;
@@ -351,7 +352,7 @@ export function useMessageDiceRolls({
 
   // Handle manual dice result input with batching support
   const handleManualResult = useCallback(
-    async (result: number) => {
+    async (result: number, details?: RolledResultDetails) => {
       const roll = getCurrentDiceRoll();
       if (!roll) {
         logger.warn('[useMessageDiceRolls] No current dice roll in queue');
@@ -374,9 +375,14 @@ export function useMessageDiceRolls({
           return;
         }
 
+        // The engine settlers take the bare d20. The popup's animated roll reports its natural
+        // face alongside the total (#2210); a hand-entered number has no details and IS the face,
+        // since the popup asks for a bare d20.
+        const naturalFace = details?.naturalRoll ?? numericResult;
+
         if (
           roll.combatInitiativeRoll &&
-          (!Number.isInteger(numericResult) || numericResult < 1 || numericResult > 20)
+          (!Number.isInteger(naturalFace) || naturalFace < 1 || naturalFace > 20)
         ) {
           logger.warn('[useMessageDiceRolls] initiative result must be a natural d20 (1-20)');
           return;
@@ -423,15 +429,14 @@ export function useMessageDiceRolls({
           },
         };
 
-        // Same diversion as the rolled path: a hand-entered attack die is still the player's
-        // die for an attack already mid-resolution, and still must not reach the DM as a
-        // message. The typed number IS the natural face, since the popup asks for a bare d20.
-        if (settleCombatAttackRoll(roll.id, numericResult)) {
+        // Same diversion as the rolled path: the popup's die is still the player's die for an
+        // attack already mid-resolution, and still must not reach the DM as a message.
+        if (settleCombatAttackRoll(roll.id, naturalFace)) {
           completeDiceRoll(roll.id, { total: numericResult });
           logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');
           return;
         }
-        if (settleCombatInitiativeRoll(roll.id, numericResult)) {
+        if (settleCombatInitiativeRoll(roll.id, naturalFace)) {
           completeDiceRoll(roll.id, { total: numericResult });
           logger.info(
             '[useMessageDiceRolls] manual combat initiative die returned to the entry flow',

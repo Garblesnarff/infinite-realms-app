@@ -69,7 +69,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     const {
       currentRoll,
       rollRequest,
-      handleDiceRoll,
       handleManualResult,
       handleCancelRoll,
       lastRollRef: _lastRollRef,
@@ -235,10 +234,14 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               requestId={currentRoll.id}
               pendingRollId={pendingRollId}
               rollError={rollError}
-              onRoll={handleDiceRoll}
               onManualResult={handleManualResult}
               onRollCommit={
-                currentRoll.combatInitiativeRoll
+                // Both engine prompts are on a timer, and the popup takes ~3.5s to produce its
+                // result. Committing on the click rather than on the settle is what stops a die
+                // rolled near the end of the window from losing the race to the timeout — the
+                // engine would roll its own d20 and the player's number would be dropped, so the
+                // player sees one number and the narration uses another (#2200).
+                currentRoll.combatInitiativeRoll || currentRoll.combatAttackRoll
                   ? () => markPlayerRollCommitted(currentRoll.id)
                   : undefined
               }

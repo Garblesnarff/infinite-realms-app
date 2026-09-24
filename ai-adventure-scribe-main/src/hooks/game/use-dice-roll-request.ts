@@ -16,9 +16,23 @@ export function isNumericFormula(formula: string): boolean {
   return !/\b(cha|int|wis|str|dex|con|mod|modifier)\b/i.test(formula);
 }
 
+/**
+ * What the animated roll knows beyond its total. A hand-entered result has no details: the player
+ * typed one number and the popup asks for it as the bare die.
+ */
+export interface RolledResultDetails {
+  /** The kept d20 face, before modifiers. The engine settlers consume this, never the total. */
+  naturalRoll: number;
+}
+
+export type RollResultHandler = (
+  result: number,
+  details?: RolledResultDetails,
+) => void | Promise<void>;
+
 interface UseDiceRollRequestProps {
   request: RollRequest;
-  onManualResult: (result: number) => void | Promise<void>;
+  onManualResult: RollResultHandler;
   onRollCommit?: () => void;
 }
 
@@ -177,12 +191,12 @@ export function useDiceRollRequest({
   }, [isRolling, onRollCommit]);
 
   const submitResult = useCallback(
-    async (totalResult: number) => {
+    async (totalResult: number, details?: RolledResultDetails) => {
       if (isSubmittingRef.current) return;
       isSubmittingRef.current = true;
       setIsSubmitting(true);
       try {
-        await onManualResult(totalResult);
+        await (details ? onManualResult(totalResult, details) : onManualResult(totalResult));
       } finally {
         isSubmittingRef.current = false;
         setIsSubmitting(false);
@@ -198,16 +212,24 @@ export function useDiceRollRequest({
 
       // Extract the total from DiceRollResult object if needed
       let totalResult: number;
+      let details: RolledResultDetails | undefined;
       if (typeof result === 'number') {
         totalResult = result;
       } else if (result && typeof result === 'object' && 'total' in result) {
-        totalResult = (result as { total: number }).total;
+        const rolled = result as { total: number; naturalRoll?: unknown };
+        totalResult = rolled.total;
+        // The total includes the formula's modifier. An engine prompt (attack, initiative) adds
+        // its own bonus to the die it gets back, so it must receive the natural face, or a
+        // natural 13 at +5 resolves as 18 + 5 (#2210).
+        if (typeof rolled.naturalRoll === 'number') {
+          details = { naturalRoll: rolled.naturalRoll };
+        }
       } else {
         logger.warn('Unexpected result type in handleDiceRollComplete:', result);
         totalResult = 0;
       }
 
-      await submitResult(totalResult);
+      await submitResult(totalResult, details);
     },
     [submitResult],
   );

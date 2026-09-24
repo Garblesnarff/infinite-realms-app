@@ -161,6 +161,22 @@ function renderHandler(
   return { result, ref, updateGameSessionState };
 }
 
+/** `setComposerBlocked(false)` reports this phase; a turn that leaves the composer locked never does. */
+function composerEnabledCount(): number {
+  return vi
+    .mocked(logger.info)
+    .mock.calls.filter(
+      ([event, data]) =>
+        event === 'TURN_PHASE' && (data as { phase?: string })?.phase === 'composer enabled',
+    ).length;
+}
+
+function dmPersisted(): Array<{ text?: string }> {
+  return mockSendMessage.mock.calls
+    .map(([message]) => message as { sender?: string; text?: string })
+    .filter((message) => message.sender === 'dm');
+}
+
 function rerenderHandler(
   renderResult: ReturnType<typeof render>,
   ref: HandlerRef,
@@ -739,6 +755,109 @@ describe('session-continuity regression', () => {
       resolveAIResponse?.(rollResponse);
       await sendPromise;
     });
+  });
+
+  /**
+   * #2200 (NIT from the #2196 review): the final path applies the same engine-channel boundary as
+   * the early path. `dm-actions-handler` strips `attack`/`initiative` on combat entry, but an
+   * in-combat turn that is not an entry turn does not go through that filter, so a raw declaration
+   * request would still reach the dice queue from here.
+   */
+  it('filters engine-channel requests out of the final-path roll prompt', async () => {
+    const rollRequests = [
+      { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack vs the Hulk' },
+      { type: 'initiative', formula: '1d20+1', purpose: 'Initiative roll for the party' },
+      { type: 'skill_check', formula: '1d20+3', purpose: 'Athletics to keep your footing' },
+    ];
+    // No early callback: this turn's requests arrive only on the final response.
+    mockGetAIResponse.mockResolvedValue({
+      text: 'You brace against the rubble.',
+      sender: 'dm',
+      rollRequests,
+    });
+
+    const { ref } = renderHandler('session-final-path-filter', mockOnAIResponse);
+    await act(async () => {
+      await ref.send('I hold the line.');
+    });
+
+    expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+    expect(mockProcessAiResponse).toHaveBeenCalledWith([rollRequests[2]]);
+    // The skill check is still owed, so this turn waits on its die exactly as before: no
+    // narration, the composer stays blocked, and combat detection waits for the roll turn.
+    expect(dmPersisted()).toHaveLength(0);
+    expect(composerEnabledCount()).toBe(0);
+    expect(mockOnAIResponse).not.toHaveBeenCalled();
+  });
+
+  // Review of round 1: the filter alone made this turn a silent dead-end, because
+  // `hasRollRequests` still counted the raw list — no narration, no popup, composer never
+  // unblocked, no combat callback. An engine-channel-only turn is a resolved turn.
+  it('prompts nothing and still renders the turn when the final path carries engine-channel requests only', async () => {
+    const text = 'The Hulk wheels toward you.';
+    mockGetAIResponse.mockResolvedValue({
+      text,
+      sender: 'dm',
+      rollRequests: [
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack vs the Hulk' },
+        { type: 'initiative', formula: '1d20+1', purpose: 'Initiative roll for the party' },
+      ],
+    });
+
+    const { ref } = renderHandler('session-final-path-all-engine', mockOnAIResponse);
+    await act(async () => {
+      await ref.send('I hold the line.');
+    });
+
+    expect(mockProcessAiResponse).not.toHaveBeenCalled();
+    expect(dmPersisted()).toEqual([expect.objectContaining({ text })]);
+    expect(composerEnabledCount()).toBe(1);
+    expect(mockOnAIResponse).toHaveBeenCalledWith(expect.objectContaining({ text }));
+  });
+
+  it('shows the text once and unblocks the composer for a final response with text plus [attack] only', async () => {
+    const text = 'You press the Hulk back a step.';
+    mockGetAIResponse.mockResolvedValue({
+      text,
+      sender: 'dm',
+      rollRequests: [
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack vs the Hulk' },
+      ],
+    });
+
+    const { ref } = renderHandler('session-final-path-attack-only', mockOnAIResponse);
+    await act(async () => {
+      await ref.send('I swing again.');
+    });
+
+    expect(mockProcessAiResponse).not.toHaveBeenCalled();
+    expect(dmPersisted()).toEqual([expect.objectContaining({ text })]);
+    expect(composerEnabledCount()).toBe(1);
+    expect(mockOnAIResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the text but keeps the composer blocked when a text plus [attack] response starts combat', async () => {
+    const text = 'Steel rings out as the ambush springs.';
+    mockGetAIResponse.mockResolvedValue({
+      text,
+      sender: 'dm',
+      rollRequests: [
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack vs the bandit' },
+      ],
+      context: { combat_transition: 'start' },
+      // `dm-response-processor` sets `isCombat` with every `combat_transition: 'start'`.
+      combatDetection: { isCombat: true, shouldStartCombat: true },
+    });
+
+    const { ref } = renderHandler('session-final-path-attack-combat-start', mockOnAIResponse);
+    await act(async () => {
+      await ref.send('I draw on them.');
+    });
+
+    expect(mockProcessAiResponse).not.toHaveBeenCalled();
+    expect(dmPersisted()).toEqual([expect.objectContaining({ text })]);
+    expect(composerEnabledCount()).toBe(0);
+    expect(mockOnAIResponse).toHaveBeenCalledTimes(1);
   });
 
   it('unlocks the composer when response memory extraction fails', async () => {

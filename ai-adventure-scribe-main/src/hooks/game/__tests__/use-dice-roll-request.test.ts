@@ -204,6 +204,19 @@ describe('useDiceRollRequest', () => {
     expect(mockOnManualResult).toHaveBeenCalledWith(22);
   });
 
+  // #2210: the engine settlers need the bare die; the total already carries the formula's bonus.
+  it('passes the natural face alongside the total when the animated roll reports one', () => {
+    const { result } = renderHook(() =>
+      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+    );
+
+    act(() => {
+      result.current.handleDiceRollComplete({ total: 18, naturalRoll: 13 });
+    });
+
+    expect(mockOnManualResult).toHaveBeenCalledWith(18, { naturalRoll: 13 });
+  });
+
   it('completes auto-roll with invalid result', () => {
     const { result } = renderHook(() =>
       useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
