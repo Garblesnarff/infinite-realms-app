@@ -74,6 +74,17 @@ let pending: {
 /** Keep the ask-first popup short enough to be a turn prompt, but long enough to be usable. */
 export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 30_000;
 
+/**
+ * The attack prompt is bounded for the same reason the initiative prompt is.
+ *
+ * An unbounded await is a combat that can wedge: if the popup is never answered — the player
+ * walked away, or its queue slot was taken by another request and the prompt was never visible
+ * — the resolution sits forever, the turn never finishes and the composer stays disabled. That
+ * was the M3 dead-end in #2190. Timing out resolves `{ d20: null }`, which the engine reads as
+ * "roll it yourself", so the turn always completes.
+ */
+export const PLAYER_ATTACK_ROLL_TIMEOUT_MS = 45_000;
+
 /** Registered by the provider that owns the dice queue. Passing `null` clears it on unmount. */
 export function setPlayerRollHost(next: PlayerRollHost | null): void {
   host = next;
@@ -172,7 +183,9 @@ function requestPlayerRoll(
       hostHandle.dismiss();
     } else if (timeoutMs !== undefined) {
       const timeoutId = setTimeout(() => {
-        logger.info(`[PlayerRoll] initiative prompt timed out after ${timeoutMs}ms; auto-rolling`);
+        logger.info(
+          `[PlayerRoll] ${rollLabel} prompt timed out after ${timeoutMs}ms; auto-rolling`,
+        );
         settlePendingPlayerRoll({ d20: null });
       }, timeoutMs);
       if (pending?.settle === settle) pending.timeoutId = timeoutId;
@@ -186,10 +199,11 @@ function requestPlayerRoll(
  *
  * Resolves `{ d20: null }` rather than rejecting when no host is mounted: headless callers and
  * tests must be able to resolve combat without a popup, and an engine roll is the correct
- * behaviour in exactly that case.
+ * behaviour in exactly that case. The bounded timer gives the same guarantee for a popup that is
+ * mounted but never answered.
  */
 export function requestPlayerAttackRoll(spec: PlayerAttackRollSpec): Promise<PlayerRollOutcome> {
-  return requestPlayerRoll(spec, undefined);
+  return requestPlayerRoll(spec, PLAYER_ATTACK_ROLL_TIMEOUT_MS);
 }
 
 /**

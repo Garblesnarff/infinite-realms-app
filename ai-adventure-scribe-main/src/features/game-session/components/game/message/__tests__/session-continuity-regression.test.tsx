@@ -323,10 +323,14 @@ describe('session-continuity regression', () => {
     });
   });
 
+  // A narrative roll turn outside combat is the one case that still prompts early: the request
+  // is an ordinary check the dice popup owns, so `use-ai-response` sets `earlyRollPromptAllowed`.
   it('shows the roll prompt immediately without rendering declaration-turn outcome text', async () => {
-    const rollRequests = [{ type: 'attack', formula: '1d20+5', purpose: 'Longsword attack' }];
+    const rollRequests = [
+      { type: 'skill_check', formula: '1d20+3', purpose: 'Investigation to find the catch' },
+    ];
     const rollResponse = {
-      text: 'Your blade scrapes past its frame, failing to find purchase.',
+      text: 'You find nothing but a seam of dust along the panel.',
       sender: 'dm',
       rollRequests,
     };
@@ -337,9 +341,12 @@ describe('session-continuity regression', () => {
 
     mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
       const onTextReady = args[4] as
-        | ((response: typeof rollResponse) => Promise<void> | void)
+        | ((
+            response: typeof rollResponse,
+            options: { suppressRender: boolean; earlyRollPromptAllowed: boolean },
+          ) => Promise<void> | void)
         | undefined;
-      await onTextReady?.(rollResponse);
+      await onTextReady?.(rollResponse, { suppressRender: true, earlyRollPromptAllowed: true });
       return pendingAIResponse;
     });
 
@@ -522,10 +529,13 @@ describe('session-continuity regression', () => {
       const onTextReady = args[4] as
         | ((
             response: typeof earlyResponse,
-            options: { suppressRender: boolean },
+            options: { suppressRender: boolean; earlyRollPromptAllowed: boolean },
           ) => Promise<void> | void)
         | undefined;
-      await onTextReady?.(earlyResponse, { suppressRender: true });
+      await onTextReady?.(earlyResponse, {
+        suppressRender: true,
+        earlyRollPromptAllowed: false,
+      });
       return pendingAIResponse;
     });
 
@@ -560,9 +570,11 @@ describe('session-continuity regression', () => {
    * response carries no pending request, that text is rendered and saved once.
    */
   it('renders the final DM message once after a roll turn resolves', async () => {
-    const rollRequests = [{ type: 'attack', formula: '1d20+5', purpose: 'Longsword attack' }];
+    const rollRequests = [
+      { type: 'skill_check', formula: '1d20+3', purpose: 'Investigation to find the catch' },
+    ];
     const rollResponse = {
-      text: 'Your blade scrapes past its frame, failing to find purchase.',
+      text: 'You find nothing but a seam of dust along the panel.',
       sender: 'dm',
       rollRequests,
     };
@@ -580,10 +592,10 @@ describe('session-continuity regression', () => {
       const onTextReady = args[4] as
         | ((
             response: typeof rollResponse,
-            options: { suppressRender: boolean },
+            options: { suppressRender: boolean; earlyRollPromptAllowed: boolean },
           ) => Promise<void> | void)
         | undefined;
-      await onTextReady?.(rollResponse, { suppressRender: true });
+      await onTextReady?.(rollResponse, { suppressRender: true, earlyRollPromptAllowed: true });
       return pendingAIResponse;
     });
 
@@ -609,6 +621,124 @@ describe('session-continuity regression', () => {
     expect(dmMessages[0]?.[0].text).toBe(resolvedResponse.text);
     // The prompt fired once, from the early callback only.
     expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * #2190: a combat-start turn's `roll_requests` are the DM's engine declaration channel. The
+   * early callback must not prompt with them — the player would roll a die the engine throws
+   * away while the engine's own initiative prompt waits behind it. Only the combat confirmation
+   * text reaches the transcript from this turn.
+   */
+  it('shows no roll prompt for a combat-start turn carrying initiative and attack requests', async () => {
+    const earlyResponse = {
+      text: 'The Chiropteran Hulk drops from the rafters, wings snapping wide.',
+      sender: 'dm',
+      rollRequests: [
+        { type: 'initiative', formula: '1d20+1', purpose: 'Initiative roll for the party' },
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack vs Chiropteran Hulk' },
+      ],
+      context: { combat_transition: 'start' },
+      combatDetection: { isCombat: true, shouldStartCombat: true },
+    };
+    // `dm-actions-handler` strips attack/initiative once `/enter` has seated the encounter, so
+    // the final response carries the confirmation only.
+    const finalResponse = {
+      text: 'Combat begins. Roll for initiative.',
+      sender: 'dm',
+      rollRequests: [],
+      context: { combat_transition: 'none' },
+      combatDetection: { isCombat: true, shouldStartCombat: false },
+    };
+    let resolveAIResponse: ((response: typeof finalResponse) => void) | undefined;
+    const pendingAIResponse = new Promise<typeof finalResponse>((resolve) => {
+      resolveAIResponse = resolve;
+    });
+
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((
+            response: typeof earlyResponse,
+            options: { suppressRender: boolean; earlyRollPromptAllowed: boolean },
+          ) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(earlyResponse, {
+        suppressRender: true,
+        earlyRollPromptAllowed: false,
+      });
+      return pendingAIResponse;
+    });
+
+    const { ref } = renderHandler('session-combat-entry-requests');
+    let sendPromise: Promise<void>;
+    await act(async () => {
+      sendPromise = ref.send('I attack the hulk with my longsword.');
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalled());
+    });
+
+    // No prompt, no text, nothing persisted while the entry pipeline runs.
+    expect(mockProcessAiResponse).not.toHaveBeenCalled();
+    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
+      0,
+    );
+
+    await act(async () => {
+      resolveAIResponse?.(finalResponse);
+      await sendPromise;
+    });
+
+    // Only the engine-filtered confirmation reaches the transcript, and the raw declaration
+    // requests were never queued for the player.
+    const dmMessages = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
+    expect(dmMessages).toHaveLength(1);
+    expect(dmMessages[0]?.[0].text).toBe(finalResponse.text);
+    expect(mockProcessAiResponse).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Defence in depth for #2190: even if the flag says a turn may prompt early, an `attack` or
+   * `initiative` request is never forwarded from the early path — those belong to the engine.
+   */
+  it('never forwards an attack request from the early path even when prompting is allowed', async () => {
+    const rollRequests = [
+      { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack' },
+      { type: 'skill_check', formula: '1d20+3', purpose: 'Athletics to keep your footing' },
+    ];
+    const rollResponse = {
+      text: 'You set your feet and swing.',
+      sender: 'dm',
+      rollRequests,
+    };
+    let resolveAIResponse: ((response: typeof rollResponse) => void) | undefined;
+    const pendingAIResponse = new Promise<typeof rollResponse>((resolve) => {
+      resolveAIResponse = resolve;
+    });
+
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      const onTextReady = args[4] as
+        | ((
+            response: typeof rollResponse,
+            options: { suppressRender: boolean; earlyRollPromptAllowed: boolean },
+          ) => Promise<void> | void)
+        | undefined;
+      await onTextReady?.(rollResponse, { suppressRender: true, earlyRollPromptAllowed: true });
+      return pendingAIResponse;
+    });
+
+    const { ref } = renderHandler('session-early-attack-filter');
+    let sendPromise: Promise<void>;
+    await act(async () => {
+      sendPromise = ref.send('I swing at the ooze.');
+      await waitFor(() => expect(mockProcessAiResponse).toHaveBeenCalled());
+    });
+
+    // The narrative check goes up; the attack request does not.
+    expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+    expect(mockProcessAiResponse).toHaveBeenCalledWith([rollRequests[1]]);
+
+    await act(async () => {
+      resolveAIResponse?.(rollResponse);
+      await sendPromise;
+    });
   });
 
   it('unlocks the composer when response memory extraction fails', async () => {

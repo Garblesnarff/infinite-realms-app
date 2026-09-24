@@ -11,6 +11,7 @@ import {
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
+import { hasPendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 
@@ -26,6 +27,10 @@ vi.mock('@/utils/diceUtils', () => ({
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(),
   settleCombatInitiativeRoll: vi.fn(),
+}));
+
+vi.mock('@/services/combat/player-roll-bridge', () => ({
+  hasPendingPlayerRoll: vi.fn(() => false),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -70,6 +75,7 @@ describe('useMessageDiceRolls', () => {
     };
     vi.mocked(settleCombatAttackRoll).mockReturnValue(false);
     vi.mocked(settleCombatInitiativeRoll).mockReturnValue(false);
+    vi.mocked(hasPendingPlayerRoll).mockReturnValue(false);
   });
 
   it('should return initial state when no roll is active', () => {
@@ -774,6 +780,145 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 25 });
+    });
+  });
+  /**
+   * #2190: on a combat-start turn the DM's raw `attack`/`initiative` roll_requests used to reach
+   * the popup. Nothing in the engine owns those dice, so the result was formatted and sent to the
+   * DM as a player message — a turn for an attack the engine never resolved. While an encounter
+   * exists or is being seated, such a die is dropped instead.
+   */
+  describe('unowned combat dice during an encounter', () => {
+    const attackRoll = {
+      id: 'roll-attack',
+      requestType: 'attack',
+      description: 'Longsword attack vs Chiropteran Hulk',
+      rollConfig: { dieType: 20, count: 1, modifier: 5 },
+      status: 'pending',
+    };
+
+    beforeEach(() => {
+      mockUseGame.state = {
+        isInCombat: true,
+        currentPhase: 'combat',
+        diceRollQueue: { currentRollId: 'roll-attack', pendingRolls: [attackRoll] as any },
+      } as any;
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
+      (rollDice as any).mockReturnValue({
+        total: 9,
+        naturalRoll: 4,
+        results: [4],
+        keptResults: [4],
+        critical: false,
+      });
+    });
+
+    it('drops a rolled attack die no engine settler owns instead of sending it to the DM', async () => {
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleDiceRoll('1d20+5');
+      });
+
+      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
+      // The queue entry still completes so the engine's own prompt can take the slot.
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith(
+        'roll-attack',
+        expect.objectContaining({ total: 9 }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[useMessageDiceRolls] dropped an unowned combat die; not sent to the DM',
+        expect.objectContaining({ requestType: 'attack' }),
+      );
+    });
+
+    it('drops a hand-entered attack die no engine settler owns', async () => {
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(4);
+      });
+
+      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-attack', { total: 4 });
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[useMessageDiceRolls] dropped an unowned manual combat die; not sent to the DM',
+        expect.objectContaining({ requestType: 'attack' }),
+      );
+    });
+
+    it('drops an unowned initiative die during the seating window', async () => {
+      const initiativeRoll = {
+        ...attackRoll,
+        id: 'roll-initiative',
+        requestType: 'initiative',
+        description: 'Initiative roll for the party',
+      };
+      // Neither context reports combat yet; the engine's own prompt is already waiting.
+      mockUseGame.state = {
+        isInCombat: false,
+        currentPhase: 'exploration',
+        diceRollQueue: {
+          currentRollId: 'roll-initiative',
+          pendingRolls: [initiativeRoll] as any,
+        },
+      } as any;
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(initiativeRoll);
+      vi.mocked(hasPendingPlayerRoll).mockReturnValue(true);
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleDiceRoll('1d20+1');
+      });
+
+      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
+    });
+
+    it('still sends an ordinary narrative check made during combat', async () => {
+      const checkRoll = {
+        ...attackRoll,
+        id: 'roll-check',
+        requestType: 'skill_check',
+        description: 'Athletics to keep your footing',
+      };
+      mockUseGame.state = {
+        isInCombat: true,
+        currentPhase: 'combat',
+        diceRollQueue: { currentRollId: 'roll-check', pendingRolls: [checkRoll] as any },
+      } as any;
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(checkRoll);
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleDiceRoll('1d20+5');
+      });
+
+      expect(mockOnSendFullMessage).toHaveBeenCalled();
     });
   });
 });

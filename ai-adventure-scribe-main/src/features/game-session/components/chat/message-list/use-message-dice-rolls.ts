@@ -16,8 +16,10 @@ import {
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
+import { hasPendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
+import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
 
 // Type for last roll metadata
 export type LastRollMeta = {
@@ -74,6 +76,25 @@ export function useMessageDiceRolls({
   const formatDiceRoll = useCallback((roll: DiceRollRequest): string => {
     return formatDiceRollUtil(roll);
   }, []);
+
+  /**
+   * Whether an `attack` or `initiative` die that no engine settler claimed must be dropped
+   * instead of sent to the DM.
+   *
+   * Once an encounter exists or is being seated, those dice belong to the engine: it prompts for
+   * them itself and consumes the result. A leftover one is a prompt the engine never owned — a
+   * raw DM declaration request that reached the popup. Sending its result as a player message
+   * starts a turn for an attack the engine never resolved, which is exactly the fabricated
+   * "attacks X with their longsword: 9 (nat 4+5) miss" line from #2190. `hasPendingPlayerRoll`
+   * covers the seating window, where the engine's own prompt is already waiting but neither
+   * context reports combat yet.
+   */
+  const shouldDropUnownedCombatRoll = useCallback(
+    (requestType: string): boolean =>
+      isEngineChannelRollType(requestType) &&
+      (state.isInCombat || state.currentPhase === 'combat' || hasPendingPlayerRoll()),
+    [state.isInCombat, state.currentPhase],
+  );
 
   // Subscribe to current dice roll from queue state
   const currentRoll = useMemo(() => {
@@ -216,6 +237,26 @@ export function useMessageDiceRolls({
           return;
         }
 
+        // No engine settler owns this attack/initiative die and a fight is under way or being
+        // seated: it came from a raw DM declaration request, not from the engine. Drop it — the
+        // engine has resolved or will resolve that roll itself, and posting the number as a
+        // player message would narrate an attack that never happened (#2190).
+        if (shouldDropUnownedCombatRoll(roll.requestType)) {
+          completeDiceRoll(roll.id, rollResult);
+          logger.warn('[useMessageDiceRolls] dropped an unowned combat die; not sent to the DM', {
+            requestType: roll.requestType,
+            description: roll.description,
+            total: rollResult.total,
+          });
+          lastRollRef.current = {
+            kind: roll.requestType === 'initiative' ? 'initiative' : 'attack',
+            label: roll.description,
+            result: rollResult.total,
+            nat: rollResult.naturalRoll,
+          };
+          return;
+        }
+
         const diceRollMessage: ChatMessage = {
           text: formattedRoll,
           sender: 'player',
@@ -303,6 +344,7 @@ export function useMessageDiceRolls({
       completeDiceRoll,
       clearBatch,
       formatDiceRoll,
+      shouldDropUnownedCombatRoll,
       state.diceRollQueue.pendingRolls,
     ],
   );
@@ -397,6 +439,22 @@ export function useMessageDiceRolls({
           return;
         }
 
+        // Same drop rule as the rolled path: a hand-entered attack/initiative die with no engine
+        // settler, during or just before an encounter, is a raw DM declaration request and must
+        // not reach the DM as a message (#2190).
+        if (shouldDropUnownedCombatRoll(roll.requestType)) {
+          completeDiceRoll(roll.id, { total: numericResult });
+          logger.warn(
+            '[useMessageDiceRolls] dropped an unowned manual combat die; not sent to the DM',
+            {
+              requestType: roll.requestType,
+              description: roll.description,
+              total: numericResult,
+            },
+          );
+          return;
+        }
+
         if (roll.batchId && !willCompleteBatch) {
           const playerMessage: ChatMessage = {
             text: formattedRoll,
@@ -452,6 +510,7 @@ export function useMessageDiceRolls({
       completeDiceRoll,
       clearBatch,
       formatDiceRoll,
+      shouldDropUnownedCombatRoll,
       state.diceRollQueue.pendingRolls,
     ],
   );

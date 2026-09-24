@@ -672,7 +672,100 @@ describe('useAIResponse', () => {
     });
 
     expect(onTextReady).toHaveBeenCalledTimes(1);
-    expect(onTextReady.mock.calls[0][1]).toEqual({ suppressRender: true });
+    expect(onTextReady.mock.calls[0][1]).toEqual({
+      suppressRender: true,
+      earlyRollPromptAllowed: false,
+    });
+  });
+
+  /**
+   * #2190: on a combat-start turn the DM's `roll_requests` are an engine declaration channel,
+   * not player dice prompts. The early callback must be told it may not prompt with them.
+   */
+  it('withholds the early roll prompt on a combat-start turn carrying initiative and attack', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+
+    const parsed = {
+      text: 'The Chiropteran Hulk drops from the rafters.',
+      roll_requests: [
+        { type: 'initiative', formula: '1d20+1', purpose: 'Initiative roll for the party' },
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack vs Chiropteran Hulk' },
+      ],
+      combat_transition: 'start',
+      combatDetection: { isCombat: true, shouldStartCombat: true },
+    };
+    (AIService.chatWithDM as any).mockImplementation(async (params: any) => {
+      await params.onTextReady?.(parsed);
+      return parsed;
+    });
+
+    const onTextReady = vi.fn();
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        onTextReady,
+      );
+    });
+
+    expect(onTextReady).toHaveBeenCalledTimes(1);
+    expect(onTextReady.mock.calls[0][1]).toEqual({
+      suppressRender: true,
+      earlyRollPromptAllowed: false,
+    });
+  });
+
+  it('allows the early roll prompt for a narrative check outside combat', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    } as any);
+
+    const parsed = {
+      text: 'The panel has a seam you could work at.',
+      roll_requests: [
+        { type: 'skill_check', formula: '1d20+3', purpose: 'Investigation to find the catch' },
+      ],
+      combatDetection: { isCombat: false },
+    };
+    (AIService.chatWithDM as any).mockImplementation(async (params: any) => {
+      await params.onTextReady?.(parsed);
+      return parsed;
+    });
+
+    const onTextReady = vi.fn();
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        onTextReady,
+      );
+    });
+
+    expect(onTextReady).toHaveBeenCalledTimes(1);
+    expect(onTextReady.mock.calls[0][1]).toEqual({
+      suppressRender: true,
+      earlyRollPromptAllowed: true,
+    });
   });
 
   it('keeps the early render on a non-combat turn with no roll requests', async () => {
@@ -709,7 +802,10 @@ describe('useAIResponse', () => {
     });
 
     expect(onTextReady).toHaveBeenCalledTimes(1);
-    expect(onTextReady.mock.calls[0][1]).toEqual({ suppressRender: false });
+    expect(onTextReady.mock.calls[0][1]).toEqual({
+      suppressRender: false,
+      earlyRollPromptAllowed: false,
+    });
     expect(onTextReady.mock.calls[0][0]).toMatchObject({ text: parsed.text, sender: 'dm' });
   });
 });

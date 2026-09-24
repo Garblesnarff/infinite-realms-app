@@ -78,6 +78,19 @@ export interface StructuredAIResponse {
  */
 export interface TextReadyOptions {
   suppressRender: boolean;
+  /**
+   * Whether this turn's `roll_requests` may be put in front of the player from the early
+   * callback.
+   *
+   * On a combat-start or in-combat turn the DM's `roll_requests` are an engine declaration
+   * channel, not player dice prompts: `rules-prompts.ts` asks for `initiative` and `attack`
+   * entries so the combat pipeline can read the declared action, and
+   * `dm-actions-handler.ts` strips both types once the encounter is seated. Prompting with the
+   * raw list takes the single visible dice slot away from the engine's own initiative prompt and
+   * throws the player's die away — see #2190. So only a non-combat narrative roll turn may
+   * prompt early; every other turn waits for the filtered final list.
+   */
+  earlyRollPromptAllowed: boolean;
 }
 
 export interface EnhancedChatMessage extends ChatMessage {
@@ -401,6 +414,10 @@ export const useAIResponse = (): {
                   // Non-combat, non-roll turns keep it (the #2095 fast-render win).
                   const suppressRender =
                     isInCombat || earlyShouldStartCombat || earlyRollRequests.length > 0;
+                  // Combat turns hand their roll requests to the engine, not to the dice popup
+                  // (#2190). Only a narrative roll turn outside combat may prompt early.
+                  const earlyRollPromptAllowed =
+                    earlyRollRequests.length > 0 && !isInCombat && !earlyShouldStartCombat;
                   let earlyText = parsedResult.text;
                   if (!suppressRender && parsedResult.options?.length) {
                     earlyText = `${earlyText.trim()}\n\n${parsedResult.options.join('\n')}`;
@@ -431,7 +448,7 @@ export const useAIResponse = (): {
                         combatActions: parsedResult.combatDetection?.combatActions || [],
                       },
                     },
-                    { suppressRender },
+                    { suppressRender, earlyRollPromptAllowed },
                   );
                 },
               }

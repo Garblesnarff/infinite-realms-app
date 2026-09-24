@@ -32,6 +32,7 @@ import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
+import { isNarrativeRollRequest } from '@/utils/roll-request/engine-channel';
 
 interface UseMessageHandlerLogicProps {
   sessionId: string;
@@ -268,13 +269,27 @@ export const useMessageHandlerLogic = ({
             // inside `handleDmActionsAndTransitions`, after this callback). Declaration-turn
             // prose can describe a hit or miss the dice have not decided yet, so nothing is
             // rendered here; the composer stays blocked until resolution.
-            if (hasEarlyRollRequests) {
-              // The structured roll request is the authoritative UI boundary, so the prompt
-              // still goes up immediately. This 'text shown' marks that prompt, not narration.
+            // A narrative roll turn outside combat may show its prompt immediately — the
+            // structured request is the authoritative UI boundary there. A combat-start or
+            // in-combat turn may not: those `roll_requests` are the DM's engine declaration
+            // channel, `dm-actions-handler` strips `attack`/`initiative` once the encounter is
+            // seated, and prompting with the raw list steals the single visible dice slot from
+            // the engine's own initiative prompt (#2190). Those turns wait for the final,
+            // filtered list. The type filter is defence in depth: no engine-channel request is
+            // ever forwarded from here, whatever the flag says.
+            const earlyPromptRollRequests = textReadyOptions?.earlyRollPromptAllowed
+              ? (earlyResponse.rollRequests ?? []).filter(isNarrativeRollRequest)
+              : [];
+            if (earlyPromptRollRequests.length > 0) {
               rollTurnStarted = true;
               turnPhase('text shown');
               textPhaseEmitted = true;
-              processAiResponse(earlyResponse.rollRequests ?? []);
+              processAiResponse(earlyPromptRollRequests);
+            } else if (hasEarlyRollRequests) {
+              logger.info('[RollPrompt] early roll prompt withheld for an engine-resolved turn', {
+                requestTypes: (earlyResponse.rollRequests ?? []).map((request) => request.type),
+                inCombatTurn: !textReadyOptions?.earlyRollPromptAllowed,
+              });
             }
             return;
           }

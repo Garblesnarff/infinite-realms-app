@@ -5,6 +5,7 @@ import {
   markPlayerRollCommitted,
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
+  PLAYER_ATTACK_ROLL_TIMEOUT_MS,
   PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
   setPlayerRollHost,
   settlePendingPlayerRoll,
@@ -217,6 +218,65 @@ describe('the player roll bridge', () => {
     await expect(pending).resolves.toEqual({ d20: null });
     expect(markPlayerRollCommitted('initiative-roll-1')).toBe(false);
     settleInitiative?.({ d20: 14 });
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+  /**
+   * #2190: the attack prompt used to have no timer. A prompt the player never answers — or one
+   * whose queue slot was taken by another request, so it was never visible — left the resolution
+   * awaiting forever, the turn unfinished and the composer disabled. That was the M3 dead-end.
+   */
+  it('auto-rolls an unanswered attack prompt after the bounded timeout', async () => {
+    vi.useFakeTimers();
+    const dismiss = vi.fn();
+    const present = vi.fn((_spec, _settle) => hostHandle('attack-roll-1', dismiss));
+    setPlayerRollHost({ present });
+
+    const pending = requestPlayerAttackRoll(SPEC);
+
+    expect(hasPendingPlayerRoll()).toBe(true);
+    await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({ d20: null });
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('clears the attack timeout when the player supplies a die', async () => {
+    vi.useFakeTimers();
+    let settleAttack: ((outcome: { d20: number | null }) => void) | undefined;
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        settleAttack = settle;
+        return hostHandle('attack-roll-1');
+      },
+    });
+
+    const pending = requestPlayerAttackRoll(SPEC);
+    settleAttack?.({ d20: 18 });
+
+    await expect(pending).resolves.toEqual({ d20: 18 });
+    await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS);
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('lets a committed attack roll settle after its prompt window', async () => {
+    vi.useFakeTimers();
+    let settleAttack: ((outcome: { d20: number | null }) => void) | undefined;
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        settleAttack = settle;
+        return hostHandle('attack-roll-1');
+      },
+    });
+
+    const pending = requestPlayerAttackRoll(SPEC);
+
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(markPlayerRollCommitted('attack-roll-1')).toBe(true);
+    await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS);
+    settleAttack?.({ d20: 11 });
+
+    await expect(pending).resolves.toEqual({ d20: 11 });
     expect(hasPendingPlayerRoll()).toBe(false);
   });
 });

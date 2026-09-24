@@ -5,6 +5,8 @@
  * Extracted from GameContext.tsx for better maintainability and testability.
  */
 
+import { nextVisibleRollId } from './dice-queue-visibility';
+
 import type { DiceRollRequest, DiceRollQueue, DiceRoll } from '@/types/combat';
 
 import logger from '@/lib/logger';
@@ -102,12 +104,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return state;
       }
 
+      // An engine roll request takes the single visible slot from an ordinary narrative roll; see
+      // `dice-queue-visibility` for why the order is load-bearing (#2190).
       return {
         ...state,
         diceRollQueue: {
           ...state.diceRollQueue,
           pendingRolls: [...state.diceRollQueue.pendingRolls, action.payload],
-          currentRollId: state.diceRollQueue.currentRollId || action.payload.id,
+          currentRollId: nextVisibleRollId(state.diceRollQueue, action.payload),
         },
       };
     }
