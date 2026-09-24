@@ -3,17 +3,11 @@ import type { DiceRollQueue, DiceRollRequest } from '@/types/combat';
 type LabeledRoll = DiceRollRequest & { purpose?: string };
 
 /**
- * The roll the player has to resolve right now. Prefer `getCurrentDiceRoll()`
- * (same pending + currentRollId rule) and fall back to the queue on state so a
- * render still sees the request if the getter is stale.
+ * The pending request `state.diceRollQueue` is showing right now.
+ * Read the queue on state. Do not call `getCurrentDiceRoll()` — that getter
+ * reads a ref updated during render and lags the queue by one commit.
  */
-export function currentQueueRoll(
-  queue: DiceRollQueue | undefined,
-  fromGetter: DiceRollRequest | null | undefined,
-): DiceRollRequest | null {
-  if (fromGetter?.status === 'pending') {
-    return fromGetter;
-  }
+export function currentQueueRoll(queue: DiceRollQueue | undefined): DiceRollRequest | null {
   if (!queue?.currentRollId) return null;
   return (
     queue.pendingRolls.find(

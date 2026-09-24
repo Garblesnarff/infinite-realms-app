@@ -12,6 +12,8 @@ export interface DiceRollResult {
   rolls: Array<{
     dice: number;
     value: number;
+    /** +1, or -1 when this face comes from a subtracted dice group. */
+    sign?: 1 | -1;
     critical?: boolean;
   }>;
   modifiers: number;
@@ -59,9 +61,9 @@ export class DiceEngine {
 
     const roll = new DiceRoll(finalExpression);
     const rolls = parseLibraryRoll(roll.rolls, finalExpression);
-    const naturalRoll = rolls.find((face) => face.dice === 20)?.value;
-    const diceSum = rolls.reduce((sum, face) => sum + face.value, 0);
-    const modifiers = rolls.length > 0 ? roll.total - diceSum : 0;
+    const naturalRoll = rolls.find((face) => face.dice === 20 && face.sign !== -1)?.value;
+    const signedSum = rolls.reduce((sum, face) => sum + face.value * face.sign, 0);
+    const modifiers = rolls.length > 0 ? roll.total - signedSum : 0;
 
     return {
       expression: finalExpression,

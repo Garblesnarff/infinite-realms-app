@@ -4,6 +4,8 @@ import { DiceEngine } from '../DiceEngine';
 
 import type { Character } from '@/types/character';
 
+import { formatRollBreakdown } from '@/features/game-session/components/dice/format-roll-breakdown';
+
 describe('DiceEngine', () => {
   const mockCharacter: Partial<Character> = {
     level: 5, // Proficiency +3
@@ -46,6 +48,18 @@ describe('DiceEngine', () => {
       const result = DiceEngine.roll('1d20-2');
       expect(result.modifiers).toBe(-2);
       expect(result.total).toBe((result.naturalRoll ?? 0) - 2);
+    });
+
+    it('carries a subtracted dice group sign through 1d8+1d6-1d4', () => {
+      const result = DiceEngine.roll('1d8+1d6-1d4');
+      expect(result.rolls.map((face) => face.sign)).toEqual([1, 1, -1]);
+      expect(result.rolls.map((face) => face.dice)).toEqual([8, 6, 4]);
+      expect(result.modifiers).toBe(0);
+      const [first, second, third] = result.rolls;
+      expect(result.total).toBe(first.value + second.value - third.value);
+      expect(formatRollBreakdown(result)).toBe(
+        `${first.value} + ${second.value} - ${third.value} = ${result.total}`,
+      );
     });
 
     it('should handle advantage on d20 rolls', () => {

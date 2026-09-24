@@ -95,19 +95,25 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
   }) => {
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
     const { queueStatus } = useMessageContext();
-    const { state: gameState, getCurrentDiceRoll } = useGame();
+    const { state: gameState } = useGame();
     const { hasPendingRolls, pendingRequests } = usePendingRolls();
-    const queuedRoll = currentQueueRoll(gameState.diceRollQueue, getCurrentDiceRoll());
+    // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
+    const queuedRoll = currentQueueRoll(gameState.diceRollQueue);
     const queuedLabel = queuedRoll ? queueRollLabel(queuedRoll) : null;
-    const chatRollLabel = hasPendingRolls
+    // Chat parsing is only for messages saved before rolls lived on the queue.
+    const chatIsFallback = !queuedLabel && hasPendingRolls;
+    const chatRollLabel = chatIsFallback
       ? pendingRequests.length === 1
         ? pendingRequests[0].purpose || pendingRequests[0].type
         : `${pendingRequests.length} pending rolls`
       : null;
-    // The dice queue is the combat source of truth. It wins over a chat-parsed
-    // request and over the "Checking whose turn it is…" bar.
     const rollPillLabel = queuedLabel ?? chatRollLabel;
-    const rollBlocksInput = Boolean(queuedRoll) || hasPendingRolls;
+    const rollBlocksInput = Boolean(rollPillLabel);
+    const completionBanner = !rollPillLabel
+      ? null
+      : chatIsFallback && pendingRequests.length > 1
+        ? `Please complete ${rollPillLabel} above`
+        : `Please complete the ${rollPillLabel} roll above`;
     const sceneBlurb = stripAssetTags(sessionData.current_scene_description || '');
     const overhaul = useOverhaulViewModel({
       chapterLabel: resolveCampaignChapterLabel(sessionData.turn_count),
@@ -306,16 +312,12 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     )
                   )}
 
-                  {/* Pending Roll Indicator */}
-                  {hasPendingRolls && (
+                  {/* Same label as the pill. Queue wins; chat text is the pre-queue fallback. */}
+                  {completionBanner && (
                     <div className="border-t border-orange-200 bg-orange-50 p-3">
                       <div className="flex items-center gap-2 text-orange-700">
                         <Dice6 className="w-4 h-4" />
-                        <span className="text-sm font-medium">
-                          {pendingRequests.length === 1
-                            ? `Please complete the ${pendingRequests[0].type} roll above`
-                            : `Please complete ${pendingRequests.length} pending rolls above`}
-                        </span>
+                        <span className="text-sm font-medium">{completionBanner}</span>
                       </div>
                     </div>
                   )}

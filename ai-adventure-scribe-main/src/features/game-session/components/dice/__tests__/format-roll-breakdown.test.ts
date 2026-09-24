@@ -23,6 +23,20 @@ describe('formatRollBreakdown', () => {
     ).toBe('9 - 2 = 7');
   });
 
+  it('keeps a subtracted dice group negative instead of folding it into the modifier', () => {
+    expect(
+      formatRollBreakdown({
+        rolls: [
+          { value: 8, sign: 1 },
+          { value: 4, sign: 1 },
+          { value: 2, sign: -1 },
+        ],
+        modifiers: 0,
+        total: 10,
+      }),
+    ).toBe('8 + 4 - 2 = 10');
+  });
+
   it('lists every face before the modifier', () => {
     expect(
       formatRollBreakdown({

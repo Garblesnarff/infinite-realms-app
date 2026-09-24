@@ -15,6 +15,13 @@ const state = vi.hoisted(() => ({
     purpose?: string;
     requestType: string;
   },
+  getterRoll: null as null | {
+    id: string;
+    status: 'pending' | 'completed' | 'cancelled';
+    description: string;
+    purpose?: string;
+    requestType: string;
+  },
   lastChapterLabel: undefined as string | undefined,
   combatTurnUiState: {
     holder: null as string | null,
@@ -38,7 +45,7 @@ vi.mock('@/contexts/GameContext', () => ({
         completedBatchRolls: [],
       },
     },
-    getCurrentDiceRoll: () => state.currentRoll,
+    getCurrentDiceRoll: () => state.getterRoll,
   }),
 }));
 vi.mock('@/hooks/use-pending-rolls', () => ({
@@ -160,6 +167,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.hasPendingRolls = false;
     state.pendingRequests = [];
     state.currentRoll = null;
+    state.getterRoll = null;
     state.lastChapterLabel = undefined;
     state.combatTurnUiState = {
       holder: null,
@@ -199,7 +207,9 @@ describe('GameMainContent overhaul behavior contract', () => {
     render(<GameMainContent {...baseProps} />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Wisdom saving throw');
-    expect(screen.getByText('Please complete the saving throw roll above')).toBeInTheDocument();
+    expect(
+      screen.getByText('Please complete the Wisdom saving throw roll above'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
   });
 
@@ -234,9 +244,48 @@ describe('GameMainContent overhaul behavior contract', () => {
     render(<GameMainContent {...baseProps} isCombatDetected />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
+    expect(
+      screen.getByText('Please complete the Longsword attack vs … roll above'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Checking whose turn it is…')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resume turn' })).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('lets the queue label own the banner and lock even when a chat roll is also parsed', () => {
+    state.currentRoll = {
+      id: 'attack-1',
+      status: 'pending',
+      requestType: 'attack',
+      description: 'Longsword attack vs …',
+    };
+    state.hasPendingRolls = true;
+    state.pendingRequests = [{ type: 'saving throw', purpose: 'Wisdom saving throw' }];
+
+    render(<GameMainContent {...baseProps} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
+    expect(
+      screen.getByText('Please complete the Longsword attack vs … roll above'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Wisdom saving throw/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/saving throw roll above/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('ignores a getCurrentDiceRoll result that is not on diceRollQueue state', () => {
+    state.getterRoll = {
+      id: 'stale-1',
+      status: 'pending',
+      requestType: 'attack',
+      description: 'Stale longsword',
+    };
+
+    render(<GameMainContent {...baseProps} />);
+
+    expect(screen.queryByText(/Stale longsword/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your roll:/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).not.toBeDisabled();
   });
 
   it('shows Resume turn for an unknown holder and reruns the recovery preflight', () => {
