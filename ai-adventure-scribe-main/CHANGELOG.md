@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.20.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.13...v0.20.0) (2026-09-25)
+
+
+### Features
+
+* **ops:** /health reports effective image model; dry-run names newest run ([#2201](https://github.com/Garblesnarff/infinite-realms-production/issues/2201)) ([#2208](https://github.com/Garblesnarff/infinite-realms-production/issues/2208)) ([face640](https://github.com/Garblesnarff/infinite-realms-production/commit/face6406a3a5be8e7816373adfb8508b5932178a))
+* **scripts:** add read-only --check-links mode to campaign asset uploader ([#2205](https://github.com/Garblesnarff/infinite-realms-production/issues/2205)) ([#2214](https://github.com/Garblesnarff/infinite-realms-production/issues/2214)) ([9831038](https://github.com/Garblesnarff/infinite-realms-production/commit/983103887612d76e3a1caf7acf3431d73f4ab66b))
+* **voice:** free in-browser Standard voice with kokoro-js ([#2162](https://github.com/Garblesnarff/infinite-realms-production/issues/2162)) ([#2180](https://github.com/Garblesnarff/infinite-realms-production/issues/2180)) ([a760a0d](https://github.com/Garblesnarff/infinite-realms-production/commit/a760a0d014c187a378792172eb0896c33d2b8c28))
+
+
+### Bug Fixes
+
+* **client:** character sheet renders every premade and names the real load error ([#2150](https://github.com/Garblesnarff/infinite-realms-production/issues/2150)) ([#2156](https://github.com/Garblesnarff/infinite-realms-production/issues/2156)) ([6d867b5](https://github.com/Garblesnarff/infinite-realms-production/commit/6d867b5c43c87a8e01637a8fe4676538d55b8179))
+* **client:** commit the attack roll timeout on click, like initiative ([#2200](https://github.com/Garblesnarff/infinite-realms-production/issues/2200)) ([#2209](https://github.com/Garblesnarff/infinite-realms-production/issues/2209)) ([ab23e3a](https://github.com/Garblesnarff/infinite-realms-production/commit/ab23e3a4468ea261b9a17a238e1e348c41850a9c))
+* **client:** gate custom campaign wizard for beta ([#2192](https://github.com/Garblesnarff/infinite-realms-production/issues/2192)) ([#2197](https://github.com/Garblesnarff/infinite-realms-production/issues/2197)) ([f94937a](https://github.com/Garblesnarff/infinite-realms-production/commit/f94937acf338d5ccff031aa50ffb459b77d7953b))
+* **client:** gate empty-picker roster fallback behind !isStarterCampaign ([#2193](https://github.com/Garblesnarff/infinite-realms-production/issues/2193) round 2) ([#2193](https://github.com/Garblesnarff/infinite-realms-production/issues/2193)) ([1a85b0b](https://github.com/Garblesnarff/infinite-realms-production/commit/1a85b0b672cf8dbac66562e815106a8a3a4112d9))
+* **client:** keep the DM's engine roll_requests out of the dice popup ([#2190](https://github.com/Garblesnarff/infinite-realms-production/issues/2190)) ([#2196](https://github.com/Garblesnarff/infinite-realms-production/issues/2196)) ([bdff486](https://github.com/Garblesnarff/infinite-realms-production/commit/bdff4865fddce7f2ddb18ef1c4272da7daecd218))
+* **client:** one queue label for the roll pill, banner, and lock ([#2195](https://github.com/Garblesnarff/infinite-realms-production/issues/2195)) ([#2207](https://github.com/Garblesnarff/infinite-realms-production/issues/2207)) ([2627748](https://github.com/Garblesnarff/infinite-realms-production/commit/26277483373f7beacf7db231356489f81e5b1808))
+* **client:** preserve combat transcript ordering ([#2138](https://github.com/Garblesnarff/infinite-realms-production/issues/2138)) ([8670fd8](https://github.com/Garblesnarff/infinite-realms-production/commit/8670fd8fed2896153773b28b9a1985bfe9f233c5))
+* **client:** queued roll pill and die breakdown ([#2191](https://github.com/Garblesnarff/infinite-realms-production/issues/2191)) ([#2194](https://github.com/Garblesnarff/infinite-realms-production/issues/2194)) ([557307e](https://github.com/Garblesnarff/infinite-realms-production/commit/557307ee833c4f8c4e1edbe5967cf1da889deb5e))
+* **client:** replace import.meta?.env so prod flags and blog role are real ([#2211](https://github.com/Garblesnarff/infinite-realms-production/issues/2211)) ([#2217](https://github.com/Garblesnarff/infinite-realms-production/issues/2217)) ([ce7266b](https://github.com/Garblesnarff/infinite-realms-production/commit/ce7266ba7a37e1c0cb7a17dc63a03c4f2b612bf7))
+* **client:** restore persist TURN_PHASE and cap background LLM retries ([#2135](https://github.com/Garblesnarff/infinite-realms-production/issues/2135) [#2134](https://github.com/Garblesnarff/infinite-realms-production/issues/2134)) ([#2137](https://github.com/Garblesnarff/infinite-realms-production/issues/2137)) ([567a081](https://github.com/Garblesnarff/infinite-realms-production/commit/567a081d0381d102ac4e645779718ce7510a8564))
+* **client:** route dead /app links and add /app/* not-found page ([#2155](https://github.com/Garblesnarff/infinite-realms-production/issues/2155)) ([#2179](https://github.com/Garblesnarff/infinite-realms-production/issues/2179)) ([74b5514](https://github.com/Garblesnarff/infinite-realms-production/commit/74b551433d762ef07d63cee93069e8f8c341959d))
+* **client:** stop campaigns-list request fan-out; retry UI on failure ([#2149](https://github.com/Garblesnarff/infinite-realms-production/issues/2149)) ([#2153](https://github.com/Garblesnarff/infinite-realms-production/issues/2153)) ([a8387f6](https://github.com/Garblesnarff/infinite-realms-production/commit/a8387f6c89dddc79dbf6992006eb9d266d29c833))
+* **client:** suppress premature roll narration ([#2139](https://github.com/Garblesnarff/infinite-realms-production/issues/2139)) ([#2147](https://github.com/Garblesnarff/infinite-realms-production/issues/2147)) ([68934e9](https://github.com/Garblesnarff/infinite-realms-production/commit/68934e9c5db2b6225081a47de5421d9254299627))
+* **dm:** server persists the DM reply it generated; client reconciles ([#2218](https://github.com/Garblesnarff/infinite-realms-production/issues/2218)) ([#2223](https://github.com/Garblesnarff/infinite-realms-production/issues/2223)) ([1edd391](https://github.com/Garblesnarff/infinite-realms-production/commit/1edd391396b2e4f3c746c0015237987c8a4ba235))
+* **memory:** make memory extraction a server-owned job ([#2148](https://github.com/Garblesnarff/infinite-realms-production/issues/2148)) ([#2186](https://github.com/Garblesnarff/infinite-realms-production/issues/2186)) ([0bc46f9](https://github.com/Garblesnarff/infinite-realms-production/commit/0bc46f9a01921acee009b677e204a0e9c1a5b335))
+* **server:** cap free-plan image and voice quotas ([#2159](https://github.com/Garblesnarff/infinite-realms-production/issues/2159)) ([#2178](https://github.com/Garblesnarff/infinite-realms-production/issues/2178)) ([f17a423](https://github.com/Garblesnarff/infinite-realms-production/commit/f17a423cff26f259d0c1a9245799aa2c73e5d80b))
+* **server:** keep authored monster attack name and range ([#2213](https://github.com/Garblesnarff/infinite-realms-production/issues/2213)) ([#2220](https://github.com/Garblesnarff/infinite-realms-production/issues/2220)) ([6428644](https://github.com/Garblesnarff/infinite-realms-production/commit/64286442cad97999d0e4413bdf971af03b816051))
+* **server:** move image default to gemini-3.1-flash-image; ignore client model ([#2157](https://github.com/Garblesnarff/infinite-realms-production/issues/2157)) ([#2177](https://github.com/Garblesnarff/infinite-realms-production/issues/2177)) ([e911ec0](https://github.com/Garblesnarff/infinite-realms-production/commit/e911ec099d802b904c46f7a24d068215195d3b3d))
+
+
+### Refactoring
+
+* **dice:** retire dead handleDiceRoll; animated results settle with their natural face ([#2219](https://github.com/Garblesnarff/infinite-realms-production/issues/2219)) ([#2222](https://github.com/Garblesnarff/infinite-realms-production/issues/2222)) ([1cc911c](https://github.com/Garblesnarff/infinite-realms-production/commit/1cc911c8fb0b8349f3bf70133d57ff17dffeb073))
+
+
+### Documentation
+
+* document the authored attack name and range line ([#2221](https://github.com/Garblesnarff/infinite-realms-production/issues/2221)) ([#2229](https://github.com/Garblesnarff/infinite-realms-production/issues/2229)) ([c5a57f4](https://github.com/Garblesnarff/infinite-realms-production/commit/c5a57f498e209788919a15605e2f56b7d082e57f))
+
 ## [0.19.13](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.12...v0.19.13) (2026-09-21)
 
 
