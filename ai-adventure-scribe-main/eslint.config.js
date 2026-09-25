@@ -6,6 +6,39 @@ import importPlugin from 'eslint-plugin-import';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 
+// Repo-local rules that need their own severity. A selector added to a shared
+// `no-restricted-syntax` entry takes that entry's severity (see #2216).
+const localPlugin = {
+  rules: {
+    'no-optional-import-meta-env': {
+      meta: {
+        type: 'problem',
+        docs: { description: 'Disallow import.meta?.env, which Vite does not replace (#2211).' },
+        schema: [],
+        messages: {
+          optionalEnv:
+            'Use import.meta.env.X (or import.meta.env?.X). Vite does not replace import.meta?.env, so the value is undefined in the production bundle.',
+        },
+      },
+      create(context) {
+        return {
+          MemberExpression(node) {
+            if (
+              node.optional &&
+              !node.computed &&
+              node.property.name === 'env' &&
+              node.object.type === 'MetaProperty' &&
+              node.object.property.name === 'meta'
+            ) {
+              context.report({ node, messageId: 'optionalEnv' });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -203,16 +236,21 @@ export default tseslint.config(
           message:
             'Read WorkOS tokens through services/auth/TokenService instead of localStorage directly.',
         },
-        {
-          // Vite replaces `import.meta.env` only in that exact form. `import.meta?.env`
-          // is shipped as a runtime read, and `import.meta.env` is undefined in the
-          // production bundle (#2211). `import.meta.env?.X` (optional after env) is fine.
-          selector:
-            "MemberExpression[optional=true][property.name='env'][object.type='MetaProperty'][object.property.name='meta']",
-          message:
-            'Use import.meta.env.X (or import.meta.env?.X). Vite does not replace import.meta?.env, so the value is undefined in the production bundle.',
-        },
       ],
+    },
+  },
+  // Vite replaces `import.meta.env` only in that exact form. `import.meta?.env`
+  // is shipped as a runtime read, and `import.meta.env` is undefined in the
+  // production bundle (#2211). `import.meta.env?.X` (optional after env) is fine.
+  // This lives in a local plugin rule, not in the `no-restricted-syntax` entry
+  // above, so it can be 'error' while the WorkOS selector stays 'warn' (#2216).
+  // Flat config replaces a rule's options per rule name, so one rule name holds
+  // one severity for all of its selectors.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: { local: localPlugin },
+    rules: {
+      'local/no-optional-import-meta-env': 'error',
     },
   },
   // TokenService is the one intentional owner of direct WorkOS token storage access.
