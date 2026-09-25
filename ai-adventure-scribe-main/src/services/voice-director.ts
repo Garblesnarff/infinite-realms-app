@@ -14,6 +14,7 @@
  */
 
 import { VoiceAudioService } from './voice/voice-audio-service';
+import { getVoiceCategoryKey } from './voice/voice-classification';
 import { VoiceDialogueParser } from './voice/voice-dialogue-parser';
 import { type VoicePool } from './voice/voice-pools';
 import { cleanSegmentText } from './voice/voice-utils';
@@ -70,6 +71,7 @@ export class VoiceDirector {
           character: segment.character || (segment.type === 'dm' ? 'DM' : 'Unknown'),
           voiceId: voiceConfig.id,
           voiceName: voiceConfig.name,
+          voiceCategory: getVoiceCategoryKey(voiceConfig),
           voiceSettings: voiceConfig.settings,
           isGenerating: false,
           isPlaying: false,
@@ -101,10 +103,7 @@ export class VoiceDirector {
   /**
    * Generate audio for a single segment with caching - Delegated to VoiceAudioService
    */
-  static async generateAudio(
-    segment: VoiceSegment,
-    signal?: AbortSignal,
-  ): Promise<VoiceSegment> {
+  static async generateAudio(segment: VoiceSegment, signal?: AbortSignal): Promise<VoiceSegment> {
     return VoiceAudioService.generateAudio(segment, signal);
   }
 

@@ -98,6 +98,7 @@
     "highlight.js": "^11.11.1",
     "howler": "^2.2.4",
     "jsonwebtoken": "^9.0.2",
+    "kokoro-js": "1.2.1",
     "lucide-react": "^0.462.0",
     "marked": "^16.4.2",
     "openai": "^4.64.0",

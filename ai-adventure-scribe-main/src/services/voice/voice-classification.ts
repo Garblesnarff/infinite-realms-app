@@ -30,6 +30,21 @@ export function getVoiceConfigByCategory(category: string): VoiceDefinition {
 }
 
 /**
+ * VOICE_CONFIGS key for an assigned voice, so non-ElevenLabs providers can map
+ * it to their own voice. assignVoice returns either a VOICE_CONFIGS entry
+ * (category path) or a pool entry (hash path). Identity is checked first so
+ * entries that share an ElevenLabs id (hero_male/guard, narrator/default)
+ * keep their own key; pool entries and seeded mappings match by id.
+ */
+export function getVoiceCategoryKey(voice: { id: string }): string {
+  const entries = Object.entries(VOICE_CONFIGS);
+  const byIdentity = entries.find(([, config]) => config === voice);
+  if (byIdentity) return byIdentity[0];
+  const byId = entries.find(([, config]) => config.id === voice.id);
+  return byId ? byId[0] : 'narrator';
+}
+
+/**
  * Get voice pool based on character name patterns
  */
 export function getVoicePoolByCharacter(character: string): VoiceConfig[] {

@@ -10,11 +10,20 @@ import type { NarrationSegment } from '@/hooks/use-ai-response';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
+import { useVoiceModeStatus } from '@/hooks/voice/use-voice-mode';
 import logger from '@/lib/logger';
+import { prepareStandardVoice } from '@/services/voice/kokoro-provider';
+import { type VoiceMode, setVoiceMode } from '@/services/voice/voice-mode-store';
 
 interface ProgressiveVoicePlayerProps {
   text: string;
@@ -55,6 +64,23 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
     clearCharacterVoiceMappings,
     initializeAudioContext,
   } = useProgressiveVoice();
+
+  const { mode: voiceMode } = useVoiceModeStatus();
+  // "Off" is the existing progressive-voice-enabled flag; Premium/Standard is the mode.
+  const voiceSelection = isVoiceEnabled ? voiceMode : 'off';
+  const handleVoiceSelection = React.useCallback(
+    (value: string) => {
+      if (value === 'off') {
+        if (isVoiceEnabled) toggleVoiceEnabled();
+        return;
+      }
+      const mode: VoiceMode = value === 'standard' ? 'standard' : 'premium';
+      setVoiceMode(mode);
+      if (mode === 'standard') prepareStandardVoice();
+      if (!isVoiceEnabled) toggleVoiceEnabled();
+    },
+    [isVoiceEnabled, toggleVoiceEnabled],
+  );
 
   const [showSegments, setShowSegments] = React.useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useLocalStorage(
@@ -124,14 +150,19 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Switch
-                  id="progressive-voice-enabled"
-                  checked={isVoiceEnabled}
-                  onCheckedChange={toggleVoiceEnabled}
-                />
                 <Label htmlFor="progressive-voice-enabled" className="text-sm">
-                  Enable
+                  Voice
                 </Label>
+                <Select value={voiceSelection} onValueChange={handleVoiceSelection}>
+                  <SelectTrigger id="progressive-voice-enabled" className="h-8 w-[130px] text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="premium">Premium</SelectItem>
+                    <SelectItem value="standard">Standard (free)</SelectItem>
+                    <SelectItem value="off">Off</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardTitle>

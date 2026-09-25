@@ -8,6 +8,8 @@ import {
 import { type VoicePool, VOICE_POOLS } from './voice/voice-pools';
 import { normalizeCharacterName } from './voice/voice-utils';
 
+import type { VoiceProviderId } from './voice/voice-provider';
+
 import logger from '@/lib/logger';
 
 // Re-export utility for backward compatibility and internal use
@@ -32,6 +34,10 @@ export interface VoiceSegment {
   character?: string;
   voiceId: string;
   voiceName: string;
+  /** VOICE_CONFIGS key (narrator, goblin, ...); providers map it to their own voice. */
+  voiceCategory?: string;
+  /** Which provider produced audioUrl ('speech-synthesis' segments have none). */
+  provider?: VoiceProviderId;
   voiceSettings: {
     stability: number;
     similarity_boost: number;

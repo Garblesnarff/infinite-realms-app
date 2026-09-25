@@ -85,6 +85,12 @@ export default defineConfig(({ mode }) => ({
       'node:async_hooks': path.resolve(__dirname, './src/lib/stubs/async-hooks.ts'),
     },
   },
+  worker: {
+    // Workers are created with { type: 'module' }. The Kokoro voice worker
+    // (#2162) lazy-imports kokoro-js, which needs code-split (ES) output;
+    // Vite's default 'iife' rejects that.
+    format: 'es',
+  },
   optimizeDeps: {
     exclude: ['@langchain/langgraph', '@langchain/core', 'langsmith'],
     include: ['camelcase', 'decamelize', 'sanitize-html', 'howler', 'uuid'],

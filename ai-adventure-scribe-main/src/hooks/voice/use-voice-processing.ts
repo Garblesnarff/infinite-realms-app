@@ -9,8 +9,11 @@ import React from 'react';
 import { logger } from '../../lib/logger';
 
 import type { ProgressiveVoiceState } from '../use-progressive-voice';
+import type { VoiceProviderId } from '@/services/voice/voice-provider';
 import type { VoiceSegment, AISegment } from '@/services/voice-routing';
 
+import { speakSegment } from '@/services/voice/speech-synthesis-voice';
+import { isStandardVoiceActive } from '@/services/voice/voice-mode-store';
 import { VoiceDirector } from '@/services/voice-director';
 
 const PREFETCH_CONCURRENCY = 3;
@@ -51,8 +54,8 @@ export function hashSegmentText(text: string): string {
   return String(Math.abs(hash));
 }
 
-function segmentCacheKey(segment: VoiceSegment): string {
-  return `${segment.voiceId ?? ''}:${hashSegmentText(segment.text)}`;
+function segmentCacheKey(segment: VoiceSegment, provider: VoiceProviderId): string {
+  return `${provider}:${segment.voiceId ?? ''}:${hashSegmentText(segment.text)}`;
 }
 
 async function generateWithCache(
@@ -60,7 +63,10 @@ async function generateWithCache(
   signal?: AbortSignal,
 ): Promise<VoiceSegment> {
   if (segment.audioUrl) return segment;
-  const key = segmentCacheKey(segment);
+  // Look up under the provider that would serve this segment now; store under
+  // the one that actually did (a premium 429 mid-turn yields kokoro audio).
+  const expectedProvider: VoiceProviderId = isStandardVoiceActive() ? 'kokoro' : 'elevenlabs';
+  const key = segmentCacheKey(segment, expectedProvider);
   const cached = segmentAudioCache.get(key);
   if (cached?.segment.audioUrl && cached.text === segment.text) {
     rememberSegment(key, cached.segment);
@@ -68,11 +74,12 @@ async function generateWithCache(
       ...segment,
       audioUrl: cached.segment.audioUrl,
       audioBlob: cached.segment.audioBlob,
+      provider: cached.segment.provider,
     };
   }
   const generated = await VoiceDirector.generateAudio(segment, signal);
   if (generated.audioUrl) {
-    rememberSegment(key, generated);
+    rememberSegment(segmentCacheKey(segment, generated.provider ?? expectedProvider), generated);
   }
   return generated;
 }
@@ -238,6 +245,9 @@ export const useVoiceProcessing = ({
 
           if (segmentWithAudio.audioUrl) {
             await playAudioSegment(segmentWithAudio, actualIndex);
+          } else if (segmentWithAudio.provider === 'speech-synthesis') {
+            // Standard voice on a slow device: no blob, the browser speaks it.
+            await speakSegment(segmentWithAudio, signal);
           }
           previousEndedAt = performance.now();
         } catch (error) {
