@@ -38,6 +38,8 @@ describe('campaign list empty state (#2192)', () => {
     renderEmptyState();
 
     expect(screen.getByText(/no campaigns found/i)).toBeInTheDocument();
+    expect(screen.getByText(/explore a pre-built one to begin/i)).toBeInTheDocument();
+    expect(screen.queryByText(/haven't created any campaigns/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /create campaign/i })).not.toBeInTheDocument();
   });
 

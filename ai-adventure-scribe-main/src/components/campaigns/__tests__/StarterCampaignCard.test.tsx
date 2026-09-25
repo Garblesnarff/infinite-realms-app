@@ -51,4 +51,15 @@ describe('StarterCampaignCard artwork fallback', () => {
       screen.getByRole('heading', { name: 'Academy of Arcane Gastronomy' }),
     ).toBeInTheDocument();
   });
+
+  it('shows level 1 when the stored span is the glued 7-10-11 range', () => {
+    render(
+      <MemoryRouter>
+        <StarterCampaignCard campaign={{ ...campaign, levelRange: '7-10-11' }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Level 1')).toBeInTheDocument();
+    expect(screen.queryByText(/7-10-11/)).not.toBeInTheDocument();
+  });
 });

@@ -14,6 +14,7 @@ import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-ar
 import { CampaignTitleOverlay } from '@/components/campaigns/CampaignTitleOverlay';
 import { Badge } from '@/components/ui/badge';
 import { Z_INDEX } from '@/constants/z-index';
+import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 
 interface StarterCampaignCardProps {
   campaign: StarterCampaign;
@@ -166,7 +167,7 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campai
                     d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
-                Level {campaign.levelRange}
+                Level {formatStarterLevelRange(campaign.levelRange)}
               </span>
             )}
             {campaign.estimatedSessions && (

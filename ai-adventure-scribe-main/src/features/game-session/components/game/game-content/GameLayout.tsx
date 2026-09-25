@@ -117,7 +117,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
 
     return (
       <div
-        className="bg-background relative"
+        className="relative max-w-full overflow-x-hidden bg-background"
         style={{ ['--top-offset' as string]: `${topOffset}px` }}
       >
         {/* Scene background layer */}

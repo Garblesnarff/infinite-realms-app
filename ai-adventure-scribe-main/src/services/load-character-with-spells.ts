@@ -4,6 +4,7 @@
 
 import { buildAbilityScores } from './build-ability-scores';
 import { characterSpellService } from './characterSpellApi';
+import { hydrateCharacterStats } from './hydrate-character-stats';
 
 import type { CharacterSpellData } from './characterSpellApi';
 import type {
@@ -200,6 +201,9 @@ export async function loadCharacterWithSpells(
       // The server stores and seats this AC value; do not recompute it from
       // ability scores after the character API has already supplied it.
       armorClass: stats?.armor_class ?? undefined,
+      // The stat bar reads stored HP from character_stats. Dropping the row
+      // here left a premade on "—" for the whole session (#2235).
+      character_stats: hydrateCharacterStats(stats),
       abilityScores: buildAbilityScores({
         strength: stats?.strength || 10,
         dexterity: stats?.dexterity || 10,

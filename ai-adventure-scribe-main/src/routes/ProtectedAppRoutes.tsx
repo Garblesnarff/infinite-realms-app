@@ -15,7 +15,7 @@ const AppRouteTable: React.FC = () => useRoutes(getAppRoutes());
  */
 export const ProtectedAppRoutes: React.FC = () => (
   <ProtectedRoute>
-    <div className="ir-app">
+    <div className="ir-app max-w-full overflow-x-hidden">
       <Navigation />
       <Breadcrumbs />
       <main id="main-content" tabIndex={-1}>

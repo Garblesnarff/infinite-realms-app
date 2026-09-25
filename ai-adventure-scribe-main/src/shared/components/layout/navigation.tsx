@@ -36,8 +36,8 @@ const Navigation: React.FC = () => {
       className="sticky top-0 w-full border-b border-infinite-purple/30 bg-infinite-dark/95 shadow-nav-panel backdrop-blur supports-[backdrop-filter]:bg-infinite-dark/60"
       style={{ zIndex: Z_INDEX.STICKY }}
     >
-      <div className="container mx-auto px-4">
-        <div className="flex h-14 items-center justify-between">
+      <div className="container mx-auto min-w-0 max-w-full px-4">
+        <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
           {/* Logo/Home */}
           <Link
             to="/app"
@@ -48,7 +48,7 @@ const Navigation: React.FC = () => {
           </Link>
 
           {/* Navigation Links */}
-          <div className="flex items-center space-x-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <div className="flex space-x-4">
               <Link
                 to="/app"
@@ -105,7 +105,7 @@ const Navigation: React.FC = () => {
                 title="Account Settings"
               >
                 <Settings className="h-4 w-4" />
-                <span className="hidden sm:inline">{user?.email}</span>
+                <span className="hidden lg:inline">{user?.email}</span>
               </Link>
               <Button
                 onClick={handleSignOut}

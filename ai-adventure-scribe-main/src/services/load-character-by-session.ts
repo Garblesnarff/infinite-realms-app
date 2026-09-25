@@ -3,6 +3,7 @@
  */
 
 import { buildAbilityScores } from './build-ability-scores';
+import { hydrateCharacterStats } from './hydrate-character-stats';
 
 import type {
   Character,
@@ -63,6 +64,7 @@ export async function loadCharacterBySession(
       level: characterData.level,
       background: characterBackground as CharacterBackground | null,
       armorClass: characterData.character_stats?.[0]?.armor_class ?? undefined,
+      character_stats: hydrateCharacterStats(characterData.character_stats?.[0]),
       description: characterData.description,
       abilityScores: characterData.character_stats?.[0]
         ? buildAbilityScores({

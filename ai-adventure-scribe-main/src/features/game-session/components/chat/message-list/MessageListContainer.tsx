@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
 import { useMessageDiceRolls } from './use-message-dice-rolls';
+import { isPlayerChatBubble } from './utils/player-chat-bubble';
 
 import type { MessageSendContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
@@ -95,20 +96,23 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       let currentGroup = {
         sender: messages[0].sender,
         messages: [messages[0]],
-        isPlayer: messages[0].sender === 'player',
+        isPlayer: isPlayerChatBubble(messages[0]),
         isCompanion: messages[0].sender === 'companion',
       };
 
       for (let i = 1; i < messages.length; i++) {
         const message = messages[i];
-        if (message.sender === currentGroup.sender) {
+        const sameBubble =
+          message.sender === currentGroup.sender &&
+          isPlayerChatBubble(message) === currentGroup.isPlayer;
+        if (sameBubble) {
           currentGroup.messages.push(message);
         } else {
           groups.push(currentGroup);
           currentGroup = {
             sender: message.sender,
             messages: [message],
-            isPlayer: message.sender === 'player',
+            isPlayer: isPlayerChatBubble(message),
             isCompanion: message.sender === 'companion',
           };
         }
@@ -225,8 +229,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         {/* Global Dice Roll Request - Shows current roll from GameContext queue */}
         {currentRoll && rollRequest && (
           <div
-            className="fixed bottom-24 left-1/2 transform -translate-x-1/2"
-            style={{ zIndex: Z_INDEX.POPOVER }}
+            className="sticky bottom-2 mx-auto w-full max-w-md"
+            style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
           >
             <DiceRollRequest
               key={currentRoll.id}

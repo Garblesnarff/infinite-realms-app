@@ -138,7 +138,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
               />
             )}
           </div>
-        ) : message.sender === 'system' ? (
+        ) : message.sender === 'system' || (message.sender === 'player' && !isPlayer) ? (
           <SystemMessage
             message={message}
             isFirstInGroup={isFirstInGroup}

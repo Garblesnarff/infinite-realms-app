@@ -118,7 +118,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     return (
       <div className="flex-1 min-h-0">
         <div
-          className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-4 md:py-6 space-y-6 chat-scroll parchment-panel bg-gradient-to-b from-background/50 to-background/30"
+          className="chat-scroll parchment-panel flex-1 min-h-0 min-w-0 max-w-full space-y-6 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-background/50 to-background/30 px-4 py-4 md:px-6 md:py-6"
           role="log"
           aria-live="polite"
           ref={messagesRef}

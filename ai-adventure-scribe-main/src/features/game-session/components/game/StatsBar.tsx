@@ -25,12 +25,12 @@ const StatBadge = React.memo(
     label: string;
     color: string;
   }) => (
-    <div className="text-center">
-      <div className={`flex items-center justify-center gap-1 ${color} mb-1`}>
+    <div className="flex min-w-[3.25rem] shrink-0 flex-col items-center text-center">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 flex items-center justify-center gap-1 ${color}`}>
         <Icon className="w-3 h-3" />
         <span className="text-xs font-bold">{value}</span>
       </div>
-      <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   ),
 );
@@ -67,7 +67,7 @@ export const StatsBar: React.FC = React.memo(() => {
   const { armorClass, proficiencyBonus: proficiency, initiative } = stats;
 
   return (
-    <div className="flex items-center gap-4 mt-2 mb-4 p-2 bg-muted/50 rounded-lg">
+    <div className="flex max-w-full flex-wrap items-center gap-4 rounded-lg bg-muted/50 p-2">
       <StatBadge
         icon={Heart}
         value={formatCharacterSheetHitPoints({ current: currentHp, maximum: maxHp })}

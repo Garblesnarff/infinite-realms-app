@@ -19,7 +19,9 @@ const EmptyState = () => {
         No Campaigns Found
       </h3>
       <p className="text-muted-foreground mb-6">
-        You haven't created any campaigns yet. Your tales await.
+        {isCustomCampaignsEnabled()
+          ? "You haven't created any campaigns yet. Your tales await."
+          : "You haven't started a campaign yet. Explore a pre-built one to begin."}
       </p>
       {/*
         #2192: the wizard is hidden from beta users while the flag is off.

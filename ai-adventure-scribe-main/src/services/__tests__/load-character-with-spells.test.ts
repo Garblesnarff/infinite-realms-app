@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { loadCharacterWithSpells } from '../load-character-with-spells';
 
+import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
+
 const { getCharacter, getCharacterSpells, convertSpellIdsToFrontend } = vi.hoisted(() => ({
   getCharacter: vi.fn(),
   getCharacterSpells: vi.fn(),
@@ -71,5 +73,37 @@ describe('loadCharacterWithSpells API spell shape', () => {
       1: { max: 4, current: 3 },
       2: { max: 2, current: 1 },
     });
+  });
+
+  it("keeps a premade's stored hit points on the character the stat bar reads", async () => {
+    getCharacter.mockResolvedValue({
+      id: 'veteran',
+      name: 'The Veteran',
+      race: 'Human',
+      class: 'Fighter',
+      level: 1,
+      cantrips: '',
+      known_spells: '',
+      prepared_spells: '',
+      ritual_spells: '',
+      character_stats: [
+        {
+          strength: 16,
+          dexterity: 12,
+          constitution: 14,
+          intelligence: 10,
+          wisdom: 13,
+          charisma: 10,
+          armor_class: 18,
+          max_hit_points: 12,
+          current_hit_points: 12,
+        },
+      ],
+    });
+    getCharacterSpells.mockResolvedValue({ cantrips: [], spells: [] });
+
+    const result = await loadCharacterWithSpells('veteran');
+
+    expect(getCharacterSheetHitPoints(result!)).toEqual({ current: 12, maximum: 12 });
   });
 });

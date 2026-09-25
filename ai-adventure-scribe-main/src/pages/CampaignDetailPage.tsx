@@ -23,6 +23,8 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { resolveOrCreateStarterCampaign } from '@/services/starter-campaign-bootstrap';
 import { userDataApi } from '@/services/user-data-api';
+import { previewCampaignOverview } from '@/utils/campaign/preview-campaign-overview';
+import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 
 const CampaignDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -161,7 +163,7 @@ const CampaignDetailPage: React.FC = () => {
                     d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
-                <span>Level {campaign.levelRange}</span>
+                <span>Level {formatStarterLevelRange(campaign.levelRange)}</span>
               </div>
             )}
             {campaign.estimatedSessions && (
@@ -214,9 +216,7 @@ const CampaignDetailPage: React.FC = () => {
               <h2 className="text-2xl font-bold text-white mb-4">What Awaits You</h2>
               <div className="prose prose-invert prose-lg max-w-none">
                 <p className="text-gray-300 leading-relaxed whitespace-pre-line">
-                  {/* Extract first section (before ## or first 800 chars) for a polished preview */}
-                  {campaign.overview.split(/\n##/)[0].slice(0, 800).trim()}
-                  {campaign.overview.length > 800 && '...'}
+                  {previewCampaignOverview(campaign.overview)}
                 </p>
               </div>
             </div>
