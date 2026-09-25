@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.20.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.1...v0.20.2) (2026-09-25)
+
+
+### Bug Fixes
+
+* **combat:** premade casters resolve their own spells in combat ([#2233](https://github.com/Garblesnarff/infinite-realms-production/issues/2233)) ([#2238](https://github.com/Garblesnarff/infinite-realms-production/issues/2238)) ([fe7a4e3](https://github.com/Garblesnarff/infinite-realms-production/commit/fe7a4e3a8dc3d2f7875d32c91738bed3a6c02069))
+* **server:** record image, voice, and chronicle AI cost ([#2160](https://github.com/Garblesnarff/infinite-realms-production/issues/2160)) ([#2181](https://github.com/Garblesnarff/infinite-realms-production/issues/2181)) ([e804e12](https://github.com/Garblesnarff/infinite-realms-production/commit/e804e12a05349aa388c3339f619e4227fdd42236))
+
 ## [0.20.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.0...v0.20.1) (2026-09-25)
 
 
