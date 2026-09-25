@@ -374,6 +374,10 @@ export interface AuthoredAttackFields {
   attackBonus?: number;
   damageDice?: string;
   damageType?: string;
+  /** From `Attack (Name):`. Absent means the profile names the swing `<monster> attack`. */
+  attackName?: string;
+  /** Remainder of the Attack line. Geometry is read from this; empty stays melee 5 ft. */
+  attackText?: string;
 }
 
 /**
@@ -398,17 +402,21 @@ export function resolveMonsterAttackProfile(input: {
   if (authored?.attackBonus !== undefined && authored.damageDice) {
     const split = splitDamageDice(authored.damageDice);
     if (split) {
+      // Same geometry reader as the catalog rung. No reach/range prose stays melee 5 ft.
+      const geometry = readGeometry(authored.attackText ?? '');
+      const fallbackName = monsterName ? `${monsterName} attack` : 'Attack';
       return {
         source: 'authored',
         attacks: [
           {
-            name: monsterName ? `${monsterName} attack` : 'Attack',
+            name: authored.attackName?.trim() || fallbackName,
             attackBonus: authored.attackBonus,
             damageDice: split.dice,
             damageBonus: split.bonus,
             damageType: asDamageType(authored.damageType, 'bludgeoning'),
-            normalRange: 5,
-            ranged: false,
+            normalRange: geometry.normalRange,
+            ...(geometry.longRange === undefined ? {} : { longRange: geometry.longRange }),
+            ranged: geometry.ranged,
           },
         ],
       };

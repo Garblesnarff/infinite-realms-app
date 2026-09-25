@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { gradeCoverage, parseAuthoredStatBlock } from '../authored-stat-block-parser.js';
+import { resolveMonsterAttackProfile } from '../monster-attack-profile.js';
 
 /** the-eternal-feast: bold labels, space-separated, all on one line. */
 const GLUTEN_GOLEM = `**Gluten Golem**
@@ -144,5 +145,99 @@ describe('combat fields beyond HP/AC/Speed', () => {
 
   test('an explicit "none" list is not read as a resistance', () => {
     expect(parseAuthoredStatBlock('**Resistances:** None').damageResistances).toBeUndefined();
+  });
+});
+
+describe('authored attack name and range', () => {
+  test('a named ranged attack keeps its name, range, and ranged flag', () => {
+    const parsed = parseAuthoredStatBlock(
+      '**HP:** 40 **AC:** 13\n**Attack (Ink Lash):** +5 to hit, range 60 ft, 2d8+2 piercing',
+    );
+    expect(parsed).toMatchObject({
+      attackBonus: 5,
+      attackName: 'Ink Lash',
+      damageDice: '2d8+2',
+      damageType: 'piercing',
+    });
+    expect(parsed.attackText).toContain('range 60 ft');
+
+    const profile = resolveMonsterAttackProfile({
+      authored: parsed,
+      maxHp: 40,
+      monsterName: 'Heckling Harpy',
+    });
+    expect(profile.source).toBe('authored');
+    expect(profile.attacks[0]).toMatchObject({
+      name: 'Ink Lash',
+      attackBonus: 5,
+      damageDice: '2d8',
+      damageBonus: 2,
+      damageType: 'piercing',
+      normalRange: 60,
+      ranged: true,
+    });
+  });
+
+  test('a ranged attack with a long range keeps both distances', () => {
+    const parsed = parseAuthoredStatBlock(
+      '*Attack (Spit):* +4 to hit, range 30/120 ft, 1d8 poison',
+    );
+    expect(parsed.attackName).toBe('Spit');
+    const profile = resolveMonsterAttackProfile({ authored: parsed, monsterName: 'Toad' });
+    expect(profile.attacks[0]).toMatchObject({
+      name: 'Spit',
+      normalRange: 30,
+      longRange: 120,
+      ranged: true,
+      damageType: 'poison',
+    });
+  });
+
+  test('a plain melee block stays unnamed and melee 5 ft', () => {
+    const parsed = parseAuthoredStatBlock(
+      '**HP:** 90 **AC:** 14\n**Attack:** +7 to hit, 2d10+4 bludgeoning',
+    );
+    expect(parsed.attackName).toBeUndefined();
+    expect(parsed.attackBonus).toBe(7);
+    const profile = resolveMonsterAttackProfile({
+      authored: parsed,
+      monsterName: 'Gluten Golem',
+    });
+    expect(profile.attacks[0]).toMatchObject({
+      name: 'Gluten Golem attack',
+      normalRange: 5,
+      ranged: false,
+      damageDice: '2d10',
+      damageBonus: 4,
+    });
+    expect(profile.attacks[0].longRange).toBeUndefined();
+  });
+
+  test('reach is melee at the authored distance, not a ranged attack', () => {
+    const parsed = parseAuthoredStatBlock('**Attack:** +3 to hit, reach 10 ft, 1d6 slashing');
+    const profile = resolveMonsterAttackProfile({ authored: parsed, monsterName: 'Tendril' });
+    expect(profile.attacks[0]).toMatchObject({
+      name: 'Tendril attack',
+      normalRange: 10,
+      ranged: false,
+    });
+  });
+
+  test('a parenthetical that is not a name does not drop the +N', () => {
+    const empty = parseAuthoredStatBlock('**Attack ():** +5 to hit, 1d6 slashing');
+    expect(empty.attackBonus).toBe(5);
+    expect(empty.attackName).toBeUndefined();
+
+    const dice = parseAuthoredStatBlock('**Attack (2d6):** +5 to hit, 1d4 piercing');
+    expect(dice.attackBonus).toBe(5);
+    expect(dice.attackName).toBeUndefined();
+  });
+
+  test('a name written before the +N is not accepted and does not invent a bonus', () => {
+    // The value must still start with `+`. Loosening that to fit "Ink Lash, +5" would
+    // also accept prose the author did not mean as a to-hit bonus.
+    const parsed = parseAuthoredStatBlock('**Attack:** Ink Lash, +5 to hit, 1d6 slashing');
+    expect(parsed.attackBonus).toBeUndefined();
+    expect(parsed.attackName).toBeUndefined();
   });
 });

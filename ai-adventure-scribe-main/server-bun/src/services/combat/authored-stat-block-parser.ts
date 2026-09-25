@@ -41,6 +41,16 @@ export interface ParsedStatBlock {
   attackBonus?: number;
   damageDice?: string;
   damageType?: string;
+  /**
+   * Name from `Attack (Ink Lash):`. Absent when the block uses a bare `Attack:` label.
+   * Not a coverage field: a missing name is the normal case, not a parse failure.
+   */
+  attackName?: string;
+  /**
+   * Remainder of the `Attack:` line, including reach/range prose. The attack profile
+   * reads geometry from this; it is not itself a stat the audit grades.
+   */
+  attackText?: string;
   damageResistances?: string[];
   damageImmunities?: string[];
   damageVulnerabilities?: string[];
@@ -54,9 +64,17 @@ export interface ParsedStatBlock {
  * Labels are matched with the surrounding markdown emphasis optional, so `**HP:** 90`,
  * `*HP:* 90`, `HP: 90` and `- **Hit Points:** 90` all read the same. What is NOT optional
  * is the label itself and the colon: that is the entire safety property.
+ *
+ * `allowAttackName` accepts one form: `Attack (Ink Lash): +5 to hit, range 60 ft, …`.
+ * The parenthetical is optional and non-capturing, so the value after the colon stays
+ * group 1 and must still start with `+N`. `Attack: Ink Lash, +5` is refused — accepting
+ * it would move the bonus off the colon. There is no CAMPAIGN-BIBLE-FORMAT-SPEC.md in
+ * this repo; this comment is the contract for that line.
  */
-const labelPattern = (labels: string[]): string =>
-  `(?:^|[\\s*_>|-])\\**\\s*(?:${labels.join('|')})\\s*\\**\\s*:\\s*\\**\\s*`;
+const labelPattern = (labels: string[], allowAttackName = false): string => {
+  const name = allowAttackName ? String.raw`\s*(?:\([^)\n]*\))?` : '';
+  return `(?:^|[\\s*_>|-])\\**\\s*(?:${labels.join('|')})${name}\\s*\\**\\s*:\\s*\\**\\s*`;
+};
 
 /**
  * Reads a labelled value with a required shape.
@@ -69,16 +87,17 @@ const readLabelled = (
   content: string,
   labels: string[],
   valuePattern: string,
+  allowAttackName = false,
 ): { raw: string; groups: string[] } | null => {
-  const re = new RegExp(`${labelPattern(labels)}(${valuePattern})`, 'i');
+  const re = new RegExp(`${labelPattern(labels, allowAttackName)}(${valuePattern})`, 'i');
   const match = re.exec(content);
   if (!match) return null;
   return { raw: match[1] ?? '', groups: match.slice(1).map((g) => g ?? '') };
 };
 
 /** True when the label appears at all, regardless of whether its value was readable. */
-const hasLabel = (content: string, labels: string[]): boolean =>
-  new RegExp(labelPattern(labels), 'i').test(content);
+const hasLabel = (content: string, labels: string[], allowAttackName = false): boolean =>
+  new RegExp(labelPattern(labels, allowAttackName), 'i').test(content);
 
 const HP_LABELS = ['HP', 'Hit Points', 'HitPoints', 'Health'];
 const AC_LABELS = ['AC', 'Armor Class', 'Armour Class'];
@@ -87,6 +106,18 @@ const SIZE_LABELS = ['Size'];
 const INITIATIVE_LABELS = ['Initiative', 'Init'];
 const CR_LABELS = ['CR', 'Challenge', 'Challenge Rating'];
 const ATTACK_LABELS = ['Attack Bonus', 'To Hit', 'Attack', 'Hit Bonus'];
+
+/** Letters, spaces, hyphens, apostrophes. Digits and dice are not a name. */
+const ATTACK_NAME = /^[A-Za-z][A-Za-z' -]{0,39}$/;
+
+const readAttackName = (content: string): string | undefined => {
+  const re = new RegExp(
+    `(?:^|[\\s*_>|-])\\**\\s*(?:${ATTACK_LABELS.join('|')})\\s*\\(([^)\\n]*)\\)\\s*\\**\\s*:`,
+    'i',
+  );
+  const raw = re.exec(content)?.[1]?.trim().replace(/\s+/g, ' ') ?? '';
+  return ATTACK_NAME.test(raw) ? raw : undefined;
+};
 const DAMAGE_LABELS = ['Damage', 'Damage Dice', 'Dmg'];
 const RESIST_LABELS = ['Resistances', 'Damage Resistances', 'Resistant To', 'Resistance'];
 const IMMUNE_LABELS = ['Immunities', 'Damage Immunities', 'Immune To', 'Immunity'];
@@ -164,12 +195,13 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
     labels: string[],
     valuePattern: string,
     convert: (groups: string[]) => ParsedStatBlock[K] | undefined,
+    allowAttackName = false,
   ): void => {
-    const hit = readLabelled(content, labels, valuePattern);
+    const hit = readLabelled(content, labels, valuePattern, allowAttackName);
     const value = hit ? convert(hit.groups) : undefined;
     if (value !== undefined) {
       record(field, value);
-    } else if (hasLabel(content, labels)) {
+    } else if (hasLabel(content, labels, allowAttackName)) {
       parsed.unparsedLabels.push(labels[0]!);
     }
   };
@@ -202,12 +234,18 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
     raw.replace(/\s+/g, ''),
   );
 
-  attempt('attackBonus', ATTACK_LABELS, `\\+\\s*\\d{1,2}\\b`, ([raw]) => {
-    // Requires an explicit `+`: an attack line reading "Attack: slam" must not become +0,
-    // and a bare number next to "Attack" is too ambiguous to trust.
-    const n = Number(raw.replace(/\s+/g, ''));
-    return Number.isInteger(n) && n >= 0 && n <= 20 ? n : undefined;
-  });
+  attempt(
+    'attackBonus',
+    ATTACK_LABELS,
+    `\\+\\s*\\d{1,2}\\b`,
+    ([raw]) => {
+      // Requires an explicit `+`: an attack line reading "Attack: slam" must not become +0,
+      // and a bare number next to "Attack" is too ambiguous to trust.
+      const n = Number(raw.replace(/\s+/g, ''));
+      return Number.isInteger(n) && n >= 0 && n <= 20 ? n : undefined;
+    },
+    true,
+  );
 
   attempt('damageDice', DAMAGE_LABELS, DICE, ([raw]) => raw.replace(/\s+/g, '').toLowerCase());
 
@@ -222,8 +260,12 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
   // bludgeoning` — with no separate `Damage:` label. Read the dice and type from the attack
   // line's own remainder, which keeps the value anchored to a label rather than scanned out
   // of free prose. Only fills what the Damage label did not already supply.
-  const attackLine = readLabelled(content, ATTACK_LABELS, '[^\\n]*');
+  const attackLine = readLabelled(content, ATTACK_LABELS, '[^\\n]*', true);
   if (attackLine) {
+    const text = attackLine.raw.trim();
+    if (text) parsed.attackText = text;
+    const attackName = readAttackName(content);
+    if (attackName) parsed.attackName = attackName;
     if (parsed.damageDice === undefined) {
       const dice = new RegExp(DICE).exec(attackLine.raw);
       if (dice) record('damageDice', dice[0].replace(/\s+/g, '').toLowerCase());

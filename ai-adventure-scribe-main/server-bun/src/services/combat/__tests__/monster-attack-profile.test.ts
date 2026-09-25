@@ -176,11 +176,15 @@ describe('precedence: authored -> catalog -> derived -> generic', () => {
     });
     expect(profile.source).toBe('authored');
     expect(profile.attacks[0]).toMatchObject({
+      name: 'Stone Golem attack',
       attackBonus: 7,
       damageDice: '2d10',
       damageBonus: 4,
       damageType: 'fire',
+      normalRange: 5,
+      ranged: false,
     });
+    expect(profile.attacks[0].longRange).toBeUndefined();
   });
 
   test('the catalog outranks derivation when no attack was authored', () => {
