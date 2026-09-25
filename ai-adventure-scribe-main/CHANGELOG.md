@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.20.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.0...v0.20.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **client:** polish the first session a new player sees ([#2235](https://github.com/Garblesnarff/infinite-realms-production/issues/2235)) ([#2239](https://github.com/Garblesnarff/infinite-realms-production/issues/2239)) ([a5e07f4](https://github.com/Garblesnarff/infinite-realms-production/commit/a5e07f4739aa22bf374fee036dc919893f8f9989))
+* **client:** roll banner needs a live control; dismiss withdraws the attack ([#2234](https://github.com/Garblesnarff/infinite-realms-production/issues/2234)) ([#2237](https://github.com/Garblesnarff/infinite-realms-production/issues/2237)) ([1c8f06b](https://github.com/Garblesnarff/infinite-realms-production/commit/1c8f06be7ca858b967265ff203d483881020f221))
+
 ## [0.20.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.19.13...v0.20.0) (2026-09-25)
 
 
