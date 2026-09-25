@@ -25,6 +25,7 @@ import {
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
 import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
+import { trackPlayerRollDismissal } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { userDataApi } from '@/services/user-data-api';
 import {
@@ -77,6 +78,8 @@ export interface CombatResolutionParams {
     action: StructuredCombatAction;
     d20?: number;
     autoRolled: boolean;
+    /** The player dismissed this action's roll prompt; it must not resolve (#2234). */
+    cancelled?: boolean;
   };
   /** NPC actions resolved before the player's declaration reached chatWithDM. */
   preResolvedNpcTurns?: AdvanceNpcTurnsResponse;
@@ -145,7 +148,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // that got the actor wrong once will get it wrong for every action in the same batch.
   let repairSpent = false;
   let npcTurnRecoverySpent = false;
-  type PlayerAttackRoll = Awaited<ReturnType<typeof askPlayerForAttackDie>>;
+  type PlayerAttackRoll =
+    | (Omit<Awaited<ReturnType<typeof askPlayerForAttackDie>>, 'movementOnly'> & {
+        cancelled?: boolean;
+      })
+    | null;
+  /** The player's own action whose roll prompt they dismissed. Nothing after it resolves. */
+  let cancelledPlayerAction: StructuredCombatAction | null = null;
   const playerDieByAction = new WeakMap<StructuredCombatAction, PlayerAttackRoll>();
   const queuedActorIds = new Set(queuedIntentActorIds ?? []);
   const queuedActorSlugs = new Set(
@@ -297,16 +306,33 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       const actorLabel =
         participants?.find((participant) => participant.id === action.actor_id)?.name ??
         action.actor_id;
-      playerDie = entryRoll
-        ? entryRoll
-        : !isQueuedIntentActor(action.actor_id) && isPlayerActor(action.actor_id, participants)
-          ? action.action_type === 'attack'
-            ? await askPlayerForAttackDie({ encounterId, action, actorLabel })
-            : action.action_type === 'cast_spell'
-              ? await askPlayerForSpellCast({ action, actorLabel, participants })
-              : null
-          : null;
+      const asksPlayer =
+        !entryRoll &&
+        !isQueuedIntentActor(action.actor_id) &&
+        isPlayerActor(action.actor_id, participants) &&
+        (action.action_type === 'attack' || action.action_type === 'cast_spell');
+      if (entryRoll) {
+        playerDie = entryRoll;
+      } else if (asksPlayer) {
+        const asked = await trackPlayerRollDismissal(() =>
+          action.action_type === 'attack'
+            ? askPlayerForAttackDie({ encounterId, action, actorLabel })
+            : askPlayerForSpellCast({ action, actorLabel, participants }),
+        );
+        playerDie = asked.dismissed ? { autoRolled: false, cancelled: true } : asked.value;
+      } else {
+        playerDie = null;
+      }
       playerDieByAction.set(action, playerDie);
+    }
+    // A dismissed prompt withdraws the action. It is not submitted, the turn is not ended, and
+    // nothing else in this declaration runs: the player chose not to act yet (#2234).
+    if (playerDie?.cancelled) {
+      cancelledPlayerAction = action;
+      logger.info('[PlayerRoll] player dismissed the roll prompt; action withdrawn', {
+        actionType: action.action_type,
+      });
+      return 'turn_ended';
     }
     const execution = await executeStructuredCombatActionWithBoundary(
       encounterId,
@@ -435,14 +461,28 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       }
       // The corrected turn replaces the refused one. A second refusal is not repaired again.
       let correctedBoundary: BatchBoundary | null = null;
+      let repairRefused = false;
       for (let correctedIndex = 0; correctedIndex < corrected.length; correctedIndex += 1) {
-        correctedBoundary = await runAction(corrected[correctedIndex]);
+        const correctedAction = corrected[correctedIndex];
+        try {
+          correctedBoundary = await runAction(correctedAction);
+        } catch (correctedError) {
+          if (!(correctedError instanceof CombatIntentRefusedError)) throw correctedError;
+          // The repair was refused too. Report it like any refusal instead of throwing: a throw
+          // here dropped every engine line and showed "I encountered an issue processing your
+          // message" (#2234). The original refusal stays in the report.
+          recordRefusal(correctedAction, correctedError);
+          logger.warn(`[CombatRepair] outcome=repair_refused actor=${correctedAction.actor_id}`);
+          repairRefused = true;
+          break;
+        }
         const dropped = corrected.length - correctedIndex - 1;
         if (dropped > 0) {
           logger.info(`[CombatBatch] boundary=${correctedBoundary} dropped=${dropped}`);
         }
         if (correctedBoundary) break;
       }
+      if (repairRefused) break;
       // The corrected action was accepted, so the original refusal is no longer an unresolved
       // player notice. Keep it only when the repair itself was refused.
       const [repairedRefusal] = refusedActions.splice(repairRefusalIndex, 1);
@@ -456,6 +496,20 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       // function, so the repaired declaration never reached the player either way. Dropped in
       // the extraction rather than carried across as a line that cannot have an effect.
     }
+  }
+
+  if (cancelledPlayerAction) {
+    // No DM narration: the declaration prose describes an action that did not happen, and the
+    // narration pass would be handed it as setup. Engine lines already produced (NPC turns
+    // resolved before the declaration) still stand and are shown.
+    const orderedBlocks = orderCombatEngineBlocks(engineBlocks);
+    return {
+      text: prependCombatEngineTranscript(
+        withdrawnActionNotice(cancelledPlayerAction),
+        orderedBlocks.flatMap((block) => block.lines),
+      ),
+      combatEngineBlocks: orderedBlocks,
+    };
   }
 
   const refusedPlayerActions = refusedActions.filter((refusal) => refusal.actorIsPlayer);
@@ -569,6 +623,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         ? ensurePlayerTurnHandoff(refusedText, playerName)
         : refusedText,
   };
+}
+
+/** What the player sees after dismissing an attack or spell prompt. */
+export function withdrawnActionNotice(action: StructuredCombatAction): string {
+  const what =
+    action.action_type === 'cast_spell'
+      ? `casting ${playerCombatSpellLabel(action.spell_id, action.spell_id)}`
+      : 'that attack';
+  return `You dismissed the roll, so ${what} did not happen. It is still your turn — what do you do?`;
 }
 
 function ensurePlayerTurnHandoff(text: string, playerName: string): string {

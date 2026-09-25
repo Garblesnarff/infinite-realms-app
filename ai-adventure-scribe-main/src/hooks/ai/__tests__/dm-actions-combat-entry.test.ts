@@ -27,6 +27,10 @@ vi.mock('@/hooks/ai/combat-resolution-step', () => ({
 vi.mock('@/services/combat/player-roll-bridge', () => ({
   requestPlayerAttackRoll: vi.fn(),
   requestPlayerInitiativeRoll: vi.fn(),
+  trackPlayerRollDismissal: async (ask: () => Promise<unknown>) => ({
+    value: await ask(),
+    dismissed: false,
+  }),
 }));
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
@@ -489,6 +493,81 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
           d20: 17,
           autoRolled: false,
         }),
+      }),
+    );
+  });
+
+  it('prompts for initiative exactly once when a spell declaration starts combat (#2234)', async () => {
+    // Run M4 turn 4: "I hurl a ghostly, skeletal hand of necrotic cold … Chill Touch!"
+    const spellAction = {
+      actor_id: 'storyteller-1',
+      action_type: 'cast_spell',
+      target_ids: ['vance-1'],
+      weapon_id: null,
+      spell_id: 'chill-touch',
+      slot_level: null,
+      movement_feet: 0,
+    };
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({
+        encounter: { id: 'encounter-1' },
+        first_action: {
+          type: 'spell',
+          actor: 'storyteller-1',
+          actorLabel: 'The Storyteller',
+          target: 'vance-1',
+          targetLabel: 'Vance',
+          source: 'spell',
+          attackSource: 'spell',
+          weaponId: null,
+          weaponName: null,
+          spellId: 'chill-touch',
+          slotLevel: null,
+          combat_action: spellAction,
+        },
+      }) as any,
+    );
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: { ...PENDING_ENTRY, detail: 'combat_action cast_spell' },
+        combat_actions: [spellAction],
+      },
+      vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER),
+      { playerMessage: 'I hurl a ghostly, skeletal hand of necrotic cold. "Chill Touch!"' },
+    );
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledTimes(1);
+    expect(requestPlayerInitiativeRoll).toHaveBeenCalledTimes(1);
+    expect(userDataApi.enterCombat).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ playerInitiativeRoll: 16 }),
+    );
+  });
+
+  it('withdraws the entry attack when the player dismisses its roll prompt (#2234)', async () => {
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: null, cancelled: true });
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [NPC_ACTION],
+      },
+      vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER),
+    );
+
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playerAttackRoll: {
+          action: FIRST_ACTION_COMBAT_ACTION,
+          autoRolled: false,
+          cancelled: true,
+        },
       }),
     );
   });

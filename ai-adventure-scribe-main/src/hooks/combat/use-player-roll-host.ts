@@ -3,13 +3,14 @@ import { useEffect, useState } from 'react';
 import type {
   PlayerAttackRollSpec,
   PlayerInitiativeRollSpec,
+  PlayerRollHost,
   PlayerRollOutcome,
   PlayerRollSpec,
 } from '@/services/combat/player-roll-bridge';
 import type { DiceRollRequest } from '@/types/combat';
 
 import { useGame } from '@/contexts/GameContext';
-import { setPlayerRollHost, settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
+import { releasePlayerRollHost, setPlayerRollHost } from '@/services/combat/player-roll-bridge';
 
 /**
  * Mounts the dice popup as the place combat goes to ask the player for an attack or initiative die.
@@ -30,7 +31,7 @@ export function usePlayerRollHost(): string | null {
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
 
   useEffect(() => {
-    setPlayerRollHost({
+    const rollHost: PlayerRollHost = {
       present: (spec: PlayerRollSpec, settle: (outcome: PlayerRollOutcome) => void) => {
         const request = isInitiativeSpec(spec)
           ? {
@@ -70,13 +71,13 @@ export function usePlayerRollHost(): string | null {
           },
         };
       },
-    });
+    };
+    setPlayerRollHost(rollHost);
     return () => {
-      // An unmounted message list cannot answer the queue. Settle before releasing the host so
-      // the initiative timer is cleared and the awaiting entry pipeline falls back safely.
-      settlePendingPlayerRoll({ d20: null });
+      // An unmounted message list cannot answer the queue. The bridge re-opens the prompt on a
+      // replacement host if one mounts in the same commit, and otherwise settles it engine-rolled.
       setPendingRollId(null);
-      setPlayerRollHost(null);
+      releasePlayerRollHost(rollHost);
     };
   }, [requestDiceRoll, cancelDiceRoll]);
 
@@ -129,21 +130,30 @@ function unregisterSettler(rollId: string): void {
  * Hands a completed or cancelled combat attack roll back to the resolution waiting on it.
  * Returns false when this roll was not one of ours, which is the dice handler's signal to treat
  * it as an ordinary narrative roll and send it to the DM.
+ *
+ * `cancelled` is the player's Dismiss: the attack is withdrawn, not engine-rolled (#2234).
  */
-export function settleCombatAttackRoll(rollId: string, d20: number | null): boolean {
-  return settleCombatPlayerRoll(rollId, d20);
+export function settleCombatAttackRoll(
+  rollId: string,
+  d20: number | null,
+  options: { cancelled?: boolean } = {},
+): boolean {
+  return settleCombatPlayerRoll(
+    rollId,
+    options.cancelled ? { d20: null, cancelled: true } : { d20 },
+  );
 }
 
 /** Hands an initiative d20 back to the entry flow instead of sending it to the DM. */
 export function settleCombatInitiativeRoll(rollId: string, d20: number | null): boolean {
-  return settleCombatPlayerRoll(rollId, d20);
+  return settleCombatPlayerRoll(rollId, { d20 });
 }
 
-function settleCombatPlayerRoll(rollId: string, d20: number | null): boolean {
+function settleCombatPlayerRoll(rollId: string, outcome: PlayerRollOutcome): boolean {
   const settle = settlers.get(rollId);
   if (!settle) return false;
   settlers.delete(rollId);
-  settle({ d20 });
+  settle(outcome);
   return true;
 }
 

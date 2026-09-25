@@ -1,8 +1,9 @@
 /**
  * usePendingRolls Hook
- * Fallback for DM messages that predate the dice queue. The composer pill,
- * "please complete" banner, and input lock read `state.diceRollQueue` first
- * and only use this hook when that queue has no current pending roll.
+ * Reads roll requests out of the last DM message. It must not gate the
+ * composer: a request found here has no dice popup, so a lock or "Roll
+ * required" banner built on it has no control to clear it (#2234). The pill,
+ * banner, and input lock read `state.diceRollQueue` only.
  */
 
 import { useMemo } from 'react';

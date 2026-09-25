@@ -27,6 +27,7 @@ import { isPlayerActor } from '@/services/combat/player-attack-roll';
 import {
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
+  trackPlayerRollDismissal,
 } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
@@ -182,7 +183,7 @@ export async function handleDmActionsAndTransitions(
   let entryFirstAction: StructuredCombatAction | null = null;
   let entryFirstActionPayload: unknown;
   let entryPlayerAttackRoll:
-    | { action: StructuredCombatAction; d20?: number; autoRolled: boolean }
+    | { action: StructuredCombatAction; d20?: number; autoRolled: boolean; cancelled?: boolean }
     | undefined;
   let droppedNpcCombatActions = false;
 
@@ -481,25 +482,31 @@ export async function handleDmActionsAndTransitions(
           const actualRollSpec = asEntryAttackRollSpec(entryFirstActionPayload);
           if (actualRollSpec) {
             const roll = await requestPlayerAttackRoll(actualRollSpec);
-            entryPlayerAttackRoll = {
-              action: entryFirstAction,
-              ...(roll.d20 === null ? {} : { d20: roll.d20 }),
-              autoRolled: roll.d20 === null,
-            };
+            entryPlayerAttackRoll = roll.cancelled
+              ? { action: entryFirstAction, autoRolled: false, cancelled: true }
+              : {
+                  action: entryFirstAction,
+                  ...(roll.d20 === null ? {} : { d20: roll.d20 }),
+                  autoRolled: roll.d20 === null,
+                };
           } else {
             entryPlayerAttackRoll = { action: entryFirstAction, autoRolled: true };
           }
         } else if (entryFirstAction.action_type === 'cast_spell') {
-          const spellRoll = await askPlayerForSpellCast({
-            action: entryFirstAction,
-            actorLabel: playerParticipant.name,
-            participants: activeEncounter.participants,
-          });
-          entryPlayerAttackRoll = {
-            action: entryFirstAction,
-            ...(spellRoll.d20 === undefined ? {} : { d20: spellRoll.d20 }),
-            autoRolled: spellRoll.autoRolled,
-          };
+          const { value: spellRoll, dismissed } = await trackPlayerRollDismissal(() =>
+            askPlayerForSpellCast({
+              action: entryFirstAction,
+              actorLabel: playerParticipant.name,
+              participants: activeEncounter.participants,
+            }),
+          );
+          entryPlayerAttackRoll = dismissed
+            ? { action: entryFirstAction, autoRolled: false, cancelled: true }
+            : {
+                action: entryFirstAction,
+                ...(spellRoll.d20 === undefined ? {} : { d20: spellRoll.d20 }),
+                autoRolled: spellRoll.autoRolled,
+              };
         }
       }
       if (preflightNpcTurns?.combatEnded === true) {

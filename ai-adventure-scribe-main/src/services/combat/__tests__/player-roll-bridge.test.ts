@@ -9,6 +9,8 @@ import {
   PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
   setPlayerRollHost,
   settlePendingPlayerRoll,
+  releasePlayerRollHost,
+  trackPlayerRollDismissal,
 } from '../player-roll-bridge';
 
 /**
@@ -278,5 +280,64 @@ describe('the player roll bridge', () => {
 
     await expect(pending).resolves.toEqual({ d20: 11 });
     expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('tells a dismissed prompt apart from a timed-out one (#2234)', async () => {
+    vi.useFakeTimers();
+    let answer: ((outcome: { d20: number | null; cancelled?: boolean }) => void) | undefined;
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        answer = settle;
+        return hostHandle();
+      },
+    });
+
+    const dismissed = trackPlayerRollDismissal(() => requestPlayerAttackRoll(SPEC));
+    answer?.({ d20: null, cancelled: true });
+    await expect(dismissed).resolves.toEqual({
+      value: { d20: null, cancelled: true },
+      dismissed: true,
+    });
+
+    const timedOut = trackPlayerRollDismissal(() => requestPlayerAttackRoll(SPEC));
+    await vi.advanceTimersByTimeAsync(PLAYER_ATTACK_ROLL_TIMEOUT_MS);
+    await expect(timedOut).resolves.toEqual({ value: { d20: null }, dismissed: false });
+  });
+
+  it('lets the engine roll once a released host is not replaced', async () => {
+    const dismiss = vi.fn();
+    const onlyHost = { present: vi.fn(() => hostHandle('roll-1', dismiss)) };
+    setPlayerRollHost(onlyHost);
+
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+    releasePlayerRollHost(onlyHost);
+
+    await expect(pending).resolves.toEqual({ d20: null });
+    expect(dismiss).toHaveBeenCalled();
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('ignores the release of a host that was already replaced', async () => {
+    const oldHost = { present: vi.fn(() => hostHandle('roll-1')) };
+    let settleNew: ((outcome: { d20: number | null }) => void) | undefined;
+    const newHost = {
+      present: vi.fn((_spec, settle) => {
+        settleNew = settle;
+        return hostHandle('roll-2');
+      }),
+    };
+    setPlayerRollHost(oldHost);
+    setPlayerRollHost(newHost);
+
+    const pending = requestPlayerAttackRoll(SPEC);
+    releasePlayerRollHost(oldHost);
+    await Promise.resolve();
+
+    expect(hasPendingPlayerRoll()).toBe(true);
+    settleNew?.({ d20: 9 });
+    await expect(pending).resolves.toEqual({ d20: 9 });
   });
 });

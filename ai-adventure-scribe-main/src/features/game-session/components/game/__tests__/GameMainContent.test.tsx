@@ -202,8 +202,12 @@ describe('GameMainContent overhaul behavior contract', () => {
   });
 
   it('blocks input while a dice request is pending', () => {
-    state.hasPendingRolls = true;
-    state.pendingRequests = [{ type: 'saving throw', purpose: 'Wisdom saving throw' }];
+    state.currentRoll = {
+      id: 'save-1',
+      status: 'pending',
+      requestType: 'saving_throw',
+      description: 'Wisdom saving throw',
+    };
     render(<GameMainContent {...baseProps} />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Wisdom saving throw');
@@ -271,6 +275,34 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(screen.queryByText(/Wisdom saving throw/)).not.toBeInTheDocument();
     expect(screen.queryByText(/saving throw roll above/)).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('never shows the roll banner or locks input for a chat-parsed roll with no queued popup', () => {
+    // #2234: engine prose "the-apprentice cast Acid Splash at …" parsed as a spell attack.
+    // No queue entry means no dice popup, so there is nothing the player could click.
+    state.hasPendingRolls = true;
+    state.pendingRequests = [{ type: 'attack', purpose: 'Acid Splash spell attack' }];
+
+    render(<GameMainContent {...baseProps} />);
+
+    expect(screen.queryByText(/Your roll:/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Roll required')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Please complete/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).not.toBeDisabled();
+  });
+
+  it('drops the banner and lock once the queued roll is no longer pending', () => {
+    state.currentRoll = {
+      id: 'attack-1',
+      status: 'cancelled',
+      requestType: 'attack',
+      description: 'Acid Splash spell attack vs Flavor-Elemental',
+    };
+
+    render(<GameMainContent {...baseProps} />);
+
+    expect(screen.queryByText('Roll required')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).not.toBeDisabled();
   });
 
   it('ignores a getCurrentDiceRoll result that is not on diceRollQueue state', () => {

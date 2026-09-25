@@ -14,8 +14,12 @@ import logger from '@/lib/logger';
  *
  * Every path settles. A bridge that can hang is a combat that can wedge, and this product is
  * explicitly resume-anytime — players close laptops mid-popup and must come back to a session
- * that still works. So a cancel, a superseding action, or a missing host all resolve to `null`,
+ * that still works. So a timeout, a superseding action, or a missing host all resolve to `null`,
  * which callers read as "the engine rolls this one".
+ *
+ * An explicit Dismiss is the one exception. It resolves `null` too, so nothing waits on it, but
+ * it is marked `cancelled`: the player said "not this attack", and resolving it engine-rolled
+ * made an attack they refused (#2234). Callers read a cancelled outcome as "do not resolve".
  */
 
 /** What the popup is told to ask for. Every number here came from the engine's own proposal. */
@@ -41,8 +45,11 @@ export interface PlayerInitiativeRollSpec {
 
 export type PlayerRollSpec = PlayerAttackRollSpec | PlayerInitiativeRollSpec;
 
-/** `null` means nobody rolled: the engine should roll this attack itself. */
-export type PlayerRollOutcome = { d20: number | null };
+/**
+ * `null` means nobody rolled: the engine should roll this attack itself — unless `cancelled`,
+ * which means the player dismissed the prompt and the action must not resolve at all.
+ */
+export type PlayerRollOutcome = { d20: number | null; cancelled?: boolean };
 
 export interface PlayerRollHostHandle {
   /** The queue id for the popup, used to commit a player-initiated roll before it settles. */
@@ -69,6 +76,10 @@ let pending: {
   dismiss: () => void;
   rollId?: string;
   timeoutId?: ReturnType<typeof setTimeout>;
+  /** Opens this same prompt on a replacement host after the one showing it unmounted. */
+  represent: (next: PlayerRollHost) => void;
+  /** The host showing this prompt unmounted and no replacement has registered yet. */
+  hostGone?: boolean;
 } | null = null;
 
 /** Keep the ask-first popup short enough to be a turn prompt, but long enough to be usable. */
@@ -85,9 +96,59 @@ export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 30_000;
  */
 export const PLAYER_ATTACK_ROLL_TIMEOUT_MS = 45_000;
 
-/** Registered by the provider that owns the dice queue. Passing `null` clears it on unmount. */
+/** Bumped each time the player explicitly dismisses a combat roll prompt. */
+let dismissCount = 0;
+
+/**
+ * Runs `ask` and reports whether the player dismissed a roll prompt while it ran.
+ *
+ * The ask helpers fold a dismissed prompt into their "engine rolls it" result, and the spell
+ * helper is owned elsewhere. Reading the dismissal here keeps the cancel decision in the one
+ * place that settles prompts. Combat asks one die at a time, so a counter is exact.
+ */
+export async function trackPlayerRollDismissal<T>(
+  ask: () => Promise<T>,
+): Promise<{ value: T; dismissed: boolean }> {
+  const before = dismissCount;
+  const value = await ask();
+  return { value, dismissed: dismissCount !== before };
+}
+
+/**
+ * Registered by the provider that owns the dice queue. Passing `null` clears it outright.
+ *
+ * A prompt whose host unmounted (see `releasePlayerRollHost`) is re-opened on the new host, so
+ * a remount of the message list does not quietly turn the player's die into an engine roll.
+ */
 export function setPlayerRollHost(next: PlayerRollHost | null): void {
   host = next;
+  if (next && pending?.hostGone) {
+    pending.hostGone = false;
+    logger.info('[PlayerRoll] dice host remounted; re-opening the pending prompt');
+    pending.represent(next);
+  }
+}
+
+/**
+ * Called when a host unmounts.
+ *
+ * React can tear the message list down and mount a replacement in the same commit (a list
+ * refresh, a StrictMode pass). The combat-entry confirmation host already survives that (#2017);
+ * this host settled its prompt engine-rolled on the spot, so an initiative prompt could vanish
+ * and come back as "(auto-rolled)" with nothing ever shown (#2234). Wait one microtask for a
+ * replacement host. Only a real teardown, with no host coming back, lets the engine roll.
+ */
+export function releasePlayerRollHost(released: PlayerRollHost): void {
+  if (host !== released) return;
+  host = null;
+  const orphan = pending;
+  if (!orphan) return;
+  orphan.hostGone = true;
+  queueMicrotask(() => {
+    if (pending !== orphan || !orphan.hostGone) return;
+    logger.info('[PlayerRoll] dice host unmounted and did not return; the engine rolls it');
+    settlePendingPlayerRoll({ d20: null });
+  });
 }
 
 /** Whether a combat roll is currently waiting on the player's die. */
@@ -155,15 +216,14 @@ function requestPlayerRoll(
     const settle = (outcome: PlayerRollOutcome): void => {
       if (settled) return;
       settled = true;
-      logger.info(`[PlayerRoll] settled d20=${outcome.d20 ?? 'auto'} ${rollLabel}`);
+      if (outcome.cancelled) dismissCount += 1;
+      logger.info(
+        `[PlayerRoll] settled d20=${outcome.cancelled ? 'dismissed' : (outcome.d20 ?? 'auto')} ${rollLabel}`,
+      );
       resolve(outcome);
     };
 
-    // Install the slot before calling the host. Test hosts and simple React adapters may settle
-    // synchronously; assigning it afterwards would leave a ghost pending roll behind.
-    pending = { settle, dismiss: () => dismissPopup() };
-    const activeHost = host;
-    const hostHandle = activeHost.present(spec, (outcome) => {
+    const onHostSettle = (outcome: PlayerRollOutcome): void => {
       if (pending?.settle === settle) {
         // The queue handler has already completed the visible roll. Clear the bridge slot and
         // timer, but do not dismiss/cancel the queue entry after it was marked completed.
@@ -174,9 +234,26 @@ function requestPlayerRoll(
       } else {
         settle(outcome);
       }
-    });
-    dismissPopup = hostHandle.dismiss;
-    if (pending?.settle === settle) pending.rollId = hostHandle.rollId;
+    };
+    const presentTo = (target: PlayerRollHost): PlayerRollHostHandle => {
+      const handle = target.present(spec, onHostSettle);
+      dismissPopup = handle.dismiss;
+      if (pending?.settle === settle) pending.rollId = handle.rollId;
+      return handle;
+    };
+
+    // Install the slot before calling the host. Test hosts and simple React adapters may settle
+    // synchronously; assigning it afterwards would leave a ghost pending roll behind.
+    pending = {
+      settle,
+      dismiss: () => dismissPopup(),
+      // Drop the old host's queue entry, then ask the new host. The timer keeps running.
+      represent: (next) => {
+        dismissPopup();
+        presentTo(next);
+      },
+    };
+    const hostHandle = presentTo(host);
 
     if (settled) {
       // A synchronous host settlement happened before the real dismiss function was returned.

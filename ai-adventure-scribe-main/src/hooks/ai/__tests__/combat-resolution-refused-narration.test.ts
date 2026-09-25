@@ -212,6 +212,22 @@ describe('a player action the engine refused', () => {
     await expect(run()).rejects.toThrow('Actor is not the current-turn participant');
   });
 
+  it('reports a refused repair instead of throwing it as a generic error (#2234)', async () => {
+    // Run M4 turn 7 ended in "I encountered an issue processing your message": the repair's own
+    // action was refused, and that refusal escaped the loop and discarded the whole turn.
+    repairRefusedCombatAction.mockResolvedValue({
+      text: 'The Reveler tries again.',
+      combat_actions: [action(PLAYER_ID, NPC_ID)],
+    });
+
+    const result = await run();
+
+    const payload = resolutionPayload();
+    expect(payload.refusedActions).toHaveLength(2);
+    expect(payload.authoritativeCombatResults).toHaveLength(0);
+    expect(result.text).toBeTruthy();
+  });
+
   it('queues a refused pending declaration instead of repairing it as the current-turn actor', async () => {
     await run({ queuedIntentActorIds: [PLAYER_ID] });
 

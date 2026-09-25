@@ -141,9 +141,10 @@ export function useMessageDiceRolls({
    */
   const handleCancelRoll = useCallback(() => {
     if (!currentRoll) return;
-    // Cancelling a combat attack die does not cancel the attack: the turn is already in flight
-    // and must resolve. The engine rolls it instead, and the transcript says so.
-    settleCombatAttackRoll(currentRoll.id, null);
+    // Dismissing a combat attack prompt withdraws the attack: the resolution waiting on it skips
+    // that action instead of rolling it for the player (#2234). Only a timeout lets the engine
+    // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
+    settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
     settleCombatInitiativeRoll(currentRoll.id, null);
     cancelDiceRoll(currentRoll.id);
     if (pendingRollIdRef.current === currentRoll.id) {
@@ -232,9 +233,7 @@ export function useMessageDiceRolls({
             advantage: roll.rollConfig.advantage,
             disadvantage: roll.rollConfig.disadvantage,
             total: numericResult,
-            ...(details?.naturalRoll !== undefined
-              ? { naturalRoll: details.naturalRoll }
-              : {}),
+            ...(details?.naturalRoll !== undefined ? { naturalRoll: details.naturalRoll } : {}),
             requestType: roll.requestType,
             description: roll.description,
             dc: roll.dc,

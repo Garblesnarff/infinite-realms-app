@@ -1,7 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { usePlayerRollHost } from '../use-player-roll-host';
+import {
+  settleCombatAttackRoll,
+  settleCombatInitiativeRoll,
+  usePlayerRollHost,
+} from '../use-player-roll-host';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
@@ -49,6 +53,58 @@ describe('usePlayerRollHost teardown', () => {
     await expect(pending).resolves.toEqual({ d20: null });
     expect(cancelDiceRoll).toHaveBeenCalledWith('initiative-roll-1');
     expect(vi.getTimerCount()).toBe(0);
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('re-opens a pending initiative prompt on a remounted host instead of auto-rolling (#2234)', async () => {
+    requestDiceRoll
+      .mockReturnValueOnce('initiative-roll-1')
+      .mockReturnValueOnce('initiative-roll-2');
+    const first = renderHook(() => usePlayerRollHost());
+    let settled: { d20: number | null } | undefined;
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Apprentice',
+      initiativeModifier: 1,
+    }).then((outcome) => {
+      settled = outcome;
+      return outcome;
+    });
+
+    // The message list is torn down and a replacement mounts in the same commit.
+    first.unmount();
+    renderHook(() => usePlayerRollHost());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(settled).toBeUndefined();
+    expect(hasPendingPlayerRoll()).toBe(true);
+    expect(cancelDiceRoll).toHaveBeenCalledWith('initiative-roll-1');
+    expect(requestDiceRoll).toHaveBeenCalledTimes(2);
+    expect(requestDiceRoll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestType: 'initiative', combatInitiativeRoll: true }),
+    );
+
+    // The player's die on the re-opened prompt is the one the entry flow receives.
+    expect(settleCombatInitiativeRoll('initiative-roll-2', 14)).toBe(true);
+    await expect(pending).resolves.toEqual({ d20: 14 });
+  });
+
+  it('reports an explicit dismiss as cancelled, not as an engine roll (#2234)', async () => {
+    requestDiceRoll.mockReturnValueOnce('attack-roll-1');
+    renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Apprentice',
+      targetLabel: 'Flavor-Elemental (Corrupted)',
+      weaponName: 'Unarmed Strike',
+      attackBonus: 1,
+      targetAc: 14,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    expect(settleCombatAttackRoll('attack-roll-1', null, { cancelled: true })).toBe(true);
+
+    await expect(pending).resolves.toEqual({ d20: null, cancelled: true });
     expect(hasPendingPlayerRoll()).toBe(false);
   });
 

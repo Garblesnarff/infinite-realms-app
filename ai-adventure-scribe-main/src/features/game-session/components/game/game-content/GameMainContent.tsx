@@ -25,7 +25,6 @@ import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
-import { usePendingRolls } from '@/hooks/use-pending-rolls';
 import { stripAssetTags } from '@/lib/utils';
 
 /**
@@ -96,24 +95,17 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
     const { queueStatus } = useMessageContext();
     const { state: gameState } = useGame();
-    const { hasPendingRolls, pendingRequests } = usePendingRolls();
     // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
+    // The queue's current roll is the only request with a visible control (the dice popup in
+    // MessageListContainer), so it alone may raise the pill, the banner, and the input lock.
+    // Rolls parsed from chat text have no popup; letting them lock the composer left a
+    // "Roll required" banner with nothing to click (#2234).
     const queuedRoll = currentQueueRoll(gameState.diceRollQueue);
-    const queuedLabel = queuedRoll ? queueRollLabel(queuedRoll) : null;
-    // Chat parsing is only for messages saved before rolls lived on the queue.
-    const chatIsFallback = !queuedLabel && hasPendingRolls;
-    const chatRollLabel = chatIsFallback
-      ? pendingRequests.length === 1
-        ? pendingRequests[0].purpose || pendingRequests[0].type
-        : `${pendingRequests.length} pending rolls`
-      : null;
-    const rollPillLabel = queuedLabel ?? chatRollLabel;
+    const rollPillLabel = queuedRoll ? queueRollLabel(queuedRoll) : null;
     const rollBlocksInput = Boolean(rollPillLabel);
-    const completionBanner = !rollPillLabel
-      ? null
-      : chatIsFallback && pendingRequests.length > 1
-        ? `Please complete ${rollPillLabel} above`
-        : `Please complete the ${rollPillLabel} roll above`;
+    const completionBanner = rollPillLabel
+      ? `Please complete the ${rollPillLabel} roll above`
+      : null;
     const sceneBlurb = stripAssetTags(sessionData.current_scene_description || '');
     const overhaul = useOverhaulViewModel({
       chapterLabel: resolveCampaignChapterLabel(sessionData.turn_count),
@@ -312,7 +304,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     )
                   )}
 
-                  {/* Same label as the pill. Queue wins; chat text is the pre-queue fallback. */}
+                  {/* Same label as the pill, from the same queue roll. */}
                   {completionBanner && (
                     <div className="border-t border-orange-200 bg-orange-50 p-3">
                       <div className="flex items-center gap-2 text-orange-700">
