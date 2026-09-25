@@ -54,6 +54,9 @@ export const PLAYER_COMBAT_SPELL_IDS = [
   'eldritch-blast',
   'sacred-flame',
   'magic-missile',
+  // #2233: the premade Wizard and Sorcerer carry it as their one damaging leveled spell. A DEX
+  // save for half, resolved by the same save branch as Acid Splash and spending a slot.
+  'burning-hands',
 ] as const;
 
 const PLAYER_COMBAT_SPELL_ID_SET = new Set<string>(PLAYER_COMBAT_SPELL_IDS);
@@ -255,6 +258,119 @@ export function getSpellById(id: string): Spell | undefined {
 export function getSpellByName(name: string): Spell | undefined {
   const normalized = name.trim().toLowerCase();
   return allSpells.find((spell) => spell.name.toLowerCase() === normalized);
+}
+
+const slugifySpellRef = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+/**
+ * The one lookup every combat path uses to turn a spell reference into a catalog spell.
+ *
+ * References arrive in several spellings — the sheet's slug (`chill-touch`), a model's
+ * `chill_touch` or `Chill Touch`, or a display name beside an id the catalog has never seen
+ * (#2233: a premade's own cantrip came back "unknown spell" because a non-slug id short-circuited
+ * the name). The id is tried first, then the name, each exact and then as a slug, so a present
+ * but unmatched id never hides a name that does match.
+ */
+export function resolveCatalogSpell(
+  spellId?: string | null,
+  spellName?: string | null,
+): Spell | undefined {
+  for (const ref of [spellId, spellName]) {
+    if (typeof ref !== 'string' || !ref.trim()) continue;
+    const slug = slugifySpellRef(ref);
+    const spell =
+      getSpellById(ref.trim()) ??
+      getSpellByName(ref) ??
+      allSpells.find(
+        (candidate) => candidate.id === slug || slugifySpellRef(candidate.name) === slug,
+      );
+    if (spell) return spell;
+  }
+  return undefined;
+}
+
+/**
+ * The catalog spell a piece of prose names, when it names exactly one player combat spell.
+ *
+ * Used by the dialect translators so a sentence like "Chill Touch spell attack vs the elemental"
+ * is read as the spell it names rather than as a weapon attack with no weapon (#2233).
+ */
+export function findPlayerCombatSpellInText(text: string): Spell | undefined {
+  const normalized = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
+  const named = PLAYER_COMBAT_SPELL_IDS.map((id) => getSpellById(id)).filter(
+    (spell): spell is Spell =>
+      !!spell && normalized.includes(` ${spell.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `),
+  );
+  return named.length === 1 ? named[0] : undefined;
+}
+
+export type PlayerCombatSpellVerdict =
+  | { castable: true; spell: Spell }
+  | {
+      castable: false;
+      spell?: Spell;
+      reason:
+        | 'unknown_spell'
+        | 'unsupported_spell'
+        | 'missing_spell_slot_level'
+        | 'unsupported_spell_resolution';
+      /** The refusal as the player reads it: what happened and what to do instead. */
+      message: string;
+    };
+
+/**
+ * Whether the combat engine can resolve a spell reference, and if not, why in words the player
+ * can act on. `resolveSpellAttack` refuses with exactly these messages, and the premade walk
+ * (#2233) holds every premade's spell list to them.
+ */
+export function assessPlayerCombatSpell(
+  spellId?: string | null,
+  spellName?: string | null,
+  slotLevel?: number | null,
+): PlayerCombatSpellVerdict {
+  const spell = resolveCatalogSpell(spellId, spellName);
+  if (!spell) {
+    const label = spellName || spellId || 'that spell';
+    return {
+      castable: false,
+      reason: 'unknown_spell',
+      message: `Spell refused: unknown spell "${label}" — it is not in the spell catalog; cast a spell from your sheet by its name`,
+    };
+  }
+  if (!isPlayerCombatSpell(spell)) {
+    return {
+      castable: false,
+      spell,
+      reason: 'unsupported_spell',
+      message: `Spell refused: ${spell.name} has no attack roll or damage the combat engine resolves — describe what you do with it and the DM will narrate it, or cast a damaging spell`,
+    };
+  }
+  if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
+    return {
+      castable: false,
+      spell,
+      reason: 'missing_spell_slot_level',
+      message: `Spell refused: ${spell.name} needs a spell slot level — say which slot to spend (level ${spell.level} or higher)`,
+    };
+  }
+  if (!spell.damage || (!spell.attackType && !spell.saveAbility && spell.id !== 'magic-missile')) {
+    return {
+      castable: false,
+      spell,
+      reason: 'unsupported_spell_resolution',
+      message: `Spell refused: ${spell.name} has no supported combat resolution — describe it to the DM instead`,
+    };
+  }
+  return { castable: true, spell };
+}
+
+/** True when prose describes casting a spell rather than swinging a weapon. */
+export function describesSpellcasting(text: string): boolean {
+  return /\b(?:cast(?:s|ing)?|spell|cantrip|incantation)\b/i.test(text);
 }
 
 export function getSpellsByLevel(level: number): Spell[] {

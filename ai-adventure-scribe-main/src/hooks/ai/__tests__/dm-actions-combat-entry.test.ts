@@ -32,6 +32,20 @@ vi.mock('@/services/combat/player-roll-bridge', () => ({
     dismissed: false,
   }),
 }));
+// #2233: the spell popup reads its spell and bonus from the engine's proposal.
+vi.mock('@/services/combat/combat-attack-proposal', () => ({
+  proposeAuthoritativeSpell: vi.fn().mockResolvedValue({
+    movementOnly: false,
+    spellId: 'fire-bolt',
+    spellName: 'Fire Bolt',
+    kind: 'attack',
+    attackBonus: 6,
+    saveDC: 14,
+    targetAc: 13,
+    advantage: false,
+    disadvantage: false,
+  }),
+}));
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   requestCombatEntryConfirmation: vi.fn(),
 }));

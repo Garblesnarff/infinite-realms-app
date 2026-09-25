@@ -16,6 +16,7 @@
  */
 import { resolvePairFromText } from './attack-pair.js';
 import { parseTacticalDigest } from './digest-parse.js';
+import { describesSpellcasting, findPlayerCombatSpellInText } from '../data/spellData.js';
 import { combatLogger } from '../lib/logger.js';
 
 import type { TacticalDigest } from './digest-parse.js';
@@ -64,12 +65,50 @@ export type LegacyAttackTranslationResult = {
 
 const isAttackRequest = (request: RollRequest): boolean => request.type === 'attack';
 
+/**
+ * The action a purpose describes, for a resolved actor/target pair.
+ *
+ * A spell attack is a spell (#2233): "Chill Touch spell attack vs the elemental" used to become
+ * a weapon attack with no weapon, which a wizard with nothing equipped resolved as an Unarmed
+ * Strike nobody declared. A purpose naming one player combat spell becomes that `cast_spell`;
+ * a spell-shaped purpose that names none is not an attack of any kind and returns null.
+ */
+export function actionFromPurpose(
+  purpose: string,
+  actorId: string,
+  targetId: string,
+): DMTargetedCombatAction | null {
+  const spell = findPlayerCombatSpellInText(purpose);
+  if (spell) {
+    return {
+      actor_id: actorId,
+      action_type: 'cast_spell',
+      target_ids: [targetId],
+      weapon_id: null,
+      spell_id: spell.id,
+      slot_level: spell.level > 0 ? spell.level : null,
+      movement_feet: 0,
+    };
+  }
+  if (describesSpellcasting(purpose)) return null;
+  return {
+    actor_id: actorId,
+    action_type: 'attack',
+    target_ids: [targetId],
+    weapon_id: weaponIdFromPurpose(purpose),
+    spell_id: null,
+    slot_level: null,
+    // Approach is the engine's job. Declaring movement here would double-count it.
+    movement_feet: 0,
+  };
+}
+
 /** An attack the model already declared properly must not be duplicated by a translation. */
 function alreadyDeclared(response: DMResponse, actorId: string, targetId: string): boolean {
   return (response.combat_actions ?? []).some(
     (action) =>
       'target_ids' in action &&
-      action.action_type === 'attack' &&
+      (action.action_type === 'attack' || action.action_type === 'cast_spell') &&
       action.actor_id === actorId &&
       (action.target_ids ?? []).includes(targetId),
   );
@@ -104,18 +143,13 @@ export function translateLegacyAttackRolls(
       untranslated.push(request.purpose);
       continue;
     }
+    const action = actionFromPurpose(request.purpose, pair.actor.id, pair.target.id);
+    if (!action) {
+      untranslated.push(request.purpose);
+      continue;
+    }
     consumed.add(request);
     if (alreadyDeclared(response, pair.actor.id, pair.target.id)) continue;
-    const action: DMTargetedCombatAction = {
-      actor_id: pair.actor.id,
-      action_type: 'attack',
-      target_ids: [pair.target.id],
-      weapon_id: weaponIdFromPurpose(request.purpose),
-      spell_id: null,
-      slot_level: null,
-      // Approach is the engine's job. Declaring movement here would double-count it.
-      movement_feet: 0,
-    };
     translated.push(action);
     translations.push({ purpose: request.purpose, action, fallbacks: pair.fallbacks });
   }

@@ -1,5 +1,5 @@
 /**
- * The seven player combat spells from issue #2085, classified by how the client asks
+ * The player combat spells from issue #2085 (plus Burning Hands, #2233), classified by how the client asks
  * the player to participate. Resolution still belongs to the engine.
  */
 
@@ -20,12 +20,12 @@ const PLAYER_COMBAT_SPELLS: readonly PlayerCombatSpell[] = [
   { id: 'acid-splash', name: 'Acid Splash', kind: 'save', saveAbility: 'DEX' },
   { id: 'sacred-flame', name: 'Sacred Flame', kind: 'save', saveAbility: 'DEX' },
   { id: 'magic-missile', name: 'Magic Missile', kind: 'auto-hit' },
+  // #2233: the premade Wizard's and Sorcerer's leveled damage spell; the engine rolls the saves.
+  { id: 'burning-hands', name: 'Burning Hands', kind: 'save', saveAbility: 'DEX' },
 ];
 
 const byId = new Map(PLAYER_COMBAT_SPELLS.map((spell) => [spell.id, spell]));
-const byName = new Map(
-  PLAYER_COMBAT_SPELLS.map((spell) => [spell.name.toLowerCase(), spell]),
-);
+const byName = new Map(PLAYER_COMBAT_SPELLS.map((spell) => [spell.name.toLowerCase(), spell]));
 
 const normalize = (value: string): string =>
   value
@@ -49,10 +49,7 @@ export function resolvePlayerCombatSpell(
 const titleCase = (value: string): string =>
   value.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export function playerCombatSpellLabel(
-  spellId?: string | null,
-  spellName?: string | null,
-): string {
+export function playerCombatSpellLabel(spellId?: string | null, spellName?: string | null): string {
   const resolved = resolvePlayerCombatSpell(spellId, spellName);
   if (resolved) return resolved.name;
   const raw = (spellName || spellId || '').trim();

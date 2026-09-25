@@ -317,7 +317,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         const asked = await trackPlayerRollDismissal(() =>
           action.action_type === 'attack'
             ? askPlayerForAttackDie({ encounterId, action, actorLabel })
-            : askPlayerForSpellCast({ action, actorLabel, participants }),
+            : askPlayerForSpellCast({ encounterId, action, actorLabel, participants }),
         );
         playerDie = asked.dismissed ? { autoRolled: false, cancelled: true } : asked.value;
       } else {

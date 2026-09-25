@@ -40,7 +40,7 @@ import { checkHit, checkAutoCrit } from './hit-check.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { getSpellById, getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
+import { assessPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { rollD20 } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -540,17 +540,18 @@ export class CombatAttackService {
   }
 
   /**
-   * Resolve a spell attack against multiple targets
+   * Everything a spell cast decides before it claims the action: turn, catalog, the caster's
+   * sheet, range and line of sight per target, and the spell attack bonus. The proposal and the
+   * commit both read it, so the popup can never show a bonus or AC the resolution does not use
+   * (#2233: the popup showed "1d20+0" for a +5 caster).
    */
-  async resolveSpellAttack(
+  private async prepareSpellCast(
     encounterId: string,
-    input: SpellAttackInput,
+    input: Pick<SpellAttackInput, 'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel'>,
     userId: string,
-  ): Promise<SpellAttackResult> {
-    const { casterId, expectedVersion, targetIds, spellId, spellName, slotLevel, d20 } = input;
-
+  ) {
+    const { casterId, targetIds, spellId, spellName, slotLevel } = input;
     await this.assertCurrentTurn(encounterId, casterId, userId);
-    const spell = spellId ? getSpellById(spellId) : getSpellByName(spellName);
 
     // ⚡ Bolt: Batch fetch both caster and all targets with their stats in a single query.
     // This reduces database round-trips from 2 to 1 for participant data.
@@ -568,47 +569,24 @@ export class CombatAttackService {
     }
     const casterData = allParticipantDataMap.get(casterId)!;
     const casterProfile = await getParticipantAbilityProfile(casterData.participant);
-    if (!spell) {
-      throw new BusinessLogicError(`Spell refused: unknown spell "${spellName}"`, {
-        reason: 'unknown_spell',
-        spell: spellName,
+    const verdict = assessPlayerCombatSpell(spellId, spellName, slotLevel);
+    if (!verdict.castable) {
+      throw new BusinessLogicError(verdict.message, {
+        reason: verdict.reason,
+        spell: verdict.spell?.name ?? spellName,
       });
     }
-    if (!isPlayerCombatSpell(spell)) {
-      throw new BusinessLogicError(
-        `Spell refused: ${spell.name} is outside the player combat scope`,
-        {
-          reason: 'unsupported_spell',
-          spell: spell.name,
-        },
-      );
-    }
-    if (spell.level >= 1 && (slotLevel === undefined || slotLevel === null)) {
-      throw new BusinessLogicError(`Spell refused: ${spell.name} needs a spell slot level`, {
-        reason: 'missing_spell_slot_level',
-        spell: spell.name,
-      });
-    }
-    if (
-      !spell.damage ||
-      (!spell.attackType && !spell.saveAbility && spell.id !== 'magic-missile')
-    ) {
-      throw new BusinessLogicError(
-        `Spell refused: ${spell.name} has no supported combat resolution`,
-        {
-          reason: 'unsupported_spell_resolution',
-          spell: spell.name,
-        },
-      );
-    }
+    const { spell } = verdict;
+    // The sheet stores slugs, older rows store names, and `character_spells` joins in both;
+    // each is read through the same catalog lookup as the declaration so spelling never decides.
     if (
       casterData.participant.characterId &&
-      !casterProfile.spellIds.includes(spell.id.toLowerCase()) &&
-      !casterProfile.spellIds.includes(spell.name.toLowerCase())
+      !casterProfile.spellIds.some((known) => resolveCatalogSpell(known)?.id === spell.id)
     ) {
-      throw new BusinessLogicError('Caster does not know or have this spell prepared', {
-        spellId: spell.id,
-      });
+      throw new BusinessLogicError(
+        `Spell refused: ${spell.name} is not on ${casterData.participant.name ?? 'the caster'}'s sheet — cast a spell you know or have prepared`,
+        { reason: 'spell_not_known', spellId: spell.id },
+      );
     }
     const tacticalMap = await loadActiveTacticalMap(casterData.participant.encounter.sessionId);
     const spellRange = Number(
@@ -660,6 +638,74 @@ export class CombatAttackService {
         });
       spellRules.set(targetId, rules);
     }
+    const spellAbility = this.spellcastingAbility(casterProfile.className);
+    const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
+    const spellAttackBonus = spellModifier + this.proficiencyBonus(casterProfile.level);
+    return {
+      spell,
+      casterData,
+      casterProfile,
+      allParticipantDataMap,
+      spellRules,
+      spellModifier,
+      spellAttackBonus,
+    };
+  }
+
+  /**
+   * What a spell attack would be, asked before the player rolls for it. Read-only: it claims no
+   * action and spends no slot, so a closed popup leaves the encounter as it found it.
+   */
+  async proposeSpellAttack(
+    encounterId: string,
+    input: Pick<SpellAttackInput, 'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel'>,
+    userId: string,
+  ): Promise<{
+    spellId: string;
+    spellName: string;
+    kind: 'attack' | 'save' | 'auto-hit';
+    attackBonus: number;
+    saveDC: number;
+    targetAc: number;
+    advantage: boolean;
+    disadvantage: boolean;
+  }> {
+    const { spell, spellRules, spellAttackBonus } = await this.prepareSpellCast(
+      encounterId,
+      input,
+      userId,
+    );
+    const rules = spellRules.get(input.targetIds[0]);
+    return {
+      spellId: spell.id,
+      spellName: spell.name,
+      kind: spell.attackType ? 'attack' : spell.saveAbility ? 'save' : 'auto-hit',
+      attackBonus: spellAttackBonus,
+      saveDC: 8 + spellAttackBonus,
+      targetAc: rules?.targetAc ?? 0,
+      advantage: rules?.advantage ?? false,
+      disadvantage: rules?.disadvantage ?? false,
+    };
+  }
+
+  /**
+   * Resolve a spell attack against multiple targets
+   */
+  async resolveSpellAttack(
+    encounterId: string,
+    input: SpellAttackInput,
+    userId: string,
+  ): Promise<SpellAttackResult> {
+    const { casterId, expectedVersion, targetIds, slotLevel, d20 } = input;
+    const {
+      spell,
+      casterData,
+      casterProfile,
+      allParticipantDataMap,
+      spellRules,
+      spellModifier,
+      spellAttackBonus,
+    } = await this.prepareSpellCast(encounterId, input, userId);
     const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
     // Same release-on-throw wrapper as resolveAttack. It matters more here: the
     // claim is made once and then damage is applied to every target in turn, so
@@ -684,10 +730,6 @@ export class CombatAttackService {
           userId,
         );
       }
-      const spellAbility = this.spellcastingAbility(casterProfile.className);
-      const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
-      const proficiencyBonus = this.proficiencyBonus(casterProfile.level);
-      const spellAttackBonus = spellModifier + proficiencyBonus;
       const saveDC = 8 + spellAttackBonus;
       const rawDamageDice = this.damageDiceForLevel(
         spell.damageByLevel,

@@ -18,6 +18,7 @@
  */
 import { collectEntityMentions } from './attack-pair.js';
 import { parseTacticalDigest } from './digest-parse.js';
+import { actionFromPurpose } from './legacy-attack-translation.js';
 import { combatLogger } from '../lib/logger.js';
 import { isCombatDeescalationSpeech } from '../services/combat/combat-intent-gate.js';
 
@@ -166,17 +167,24 @@ export function inferProseAttackIntent(
   const target = targetFromProse(digest, actor, text);
   if (!target || target.id === actor.id) return null;
 
-  const action: DMTargetedCombatAction = {
-    actor_id: actor.id,
-    action_type: 'attack',
-    target_ids: [target.id],
-    weapon_id: weaponIdFromProse(text),
-    spell_id: null,
-    slot_level: null,
-    // Approach is the engine's job here for the same reason it is in the legacy translation:
-    // declaring movement alongside it would double-count the distance.
-    movement_feet: 0,
-  };
+  // Narration of a spell is read as that spell or not at all (#2233): the same reader as the
+  // roll-request translation, so prose about Chill Touch never becomes an Unarmed Strike.
+  const spellAction = actionFromPurpose(text, actor.id, target.id);
+  if (!spellAction) return null;
+  const action: DMTargetedCombatAction =
+    spellAction.action_type === 'cast_spell'
+      ? spellAction
+      : {
+          actor_id: actor.id,
+          action_type: 'attack',
+          target_ids: [target.id],
+          weapon_id: weaponIdFromProse(text),
+          spell_id: null,
+          slot_level: null,
+          // Approach is the engine's job here for the same reason it is in the legacy
+          // translation: declaring movement alongside it would double-count the distance.
+          movement_feet: 0,
+        };
   return {
     action,
     text,

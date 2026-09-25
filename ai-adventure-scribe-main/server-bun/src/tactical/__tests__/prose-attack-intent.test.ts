@@ -156,6 +156,38 @@ describe("run 9's prose becomes an attack the engine can execute", () => {
   });
 });
 
+describe('narrated spells stay spells (#2233)', () => {
+  test('prose naming Chill Touch infers that cast, not a weapon attack', () => {
+    const inference = inferProseAttackIntent(
+      response({
+        text: 'You cast Chill Touch, and a ghostly skeletal hand strikes Shadow Roach 1.',
+      }),
+      promptFor('the-seeker'),
+      true,
+    );
+    expect(inference!.action).toEqual({
+      actor_id: 'the-seeker',
+      action_type: 'cast_spell',
+      target_ids: ['shadow-roach-1'],
+      weapon_id: null,
+      spell_id: 'chill-touch',
+      slot_level: null,
+      movement_feet: 0,
+    });
+  });
+
+  test('prose about a spell it cannot name infers nothing rather than an unarmed strike', () => {
+    const inference = inferProseAttackIntent(
+      response({
+        text: 'You snarl an incantation and a spectral hand strikes Shadow Roach 1.',
+      }),
+      promptFor('the-seeker'),
+      true,
+    );
+    expect(inference).toBeNull();
+  });
+});
+
 describe('the floor stays out of the way of every dialect above it', () => {
   test('a declared combat_action is not doubled by an inference', () => {
     const inference = inferProseAttackIntent(

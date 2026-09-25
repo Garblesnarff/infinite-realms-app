@@ -28,17 +28,35 @@ export interface ActionHandlerResult {
   errorMessage?: string;
 }
 
+/** What the tracker says when its Cast Spell button carries no spell (#2233). */
+export const NO_SPELL_CHOSEN_GUIDANCE =
+  'no spell was chosen — cast from the Spells list on your character sheet (Cast), or say which spell and target in chat';
+
 /**
  * Handle spell casting action
  */
-export function handleSpellCast(
+export async function handleSpellCast(
   action: Partial<CombatActionType>,
   participant: CombatParticipant,
-): ActionHandlerResult {
+): Promise<ActionHandlerResult> {
+  // The encounter tracker's Cast Spell button names no spell. It used to fall through to a
+  // lookup of "Unknown Spell"; it now says where casting works, and spends nothing.
+  if (!action.spellName) {
+    return {
+      participantUpdates: {},
+      actionUpdates: {
+        description: `${action.description || `${participant.name} attempts to cast a spell`} (${NO_SPELL_CHOSEN_GUIDANCE})`,
+      },
+      success: false,
+      errorMessage: NO_SPELL_CHOSEN_GUIDANCE,
+    };
+  }
   try {
     const spellLevel = (action.spellLevel as SpellSlotLevel) || 1;
-    const spellName = action.spellName || 'Unknown Spell';
-    const { updatedParticipant, updatedAction } = castSpell(
+    const spellName = action.spellName;
+    // `castSpell` is async; destructuring its un-awaited Promise is what threw
+    // "Cannot read properties of undefined (reading 'spellSlots')" (#2233).
+    const { updatedParticipant, updatedAction } = await castSpell(
       action,
       participant,
       spellName,

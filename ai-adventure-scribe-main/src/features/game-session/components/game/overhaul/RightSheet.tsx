@@ -79,12 +79,13 @@ const spellLevelLabel = (level: number | null): string => {
 
 const SpellEntry: React.FC<{
   spell: SpellVM;
+  /** Cast stays offered in combat (#2233): it is the one cast path that reaches the engine. */
   isInCombat: boolean;
   showActions: boolean;
   pendingSpellId?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
-}> = ({ spell, isInCombat, showActions, pendingSpellId, onCastSpell, onTogglePrepared }) => (
+}> = ({ spell, showActions, pendingSpellId, onCastSpell, onTogglePrepared }) => (
   <div className="rounded border border-white/5 bg-white/[0.02] p-2">
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
@@ -110,7 +111,7 @@ const SpellEntry: React.FC<{
               {pendingSpellId === spell.id ? 'Saving…' : spell.isPrepared ? 'Prepared' : 'Prepare'}
             </Button>
           )}
-          {!isInCombat && onCastSpell && (
+          {onCastSpell && (
             <Button
               type="button"
               size="sm"

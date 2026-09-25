@@ -495,6 +495,7 @@ export async function handleDmActionsAndTransitions(
         } else if (entryFirstAction.action_type === 'cast_spell') {
           const { value: spellRoll, dismissed } = await trackPlayerRollDismissal(() =>
             askPlayerForSpellCast({
+              encounterId: activeEncounter?.id,
               action: entryFirstAction,
               actorLabel: playerParticipant.name,
               participants: activeEncounter.participants,

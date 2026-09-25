@@ -1,7 +1,7 @@
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { executeCombatIntent } from './combat-intent-service.js';
 import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
-import { getSpellById } from '../../data/spellData.js';
+import { resolveCatalogSpell } from '../../data/spellData.js';
 import { calculateAoECast } from '../../tactical/aoe.js';
 import { dispatchMapAction } from '../../tactical/dispatch.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
@@ -46,7 +46,10 @@ const publish = (sessionId: string, delta: AoECastDelta | AoEPreviewDelta): void
   broadcastToRoom(sessionId, null as never, { ...delta, timestamp: Date.now() });
 
 async function prepare(sessionId: string, request: AoECastRequest) {
-  const [map, spell] = await Promise.all([loadActiveTacticalMap(sessionId), getSpellById(request.spellId)]);
+  const [map, spell] = await Promise.all([
+    loadActiveTacticalMap(sessionId),
+    resolveCatalogSpell(request.spellId),
+  ]);
   if (!map) throw new Error('No active tactical map');
   if (!spell?.areaOfEffect) throw new Error('Spell does not have an area of effect');
   const actor = map.entities.find((entity) => entity.id === request.actorId);
@@ -131,7 +134,8 @@ export async function resolveAoECast(
         distance: spell.forcedMove.distanceFeet,
         destination: null,
       });
-      if (moved.applied && moved.path?.length) forcedMoves.push({ entityId: target.entityId, path: moved.path });
+      if (moved.applied && moved.path?.length)
+        forcedMoves.push({ entityId: target.entityId, path: moved.path });
     }
     if (forcedMoves.length) await saveTacticalMap(map);
   }

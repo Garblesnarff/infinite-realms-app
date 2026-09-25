@@ -124,6 +124,14 @@ describe('RightSheet attacks list', () => {
     );
   });
 
+  it('keeps Cast available in combat and routes it to the same turn handler (#2233)', () => {
+    const onCastSpell = vi.fn().mockResolvedValue(undefined);
+    render(<RightSheet c={casterSheet} isInCombat onCastSpell={onCastSpell} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cast Magic Missile' }));
+    expect(onCastSpell).toHaveBeenCalledWith(casterSheet.spells.known[0]);
+  });
+
   it('does not offer a cast action during combat or a preparation toggle to non-casters', () => {
     render(<RightSheet c={casterSheet} isInCombat />);
     expect(screen.queryByRole('button', { name: 'Cast Magic Missile' })).not.toBeInTheDocument();

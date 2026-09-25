@@ -212,3 +212,53 @@ describe('weapon inference', () => {
     expect(weaponIdFromPurpose(purpose)).toBe(expected as string | null);
   });
 });
+
+describe('a spell attack is the spell it names, never a weapon attack (#2233)', () => {
+  test('"Chill Touch spell attack vs Shadow Roach 1" becomes a Chill Touch cast', () => {
+    const result = translateLegacyAttackRolls(
+      response({
+        roll_requests: [attackRequest('Chill Touch spell attack vs Shadow Roach 1')],
+      }),
+      promptFor('the-seeker'),
+      true,
+    )!;
+    expect(result.response.roll_requests).toHaveLength(0);
+    expect(result.response.combat_actions).toEqual([
+      {
+        actor_id: 'the-seeker',
+        action_type: 'cast_spell',
+        target_ids: ['shadow-roach-1'],
+        weapon_id: null,
+        spell_id: 'chill-touch',
+        slot_level: null,
+        movement_feet: 0,
+      },
+    ]);
+  });
+
+  test('a leveled spell carries its slot level', () => {
+    const result = translateLegacyAttackRolls(
+      response({
+        roll_requests: [attackRequest('The Seeker casts Burning Hands at Shadow Roach 1')],
+      }),
+      promptFor('the-seeker'),
+      true,
+    )!;
+    expect(result.response.combat_actions[0]).toMatchObject({
+      action_type: 'cast_spell',
+      spell_id: 'burning-hands',
+      slot_level: 1,
+    });
+  });
+
+  test('a spell attack naming no castable spell is left untranslated, not made an unarmed strike', () => {
+    const result = translateLegacyAttackRolls(
+      response({
+        roll_requests: [attackRequest('Spell attack with a ghostly hand against Shadow Roach 1')],
+      }),
+      promptFor('the-seeker'),
+      true,
+    );
+    expect(result).toBeNull();
+  });
+});

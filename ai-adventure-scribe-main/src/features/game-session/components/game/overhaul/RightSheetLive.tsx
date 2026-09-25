@@ -79,7 +79,9 @@ export const RightSheetLive: React.FC<{
 
   const handleCastSpell = useCallback(
     async (spell: SpellVM): Promise<void> => {
-      if (isInCombat) return;
+      // In combat as well as out of it (#2233): the cast goes through the ordinary turn, where
+      // the engine resolves it from the same catalog the sheet lists. The encounter tracker's
+      // local Cast Spell button never reached the engine, so this is the in-combat cast path.
       const handler = spellCastHandlerRef?.current;
       if (!handler) {
         setSpellActionError('The turn is still loading. Try casting again in a moment.');
@@ -93,7 +95,7 @@ export const RightSheetLive: React.FC<{
         setSpellActionError(error instanceof Error ? error.message : 'Unable to cast spell.');
       }
     },
-    [isInCombat, spellCastHandlerRef],
+    [spellCastHandlerRef],
   );
 
   return (

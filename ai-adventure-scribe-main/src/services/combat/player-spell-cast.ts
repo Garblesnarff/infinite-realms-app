@@ -1,11 +1,14 @@
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 
 import logger from '@/lib/logger';
+import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
 import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 
 export interface PlayerSpellCastParams {
+  /** When present, the popup's spell, bonus, and AC come from the engine's proposal (#2233). */
+  encounterId?: string;
   action: StructuredCombatAction;
   actorLabel: string;
   participants?: Array<{ id: string; name?: string }>;
@@ -32,7 +35,7 @@ const labelFor = (
 export async function askPlayerForSpellCast(
   params: PlayerSpellCastParams,
 ): Promise<PlayerSpellCastResult> {
-  const { action, actorLabel, participants } = params;
+  const { encounterId, action, actorLabel, participants } = params;
   const spell = resolvePlayerCombatSpell(action.spell_id, action.spell_id);
   const targetId = action.target_ids[0];
   const targetLabel = targetId ? labelFor(targetId, participants) : 'the target';
@@ -55,16 +58,47 @@ export async function askPlayerForSpellCast(
     return { autoRolled: true, movementOnly: false };
   }
 
+  // The engine names the spell and its numbers. Without a proposal the popup would have to
+  // guess them, and a guessed "+0" is how #2233 showed a +5 caster the wrong roll; a refused or
+  // failed proposal therefore opens no popup and lets the commit resolve or refuse by itself.
+  let rollSpec = {
+    weaponName: spell.name,
+    attackBonus: 0,
+    targetAc: 0,
+    advantage: false,
+    disadvantage: false,
+  };
+  if (encounterId && targetId) {
+    try {
+      const proposal = await proposeAuthoritativeSpell(encounterId, {
+        type: 'spell',
+        actorId: action.actor_id,
+        targetIds: action.target_ids,
+        ...(action.spell_id ? { spellId: action.spell_id } : {}),
+        spellName: spell.name,
+        ...(typeof action.slot_level === 'number' && action.slot_level >= 1
+          ? { slotLevel: action.slot_level }
+          : {}),
+      });
+      rollSpec = {
+        weaponName: proposal.spellName,
+        attackBonus: proposal.attackBonus,
+        targetAc: proposal.targetAc,
+        advantage: proposal.advantage,
+        disadvantage: proposal.disadvantage,
+      };
+    } catch (error) {
+      logger.info('[SpellAttack] proposal refused or failed; the engine resolves the cast', error);
+      return { autoRolled: true, movementOnly: false };
+    }
+  }
+
   try {
     const outcome = await requestPlayerAttackRoll({
       kind: 'spell-attack',
       actorLabel,
       targetLabel,
-      weaponName: spell.name,
-      attackBonus: 0,
-      targetAc: 0,
-      advantage: false,
-      disadvantage: false,
+      ...rollSpec,
     });
     if (outcome.d20 === null) return { autoRolled: true, movementOnly: false };
     return { d20: outcome.d20, autoRolled: false, movementOnly: false };

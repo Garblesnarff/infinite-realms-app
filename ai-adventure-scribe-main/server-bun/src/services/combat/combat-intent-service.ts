@@ -31,7 +31,7 @@ import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entit
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { getSpellById, getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
+import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
@@ -543,8 +543,9 @@ export async function proposeCombatAttack(
 ): Promise<
   { movementOnly: true; result: unknown } | ({ movementOnly: false } & Record<string, unknown>)
 > {
+  if (submitted.type === 'spell') return proposeCombatSpell(encounterId, submitted, userId, source);
   if (submitted.type !== 'attack') {
-    throw new ValidationError('Only attack intents can be proposed', {
+    throw new ValidationError('Only attack and spell intents can be proposed', {
       intentType: submitted.type,
     });
   }
@@ -606,6 +607,57 @@ export async function proposeCombatAttack(
     targetLabel,
     requestedWeapon: grounding.requested,
     weaponSubstituted: !grounding.grounded,
+  };
+}
+
+/**
+ * What a player's spell would be, asked before the popup opens (#2233).
+ *
+ * The same reference resolution, turn check, catalog lookup, sheet check, and spell attack bonus
+ * as the commit, so the popup reads "Chill Touch spell attack 1d20+5" from the numbers the
+ * resolution will use — and a spell the caster does not have is refused here, before any dialog
+ * can offer it.
+ */
+async function proposeCombatSpell(
+  encounterId: string,
+  submitted: Extract<SubmittedCombatIntent, { type: 'spell' }>,
+  userId: string,
+  source: CombatActionSource,
+): Promise<{ movementOnly: false } & Record<string, unknown>> {
+  const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  const index = await loadSessionEntityIndex(state.encounter.sessionId);
+  const resolved = resolveIntentRefs(submitted, index, state) as Extract<
+    CombatIntent,
+    { type: 'spell' }
+  >;
+  const { encounter } = await resolveActorTurn(
+    encounterId,
+    state,
+    resolved.actorId,
+    index,
+    userId,
+    resolved.type,
+    source,
+  );
+  const attackService = await createCombatAttackService();
+  const proposal = await attackService.proposeSpellAttack(
+    encounterId,
+    {
+      casterId: resolved.actorId,
+      targetIds: resolved.targetIds,
+      spellId: resolved.spellId,
+      spellName: resolved.spellName,
+      slotLevel: resolved.slotLevel,
+    },
+    userId,
+  );
+  return {
+    movementOnly: false,
+    ...proposal,
+    actorId: resolved.actorId,
+    targetIds: resolved.targetIds,
+    expectedVersion: encounter.version,
+    targetLabel: await participantLabel(encounterId, resolved.targetIds[0], userId),
   };
 }
 
@@ -1043,7 +1095,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     );
   }
   const spells = profile.spellIds
-    .map((id) => getSpellById(id) ?? getSpellByName(id))
+    .map((id) => resolveCatalogSpell(id))
     .filter(
       (spell, index, all) =>
         spell &&

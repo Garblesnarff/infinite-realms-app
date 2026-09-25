@@ -55,3 +55,47 @@ export async function proposeAuthoritativeAttack(
     );
   return payload.proposal as CombatAttackProposal;
 }
+
+/** The engine's answer to "what would this spell be?" (#2233). */
+export interface CombatSpellProposal {
+  movementOnly: false;
+  spellId: string;
+  spellName: string;
+  kind: 'attack' | 'save' | 'auto-hit';
+  attackBonus: number;
+  saveDC: number;
+  targetAc: number;
+  advantage: boolean;
+  disadvantage: boolean;
+  targetLabel?: string;
+}
+
+/**
+ * Asks the engine what a spell cast would be, without casting it. The popup reads the spell's
+ * name, attack bonus, and target AC from here, so it can only ever offer the spell the engine
+ * will resolve, at the bonus the engine will add. A spell the caster does not have is refused
+ * here, before any dialog opens.
+ */
+export async function proposeAuthoritativeSpell(
+  encounterId: string,
+  intent: Extract<ClientCombatIntent, { type: 'spell' }>,
+): Promise<CombatSpellProposal> {
+  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
+  const response = await fetch(
+    `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/intent`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
+    },
+  );
+  logServerRequestId('/v1/combat', response);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok)
+    throw new CombatIntentRefusedError(
+      String(payload.error || `Spell proposal rejected (${response.status})`),
+      response.status,
+      (payload as { details?: CombatRefusalDetails }).details,
+    );
+  return payload.proposal as CombatSpellProposal;
+}
