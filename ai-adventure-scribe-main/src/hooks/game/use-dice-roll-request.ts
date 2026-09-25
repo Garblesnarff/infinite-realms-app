@@ -32,7 +32,7 @@ export type RollResultHandler = (
 
 interface UseDiceRollRequestProps {
   request: RollRequest;
-  onManualResult: RollResultHandler;
+  onResult: RollResultHandler;
   onRollCommit?: () => void;
 }
 
@@ -43,7 +43,7 @@ interface UseDiceRollRequestProps {
  */
 export function useDiceRollRequest({
   request,
-  onManualResult,
+  onResult,
   onRollCommit,
 }: UseDiceRollRequestProps) {
   const [manualMode, setManualMode] = useState(false);
@@ -196,13 +196,13 @@ export function useDiceRollRequest({
       isSubmittingRef.current = true;
       setIsSubmitting(true);
       try {
-        await (details ? onManualResult(totalResult, details) : onManualResult(totalResult));
+        await (details ? onResult(totalResult, details) : onResult(totalResult));
       } finally {
         isSubmittingRef.current = false;
         setIsSubmitting(false);
       }
     },
-    [onManualResult],
+    [onResult],
   );
 
   const handleDiceRollComplete = useCallback(

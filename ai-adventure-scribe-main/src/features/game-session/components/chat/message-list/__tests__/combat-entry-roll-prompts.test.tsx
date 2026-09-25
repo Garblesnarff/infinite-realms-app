@@ -27,7 +27,6 @@ import {
   setPlayerRollHost,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
-import { rollDice } from '@/utils/diceUtils';
 
 const { gameRef } = vi.hoisted(() => ({
   gameRef: { current: null as unknown as Record<string, unknown> },
@@ -40,7 +39,6 @@ vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: null } }),
 }));
 
-vi.mock('@/utils/diceUtils', () => ({ rollDice: vi.fn() }));
 
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -53,7 +51,7 @@ type GameStore = ReturnType<typeof useDiceRollManagement> & {
 };
 
 interface DiceHandle {
-  handleDiceRoll: (formula: string) => Promise<void>;
+  handleManualResult: (result: number, details?: { naturalRoll: number }) => Promise<void>;
   currentRollDescription: string | null;
   currentRollId: string | null;
   pendingRollIds: string[];
@@ -77,13 +75,13 @@ function Harness({ handle }: { handle: { current: DiceHandle | null } }): React.
 
 function DiceConsumer({ handle }: { handle: { current: DiceHandle | null } }): null {
   usePlayerRollHost();
-  const { currentRoll, handleDiceRoll } = useMessageDiceRolls({
+  const { currentRoll, handleManualResult } = useMessageDiceRolls({
     onSendMessage,
     onSendFullMessage,
   });
   const store = gameRef.current as unknown as GameStore;
   handle.current = {
-    handleDiceRoll,
+    handleManualResult,
     currentRollDescription: currentRoll?.description ?? null,
     currentRollId: currentRoll?.id ?? null,
     pendingRollIds: store.state.diceRollQueue.pendingRolls
@@ -151,17 +149,12 @@ describe('combat-entry roll prompts (#2190)', () => {
     const enginePromptId = handle.current?.currentRollId;
     expect(enginePromptId).not.toBe(rawInitiativeId);
 
-    // Step 3: the player rolls a natural 9. On the failing runs this number was thrown away and
-    // the engine used its own auto-roll; here it is the number the engine receives.
-    vi.mocked(rollDice).mockReturnValue({
-      total: 10,
-      naturalRoll: 9,
-      results: [9],
-      keptResults: [9],
-      critical: false,
-    } as never);
+    // Step 3: the player's popup animation produced total 10 with natural face 9.
+    // handleManualResult settles the face the player watched land — no re-roll (#2219).
+    // On the failing runs this number was thrown away and the engine used its own
+    // auto-roll; here it is the number the engine receives.
     await act(async () => {
-      await handle.current?.handleDiceRoll('1d20+1');
+      await handle.current?.handleManualResult(10, { naturalRoll: 9 });
     });
 
     await expect(enginePrompt).resolves.toEqual({ d20: 9 });
@@ -176,22 +169,16 @@ describe('combat-entry roll prompts (#2190)', () => {
     // The DM's raw declaration requests are what is left in the queue. Answering either of them
     // must not reach the DM — that is the fabricated "attacks a Chiropteran Hulk … miss" player
     // message that started a turn for an attack the engine never resolved.
-    vi.mocked(rollDice).mockReturnValue({
-      total: 9,
-      naturalRoll: 4,
-      results: [4],
-      keptResults: [4],
-      critical: false,
-    } as never);
-
+    // Unowned combat dice settle with the popup's observed total/natural face and are dropped
+    // by the same guard (#2219).
     expect(handle.current?.currentRollId).toBe(rawInitiativeId);
     await act(async () => {
-      await handle.current?.handleDiceRoll('1d20+1');
+      await handle.current?.handleManualResult(9, { naturalRoll: 4 });
     });
 
     expect(handle.current?.currentRollId).toBe(rawAttackId);
     await act(async () => {
-      await handle.current?.handleDiceRoll('1d20+5');
+      await handle.current?.handleManualResult(9, { naturalRoll: 4 });
     });
 
     // The whole sequence produced no player message at all: only the engine's own transcript

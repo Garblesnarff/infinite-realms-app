@@ -71,7 +71,7 @@ describe('useDiceRollRequest', () => {
 
   it('initializes state correctly', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     expect(result.current.manualMode).toBe(false);
@@ -84,14 +84,14 @@ describe('useDiceRollRequest', () => {
   it('respects initial advantage/disadvantage from request', () => {
     const request = { ...defaultRequest, advantage: true };
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request, onResult: mockOnManualResult }),
     );
     expect(result.current.hasAdvantage).toBe(true);
   });
 
   it('toggles advantage correctly', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -108,7 +108,7 @@ describe('useDiceRollRequest', () => {
 
   it('toggles disadvantage correctly and clears advantage', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -130,7 +130,7 @@ describe('useDiceRollRequest', () => {
 
   it('handles manual result submission', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -146,7 +146,7 @@ describe('useDiceRollRequest', () => {
 
   it('ignores invalid manual result submission', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -168,7 +168,7 @@ describe('useDiceRollRequest', () => {
 
   it('starts auto-roll', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -181,7 +181,7 @@ describe('useDiceRollRequest', () => {
 
   it('completes auto-roll with numeric result', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -194,7 +194,7 @@ describe('useDiceRollRequest', () => {
 
   it('completes auto-roll with object result', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -207,7 +207,7 @@ describe('useDiceRollRequest', () => {
   // #2210: the engine settlers need the bare die; the total already carries the formula's bonus.
   it('passes the natural face alongside the total when the animated roll reports one', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -219,7 +219,7 @@ describe('useDiceRollRequest', () => {
 
   it('completes auto-roll with invalid result', () => {
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     act(() => {
@@ -231,21 +231,21 @@ describe('useDiceRollRequest', () => {
 
   it('handles damage rolls without calculating modifiers', () => {
     const request = { type: 'damage' as const, formula: '2d6+5', purpose: 'Fireball' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).not.toHaveBeenCalled();
   });
 
   it('handles formula with numbers as-is', () => {
     const request = { ...defaultRequest, formula: '1d20+5' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).not.toHaveBeenCalled();
   });
 
   it('identifies skill check from purpose', () => {
     const request = { ...defaultRequest, type: 'skill_check' as const, purpose: 'Athletics check' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -261,7 +261,7 @@ describe('useDiceRollRequest', () => {
       formula: '1d20+cha',
       purpose: 'A general charisma test',
     };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     // Must be called with 'check' rollType (not 'skill' which would throw with no skillName)
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
@@ -274,7 +274,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula string (+dex)', () => {
     const request = { ...defaultRequest, formula: '+dex' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -286,7 +286,7 @@ describe('useDiceRollRequest', () => {
 
   it('sets ability from purpose using short names like dex', () => {
     const request = { ...defaultRequest, purpose: 'Dex check' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -298,7 +298,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula with full names', () => {
     const request = { ...defaultRequest, formula: 'strength' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -310,7 +310,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula with +str', () => {
     const request = { ...defaultRequest, formula: '+str' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -322,7 +322,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula with intelligence', () => {
     const request = { ...defaultRequest, formula: 'intelligence' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -334,7 +334,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula with +wis', () => {
     const request = { ...defaultRequest, formula: '+wis' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -346,7 +346,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula with +cha', () => {
     const request = { ...defaultRequest, formula: '+cha' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -358,7 +358,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from formula with constitution', () => {
     const request = { ...defaultRequest, formula: 'constitution' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -370,7 +370,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies initiative correctly', () => {
     const request = { ...defaultRequest, type: 'initiative' as const };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -382,7 +382,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies attack correctly (defaults to strength)', () => {
     const request = { ...defaultRequest, type: 'attack' as const };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -394,7 +394,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies save correctly from purpose', () => {
     const request = { ...defaultRequest, type: 'save' as const, purpose: 'Wisdom save' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -406,7 +406,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies skill from purpose even if type is not skill_check', () => {
     const request = { ...defaultRequest, type: 'check' as const, purpose: 'Stealth check' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -418,7 +418,7 @@ describe('useDiceRollRequest', () => {
 
   it('identifies ability from purpose', () => {
     const request = { ...defaultRequest, type: 'check' as const, purpose: 'Intelligence check' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -431,7 +431,7 @@ describe('useDiceRollRequest', () => {
   it('handles missing character gracefully', () => {
     (useCharacter as any).mockReturnValue({ state: { character: null } });
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     expect(result.current.character).toBeNull();
@@ -444,7 +444,7 @@ describe('useDiceRollRequest', () => {
     });
 
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     expect(result.current.rollCalculation.formula).toBe('1d20');
@@ -470,7 +470,7 @@ describe('useDiceRollRequest', () => {
     });
 
     const { result } = renderHook(() =>
-      useDiceRollRequest({ request: defaultRequest, onManualResult: mockOnManualResult }),
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
     expect(result.current.resolvedFormula).toBeNull();
@@ -479,7 +479,7 @@ describe('useDiceRollRequest', () => {
 
   it('sets ability from purpose when not explicitly in formula and skill not found', () => {
     const request = { ...defaultRequest, purpose: 'Just a strength test' };
-    renderHook(() => useDiceRollRequest({ request, onManualResult: mockOnManualResult }));
+    renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
       mockCharacter,
@@ -492,7 +492,7 @@ describe('useDiceRollRequest', () => {
   describe('Callback and Reference Stability', () => {
     it('maintains referential identity across re-renders with the same props and state', () => {
       const { result, rerender } = renderHook(
-        ({ request }) => useDiceRollRequest({ request, onManualResult: mockOnManualResult }),
+        ({ request }) => useDiceRollRequest({ request, onResult: mockOnManualResult }),
         { initialProps: { request: defaultRequest } },
       );
 

@@ -30,7 +30,7 @@ interface DiceRollRequestProps {
    * Receives every result the popup produces — the animated roll's total with its natural face,
    * or a hand-entered number with no details.
    */
-  onManualResult: RollResultHandler;
+  onResult: RollResultHandler;
   onRollCommit?: () => void;
   onCancel?: () => void;
   requestId?: string;
@@ -46,7 +46,7 @@ interface DiceRollRequestProps {
 export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
   ({
     request,
-    onManualResult,
+    onResult,
     onRollCommit,
     onCancel,
     requestId,
@@ -75,7 +75,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       handleBackToRoll,
       toggleAdvantage,
       toggleDisadvantage,
-    } = useDiceRollRequest({ request, onManualResult, onRollCommit });
+    } = useDiceRollRequest({ request, onResult, onRollCommit });
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
     const isRollPending = Boolean(requestId && pendingRollId === requestId);

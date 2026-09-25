@@ -136,7 +136,7 @@ describe('DiceRollRequest — symbolic formula UI guard', () => {
   it('shows loading spinner when character is not yet loaded', () => {
     (useCharacter as ReturnType<typeof vi.fn>).mockReturnValue({ state: { character: null } });
 
-    render(<DiceRollRequest request={baseRequest} onManualResult={vi.fn()} />);
+    render(<DiceRollRequest request={baseRequest} onResult={vi.fn()} />);
 
     expect(screen.getByText(/loading character data/i)).toBeTruthy();
     expect(screen.queryByTestId('dice-roll-embed')).toBeNull();
@@ -147,7 +147,7 @@ describe('DiceRollRequest — symbolic formula UI guard', () => {
       state: { character: mockCharacter },
     });
 
-    render(<DiceRollRequest request={baseRequest} onManualResult={vi.fn()} />);
+    render(<DiceRollRequest request={baseRequest} onResult={vi.fn()} />);
 
     const embed = screen.queryByTestId('dice-roll-embed');
     if (embed) {
@@ -164,7 +164,7 @@ describe('DiceRollRequest — symbolic formula UI guard', () => {
       state: { character: mockCharacter },
     });
 
-    render(<DiceRollRequest request={baseRequest} onManualResult={vi.fn()} />);
+    render(<DiceRollRequest request={baseRequest} onResult={vi.fn()} />);
 
     // The roll details area should show a numeric formula like "1d20+3" not "1d20+cha"
     const formulaText = screen.queryByText(/1d20\+cha/i);

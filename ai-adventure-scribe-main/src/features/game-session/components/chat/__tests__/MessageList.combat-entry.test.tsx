@@ -56,7 +56,6 @@ vi.mock('../message-list/use-message-dice-rolls', () => ({
     currentRoll: null,
     batchProgress: null,
     rollRequest: null,
-    handleDiceRoll: vi.fn(),
     handleManualResult: vi.fn(),
     handleCancelRoll: vi.fn(),
     lastRollRef: { current: null },

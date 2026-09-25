@@ -234,7 +234,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               requestId={currentRoll.id}
               pendingRollId={pendingRollId}
               rollError={rollError}
-              onManualResult={handleManualResult}
+              onResult={handleManualResult}
               onRollCommit={
                 // Both engine prompts are on a timer, and the popup takes ~3.5s to produce its
                 // result. Committing on the click rather than on the settle is what stops a die

@@ -140,7 +140,7 @@ describe('usePlayerRollHost teardown', () => {
           formula: '1d20+2',
           purpose: 'Initiative for The Seeker',
         },
-        onManualResult: vi.fn(),
+        onResult: vi.fn(),
         onRollCommit,
       }),
     );

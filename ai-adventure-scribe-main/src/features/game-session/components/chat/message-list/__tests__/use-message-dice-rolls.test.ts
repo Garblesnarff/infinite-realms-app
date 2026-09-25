@@ -12,16 +12,11 @@ import {
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
 import { hasPendingPlayerRoll } from '@/services/combat/player-roll-bridge';
-import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 
 // Mock dependencies
 vi.mock('@/contexts/GameContext', () => ({
   useGame: vi.fn(),
-}));
-
-vi.mock('@/utils/diceUtils', () => ({
-  rollDice: vi.fn(),
 }));
 
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
@@ -178,7 +173,13 @@ describe('useMessageDiceRolls', () => {
     expect(mockUseGame.cancelDiceRoll).toHaveBeenCalledWith('roll-1');
   });
 
-  describe('handleDiceRoll', () => {
+  /**
+   * Ported from the retired `handleDiceRoll` (#2219). The animated popup no longer re-rolls a
+   * fresh die: it reports the total with the natural face the player watched land, and
+   * `handleManualResult` settles that. Each test below is the successor of the `handleDiceRoll`
+   * test named in its comment, with assertions just as strong.
+   */
+  describe('handleManualResult with animated popup details', () => {
     const activeRoll = {
       id: 'roll-1',
       requestType: 'skill_check',
@@ -195,16 +196,9 @@ describe('useMessageDiceRolls', () => {
       mockUseGame.getCurrentDiceRoll.mockReturnValue(activeRoll);
     });
 
-    it('should process a successful dice roll', async () => {
-      const mockResult = {
-        total: 15,
-        naturalRoll: 13,
-        results: [13],
-        keptResults: [13],
-        critical: false,
-      };
-      (rollDice as any).mockReturnValue(mockResult);
-
+    it('processes an animated skill check with its natural face', async () => {
+      // Successor of `handleDiceRoll › should process a successful dice roll`. The die the
+      // player watched land (total 15, natural 13) is the die that settles — no re-roll.
       const { result } = renderHook(() =>
         useMessageDiceRolls({
           onSendMessage: mockOnSendMessage,
@@ -213,26 +207,22 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
+        await result.current.handleManualResult(15, { naturalRoll: 13 });
       });
 
-      expect(rollDice).toHaveBeenCalledWith(20, 1, 2, { advantage: false, disadvantage: false });
-      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', mockResult);
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', {
+        total: 15,
+        naturalRoll: 13,
+      });
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('Stealth Check: 15 (nat 13+2)'),
         expect.objectContaining({ intent: 'dice_roll' }),
       );
     });
 
-    it('should format DC success correctly', async () => {
-      const rollWithDC = { ...activeRoll, dc: 14 };
-      mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithDC);
-      (rollDice as any).mockReturnValue({
-        total: 15,
-        naturalRoll: 13,
-        results: [13],
-        keptResults: [13],
-      });
+    it('formats DC success for an animated result', async () => {
+      // Successor of `handleDiceRoll › should format DC success correctly`.
+      mockUseGame.getCurrentDiceRoll.mockReturnValue({ ...activeRoll, dc: 14 });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -242,7 +232,7 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
+        await result.current.handleManualResult(15, { naturalRoll: 13 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
@@ -251,6 +241,7 @@ describe('useMessageDiceRolls', () => {
           diceRoll: expect.objectContaining({
             success: true,
             dc: 14,
+            naturalRoll: 13,
             requestType: 'skill_check',
             description: 'Stealth Check',
           }),
@@ -258,15 +249,11 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
-    it('should format critical miss on attacks', async () => {
+    it('formats a critical miss for an animated attack', async () => {
+      // Successor of `handleDiceRoll › should format critical miss on attacks`. No engine
+      // settler owns this die (mocked), so it reaches the DM as a message, as before.
       const attackRoll = { ...activeRoll, requestType: 'attack' };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
-      (rollDice as any).mockReturnValue({
-        total: 3,
-        naturalRoll: 1,
-        results: [1],
-        keptResults: [1],
-      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -276,7 +263,7 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
+        await result.current.handleManualResult(3, { naturalRoll: 1 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
@@ -285,15 +272,10 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
-    it('should format AC success correctly', async () => {
+    it('formats AC success for an animated attack', async () => {
+      // Successor of `handleDiceRoll › should format AC success correctly`.
       const rollWithAC = { ...activeRoll, requestType: 'attack', ac: 15 };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithAC);
-      (rollDice as any).mockReturnValue({
-        total: 16,
-        naturalRoll: 14,
-        results: [14],
-        keptResults: [14],
-      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -303,7 +285,7 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
+        await result.current.handleManualResult(16, { naturalRoll: 14 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
@@ -312,18 +294,13 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
-    it('should format advantage and negative modifier', async () => {
+    it('formats advantage and a negative modifier for an animated result', async () => {
+      // Successor of `handleDiceRoll › should format advantage and negative modifier`.
       const rollWithAdv = {
         ...activeRoll,
         rollConfig: { ...activeRoll.rollConfig, advantage: true, modifier: -1 },
       };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithAdv);
-      (rollDice as any).mockReturnValue({
-        total: 9,
-        naturalRoll: 10,
-        results: [10, 5],
-        keptResults: [10],
-      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -333,7 +310,7 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20-1', true, false);
+        await result.current.handleManualResult(9, { naturalRoll: 10 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
@@ -346,18 +323,13 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
-    it('should format disadvantage', async () => {
+    it('formats disadvantage for an animated result', async () => {
+      // Successor of `handleDiceRoll › should format disadvantage`.
       const rollWithDis = {
         ...activeRoll,
         rollConfig: { ...activeRoll.rollConfig, disadvantage: true },
       };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithDis);
-      (rollDice as any).mockReturnValue({
-        total: 7,
-        naturalRoll: 5,
-        results: [10, 5],
-        keptResults: [5],
-      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -367,7 +339,7 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2', false, true);
+        await result.current.handleManualResult(7, { naturalRoll: 5 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
@@ -376,15 +348,10 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
-    it('should format DC failure correctly', async () => {
+    it('formats DC failure for an animated result', async () => {
+      // Successor of `handleDiceRoll › should format DC failure correctly`.
       const rollWithDC = { ...activeRoll, dc: 18 };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(rollWithDC);
-      (rollDice as any).mockReturnValue({
-        total: 15,
-        naturalRoll: 13,
-        results: [13],
-        keptResults: [13],
-      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -394,26 +361,21 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
+        await result.current.handleManualResult(15, { naturalRoll: 13 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('fail'),
         expect.objectContaining({
-          diceRoll: expect.objectContaining({ success: false, dc: 18 }),
+          diceRoll: expect.objectContaining({ success: false, dc: 18, naturalRoll: 13 }),
         }),
       );
     });
 
-    it('should format critical hits on attacks', async () => {
+    it('formats a critical hit for an animated attack', async () => {
+      // Successor of `handleDiceRoll › should format critical hits on attacks`.
       const attackRoll = { ...activeRoll, requestType: 'attack' };
       mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
-      (rollDice as any).mockReturnValue({
-        total: 22,
-        naturalRoll: 20,
-        results: [20],
-        keptResults: [20],
-      });
 
       const { result } = renderHook(() =>
         useMessageDiceRolls({
@@ -423,73 +385,13 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
+        await result.current.handleManualResult(22, { naturalRoll: 20 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('CRITICAL HIT!'),
         expect.anything(),
       );
-    });
-
-    it('should handle batch rolls and wait for completion', async () => {
-      const batchId = 'batch-1';
-      const roll1 = { ...activeRoll, id: 'roll-1', batchId };
-      const roll2 = { ...activeRoll, id: 'roll-2', batchId };
-
-      mockUseGame.state.diceRollQueue.pendingRolls = [roll1, roll2] as any;
-      mockUseGame.getCurrentDiceRoll.mockReturnValue(roll1);
-      (rollDice as any).mockReturnValue({
-        total: 10,
-        naturalRoll: 8,
-        results: [8],
-        keptResults: [8],
-      });
-
-      const { result } = renderHook(() =>
-        useMessageDiceRolls({
-          onSendMessage: mockOnSendMessage,
-          onSendFullMessage: mockOnSendFullMessage,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
-      });
-
-      // Should call onSendMessage for intermediate batch roll, NOT onSendFullMessage
-      expect(mockOnSendMessage).toHaveBeenCalled();
-      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
-      expect(mockUseGame.clearBatch).not.toHaveBeenCalled();
-    });
-
-    it('should clear batch when final roll completes', async () => {
-      const batchId = 'batch-1';
-      const roll1 = { ...activeRoll, id: 'roll-1', batchId, status: 'completed' };
-      const roll2 = { ...activeRoll, id: 'roll-2', batchId, status: 'pending' };
-
-      mockUseGame.state.diceRollQueue.pendingRolls = [roll1, roll2] as any;
-      mockUseGame.getCurrentDiceRoll.mockReturnValue(roll2);
-      (rollDice as any).mockReturnValue({
-        total: 10,
-        naturalRoll: 8,
-        results: [8],
-        keptResults: [8],
-      });
-
-      const { result } = renderHook(() =>
-        useMessageDiceRolls({
-          onSendMessage: mockOnSendMessage,
-          onSendFullMessage: mockOnSendFullMessage,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
-      });
-
-      expect(mockOnSendFullMessage).toHaveBeenCalled();
-      expect(mockUseGame.clearBatch).toHaveBeenCalled();
     });
   });
 
@@ -614,6 +516,8 @@ describe('useMessageDiceRolls', () => {
 
       expect(mockOnSendMessage).toHaveBeenCalled();
       expect(mockOnSendFullMessage).not.toHaveBeenCalled();
+      // The retired `handleDiceRoll` batch-wait test asserted the batch survives mid-batch.
+      expect(mockUseGame.clearBatch).not.toHaveBeenCalled();
     });
 
     it('should handle manual batch completion', async () => {
@@ -639,6 +543,66 @@ describe('useMessageDiceRolls', () => {
       expect(mockUseGame.clearBatch).toHaveBeenCalled();
     });
 
+    it('shows the natural face of an animated skill check in the DM message (nat 20)', async () => {
+      // #2219 acceptance: a DM-requested skill check rolled through the popup animation keeps
+      // its natural face — the DM message shows "nat 20" and the total is unchanged.
+      mockUseGame.getCurrentDiceRoll.mockReturnValue({ ...activeRoll, dc: 16 });
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(22, { naturalRoll: 20 });
+      });
+
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', {
+        total: 22,
+        naturalRoll: 20,
+      });
+      expect(mockOnSendFullMessage).toHaveBeenCalledWith(
+        expect.stringContaining('Stealth Check: 22 (nat 20+2)'),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({
+            total: 22,
+            naturalRoll: 20,
+            success: true,
+            dc: 16,
+          }),
+        }),
+      );
+    });
+
+    it('keeps the typed-entry format and context shape without a natural face', async () => {
+      // A hand-entered number has no animation details: completeDiceRoll still receives exactly
+      // { total }, and the DM context carries no naturalRoll key (#2219).
+      mockUseGame.getCurrentDiceRoll.mockReturnValue(activeRoll);
+
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(18);
+      });
+
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
+      expect(mockOnSendFullMessage).toHaveBeenCalledWith(
+        expect.stringContaining('Stealth Check: 18'),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({ total: 18 }),
+        }),
+      );
+      const context = (mockOnSendFullMessage.mock.calls[0] as any[])[1];
+      expect(context.diceRoll).not.toHaveProperty('naturalRoll');
+    });
+
     it('should handle errors in manual result', async () => {
       mockUseGame.completeDiceRoll.mockImplementation(() => {
         throw new Error('Test Error');
@@ -660,43 +624,9 @@ describe('useMessageDiceRolls', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle errors in handleDiceRoll', async () => {
-      (rollDice as any).mockImplementation(() => {
-        throw new Error('Test Error');
-      });
-
-      const { result } = renderHook(() =>
-        useMessageDiceRolls({
-          onSendMessage: mockOnSendMessage,
-          onSendFullMessage: mockOnSendFullMessage,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.handleDiceRoll('1d20+2');
-      });
-
-      expect(handleAsyncError).toHaveBeenCalled();
-    });
-
-    it('should handle missing current roll in handleDiceRoll', async () => {
-      mockUseGame.getCurrentDiceRoll.mockReturnValue(null);
-
-      const { result } = renderHook(() =>
-        useMessageDiceRolls({
-          onSendMessage: mockOnSendMessage,
-          onSendFullMessage: mockOnSendFullMessage,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.handleDiceRoll('1d20');
-      });
-
-      expect(rollDice).not.toHaveBeenCalled();
-    });
-
-    it('should handle invalid formula in handleDiceRoll', async () => {
+    it('rejects an invalid result type in handleManualResult', async () => {
+      // Successor of `handleDiceRoll › should handle invalid formula in handleDiceRoll`: invalid
+      // input never reaches the roll machinery — no message is sent and nothing completes.
       mockUseGame.getCurrentDiceRoll.mockReturnValue({ id: 'roll-1' });
 
       const { result } = renderHook(() =>
@@ -707,13 +637,21 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('invalid');
+        await result.current.handleManualResult('invalid' as any);
       });
 
-      expect(rollDice).not.toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        '[useMessageDiceRolls] Invalid result type:',
+        'invalid',
+      );
+      expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
+      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
     });
 
     it('should handle missing current roll in handleManualResult', async () => {
+      // Successor of the retired `handleDiceRoll › should handle missing current roll in
+      // handleDiceRoll`: nothing is sent anywhere when there is no current roll.
       mockUseGame.getCurrentDiceRoll.mockReturnValue(null);
 
       const { result } = renderHook(() =>
@@ -728,6 +666,11 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
+      expect(mockOnSendFullMessage).not.toHaveBeenCalled();
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[useMessageDiceRolls] No current dice roll in queue',
+      );
     });
 
     it('does not reach the no-current-roll branch for a committed combat initiative roll', async () => {
@@ -804,16 +747,12 @@ describe('useMessageDiceRolls', () => {
         diceRollQueue: { currentRollId: 'roll-attack', pendingRolls: [attackRoll] as any },
       } as any;
       mockUseGame.getCurrentDiceRoll.mockReturnValue(attackRoll);
-      (rollDice as any).mockReturnValue({
-        total: 9,
-        naturalRoll: 4,
-        results: [4],
-        keptResults: [4],
-        critical: false,
-      });
     });
 
-    it('drops a rolled attack die no engine settler owns instead of sending it to the DM', async () => {
+    it('drops an animated attack die no engine settler owns instead of sending it to the DM', async () => {
+      // Successor of the retired `handleDiceRoll › drops a rolled attack die no engine settler
+      // owns instead of sending it to the DM`: the popup's observed total/natural face settles
+      // through the unified path and the same guard drops it.
       const { result } = renderHook(() =>
         useMessageDiceRolls({
           onSendMessage: mockOnSendMessage,
@@ -822,23 +761,25 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+5');
+        await result.current.handleManualResult(9, { naturalRoll: 4 });
       });
 
       expect(mockOnSendFullMessage).not.toHaveBeenCalled();
       expect(mockOnSendMessage).not.toHaveBeenCalled();
       // The queue entry still completes so the engine's own prompt can take the slot.
-      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith(
-        'roll-attack',
-        expect.objectContaining({ total: 9 }),
-      );
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-attack', {
+        total: 9,
+        naturalRoll: 4,
+      });
       expect(logger.warn).toHaveBeenCalledWith(
-        '[useMessageDiceRolls] dropped an unowned combat die; not sent to the DM',
+        '[useMessageDiceRolls] dropped an unowned manual combat die; not sent to the DM',
         expect.objectContaining({ requestType: 'attack' }),
       );
     });
 
     it('drops a hand-entered attack die no engine settler owns', async () => {
+      // Typed-entry variant of the drop guard above: no animation details, so the settled
+      // result stays exactly { total }.
       const { result } = renderHook(() =>
         useMessageDiceRolls({
           onSendMessage: mockOnSendMessage,
@@ -885,12 +826,18 @@ describe('useMessageDiceRolls', () => {
         }),
       );
 
+      // Successor of the retired `handleDiceRoll` seating-window test: the natural face rides
+      // along but the die is still dropped — it never reaches the DM.
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+1');
+        await result.current.handleManualResult(15, { naturalRoll: 13 });
       });
 
       expect(mockOnSendFullMessage).not.toHaveBeenCalled();
       expect(mockOnSendMessage).not.toHaveBeenCalled();
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-initiative', {
+        total: 15,
+        naturalRoll: 13,
+      });
     });
 
     it('still sends an ordinary narrative check made during combat', async () => {
@@ -914,11 +861,16 @@ describe('useMessageDiceRolls', () => {
         }),
       );
 
+      // Successor of the retired `handleDiceRoll` version: an ordinary check is not a combat
+      // die, so it reaches the DM — now with its natural face.
       await act(async () => {
-        await result.current.handleDiceRoll('1d20+5');
+        await result.current.handleManualResult(15, { naturalRoll: 13 });
       });
 
-      expect(mockOnSendFullMessage).toHaveBeenCalled();
+      expect(mockOnSendFullMessage).toHaveBeenCalledWith(
+        expect.stringContaining('Athletics to keep your footing: 15 (nat 13+5)'),
+        expect.anything(),
+      );
     });
   });
 });
