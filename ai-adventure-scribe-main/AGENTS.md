@@ -6,6 +6,8 @@ These rules apply to every AI session — Claude Code (local, Hetzner, cloud), C
 
 Order in this file: worker rules; Hetzner (ops) rules; Playtest rules; pre-merge check procedure (#2056); deploy-ordering note (#2093).
 
+Authored monster attack lines (name, reach, and range) are in `docs/content/stat-block-format.md` at the repository root. That file is the copy content authors should read. The comment on `labelPattern` in `ai-adventure-scribe-main/server-bun/src/services/combat/authored-stat-block-parser.ts` is not a substitute.
+
 ---
 
 # Worker rules
