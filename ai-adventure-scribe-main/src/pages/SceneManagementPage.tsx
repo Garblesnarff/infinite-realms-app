@@ -69,7 +69,7 @@ export const SceneManagementPage: React.FC = () => {
         <Card className="p-12 text-center">
           <CardTitle className="text-2xl mb-2">Invalid Campaign</CardTitle>
           <CardDescription>Please select a valid campaign.</CardDescription>
-          <Button onClick={() => navigate('/app/campaigns')} className="mt-6">
+          <Button onClick={() => navigate('/app')} className="mt-6">
             Return to Campaigns
           </Button>
         </Card>
@@ -93,16 +93,16 @@ export const SceneManagementPage: React.FC = () => {
   };
 
   const handleViewScene = (sceneId: string) => {
-    navigate(`/app/campaigns/${campaignId}/scenes/${sceneId}/battle-map`);
+    navigate(`/app/campaigns/${campaignId}/scenes/${sceneId}`);
   };
 
   const handleEditScene = (sceneId: string) => {
-    navigate(`/app/campaigns/${campaignId}/scenes/${sceneId}/edit`);
+    navigate(`/app/campaigns/${campaignId}/scenes/${sceneId}`);
   };
 
   const handleWizardComplete = (sceneId: string) => {
     setViewMode('list');
-    navigate(`/app/campaigns/${campaignId}/scenes/${sceneId}/battle-map`);
+    navigate(`/app/campaigns/${campaignId}/scenes/${sceneId}`);
   };
 
   const handleCancelCreate = () => {
@@ -133,7 +133,7 @@ export const SceneManagementPage: React.FC = () => {
         <SceneManagementHeader
           campaignName={campaign?.name}
           showTitleRow={viewMode === 'list'}
-          onNavigateCampaigns={() => navigate('/app/campaigns')}
+          onNavigateCampaigns={() => navigate('/app')}
           onNavigateCampaign={() => navigate(`/app/campaigns/${campaignId}`)}
         />
 

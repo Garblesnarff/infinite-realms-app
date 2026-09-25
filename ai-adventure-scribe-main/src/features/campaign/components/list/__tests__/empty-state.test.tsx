@@ -41,10 +41,26 @@ describe('campaign list empty state (#2192)', () => {
     expect(screen.queryByRole('button', { name: /create campaign/i })).not.toBeInTheDocument();
   });
 
+  it('offers the pre-built campaigns when the flag is off', async () => {
+    setFlag(false);
+    renderEmptyState();
+
+    fireEvent.click(screen.getByRole('button', { name: /explore pre-built campaigns/i }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/explore', {
+        normalizeWhitespace: false,
+      }),
+    );
+  });
+
   it('navigates to the wizard when the flag is on', async () => {
     setFlag(true);
     renderEmptyState();
 
+    expect(
+      screen.queryByRole('button', { name: /explore pre-built campaigns/i }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /create campaign/i }));
 
     await waitFor(() =>

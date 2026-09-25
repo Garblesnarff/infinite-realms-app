@@ -12,12 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 
 interface BattleMapHeaderProps {
@@ -67,7 +62,7 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={() => navigate('/app/campaigns')}
+                onClick={() => navigate('/app')}
                 className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
                 aria-label="Back to Campaigns"
               >
@@ -162,12 +157,7 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Open View Settings"
-                    type="button"
-                  >
+                  <Button variant="ghost" size="icon" aria-label="Open View Settings" type="button">
                     <SettingsIcon className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -189,7 +179,10 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
                 Keyboard Shortcuts
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem checked={showLayersPanel} onCheckedChange={toggleLayersPanel}>
+              <DropdownMenuCheckboxItem
+                checked={showLayersPanel}
+                onCheckedChange={toggleLayersPanel}
+              >
                 Layers Panel
               </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />

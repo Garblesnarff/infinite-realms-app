@@ -1,35 +1,13 @@
-import React, { lazy } from 'react';
-import { Navigate, Routes, Route } from 'react-router-dom';
+import React from 'react';
+import { useRoutes } from 'react-router-dom';
 
-import { withRouteSuspense } from './route-suspense';
+import { getAppRoutes } from './app-routes';
 
-import { isCustomCampaignsEnabled } from '@/config/featureFlags';
 import { ProtectedRoute } from '@/features/auth';
 import Breadcrumbs from '@/shared/components/layout/breadcrumbs';
 import Navigation from '@/shared/components/layout/navigation';
 
-// Lazy load route page components for code splitting
-const Index = lazy(() => import('@/pages/Index'));
-const CharacterSheet = lazy(() => import('@/features/character/components/sheet/character-sheet'));
-const CharacterList = lazy(() => import('@/features/character/components/list/character-list'));
-const CampaignWizard = lazy(
-  () => import('@/features/campaign/components/creation/campaign-wizard'),
-);
-const GameContentWithErrorBoundary = lazy(
-  () => import('@/features/game-session/components/game/GameContentWithErrorBoundary'),
-);
-const CharacterCreateEntry = lazy(() => import('@/pages/CharacterCreateEntry'));
-const CampaignHubWithErrorBoundary = lazy(
-  () => import('@/pages/campaigns/CampaignHubWithErrorBoundary'),
-);
-const SceneManagementPage = lazy(() => import('@/pages/SceneManagementPage'));
-const BattleMapPage = lazy(() => import('@/pages/BattleMapPage'));
-const BlogAdmin = lazy(() => import('@/pages/BlogAdmin'));
-const BlogEditor = lazy(() => import('@/pages/BlogEditor'));
-const AccountPage = lazy(() => import('@/pages/AccountPage'));
-
-// TODO [legacy-character-deprecation]: Feature flag for legacy character entry. When disabling legacy character creation, set to false and then remove this flag following docs/cleanup/campaign-character-migration.md
-const ENABLE_LEGACY_CHARACTER_ENTRY = true;
+const AppRouteTable: React.FC = () => useRoutes(getAppRoutes());
 
 /**
  * The authenticated /app/* subtree: app chrome (navigation, breadcrumbs)
@@ -41,53 +19,7 @@ export const ProtectedAppRoutes: React.FC = () => (
       <Navigation />
       <Breadcrumbs />
       <main id="main-content" tabIndex={-1}>
-        <Routes>
-          <Route path="/" element={withRouteSuspense(<Index />)} />
-          {/* TODO [legacy-character-deprecation]: Legacy character list and creation routes. Gate behind ENABLE_LEGACY_CHARACTER_ENTRY and remove per docs/cleanup/campaign-character-migration.md */}
-          {ENABLE_LEGACY_CHARACTER_ENTRY && (
-            <Route path="/characters" element={withRouteSuspense(<CharacterList />)} />
-          )}
-          {ENABLE_LEGACY_CHARACTER_ENTRY && (
-            <Route
-              path="/characters/create"
-              element={withRouteSuspense(<CharacterCreateEntry />)}
-            />
-          )}
-          {ENABLE_LEGACY_CHARACTER_ENTRY && (
-            <Route path="/characters/new" element={withRouteSuspense(<CharacterCreateEntry />)} />
-          )}
-          <Route path="/character/:id" element={withRouteSuspense(<CharacterSheet />)} />
-          {/*
-            Custom campaign wizard (#2192): off for beta users. The wizard saves a
-            campaign row but no playable content, so the route redirects to the
-            campaign list (Index) while the flag is off. Existing campaigns are
-            untouched — only the wizard entry points are gated.
-          */}
-          {isCustomCampaignsEnabled() ? (
-            <Route path="/campaigns/create" element={withRouteSuspense(<CampaignWizard />)} />
-          ) : (
-            <Route path="/campaigns/create" element={<Navigate to="/app/" replace />} />
-          )}
-          <Route
-            path="/campaigns/:campaignId/scenes/:sceneId"
-            element={withRouteSuspense(<BattleMapPage />)}
-          />
-          <Route
-            path="/campaigns/:campaignId/scenes"
-            element={withRouteSuspense(<SceneManagementPage />)}
-          />
-          <Route
-            path="/campaigns/:id/*"
-            element={withRouteSuspense(<CampaignHubWithErrorBoundary />)}
-          />
-          <Route path="/game/:id" element={withRouteSuspense(<GameContentWithErrorBoundary />)} />
-          {/* Blog Admin Panel */}
-          <Route path="/blog" element={withRouteSuspense(<BlogAdmin />)} />
-          <Route path="/blog/edit/:id" element={withRouteSuspense(<BlogEditor />)} />
-          <Route path="/blog/new" element={withRouteSuspense(<BlogEditor />)} />
-          {/* Account/Subscription Management */}
-          <Route path="/account" element={withRouteSuspense(<AccountPage />)} />
-        </Routes>
+        <AppRouteTable />
       </main>
     </div>
   </ProtectedRoute>

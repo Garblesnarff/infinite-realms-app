@@ -39,7 +39,7 @@ describe('BattleMapHeader Accessibility', () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const campaignsBtn = screen.getByLabelText('Back to Campaigns');
@@ -59,7 +59,7 @@ describe('BattleMapHeader Accessibility', () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const sceneName = screen.getByText('Test Scene');
@@ -72,7 +72,7 @@ describe('BattleMapHeader Accessibility', () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const campaignsBtn = screen.getByLabelText('Back to Campaigns');
@@ -83,17 +83,20 @@ describe('BattleMapHeader Accessibility', () => {
 
     // Tooltips are often rendered in portals, so we wait for them
     // Note: In JSDOM with Radix, we might need to check for the content
-    await waitFor(() => {
-      const tooltip = screen.queryByRole('tooltip') || screen.queryByText('Back to Campaigns');
-      expect(tooltip).toBeInTheDocument();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const tooltip = screen.queryByRole('tooltip') || screen.queryByText('Back to Campaigns');
+        expect(tooltip).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('shows tooltip for the scene name on hover', async () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const sceneName = screen.getByText('Test Scene');
@@ -102,30 +105,33 @@ describe('BattleMapHeader Accessibility', () => {
     fireEvent.mouseOver(sceneName);
     fireEvent.focus(sceneName);
 
-    await waitFor(() => {
-      const tooltip = screen.queryByRole('tooltip') || screen.queryByText('Test Scene');
-      expect(tooltip).toBeInTheDocument();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const tooltip = screen.queryByRole('tooltip') || screen.queryByText('Test Scene');
+        expect(tooltip).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('navigates to campaigns when clicking the campaigns breadcrumb', () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const campaignsBtn = screen.getByLabelText('Back to Campaigns');
     fireEvent.click(campaignsBtn);
 
-    expect(mockNavigate).toHaveBeenCalledWith('/app/campaigns');
+    expect(mockNavigate).toHaveBeenCalledWith('/app');
   });
 
   it('calls onBackToCampaign when clicking the campaign breadcrumb', () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const campaignBtn = screen.getByLabelText('Back to Test Campaign');
@@ -138,7 +144,7 @@ describe('BattleMapHeader Accessibility', () => {
     render(
       <BrowserRouter>
         <BattleMapHeader {...defaultProps} />
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     const scenesBtn = screen.getByLabelText('Back to Scenes');
