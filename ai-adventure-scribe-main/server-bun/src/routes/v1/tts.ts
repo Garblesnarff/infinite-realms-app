@@ -2,7 +2,11 @@ import { Elysia, t } from 'elysia';
 
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { AIUsageService } from '../../services/ai-usage-service.js';
+import {
+  AIUsageService,
+  elevenLabsCharacterCostUsd,
+  voiceQuotaUnits,
+} from '../../services/ai-usage-service.js';
 
 const VOICE_TIMEOUT_MS = 120_000;
 
@@ -24,7 +28,7 @@ const ttsRequestSchema = t.Object({
 export interface TtsRouteOptions {
   auth?: typeof requireAuth;
   rateLimit?: ReturnType<typeof planRateLimit>;
-  usageService?: Pick<typeof AIUsageService, 'checkQuotaAndConsume'>;
+  usageService?: Pick<typeof AIUsageService, 'checkQuotaAndConsume' | 'recordProviderUsage'>;
   fetchImpl?: TtsFetch;
 }
 
@@ -48,10 +52,12 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
       .post(
         '/voice/:voiceId',
         async ({ params, body, set, user }) => {
+          const characters = body.text.length;
           const quota = await usageService.checkQuotaAndConsume({
             userId: user.userId,
             plan: user.plan || 'free',
             type: 'voice',
+            units: voiceQuotaUnits(characters),
           });
           if (!quota.allowed) {
             set.status = 429;
@@ -83,6 +89,17 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
               set.status = response.status >= 500 ? 503 : 502;
               return { error: 'Voice request failed' };
             }
+
+            await usageService.recordProviderUsage({
+              userId: user.userId,
+              plan: user.plan || 'free',
+              type: 'voice',
+              provider: 'elevenlabs',
+              model: body.model_id,
+              inputTokens: characters,
+              outputTokens: 0,
+              costUsd: elevenLabsCharacterCostUsd(characters),
+            });
 
             return new Response(response.body, {
               status: 200,

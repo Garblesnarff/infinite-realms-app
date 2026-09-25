@@ -1,5 +1,5 @@
 import { getConfiguredGeminiModels, getConfiguredOpenRouterModels } from './llm-model-config.js';
-import { setFetchedModelPricing } from './model-pricing.js';
+import { perMillionRatesFromOpenRouterPricing, setFetchedModelPricing } from './model-pricing.js';
 import { alert } from '../lib/alerting.js';
 import { logger } from '../lib/logger.js';
 
@@ -39,7 +39,7 @@ let modelHealth: ModelHealthStatus = {
 type OpenRouterModel = {
   id?: unknown;
   supported_parameters?: unknown;
-  pricing?: { prompt?: unknown; completion?: unknown };
+  pricing?: { prompt?: unknown; completion?: unknown; image_output?: unknown };
 };
 
 const parseOpenRouterModels = (
@@ -66,19 +66,8 @@ const parseOpenRouterModels = (
   );
   const pricing = new Map<string, { input: number; output: number }>();
   for (const model of models) {
-    const inputPerToken = Number(model.pricing?.prompt);
-    const outputPerToken = Number(model.pricing?.completion);
-    if (
-      Number.isFinite(inputPerToken) &&
-      inputPerToken >= 0 &&
-      Number.isFinite(outputPerToken) &&
-      outputPerToken >= 0
-    ) {
-      pricing.set(model.id, {
-        input: inputPerToken * 1_000_000,
-        output: outputPerToken * 1_000_000,
-      });
-    }
+    const rates = perMillionRatesFromOpenRouterPricing(model.pricing);
+    if (rates) pricing.set(model.id, rates);
   }
   return { parameters, pricing };
 };

@@ -290,6 +290,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
               const content = await chronicleGenerator.generateProChronicle(
                 sessionIdForChronicle,
                 sessionUserId,
+                userPlan || 'free',
               );
               const illustrationUrl = await chronicleGenerator.generateIllustration(
                 content.illustrationPrompt,

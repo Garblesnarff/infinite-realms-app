@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 /* eslint-disable import/order */
-import OpenAI from 'openai';
 import { randomBytes } from 'crypto';
 import { and, asc, eq, exists, or } from 'drizzle-orm';
 
@@ -14,7 +13,8 @@ import {
 } from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import { getCircuitBreaker } from '../utils/circuit-breaker.js';
+import { AIUsageService } from './ai-usage-service.js';
+import { LLMProviderService } from './llm-provider-service.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,6 @@ interface FalStatusResponse {
   images?: Array<{ url: string }>;
 }
 
-const TEXT_TIMEOUT_MS = 60_000;
 const IMAGE_TIMEOUT_MS = 120_000;
 
 // ─── Transcript sampling ────────────────────────────────────────────────────
@@ -212,28 +211,9 @@ export async function persistChronicleFailure(
 
 // ─── ChronicleGenerator ─────────────────────────────────────────────────────
 
+const CHRONICLE_MODEL = 'deepseek/deepseek-chat';
+
 class ChronicleGenerator {
-  private client: OpenAI | null = null;
-
-  // Mirror blog-content-generator.ts exactly
-  private getClient(): OpenAI {
-    if (!this.client) {
-      const apiKey = process.env.OPENROUTER_API_KEY;
-      if (!apiKey) {
-        throw new Error('OPENROUTER_API_KEY environment variable is not set');
-      }
-      this.client = new OpenAI({
-        baseURL: 'https://openrouter.ai/api/v1',
-        apiKey,
-        defaultHeaders: {
-          'HTTP-Referer': process.env.SITE_URL || 'https://infiniterealms.app',
-          'X-Title': 'Infinite Realms Chronicles',
-        },
-      });
-    }
-    return this.client;
-  }
-
   // ── Data fetching ──────────────────────────────────────────────────────────
 
   private async fetchSessionData(sessionId: string, userId: string): Promise<SessionData> {
@@ -329,9 +309,12 @@ class ChronicleGenerator {
 
   // ── Pro chronicle ──────────────────────────────────────────────────────────
 
-  async generateProChronicle(sessionId: string, userId: string): Promise<ProChronicleContent> {
+  async generateProChronicle(
+    sessionId: string,
+    userId: string,
+    plan = 'free',
+  ): Promise<ProChronicleContent> {
     const data = await this.fetchSessionData(sessionId, userId);
-    const client = this.getClient();
 
     const sessionLabel = data.sessionNumber ? `Session ${data.sessionNumber}` : 'Latest Session';
 
@@ -362,27 +345,24 @@ Respond ONLY as JSON with exactly these fields:
   "illustrationPrompt": "..."
 }`;
 
-    const response = await getCircuitBreaker('chronicle:openrouter').exec(() =>
-      client.chat.completions.create(
-        {
-          model: 'deepseek/deepseek-chat',
-          max_tokens: 2000,
-          temperature: 0.9,
-          messages: [{ role: 'user', content: prompt }],
-        },
-        { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) },
-      ),
-    );
-
-    const text = response.choices[0]?.message?.content || '';
+    const text = await this.completeChronicle({
+      userId,
+      plan,
+      prompt,
+      maxTokens: 2000,
+      temperature: 0.9,
+    });
     return this.parseProResponse(text, data);
   }
 
   // ── Free chronicle ─────────────────────────────────────────────────────────
 
-  async generateFreeChronicle(sessionId: string, userId: string): Promise<FreeChronicleContent> {
+  async generateFreeChronicle(
+    sessionId: string,
+    userId: string,
+    plan = 'free',
+  ): Promise<FreeChronicleContent> {
     const data = await this.fetchSessionData(sessionId, userId);
-    const client = this.getClient();
 
     const sessionLabel = data.sessionNumber ? `Session ${data.sessionNumber}` : 'Latest Session';
 
@@ -409,20 +389,64 @@ Respond ONLY as JSON with exactly these fields:
   "previouslyOn": "..."
 }`;
 
-    const response = await getCircuitBreaker('chronicle:openrouter').exec(() =>
-      client.chat.completions.create(
-        {
-          model: 'deepseek/deepseek-chat',
-          max_tokens: 600,
-          temperature: 0.8,
-          messages: [{ role: 'user', content: prompt }],
-        },
-        { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) },
-      ),
-    );
-
-    const text = response.choices[0]?.message?.content || '';
+    const text = await this.completeChronicle({
+      userId,
+      plan,
+      prompt,
+      maxTokens: 600,
+      temperature: 0.8,
+    });
     return this.parseFreeResponse(text, data);
+  }
+
+  /**
+   * Chronicles are background prose, so they draw the system quota (same bucket
+   * as memory extraction) and record provider usage through LLMProviderService.
+   * deepseek/deepseek-chat stays the preferred model; the provider service may
+   * fail over, and the recorded model is the one that actually answered.
+   */
+  private async completeChronicle(opts: {
+    userId: string;
+    plan: string;
+    prompt: string;
+    maxTokens: number;
+    temperature: number;
+  }): Promise<string> {
+    const quota = await AIUsageService.checkQuotaAndConsume({
+      userId: opts.userId,
+      plan: opts.plan,
+      type: 'llm_system',
+      units: 1,
+    });
+    if (!quota.allowed) {
+      throw new Error('AI quota exceeded');
+    }
+
+    const result = await LLMProviderService.generate({
+      prompt: opts.prompt,
+      model: CHRONICLE_MODEL,
+      maxTokens: opts.maxTokens,
+      temperature: opts.temperature,
+      provider: 'openrouter',
+    });
+
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
+    if (result.usage && result.provider) {
+      await AIUsageService.recordProviderUsage({
+        userId: opts.userId,
+        plan: opts.plan,
+        type: 'llm_system',
+        provider: result.provider,
+        model: result.model,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      });
+    }
+
+    return result.text || '';
   }
 
   // ── Illustration generation ────────────────────────────────────────────────

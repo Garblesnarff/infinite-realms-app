@@ -275,8 +275,23 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         breaker.onSuccess();
 
         // OpenRouter image-capable chat completion response (robust extraction)
-        type ORImageResp = { choices?: { message?: any }[]; [k: string]: any };
+        type ORImageResp = {
+          choices?: { message?: any }[];
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          [k: string]: any;
+        };
         const data = (await response.json()) as ORImageResp;
+
+        const recordImageUsage = (): Promise<void> =>
+          AIUsageService.recordProviderUsage({
+            userId,
+            plan,
+            type: 'image',
+            provider: 'openrouter',
+            model: imageModel,
+            inputTokens: data.usage?.prompt_tokens ?? 0,
+            outputTokens: data.usage?.completion_tokens ?? 0,
+          });
 
         const choice = data.choices?.[0];
         const imageRef = extractFromMessage(choice?.message) || extractFromMessage(data);
@@ -294,6 +309,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         if (imageRef.startsWith('data:image/')) {
           const idx = imageRef.indexOf('base64,');
           const base64 = idx !== -1 ? imageRef.substring(idx + 7) : '';
+          await recordImageUsage();
           return { image: base64 };
         }
 
@@ -308,6 +324,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
             return { error: 'Failed to fetch image from provider' };
           }
           const buf = Buffer.from(await r2.arrayBuffer());
+          await recordImageUsage();
           return { image: buf.toString('base64') };
         } catch (fetchErr) {
           logger.error({ msg: 'IMAGE_FETCH_ERROR', url: imageRef, error: fetchErr });

@@ -2,6 +2,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// chronicle-generator imports AIUsageService, which validates env at load.
+vi.hoisted(() => {
+  Object.assign(process.env, {
+    DATABASE_URL: 'postgres://test:test@localhost:5432/test',
+    PORT: '3000',
+    CORS_ORIGIN: 'http://localhost:3000',
+    WORKOS_API_KEY: 'test-workos-key',
+    WORKOS_CLIENT_ID: 'test-workos-client',
+  });
+});
+
 import { verifySessionOwnership, chroniclesRouter } from '../chronicles.js';
 
 // Mock the db client

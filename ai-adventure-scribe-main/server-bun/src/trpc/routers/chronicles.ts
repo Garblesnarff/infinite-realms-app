@@ -215,6 +215,7 @@ export const chroniclesRouter = router({
             const content = await chronicleGenerator.generateProChronicle(
               capturedSessionId,
               capturedUserId,
+              userPlan || 'free',
             );
             const illustrationUrl = await chronicleGenerator.generateIllustration(
               content.illustrationPrompt,
@@ -244,6 +245,7 @@ export const chroniclesRouter = router({
             const content = await chronicleGenerator.generateFreeChronicle(
               capturedSessionId,
               capturedUserId,
+              userPlan || 'free',
             );
 
             await db

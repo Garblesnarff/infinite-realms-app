@@ -52,7 +52,12 @@ mock.module('../../../lib/auth.js', () => ({
   },
 }));
 mock.module('../../../services/ai-usage-service.js', () => ({
-  AIUsageService: { checkQuotaAndConsume: async () => ({ allowed: true }) },
+  AIUsageService: {
+    checkQuotaAndConsume: async () => ({ allowed: true }),
+    recordProviderUsage: async () => {},
+  },
+  elevenLabsCharacterCostUsd: (characters: number) => (characters * 0.05) / 1000,
+  voiceQuotaUnits: (characters: number) => Math.ceil(characters / 100),
 }));
 
 const { createTtsRoutes, ttsRoutes } = await import('../tts.js');
@@ -90,7 +95,8 @@ const app = new Elysia().use(
     auth: testAuth as unknown as TtsRouteOptions['auth'],
     rateLimit: testRateLimit as unknown as TtsRouteOptions['rateLimit'],
     usageService: {
-      checkQuotaAndConsume: async () => ({ allowed: true }),
+      checkQuotaAndConsume: async () => ({ allowed: true, remaining: 1, resetAt: '' }),
+      recordProviderUsage: async () => {},
     } as unknown as TtsRouteOptions['usageService'],
     fetchImpl: async (input, init) => {
       forwardedRequest = { url: String(input), init };

@@ -13,6 +13,27 @@ import { logger } from '../lib/logger.js';
 
 export type UsageType = 'llm' | 'llm_system' | 'image' | 'voice';
 
+/** One voice quota unit is this many characters. A 100-character line costs 1. */
+export const VOICE_CHARS_PER_UNIT = 100;
+
+/** Previous per-call daily caps for paid plans. Multiplied by VOICE_CHARS_PER_UNIT.
+ * Free voice stays 0 (#2178) and is not scaled.
+ */
+const VOICE_CALL_DAILY_LIMITS = { pro: 200, enterprise: 2000 } as const;
+
+/** ElevenLabs Flash/Turbo list price. cost_usd = characters * this / 1000. */
+export const ELEVENLABS_USD_PER_1K_CHARS = 0.05;
+
+export function elevenLabsCharacterCostUsd(characters: number): number {
+  const count = Math.max(0, Math.floor(characters));
+  return (count * ELEVENLABS_USD_PER_1K_CHARS) / 1000;
+}
+
+export function voiceQuotaUnits(characters: number): number {
+  const count = Math.max(0, Math.floor(characters));
+  return Math.ceil(count / VOICE_CHARS_PER_UNIT);
+}
+
 export type QuotaConfig = {
   daily: Record<UsageType, number>;
 };
@@ -29,10 +50,18 @@ export class AIUsageService {
     model?: string;
     inputTokens: number;
     outputTokens: number;
+    /**
+     * Dollar amount already computed by the caller. Voice uses a per-character
+     * price, which the per-million token table cannot express. When omitted,
+     * cost is derived from model-pricing.
+     */
+    costUsd?: number;
   }): Promise<void> {
     const model = opts.model || 'unknown';
     const pricing = getModelPricing(model);
-    if (!pricing) {
+    const explicitCost =
+      opts.costUsd != null && Number.isFinite(opts.costUsd) ? Math.max(0, opts.costUsd) : undefined;
+    if (!pricing && explicitCost == null) {
       logger.warn({
         msg: 'AI_USAGE_UNKNOWN_MODEL_PRICING',
         provider: opts.provider,
@@ -42,6 +71,7 @@ export class AIUsageService {
     const inputTokens = Math.max(0, Math.floor(opts.inputTokens));
     const outputTokens = Math.max(0, Math.floor(opts.outputTokens));
     const costUsd =
+      explicitCost ??
       (inputTokens * (pricing?.input ?? 0) + outputTokens * (pricing?.output ?? 0)) / 1_000_000;
     const period = AIUsageService.periodKey();
 
@@ -88,14 +118,25 @@ export class AIUsageService {
       // llm: User-initiated chat messages (30/day)
       // llm_system: Background tasks like memory extraction, world building (500/day - generous for side effects)
       // image 3: character avatar + design sheet + campaign cover still fit
-      // on a free onboarding. voice 0: ElevenLabs is off; browser/Kokoro only.
+      // on a free onboarding. voice 0: ElevenLabs is off; browser/Kokoro only (#2178).
+      // Pro and enterprise count voice in characters (ceil(chars / 100)), not calls.
       daily: { llm: 30, llm_system: 500, image: 3, voice: 0 },
     },
     pro: {
-      daily: { llm: 100, llm_system: 1000, image: 50, voice: 200 },
+      daily: {
+        llm: 100,
+        llm_system: 1000,
+        image: 50,
+        voice: VOICE_CALL_DAILY_LIMITS.pro * VOICE_CHARS_PER_UNIT,
+      },
     },
     enterprise: {
-      daily: { llm: 1000, llm_system: 5000, image: 500, voice: 2000 },
+      daily: {
+        llm: 1000,
+        llm_system: 5000,
+        image: 500,
+        voice: VOICE_CALL_DAILY_LIMITS.enterprise * VOICE_CHARS_PER_UNIT,
+      },
     },
   };
 

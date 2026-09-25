@@ -9,6 +9,12 @@ import {
   type TranscriptTurn,
 } from '../chronicle-generator.js';
 
+const { generate, recordProviderUsage, checkQuotaAndConsume } = vi.hoisted(() => ({
+  generate: vi.fn(),
+  recordProviderUsage: vi.fn(),
+  checkQuotaAndConsume: vi.fn(),
+}));
+
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
   db: {
@@ -16,15 +22,17 @@ vi.mock('../../../../db/client', () => ({
   },
 }));
 
-// Mock OpenAI
-vi.mock('openai', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: vi.fn(),
-      },
-    },
-  })),
+vi.mock('../llm-provider-service.js', () => ({
+  LLMProviderService: {
+    generate: (...args: unknown[]) => generate(...args),
+  },
+}));
+
+vi.mock('../ai-usage-service.js', () => ({
+  AIUsageService: {
+    checkQuotaAndConsume: (...args: unknown[]) => checkQuotaAndConsume(...args),
+    recordProviderUsage: (...args: unknown[]) => recordProviderUsage(...args),
+  },
 }));
 
 describe('ChronicleGenerator Service', () => {
@@ -33,7 +41,52 @@ describe('ChronicleGenerator Service', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    checkQuotaAndConsume.mockResolvedValue({ allowed: true, remaining: 10, resetAt: 'tomorrow' });
+    recordProviderUsage.mockResolvedValue(undefined);
+    generate.mockResolvedValue({
+      text: JSON.stringify({
+        chapterTitle: 'The Lantern Wood',
+        chronicleText: 'Hera walked into the trees.',
+        previouslyOn: 'Previously, on your adventure in Blackreach, Hera lit a lantern.',
+        illustrationPrompt: 'An elf ranger in a wood, cinematic, no text no words no letters',
+        summaryText: 'Hera walked into the trees.',
+      }),
+      model: 'deepseek/deepseek-chat',
+      provider: 'openrouter',
+      usage: { inputTokens: 40, outputTokens: 80, totalTokens: 120 },
+    });
   });
+
+  function mockOwnedSession(): void {
+    let call = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.select as any).mockImplementation(() => {
+      const index = call;
+      call += 1;
+      const rows =
+        index === 0
+          ? [
+              {
+                sessionNumber: 3,
+                currentSceneDescription: 'A lantern in the woods',
+                campaignName: 'Blackreach',
+                characterName: 'Hera',
+                characterRace: 'Elf',
+                characterClass: 'Ranger',
+              },
+            ]
+          : [];
+      const builder = {
+        from: () => builder,
+        leftJoin: () => builder,
+        where: () => builder,
+        limit: () => builder,
+        orderBy: () => builder,
+        then: (resolve: (value: unknown) => void) => resolve(rows),
+      };
+      return builder;
+    });
+  }
 
   describe('fetchSessionData', () => {
     it('should throw NotFoundError if the session is not found or not owned', async () => {
@@ -51,8 +104,75 @@ describe('ChronicleGenerator Service', () => {
       (db.select as any).mockReturnValue(mockQB);
 
       // We expect the first Promise.all element to return empty, leading to a NotFoundError
-      await expect(chronicleGenerator.generateProChronicle(mockSessionId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        chronicleGenerator.generateProChronicle(mockSessionId, mockUserId),
+      ).rejects.toThrow(NotFoundError);
+      expect(generate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('LLMProviderService routing', () => {
+    it('prefers deepseek and records system-quota usage for a pro chronicle', async () => {
+      mockOwnedSession();
+
+      const content = await chronicleGenerator.generateProChronicle(
+        mockSessionId,
+        mockUserId,
+        'pro',
+      );
+
+      expect(content.chapterTitle).toBe('The Lantern Wood');
+      expect(checkQuotaAndConsume).toHaveBeenCalledWith({
+        userId: mockUserId,
+        plan: 'pro',
+        type: 'llm_system',
+        units: 1,
+      });
+      expect(generate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'deepseek/deepseek-chat',
+          provider: 'openrouter',
+          maxTokens: 2000,
+          temperature: 0.9,
+        }),
+      );
+      expect(recordProviderUsage).toHaveBeenCalledWith({
+        userId: mockUserId,
+        plan: 'pro',
+        type: 'llm_system',
+        provider: 'openrouter',
+        model: 'deepseek/deepseek-chat',
+        inputTokens: 40,
+        outputTokens: 80,
+      });
+    });
+
+    it('keeps deepseek as the preferred model for a free chronicle', async () => {
+      mockOwnedSession();
+
+      await chronicleGenerator.generateFreeChronicle(mockSessionId, mockUserId, 'free');
+
+      expect(generate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'deepseek/deepseek-chat',
+          maxTokens: 600,
+          temperature: 0.8,
+        }),
+      );
+      expect(recordProviderUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ plan: 'free', type: 'llm_system', inputTokens: 40 }),
+      );
+    });
+
+    it('does not call the provider or record cost when the quota is spent', async () => {
+      mockOwnedSession();
+      checkQuotaAndConsume.mockResolvedValue({ allowed: false, remaining: 0, resetAt: 'tomorrow' });
+
+      await expect(
+        chronicleGenerator.generateProChronicle(mockSessionId, mockUserId, 'pro'),
+      ).rejects.toThrow('AI quota exceeded');
+      expect(generate).not.toHaveBeenCalled();
+      expect(recordProviderUsage).not.toHaveBeenCalled();
     });
   });
 
