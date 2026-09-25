@@ -84,7 +84,9 @@ export class AIUsageService {
     free: {
       // llm: User-initiated chat messages (30/day)
       // llm_system: Background tasks like memory extraction, world building (500/day - generous for side effects)
-      daily: { llm: 30, llm_system: 500, image: 20, voice: 10 },
+      // image 3: character avatar + design sheet + campaign cover still fit
+      // on a free onboarding. voice 0: ElevenLabs is off; browser/Kokoro only.
+      daily: { llm: 30, llm_system: 500, image: 3, voice: 0 },
     },
     pro: {
       daily: { llm: 100, llm_system: 1000, image: 50, voice: 200 },
