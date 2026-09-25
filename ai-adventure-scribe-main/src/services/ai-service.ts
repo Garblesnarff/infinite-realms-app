@@ -93,6 +93,11 @@ export class AIService {
     onTurnPhase?: TurnPhaseReporter;
     /** Called after the envelope parses, before combat/roll handling or deferred writes. */
     onTextReady?: (response: AIResponse) => Promise<void> | void;
+    /**
+     * #2218: the id reserved for this turn's DM row, so the server can persist the reply, and
+     * whether the engine may still resolve the turn (in which case the server must not).
+     */
+    dmReply?: { messageId: string; inCombat: boolean };
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -260,6 +265,7 @@ export class AIService {
           onResponseMetadata: params.onProviderResponse,
           metrics: promptMetrics,
           combatEntry,
+          dmReply: params.dmReply,
         });
         reportTurnPhase(
           params.onTurnPhase,

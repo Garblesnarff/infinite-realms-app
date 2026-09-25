@@ -157,6 +157,33 @@ export const useMessageHandlerLogic = ({
   // Assuming validateSession is still relevant or adapted
   const validateSession = useSessionValidator({ sessionId, campaignId, characterId });
 
+  // The client's save of a DM reply. A failure used to be a logger line: the queue rolled the
+  // optimistic row back off the screen and nothing retried it (#2218). The reply now stays
+  // visible and the player gets a retry. The save is idempotent by message id, and the server
+  // replaces its own provisional copy of the turn in place, so a retry never writes a second row.
+  const persistDmReply = async (message: ChatMessage, onPersisted?: () => void): Promise<void> => {
+    try {
+      await sendMessage(message);
+      onPersisted?.();
+    } catch (error) {
+      logger.error('[MessageHandler] DM reply save failed; offering a retry', {
+        messageId: message.id,
+        error,
+      });
+      updateMessage(message);
+      toast({
+        title: "The DM's reply wasn't saved",
+        description: 'It is still on screen. Retry to keep it in your story.',
+        variant: 'destructive',
+        duration: Infinity,
+        action: {
+          label: 'Retry',
+          onClick: () => void persistDmReply(message, onPersisted),
+        },
+      });
+    }
+  };
+
   // The actual message sending logic (extracted from handleSendMessage)
   const actualSendMessage = async (
     playerInput: string,
@@ -244,6 +271,10 @@ export const useMessageHandlerLogic = ({
       // await sendMessage(systemMessage);
 
       logger.info('[Memory Flow] Getting AI response for session:', sessionId);
+      // #2218: one id for this turn's DM row, reserved before generation. The server persists a
+      // display-ready reply under it, and the early render and the final save below reuse it,
+      // so the turn is one row whichever side writes it and a dead tab cannot lose the reply.
+      const dmMessageId = crypto.randomUUID();
       // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
       // Use ref to get current messages to avoid stale closure
       const aiResponseMessage = await getAIResponse(
@@ -298,7 +329,7 @@ export const useMessageHandlerLogic = ({
 
           earlyMessage = {
             ...earlyResponse,
-            id: earlyResponse.id ?? crypto.randomUUID(),
+            id: dmMessageId,
             text: earlyText,
           };
           textShown = Boolean(earlyText || earlyResponse.narrationSegments?.length);
@@ -333,6 +364,7 @@ export const useMessageHandlerLogic = ({
             }
           }
         },
+        dmMessageId,
       );
       // Sanitize the AI response text first
       const processedText = sanitizeDMText(aiResponseMessage.text);
@@ -404,7 +436,7 @@ export const useMessageHandlerLogic = ({
               id: earlyMessage.id,
               timestamp: earlyMessage.timestamp,
             }
-          : sanitizedAiResponseMessage;
+          : { ...sanitizedAiResponseMessage, id: dmMessageId };
 
         if (!textPhaseEmitted) {
           turnPhase('text shown');
@@ -420,10 +452,9 @@ export const useMessageHandlerLogic = ({
 
         // The single persistence point for DM narration on this turn. The early render is
         // cache-only, so dialogue_history receives the authoritative text exactly once.
-        runDeferredTask('DM continuation persistence', async () => {
-          await sendMessage(finalMessage);
-          turnPhase('persist');
-        });
+        runDeferredTask('DM continuation persistence', () =>
+          persistDmReply(finalMessage, () => turnPhase('persist')),
+        );
       }
 
       if (hasRollRequests && !rollTurnStarted) {

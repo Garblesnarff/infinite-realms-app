@@ -21,6 +21,8 @@ export class AIUsageService {
   static async recordProviderUsage(opts: {
     userId: string;
     orgId?: string | null;
+    /** The game session a DM turn belongs to (#2218), so "did the DM reply?" is one query. */
+    sessionId?: string | null;
     plan: string;
     type: UsageType;
     provider: string;
@@ -49,10 +51,11 @@ export class AIUsageService {
       await sql`
         INSERT INTO ai_usage (
           org_id, user_id, plan, type, units, period_start,
-          provider, model, input_tokens, output_tokens, total_tokens, cost_usd
+          provider, model, input_tokens, output_tokens, total_tokens, cost_usd, session_id
         ) VALUES (
           ${opts.orgId || null}, ${opts.userId}, ${opts.plan}, ${opts.type}, 0, ${period},
-          ${opts.provider}, ${model}, ${inputTokens}, ${outputTokens}, ${inputTokens + outputTokens}, ${costUsd}
+          ${opts.provider}, ${model}, ${inputTokens}, ${outputTokens}, ${inputTokens + outputTokens}, ${costUsd},
+          ${opts.sessionId || null}
         )
       `;
       const totals = await sql`
@@ -138,6 +141,7 @@ export class AIUsageService {
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS output_tokens INTEGER`;
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS total_tokens INTEGER`;
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS cost_usd NUMERIC`;
+    await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS session_id TEXT`;
 
     AIUsageService.dbInitialized = true;
   }

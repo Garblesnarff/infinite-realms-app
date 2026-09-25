@@ -193,6 +193,24 @@ describe('LlmApiClient', () => {
       // Actually llmApiClient.generateText doesn't log on success by default
     });
 
+    it('sends the reserved DM row id so the server can persist the reply (#2218)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ text: 'Generated response', dmReplyPersisted: true }),
+      });
+
+      await llmApiClient.generateText({
+        prompt: 'Hello',
+        sessionId: 'session-1',
+        dmReply: { messageId: '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f', inCombat: false },
+      });
+
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body).dmReply).toEqual({
+        messageId: '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f',
+        inCombat: false,
+      });
+    });
+
     it('should include auth token from localStorage if present', async () => {
       mockGetItem.mockReturnValue('test-token');
       mockFetch.mockResolvedValueOnce({

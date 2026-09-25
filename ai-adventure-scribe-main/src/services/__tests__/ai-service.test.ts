@@ -144,6 +144,25 @@ describe('AIService', () => {
       expect(result).toEqual(mockProcessedResponse);
     });
 
+    it('forwards the reserved DM row id to the generate call (#2218)', async () => {
+      vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);
+      vi.mocked(ContextBuilder.build).mockResolvedValue('Build prompt');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'Processed Text' } as any);
+      const dmReply = { messageId: '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f', inCombat: false };
+
+      await AIService.chatWithDM({
+        message: 'I look down the stairwell',
+        context: { ...mockContext, sessionId: 'dm-reply-session' },
+        conversationHistory: [],
+        dmReply,
+      });
+
+      expect(llmApiClient.generateText).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'dm-reply-session', dmReply }),
+      );
+    });
+
     it('does not label turn-phase logging failures as provider failures', async () => {
       const mockParams: any = {
         message: 'Turn phase logging failure',

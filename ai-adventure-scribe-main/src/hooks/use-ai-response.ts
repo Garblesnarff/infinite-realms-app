@@ -154,6 +154,7 @@ export const useAIResponse = (): {
     turnCount?: number,
     onTurnPhase?: TurnPhaseReporter,
     onTextReady?: (message: EnhancedChatMessage, options: TextReadyOptions) => Promise<void> | void,
+    dmMessageId?: string,
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
@@ -216,6 +217,7 @@ export const useAIResponse = (): {
         message: EnhancedChatMessage,
         options: TextReadyOptions,
       ) => Promise<void> | void,
+      dmMessageId?: string,
     ): Promise<EnhancedChatMessage> => {
       try {
         logger.info('Getting AI response for session:', sessionId);
@@ -402,6 +404,21 @@ export const useAIResponse = (): {
           turnCount,
           relevantMemories,
           onTurnPhase,
+          // #2218: the server persists a display-ready reply under the id the caller reserved.
+          // `inCombat` carries the same combat-sequence test the early render uses below, so
+          // the server never keeps prose for a turn the engine may still resolve.
+          ...(dmMessageId
+            ? {
+                dmReply: {
+                  messageId: dmMessageId,
+                  inCombat: Boolean(
+                    isInCombat ||
+                    preflightNpcTurns?.results?.length ||
+                    preflightNpcTurns?.combatEnded,
+                  ),
+                },
+              }
+            : {}),
           ...(onTextReady
             ? {
                 onTextReady: async (parsedResult: AIResponse) => {

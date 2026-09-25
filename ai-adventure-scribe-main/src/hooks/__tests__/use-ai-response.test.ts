@@ -168,6 +168,81 @@ describe('useAIResponse', () => {
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });
 
+  describe('#2218: the reserved DM row id reaches the server', () => {
+    const DM_ID = '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f';
+    const sessionContext = {
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    };
+
+    it('sends it with inCombat false on a narrative turn, so the server keeps the reply', async () => {
+      const { AIService } = await import('@/services/ai-service');
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'The stair ends in black water.' });
+
+      const { result } = renderHook(() => useAIResponse());
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        undefined,
+        DM_ID,
+      );
+
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({ dmReply: { messageId: DM_ID, inCombat: false } }),
+      );
+    });
+
+    it('marks an in-combat turn, so the server never keeps prose the engine may still resolve', async () => {
+      const { AIService } = await import('@/services/ai-service');
+      const { useCombat } = await import('@/contexts/CombatContext');
+      const liveEncounter = {
+        id: 'enc-1',
+        phase: 'active',
+        currentTurnParticipantId: 'turn-entity',
+        currentRound: 1,
+        participants: [],
+      };
+      vi.mocked(useCombat).mockReturnValue({
+        state: { isInCombat: true, activeEncounter: liveEncounter },
+        refreshCombatState: vi.fn(async () => liveEncounter),
+      } as any);
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'You circle the ghoul.' });
+
+      const { result } = renderHook(() => useAIResponse());
+      await result.current.getAIResponse(
+        mockMessages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        undefined,
+        DM_ID,
+      );
+
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({ dmReply: { messageId: DM_ID, inCombat: true } }),
+      );
+    });
+
+    it('sends nothing when the caller reserved no id', async () => {
+      const { AIService } = await import('@/services/ai-service');
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'Quiet.' });
+
+      const { result } = renderHook(() => useAIResponse());
+      await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+      expect((AIService.chatWithDM as any).mock.calls[0][0]).not.toHaveProperty('dmReply');
+    });
+  });
+
   it('appends structured options without a client repair call', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { llmApiClient } = await import('@/infrastructure/api');

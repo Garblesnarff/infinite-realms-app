@@ -141,10 +141,47 @@ export class SessionMessageService {
       });
       if (!session) throw new NotFoundError('Session', sessionId);
 
+      // #2218: /v1/llm/generate writes the DM reply it produced as a provisional row under the
+      // id the client reserved for the turn. The client's own save of that turn carries the same
+      // id and its final text, and replaces the provisional row in place rather than being
+      // dropped as a duplicate — so one turn is one row, whichever side wrote first. Only rows
+      // still marked provisional are replaceable; every other duplicate id stays a no-op retry.
+      const dmMessages = messages.filter(
+        (data): data is typeof data & { id: string } =>
+          Boolean(data.id) && data.speakerType === 'dm',
+      );
+      const reconciled: DialogueHistory[] = [];
+      for (const data of dmMessages) {
+        const [row] = await tx
+          .update(dialogueHistory)
+          .set({
+            message: data.message,
+            context: data.context || null,
+            images: data.images || null,
+            // History is read in timestamp order and the player's row carries the client's
+            // clock, so the client's timestamp replaces the server's too: a live tab orders
+            // exactly as it did when the client was the only writer.
+            ...(data.timestamp ? { timestamp: data.timestamp } : {}),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(dialogueHistory.id, data.id),
+              eq(dialogueHistory.sessionId, sessionId),
+              sql`${dialogueHistory.context}->>'provisional' = 'true'`,
+            ),
+          )
+          .returning();
+        if (row) reconciled.push(row);
+      }
+      const reconciledIds = new Set(reconciled.map((row) => row.id));
+      const toInsert = messages.filter((data) => !data.id || !reconciledIds.has(data.id));
+      if (toInsert.length === 0) return reconciled;
+
       const inserted = await tx
         .insert(dialogueHistory)
         .values(
-          messages.map((data) => ({
+          toInsert.map((data) => ({
             id: data.id,
             sessionId,
             speakerType: data.speakerType,
@@ -167,7 +204,7 @@ export class SessionMessageService {
           })
           .where(eq(gameSessions.id, sessionId));
       }
-      return inserted;
+      return [...reconciled, ...inserted];
     });
   }
 

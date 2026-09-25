@@ -28,6 +28,10 @@ import {
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
 import {
+  persistGeneratedDmReply,
+  scheduleDmReplyWatchdog,
+} from '../../services/dm/dm-reply-persistence.js';
+import {
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
@@ -190,6 +194,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         combatEntry,
         sessionId,
         player_input: requestedPlayerInput,
+        dmReply,
       } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
@@ -326,6 +331,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           model: result.model,
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
+          // #2218: only DM turns carry dmReply; other generations stay session-less.
+          sessionId: dmReply ? (sessionId ?? combatEntry?.sessionId) : undefined,
         });
       }
 
@@ -336,10 +343,44 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // precisely the turns being debugged. (#2050 C)
       logEnvelopeShape(envelope, result.text, sessionId ?? combatEntry?.sessionId);
 
+      // #2218: the engine keeps the DM reply it generated. Written before the response leaves,
+      // so a tab that dies after this point cannot take the reply with it; the client saves
+      // the same id and replaces this row in place. A turn the server may not persist (roll,
+      // combat) is watched instead, and reported if no DM row follows.
+      let dmReplyPersisted = false;
+      const dmSessionId = sessionId ?? combatEntry?.sessionId;
+      if (dmReply && dmSessionId) {
+        const generatedAt = new Date();
+        const persistence = await persistGeneratedDmReply({
+          userId,
+          sessionId: dmSessionId,
+          messageId: dmReply.messageId,
+          envelope,
+          clientInCombat: dmReply.inCombat === true,
+        });
+        dmReplyPersisted = persistence.persisted;
+        logger.info({
+          msg: 'DM_REPLY_PERSISTENCE',
+          sessionId: dmSessionId,
+          messageId: dmReply.messageId,
+          persisted: persistence.persisted,
+          reason: persistence.reason ?? null,
+        });
+        if (!persistence.persisted) {
+          void scheduleDmReplyWatchdog({
+            sessionId: dmSessionId,
+            messageId: dmReply.messageId,
+            reason: persistence.reason ?? 'unknown',
+            generatedAt,
+          });
+        }
+      }
+
       return {
         text: rewriteNarrationSegmentsFromEnvelope(envelope, result.text),
         provider: result.provider,
         model: result.model,
+        ...(dmReply ? { dmReplyPersisted } : {}),
       };
     },
     {
@@ -349,6 +390,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // generate, not only on the combat-entry path.
         sessionId: t.Optional(t.String({ maxLength: 255 })),
         player_input: t.Optional(t.String({ maxLength: 20_000 })),
+        // #2218: the id the client reserved for this turn's DM row. Present only on the main DM
+        // turn; the server persists the reply under it when the turn is display-ready.
+        dmReply: t.Optional(
+          t.Object({
+            messageId: t.String({
+              pattern:
+                '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+            }),
+            inCombat: t.Optional(t.Boolean()),
+          }),
+        ),
         model: t.Optional(t.String()),
         maxTokens: t.Optional(t.Number()),
         temperature: t.Optional(t.Number()),

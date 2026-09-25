@@ -309,6 +309,12 @@ export interface GenerateTextParams {
    */
   /** #2050 C: correlates the server's envelope log line on every generate. */
   sessionId?: string;
+  /**
+   * #2218: the id reserved for this turn's DM row. The server persists a display-ready reply
+   * under it before responding, and the client's own save of the turn replaces that row in
+   * place. Only the main DM turn sends it.
+   */
+  dmReply?: { messageId: string; inCombat?: boolean };
   combatEntry?: {
     sessionId: string;
     player: {
@@ -486,6 +492,7 @@ class LlmApiClient {
           metrics: params.metrics,
           sessionId: params.sessionId,
           combatEntry: params.combatEntry,
+          dmReply: params.dmReply,
         }),
       });
 

@@ -235,6 +235,7 @@ describe('session-continuity regression', () => {
       undefined,
       expect.any(Function),
       expect.any(Function),
+      expect.any(String), // #2218: the DM row id reserved for this turn
     );
   });
 
@@ -291,6 +292,7 @@ describe('session-continuity regression', () => {
       undefined,
       expect.any(Function),
       expect.any(Function),
+      expect.any(String), // #2218: the DM row id reserved for this turn
     );
   });
 
@@ -858,6 +860,112 @@ describe('session-continuity regression', () => {
     expect(dmPersisted()).toEqual([expect.objectContaining({ text })]);
     expect(composerEnabledCount()).toBe(0);
     expect(mockOnAIResponse).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * #2218: the server persists a display-ready DM reply under an id the client reserves before
+   * generation. The early render (#2147) and the single final save must reuse that id, or the
+   * server's row and the client's row become two DM messages for one turn.
+   */
+  it('renders early, replaces in place and saves once, all under the id reserved for the server row', async () => {
+    const earlyResponse = {
+      text: 'The stair ends in black water.',
+      sender: 'dm',
+      rollRequests: [],
+    };
+    const finalResponse = {
+      ...earlyResponse,
+      text: 'The stair ends in black water. Something beneath it breathes.',
+    };
+    let reservedId: string | undefined;
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      reservedId = args[5] as string | undefined;
+      const onTextReady = args[4] as
+        | ((response: typeof earlyResponse) => Promise<void>)
+        | undefined;
+      await onTextReady?.(earlyResponse);
+      return finalResponse;
+    });
+
+    const { ref } = renderHandler('session-reserved-dm-id');
+    await act(async () => {
+      await ref.send('I look down the stairwell.');
+    });
+
+    expect(reservedId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    const earlyRender = mockUpdateMessage.mock.calls.find(
+      ([message]) => message.text === earlyResponse.text,
+    );
+    expect(earlyRender?.[0].id).toBe(reservedId);
+    expect(mockUpdateMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: reservedId, text: finalResponse.text }),
+    );
+    expect(dmPersisted()).toEqual([
+      expect.objectContaining({ id: reservedId, text: finalResponse.text }),
+    ]);
+  });
+
+  it('saves a turn with no early render under the reserved id too, so it reconciles with the server row', async () => {
+    let reservedId: string | undefined;
+    mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+      reservedId = args[5] as string | undefined;
+      return {
+        text: 'The engine resolves the swing: a clean miss.',
+        sender: 'dm',
+        rollRequests: [],
+      };
+    });
+
+    const { ref } = renderHandler('session-reserved-dm-id-no-early');
+    await act(async () => {
+      await ref.send('I swing at the ghoul.');
+    });
+
+    expect(reservedId).toBeTruthy();
+    expect(dmPersisted()).toEqual([expect.objectContaining({ id: reservedId })]);
+  });
+
+  /**
+   * #2218, the Aug 26 shape: the DM save failed, the queue rolled the optimistic row back off the
+   * screen, and nothing ever retried it — the reply reached neither dialogue_history nor the
+   * player. Now the row stays on screen and the player can retry the same row.
+   */
+  it('keeps a DM reply whose save failed on screen and offers a retry that saves the same row', async () => {
+    const text = 'Forty steps down, the stair ends in black water.';
+    mockGetAIResponse.mockResolvedValue({ text, sender: 'dm', rollRequests: [] });
+    mockSendMessage.mockImplementation(async (message: { sender?: string }) => {
+      if (message.sender === 'dm' && mockSendMessage.mock.calls.length <= 2) {
+        throw new Error('API 503: upstream unavailable');
+      }
+    });
+
+    const { ref } = renderHandler('session-dm-save-fails');
+    await act(async () => {
+      await ref.send('I look down the stairwell.');
+    });
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    const [failedSave] = dmPersisted() as Array<{ id?: string; text?: string }>;
+    // Rendered again after the queue's rollback, under the same id.
+    expect(mockUpdateMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: failedSave?.id, text }),
+    );
+    const retryToast = mockToast.mock.calls
+      .map(
+        ([options]) =>
+          options as { title?: string; action?: { label: string; onClick: () => void } },
+      )
+      .find((options) => options.action?.label === 'Retry');
+    expect(retryToast?.title).toBe("The DM's reply wasn't saved");
+
+    await act(async () => {
+      retryToast?.action?.onClick();
+    });
+
+    await waitFor(() => expect(dmPersisted()).toHaveLength(2));
+    const [first, second] = dmPersisted() as Array<{ id?: string; text?: string }>;
+    expect(second?.id).toBe(first?.id);
+    expect(second?.text).toBe(text);
   });
 
   it('unlocks the composer when response memory extraction fails', async () => {
