@@ -87,6 +87,51 @@ If GitHub cannot be read, the deploy proceeds on the HOLD file alone and a
 rate-limited `run_check` alert fires. Overrides: `DEPLOY_RUN_ISSUE`,
 `DEPLOY_RUN_REPO`, `DEPLOY_RUN_HOLD_MAX_AGE_SECONDS`, `DEPLOY_GH_BIN`.
 
+### Is a run open? `run-status.sh`
+
+The merger asks the same question the cron does with one call (#2224):
+
+```bash
+$ ops/run-status.sh
+run: open — run 9 started 12m ago (#2093: run 9 started — session …)
+newest: run 9 started
+```
+
+Exit status: `0` no open run (the cron would deploy), `1` open run (the cron
+holds), `2` GitHub could not be read (`run: unknown`). It applies the cron's 3h
+cut-off, so an unmatched `started` older than that prints `run: closed — …
+auto-deploy ignores it`. `open_run`, `newest_run`, `newest_run_detail` and the
+`DEPLOY_RUN_*` defaults are read out of the sibling `auto-deploy.sh` rather
+than copied (it is installed on the host as a single file, so there is no
+shared library to source). The same `DEPLOY_RUN_*` / `DEPLOY_GH_BIN` overrides
+apply; `RUN_STATUS_DEPLOY_SCRIPT` points it at a different `auto-deploy.sh`.
+Cases: `bash ops/tests/run-status.sh`.
+
+### Merge-train hold
+
+A multi-PR merge train deploys once only if every merge lands inside one
+15-minute cron window; a train that straddles a tick deploys twice, with a
+restart in between. The merger holds the cron for the whole train:
+
+```bash
+touch /var/lib/infiniterealms-deploy/TRAIN   # before the first merge
+rm /var/lib/infiniterealms-deploy/TRAIN      # after the last merge
+```
+
+While the file is under `DEPLOY_TRAIN_STALE_SECONDS` (default 3600 = 60 min)
+old, the script logs `hold train: … present (Nm)` and exits 0 without fetching,
+building or restarting; `--deploy-now` exits 1, as for the other holds. The
+next tick after `rm` deploys the whole train at once.
+
+A TRAIN file older than that is treated as forgotten: the script logs
+`ALERT: ignoring stale …` and deploys anyway, and a rate-limited `train` alert
+pages Slack until the file is removed (then RECOVERED). With no TRAIN file the
+cron path is byte-for-byte unchanged. The test checks this by running the
+script with the block cut out and diffing log, exit status, commands and state
+files. Path override: `DEPLOY_TRAIN_FILE`. Cases:
+`bash ops/tests/merge-train-hold.sh` (needs bash, git, jq; runs the real script
+against a scratch repo with stub bun/pm2/gh).
+
 ## Rollback of the publish step
 
 Before publishing, the live `dist/` is hardlink-snapshotted to
@@ -103,4 +148,5 @@ rsync -a --delete /var/lib/infiniterealms-deploy/dist.prev/ \
 ```
 
 Additional host overrides: `DEPLOY_HOLD_FILE`, `DEPLOY_HOLD_STALE_SECONDS`,
+`DEPLOY_TRAIN_FILE`, `DEPLOY_TRAIN_STALE_SECONDS`,
 `DEPLOY_STAGING_ROOT`.

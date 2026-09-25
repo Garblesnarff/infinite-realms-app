@@ -19,7 +19,8 @@ set -euo pipefail
 # resume. A hold older than 3h pages Slack so a forgotten one cannot silently
 # stop prod from tracking main. See the "deploy hold" block below.
 # An unmatched "run N started" comment on #2093 under 3h old holds the same
-# way; see the "open stranger-test run" block.
+# way; see the "open stranger-test run" block. A merge train holds with
+# `touch /var/lib/infiniterealms-deploy/TRAIN` (under 60 min old; #2224).
 #
 # cron runs with a minimal PATH that lacks bun (/root/.bun/bin). Without this,
 # the deploy advances git via `git reset --hard` but dies at `bun install`
@@ -236,6 +237,40 @@ if [ -e "$HOLD_FILE" ]; then
   exit 0
 fi
 record_state hold ok ""
+
+# --- merge-train hold (added 2026-09-25, #2224) -------------------------------
+# A multi-PR merge train deploys once only if every merge lands inside one
+# 15-minute cron window; one that straddles a tick deploys twice, with a
+# restart (and possibly dropped turns) in between. The merger `touch`es this
+# file before the first merge and `rm`s it after the last. While it is fresh
+# this script records "hold train" and deploys nothing, like the open-run hold
+# below. A TRAIN file older than TRAIN_STALE_SECONDS is a forgotten one: it is
+# ignored with an alert, so it cannot block deploys for good.
+#
+# With no TRAIN file this block prints nothing and writes nothing, so the cron
+# path is byte-for-byte what it was (ops/tests/merge-train-hold.sh checks that).
+# The one exception is clearing an earlier stale-TRAIN alert to RECOVERED.
+TRAIN_FILE=${DEPLOY_TRAIN_FILE:-$STATE_DIR/TRAIN}
+TRAIN_STALE_SECONDS=${DEPLOY_TRAIN_STALE_SECONDS:-3600}
+if [ -e "$TRAIN_FILE" ]; then
+  TRAIN_SINCE=$(stat -c %Y "$TRAIN_FILE" 2>/dev/null || echo 0)
+  TRAIN_AGE=$(( $(date +%s) - TRAIN_SINCE ))
+  if [ "$TRAIN_AGE" -lt "$TRAIN_STALE_SECONDS" ]; then
+    echo "$(ts) hold train: $TRAIN_FILE present ($(( TRAIN_AGE / 60 ))m); merge train in progress. No fetch, no build, no restart."
+    # Same rule as the run hold: --deploy-now does not override a train, and
+    # says so with exit 1 rather than a silent 0 that reads as "deployed".
+    if [ "$DEPLOY_FORCE" = 1 ]; then
+      echo "$(ts) Refusing --deploy-now: a merge train is in progress. Remove $TRAIN_FILE after the last merge, then re-run."
+      exit 1
+    fi
+    exit 0
+  fi
+  echo "$(ts) ALERT: ignoring stale $TRAIN_FILE ($(( TRAIN_AGE / 60 ))m old, limit $(( TRAIN_STALE_SECONDS / 60 ))m); deploying anyway."
+  record_state train fail "merge-train hold $TRAIN_FILE is $(( TRAIN_AGE / 60 ))m old and is being IGNORED; deploys continue. If the train is over, remove the file."
+elif [ -e "$STATE_DIR/train.state" ]; then
+  record_state train ok ""
+fi
+# --- end merge-train hold ------------------------------------------------------
 
 # --- open stranger-test run (added 2026-09-22, #2093) -------------------------
 # The HOLD file only works if Playtest remembers to `touch` it. Playtest always
