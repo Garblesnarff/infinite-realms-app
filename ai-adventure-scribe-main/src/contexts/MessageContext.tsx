@@ -45,6 +45,7 @@ import { useCompanionScene } from '@/webmcp/use-companion-scene';
 interface MessageContextType {
   messages: ChatMessage[];
   isLoading: boolean;
+  messagesReady: boolean;
   isFetchingMore: boolean;
   hasMore: boolean;
   loadMore: () => void;
@@ -66,6 +67,7 @@ export const MessageProvider: React.FC<{
   const pollForCompanions = getActiveCompanions(companionScene).length > 0;
   const {
     data: messages = [],
+    messagesReady,
     isLoading,
     isFetching,
     hasMore,
@@ -96,6 +98,7 @@ export const MessageProvider: React.FC<{
     () => ({
       messages,
       isLoading,
+      messagesReady,
       isFetchingMore: isFetching && !isLoading,
       hasMore,
       loadMore,
@@ -103,7 +106,17 @@ export const MessageProvider: React.FC<{
       updateMessage,
       queueStatus,
     }),
-    [messages, isLoading, isFetching, hasMore, loadMore, sendMessage, updateMessage, queueStatus],
+    [
+      messages,
+      isLoading,
+      messagesReady,
+      isFetching,
+      hasMore,
+      loadMore,
+      sendMessage,
+      updateMessage,
+      queueStatus,
+    ],
   );
 
   return <MessageContext.Provider value={value}>{children}</MessageContext.Provider>;

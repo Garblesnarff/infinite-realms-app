@@ -134,6 +134,7 @@ export const useMessageQueue = (sessionId: string | null) => {
 
           // Format the context to ensure it's compatible with Supabase's Json type
           const narrationSegments = persistableNarrationSegments(message);
+          const rollRequests = message.rollRequests ?? message.context?.rollRequests;
           const contextData = message.context
             ? {
                 location: message.context.location || null,
@@ -148,10 +149,16 @@ export const useMessageQueue = (sessionId: string | null) => {
                   null,
                 combat_ended: Boolean(message.context.combatEnded ?? message.context.combat_ended),
                 narration_segments: narrationSegments,
+                ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
               }
             : narrationSegments
-              ? { narration_segments: narrationSegments }
-              : {};
+              ? {
+                  narration_segments: narrationSegments,
+                  ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
+                }
+              : Array.isArray(rollRequests)
+                ? { rollRequests }
+                : {};
 
           await userDataApi.saveSessionMessages(sessionId, {
             id: messageId,
@@ -235,6 +242,7 @@ export const useMessageQueue = (sessionId: string | null) => {
       const now = new Date().toISOString();
       const formattedBatch = batch.map((message) => {
         const narrationSegments = persistableNarrationSegments(message);
+        const rollRequests = message.rollRequests ?? message.context?.rollRequests;
         return {
           id: message.id || uuidv4(),
           message: message.text,
@@ -253,10 +261,16 @@ export const useMessageQueue = (sessionId: string | null) => {
                   null,
                 combat_ended: Boolean(message.context.combatEnded ?? message.context.combat_ended),
                 narration_segments: narrationSegments,
+                ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
               }
             : narrationSegments
-              ? { narration_segments: narrationSegments }
-              : {},
+              ? {
+                  narration_segments: narrationSegments,
+                  ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
+                }
+              : Array.isArray(rollRequests)
+                ? { rollRequests }
+                : {},
           timestamp: message.timestamp || now,
         };
       });

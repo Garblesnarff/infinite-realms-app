@@ -21,6 +21,7 @@ import {
   type CombatEntryResponse,
   type CombatEntryStartResult,
 } from '../combat-entry-gate.js';
+import { resolveCombatIntentRefsWithRetry } from '../combat-intent-refs.js';
 
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const USER_ID = 'user_01KAT5E3WFD7NGE3C0TDHX2T5G';
@@ -514,6 +515,174 @@ describe('seatCombatEntry', () => {
       weaponName: 'Unarmed Strike',
       roll_request: { modifier: 5 },
     });
+  });
+
+  it('replays M4 entry through Chill Touch and resolves the immediate cast against the encounter roster', async () => {
+    const order: string[] = [];
+    const player = {
+      characterId: 'm4-apprentice-character',
+      name: 'The Apprentice',
+      initiativeModifier: 1,
+      hpCurrent: 7,
+      hpMax: 7,
+    };
+    const targetName = 'Flavor-Elemental (Corrupted)';
+    const { deps } = stubDeps({
+      createTacticalCombatMap: async () => {
+        order.push('tactical_map_saved');
+      },
+      deriveFirstAction: async ({ combatState }) => {
+        order.push('first_action_derived');
+        const [actor, target] = combatState.participants;
+        return {
+          type: 'spell' as const,
+          actor: actor.id,
+          actorLabel: player.name,
+          target: target.id,
+          targetLabel: targetName,
+          source: 'spell' as const,
+          attackSource: 'spell' as const,
+          weaponId: null,
+          weaponName: null,
+          spellId: 'chill-touch',
+          slotLevel: null,
+          combat_action: {
+            actor_id: actor.id,
+            action_type: 'cast_spell' as const,
+            target_ids: [target.id],
+            weapon_id: null,
+            spell_id: 'chill-touch',
+            slot_level: null,
+            movement_feet: 0,
+          },
+        };
+      },
+    });
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player,
+        combatants: [{ name: targetName, count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        trigger: 'combat_transition',
+        detail: 'M4 declared Chill Touch at combat entry',
+        declaredAttack: {
+          verb: 'cast Chill Touch',
+          actorName: targetName,
+          attackSource: 'spell',
+          spellName: 'Chill Touch',
+          spellId: 'chill-touch',
+        },
+      },
+      deps,
+    );
+
+    expect(order).toEqual(['tactical_map_saved', 'first_action_derived']);
+    expect(outcome?.firstAction?.combat_action).toMatchObject({
+      action_type: 'cast_spell',
+      actor_id: 'participant-0',
+      target_ids: ['participant-1'],
+    });
+
+    const immediateCast = {
+      type: 'spell',
+      actorId: 'the-apprentice',
+      targetIds: ['flavor-elemental-corrupted'],
+      spellName: 'Chill Touch',
+      spellId: 'chill-touch',
+    };
+    const state = {
+      ...outcome!.combatState,
+      encounter: {
+        ...outcome!.combatState.encounter,
+        sessionId: SESSION_ID,
+        status: 'active',
+      },
+    };
+    const reconciliations: Record<string, unknown>[] = [];
+    const { resolved } = await resolveCombatIntentRefsWithRetry(immediateCast, state, {
+      loadState: async () => state,
+      loadIndex: async () => ({
+        resolve: (token) => (token === 'the-apprentice' ? 'm4-apprentice-character' : token),
+        roster: () => 'the-apprentice, flavor-elemental-corrupted',
+      }),
+      warn: (event) => reconciliations.push(event),
+      waitBeforeRetry: async () => undefined,
+    });
+
+    expect(resolved).toMatchObject({
+      actorId: 'participant-0',
+      targetIds: ['participant-1'],
+    });
+    expect(reconciliations).toEqual([
+      expect.objectContaining({
+        msg: 'COMBAT_INTENT_REF_RECONCILED_TO_ENCOUNTER_ROSTER',
+        role: 'actor',
+        submittedRef: 'the-apprentice',
+        resolvedTo: 'participant-0',
+        boardResolvedTo: 'm4-apprentice-character',
+      }),
+      expect.objectContaining({
+        msg: 'COMBAT_INTENT_REF_RECONCILED_TO_ENCOUNTER_ROSTER',
+        role: 'target',
+        submittedRef: 'flavor-elemental-corrupted',
+        resolvedTo: 'participant-1',
+        boardResolvedTo: null,
+      }),
+    ]);
+  });
+
+  it('re-reads a just-seated roster once before refusing an unresolved first action', async () => {
+    const fullRoster = {
+      encounter: { id: 'encounter-1', sessionId: SESSION_ID, status: 'active' },
+      participants: [
+        { id: 'participant-player', name: 'The Apprentice' },
+        { id: 'participant-target', name: 'Flavor-Elemental (Corrupted)' },
+      ],
+    };
+    const partialRoster = {
+      ...fullRoster,
+      participants: [fullRoster.participants[1]],
+    };
+    let stateReads = 0;
+    let waits = 0;
+    const warnEvents: Record<string, unknown>[] = [];
+
+    const { resolved } = await resolveCombatIntentRefsWithRetry(
+      {
+        type: 'spell',
+        actorId: 'the-apprentice',
+        targetIds: ['flavor-elemental-corrupted'],
+      },
+      partialRoster,
+      {
+        loadState: async () => {
+          stateReads += 1;
+          return fullRoster;
+        },
+        loadIndex: async () => ({
+          resolve: (token) => token,
+          roster: () => 'flavor-elemental-corrupted',
+        }),
+        warn: (event) => warnEvents.push(event),
+        waitBeforeRetry: async () => {
+          waits += 1;
+        },
+      },
+    );
+
+    expect(resolved).toMatchObject({
+      actorId: 'participant-player',
+      targetIds: ['participant-target'],
+    });
+    expect(stateReads).toBe(1);
+    expect(waits).toBe(1);
+    expect(warnEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ msg: 'COMBAT_INTENT_REF_RETRY_AFTER_SEATING_READ' }),
+      ]),
+    );
   });
 
   it('passes the player d20 only to the player seat and reports the complete seating line', async () => {

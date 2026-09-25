@@ -5,6 +5,7 @@ import { decideAttackApproach, describeResolvedAttack } from './combat-approach-
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
+import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { publishCombatState } from './combat-sync-service.js';
 import {
@@ -19,6 +20,7 @@ import {
   vitalStateOf,
   type VitalsInput,
 } from './death-saves-service.js';
+import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { logger } from '../../lib/logger.js';
@@ -29,7 +31,6 @@ import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-res
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
-import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
@@ -475,45 +476,6 @@ function alreadyEndedTurn(
  * which token missed and what was actually on the board is an answer the caller can act on; a
  * 500 from the database two layers down is not.
  */
-function resolveIntentRefs(
-  submitted: SubmittedCombatIntent,
-  index: SessionEntityIndex,
-  state: CombatState,
-): SubmittedCombatIntent {
-  const roster = new Set(state.participants.map((participant) => participant.id));
-  const require = (token: string, role: 'actor' | 'target'): string => {
-    const resolved = index.resolve(token);
-    if (roster.has(resolved)) return resolved;
-    logger.warn({
-      msg: 'COMBAT_INTENT_UNRESOLVED_REF',
-      encounterId: state.encounter.id,
-      sessionId: state.encounter.sessionId,
-      intentType: submitted.type,
-      role,
-      submittedRef: token,
-      // Named separately because the two differ exactly when the board resolved a token to an
-      // id the encounter does not carry — a stale reference, not an unknown one.
-      resolvedTo: resolved === token ? null : resolved,
-      roster: index.roster(),
-    });
-    throw new NotFoundError('Combat participant', token, {
-      role,
-      intentType: submitted.type,
-      roster: index.roster(),
-    });
-  };
-  const actorId = require(submitted.actorId, 'actor');
-  if (submitted.type === 'attack')
-    return { ...submitted, actorId, targetId: require(submitted.targetId, 'target') };
-  if (submitted.type === 'spell')
-    return {
-      ...submitted,
-      actorId,
-      targetIds: submitted.targetIds.map((id) => require(id, 'target')),
-    };
-  return { ...submitted, actorId };
-}
-
 /**
  * What a player's attack would be, asked before the player rolls for it.
  *
@@ -549,33 +511,38 @@ export async function proposeCombatAttack(
       intentType: submitted.type,
     });
   }
-  const state = await CombatEncounterService.getCombatState(encounterId, userId);
-  const index = await loadSessionEntityIndex(state.encounter.sessionId);
-  const resolved = resolveIntentRefs(submitted, index, state) as Extract<
-    CombatIntent,
-    { type: 'attack' }
-  >;
+  const initialState = await CombatEncounterService.getCombatState(encounterId, userId);
+  const { state, index, resolved } = await resolveCombatIntentRefsWithRetry(
+    submitted,
+    initialState,
+    {
+      loadState: () => CombatEncounterService.getCombatState(encounterId, userId),
+      loadIndex: loadSessionEntityIndex,
+      warn: (data) => logger.warn(data),
+    },
+  );
+  const resolvedAttack = resolved as Extract<CombatIntent, { type: 'attack' }>;
   const { actor, encounter } = await resolveActorTurn(
     encounterId,
     state,
-    resolved.actorId,
+    resolvedAttack.actorId,
     index,
     userId,
-    resolved.type,
+    resolvedAttack.type,
     source,
   );
-  const actorLabel = actor.name ?? resolved.actorId;
-  const targetLabel = await participantLabel(encounterId, resolved.targetId, userId);
+  const actorLabel = actor.name ?? resolvedAttack.actorId;
+  const targetLabel = await participantLabel(encounterId, resolvedAttack.targetId, userId);
   const equipped = await listEquippedWeaponProfiles(actor);
-  const grounding = groundRequestedWeapon(resolved.weaponId, equipped);
-  const groundedWeaponId = isUnarmedWeaponClaim(resolved.weaponId)
+  const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped);
+  const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
   const approach = await decideAttackApproach({
     sessionId: encounter.sessionId,
-    actorId: resolved.actorId,
+    actorId: resolvedAttack.actorId,
     actorLabel,
-    targetId: resolved.targetId,
+    targetId: resolvedAttack.targetId,
     targetLabel,
     weapon: grounding.weapon,
   });
@@ -584,14 +551,14 @@ export async function proposeCombatAttack(
   const proposal = await attackService.proposeAttack(
     encounterId,
     {
-      attackerId: resolved.actorId,
-      targetId: resolved.targetId,
+      attackerId: resolvedAttack.actorId,
+      targetId: resolvedAttack.targetId,
       weaponId: groundedWeaponId,
       attackType: approach.attackType,
       // The proposal claims no version: it writes nothing that a concurrent write could lose.
       expectedVersion: encounter.version,
-      advantage: resolved.advantage,
-      disadvantage: resolved.disadvantage,
+      advantage: resolvedAttack.advantage,
+      disadvantage: resolvedAttack.disadvantage,
     },
     userId,
   );
@@ -600,8 +567,8 @@ export async function proposeCombatAttack(
   return {
     movementOnly: false,
     ...proposal,
-    actorId: resolved.actorId,
-    targetId: resolved.targetId,
+    actorId: resolvedAttack.actorId,
+    targetId: resolvedAttack.targetId,
     weaponId: groundedWeaponId,
     expectedVersion: encounter.version,
     targetLabel,
@@ -675,7 +642,7 @@ export async function executeCombatIntent(
     // Check the authoritative encounter status before loading that board or resolving a slug;
     // otherwise a valid post-victory follow-through becomes the misleading 404 "Combat
     // participant not found" that #1744 observed.
-    const state = await CombatEncounterService.getCombatState(encounterId, userId);
+    let state = await CombatEncounterService.getCombatState(encounterId, userId);
     stateForUnresolved = state;
     if (state.encounter.status !== 'active') {
       logger.info({
@@ -695,8 +662,30 @@ export async function executeCombatIntent(
     }
     // Reference resolution happens before authorization, not after: the turn check keys on
     // participant ids, so asking it about a slug is asking the wrong question.
-    const index = await loadSessionEntityIndex(state.encounter.sessionId);
-    const resolved = resolveIntentRefs(submitted, index, state);
+    const refs = await resolveCombatIntentRefsWithRetry(submitted, state, {
+      loadState: () => CombatEncounterService.getCombatState(encounterId, userId),
+      loadIndex: loadSessionEntityIndex,
+      warn: (data) => logger.warn(data),
+    });
+    state = refs.state;
+    stateForUnresolved = state;
+    const { index, resolved } = refs;
+    if (state.encounter.status !== 'active') {
+      logger.info({
+        msg: 'COMBAT_INTENT_AFTER_CONCLUSION',
+        encounterId,
+        sessionId: state.encounter.sessionId,
+        status: state.encounter.status,
+        submittedActorId: submitted.actorId,
+        action: submitted.type,
+        source,
+      });
+      return {
+        encounterAlreadyConcluded: true,
+        encounterId,
+        status: 'completed',
+      } satisfies EncounterAlreadyConcludedResult;
+    }
     // Before authorization, because a boundary that has already been crossed is not an
     // authorization question: there is no turn left to be out of.
     const stale = alreadyEndedTurn(state, resolved, source);

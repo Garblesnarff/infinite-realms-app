@@ -469,6 +469,26 @@ export const useMessageHandlerLogic = ({
         setComposerBlocked(false);
       }
 
+      if (narrativeRollRequests.length > 0) {
+        // The declaration prose stays withheld until the die settles, but the structured request
+        // must survive a reload. Persist a textless metadata row so recovery can restore the
+        // popup without replaying prose that might describe an outcome the player has not rolled.
+        const pendingRollMessage: ChatMessage = {
+          id: dmMessageId,
+          text: '',
+          sender: 'dm',
+          timestamp: new Date().toISOString(),
+          rollRequests: narrativeRollRequests,
+          context: {
+            intent: 'pending_roll_request',
+            rollRequests: narrativeRollRequests,
+          },
+        };
+        runDeferredTask('DM roll request persistence', () =>
+          persistDmReply(pendingRollMessage, () => turnPhase('persist')),
+        );
+      }
+
       // Combat detection still runs after the first render; turns still waiting on a roll have
       // their critical gate handled above and do not need a second transcript callback here.
       if (!hasRollRequests) {

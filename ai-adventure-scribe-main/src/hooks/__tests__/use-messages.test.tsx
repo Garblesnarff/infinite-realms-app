@@ -143,6 +143,33 @@ describe('useMessages', () => {
     expect(result.current.data[0].narrationSegments).toEqual(narrationSegments);
   });
 
+  it('restores structured roll requests from a persisted DM context', async () => {
+    const rollRequests = [
+      { type: 'skill_check', formula: '1d20+5', purpose: 'Stealth check', dc: 13 },
+    ];
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: [
+        {
+          id: 'dm-roll',
+          message: '',
+          speaker_type: 'dm',
+          timestamp: new Date().toISOString(),
+          sequence_number: 1,
+          context: { intent: 'pending_roll_request', rollRequests },
+          game_sessions: { characters: null },
+        },
+      ],
+      total: 1,
+      hasMore: false,
+    });
+
+    const { result } = renderHook(() => useMessages(sessionId), { wrapper });
+
+    await waitFor(() => expect(result.current.data.length).toBe(1), { timeout: 2000 });
+    expect(result.current.data[0].rollRequests).toEqual(rollRequests);
+    expect(result.current.data[0].context?.intent).toBe('pending_roll_request');
+  });
+
   it('should handle pagination with loadMore', async () => {
     const page0Results = {
       messages: Array.from({ length: 50 }, (_, i) => ({

@@ -168,6 +168,32 @@ describe('useMessageQueue', () => {
     );
   });
 
+  it('persists structured pending roll requests in message context', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    const rollRequests = [
+      { type: 'skill_check', formula: '1d20+5', purpose: 'Stealth check', dc: 13 },
+    ];
+
+    await act(async () => {
+      await result.current.messageMutation.mutateAsync({
+        text: '',
+        sender: 'dm',
+        context: { intent: 'pending_roll_request', rollRequests },
+      });
+    });
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speaker_type: 'dm',
+        message: '',
+        context: expect.objectContaining({
+          intent: 'pending_roll_request',
+          rollRequests,
+        }),
+      }),
+    );
+  });
+
   it('does not persist an already-persisted seating transcript', async () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const seatingTranscript = '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled).';

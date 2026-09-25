@@ -171,9 +171,21 @@ function composerEnabledCount(): number {
     ).length;
 }
 
-function dmPersisted(): Array<{ text?: string }> {
+function dmPersisted(): Array<{
+  text?: string;
+  rollRequests?: Array<{ type: string }>;
+  context?: { intent?: string; rollRequests?: Array<{ type: string }> };
+}> {
   return mockSendMessage.mock.calls
-    .map(([message]) => message as { sender?: string; text?: string })
+    .map(
+      ([message]) =>
+        message as {
+          sender?: string;
+          text?: string;
+          rollRequests?: Array<{ type: string }>;
+          context?: { intent?: string; rollRequests?: Array<{ type: string }> };
+        },
+    )
     .filter((message) => message.sender === 'dm');
 }
 
@@ -787,7 +799,16 @@ describe('session-continuity regression', () => {
     expect(mockProcessAiResponse).toHaveBeenCalledWith([rollRequests[2]]);
     // The skill check is still owed, so this turn waits on its die exactly as before: no
     // narration, the composer stays blocked, and combat detection waits for the roll turn.
-    expect(dmPersisted()).toHaveLength(0);
+    expect(dmPersisted()).toEqual([
+      expect.objectContaining({
+        text: '',
+        rollRequests: [rollRequests[2]],
+        context: expect.objectContaining({
+          intent: 'pending_roll_request',
+          rollRequests: [rollRequests[2]],
+        }),
+      }),
+    ]);
     expect(composerEnabledCount()).toBe(0);
     expect(mockOnAIResponse).not.toHaveBeenCalled();
   });

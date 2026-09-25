@@ -38,6 +38,13 @@ vi.mock('@/contexts/CombatContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/GameContext', () => ({
+  useGame: () => ({
+    state: { diceRollQueue: { pendingRolls: [] } },
+    processAiResponse: vi.fn(),
+  }),
+}));
+
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 
 vi.mock('../message-list/useImageGeneration', () => ({

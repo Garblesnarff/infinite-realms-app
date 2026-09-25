@@ -66,7 +66,15 @@ interface MessageListProps {
  */
 export const MessageList: React.FC<MessageListProps> = React.memo(
   ({ onSendFullMessage, sessionId, containerRef, suppressEmptyState }) => {
-    const { messages = [], sendMessage, hasMore, loadMore, isFetchingMore } = useMessageContext();
+    const {
+      messages = [],
+      isLoading,
+      messagesReady,
+      sendMessage,
+      hasMore,
+      loadMore,
+      isFetchingMore,
+    } = useMessageContext();
     const { state: characterState } = useCharacter();
     const { state: campaignState } = useCampaign();
     const { getAssetImageUrl } = useCampaignAssetsContext();
@@ -143,6 +151,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             onSendMessage={sendMessage}
             onSendFullMessage={onSendFullMessage}
             sessionId={sessionId}
+            messagesReady={messagesReady && !isLoading}
             isFetchingMore={isFetchingMore}
             hasMore={hasMore}
             suppressEmptyState={suppressEmptyState}

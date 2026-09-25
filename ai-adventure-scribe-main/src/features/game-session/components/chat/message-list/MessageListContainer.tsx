@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
 import { useMessageDiceRolls } from './use-message-dice-rolls';
+import { usePendingDmRollRecovery } from './use-pending-dm-roll-recovery';
 import { isPlayerChatBubble } from './utils/player-chat-bubble';
 
 import type { MessageSendContext } from '../MessageList';
@@ -34,6 +35,7 @@ interface MessageListContainerProps {
   isFetchingMore?: boolean;
   hasMore?: boolean;
   suppressEmptyState?: boolean;
+  messagesReady?: boolean;
   onCombatEntrySpaceChange?: (space: number) => void;
 }
 
@@ -62,9 +64,11 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     isFetchingMore,
     hasMore,
     suppressEmptyState = false,
+    messagesReady = true,
     onCombatEntrySpaceChange,
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
+    usePendingDmRollRecovery({ sessionId, messages, messagesReady });
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
     const spellTargetSave = useSpellTargetSaveHost();
     const {
@@ -83,7 +87,11 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
 
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {
-      if (!messages.length) {
+      const transcriptMessages = messages.filter(
+        (message) =>
+          !(message.sender === 'dm' && message.context?.intent === 'pending_roll_request'),
+      );
+      if (!transcriptMessages.length) {
         return [];
       }
 
@@ -94,14 +102,14 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         isCompanion: boolean;
       }[] = [];
       let currentGroup = {
-        sender: messages[0].sender,
-        messages: [messages[0]],
-        isPlayer: isPlayerChatBubble(messages[0]),
-        isCompanion: messages[0].sender === 'companion',
+        sender: transcriptMessages[0].sender,
+        messages: [transcriptMessages[0]],
+        isPlayer: isPlayerChatBubble(transcriptMessages[0]),
+        isCompanion: transcriptMessages[0].sender === 'companion',
       };
 
-      for (let i = 1; i < messages.length; i++) {
-        const message = messages[i];
+      for (let i = 1; i < transcriptMessages.length; i++) {
+        const message = transcriptMessages[i];
         const sameBubble =
           message.sender === currentGroup.sender &&
           isPlayerChatBubble(message) === currentGroup.isPlayer;

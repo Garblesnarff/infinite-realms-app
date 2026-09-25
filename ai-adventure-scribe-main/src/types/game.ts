@@ -1,5 +1,6 @@
 import type { Campaign } from './campaign';
 import type { Memory } from './memory';
+import type { RollRequest } from './roll-request';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 import type { ActionOption } from '@/utils/parseMessageOptions';
@@ -21,6 +22,8 @@ export interface MessageContext {
   combat_transition?: 'none' | 'start' | 'end' | null;
   combatEngineBlocks?: CombatEngineBlock[];
   combatEnded?: boolean;
+  /** Structured DM roll requests retained so a pending popup can be restored after reload. */
+  rollRequests?: RollRequest[];
   scene_spec?: boolean | null;
   previouslyOn?: boolean;
   handouts?: JournalHandoutEntry[];
@@ -91,6 +94,8 @@ export interface ChatMessage {
   // is immune to clock skew and same-millisecond ties.
   sequenceNumber?: number;
   context?: MessageContext;
+  /** Structured requests are also present on live AI responses before persistence. */
+  rollRequests?: RollRequest[];
   narrationSegments?: Array<{
     type: 'narration' | 'dialogue' | 'action' | 'thought' | 'dm' | 'character' | 'transition';
     text: string;

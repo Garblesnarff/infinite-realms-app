@@ -31,6 +31,7 @@ const compareMessages = (a: ChatMessage, b: ChatMessage): number => {
  */
 export interface UseMessagesReturn {
   data: ChatMessage[];
+  messagesReady: boolean;
   isLoading: boolean;
   isFetching: boolean;
   error: Error | null;
@@ -58,11 +59,17 @@ export const useMessages = (
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
+  const [messagesSessionId, setMessagesSessionId] = useState<string | null>(null);
 
-  const query = useQuery<{ messages: ChatMessage[]; hasMore: boolean }>({
+  const query = useQuery<{
+    sessionId: string | null;
+    page: number;
+    messages: ChatMessage[];
+    hasMore: boolean;
+  }>({
     queryKey: ['messages', sessionId, page],
     queryFn: async () => {
-      if (!sessionId) return { messages: [], hasMore: false };
+      if (!sessionId) return { sessionId: null, page, messages: [], hasMore: false };
 
       // Calculate range for pagination
       // For chat interfaces, we want newest messages first when paginating history
@@ -91,6 +98,11 @@ export const useMessages = (
         } | null;
         const characterData = sessions?.characters;
         const context = msg.context as MessageContext;
+        const rollRequests = Array.isArray(context?.rollRequests)
+          ? context.rollRequests
+          : Array.isArray(context?.roll_requests)
+            ? context.roll_requests
+            : undefined;
         const contextSpeakerName =
           typeof context?.speaker_name === 'string' ? context.speaker_name : undefined;
 
@@ -101,6 +113,7 @@ export const useMessages = (
           timestamp: msg.timestamp,
           sequenceNumber: typeof msg.sequence_number === 'number' ? msg.sequence_number : undefined,
           context,
+          ...(rollRequests ? { rollRequests } : {}),
           narrationSegments: narrationSegmentsFromPersistedContext(context),
           images: Array.isArray(msg.images) ? msg.images : undefined,
           speakerName:
@@ -137,15 +150,28 @@ export const useMessages = (
         `[useMessages] Loaded ${messages.length} messages, total: ${totalMessages}, hasMore: ${moreAvailable}`,
       );
 
-      return { messages: messages, hasMore: moreAvailable };
+      return { sessionId, page, messages, hasMore: moreAvailable };
     },
     enabled: !!sessionId,
     refetchInterval: options.pollForCompanions ? 5_000 : false,
   });
 
+  // Reset pagination when session changes. Keep the old array tagged to its session until the
+  // current session's first page has loaded; consumers receive an empty list in the meantime.
+  const resetPagination = useCallback(() => {
+    logger.info('[useMessages] Resetting pagination');
+    setPage(0);
+    setHasMore(true);
+    setMessagesSessionId(null);
+  }, []);
+
+  useEffect(() => {
+    resetPagination();
+  }, [sessionId, resetPagination]);
+
   // Update allMessages whenever query data changes
   useEffect(() => {
-    if (query.data?.messages) {
+    if (query.data?.messages && query.data.sessionId === sessionId && query.data.page === page) {
       setAllMessages((prev) => {
         // Initial page load - use messages directly
         if (page === 0) {
@@ -163,9 +189,10 @@ export const useMessages = (
         const newMessages = query.data.messages.filter((m) => !existingIds.has(m.id));
         return [...prev, ...newMessages].sort(compareMessages);
       });
+      setMessagesSessionId(sessionId);
       setHasMore(query.data.hasMore);
     }
-  }, [query.data, page]);
+  }, [query.data, page, sessionId]);
 
   // Load more messages (next page)
   const loadMore = useCallback(() => {
@@ -174,20 +201,6 @@ export const useMessages = (
       setPage((prev) => prev + 1);
     }
   }, [hasMore, query.isFetching, page]);
-
-  // Reset pagination when session changes
-  const resetPagination = useCallback(() => {
-    logger.info('[useMessages] Resetting pagination');
-    setPage(0);
-    setHasMore(true);
-    setAllMessages([]);
-  }, []);
-
-  // ⚡ Bolt: Automatically reset pagination and clear messages when sessionId changes
-  // to prevent stale data leaks between sessions.
-  useEffect(() => {
-    resetPagination();
-  }, [sessionId, resetPagination]);
 
   // ⚡ Bolt: Wrap addMessage in useCallback to ensure stable identity across renders,
   // preventing unnecessary re-renders of memoized child components that receive this callback.
@@ -198,12 +211,15 @@ export const useMessages = (
       // ⚡ Bolt: Optimistically add the message to the local state for zero-latency UI feedback.
       // This ensures the message appears instantly in the chat list before the DB insert completes.
       setAllMessages((prev) => {
-        if (prev.some((m) => m.id === message.id)) return prev;
-        return [...prev, message];
+        const currentMessages = messagesSessionId === sessionId ? prev : [];
+        if (currentMessages.some((m) => m.id === message.id)) return currentMessages;
+        return [...currentMessages, message];
       });
+      setMessagesSessionId(sessionId);
 
       try {
         const narrationSegments = persistableNarrationSegments(message);
+        const rollRequests = message.rollRequests ?? message.context?.rollRequests;
         const contextData = message.context
           ? {
               location: message.context.location || null,
@@ -211,10 +227,16 @@ export const useMessages = (
               intent: message.context.intent || null,
               handouts: message.context.handouts || null,
               narration_segments: narrationSegments,
+              ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
             }
           : narrationSegments
-            ? { narration_segments: narrationSegments }
-            : {};
+            ? {
+                narration_segments: narrationSegments,
+                ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
+              }
+            : Array.isArray(rollRequests)
+              ? { rollRequests }
+              : {};
 
         await userDataApi.saveSessionMessages(sessionId, {
           id: message.id,
@@ -233,12 +255,21 @@ export const useMessages = (
         throw error;
       }
     },
-    [sessionId, queryClient],
+    [sessionId, messagesSessionId, queryClient],
   );
+
+  const messagesReady =
+    !!sessionId &&
+    page === 0 &&
+    !query.isLoading &&
+    query.data?.sessionId === sessionId &&
+    query.data.page === 0 &&
+    messagesSessionId === sessionId;
 
   return useMemo(
     () => ({
-      data: allMessages,
+      data: sessionId && messagesSessionId === sessionId ? allMessages : [],
+      messagesReady,
       isLoading: query.isLoading,
       isFetching: query.isFetching,
       error: query.error,
@@ -249,6 +280,9 @@ export const useMessages = (
     }),
     [
       allMessages,
+      messagesSessionId,
+      sessionId,
+      messagesReady,
       query.isLoading,
       query.isFetching,
       query.error,
