@@ -4,6 +4,7 @@ import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
+import { TacticalMapProvider, useMapInRail } from '../../tactical/TacticalMapProvider';
 import { FloatingActionPanel } from '../FloatingActionPanel';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 
@@ -98,6 +99,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     const handleLeftClose = useCallback((): void => {
       setIsLeftCollapsed(true);
     }, [setIsLeftCollapsed]);
+    const mapInRail = useMapInRail(isLeftCollapsed, isRightCollapsed);
 
     const handleFloatingPanelToggle = useCallback((): void => {
       setIsFloatingPanelVisible((v) => !v);
@@ -141,78 +143,86 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
           className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative"
           style={{ zIndex: Z_INDEX.DROPDOWN }}
         >
-          <div
+          <TacticalMapProvider
             key={sessionId}
-            className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${
-              isLeftCollapsed && isRightCollapsed
-                ? 'grid-cols-1'
-                : isLeftCollapsed
-                  ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
-                  : isRightCollapsed
-                    ? 'grid-cols-1 md:grid-cols-[minmax(210px,250px)_1fr]'
-                    : 'grid-cols-1 lg:grid-cols-[minmax(210px,250px)_1fr_minmax(300px,340px)]'
-            }`}
+            sessionId={sessionId}
+            setLeftCollapsed={setIsLeftCollapsed}
           >
-            {/* Left Campaign Panel */}
-            <GameLeftPanel
-              sessionId={sessionId}
-              isCollapsed={isLeftCollapsed}
-              onToggle={handleLeftClose}
-              chapterLabel={resolveCampaignChapterLabel(sessionData?.turn_count)}
-            />
-
-            {/* Main Content Area */}
-            <GameMainContent
-              sessionId={sessionId}
-              campaignIdForHandler={campaignIdForHandler}
-              characterIdForHandler={characterIdForHandler}
-              sessionData={sessionData}
-              updateGameSessionState={updateGameSessionState}
-              showSceneBlurb={showSceneBlurb}
-              onSceneBlurbToggle={onSceneBlurbToggle}
-              isLeftCollapsed={isLeftCollapsed}
-              isRightCollapsed={isRightCollapsed}
-              onLeftToggle={handleLeftToggle}
-              onRightToggle={handleRightToggle}
-              showTracker={showTracker}
-              setShowTracker={setShowTracker}
-              isCombatDetected={isCombatDetected}
-              isGeneratingGreeting={isGeneratingGreeting}
-              innerHandleAIResponse={innerHandleAIResponse}
-              spellCastHandlerRef={spellCastHandlerRef}
-              lastSafetyCommand={lastSafetyCommand}
-              contentWarnings={contentWarnings}
-              comfortLevel={comfortLevel}
-              showSafetyInfo={showSafetyInfo}
-            />
-
-            {/* Right Character/Memory Panel */}
-            <div className={`${isLeftCollapsed ? 'order-2' : 'order-3'}`}>
-              <GameRightPanel
+            <div
+              key={sessionId}
+              className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${
+                isLeftCollapsed && isRightCollapsed
+                  ? 'grid-cols-1'
+                  : isLeftCollapsed
+                    ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
+                    : isRightCollapsed
+                      ? 'grid-cols-1 md:grid-cols-[minmax(210px,250px)_1fr]'
+                      : 'grid-cols-1 lg:grid-cols-[minmax(210px,250px)_1fr_minmax(300px,340px)]'
+              }`}
+            >
+              {/* Left Campaign Panel */}
+              <GameLeftPanel
                 sessionId={sessionId}
-                isCollapsed={isRightCollapsed}
+                isCollapsed={isLeftCollapsed}
+                onToggle={handleLeftClose}
+                showMap={mapInRail}
+                chapterLabel={resolveCampaignChapterLabel(sessionData?.turn_count)}
+              />
+
+              {/* Main Content Area */}
+              <GameMainContent
+                sessionId={sessionId}
+                campaignIdForHandler={campaignIdForHandler}
+                characterIdForHandler={characterIdForHandler}
                 sessionData={sessionData}
                 updateGameSessionState={updateGameSessionState}
-                combatMode={combatMode}
+                showSceneBlurb={showSceneBlurb}
+                onSceneBlurbToggle={onSceneBlurbToggle}
+                isLeftCollapsed={isLeftCollapsed}
+                isRightCollapsed={isRightCollapsed}
+                mapInRail={mapInRail}
+                onLeftToggle={handleLeftToggle}
+                onRightToggle={handleRightToggle}
+                showTracker={showTracker}
+                setShowTracker={setShowTracker}
+                isCombatDetected={isCombatDetected}
+                isGeneratingGreeting={isGeneratingGreeting}
+                innerHandleAIResponse={innerHandleAIResponse}
                 spellCastHandlerRef={spellCastHandlerRef}
-                onToggle={handleRightToggle}
+                lastSafetyCommand={lastSafetyCommand}
+                contentWarnings={contentWarnings}
+                comfortLevel={comfortLevel}
+                showSafetyInfo={showSafetyInfo}
+              />
+
+              {/* Right Character/Memory Panel */}
+              <div className={`${isLeftCollapsed ? 'order-2' : 'order-3'}`}>
+                <GameRightPanel
+                  sessionId={sessionId}
+                  isCollapsed={isRightCollapsed}
+                  sessionData={sessionData}
+                  updateGameSessionState={updateGameSessionState}
+                  combatMode={combatMode}
+                  spellCastHandlerRef={spellCastHandlerRef}
+                  onToggle={handleRightToggle}
+                />
+              </div>
+
+              {/* Floating Action Panel for Quick RPG Actions */}
+              <FloatingActionPanel
+                isVisible={isFloatingPanelVisible}
+                onToggle={handleFloatingPanelToggle}
+                combatMode={combatMode}
+              />
+
+              {/* Combat Tracker Sheet */}
+              <GameCombatSheet
+                showTracker={showTracker}
+                setShowTracker={setShowTracker}
+                isDM={isDM}
               />
             </div>
-
-            {/* Floating Action Panel for Quick RPG Actions */}
-            <FloatingActionPanel
-              isVisible={isFloatingPanelVisible}
-              onToggle={handleFloatingPanelToggle}
-              combatMode={combatMode}
-            />
-
-            {/* Combat Tracker Sheet */}
-            <GameCombatSheet
-              showTracker={showTracker}
-              setShowTracker={setShowTracker}
-              isDM={isDM}
-            />
-          </div>
+          </TacticalMapProvider>
         </div>
       </div>
     );

@@ -20,6 +20,7 @@ export const useScrollBehavior = (
   isFetchingMore?: boolean,
 ) => {
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+  const isUserScrolledUpRef = useRef(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const previousScrollHeightRef = useRef<number>(0);
   const isLoadingMoreRef = useRef(false);
@@ -31,6 +32,7 @@ export const useScrollBehavior = (
 
     const onScroll = () => {
       const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      isUserScrolledUpRef.current = !atBottom;
       setIsUserScrolledUp(!atBottom);
       const progress = el.scrollTop / (el.scrollHeight - el.clientHeight);
       setScrollProgress(Math.max(0, Math.min(1, progress)));
@@ -60,6 +62,18 @@ export const useScrollBehavior = (
     if (!el || isUserScrolledUp) return;
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages, isUserScrolledUp, messagesRef]);
+
+  // Keep the newest line in view when the stream's box shrinks — the roll tray opening below
+  // it, for one (#2252). A shrink moves no scroll position, so nothing else would follow it.
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (!isUserScrolledUpRef.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [messagesRef]);
 
   // Preserve scroll position after loading more messages
   useEffect(() => {

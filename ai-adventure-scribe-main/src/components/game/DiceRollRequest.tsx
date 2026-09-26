@@ -101,47 +101,45 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       handleManualSubmit();
     }, [handleManualSubmit, isRollInFlight, requestId]);
 
+    // Docked in the roll tray between the story and the chat box (#2252), so it is compact:
+    // at 390 px the Roll button, the chat box and the newest story line all have to fit.
     return (
       <Card
         ref={promptRef}
         tabIndex={-1}
         role="dialog"
+        aria-modal="false"
         aria-label={`${request.purpose} roll request`}
         data-testid="dice-roll-request"
         className={cn(
-          'w-full max-w-md mx-auto border-2 shadow-lg ring-2 ring-orange-400/80 shadow-orange-300/30',
-          'animate-pulse',
-          config.color,
+          'w-full rounded-none border-0 border-t border-infinite-gold/50 bg-infinite-dark/95 text-foreground shadow-none outline-none',
           className,
         )}
       >
-        <div className="p-4">
+        <div className="mx-auto max-w-3xl space-y-2 px-3 py-2.5 sm:px-4 sm:py-3">
           {/* Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-2">
-              {config.icon}
-              <span className="font-semibold text-slate-700">{config.label} Requested</span>
-            </div>
-            <Badge variant="warning" className="ml-auto animate-pulse">
+          <div className="flex items-center gap-2 text-infinite-gold">
+            {config.icon}
+            <span className="text-[11px] font-semibold uppercase tracking-[.12em]">
+              {config.label} Requested
+            </span>
+            <Badge variant="warning" className="ml-auto">
               Roll required
             </Badge>
           </div>
 
-          {/* Purpose */}
-          <div className="mb-4">
-            <p className="text-sm text-slate-600 leading-relaxed">
-              <strong>Purpose:</strong> {request.purpose}
-            </p>
-          </div>
-
-          {/* Roll Details */}
-          <div className="bg-white rounded-lg p-3 mb-4 border">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-lg font-mono font-bold text-slate-800">
+          {/* Roll details: purpose, formula, breakdown, advantage */}
+          <div data-testid="roll-details" className="space-y-2">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground">
+                <span className="sr-only">Purpose: </span>
+                {request.purpose}
+              </p>
+              <span className="font-mono text-lg font-bold tabular-nums text-foreground">
                 {rollCalculation.formula}
-              </div>
+              </span>
               {(request.dc || request.ac) && (
-                <Badge variant="outline" className="text-sm">
+                <Badge variant="outline" className="text-xs text-muted-foreground">
                   {request.dc ? `DC ${request.dc}` : `AC ${request.ac}`}
                 </Badge>
               )}
@@ -149,11 +147,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
 
             {/* Modifier Breakdown */}
             {rollCalculation.breakdown.length > 1 && (
-              <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
-                <Info className="w-3 h-3" />
+              <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+                <Info className="h-3 w-3" aria-hidden="true" />
                 <span>{rollCalculation.breakdown.join(' + ')}</span>
                 {rollCalculation.isProficient && (
-                  <Badge variant="secondary" className="text-xs px-1 py-0">
+                  <Badge variant="secondary" className="px-1 py-0 text-xs">
                     Proficient
                   </Badge>
                 )}
@@ -173,26 +171,28 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
 
           {/* Roll Actions */}
           {!effectiveManualMode ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {/* Character not yet loaded — formula cannot be resolved */}
               {!character && resolvedFormula === null ? (
-                <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-400" />
+                <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-muted-foreground" />
                   Loading character data…
                 </div>
-              ) : showDiceAnimation && resolvedFormula ? (
-                <div className="space-y-3">
-                  <div className="bg-slate-50 rounded-lg p-4 border-2 border-dashed border-slate-200">
-                    <DiceRollEmbed
-                      expression={resolvedFormula}
-                      purpose={request.purpose}
-                      onRoll={handleDiceRollComplete}
-                      autoRoll={true}
-                      showAnimation={true}
-                      advantage={hasAdvantage && !hasDisadvantage}
-                      disadvantage={hasDisadvantage && !hasAdvantage}
-                    />
-                  </div>
+              ) : (
+                <>
+                  {showDiceAnimation && resolvedFormula && (
+                    <div className="rounded-lg border border-white/10 p-2">
+                      <DiceRollEmbed
+                        expression={resolvedFormula}
+                        purpose={request.purpose}
+                        onRoll={handleDiceRollComplete}
+                        autoRoll={true}
+                        showAnimation={true}
+                        advantage={hasAdvantage && !hasDisadvantage}
+                        disadvantage={hasDisadvantage && !hasAdvantage}
+                      />
+                    </div>
+                  )}
                   <DiceRollActionButtons
                     formula={rollCalculation.formula}
                     purpose={request.purpose}
@@ -201,17 +201,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                     onEnterManually={handleEnterManually}
                     onCancel={onCancel}
                   />
-                </div>
-              ) : (
-                // Show roll dice button (resolvedFormula is always non-null here)
-                <DiceRollActionButtons
-                  formula={rollCalculation.formula}
-                  purpose={request.purpose}
-                  isRolling={isRollInFlight}
-                  onAutoRoll={handleRollClick}
-                  onEnterManually={handleEnterManually}
-                  onCancel={onCancel}
-                />
+                </>
               )}
             </div>
           ) : (
@@ -227,16 +217,16 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           )}
 
           {rollError && (
-            <p role="alert" className="mt-3 text-center text-sm font-medium text-red-700">
+            <p role="alert" className="text-center text-sm font-medium text-red-300">
               {rollError}
             </p>
           )}
 
-          {/* Hint Text */}
-          <p className="text-xs text-slate-500 mt-3 text-center">
+          {/* Hint Text: the buttons say it at phone width, where every line costs story. */}
+          <p className="hidden text-center text-xs text-muted-foreground sm:block">
             {effectiveManualMode
               ? 'Enter the total result of your dice roll'
-              : "Click 'Roll Dice' to automatically roll, or 'Enter Manually' if you prefer to roll physical dice"}
+              : "Roll here, or 'Enter my own roll' if you roll physical dice"}
           </p>
         </div>
       </Card>

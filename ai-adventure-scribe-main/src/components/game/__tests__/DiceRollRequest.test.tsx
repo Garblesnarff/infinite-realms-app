@@ -157,7 +157,7 @@ describe('DiceRollRequest', () => {
     render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
 
     const formula = screen.getByText('1d20+2');
-    const rollPanel = formula.closest('div.bg-white');
+    const rollPanel = formula.closest('[data-testid="roll-details"]');
     expect(rollPanel).not.toBeNull();
 
     await user.hover(screen.getByRole('button', { name: /Enable Advantage/i }));
@@ -205,15 +205,9 @@ describe('DiceRollRequest', () => {
 
   it('latches the roll button while the result is awaiting the server', async () => {
     let resolveSubmission!: () => void;
-    const onResult = vi.fn(
-      () => new Promise<void>((resolve) => (resolveSubmission = resolve)),
-    );
+    const onResult = vi.fn(() => new Promise<void>((resolve) => (resolveSubmission = resolve)));
     const { rerender } = render(
-      <DiceRollRequest
-        request={defaultRequest}
-        requestId="roll-1"
-        onResult={onResult}
-      />,
+      <DiceRollRequest request={defaultRequest} requestId="roll-1" onResult={onResult} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
@@ -221,13 +215,7 @@ describe('DiceRollRequest', () => {
     expect(rollButton).toBeDisabled();
     expect(rollButton).toHaveTextContent('Rolling...');
 
-    rerender(
-      <DiceRollRequest
-        request={defaultRequest}
-        requestId="roll-1"
-        onResult={onResult}
-      />,
-    );
+    rerender(<DiceRollRequest request={defaultRequest} requestId="roll-1" onResult={onResult} />);
 
     expect(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i })).toBeDisabled();
     fireEvent.click(screen.getByTestId('mock-roll-button'));

@@ -1,11 +1,13 @@
-import { Dice6, Sword, X } from 'lucide-react';
+import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
 import { GamePanelControls } from './GamePanelControls';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
+import { RollTraySlotProvider } from './roll-tray-slot';
 import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
+import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
 import { MessageHandler } from '../message/MessageHandler';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 import { SceneHeader } from '../overhaul/SceneHeader';
@@ -27,6 +29,29 @@ import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { stripAssetTags } from '@/lib/utils';
 
+/** Pixels from the top of `card` to the top of `dock`, tracked while `active`. */
+function useHeightAboveDock(
+  active: boolean,
+  cardRef: React.RefObject<HTMLElement>,
+  dockRef: React.RefObject<HTMLElement>,
+): number | null {
+  const [height, setHeight] = React.useState<number | null>(null);
+  React.useLayoutEffect(() => {
+    const card = cardRef.current;
+    const dock = dockRef.current;
+    if (!active || !card || !dock) return;
+    const measure = (): void =>
+      setHeight(Math.max(0, dock.getBoundingClientRect().top - card.getBoundingClientRect().top));
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(card);
+    observer.observe(dock);
+    return () => observer.disconnect();
+  }, [active, cardRef, dockRef]);
+  return height;
+}
+
 /**
  * GameMainContent Component
  *
@@ -44,6 +69,8 @@ interface GameMainContentProps {
   onSceneBlurbToggle: () => void;
   isLeftCollapsed: boolean;
   isRightCollapsed: boolean;
+  /** The left rail is showing the tactical map, so the center column offers no Map button. */
+  mapInRail?: boolean;
   onLeftToggle: () => void;
   onRightToggle: () => void;
   showTracker: boolean;
@@ -79,6 +106,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     onSceneBlurbToggle,
     isLeftCollapsed,
     isRightCollapsed,
+    mapInRail = false,
     onLeftToggle,
     onRightToggle,
     showTracker,
@@ -93,6 +121,18 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     showSafetyInfo,
   }) => {
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
+    // The roll tray's element: in flow between the stream and the chat box (#2252).
+    const [rollTraySlot, setRollTraySlot] = React.useState<HTMLDivElement | null>(null);
+    // The tactical map never sits in this column. When the rail is not showing it, a Map
+    // button opens it in a sheet over the stream only, so it can't cover the tray or input.
+    const hasTacticalMap = Boolean(useTacticalMapContext()?.map);
+    const [mapSheetOpen, setMapSheetOpen] = React.useState(false);
+    const showMapButton = hasTacticalMap && !mapInRail;
+    const showMapSheet = showMapButton && mapSheetOpen;
+    // The sheet covers the card from its top down to the dock (tray + chat box), never lower.
+    const cardRef = React.useRef<HTMLDivElement>(null);
+    const dockRef = React.useRef<HTMLDivElement>(null);
+    const mapSheetHeight = useHeightAboveDock(showMapSheet, cardRef, dockRef);
     const { queueStatus } = useMessageContext();
     const { state: gameState } = useGame();
     // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
@@ -116,8 +156,13 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
       <div
         className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
       >
-        <Card className="ir-panel mobile-chat flex h-full flex-col overflow-hidden border border-white/10 bg-[linear-gradient(180deg,#0c1322,#0a0f1c)] shadow-2xl transition-all duration-300">
-          <div className="relative border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]">
+        <Card
+          ref={cardRef}
+          className="ir-panel mobile-chat relative flex h-full flex-col overflow-hidden border border-white/10 bg-[linear-gradient(180deg,#0c1322,#0a0f1c)] shadow-2xl transition-all duration-300"
+        >
+          {/* The header is the one part that gives way on a short screen (it scrolls inside
+              itself), so the roll tray and the chat box below never leave the viewport (#2252). */}
+          <div className="relative min-h-0 overflow-y-auto border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]">
             <SceneHeader
               title={overhaul.scene.title}
               blurb={
@@ -150,6 +195,22 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   onRightToggle={onRightToggle}
                   onSceneBlurbToggle={onSceneBlurbToggle}
                 />
+                {showMapButton && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-expanded={showMapSheet}
+                    aria-controls="tactical-map-sheet"
+                    onClick={() => setMapSheetOpen((open) => !open)}
+                    className="border-infinite-gold/30 bg-white/[0.03] text-infinite-gold/90 hover:bg-infinite-gold/10"
+                  >
+                    <MapIcon className="h-4 w-4" aria-hidden="true" />
+                    <span className="font-display font-medium">
+                      {showMapSheet ? 'Hide map' : 'Map'}
+                    </span>
+                  </Button>
+                )}
                 <Button
                   variant={showTracker ? 'destructive' : 'outline'}
                   size="sm"
@@ -186,18 +247,24 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
           </div>
 
           {/* Enhanced Content Area - Chat is always visible; tracker lives in a sheet */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative bg-gradient-to-b from-card/60 via-card/40 to-card/60 transition-all duration-300">
+          {/* No min-h-0 here: this column's minimum is the stream's floor plus the tray plus the
+              chat box, and the header above shrinks instead. */}
+          <div className="flex-1 flex flex-col relative bg-gradient-to-b from-card/60 via-card/40 to-card/60 transition-all duration-300">
             {/* HUD Banner when combat is active/detected */}
             {isCombatDetected && (
-              <div className="mx-3 mt-3 mb-1 px-3 py-2 bg-red-50 border border-red-200 rounded-md flex items-center justify-between">
+              <div
+                className={`mx-3 mt-3 mb-1 px-3 py-2 bg-red-50 border border-red-200 rounded-md items-center justify-between ${
+                  // At phone width the tray is the fight's state while a roll is pending, and the
+                  // header already has Open Tracker; the space goes to the story instead.
+                  rollPillLabel ? 'hidden sm:flex' : 'flex'
+                }`}
+              >
                 <div className="text-sm text-red-700 font-medium">⚔️ Combat in progress</div>
                 <Button size="sm" variant="outline" onClick={() => setShowTracker(true)}>
                   Open Tracker
                 </Button>
               </div>
             )}
-
-            <TacticalMapBoard sessionId={sessionId} />
 
             <MessageHandler
               sessionId={sessionId}
@@ -215,8 +282,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 combatTurnUiState,
                 onResumeTurn,
               }) => (
-                <>
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+                <RollTraySlotProvider value={rollTraySlot}>
+                  {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
+                      story's length out of this column's minimum height. */}
+                  <div className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]">
                     <MessageList
                       onSendFullMessage={handleSendMessage}
                       sessionId={sessionId}
@@ -260,56 +329,24 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     </div>
                   )}
 
-                  {/* Roll requests take priority over the generic processing status. */}
-                  {rollPillLabel ? (
+                  {/* A pending roll's status sits with the tray below; this is only the DM wait. */}
+                  {!rollPillLabel && queueStatus === 'processing' && (
                     <div
                       className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
                       style={{ zIndex: Z_INDEX.DROPDOWN }}
-                      role="status"
-                      aria-live="polite"
                     >
-                      <div className="flex items-center gap-3 rounded-full border border-orange-300/70 bg-orange-50/95 px-4 py-2 shadow-lg backdrop-blur-sm">
-                        <Dice6
-                          className="h-5 w-5 animate-pulse text-orange-600"
-                          aria-hidden="true"
-                        />
-                        <span className="text-sm font-semibold text-orange-800">
-                          Your roll: {rollPillLabel}
-                        </span>
-                        <Badge variant="warning" className="animate-pulse">
-                          Roll required
-                        </Badge>
-                      </div>
-                    </div>
-                  ) : (
-                    queueStatus === 'processing' && (
-                      <div
-                        className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
-                        style={{ zIndex: Z_INDEX.DROPDOWN }}
-                      >
-                        <div className="flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full shadow-lg">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-infinite-gold to-infinite-teal flex items-center justify-center">
-                            <span className="text-xs font-medium text-white">DM</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-1.5 h-1.5 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce"></div>
-                          </div>
-                          <span className="text-xs text-muted-foreground font-medium">
-                            Dungeon Master is thinking...
-                          </span>
+                      <div className="flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full shadow-lg">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-infinite-gold to-infinite-teal flex items-center justify-center">
+                          <span className="text-xs font-medium text-white">DM</span>
                         </div>
-                      </div>
-                    )
-                  )}
-
-                  {/* Same label as the pill, from the same queue roll. */}
-                  {completionBanner && (
-                    <div className="border-t border-orange-200 bg-orange-50 p-3">
-                      <div className="flex items-center gap-2 text-orange-700">
-                        <Dice6 className="w-4 h-4" />
-                        <span className="text-sm font-medium">{completionBanner}</span>
+                        <div className="flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                          <div className="w-1.5 h-1.5 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                          <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce"></div>
+                        </div>
+                        <span className="text-xs text-muted-foreground font-medium">
+                          Dungeon Master is thinking...
+                        </span>
                       </div>
                     </div>
                   )}
@@ -347,27 +384,93 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       </div>
                     )}
 
-                  {/* Input Area at bottom - sticky */}
-                  <div
-                    className="border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)] sticky bottom-0 left-0 right-0 shrink-0"
-                    style={{ zIndex: Z_INDEX.STICKY }}
-                  >
-                    <ChatInput
-                      onSendMessage={handleSendMessage}
-                      isReconnecting={isReconnecting}
-                      isDisabled={
-                        isProcessing ||
-                        rollBlocksInput ||
-                        combatTurnUiState.preflight === 'unknown' ||
-                        combatTurnUiState.preflight === 'failed' ||
-                        combatTurnUiState.preflight === 'running'
-                      }
+                  {/* The dock: roll tray, roll status and chat box, in flow at the bottom. */}
+                  <div ref={dockRef} className="shrink-0">
+                    {/* The roll tray: the dice prompt is portaled in here (see roll-tray-slot). */}
+                    <div
+                      ref={setRollTraySlot}
+                      data-testid="roll-tray-slot"
+                      className="empty:hidden"
                     />
+
+                    {/* One line, in flow, from the same queue roll that fills the tray, so it
+                      exists only while the tray does (#2234). */}
+                    {rollPillLabel && (
+                      <div
+                        className="hidden border-t border-infinite-gold/20 bg-infinite-dark/60 px-3 py-1.5 sm:block"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-infinite-gold">
+                          <Dice6 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="font-semibold">Your roll: {rollPillLabel}</span>
+                          <Badge variant="warning">Roll required</Badge>
+                          <span className="text-muted-foreground">{completionBanner}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Input Area at bottom. In flow, not sticky: a sticky chat box sat on top of the
+                      tray's buttons whenever the column ran out of room. */}
+                    <div
+                      className="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
+                      style={{ zIndex: Z_INDEX.STICKY }}
+                    >
+                      <ChatInput
+                        onSendMessage={handleSendMessage}
+                        isReconnecting={isReconnecting}
+                        isDisabled={
+                          isProcessing ||
+                          rollBlocksInput ||
+                          combatTurnUiState.preflight === 'unknown' ||
+                          combatTurnUiState.preflight === 'failed' ||
+                          combatTurnUiState.preflight === 'running'
+                        }
+                      />
+                    </div>
                   </div>
-                </>
+                </RollTraySlotProvider>
               )}
             </MessageHandler>
           </div>
+
+          {showMapSheet && (
+            <div
+              id="tactical-map-sheet"
+              role="dialog"
+              aria-modal="false"
+              aria-label="Tactical map"
+              className="absolute inset-x-0 top-0 flex flex-col overflow-y-auto border-b border-infinite-gold/25 bg-infinite-dark/95 backdrop-blur-sm"
+              style={
+                {
+                  zIndex: Z_INDEX.CARD_HOVER,
+                  height: mapSheetHeight ?? undefined,
+                  // The canvas sizes itself to fit the sheet (see canvasClassName below).
+                  '--map-sheet-h': mapSheetHeight == null ? undefined : `${mapSheetHeight}px`,
+                } as React.CSSProperties
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setMapSheetOpen(false);
+              }}
+            >
+              <div className="flex justify-end px-3 pt-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setMapSheetOpen(false)}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  Close map
+                </Button>
+              </div>
+              <TacticalMapBoard
+                sessionId={sessionId}
+                className="mx-3 mb-3"
+                canvasClassName="h-[max(8rem,min(52vh,520px,calc(var(--map-sheet-h,100vh)_-_6rem)))]"
+              />
+            </div>
+          )}
         </Card>
       </div>
     );

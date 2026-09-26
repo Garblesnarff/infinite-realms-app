@@ -13,76 +13,69 @@ interface DiceRollActionButtonsProps {
   onCancel?: () => void;
 }
 
-export const DiceRollActionButtons: React.FC<DiceRollActionButtonsProps> = React.memo(({
-  formula,
-  purpose,
-  isRolling,
-  onAutoRoll,
-  onEnterManually,
-  onCancel,
-}) => (
-  <TooltipProvider>
-    <div className="space-y-3">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            onClick={onAutoRoll}
-            disabled={isRolling}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
-            size="lg"
-            aria-label={`Roll ${formula} for ${purpose}`}
-          >
-            <Dice6 className="w-4 h-4 mr-2" aria-hidden="true" />
-            {isRolling ? 'Rolling...' : 'Roll Dice'}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{`Roll ${formula} for ${purpose}`}</p>
-        </TooltipContent>
-      </Tooltip>
-
-      <div className="flex gap-2">
+export const DiceRollActionButtons: React.FC<DiceRollActionButtonsProps> = React.memo(
+  ({ formula, purpose, isRolling, onAutoRoll, onEnterManually, onCancel }) => (
+    <TooltipProvider>
+      <div className="flex flex-wrap gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="outline"
-              onClick={onEnterManually}
+              onClick={onAutoRoll}
               disabled={isRolling}
-              className="flex-1 text-xs"
-              size="sm"
-              aria-label="Roll physical dice and enter result manually"
+              variant="ir-gold"
+              className="min-h-11 flex-[2_1_8rem] font-semibold"
+              aria-label={`Roll ${formula} for ${purpose}`}
             >
-              Enter Manually
+              <Dice6 className="w-4 h-4 mr-2" aria-hidden="true" />
+              {isRolling ? 'Rolling...' : 'Roll Dice'}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Roll physical dice and enter result manually</p>
+            <p>{`Roll ${formula} for ${purpose}`}</p>
           </TooltipContent>
         </Tooltip>
 
-        {onCancel && (
+        <div className="flex flex-[3_1_14rem] gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
-                onClick={onCancel}
+                variant="outline"
+                onClick={onEnterManually}
                 disabled={isRolling}
-                className="flex-1 text-xs"
-                size="sm"
-                aria-label="Dismiss roll request"
+                className="min-h-11 flex-1 border-white/20 bg-white/[0.03] text-sm text-foreground hover:bg-white/10"
+                aria-label="Enter my own roll: roll physical dice and enter result manually"
               >
-                Cancel
+                Enter my own roll
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Dismiss roll request</p>
+              <p>Roll physical dice and enter result manually</p>
             </TooltipContent>
           </Tooltip>
-        )}
+
+          {onCancel && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={onCancel}
+                  disabled={isRolling}
+                  className="min-h-11 flex-1 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground"
+                  aria-label="Dismiss roll request"
+                >
+                  Cancel
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Dismiss roll request</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
-    </div>
-  </TooltipProvider>
-));
+    </TooltipProvider>
+  ),
+);

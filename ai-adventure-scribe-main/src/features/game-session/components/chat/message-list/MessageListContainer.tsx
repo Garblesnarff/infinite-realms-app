@@ -11,8 +11,8 @@ import type { ChatMessage } from '@/types/game';
 import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirmation';
 import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConfirmation';
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
-import { Z_INDEX } from '@/constants/z-index';
 import { useCombat } from '@/contexts/CombatContext';
+import { RollTray } from '@/features/game-session/components/game/game-content/roll-tray-slot';
 import { SpellTargetSaveCard } from '@/features/game-session/components/game/SpellTargetSaveCard';
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
@@ -234,12 +234,10 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
           </div>
         ))}
 
-        {/* Global Dice Roll Request - Shows current roll from GameContext queue */}
+        {/* The current roll from the GameContext queue, docked in the roll tray between the
+            story and the chat box (#2252) rather than floating inside the scroll area. */}
         {currentRoll && rollRequest && (
-          <div
-            className="sticky bottom-2 mx-auto w-full max-w-md"
-            style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
-          >
+          <RollTray>
             <DiceRollRequest
               key={currentRoll.id}
               request={rollRequest}
@@ -258,9 +256,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                   : undefined
               }
               onCancel={handleCancelRoll}
-              className="shadow-2xl animate-in slide-in-from-bottom-4 duration-300"
             />
-          </div>
+          </RollTray>
         )}
 
         {/* Loading state */}

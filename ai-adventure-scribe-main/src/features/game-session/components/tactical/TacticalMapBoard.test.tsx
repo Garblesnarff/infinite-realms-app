@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TacticalMapBoard } from './TacticalMapBoard';
+import { TacticalMapProvider } from './TacticalMapProvider';
 
 import type { TacticalMap } from './tactical-map-state';
 
@@ -151,5 +152,37 @@ describe('tactical map combat flow', () => {
       ),
     );
     expect(screen.queryByTestId('canvas')).not.toBeInTheDocument();
+  });
+  it('keeps one map when the board moves between the rail and the sheet (#2252)', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false, json: async () => null }));
+    vi.stubGlobal('fetch', fetchMock);
+    const Placement = ({ where }: { where: 'rail' | 'sheet' | 'none' }): JSX.Element => (
+      <TacticalMapProvider sessionId="s">
+        <div data-testid="rail">{where === 'rail' && <TacticalMapBoard sessionId="s" />}</div>
+        <div data-testid="sheet">{where === 'sheet' && <TacticalMapBoard sessionId="s" />}</div>
+      </TacticalMapProvider>
+    );
+    const { rerender } = render(<Placement where="rail" />);
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
+      ),
+    );
+    expect(await screen.findByText('2×2')).toBeInTheDocument();
+
+    // Neither placement is mounted when the delta for the next round arrives.
+    rerender(<Placement where="none" />);
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('tactical-map-delta', {
+          detail: { type: 'map_created', map: { ...map(), width: 3, height: 3 } },
+        }),
+      ),
+    );
+    rerender(<Placement where="sheet" />);
+
+    expect(screen.getByTestId('sheet')).toHaveTextContent('3×3');
+    expect(screen.getByTestId('rail')).toBeEmptyDOMElement();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

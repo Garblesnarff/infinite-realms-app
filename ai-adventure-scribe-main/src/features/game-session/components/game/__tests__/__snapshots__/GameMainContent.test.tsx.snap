@@ -5,10 +5,10 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
   class="flex-1 min-w-0 min-h-0 order-2 layout-main flex flex-col h-full"
 >
   <div
-    class="rounded-lg hover:shadow-md hover:scale-[1.01] bg-card text-card-foreground hover:border-border/80 ir-panel mobile-chat flex h-full flex-col overflow-hidden border border-white/10 bg-[linear-gradient(180deg,#0c1322,#0a0f1c)] shadow-2xl transition-all duration-300"
+    class="rounded-lg hover:shadow-md hover:scale-[1.01] bg-card text-card-foreground hover:border-border/80 ir-panel mobile-chat relative flex h-full flex-col overflow-hidden border border-white/10 bg-[linear-gradient(180deg,#0c1322,#0a0f1c)] shadow-2xl transition-all duration-300"
   >
     <div
-      class="relative border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]"
+      class="relative min-h-0 overflow-y-auto border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]"
     >
       <header
         data-testid="scene-header"
@@ -84,13 +84,10 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
       </div>
     </div>
     <div
-      class="flex-1 min-h-0 flex flex-col overflow-hidden relative bg-gradient-to-b from-card/60 via-card/40 to-card/60 transition-all duration-300"
+      class="flex-1 flex flex-col relative bg-gradient-to-b from-card/60 via-card/40 to-card/60 transition-all duration-300"
     >
       <div
-        data-testid="tactical-map-board"
-      />
-      <div
-        class="flex-1 min-h-0 flex flex-col overflow-hidden relative"
+        class="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
       >
         <div
           data-suppress-empty="false"
@@ -111,14 +108,22 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
         />
       </div>
       <div
-        class="border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)] sticky bottom-0 left-0 right-0 shrink-0"
-        style="z-index: 30;"
+        class="shrink-0"
       >
-        <button
-          data-testid="chat-input"
+        <div
+          class="empty:hidden"
+          data-testid="roll-tray-slot"
+        />
+        <div
+          class="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
+          style="z-index: 30;"
         >
-          Send
-        </button>
+          <button
+            data-testid="chat-input"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -9,8 +9,12 @@ import {
   type TacticalMap,
 } from './tactical-map-state';
 
+import { cn } from '@/lib/utils';
+
 type Props = {
   map: TacticalMap;
+  /** Overrides the default canvas height. */
+  className?: string;
   reachable?: Point[];
   path?: Point[];
   animation?: {
@@ -74,6 +78,7 @@ const decoration = (
 
 export function TacticalMapCanvas({
   map,
+  className,
   reachable = [],
   path = [],
   animation,
@@ -196,7 +201,12 @@ export function TacticalMapCanvas({
       const origin = aoeTemplate.geometry.origin;
       ctx.strokeStyle = colors.stroke;
       ctx.setLineDash(aoeTemplate.state === 'hostile-telegraph' ? [5, 4] : []);
-      ctx.strokeRect(px + origin.x * size + size * 0.16, py + origin.y * size + size * 0.16, size * 0.68, size * 0.68);
+      ctx.strokeRect(
+        px + origin.x * size + size * 0.16,
+        py + origin.y * size + size * 0.16,
+        size * 0.68,
+        size * 0.68,
+      );
       ctx.setLineDash([]);
     }
     map.entities.forEach((entity) => {
@@ -257,7 +267,10 @@ export function TacticalMapCanvas({
     <canvas
       ref={canvasRef}
       aria-label="Tactical combat map"
-      className="h-[min(52vh,520px)] w-full touch-none rounded-md border border-white/10"
+      className={cn(
+        'h-[min(52vh,520px)] w-full touch-none rounded-md border border-white/10',
+        className,
+      )}
       onPointerMove={(event) => {
         if (templateDrag.current) {
           const point = cellAt(event);

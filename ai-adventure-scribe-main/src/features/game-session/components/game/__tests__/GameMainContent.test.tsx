@@ -3,6 +3,7 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GameMainContent } from '../game-content/GameMainContent';
+import { RollTray } from '../game-content/roll-tray-slot';
 
 const state = vi.hoisted(() => ({
   queueStatus: 'idle',
@@ -30,6 +31,7 @@ const state = vi.hoisted(() => ({
     error: undefined as string | undefined,
   },
   resumeCombatTurn: vi.fn(),
+  tacticalMap: null as null | { id: string },
 }));
 
 vi.mock('@/contexts/MessageContext', () => ({
@@ -82,8 +84,17 @@ vi.mock('../../chat/MessageList', () => ({
       streamed DM narrative
       <div data-testid="dice-card">d20: 18</div>
       <button>Quick action</button>
+      {/* The real list portals the queue's roll prompt into the tray the same way. */}
+      {state.currentRoll && (
+        <RollTray>
+          <button type="button">Roll Dice</button>
+        </RollTray>
+      )}
     </div>
   ),
+}));
+vi.mock('../../tactical/TacticalMapProvider', () => ({
+  useTacticalMapContext: () => (state.tacticalMap ? { map: state.tacticalMap } : null),
 }));
 vi.mock('../../chat/ChatInput', () => ({
   ChatInput: ({
@@ -176,6 +187,7 @@ describe('GameMainContent overhaul behavior contract', () => {
       error: undefined,
     };
     state.resumeCombatTurn.mockClear();
+    state.tacticalMap = null;
     sendMessage.mockClear();
   });
 
@@ -366,5 +378,84 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(state.lastChapterLabel).toBe('Chapter 1');
     expect(screen.getByTestId('scene-header')).toHaveTextContent('Chapter 1');
     expect(screen.getByTestId('scene-header')).not.toHaveTextContent('Chapter 15');
+  });
+  describe('roll tray and tactical map placement (#2252)', () => {
+    const OVERLAY = /(^|\s)(fixed|absolute|sticky)(\s|$)/;
+
+    it('docks the roll tray in the main column between the stream and the composer, not in an overlay', () => {
+      state.currentRoll = {
+        id: 'attack-1',
+        status: 'pending',
+        requestType: 'attack',
+        description: 'Longsword attack vs Faceless Stalker',
+      };
+      const { container } = render(<GameMainContent {...baseProps} isCombatDetected />);
+
+      const rollButton = screen.getByRole('button', { name: 'Roll Dice' });
+      const slot = screen.getByTestId('roll-tray-slot');
+      const stream = screen.getByTestId('message-list');
+      const composer = screen.getByTestId('chat-input');
+
+      expect(slot).toContainElement(rollButton);
+      expect(stream).not.toContainElement(rollButton);
+      expect(stream.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(
+        slot.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      // Normal flow all the way up: nothing between the button and the page positions it.
+      for (let el: HTMLElement | null = rollButton; el && el !== container; el = el.parentElement) {
+        expect(el.className).not.toMatch(OVERLAY);
+        expect(['fixed', 'absolute', 'sticky']).not.toContain(el.style.position);
+      }
+    });
+
+    it('renders an empty tray slot and no roll status when no roll is pending', () => {
+      render(<GameMainContent {...baseProps} />);
+
+      expect(screen.getByTestId('roll-tray-slot')).toBeEmptyDOMElement();
+      expect(screen.queryByRole('button', { name: 'Roll Dice' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Your roll:/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the tactical map out of the center column when the rail shows it', () => {
+      state.tacticalMap = { id: 'map-1' };
+      render(<GameMainContent {...baseProps} mapInRail />);
+
+      expect(screen.queryByTestId('tactical-map-board')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Map' })).not.toBeInTheDocument();
+    });
+
+    it('opens the map in a sheet above the dock, never over the tray or the composer', () => {
+      state.tacticalMap = { id: 'map-1' };
+      state.currentRoll = {
+        id: 'attack-1',
+        status: 'pending',
+        requestType: 'attack',
+        description: 'Longsword attack vs Faceless Stalker',
+      };
+      render(<GameMainContent {...baseProps} isLeftCollapsed />);
+
+      expect(screen.queryByTestId('tactical-map-board')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+
+      const sheet = screen.getByRole('dialog', { name: 'Tactical map' });
+      expect(sheet).toContainElement(screen.getByTestId('tactical-map-board'));
+      // The sheet is not an ancestor of the tray or the chat box, and does not sit inside them.
+      const slot = screen.getByTestId('roll-tray-slot');
+      const composer = screen.getByTestId('chat-input');
+      expect(sheet).not.toContainElement(slot);
+      expect(sheet).not.toContainElement(composer);
+      expect(slot).not.toContainElement(sheet);
+      expect(screen.getByRole('button', { name: 'Roll Dice' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close map' }));
+      expect(screen.queryByRole('dialog', { name: 'Tactical map' })).not.toBeInTheDocument();
+    });
+
+    it('offers no Map button when there is no tactical map', () => {
+      render(<GameMainContent {...baseProps} isLeftCollapsed />);
+      expect(screen.queryByRole('button', { name: 'Map' })).not.toBeInTheDocument();
+    });
   });
 });

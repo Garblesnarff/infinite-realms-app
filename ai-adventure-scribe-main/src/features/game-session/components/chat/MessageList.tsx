@@ -124,7 +124,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     );
 
     return (
-      <div className="flex-1 min-h-0">
+      // No minimum height: the stream is what shrinks when the roll tray opens below it, so the
+      // tray and the chat box stay on screen and the newest line stays visible (#2252).
+      <div className="flex min-h-0 flex-1 flex-col">
         <div
           className="chat-scroll parchment-panel flex-1 min-h-0 min-w-0 max-w-full space-y-6 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-background/50 to-background/30 px-4 py-4 md:px-6 md:py-6"
           role="log"
@@ -133,8 +135,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
-            height: '100%',
-            minHeight: '400px',
             paddingBottom: combatEntrySpace || undefined,
           }}
         >

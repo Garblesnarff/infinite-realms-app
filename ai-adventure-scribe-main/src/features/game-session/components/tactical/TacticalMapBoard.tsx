@@ -4,12 +4,19 @@ import { toast } from 'sonner';
 
 import { type Point, type TacticalEntity } from './tactical-map-state';
 import { TacticalMapCanvas } from './TacticalMapCanvas';
+import { useTacticalMapContext, type TacticalMapState } from './TacticalMapProvider';
 import { useTacticalMap } from './useTacticalMap';
 
 import { Button } from '@/components/ui/button';
 import { useCombat } from '@/contexts/CombatContext';
+import { cn } from '@/lib/utils';
 
-type Props = { sessionId: string };
+type Props = {
+  sessionId: string;
+  /** Canvas height classes; the rail is narrower than the sheet. */
+  canvasClassName?: string;
+  className?: string;
+};
 type MoveResponse = {
   result?: {
     applied: boolean;
@@ -18,8 +25,31 @@ type MoveResponse = {
   };
 };
 
-export function TacticalMapBoard({ sessionId }: Props) {
-  const { map, animation, request, degradeLine, aoeTemplate, setAoeTemplate } = useTacticalMap(sessionId);
+/**
+ * Reads the shared map from TacticalMapProvider when one is mounted (the game layout), so
+ * moving the board between the rail and the sheet keeps its state. Without a provider it
+ * owns the map itself.
+ */
+export function TacticalMapBoard(props: Props): JSX.Element {
+  const shared = useTacticalMapContext();
+  return shared ? (
+    <TacticalMapBoardView {...props} tactical={shared} />
+  ) : (
+    <StandaloneTacticalMapBoard {...props} />
+  );
+}
+
+function StandaloneTacticalMapBoard(props: Props): JSX.Element {
+  const tactical = useTacticalMap(props.sessionId);
+  return <TacticalMapBoardView {...props} tactical={tactical} />;
+}
+
+function TacticalMapBoardView({
+  tactical,
+  canvasClassName,
+  className,
+}: Props & { tactical: TacticalMapState }): JSX.Element | null {
+  const { map, animation, request, degradeLine, aoeTemplate, setAoeTemplate } = tactical;
   const { state: combatState } = useCombat();
   const currentTurnId = combatState.activeEncounter?.currentTurnParticipantId;
   const [collapsed, setCollapsed] = useState(false);
@@ -120,7 +150,10 @@ export function TacticalMapBoard({ sessionId }: Props) {
 
   return (
     <section
-      className="mx-3 mt-3 shrink-0 rounded-lg border border-infinite-gold/25 bg-infinite-dark/40"
+      className={cn(
+        'shrink-0 rounded-lg border border-infinite-gold/25 bg-infinite-dark/40',
+        className,
+      )}
       aria-label="Tactical combat"
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-infinite-gold">
@@ -147,6 +180,7 @@ export function TacticalMapBoard({ sessionId }: Props) {
       {!collapsed && (
         <div className="relative px-3 pb-3">
           <TacticalMapCanvas
+            className={canvasClassName}
             map={map}
             reachable={moves}
             path={previewPath}
@@ -168,7 +202,13 @@ export function TacticalMapBoard({ sessionId }: Props) {
                           // the server recomputes and authorizes it on confirmation.
                           cells: current.geometry.cells
                             .map((cell) => ({ x: cell.x + dx, y: cell.y + dy }))
-                            .filter((cell) => cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height),
+                            .filter(
+                              (cell) =>
+                                cell.x >= 0 &&
+                                cell.y >= 0 &&
+                                cell.x < map.width &&
+                                cell.y < map.height,
+                            ),
                         },
                       };
                     })()
