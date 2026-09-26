@@ -57,8 +57,11 @@ const providerUsage: Array<{
   type: string;
   model?: string;
   plan: string;
+  sessionId?: string;
 }> = [];
 let fetchStatus = 200;
+let recordThrows = false;
+let forwardedBody = '';
 
 const app = new Elysia().use(
   createTtsRoutes({
@@ -73,18 +76,22 @@ const app = new Elysia().use(
       },
       recordProviderUsage: async (opts) => {
         providerUsage.push(opts);
+        if (recordThrows) throw new Error('usage insert failed');
       },
     } as unknown as TtsRouteOptions['usageService'],
-    fetchImpl: async () =>
-      new Response(fetchStatus === 200 ? 'audio-bytes' : 'nope', {
+    fetchImpl: async (_input, init) => {
+      forwardedBody = String(init?.body ?? '');
+      return new Response(fetchStatus === 200 ? 'audio-bytes' : 'nope', {
         status: fetchStatus,
         headers: { 'content-type': 'audio/mpeg' },
-      }),
+      });
+    },
   }),
 );
 
 beforeEach(() => {
   fetchStatus = 200;
+  recordThrows = false;
   quotaConsumes.length = 0;
   providerUsage.length = 0;
 });
@@ -97,14 +104,18 @@ afterAll(() => {
   }
 });
 
-function speak(token: string, text: string): Request {
+function speak(token: string, text: string, sessionId?: string): Request {
   return new Request('http://localhost/v1/ai-proxy/voice/voice-1', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ text, model_id: 'eleven_turbo_v2_5' }),
+    body: JSON.stringify({
+      text,
+      model_id: 'eleven_turbo_v2_5',
+      ...(sessionId ? { sessionId } : {}),
+    }),
   });
 }
 
@@ -128,6 +139,27 @@ describe('POST /v1/ai-proxy/voice usage', () => {
         costUsd: (101 * 0.05) / 1000,
       }),
     ]);
+    expect(providerUsage[0]?.sessionId).toBeUndefined();
+  });
+
+  it('writes session_id when the request includes a session', async () => {
+    const response = await app.handle(
+      speak('tts-cost-user', 'The lantern flickers.', 'session-2242'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(providerUsage[0]?.sessionId).toBe('session-2242');
+    expect(JSON.parse(forwardedBody)).not.toHaveProperty('sessionId');
+  });
+
+  it('returns the voice audio when usage recording throws', async () => {
+    recordThrows = true;
+    const response = await app.handle(speak('tts-cost-user', 'The lantern flickers.'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('audio/mpeg');
+    expect(await response.text()).toBe('audio-bytes');
+    expect(providerUsage).toHaveLength(1);
   });
 
   it('does not record a cost when ElevenLabs rejects the request', async () => {

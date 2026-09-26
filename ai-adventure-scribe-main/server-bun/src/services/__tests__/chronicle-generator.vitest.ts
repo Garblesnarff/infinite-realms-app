@@ -144,6 +144,7 @@ describe('ChronicleGenerator Service', () => {
         model: 'deepseek/deepseek-chat',
         inputTokens: 40,
         outputTokens: 80,
+        sessionId: mockSessionId,
       });
     });
 
@@ -160,7 +161,12 @@ describe('ChronicleGenerator Service', () => {
         }),
       );
       expect(recordProviderUsage).toHaveBeenCalledWith(
-        expect.objectContaining({ plan: 'free', type: 'llm_system', inputTokens: 40 }),
+        expect.objectContaining({
+          plan: 'free',
+          type: 'llm_system',
+          inputTokens: 40,
+          sessionId: mockSessionId,
+        }),
       );
     });
 

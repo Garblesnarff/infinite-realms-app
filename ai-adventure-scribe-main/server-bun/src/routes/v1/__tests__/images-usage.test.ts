@@ -25,6 +25,7 @@ const recorded: Array<{
   outputTokens: number;
   userId: string;
   plan: string;
+  sessionId?: string;
 }> = [];
 
 mock.module('../../../lib/db.js', () => ({ sql: async () => [] }));
@@ -74,14 +75,17 @@ beforeEach(() => {
     })) as unknown as typeof fetch;
 });
 
-function generateRequest(): Request {
+function generateRequest(sessionId?: string): Request {
   return new Request('http://localhost/v1/images/generate', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: 'Bearer image-user',
     },
-    body: JSON.stringify({ prompt: 'A lantern in the woods' }),
+    body: JSON.stringify({
+      prompt: 'A lantern in the woods',
+      ...(sessionId ? { sessionId } : {}),
+    }),
   });
 }
 
@@ -114,6 +118,25 @@ describe('POST /v1/images/generate usage', () => {
         outputTokens: 1290,
       }),
     ]);
+    expect(recorded[0]?.sessionId).toBeUndefined();
+  });
+
+  it('writes session_id when the request includes a session', async () => {
+    providerBody = {
+      choices: [
+        {
+          message: {
+            images: [{ image_url: { url: 'data:image/png;base64,aGVsbG8=' } }],
+          },
+        },
+      ],
+      usage: { prompt_tokens: 4, completion_tokens: 8 },
+    };
+
+    const response = await app.handle(generateRequest('session-2242'));
+
+    expect(response.status).toBe(200);
+    expect(recorded[0]?.sessionId).toBe('session-2242');
   });
 
   it('does not record usage when the provider returns no image', async () => {

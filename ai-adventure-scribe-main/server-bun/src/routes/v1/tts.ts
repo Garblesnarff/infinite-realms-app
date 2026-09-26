@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia';
 
+import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import {
@@ -14,6 +15,8 @@ type TtsFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 const ttsRequestSchema = t.Object({
   text: t.String({ minLength: 1, maxLength: 5000 }),
+  // Absent for voices that are not tied to a game session (previews, tools).
+  sessionId: t.Optional(t.String({ maxLength: 255 })),
   model_id: t.Optional(t.String()),
   voice_settings: t.Optional(
     t.Object({
@@ -53,6 +56,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
         '/voice/:voiceId',
         async ({ params, body, set, user }) => {
           const characters = body.text.length;
+          const { sessionId, ...providerBody } = body;
           const quota = await usageService.checkQuotaAndConsume({
             userId: user.userId,
             plan: user.plan || 'free',
@@ -70,8 +74,9 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
             return { error: 'Voice service unavailable' };
           }
 
+          let upstream: Response;
           try {
-            const response = await (options.fetchImpl ?? globalThis.fetch)(
+            upstream = await (options.fetchImpl ?? globalThis.fetch)(
               `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(params.voiceId)}/stream`,
               {
                 method: 'POST',
@@ -81,15 +86,22 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
                   'xi-api-key': apiKey,
                 },
                 signal: AbortSignal.timeout(VOICE_TIMEOUT_MS),
-                body: JSON.stringify(body),
+                body: JSON.stringify(providerBody),
               },
             );
+          } catch {
+            set.status = 503;
+            return { error: 'Voice service unavailable' };
+          }
 
-            if (!response.ok) {
-              set.status = response.status >= 500 ? 503 : 502;
-              return { error: 'Voice request failed' };
-            }
+          if (!upstream.ok) {
+            set.status = upstream.status >= 500 ? 503 : 502;
+            return { error: 'Voice request failed' };
+          }
 
+          // Recording is not part of the provider try. A thrown insert must not
+          // turn a successful ElevenLabs response into a 503.
+          try {
             await usageService.recordProviderUsage({
               userId: user.userId,
               plan: user.plan || 'free',
@@ -99,19 +111,23 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
               inputTokens: characters,
               outputTokens: 0,
               costUsd: elevenLabsCharacterCostUsd(characters),
+              sessionId,
             });
-
-            return new Response(response.body, {
-              status: 200,
-              headers: {
-                'Content-Type': response.headers.get('content-type') || 'audio/mpeg',
-                'Cache-Control': 'private, max-age=3600',
-              },
+          } catch (error) {
+            logger.warn({
+              msg: 'TTS_USAGE_RECORD_FAILED',
+              error: error instanceof Error ? error.message : error,
+              userId: user.userId,
             });
-          } catch {
-            set.status = 503;
-            return { error: 'Voice service unavailable' };
           }
+
+          return new Response(upstream.body, {
+            status: 200,
+            headers: {
+              'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
+              'Cache-Control': 'private, max-age=3600',
+            },
+          });
         },
         { body: ttsRequestSchema },
       )

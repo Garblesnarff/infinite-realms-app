@@ -42,7 +42,7 @@ export class AIUsageService {
   static async recordProviderUsage(opts: {
     userId: string;
     orgId?: string | null;
-    /** The game session a DM turn belongs to (#2218), so "did the DM reply?" is one query. */
+    /** Game session this cost belongs to, when the caller knows it (#2218, #2242). */
     sessionId?: string | null;
     plan: string;
     type: UsageType;

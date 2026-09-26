@@ -351,6 +351,7 @@ Respond ONLY as JSON with exactly these fields:
       prompt,
       maxTokens: 2000,
       temperature: 0.9,
+      sessionId,
     });
     return this.parseProResponse(text, data);
   }
@@ -395,6 +396,7 @@ Respond ONLY as JSON with exactly these fields:
       prompt,
       maxTokens: 600,
       temperature: 0.8,
+      sessionId,
     });
     return this.parseFreeResponse(text, data);
   }
@@ -411,6 +413,8 @@ Respond ONLY as JSON with exactly these fields:
     prompt: string;
     maxTokens: number;
     temperature: number;
+    /** Absent only if a future caller has no game session. */
+    sessionId?: string | null;
   }): Promise<string> {
     const quota = await AIUsageService.checkQuotaAndConsume({
       userId: opts.userId,
@@ -443,6 +447,7 @@ Respond ONLY as JSON with exactly these fields:
         model: result.model,
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,
+        sessionId: opts.sessionId,
       });
     }
 
