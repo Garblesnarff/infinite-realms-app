@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.20.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.2...v0.20.3) (2026-09-26)
+
+
+### Bug Fixes
+
+* **game:** dock roll tray above the chat box; tactical map leaves the center ([#2252](https://github.com/Garblesnarff/infinite-realms-production/issues/2252)) ([#2272](https://github.com/Garblesnarff/infinite-realms-production/issues/2272)) ([ae9c13c](https://github.com/Garblesnarff/infinite-realms-production/commit/ae9c13cf0dada1f5d242cf9de195e5b4167764d2))
+* **server:** write session id on image, voice, and chronicle costs ([#2242](https://github.com/Garblesnarff/infinite-realms-production/issues/2242)) ([#2271](https://github.com/Garblesnarff/infinite-realms-production/issues/2271)) ([00d5a67](https://github.com/Garblesnarff/infinite-realms-production/commit/00d5a6740cb4c545f8816b44950c238d1cc9a541))
+
 ## [0.20.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.1...v0.20.2) (2026-09-25)
 
 
