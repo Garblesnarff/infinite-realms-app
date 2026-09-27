@@ -23,7 +23,12 @@ describe('HPMechanics', () => {
   describe('calculateDamageResult', () => {
     it('should apply normal damage correctly', () => {
       const options: ApplyDamageOptions = { damageAmount: 10 };
-      const result = HPMechanics.calculateDamageResult('p1', defaultStatus, defaultResistances, options);
+      const result = HPMechanics.calculateDamageResult(
+        'p1',
+        defaultStatus,
+        defaultResistances,
+        options,
+      );
 
       expect(result.hpLost).toBe(10);
       expect(result.newCurrentHp).toBe(40);
@@ -98,6 +103,49 @@ describe('HPMechanics', () => {
 
       expect(result.deathSaveFailuresAdded).toBe(2);
       expect(result.newDeathSavesFailures).toBe(2);
+    });
+
+    describe('#2236 hostile 0-HP death rule', () => {
+      const monsterStatus = { ...defaultStatus, currentHp: 6, maxHp: 6 };
+
+      it('kills a non-player reduced to 0 HP (run 10: the Vitruvian Spider)', () => {
+        const options: ApplyDamageOptions = { damageAmount: 6, targetIsPlayer: false };
+        const result = HPMechanics.calculateDamageResult(
+          'spider',
+          monsterStatus,
+          defaultResistances,
+          options,
+        );
+        expect(result.newCurrentHp).toBe(0);
+        expect(result.isDead).toBe(true);
+        expect(result.isConscious).toBe(false);
+      });
+
+      it('keeps player death-save semantics untouched at 0 HP', () => {
+        const playerStatus = { ...defaultStatus, currentHp: 6 };
+        const options: ApplyDamageOptions = { damageAmount: 6, targetIsPlayer: true };
+        const result = HPMechanics.calculateDamageResult(
+          'p1',
+          playerStatus,
+          defaultResistances,
+          options,
+        );
+        expect(result.newCurrentHp).toBe(0);
+        expect(result.isDead).toBe(false);
+        expect(result.isConscious).toBe(false);
+      });
+
+      it('does not kill when targetIsPlayer is unknown (out-of-combat vitals path)', () => {
+        const options: ApplyDamageOptions = { damageAmount: 6 };
+        const result = HPMechanics.calculateDamageResult(
+          'spider',
+          monsterStatus,
+          defaultResistances,
+          options,
+        );
+        expect(result.newCurrentHp).toBe(0);
+        expect(result.isDead).toBe(false);
+      });
     });
   });
 

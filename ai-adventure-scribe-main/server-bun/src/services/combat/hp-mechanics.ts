@@ -189,6 +189,20 @@ export class HPMechanics {
     const isDead = newDeathSavesFailures >= 3;
     const isConscious = newCurrentHp > 0;
 
+    /**
+     * #2236: a non-player participant reduced to 0 hit points dies — MM p.6, and what
+     * `vitalStateOf` in death-saves-service.ts already assumes when it ends the fight.
+     * Before this, the damage result said UNCONSCIOUS while the encounter logic treated
+     * the same monster as dead (run 10: the engine fact said the Vitruvian Spider was
+     * unconscious; the DM, reading a dead spider, narrated a carcass).
+     *
+     * Non-lethal knockouts are not modelled yet (#2254). Players are untouched: a player
+     * at 0 HP always goes to death saves. The strict `=== false` matters —
+     * `computeVitalsAfterDamage` in character-vitals-service calls this without
+     * `targetIsPlayer`, and that out-of-combat path must not start killing.
+     */
+    const killedAtZeroHp = options.targetIsPlayer === false && newCurrentHp === 0;
+
     return {
       participantId,
       originalDamage: damageAmount,
@@ -198,7 +212,7 @@ export class HPMechanics {
       newCurrentHp,
       newTempHp,
       isConscious,
-      isDead,
+      isDead: isDead || killedAtZeroHp,
       wasResisted,
       wasVulnerable,
       wasImmune,

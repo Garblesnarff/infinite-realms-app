@@ -68,6 +68,8 @@ export async function createTacticalCombatMap(
   const previous = await loadLatestTacticalMapRow(sessionId);
   if (previous?.state.pendingDmFacts?.length)
     map.pendingDmFacts = [...previous.state.pendingDmFacts];
+  if (previous?.state.pendingDmFactActions?.length)
+    map.pendingDmFactActions = [...previous.state.pendingDmFactActions];
   if (previous?.state.pendingDmCorrection)
     map.pendingDmCorrection = previous.state.pendingDmCorrection;
   await saveTacticalMap(map);

@@ -8,17 +8,25 @@ import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-s
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { concludeEncounter } from '../../services/combat/combat-ending.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
+import {
+  buildNarrationContract,
+  sceneAnchorForActor,
+} from '../../services/combat/narration-contract.js';
 import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
   applyTacticalMapAction,
+  consumeDmFactActions,
   consumeDmTacticalCorrection,
   consumeDmTacticalFacts,
   noteEngineResolutions,
 } from '../../services/combat/tactical-action-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
-import { buildTurnOrderBlock } from '../../services/combat/turn-order-block.js';
+import {
+  buildTurnOrderBlock,
+  getCurrentTurnInfo,
+} from '../../services/combat/turn-order-block.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
@@ -27,6 +35,41 @@ import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { buildStallDirective, shouldBreakStall } from '../../tactical/stall-breaker.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
+import type { DmFactAction, TacticalMap } from '../../tactical/types.js';
+
+/**
+ * The narration contract for #2236: engine-authoritative facts (whose turn it is, the
+ * actions resolved this turn with counts and hit/miss, the scene anchor) that the DM's
+ * narration must not exceed, plus the `<contract_json>` envelope the client post-check
+ * validates the prose against.
+ *
+ * Emitted on every combat turn, not just turns where something resolved — run M4's
+ * "It is not your turn yet" was written on a turn where the engine resolved nothing,
+ * and the turn rule is what catches it. Skipped only when there is no turn to contract
+ * over (no active encounter) and no resolved actions.
+ */
+async function buildNarrationContractBlock(params: {
+  sessionId: string;
+  userId: string;
+  map: TacticalMap | null;
+  actions: DmFactAction[];
+}): Promise<string> {
+  const turn = await getCurrentTurnInfo(params.sessionId, params.userId);
+  if (!turn && params.actions.length === 0) return '';
+  const sceneAnchor =
+    params.map && turn ? sceneAnchorForActor(params.map, turn.slug) : null;
+  return (
+    '\n\n' +
+    buildNarrationContract({
+      currentTurn: turn
+        ? { slug: turn.slug, label: turn.label, isPlayer: turn.isPlayer, round: turn.round }
+        : null,
+      actions: params.actions,
+      sceneAnchor,
+      sceneDescription: params.map?.sceneDescription ?? null,
+    })
+  );
+}
 
 /** Session-scoped tactical API; all writes delegate to the shared engine dispatcher. */
 export interface TacticalMapRouteOptions {
@@ -111,16 +154,23 @@ export function createTacticalMapRoutes({
         // microseconds before that. Answering 404 here threw all of it away, which is the second
         // half of why no ending has ever been narrated: even once the facts survived the teardown,
         // the endpoint that delivers them refused to answer for a session with no board.
-        const [correction, facts] = await Promise.all([
+        const [correction, facts, actions] = await Promise.all([
           consumeDmTacticalCorrection(params.id),
           consumeDmTacticalFacts(params.id),
+          consumeDmFactActions(params.id),
         ]);
-        if (!map && !facts.length && !correction) {
+        if (!map && !facts.length && !correction && !actions.length) {
           set.status = 404;
           return { error: 'No active tactical map' };
         }
         if (!map) {
           // No board to describe, but something happened on the one that just went away.
+          const contract = await buildNarrationContractBlock({
+            sessionId: params.id,
+            userId: user.userId,
+            map: null,
+            actions,
+          });
           return {
             tacticalContext:
               (facts.length
@@ -128,7 +178,8 @@ export function createTacticalMapRoutes({
                 : '') +
               (correction
                 ? `\n\n<previous_tactical_failure>${correction}</previous_tactical_failure>`
-                : ''),
+                : '') +
+              contract,
           };
         }
         // Silence is measured where the context is assembled, because the thing being counted is
@@ -164,7 +215,16 @@ export function createTacticalMapRoutes({
             (correction
               ? `\n\n<previous_tactical_failure>${correction}</previous_tactical_failure>`
               : '') +
-            (stalled ? `\n\n${buildStallDirective(map, params.entityId, silentTurns)}` : ''),
+            (stalled ? `\n\n${buildStallDirective(map, params.entityId, silentTurns)}` : '') +
+            // The narration contract: engine-authoritative facts the DM must not exceed
+            // (whose turn, resolved actions with counts and hit/miss, scene anchor).
+            // The client post-check validates the prose against its <contract_json>.
+            (await buildNarrationContractBlock({
+              sessionId: params.id,
+              userId: user.userId,
+              map,
+              actions,
+            })),
         };
       })
       .post(

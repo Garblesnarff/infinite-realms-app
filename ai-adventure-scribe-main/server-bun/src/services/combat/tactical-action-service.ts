@@ -12,7 +12,9 @@ import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactica
 import { broadcastToRoom } from '../collaboration/room-manager.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
-import type { MapEntity } from '../../tactical/types.js';
+import type { DmFactAction, MapEntity } from '../../tactical/types.js';
+
+export type { DmFactAction };
 
 const broadcast = (sessionId: string, payload: Record<string, unknown>): void =>
   broadcastToRoom(sessionId, null as never, { ...payload, timestamp: Date.now() });
@@ -174,7 +176,11 @@ export async function applyDmTacticalActions(
  * a channel that closes with the board is a channel that can never carry an ending. See
  * `loadLatestTacticalMapRow`.
  */
-export async function recordDmTacticalFact(sessionId: string, fact: string): Promise<void> {
+export async function recordDmTacticalFact(
+  sessionId: string,
+  fact: string,
+  action?: Omit<DmFactAction, 'timestamp'>,
+): Promise<void> {
   // A concluded fight has no active board to receive a new engine fact. This mirrors
   // `destroyTacticalCombatMap`: post-conclusion retries must not append another victory
   // instruction to the latest, already-consumed map row.
@@ -182,6 +188,12 @@ export async function recordDmTacticalFact(sessionId: string, fact: string): Pro
   const row = await loadLatestTacticalMapRow(sessionId);
   if (!row) return;
   row.state.pendingDmFacts = [...(row.state.pendingDmFacts ?? []), fact];
+  if (action) {
+    row.state.pendingDmFactActions = [
+      ...(row.state.pendingDmFactActions ?? []),
+      { ...action, timestamp: Date.now() },
+    ];
+  }
   await saveTacticalMapRow(row.rowId, row.state);
 }
 
@@ -199,6 +211,20 @@ export async function consumeDmTacticalFacts(sessionId: string): Promise<string[
   delete row.state.pendingDmFacts;
   await saveTacticalMapRow(row.rowId, row.state);
   return facts;
+}
+
+/**
+ * Return the structured engine-resolved actions with the next tactical digest, then clear
+ * them. Latest row, not active row, for the same reason `consumeDmTacticalFacts` does:
+ * the killing blow is recorded microseconds before the board is torn down.
+ */
+export async function consumeDmFactActions(sessionId: string): Promise<DmFactAction[]> {
+  const row = await loadLatestTacticalMapRow(sessionId);
+  if (!row?.state.pendingDmFactActions?.length) return [];
+  const actions = row.state.pendingDmFactActions;
+  delete row.state.pendingDmFactActions;
+  await saveTacticalMapRow(row.rowId, row.state);
+  return actions;
 }
 
 /**

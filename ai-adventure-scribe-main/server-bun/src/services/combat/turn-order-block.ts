@@ -24,8 +24,7 @@ import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.j
  * `combat_participant_status`. Degrades to an empty string on any failure: this is an
  * enrichment, and losing it must never cost the DM the board it is appended to.
  */
-export async function buildTurnOrderBlock(sessionId: string, userId: string): Promise<string> {
-  try {
+export async function buildTurnOrderBlock(sessionId: string, userId: string): Promise<string> {  try {
     const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
     if (!encounter) return '';
     const [state, map] = await Promise.all([
@@ -78,5 +77,53 @@ export async function buildTurnOrderBlock(sessionId: string, userId: string): Pr
     );
   } catch {
     return '';
+  }
+}
+
+/**
+ * Structured sibling of the CURRENT TURN marker inside `buildTurnOrderBlock`, for the
+ * narration contract (#2236). Run M4's DM wrote "It is not your turn yet" while the
+ * tracker showed the player's turn (initiative 19 vs 7) — the contract needs the
+ * current actor and whether it is the player as data, not prose, so the client
+ * post-check can reject turn-contradicting narration deterministically.
+ *
+ * Degrades to null on any failure: the contract is an enrichment, and losing it must
+ * never cost the DM the board it is appended to.
+ */
+export type CurrentTurnInfo = {
+  slug: string;
+  label: string;
+  isPlayer: boolean;
+  round: number;
+};
+
+export async function getCurrentTurnInfo(
+  sessionId: string,
+  userId: string,
+): Promise<CurrentTurnInfo | null> {
+  try {
+    const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
+    if (!encounter) return null;
+    const [state, map] = await Promise.all([
+      CombatEncounterService.getCombatState(encounter.id, userId),
+      loadActiveTacticalMap(sessionId),
+    ]);
+    const current = state.currentParticipant;
+    if (!current) return null;
+    const participant = state.participants.find((p) => p.id === current.id) as
+      | { name?: string; participantType?: string }
+      | undefined;
+    // The board is the source of the slug, because the board is what the DM was shown —
+    // same rule as buildTurnOrderBlock above.
+    const entity = map ? resolveEntityRef(map.entities, current.id) : null;
+    const slug = entity ? entitySlug(entity) : slugify(participant?.name ?? current.id);
+    return {
+      slug,
+      label: participant?.name ?? current.id,
+      isPlayer: participant?.participantType === 'player',
+      round: state.encounter.currentRound,
+    };
+  } catch {
+    return null;
   }
 }

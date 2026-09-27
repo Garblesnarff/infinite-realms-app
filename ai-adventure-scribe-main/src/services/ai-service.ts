@@ -1,6 +1,7 @@
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { ContextBuilder } from './ai/context-builder';
 import { processDMResponse, runDeferredDMResponseWork } from './ai/dm-response-processor';
+import { enforceNarrationContract } from './ai/narration-contract-check';
 import { formatConversationHistoryMessage } from './ai/shared/conversation-history';
 import { measurePromptSections } from './ai/shared/prompt-metrics';
 import {
@@ -272,6 +273,37 @@ export class AIService {
           'generate end',
           llmApiClient.lastGenerateRequestId ?? llmApiClient.lastRequestId,
         );
+
+        // #2236: cheap narration post-check against the engine's narration contract.
+        // No second model call unless the check fails: one regeneration with the violation
+        // list, then a deterministic engine-grounded fallback only for a factual contradiction.
+        rawResponse = await enforceNarrationContract(rawResponse, {
+          tacticalContext:
+            typeof params.context.gameState?.tacticalContext === 'string'
+              ? params.context.gameState.tacticalContext
+              : null,
+          generateText: (prompt) =>
+            llmApiClient.generateText({
+              prompt,
+              sessionId: params.context?.sessionId,
+              temperature: 0.3,
+              maxTokens: 2048,
+              metrics: promptMetrics,
+            }),
+          // One line per violation, with its rule and matched text, so the rate is measurable.
+          onViolation: (violation, stage) =>
+            logger.warn('[AIService] Narration contract violation', {
+              sessionId: params.context?.sessionId,
+              stage,
+              rule: violation.rule,
+              matched: violation.matched,
+            }),
+          onRegenError: (error) =>
+            logger.warn('[AIService] Narration regen failed', {
+              sessionId: params.context?.sessionId,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+        });
       } catch (providerError) {
         logger.error('LLM API failed:', providerError);
         throw new Error('Failed to get DM response - AI service unavailable', {

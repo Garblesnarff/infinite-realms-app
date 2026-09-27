@@ -34,8 +34,10 @@ import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
+import type { TacticalMap } from '../../tactical/types.js';
 import type { AttackRollInput, SpellAttackInput } from '../../types/combat.js';
 
 /**
@@ -236,6 +238,44 @@ async function participantLabel(
     state.participants.find((participant) => participant.id === participantId)?.name ??
     participantId
   );
+}
+
+/**
+ * The engine slug for a participant — the same addressable token the tactical digest
+ * prints, which is what the narration contract and the client post-check match against.
+ * Falls back to a slugified name for participants with no token on the map, exactly like
+ * the turn-order block does.
+ */
+function engineSlugForParticipant(
+  map: TacticalMap | null,
+  participantId: string,
+  label: string,
+): string {
+  const entity = map ? resolveEntityRef(map.entities, participantId) : null;
+  return entity ? entitySlug(entity) : slugify(label || participantId);
+}
+
+/**
+ * Record the one-line engine fact and structured contract action for a resolved discrete
+ * action (dash, dodge, disengage). These resolved silently before #2236, so the DM could
+ * neither narrate a real Dash nor be caught inventing one — run M4's "You dash across the
+ * room" was narrated on a turn where the engine resolved no such action.
+ */
+async function recordDiscreteActionFact(
+  sessionId: string,
+  state: CombatState,
+  actorId: string,
+  kind: 'dash' | 'dodge' | 'disengage',
+): Promise<void> {
+  const participant = state.participants.find((p) => p.id === actorId);
+  const label = participant?.name ?? actorId;
+  const map = await loadActiveTacticalMap(sessionId);
+  const pastTense = kind === 'dash' ? 'dashed' : kind === 'dodge' ? 'dodged' : 'disengaged';
+  await recordDmTacticalFact(sessionId, `${label} ${pastTense}.`, {
+    kind,
+    actorSlug: engineSlugForParticipant(map, actorId, label),
+    actorIsPlayer: participant?.participantType === 'player',
+  });
 }
 
 type CombatState = Awaited<ReturnType<typeof CombatEncounterService.getCombatState>>;
@@ -804,6 +844,13 @@ export async function executeCombatIntent(
         // that means nothing — so the flag is narrowed to player actors here rather than in the
         // attack service, which cannot know whose die it was.
         const resolvedAttack = result as Parameters<typeof describeResolvedAttack>[2];
+        // The structured sibling of the sentence below: the narration contract's
+        // machine-readable record of exactly what the engine resolved (#2236).
+        // A movement-only approach resolved movement, not an attack — recording it as
+        // 'move' keeps the contract from authorizing an attack the engine never rolled.
+        const factMap = await loadActiveTacticalMap(encounter.sessionId);
+        const movementOnly =
+          (result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
         await recordDmTacticalFact(
           encounter.sessionId,
           describeResolvedAttack(
@@ -812,6 +859,13 @@ export async function executeCombatIntent(
             { ...resolvedAttack, autoRolled: actorIsPlayer && resolvedAttack.autoRolled === true },
             weapon.name,
           ),
+          {
+            kind: movementOnly ? 'move' : 'attack',
+            actorSlug: engineSlugForParticipant(factMap, intent.actorId, actorLabel),
+            actorIsPlayer,
+            targetSlug: engineSlugForParticipant(factMap, intent.targetId, targetLabel),
+            hit: movementOnly ? undefined : resolvedAttack.hit,
+          },
         );
         // Going down is its own event, and the most important one the DM has never been told
         // about. The attack line above says "is UNCONSCIOUS"; this says what unconscious means
@@ -854,6 +908,11 @@ export async function executeCombatIntent(
         );
       }
       const actorLabel = actor.name ?? intent.actorId;
+      const spellActorIsPlayer =
+        state.participants.find((participant) => participant.id === intent.actorId)
+          ?.participantType === 'player';
+      const spellFactMap = await loadActiveTacticalMap(encounter.sessionId);
+      const spellActorSlug = engineSlugForParticipant(spellFactMap, intent.actorId, actorLabel);
       for (const [index, outcome] of spellResults.entries()) {
         const targetId = intent.targetIds[index];
         if (!targetId) continue;
@@ -866,6 +925,23 @@ export async function executeCombatIntent(
             outcome.spellName ?? intent.spellName,
             outcome,
           ),
+          {
+            kind: 'spell',
+            actorSlug: spellActorSlug,
+            actorIsPlayer: spellActorIsPlayer,
+            targetSlug: engineSlugForParticipant(spellFactMap, targetId, targetLabel),
+            // Attack-roll spells carry hit; save spells carry saved; auto-hit spells
+            // (magic missile) carry autoHit. All three feed the contract's success verbs.
+            hit:
+              outcome.hit ??
+              (outcome.autoHit === true
+                ? true
+                : outcome.saved === true
+                  ? false
+                  : outcome.saved === false
+                    ? true
+                    : undefined),
+          },
         );
         const targetIsPlayer =
           state.participants.find((participant) => participant.id === targetId)?.participantType ===
@@ -881,6 +957,7 @@ export async function executeCombatIntent(
         intent.expectedVersion,
         () => grantTacticalDash(encounter.sessionId, intent.actorId),
       );
+      await recordDiscreteActionFact(encounter.sessionId, state, intent.actorId, 'dash');
     } else if (intent.type === 'dodge' || intent.type === 'disengage') {
       const action = intent.type;
       result = await claimTurnActionAndResolve(
@@ -892,6 +969,7 @@ export async function executeCombatIntent(
           return { applied: true, action };
         },
       );
+      await recordDiscreteActionFact(encounter.sessionId, state, intent.actorId, action);
     } else {
       // A downed character's turn is a death saving throw, not an action. Resolving it here,
       // as the order reaches them, is what makes 0 HP a state a fight passes through rather
