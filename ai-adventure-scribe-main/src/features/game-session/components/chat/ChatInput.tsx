@@ -18,6 +18,11 @@ interface ChatInputProps {
   onSendMessage: (message: string) => void | Promise<void>;
   isDisabled: boolean;
   isReconnecting?: boolean;
+  /**
+   * Why the input is disabled, when it is not because a message is sending. A roll lock used to
+   * read "Sending message..." here, which a stranger took for a hung send (#2280).
+   */
+  disabledReason?: string;
 }
 
 /**
@@ -31,7 +36,7 @@ interface ChatInputProps {
  * @param isDisabled - Boolean to disable input during message processing
  */
 export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
-  const { onSendMessage, isDisabled, isReconnecting = false } = props;
+  const { onSendMessage, isDisabled, isReconnecting = false, disabledReason } = props;
   const [input, setInput] = useState(loadPendingInput);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
@@ -154,7 +159,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
   const sendLabel = isReconnecting
     ? 'Reconnecting…'
     : isDisabled
-      ? 'Sending message...'
+      ? (disabledReason ?? 'Sending message...')
       : 'Send message';
 
   return (
@@ -224,7 +229,11 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Describe what your character would like to do..."
+                placeholder={
+                  isDisabled && disabledReason
+                    ? disabledReason
+                    : 'Describe what your character would like to do...'
+                }
                 className="min-h-[20px] max-h-28 resize-none border-0 shadow-none focus:ring-0 focus:border-0 p-0 text-sm leading-relaxed placeholder:text-gray-600 bg-transparent"
                 disabled={isDisabled}
                 rows={1}

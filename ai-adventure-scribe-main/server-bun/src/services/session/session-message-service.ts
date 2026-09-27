@@ -146,9 +146,12 @@ export class SessionMessageService {
       // id and its final text, and replaces the provisional row in place rather than being
       // dropped as a duplicate — so one turn is one row, whichever side wrote first. Only rows
       // still marked provisional are replaceable; every other duplicate id stays a no-op retry.
+      // A blank save never replaces stored prose (#2280): the route's `minLength: 1` stops '' but
+      // not whitespace, and #2250 tried to write a text-less row under the reply's own id. Such
+      // a save falls through to the insert below, where the id conflict makes it a no-op.
       const dmMessages = messages.filter(
         (data): data is typeof data & { id: string } =>
-          Boolean(data.id) && data.speakerType === 'dm',
+          Boolean(data.id) && data.speakerType === 'dm' && data.message.trim().length > 0,
       );
       const reconciled: DialogueHistory[] = [];
       for (const data of dmMessages) {

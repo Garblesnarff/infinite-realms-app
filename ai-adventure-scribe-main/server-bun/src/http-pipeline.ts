@@ -73,6 +73,19 @@ function resolveRequestId(request: Request): string {
   return id;
 }
 
+/** Field paths and rule messages of a validation failure, without the values that failed. */
+function validationIssues(error: unknown): Array<{ path: string; message: string }> {
+  const all = (error as { all?: unknown }).all;
+  if (!Array.isArray(all)) return [];
+  return all.slice(0, 5).map((issue) => {
+    const { path, message } = (issue ?? {}) as { path?: unknown; message?: unknown };
+    return {
+      path: typeof path === 'string' ? path : '',
+      message: typeof message === 'string' ? message : 'invalid',
+    };
+  });
+}
+
 export function createRequestPipelineApp() {
   return new Elysia()
     .derive(({ request }) => {
@@ -141,9 +154,17 @@ export function createRequestPipelineApp() {
         msg: 'request.error',
       });
 
-      set.status = code === 'NOT_FOUND' ? 404 : code === 'VALIDATION' ? 422 : 500;
+      if (code === 'VALIDATION') {
+        // A 422 used to say "Internal Server Error", which hid run 11's real cause (a DM row
+        // with empty text failing `minLength: 1`) behind a server-fault label (#2280). Name the
+        // rule and the field. The submitted values are never echoed back.
+        set.status = 422;
+        return { error: 'Validation failed', issues: validationIssues(error) };
+      }
+
+      set.status = code === 'NOT_FOUND' ? 404 : 500;
       return {
-        error: 'Internal Server Error',
+        error: code === 'NOT_FOUND' ? 'Not Found' : 'Internal Server Error',
         message:
           process.env.NODE_ENV === 'production'
             ? undefined

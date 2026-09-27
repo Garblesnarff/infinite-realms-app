@@ -115,3 +115,46 @@ describe('userDataApi tactical transport', () => {
     );
   });
 });
+
+describe('userDataApi request errors (#2280)', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(waitForAuth).mockResolvedValue(undefined);
+    vi.mocked(loadCachedSession).mockReturnValue({ access_token: 'access-token' });
+  });
+
+  it("reports the status and the validation issue, not a bare 'Internal Server Error'", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'Validation failed',
+          issues: [{ path: '/message', message: 'Expected string length greater or equal to 1' }],
+        }),
+        { status: 422, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const failure = await userDataApi
+      .saveSessionMessages('session-1', { id: 'dm-1', message: '', speaker_type: 'dm' })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      name: 'UserDataApiRequestError',
+      status: 422,
+      message: 'Validation failed (422): /message Expected string length greater or equal to 1',
+    });
+  });
+
+  it('keeps the status when the body has no JSON', async () => {
+    fetchMock.mockResolvedValue(new Response('bad gateway', { status: 502 }));
+
+    const failure = await userDataApi
+      .saveSessionMessages('session-1', { id: 'p-1', message: 'hi', speaker_type: 'player' })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({ status: 502, message: 'Request failed (502)' });
+  });
+});

@@ -105,6 +105,11 @@ vi.mock('@/features/game-session/components/game/session/SessionValidator', () =
 }));
 
 // ------- imports (after mocks) -------
+import {
+  DM_ROLL_REPLY_TURNS,
+  M5_PERCEPTION,
+  RUN_11_INSIGHT,
+} from '../../../../../../../shared/test-fixtures/dm-roll-reply-saves';
 import { MessageHandler } from '../MessageHandler';
 
 import logger from '@/lib/logger';
@@ -797,18 +802,17 @@ describe('session-continuity regression', () => {
 
     expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
     expect(mockProcessAiResponse).toHaveBeenCalledWith([rollRequests[2]]);
-    // The skill check is still owed, so this turn waits on its die exactly as before: no
-    // narration, the composer stays blocked, and combat detection waits for the roll turn.
+    // The skill check is still owed, so this turn waits on its die: the composer stays blocked
+    // and combat detection waits for the roll turn. The reply is saved once, prose and the
+    // narrative request together (#2280); the message list withholds the prose until the roll.
     expect(dmPersisted()).toEqual([
       expect.objectContaining({
-        text: '',
+        text: 'You brace against the rubble.',
         rollRequests: [rollRequests[2]],
-        context: expect.objectContaining({
-          intent: 'pending_roll_request',
-          rollRequests: [rollRequests[2]],
-        }),
+        context: expect.objectContaining({ rollRequests: [rollRequests[2]] }),
       }),
     ]);
+    expect(dmPersisted()[0]?.context?.intent).not.toBe('pending_roll_request');
     expect(composerEnabledCount()).toBe(0);
     expect(mockOnAIResponse).not.toHaveBeenCalled();
   });
@@ -1008,5 +1012,89 @@ describe('session-continuity regression', () => {
     });
 
     expect(ref.processing.current).toBe(false);
+  });
+  describe('turn 1 with a narrative check (#2280: run 11 and M5)', () => {
+    for (const turn of DM_ROLL_REPLY_TURNS) {
+      it(`${turn.name}: one DM save under the turn's id, with prose and the roll request`, async () => {
+        mockGetAIResponse.mockImplementation(async (...args: unknown[]) => {
+          const onTextReady = args[4] as (
+            response: unknown,
+            options: { suppressRender: boolean; earlyRollPromptAllowed: boolean },
+          ) => Promise<void>;
+          const response = { ...turn.reply, sender: 'dm', rollRequests: turn.rollRequests };
+          await onTextReady(response, { suppressRender: true, earlyRollPromptAllowed: true });
+          return response;
+        });
+
+        const { ref } = renderHandler(`session-${turn.dmMessageId}`, mockOnAIResponse);
+        await act(async () => {
+          await ref.send(turn.playerInput);
+        });
+
+        const dmMessageId = mockGetAIResponse.mock.calls[0]?.[5] as string;
+        await waitFor(() => expect(dmPersisted()).toHaveLength(1));
+        const [saved] = dmPersisted() as Array<{
+          id?: string;
+          text?: string;
+          rollRequests?: unknown;
+          context?: { intent?: string; rollRequests?: unknown };
+        }>;
+        expect(saved?.id).toBe(dmMessageId);
+        expect(saved?.text).toBe(turn.reply.text);
+        expect(saved?.rollRequests).toEqual(turn.rollRequests);
+        expect(saved?.context?.rollRequests).toEqual(turn.rollRequests);
+        // No text-less row, ever.
+        expect(dmPersisted().every((message) => (message.text ?? '').trim().length > 0)).toBe(true);
+        // The popup went up once, and the prose was not put on screen by the handler.
+        expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+        expect(mockProcessAiResponse).toHaveBeenCalledWith(turn.rollRequests);
+        expect(mockUpdateMessage).not.toHaveBeenCalled();
+      });
+    }
+
+    it('a failed reply save keeps the prose (never a blank row) and offers a retry', async () => {
+      const turn = RUN_11_INSIGHT;
+      mockGetAIResponse.mockResolvedValue({
+        ...turn.reply,
+        sender: 'dm',
+        rollRequests: turn.rollRequests,
+      });
+      mockSendMessage.mockImplementation(async (message: { sender?: string }) => {
+        if (message.sender === 'dm')
+          throw Object.assign(new Error('Request failed (500)'), { status: 500 });
+      });
+
+      const { ref } = renderHandler('session-save-fails', mockOnAIResponse);
+      await act(async () => {
+        await ref.send(turn.playerInput);
+      });
+
+      await waitFor(() => expect(mockUpdateMessage).toHaveBeenCalledTimes(1));
+      expect(mockUpdateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ text: turn.reply.text, rollRequests: turn.rollRequests }),
+      );
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "The DM's reply wasn't saved" }),
+      );
+    });
+
+    it('a reply with no prose is still saved with text naming the roll', async () => {
+      const turn = M5_PERCEPTION;
+      mockGetAIResponse.mockResolvedValue({
+        text: '',
+        sender: 'dm',
+        rollRequests: turn.rollRequests,
+      });
+
+      const { ref } = renderHandler('session-no-prose', mockOnAIResponse);
+      await act(async () => {
+        await ref.send(turn.playerInput);
+      });
+
+      await waitFor(() => expect(dmPersisted()).toHaveLength(1));
+      expect(dmPersisted()[0]?.text).toBe(
+        `The DM asks for a roll: ${turn.rollRequests[0]?.purpose}.`,
+      );
+    });
   });
 });

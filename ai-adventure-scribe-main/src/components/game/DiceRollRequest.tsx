@@ -73,6 +73,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       handleManualSubmit,
       handleEnterManually,
       handleBackToRoll,
+      resetAfterFailedSubmit,
       toggleAdvantage,
       toggleDisadvantage,
     } = useDiceRollRequest({ request, onResult, onRollCommit });
@@ -88,6 +89,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
         check: request.purpose,
       });
     }, [requestId, request.purpose]);
+
+    // A failed submission must leave the prompt usable (#2280).
+    useEffect(() => {
+      if (rollError) resetAfterFailedSubmit();
+    }, [rollError, resetAfterFailedSubmit]);
 
     const handleRollClick = useCallback(() => {
       if (isRollInFlight) return;

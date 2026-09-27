@@ -3,6 +3,7 @@ import React from 'react';
 import { Z_INDEX } from '@/constants/z-index';
 import { useMessageContext } from '@/contexts/MessageContext';
 import logger from '@/lib/logger';
+import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
 interface TimelineRailProps {
   /** Scroll container element that holds the messages */
@@ -32,8 +33,13 @@ export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }
 
   // Build anchors from DM messages (assistant)
   const anchors = React.useMemo(() => {
+    // A reply withheld behind its roll is not on screen, so it has no anchor (#2280).
+    const withheld = withheldDmRollReplies(messages);
     return messages
-      .map((m, idx) => ({ id: m.id || m.timestamp || String(idx), isDM: m.sender === 'dm' }))
+      .map((m, idx) => ({
+        id: m.id || m.timestamp || String(idx),
+        isDM: m.sender === 'dm' && !withheld.has(m),
+      }))
       .filter((x) => x.isDM)
       .map((x) => `m-${x.id}`);
   }, [messages]);

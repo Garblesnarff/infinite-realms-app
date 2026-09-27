@@ -44,8 +44,10 @@ vi.mock('uuid', () => ({
   v4: vi.fn(() => 'test-uuid'),
 }));
 
+import { DM_ROLL_REPLY_TURNS } from '../../../shared/test-fixtures/dm-roll-reply-saves';
 import { useMessageQueue } from '../use-message-queue';
 
+import { rollReplyMessage } from '@/features/game-session/components/game/message/use-message-handler-logic';
 import { useToast } from '@/hooks/use-toast';
 
 const createQueryClient = (): QueryClient =>
@@ -424,5 +426,91 @@ describe('useMessageQueue', () => {
         description: 'Failed to process message batch. Will retry later.',
       }),
     );
+  });
+  describe('narrative roll replies (#2280)', () => {
+    const refusal = (): Error & { status: number } =>
+      Object.assign(new Error('Validation failed (422): /message Expected string length'), {
+        status: 422,
+      });
+
+    for (const turn of DM_ROLL_REPLY_TURNS) {
+      it(`sends exactly the body the route test posts: ${turn.name}`, async () => {
+        const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+        const message = rollReplyMessage(
+          { ...turn.reply, sender: 'dm', timestamp: turn.timestamp } as any,
+          turn.dmMessageId,
+          turn.rollRequests as any,
+        );
+
+        await act(async () => {
+          await result.current.messageMutation.mutateAsync(message);
+        });
+
+        expect(mockSaveSessionMessages).toHaveBeenCalledTimes(1);
+        expect(mockSaveSessionMessages).toHaveBeenCalledWith(sessionId, turn.wireBody);
+      });
+    }
+
+    it('run M5: a save the server refused is not queued, so the roll that follows still saves', async () => {
+      mockInsert.mockImplementation(async (payload: any) => {
+        if (!Array.isArray(payload) && payload.message === '') throw refusal();
+        return { error: null };
+      });
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        const refused = result.current.messageMutation
+          .mutateAsync({ id: 'dm-1', text: '', sender: 'dm' } as any)
+          .catch((error: unknown) => error);
+        await vi.runAllTimersAsync();
+        expect(await refused).toMatchObject({ status: 422 });
+      });
+      // A 4xx is the same answer every time: one attempt, nothing parked for later.
+      expect(mockInsert).toHaveBeenCalledTimes(1);
+      expect(result.current.queueLength).toBe(0);
+
+      await act(async () => {
+        await result.current.messageMutation.mutateAsync({
+          text: 'Perception check: 7 (nat 6+1)',
+          sender: 'player',
+        } as any);
+      });
+      expect(mockInsert).toHaveBeenCalledTimes(2);
+      expect(result.current.queueStatus).toBe('idle');
+    });
+
+    it('a queued failure never fails a later, unrelated save', async () => {
+      mockInsert
+        .mockResolvedValueOnce({ error: { message: 'Fail' } })
+        .mockResolvedValueOnce({ error: { message: 'Fail' } })
+        .mockResolvedValueOnce({ error: { message: 'Fail' } })
+        // The next message's own save works...
+        .mockResolvedValueOnce({ error: null })
+        // ...and the flush of the earlier failure fails again.
+        .mockResolvedValueOnce({ error: { message: 'Still failing' } });
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        const p = result.current.messageMutation
+          .mutateAsync({ text: 'Queued', sender: 'player' } as any)
+          .catch(() => undefined);
+        await vi.runAllTimersAsync();
+        await p;
+      });
+      expect(result.current.queueLength).toBe(1);
+
+      (uuidv4 as any).mockReturnValue('roll-uuid');
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({
+            text: 'Perception check: 7 (nat 6+1)',
+            sender: 'player',
+          } as any),
+        ).resolves.toMatchObject({ id: 'roll-uuid' });
+        await vi.runAllTimersAsync();
+      });
+      expect(mockInsert).toHaveBeenCalledTimes(5);
+      expect(result.current.queueLength).toBe(1);
+    });
   });
 });

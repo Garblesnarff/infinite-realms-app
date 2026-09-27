@@ -27,6 +27,7 @@ import {
   gameSessions,
   type DialogueHistory,
 } from '../../../../db/schema/index';
+import { RUN_11_INSIGHT } from '../../../../shared/test-fixtures/dm-roll-reply-saves';
 
 const DEDICATED_REAL_DB_HOST = '127.0.0.1';
 const DEDICATED_REAL_DB_PORT = '55432';
@@ -276,6 +277,78 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
 
     expect(answer).toEqual({ output_tokens: 731, dm_reply_saved: true });
     await sql`DELETE FROM ai_usage WHERE session_id = ${sessionId}`;
+  });
+
+  test('#2280: a narrative-roll reply is one row, with its prose and its roll requests together', async () => {
+    const turn = RUN_11_INSIGHT;
+    const dmId = crypto.randomUUID();
+    const rollEnvelope = {
+      text: turn.reply.text,
+      options: [],
+      roll_requests: turn.rollRequests,
+      combat_transition: 'none',
+    };
+    // The server does not write a provisional row for a roll turn; the client's save is the row.
+    expect(
+      await persistGeneratedDmReply({ userId, sessionId, messageId: dmId, envelope: rollEnvelope }),
+    ).toEqual({ persisted: false, reason: 'roll_requests' });
+
+    await SessionMessageService.addMessages(
+      [
+        {
+          id: dmId,
+          sessionId,
+          speakerType: 'dm',
+          message: turn.wireBody.message as string,
+          context: turn.wireBody.context as Record<string, unknown>,
+        },
+      ],
+      userId,
+    );
+
+    const rows = await rowsFor([dmId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toBe(turn.reply.text);
+    expect((rows[0]?.context as { rollRequests?: unknown }).rollRequests).toEqual(
+      turn.rollRequests,
+    );
+  });
+
+  test('#2280: a provisional row is replaced by the full prose, never by blank text', async () => {
+    const dmId = crypto.randomUUID();
+    await persistGeneratedDmReply({
+      userId,
+      sessionId,
+      messageId: dmId,
+      envelope: explorationEnvelope,
+    });
+
+    // A whitespace-only save passes the route's minLength and must not blank the stored prose.
+    await SessionMessageService.addMessages(
+      [
+        {
+          id: dmId,
+          sessionId,
+          speakerType: 'dm',
+          message: '   ',
+          context: { intent: 'pending_roll_request' },
+        },
+      ],
+      userId,
+    );
+    let rows = await rowsFor([dmId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toBe(provisionalDmText(explorationEnvelope));
+    expect(rows[0]?.context).toEqual(expect.objectContaining({ provisional: true }));
+
+    // The real reply still replaces it afterwards.
+    await SessionMessageService.addMessages(
+      [{ id: dmId, sessionId, speakerType: 'dm', message: 'The water stills. Full prose.' }],
+      userId,
+    );
+    rows = await rowsFor([dmId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.message).toBe('The water stills. Full prose.');
   });
 
   test('another user cannot write a provisional row into this session', async () => {

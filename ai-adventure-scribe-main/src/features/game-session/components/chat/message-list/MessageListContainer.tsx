@@ -18,6 +18,7 @@ import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 import { useSpellTargetSaveHost } from '@/hooks/combat/use-spell-target-save-host';
 import { markPlayerRollCommitted } from '@/services/combat/player-roll-bridge';
+import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
 interface MessageListContainerProps {
   messages: ChatMessage[];
@@ -87,10 +88,10 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
 
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {
-      const transcriptMessages = messages.filter(
-        (message) =>
-          !(message.sender === 'dm' && message.context?.intent === 'pending_roll_request'),
-      );
+      // A DM reply waiting on its narrative roll keeps its prose off screen until the roll is
+      // answered (#2280); the roll tray is what the player sees for that turn.
+      const withheld = withheldDmRollReplies(messages);
+      const transcriptMessages = messages.filter((message) => !withheld.has(message));
       if (!transcriptMessages.length) {
         return [];
       }

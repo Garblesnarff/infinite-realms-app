@@ -136,9 +136,12 @@ function processMetadata(metadata?: LogMetadata): LogMetadata | undefined {
 
     if (value instanceof Error) {
       // Handle Error objects
+      // An HTTP error's status is the first thing a reader needs (#2280).
+      const status = (value as { status?: unknown }).status;
       processed[key] = {
         name: value.name,
         message: value.message,
+        ...(typeof status === 'number' ? { status } : {}),
         stack: isDevelopment ? value.stack : undefined,
       };
     } else if (isDOMNode(value)) {

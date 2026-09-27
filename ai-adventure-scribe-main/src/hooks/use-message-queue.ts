@@ -23,6 +23,23 @@ function isSessionExpiredError(error: unknown): boolean {
   );
 }
 
+/**
+ * The server refused the request itself (a 4xx other than an expired session): sending the same
+ * body again gets the same answer, so it is neither retried nor queued (#2280).
+ */
+function isClientRefusal(error: unknown): boolean {
+  const status =
+    typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : null;
+  return (
+    typeof status === 'number' &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 401 &&
+    status !== 408 &&
+    status !== 429
+  );
+}
+
 type QueueStatus = 'idle' | 'processing' | 'error' | 'retrying';
 
 /**
@@ -177,11 +194,21 @@ export const useMessageQueue = (sessionId: string | null) => {
 
           logger.info(`[MessageQueue] Message persisted with ID: ${messageId}`);
 
-          // Process any queued messages if this one succeeded
+          // Flush earlier failures now that saving works, but never as part of this save: on M5
+          // a queued row the server would always refuse failed every later save through here,
+          // the player's roll included, and the roll could not be submitted (#2280).
           if (messageQueue.length > 0) {
             const batch = messageQueue.slice(0, MAX_BATCH_SIZE);
-            await processMessageBatch(batch);
-            setMessageQueue((prev) => prev.slice(MAX_BATCH_SIZE));
+            processMessageBatch(batch)
+              .then(() =>
+                setMessageQueue((prev) => prev.filter((queued) => !batch.includes(queued))),
+              )
+              .catch((batchError) =>
+                logger.warn('[MessageQueue] Queued messages still not saved', {
+                  count: batch.length,
+                  error: batchError,
+                }),
+              );
           }
 
           setQueueStatus('idle');
@@ -191,12 +218,15 @@ export const useMessageQueue = (sessionId: string | null) => {
           retries++;
           const networkError = isNetworkError(error);
 
-          if (retries === MAX_RETRIES || isSessionExpiredError(error) || networkError) {
+          const refused = isClientRefusal(error);
+          if (retries === MAX_RETRIES || isSessionExpiredError(error) || networkError || refused) {
             setQueueStatus('error');
             // The REST client owns the bounded network retry. Keep the turn in the composer
-            // instead of retrying the same persistence request again from this queue.
-            if (!networkError) {
-              setMessageQueue((prev) => [...prev, message]);
+            // instead of retrying the same persistence request again from this queue. A request
+            // the server refused (4xx) will be refused again, so it is not queued either. Anything
+            // queued keeps the id it was tried with, so a later flush cannot duplicate the row.
+            if (!networkError && !refused) {
+              setMessageQueue((prev) => [...prev, { ...message, id: messageId, timestamp: now }]);
             }
             throw error;
           }
@@ -222,7 +252,9 @@ export const useMessageQueue = (sessionId: string | null) => {
         title: 'Error',
         description: isNetworkError(error)
           ? 'Your turn is still in the composer so you can resend it.'
-          : 'Message will be retried automatically',
+          : isClientRefusal(error)
+            ? 'The server refused to save this message.'
+            : 'Message will be retried automatically',
         variant: 'destructive',
       });
     },

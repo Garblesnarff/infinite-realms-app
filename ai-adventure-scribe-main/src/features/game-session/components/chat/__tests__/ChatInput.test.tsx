@@ -237,3 +237,23 @@ describe('ChatInput', () => {
     expect(screen.getByText('501/1000')).toBeInTheDocument();
   });
 });
+
+describe('ChatInput disabled by a pending roll (#2280)', () => {
+  it('says why it is locked instead of "Sending message...", and keeps the typed text', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ChatInput onSendMessage={vi.fn()} isDisabled={false} />);
+    await user.type(screen.getByRole('textbox'), 'I ask Remy directly');
+
+    rerender(
+      <ChatInput
+        onSendMessage={vi.fn()}
+        isDisabled
+        disabledReason="Roll the dice above to continue"
+      />,
+    );
+
+    expect(screen.queryByLabelText('Sending message...')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Roll the dice above to continue')).toBeDisabled();
+    expect(screen.getByRole('textbox')).toHaveValue('I ask Remy directly');
+  });
+});

@@ -419,6 +419,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       <ChatInput
                         onSendMessage={handleSendMessage}
                         isReconnecting={isReconnecting}
+                        disabledReason={
+                          rollBlocksInput && !isProcessing
+                            ? 'Roll the dice above to continue'
+                            : undefined
+                        }
                         isDisabled={
                           isProcessing ||
                           rollBlocksInput ||

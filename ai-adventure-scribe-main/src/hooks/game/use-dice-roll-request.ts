@@ -41,11 +41,7 @@ interface UseDiceRollRequestProps {
  * Extracted from DiceRollRequest.tsx
  * Manages state and logic for dice roll requests
  */
-export function useDiceRollRequest({
-  request,
-  onResult,
-  onRollCommit,
-}: UseDiceRollRequestProps) {
+export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceRollRequestProps) {
   const [manualMode, setManualMode] = useState(false);
   const [manualResult, setManualResult] = useState('');
   const [hasAdvantage, setHasAdvantage] = useState(request.advantage || false);
@@ -270,6 +266,17 @@ export function useDiceRollRequest({
     setManualResult('');
   }, []);
 
+  // A submission that failed puts the prompt back where it started: dice animation gone, Roll /
+  // Enter my own roll / Cancel all enabled, and nothing left mounted that could roll and submit
+  // again on its own. On M5 the prompt showed "Roll submission failed" with every control off
+  // (#2280). A typed manual entry is kept so the player can resend it.
+  const resetAfterFailedSubmit = useCallback(() => {
+    setShowDiceAnimation(false);
+    setIsRolling(false);
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+  }, []);
+
   // ⚡ Bolt: Wrapped the hook's return value in useMemo to enforce referential stability,
   // preventing downstream component re-renders when state or props haven't changed.
   return useMemo(
@@ -292,6 +299,7 @@ export function useDiceRollRequest({
       handleManualSubmit,
       handleEnterManually,
       handleBackToRoll,
+      resetAfterFailedSubmit,
       toggleAdvantage,
       toggleDisadvantage,
     }),
@@ -312,6 +320,7 @@ export function useDiceRollRequest({
       handleManualSubmit,
       handleEnterManually,
       handleBackToRoll,
+      resetAfterFailedSubmit,
       toggleAdvantage,
       toggleDisadvantage,
     ],

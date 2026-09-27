@@ -214,6 +214,30 @@ class UserDataApiRequestError extends Error {
   }
 }
 
+/**
+ * The message a failed request reports: the server's label, its status, and the first
+ * validation issues it named. Run 11's 422s logged only "Internal Server Error" (#2280).
+ */
+function requestErrorMessage(status: number, payload: Record<string, unknown> | null): string {
+  const label = typeof payload?.error === 'string' ? payload.error : 'Request failed';
+  const issues = Array.isArray(payload?.issues)
+    ? payload.issues
+        .slice(0, 3)
+        .map((issue) => {
+          const { path, message } = (issue ?? {}) as { path?: unknown; message?: unknown };
+          return [path, message].filter((part) => typeof part === 'string' && part).join(' ');
+        })
+        .filter(Boolean)
+    : [];
+  const detail =
+    issues.length > 0
+      ? issues.join('; ')
+      : typeof payload?.message === 'string'
+        ? payload.message
+        : '';
+  return `${label} (${status})${detail ? `: ${detail}` : ''}`;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // Wait for AuthContext to verify/refresh the session before reading the
   // token — otherwise cold page loads race out with a stale/expired token.
@@ -230,9 +254,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     throw new UserDataApiRequestError(
-      typeof payload?.error === 'string'
-        ? payload.error
-        : `Request failed with status ${response.status}`,
+      requestErrorMessage(response.status, payload),
       response.status,
       payload ?? {},
     );

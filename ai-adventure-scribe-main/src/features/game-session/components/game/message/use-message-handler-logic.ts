@@ -7,6 +7,7 @@ import { useSessionValidator } from '../session/SessionValidator';
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
 import type { MessageSendContext } from '../../chat/MessageList';
 import type { ChatMessage } from '@/types/game';
+import type { RollRequest } from '@/types/roll-request';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
@@ -64,6 +65,29 @@ function runDeferredTask(label: string, task: () => Promise<unknown>): void {
     .finally(() => {
       if (timeoutId) clearTimeout(timeoutId);
     });
+}
+
+/**
+ * The saved form of a DM reply that asked for narrative rolls (#2280): the reply itself, under
+ * this turn's id, with the requests in its context. It always has text; a model reply with no
+ * prose gets one line naming the rolls, so the row is valid and still readable after the roll.
+ */
+export function rollReplyMessage(
+  reply: ChatMessage,
+  dmMessageId: string,
+  rollRequests: RollRequest[],
+): ChatMessage {
+  const text =
+    reply.text.trim() ||
+    `The DM asks for a roll: ${rollRequests.map((request) => request.purpose).join('; ')}.`;
+  return {
+    ...reply,
+    id: dmMessageId,
+    text,
+    sender: 'dm',
+    rollRequests,
+    context: { ...reply.context, rollRequests },
+  };
 }
 
 const toHeaderExcerpt = (raw: string, limit = 220) => {
@@ -170,6 +194,9 @@ export const useMessageHandlerLogic = ({
         messageId: message.id,
         error,
       });
+      // Only a reply with prose is worth a retry, and only prose may go back on screen: putting
+      // a text-less row back into the cache blanked the visible reply on M5 (#2280).
+      if (!message.text.trim()) return;
       updateMessage(message);
       toast({
         title: "The DM's reply wasn't saved",
@@ -469,23 +496,18 @@ export const useMessageHandlerLogic = ({
         setComposerBlocked(false);
       }
 
-      if (narrativeRollRequests.length > 0) {
-        // The declaration prose stays withheld until the die settles, but the structured request
-        // must survive a reload. Persist a textless metadata row so recovery can restore the
-        // popup without replaying prose that might describe an outcome the player has not rolled.
-        const pendingRollMessage: ChatMessage = {
-          id: dmMessageId,
-          text: '',
-          sender: 'dm',
-          timestamp: new Date().toISOString(),
-          rollRequests: narrativeRollRequests,
-          context: {
-            intent: 'pending_roll_request',
-            rollRequests: narrativeRollRequests,
-          },
-        };
-        runDeferredTask('DM roll request persistence', () =>
-          persistDmReply(pendingRollMessage, () => turnPhase('persist')),
+      if (hasRollRequests) {
+        // One row per DM reply (#2280). The reply's prose and its narrative roll requests are
+        // saved together under this turn's id, so a reload can restore the popup from the same
+        // row. The message list withholds this row's prose until the roll is answered
+        // (`withheldDmRollReplies`), so neither a live tab nor a reload shows an outcome the player
+        // has not rolled. The old separate textless row under this id failed the route's
+        // `minLength: 1` on every narrative roll (422) and poisoned the save queue.
+        runDeferredTask('DM roll reply persistence', () =>
+          persistDmReply(
+            rollReplyMessage(sanitizedAiResponseMessage, dmMessageId, narrativeRollRequests),
+            () => turnPhase('persist'),
+          ),
         );
       }
 
