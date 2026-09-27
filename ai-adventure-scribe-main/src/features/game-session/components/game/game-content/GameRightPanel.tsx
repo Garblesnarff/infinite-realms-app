@@ -1,4 +1,4 @@
-import { Menu, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import React, { memo } from 'react';
 
 import { GameSidePanel } from '../MemoryPanel';
@@ -52,10 +52,11 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
       );
     }
 
-    // Floating toggle button when collapsed
+    // Floating toggle button when collapsed. Below md it would sit on the chat box's send
+    // button, and the header's "Show Character" already opens the sheet there (#2281).
     return (
       <div
-        className="fixed right-3 bottom-3 md:top-1/2 md:bottom-auto md:right-6 md:transform md:-translate-y-1/2 transition-all duration-300"
+        className="fixed hidden md:block md:top-1/2 md:right-6 md:-translate-y-1/2 transition-all duration-300"
         style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
       >
         <Button
@@ -70,8 +71,7 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
               : 'bg-gradient-to-r from-infinite-purple/20 to-infinite-teal/20 border-infinite-purple/50'
           }`}
         >
-          <Menu className="h-6 w-6 md:hidden" />
-          <ChevronDown className="h-5 w-5 hidden md:block rotate-90" />
+          <ChevronDown className="h-5 w-5 rotate-90" />
           {/* Enhanced Context indicators */}
           <div className="absolute -top-2 -right-2 flex flex-col gap-1">
             {combatMode && (

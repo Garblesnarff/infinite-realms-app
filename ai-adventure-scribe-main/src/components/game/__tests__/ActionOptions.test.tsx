@@ -134,4 +134,40 @@ describe('ActionOptions', () => {
 
     expect(container.firstChild).toBeNull();
   });
+
+  it('shows the full bold action name and wraps the description, never truncating (#2281)', () => {
+    const description =
+      'down the long corridor toward the kitchens, where something is clearly burning and nobody seems to care';
+    render(
+      <ActionOptions
+        options={[
+          {
+            id: 'option-1',
+            number: 1,
+            text: `Follow the scorched-sugar smell, ${description}`,
+            fullText: `**Follow the scorched-sugar smell**, ${description}`,
+            title: 'Follow the scorched-sugar smell',
+            description,
+          },
+        ]}
+        onOptionSelect={onOptionSelect}
+        delay={0}
+      />,
+    );
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+
+    const title = screen.getByText('Follow the scorched-sugar smell');
+    const body = screen.getByText(description);
+    expect(title).toHaveClass('font-semibold');
+    const button = screen.getByRole('button', { name: /Option 1/ });
+    expect(button).toHaveClass('whitespace-normal');
+    expect(button).not.toHaveClass('whitespace-nowrap');
+    for (const el of [title, body, button]) {
+      expect(el.className).not.toMatch(/\b(truncate|text-ellipsis|line-clamp-\d)\b/);
+    }
+    expect(title).toHaveClass('break-words');
+    expect(body).toHaveClass('break-words');
+  });
 });

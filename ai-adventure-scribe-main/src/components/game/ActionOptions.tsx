@@ -172,7 +172,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                                 : `Option ${option.number} - ${option.text}`
                             }
                             className={`
-                            flex items-start gap-3 p-4 h-full w-full text-left justify-start
+                            flex items-start gap-3 p-4 h-full w-full text-left justify-start whitespace-normal
                             transition-all duration-200 border rounded-xl
                             bg-white/[0.02] border-white/10 text-foreground/90
                             hover:bg-infinite-gold/[0.07] hover:border-infinite-gold/40
@@ -196,9 +196,24 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                               <div className="ir-display text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
                                 Option {option.number}
                               </div>
-                              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
-                                {option.text}
-                              </div>
+                              {/* The full bold action name, then the description, both wrapping:
+                                  never cut off with an ellipsis (#2281). */}
+                              {option.title ? (
+                                <>
+                                  <div className="text-sm font-semibold leading-snug break-words text-foreground">
+                                    {option.title}
+                                  </div>
+                                  {option.description && (
+                                    <div className="mt-1 text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/75">
+                                      {option.description}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <div className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
+                                  {option.text}
+                                </div>
+                              )}
                             </div>
 
                             {isSelected && (

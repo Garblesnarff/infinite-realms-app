@@ -1,9 +1,11 @@
 import React, { useLayoutEffect, useState, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 
 import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
+import { RAIL_OVER_STORY } from './use-game-rails';
 import { TacticalMapProvider, useMapInRail } from '../../tactical/TacticalMapProvider';
 import { FloatingActionPanel } from '../FloatingActionPanel';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
@@ -13,6 +15,7 @@ import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-sess
 
 import { Z_INDEX } from '@/constants/z-index';
 import { useSceneBackground } from '@/contexts/SceneBackgroundContext';
+import { useMediaQuery } from '@/hooks/use-media-query';
 
 /**
  * GameLayout Component
@@ -100,6 +103,12 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
       setIsLeftCollapsed(true);
     }, [setIsLeftCollapsed]);
     const mapInRail = useMapInRail(isLeftCollapsed, isRightCollapsed);
+    // Below md an open rail has no column. It opens over the story box instead, which ends
+    // where the dock (roll tray + chat box) begins, so no panel can cover the composer (#2281).
+    // The floating buttons move into the story box too, off the chat box.
+    const overStory = useMediaQuery(RAIL_OVER_STORY);
+    const [storyBox, setStoryBox] = useState<HTMLDivElement | null>(null);
+    const portalToStory = overStory ? storyBox : null;
 
     const handleFloatingPanelToggle = useCallback((): void => {
       setIsFloatingPanelVisible((v) => !v);
@@ -116,6 +125,35 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
       window.addEventListener('resize', calc);
       return () => window.removeEventListener('resize', calc);
     }, []);
+
+    const leftPanel = (
+      <GameLeftPanel
+        sessionId={sessionId}
+        isCollapsed={isLeftCollapsed}
+        onToggle={handleLeftClose}
+        showMap={mapInRail}
+        chapterLabel={resolveCampaignChapterLabel(sessionData?.turn_count)}
+      />
+    );
+    const rightPanel = (
+      <GameRightPanel
+        sessionId={sessionId}
+        isCollapsed={isRightCollapsed}
+        sessionData={sessionData}
+        updateGameSessionState={updateGameSessionState}
+        combatMode={combatMode}
+        spellCastHandlerRef={spellCastHandlerRef}
+        onToggle={handleRightToggle}
+      />
+    );
+    const floatingPanel = (anchored: boolean): React.ReactNode => (
+      <FloatingActionPanel
+        isVisible={isFloatingPanelVisible}
+        onToggle={handleFloatingPanelToggle}
+        combatMode={combatMode}
+        anchored={anchored}
+      />
+    );
 
     return (
       <div
@@ -151,7 +189,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
             <div
               key={sessionId}
               className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${
-                isLeftCollapsed && isRightCollapsed
+                overStory || (isLeftCollapsed && isRightCollapsed)
                   ? 'grid-cols-1'
                   : isLeftCollapsed
                     ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
@@ -161,13 +199,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               }`}
             >
               {/* Left Campaign Panel */}
-              <GameLeftPanel
-                sessionId={sessionId}
-                isCollapsed={isLeftCollapsed}
-                onToggle={handleLeftClose}
-                showMap={mapInRail}
-                chapterLabel={resolveCampaignChapterLabel(sessionData?.turn_count)}
-              />
+              {!overStory && leftPanel}
 
               {/* Main Content Area */}
               <GameMainContent
@@ -183,6 +215,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 mapInRail={mapInRail}
                 onLeftToggle={handleLeftToggle}
                 onRightToggle={handleRightToggle}
+                storyBoxRef={setStoryBox}
                 showTracker={showTracker}
                 setShowTracker={setShowTracker}
                 isCombatDetected={isCombatDetected}
@@ -195,25 +228,37 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 showSafetyInfo={showSafetyInfo}
               />
 
-              {/* Right Character/Memory Panel */}
-              <div className={`${isLeftCollapsed ? 'order-2' : 'order-3'}`}>
-                <GameRightPanel
-                  sessionId={sessionId}
-                  isCollapsed={isRightCollapsed}
-                  sessionData={sessionData}
-                  updateGameSessionState={updateGameSessionState}
-                  combatMode={combatMode}
-                  spellCastHandlerRef={spellCastHandlerRef}
-                  onToggle={handleRightToggle}
-                />
-              </div>
+              {/* Right Character/Memory Panel. Closed, it is only a fixed floating toggle, so its
+                  wrapper is `contents`: an empty grid item made a second row that took half the
+                  height and lifted the chat box off the bottom of a narrow screen (#2281). */}
+              {(!overStory || isRightCollapsed) && (
+                <div
+                  className={
+                    isRightCollapsed ? 'contents' : isLeftCollapsed ? 'order-2' : 'order-3'
+                  }
+                >
+                  {rightPanel}
+                </div>
+              )}
 
               {/* Floating Action Panel for Quick RPG Actions */}
-              <FloatingActionPanel
-                isVisible={isFloatingPanelVisible}
-                onToggle={handleFloatingPanelToggle}
-                combatMode={combatMode}
-              />
+              {portalToStory
+                ? createPortal(floatingPanel(true), portalToStory)
+                : floatingPanel(false)}
+
+              {/* A rail opened on a narrow screen: over the story, above the dock. */}
+              {portalToStory &&
+                (!isLeftCollapsed || !isRightCollapsed) &&
+                createPortal(
+                  <div
+                    data-testid="rail-over-story"
+                    className="absolute inset-0 overflow-y-auto bg-infinite-dark/95 backdrop-blur-sm"
+                    style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                  >
+                    {isLeftCollapsed ? rightPanel : leftPanel}
+                  </div>,
+                  portalToStory,
+                )}
 
               {/* Combat Tracker Sheet */}
               <GameCombatSheet

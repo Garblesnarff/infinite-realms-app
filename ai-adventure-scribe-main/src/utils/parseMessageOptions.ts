@@ -11,6 +11,10 @@ export interface ActionOption {
   letter?: string; // For A, B, C format
   text: string;
   fullText: string; // Original text with formatting
+  /** The bold action name, when the DM bolded one ("**Search the hall**, ..."). */
+  title?: string;
+  /** What follows the bold action name, without the joining comma or dash. */
+  description?: string;
 }
 
 export interface ParsedMessage {
@@ -48,6 +52,15 @@ function buildOptionSeparator(boldText: string, cleanDescription: string): strin
   }
 
   return ', ';
+}
+
+function optionTitleParts(
+  boldText: string,
+  cleanDescription: string,
+): Pick<ActionOption, 'title' | 'description'> {
+  const title = sanitizeOptionDisplayText(boldText);
+  const description = sanitizeOptionDisplayText(cleanDescription.replace(/^[—–-]\s*/, ''));
+  return description ? { title, description } : { title };
 }
 
 function sanitizeOptionDisplayText(content: string): string {
@@ -110,6 +123,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
       number,
       text: displayText,
       fullText: fullOptionText,
+      ...optionTitleParts(boldText, cleanDescription),
     });
 
     // Track where options start in the content
@@ -137,6 +151,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
         letter: letterStr,
         text: displayText,
         fullText: fullOptionText,
+        ...optionTitleParts(boldText, cleanDescription),
       });
 
       // Track where options start in the content

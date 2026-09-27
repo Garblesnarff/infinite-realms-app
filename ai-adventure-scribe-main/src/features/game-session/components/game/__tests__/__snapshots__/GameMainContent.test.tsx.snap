@@ -88,6 +88,7 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
     >
       <div
         class="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
+        data-testid="story-box"
       >
         <div
           data-suppress-empty="false"

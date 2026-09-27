@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { GameLoadingOverlay, GameLayout } from './game-content';
+import { useGameRails } from './game-content/use-game-rails';
 import GameProviders from './GameProviders';
 import { useGameData } from './useGameData';
 
@@ -215,20 +216,8 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   onSceneBlurbToggle,
   handleAIResponse,
 }) => {
-  // Navy+gold overhaul: show the rich side rails by default on any reasonable
-  // desktop; only auto-collapse on narrow/mobile widths. Keys bumped to v2 so
-  // existing users pick up the new default instead of a stale collapsed value.
-  const getDefaultLeftCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1024;
-  const getDefaultRightCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1024;
-
-  const [isLeftCollapsed, setIsLeftCollapsed] = useLocalStorage(
-    'ui:leftPanelCollapsed:v2',
-    getDefaultLeftCollapsed(),
-  );
-  const [isRightCollapsed, setIsRightCollapsed] = useLocalStorage(
-    'ui:rightPanelCollapsed:v2',
-    getDefaultRightCollapsed(),
-  );
+  const { isLeftCollapsed, isRightCollapsed, setIsLeftCollapsed, setIsRightCollapsed } =
+    useGameRails();
   const [isCombatDetected, setIsCombatDetected] = useState(false);
   const [showTracker, setShowTracker] = useState(false);
   const spellCastHandlerRef = React.useRef<SpellCastHandlerRef['current']>(null);

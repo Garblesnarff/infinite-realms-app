@@ -23,4 +23,30 @@ describe('previewCampaignOverview', () => {
     expect(preview).toContain('A Horror / Survival campaign');
     expect(preview).not.toContain('The rest of the bible');
   });
+
+  it('skips a title-only opening to the first section with prose (#2281)', () => {
+    const overview = [
+      '# The Eternal Feast',
+      '',
+      '---',
+      '',
+      '## Campaign Overview',
+      '',
+      'A banquet that has lasted a hundred years, and **you** are the new server.',
+      '',
+      '## Act One',
+      '',
+      'Spoilers.',
+    ].join('\n');
+
+    expect(previewCampaignOverview(overview)).toBe(
+      'A banquet that has lasted a hundred years, and you are the new server.',
+    );
+  });
+
+  it('returns nothing when no section has prose', () => {
+    expect(previewCampaignOverview('# The Eternal Feast\n\n---\n\n## Campaign Overview\n')).toBe(
+      '',
+    );
+  });
 });

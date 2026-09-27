@@ -73,6 +73,12 @@ interface GameMainContentProps {
   mapInRail?: boolean;
   onLeftToggle: () => void;
   onRightToggle: () => void;
+  /**
+   * Receives the story box, the area between the header and the dock. On a narrow screen the
+   * layout portals the open rail and the floating buttons into it, so they stop above the
+   * roll tray and the chat box instead of covering them (#2281).
+   */
+  storyBoxRef?: (el: HTMLDivElement | null) => void;
   showTracker: boolean;
   setShowTracker: (v: boolean) => void;
   isCombatDetected: boolean;
@@ -109,6 +115,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     mapInRail = false,
     onLeftToggle,
     onRightToggle,
+    storyBoxRef,
     showTracker,
     setShowTracker,
     isCombatDetected,
@@ -285,7 +292,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 <RollTraySlotProvider value={rollTraySlot}>
                   {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
                       story's length out of this column's minimum height. */}
-                  <div className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]">
+                  <div
+                    ref={storyBoxRef}
+                    data-testid="story-box"
+                    className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
+                  >
                     <MessageList
                       onSendFullMessage={handleSendMessage}
                       sessionId={sessionId}

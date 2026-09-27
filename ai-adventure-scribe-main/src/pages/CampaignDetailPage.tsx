@@ -38,6 +38,7 @@ const CampaignDetailPage: React.FC = () => {
     campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER,
   );
   const [artworkUnavailable, setArtworkUnavailable] = React.useState(!campaignBannerImage);
+  const overviewPreview = campaign?.overview ? previewCampaignOverview(campaign.overview) : '';
 
   React.useEffect(() => {
     setBannerImage(campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER);
@@ -205,18 +206,21 @@ const CampaignDetailPage: React.FC = () => {
           </div>
 
           {/* Premise */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold text-white mb-4">The Story</h2>
-            <p className="text-lg text-gray-300 leading-relaxed">{campaign.premise}</p>
-          </div>
+          {campaign.premise?.trim() && (
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-4">The Story</h2>
+              <p className="text-lg text-gray-300 leading-relaxed">{campaign.premise}</p>
+            </div>
+          )}
 
-          {/* Overview - show only a polished intro, not the full campaign bible */}
-          {campaign.overview && (
+          {/* Overview - only a polished intro, not the full campaign bible. Hidden when the
+              overview has no prose, rather than showing a heading over nothing (#2281). */}
+          {overviewPreview && (
             <div className="mb-12">
               <h2 className="text-2xl font-bold text-white mb-4">What Awaits You</h2>
               <div className="prose prose-invert prose-lg max-w-none">
                 <p className="text-gray-300 leading-relaxed whitespace-pre-line">
-                  {previewCampaignOverview(campaign.overview)}
+                  {overviewPreview}
                 </p>
               </div>
             </div>

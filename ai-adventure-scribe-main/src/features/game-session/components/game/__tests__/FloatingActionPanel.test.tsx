@@ -168,4 +168,21 @@ describe('FloatingActionPanel', () => {
     expect(screen.getByLabelText(/armor class: —/i)).toBeDefined();
     expect(screen.getByLabelText(/proficiency bonus: \+2/i)).toBeDefined();
   });
+
+  it('sits inside its container instead of fixed to the viewport when anchored (#2281)', () => {
+    const { container, rerender } = render(
+      <FloatingActionPanel isVisible={false} onToggle={mockOnToggle} combatMode={false} anchored />,
+    );
+    expect(container.firstChild).toHaveClass('absolute');
+    expect(container.firstChild).not.toHaveClass('fixed');
+
+    rerender(
+      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} anchored />,
+    );
+    expect(container.firstChild).toHaveClass('absolute');
+    expect(container.firstChild).not.toHaveClass('fixed');
+
+    rerender(<FloatingActionPanel isVisible={false} onToggle={mockOnToggle} combatMode={false} />);
+    expect(container.firstChild).toHaveClass('fixed');
+  });
 });

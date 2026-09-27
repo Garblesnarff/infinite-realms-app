@@ -37,6 +37,8 @@ describe('parseMessageOptions', () => {
         number: 1,
         text: "Try to pick the lock, using your thieves' tools.",
         fullText: "**Try to pick the lock**, using your thieves' tools.",
+        title: 'Try to pick the lock',
+        description: "using your thieves' tools.",
       });
 
       expect(result.options[1]).toEqual({
@@ -44,7 +46,30 @@ describe('parseMessageOptions', () => {
         number: 2,
         text: 'Kick the door down, using your strength.',
         fullText: '**Kick the door down**, using your strength.',
+        title: 'Kick the door down',
+        description: 'using your strength.',
       });
+    });
+
+    it('splits the bold action name from its description (#2281)', () => {
+      const result = parseMessageOptions(
+        [
+          'The hall is quiet.',
+          '',
+          '1. **Follow the scorched-sugar smell**, down the corridor toward the kitchens.',
+          '2. **Question the Manager** — he is wringing his hands by the doors.',
+          '3. **Wait**',
+        ].join('\n'),
+      );
+
+      expect(result.options.map(({ title, description }) => ({ title, description }))).toEqual([
+        {
+          title: 'Follow the scorched-sugar smell',
+          description: 'down the corridor toward the kitchens.',
+        },
+        { title: 'Question the Manager', description: 'he is wringing his hands by the doors.' },
+        { title: 'Wait', description: undefined },
+      ]);
     });
 
     it('should parse lettered bold options correctly', () => {

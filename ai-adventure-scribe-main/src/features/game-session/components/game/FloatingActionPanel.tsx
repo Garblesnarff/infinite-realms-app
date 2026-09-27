@@ -21,6 +21,11 @@ interface FloatingActionPanelProps {
   isVisible: boolean;
   onToggle: () => void;
   combatMode: boolean;
+  /**
+   * Positioned inside its container (the story box on a narrow screen) instead of fixed to the
+   * viewport, so it sits above the chat box rather than on it (#2281).
+   */
+  anchored?: boolean;
 }
 
 /**
@@ -28,7 +33,7 @@ interface FloatingActionPanelProps {
  * Reduces dependency on sidebar for frequently used features
  */
 export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.memo(
-  ({ isVisible, onToggle, combatMode }) => {
+  ({ isVisible, onToggle, combatMode, anchored = false }) => {
     const { state: characterState } = useCharacter();
     const { state: _combatState } = useCombat();
     const character = characterState.character;
@@ -77,12 +82,13 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
 
     if (!character) return null;
 
+    const position = anchored
+      ? 'absolute left-3 bottom-3 max-h-[calc(100%-1.5rem)] overflow-y-auto'
+      : 'fixed left-4 bottom-4 md:left-6 md:bottom-6';
+
     if (!isVisible) {
       return (
-        <div
-          className="fixed left-4 bottom-4 md:left-6 md:bottom-6"
-          style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
-        >
+        <div className={position} style={{ zIndex: Z_INDEX.FLOATING_PANEL }}>
           <Button
             type="button"
             onClick={onToggle}
@@ -109,7 +115,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
 
     return (
       <div
-        className="fixed left-4 bottom-4 md:left-6 md:bottom-6 animate-in slide-in-from-bottom-2 duration-300"
+        className={`${position} animate-in slide-in-from-bottom-2 duration-300`}
         style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
       >
         <Card className="glass-strong border-2 border-infinite-purple/30 shadow-2xl overflow-hidden">
