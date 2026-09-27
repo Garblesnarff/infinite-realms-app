@@ -1,0 +1,11 @@
+{
+  "name": "jev-pilot",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Offline pilot for the OpenRouter Decisions API (typesafe/jev-1.13). Not imported by the app.",
+  "scripts": {
+    "test": "bun test ./src/decisions-client.test.ts ./src/pilot.test.ts",
+    "pilot": "bun src/cli.ts"
+  }
+}

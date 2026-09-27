@@ -1,0 +1,24 @@
+{"id": "reeves_survive", "source": "#2230", "text": "We are here to survive, not to hope.", "type": "dialogue", "category": "npc", "hand_importance": 3}
+{"id": "reeves_line", "source": "#2230", "text": "Understood, Veteran. We are securing the line now.", "type": "dialogue", "category": "npc", "hand_importance": 3}
+{"id": "reeves_slow", "source": "#2189", "text": "I'd rather be slow and alive than fast and falling.", "type": "dialogue", "category": "npc", "hand_importance": 3}
+{"id": "darkwater_wants", "source": "#2230", "text": "It wants us, it wants us all, yes?", "type": "dialogue", "category": "npc", "hand_importance": 3}
+{"id": "abyss_dangling", "source": "#2230", "text": "dangling you helplessly over the abyss", "type": "description", "category": "location", "hand_importance": 4}
+{"id": "darkwater_hunger", "source": "#2230", "text": "a terrifying, wide-eyed hunger", "type": "description", "category": "npc", "hand_importance": 2}
+{"id": "hulks_descend", "source": "#2189", "text": "The Chiropteran Hulk 1 and a second, Chiropteran Hulk 2, descend from the gloom", "type": "event", "hand_importance": 4}
+{"id": "spider_reach", "source": "#2230", "text": "keeps it just out of your reach", "type": "scene_state", "category": "location", "hand_importance": 4}
+{"id": "throat_basalt", "source": "#2230", "text": "the The Throat of Basalt", "type": "location", "category": "location", "hand_importance": 2}
+{"id": "spider_miss", "source": "#2230", "text": "Vitruvian Spider rolled 13 + 3 = 16 vs AC 18 against The Veteran with The Vitruvian Spider attack — MISS. No damage.", "type": "event", "hand_importance": 4}
+{"id": "swings_true", "source": "#2230", "text": "Your longsword swings true", "type": "action", "category": "player_action", "hand_importance": 4}
+{"id": "flurry", "source": "#2230", "text": "It retaliates with a flurry of strikes, but you catch the blows on the surface of your shield.", "type": "event", "hand_importance": 3}
+{"id": "dash_across", "source": "#2231", "text": "You dash across the room to put distance between yourself and the creature", "type": "action", "category": "player_action", "hand_importance": 4}
+{"id": "not_your_turn", "source": "#2231", "text": "It is not your turn yet", "type": "dialogue", "hand_importance": 4}
+{"id": "chill_refused", "source": "#2231", "text": "the-apprentice's spell \"Chill Touch\" was refused (Spell refused: unknown spell \"Chill Touch\"). No roll, no damage.", "type": "event", "category": "player_action", "hand_importance": 5}
+{"id": "acid_splash", "source": "#2231", "text": "the-apprentice cast Acid Splash at flavor-elemental-corrupted — DEX save 6 vs DC 13 — FAIL. 5 acid damage.", "type": "event", "category": "player_action", "hand_importance": 5}
+{"id": "elemental_hit", "source": "#2231", "text": "Flavor-Elemental (Corrupted) rolled 17 + 3 = 20 vs AC 11 against The Apprentice — HIT.", "type": "event", "hand_importance": 4}
+{"id": "remy_window", "source": "#2188", "text": "do not look directly into the kitchen window when the fire elementals are in a mood", "type": "dialogue", "category": "npc", "hand_importance": 3}
+{"id": "prove_it", "source": "#2188", "text": "prove it here and now", "type": "dialogue", "category": "npc", "hand_importance": 3}
+{"id": "balthazar_cook", "source": "#2188", "text": "The Balthazar Head Chef Balthazar doesn't stop his frantic, masterful cooking.", "type": "description", "category": "npc", "hand_importance": 2}
+{"id": "combat_ended", "source": "#2230", "text": "Combat has ended.", "type": "scene_state", "hand_importance": 4}
+{"id": "expedition_down", "source": "PR #2249", "text": "The expedition has begun, and there is no way but down.", "type": "description", "category": "location", "hand_importance": 3}
+{"id": "voice_leak", "source": "#2230", "text": "her voice a low, raspy rasp that carries no contractions", "type": "description", "category": "npc", "hand_importance": 1}
+{"id": "stone_floor", "source": "#2230", "text": "scuttling across the stone floor", "type": "description", "category": "location", "hand_importance": 2}
