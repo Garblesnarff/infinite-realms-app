@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import logger from '@/lib/logger';
 import { getAccessToken } from '@/services/auth/TokenService';
@@ -22,6 +22,10 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
 } {
   const [userPlan, setUserPlan] = useState<UserPlan | null>(null);
   const [userPlanLoading, setUserPlanLoading] = useState(false);
+  // The account the current plan belongs to. A response that lands after
+  // sign-out or an account switch must not paint the old account's plan.
+  const userIdRef = useRef<string | null>(user?.id ?? null);
+  userIdRef.current = user?.id ?? null;
 
   const fetchUserPlan = useCallback(async () => {
     if (!user) {
@@ -43,6 +47,7 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
       return;
     }
 
+    const requestedFor = user.id;
     setUserPlanLoading(true);
     try {
       const apiUrl = import.meta.env?.VITE_API_URL || '';
@@ -58,22 +63,24 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
       }
 
       const data = await response.json();
+      if (userIdRef.current !== requestedFor) return;
       setUserPlan((data.plan as UserPlan) || 'free');
     } catch (error) {
       logger.warn('Failed to load user plan', error);
+      if (userIdRef.current !== requestedFor) return;
       setUserPlan('free'); // Default to free on error
     } finally {
-      setUserPlanLoading(false);
+      if (userIdRef.current === requestedFor) setUserPlanLoading(false);
     }
   }, [user]);
 
-  // Clear user plan when user logs out
+  // Clear user plan when user logs out or a different account signs in, so
+  // the previous account's plan never shows while the new one loads.
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (!user) {
-      setUserPlan(null);
-      setUserPlanLoading(false);
-    }
-  }, [user]);
+    setUserPlan(null);
+    setUserPlanLoading(false);
+  }, [userId]);
 
   // Fetch user plan only after auth is fully loaded (not during refresh)
   useEffect(() => {

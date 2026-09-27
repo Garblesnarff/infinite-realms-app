@@ -5,6 +5,7 @@ import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
+import { RailOverStoryLayer } from './RailOverStoryLayer';
 import { RAIL_OVER_STORY } from './use-game-rails';
 import { TacticalMapProvider, useMapInRail } from '../../tactical/TacticalMapProvider';
 import { FloatingActionPanel } from '../FloatingActionPanel';
@@ -102,6 +103,10 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     const handleLeftClose = useCallback((): void => {
       setIsLeftCollapsed(true);
     }, [setIsLeftCollapsed]);
+    const handleRailOverStoryClose = useCallback((): void => {
+      if (!isLeftCollapsed) setIsLeftCollapsed(true);
+      else setIsRightCollapsed(true);
+    }, [isLeftCollapsed, setIsLeftCollapsed, setIsRightCollapsed]);
     const mapInRail = useMapInRail(isLeftCollapsed, isRightCollapsed);
     // Below md an open rail has no column. It opens over the story box instead, which ends
     // where the dock (roll tray + chat box) begins, so no panel can cover the composer (#2281).
@@ -250,13 +255,12 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               {portalToStory &&
                 (!isLeftCollapsed || !isRightCollapsed) &&
                 createPortal(
-                  <div
-                    data-testid="rail-over-story"
-                    className="absolute inset-0 overflow-y-auto bg-infinite-dark/95 backdrop-blur-sm"
-                    style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                  <RailOverStoryLayer
+                    key={isLeftCollapsed ? 'right' : 'left'}
+                    onClose={handleRailOverStoryClose}
                   >
                     {isLeftCollapsed ? rightPanel : leftPanel}
-                  </div>,
+                  </RailOverStoryLayer>,
                   portalToStory,
                 )}
 

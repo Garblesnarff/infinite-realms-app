@@ -3,9 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CallbackPage from '../CallbackPage';
 
-const { navigate, persistSession } = vi.hoisted(() => ({
+const { navigate, persistSession, toastSuccess } = vi.hoisted(() => ({
   navigate: vi.fn(),
   persistSession: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess },
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -51,6 +56,23 @@ describe('CallbackPage', () => {
 
     window.dispatchEvent(new CustomEvent('auth-ready'));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/app'));
+  });
+
+  it('says which account signed in once auth is ready (#2292)', async () => {
+    window.history.replaceState(null, '', '/auth/callback?code=one-time-code');
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ accessToken: 'test-access-token', refreshToken: 'test-refresh-token' }),
+    });
+
+    render(<CallbackPage />);
+    await waitFor(() => expect(persistSession).toHaveBeenCalled());
+
+    window.dispatchEvent(
+      new CustomEvent('auth-ready', { detail: { user: { email: 'player@example.com' } } }),
+    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/app'));
+    expect(toastSuccess).toHaveBeenCalledWith('Signed in as player@example.com');
   });
 
   it('uses the deprecated fragment fallback only when no code is present', async () => {

@@ -138,7 +138,6 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           <div data-testid="roll-details" className="space-y-2">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground">
-                <span className="sr-only">Purpose: </span>
                 {request.purpose}
               </p>
               <span className="font-mono text-lg font-bold tabular-nums text-foreground">

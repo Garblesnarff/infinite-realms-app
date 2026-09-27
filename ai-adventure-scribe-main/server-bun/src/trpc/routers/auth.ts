@@ -101,15 +101,18 @@ export const authRouter = router({
     const userData = await (db.query as any).users.findFirst({
       where: (fields: any, { eq }: any) => eq(fields.id, ctx.user.userId),
       columns: {
+        email: true,
         plan: true,
         firstName: true,
         lastName: true,
       },
     });
 
+    // WorkOS access tokens carry no `email` claim unless a JWT template adds
+    // one, so the users row (written on every OAuth callback) is the source.
     return {
       id: ctx.user.userId,
-      email: ctx.user.email,
+      email: ctx.user.email || userData?.email || null,
       plan: userData?.plan || 'free',
       firstName: userData?.firstName,
       lastName: userData?.lastName,

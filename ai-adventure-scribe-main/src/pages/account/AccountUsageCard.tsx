@@ -20,7 +20,7 @@ export const AccountUsageCard: React.FC<AccountUsageCardProps> = ({ quota }) => 
           <Zap className="h-5 w-5" />
           Today's Usage
         </CardTitle>
-        <CardDescription>Your AI message quota resets daily at midnight UTC</CardDescription>
+        <CardDescription>Your AI message quota resets once a day</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">

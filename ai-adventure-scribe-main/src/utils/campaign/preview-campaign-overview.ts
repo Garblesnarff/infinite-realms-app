@@ -21,8 +21,11 @@ export function previewCampaignOverview(overview: string, limit = 800): string {
   return `${plain.slice(0, limit).trim()}...`;
 }
 
+// A CommonMark thematic break: three or more of one of - * _, optionally spaced ("- - -").
+const HORIZONTAL_RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm;
+
 function withoutHeadings(section: string): string {
-  return section.replace(/^#{1,6}\s+.*$/gm, '');
+  return section.replace(/^#{1,6}\s+.*$/gm, '').replace(HORIZONTAL_RULE, '');
 }
 
 function hasProse(section: string): boolean {
@@ -31,11 +34,11 @@ function hasProse(section: string): boolean {
 
 function toPlainText(section: string): string {
   return section
+    .replace(HORIZONTAL_RULE, '')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, '$1$2')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/^---+$/gm, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

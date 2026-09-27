@@ -95,6 +95,13 @@ describe('DiceRollRequest', () => {
     expect(screen.getByText('1d20+2')).toBeInTheDocument();
   });
 
+  it('names the purpose without a bare "Purpose:" label (#2292)', () => {
+    render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
+
+    expect(screen.getByRole('dialog', { name: 'Test purpose roll request' })).toBeInTheDocument();
+    expect(screen.getByTestId('roll-details')).not.toHaveTextContent(/Purpose:/);
+  });
+
   it('handles damage rolls without calculating modifiers', () => {
     const damageRequest = {
       type: 'damage' as const,

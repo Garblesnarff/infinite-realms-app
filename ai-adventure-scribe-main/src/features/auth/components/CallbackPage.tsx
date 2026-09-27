@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import logger from '@/lib/logger';
 import { persistSession } from '@/services/auth/TokenService';
@@ -69,10 +70,14 @@ export default function CallbackPage() {
         window.dispatchEvent(new CustomEvent('auth-tokens-updated'));
 
         // Wait for AuthContext to verify and set user before navigating
+        let signedInEmail: string | null = null;
         const authReadyPromise = new Promise<void>((resolve) => {
-          const handleAuthReady = () => {
+          const handleAuthReady = (event: Event) => {
             logger.info('Received auth-ready event, proceeding to /app');
             window.removeEventListener('auth-ready', handleAuthReady);
+            signedInEmail =
+              (event as CustomEvent<{ user?: { email?: string | null } }>).detail?.user?.email ??
+              null;
             resolve();
           };
           window.addEventListener('auth-ready', handleAuthReady);
@@ -92,6 +97,9 @@ export default function CallbackPage() {
         // Redirect to app
         logger.info('Redirecting to /app');
         navigate('/app');
+        // AuthKit can resume a remembered session without asking for
+        // credentials, so always say which account this is (#2292).
+        if (signedInEmail) toast.success(`Signed in as ${signedInEmail}`);
       } catch (err) {
         logger.error('Error processing callback:', err);
         setError('An error occurred during authentication');

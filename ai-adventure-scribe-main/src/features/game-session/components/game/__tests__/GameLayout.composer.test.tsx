@@ -229,6 +229,31 @@ describe.each([390, 665])('game layout at %i px (#2281)', (width) => {
     expect(screen.queryByTestId('rail-over-story')).not.toBeInTheDocument();
   });
 
+  it('focuses the open rail and closes it on Escape, returning focus (#2287 NIT)', () => {
+    render(<Game />);
+    const toggle = screen.getByRole('button', { name: 'Toggle Character' });
+    toggle.focus();
+
+    fireEvent.click(toggle);
+    const layer = screen.getByTestId('rail-over-story');
+    expect(layer).toContainElement(document.activeElement as HTMLElement);
+
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    expect(screen.queryByTestId('rail-over-story')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('character-sheet')).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
+  });
+
+  it('closes the campaign rail on Escape too', () => {
+    render(<Game />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Campaign' }));
+    fireEvent.keyDown(screen.getByTestId('rail-over-story'), { key: 'Escape' });
+
+    expect(screen.queryByTestId('campaign-rail')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rail-over-story')).not.toBeInTheDocument();
+  });
+
   it('does not write the narrow open/closed state over the wide-window preference', () => {
     render(<Game />);
 

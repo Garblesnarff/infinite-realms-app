@@ -49,4 +49,15 @@ describe('previewCampaignOverview', () => {
       '',
     );
   });
+  it.each(['---', '***', '___', '- - -', '* * *', '  ----'])(
+    'treats a %j horizontal rule as markup, not prose (#2287 NIT)',
+    (rule) => {
+      const overview = ['# The Eternal Feast', rule, '## Overview', '', 'The feast begins.'].join(
+        '\n',
+      );
+
+      expect(previewCampaignOverview(overview)).toBe('The feast begins.');
+      expect(previewCampaignOverview(`# The Eternal Feast\n${rule}\n## Overview\n`)).toBe('');
+    },
+  );
 });

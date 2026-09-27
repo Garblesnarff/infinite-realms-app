@@ -185,4 +185,42 @@ describe('useUserPlan', () => {
 
     expect(result.current.userPlan).toBeNull();
   });
+  it('clears the previous account plan when a different account signs in (#2292)', async () => {
+    window.localStorage.setItem('workos_access_token', mockToken);
+    let resolveSecond: (value: unknown) => void = () => {};
+    (global.fetch as any)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ plan: 'pro' }) })
+      .mockReturnValueOnce(new Promise((resolve) => (resolveSecond = resolve)));
+
+    const { result, rerender } = renderHook(({ user }) => useUserPlan({ user, loading: false }), {
+      initialProps: { user: mockUser as any },
+    });
+    await waitFor(() => expect(result.current.userPlan).toBe('pro'));
+
+    rerender({ user: { id: 'user-456', email: 'free@example.com' } });
+    expect(result.current.userPlan).toBeNull();
+
+    await act(async () => {
+      resolveSecond({ ok: true, json: async () => ({ plan: 'free' }) });
+    });
+    expect(result.current.userPlan).toBe('free');
+  });
+
+  it('ignores a plan response that lands after sign-out (#2292)', async () => {
+    window.localStorage.setItem('workos_access_token', mockToken);
+    let resolveFetch: (value: unknown) => void = () => {};
+    (global.fetch as any).mockReturnValue(new Promise((resolve) => (resolveFetch = resolve)));
+
+    const { result, rerender } = renderHook(({ user }) => useUserPlan({ user, loading: false }), {
+      initialProps: { user: mockUser as any },
+    });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+    rerender({ user: null });
+    await act(async () => {
+      resolveFetch({ ok: true, json: async () => ({ plan: 'pro' }) });
+    });
+
+    expect(result.current.userPlan).toBeNull();
+  });
 });
