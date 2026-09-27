@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.20.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.3...v0.20.4) (2026-09-27)
+
+
+### Bug Fixes
+
+* **dm:** one saved row per roll reply; recoverable roll failures ([#2280](https://github.com/Garblesnarff/infinite-realms-production/issues/2280)) ([#2286](https://github.com/Garblesnarff/infinite-realms-production/issues/2286)) ([f9d481c](https://github.com/Garblesnarff/infinite-realms-production/commit/f9d481c221aa8ef245d6e7f5bcced2a765a75aaf))
+* **game:** keep panels off the chat box; full option names; hide empty "What Awaits You" ([#2281](https://github.com/Garblesnarff/infinite-realms-production/issues/2281)) ([#2287](https://github.com/Garblesnarff/infinite-realms-production/issues/2287)) ([fa049e7](https://github.com/Garblesnarff/infinite-realms-production/commit/fa049e75c4ae881250c53f23752a019acf1d7e2c))
+
 ## [0.20.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.2...v0.20.3) (2026-09-26)
 
 
