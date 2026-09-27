@@ -52,7 +52,7 @@ Hand labels use the same 1–5 rubric as the question, judged from the text. The
 
 ## Cost cap
 
-The ledger stops **before** a request whose conservative estimate (about 3 characters per token) would take the run past **2,000,000 input tokens** (about $0.08 at $0.042 per 1M input tokens; output is free). Failed attempts reserve the estimate so retries cannot walk past the cap. When the provider returns `usage`, that count replaces the reservation. The run prints tokens and cost. Published price is the fallback when `usage.cost` is absent.
+The ledger stops **before** a request whose conservative estimate (about 3 characters per token) would take the run past **2,000,000 input tokens** (about $0.08 at $0.042 per 1M input tokens; output is free). Failed attempts reserve the estimate so retries cannot walk past the cap. When the provider returns `usage`, that count replaces the reservation. If the cap trips mid-run, the script writes the experiments that finished (and the partial one) plus usage, then exits 1. After each live batch it prints that batch's estimate next to `usage.input_tokens`. Published price is the fallback when `usage.cost` is absent.
 
 ## Regex checker
 

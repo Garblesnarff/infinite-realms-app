@@ -1,4 +1,3 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { CostLedger } from './cost-ledger';
@@ -14,13 +13,8 @@ import {
 import { agreement, compareImportance } from './metrics';
 import { loadRegexChecker } from './regex-checker';
 import { chunkImportance, importanceRequest, narrationRequest, rerankRequest } from './requests';
-import {
-  estimateRequests,
-  runImportance,
-  runNarration,
-  runRerank,
-  scoreRerankBaselines,
-} from './run-experiments';
+import { estimateRequests, scoreRerankBaselines } from './run-experiments';
+import { runLive } from './run-live';
 
 import type { ImportanceComparison } from './metrics';
 
@@ -85,19 +79,15 @@ function formatRate(rate: number | null): string {
   return rate.toFixed(3);
 }
 
-function renderMarkdown(output: Record<string, unknown>): string {
-  const lines = ['# Jev pilot results', ''];
-  const usage = output.usage;
-  if (usage && typeof usage === 'object') {
-    lines.push('## Usage', '', '```json', JSON.stringify(usage, null, 2), '```', '');
-  }
-  lines.push('## Payload', '', '```json', JSON.stringify(output, null, 2), '```', '');
-  return lines.join('\n');
-}
+export type LiveDeps = {
+  ledger: CostLedger;
+  client: DecisionsClient;
+};
 
 export async function main(
   argv: string[],
   env: Record<string, string | undefined> = process.env,
+  deps?: LiveDeps,
 ): Promise<number> {
   const options = parseArgs(argv);
   const dir = fixtureDir();
@@ -143,43 +133,26 @@ export async function main(
     printLine('dry-run: no request was sent.');
     return 0;
   }
-  const apiKey = readApiKey(env);
+  const apiKey = deps ? 'injected' : readApiKey(env);
   if (!apiKey) {
     printLine('OPENROUTER_API_KEY is not set. No live request was sent.');
     return 2;
   }
-  const ledger = new CostLedger();
-  const client = new DecisionsClient({ apiKey, ledger });
-  mkdirSync(options.outDir, { recursive: true });
-  const checker = wants(options, 'A') ? await loadRegexChecker(options.appRoot) : null;
-  const output: Record<string, unknown> = {};
-  if (wants(options, 'A')) {
-    output.narration = await runNarration(client, narration, checker);
-  }
-  if (wants(options, 'B')) {
-    output.rerank = await runRerank(client, rerank);
-  }
-  if (wants(options, 'C')) {
-    const rows = await runImportance(client, importance);
-    output.importance = {
-      rows,
-      jev_hand_agreement: agreement(rows, 'jev'),
-      baseline_hand_agreement: agreement(rows, 'baseline'),
-    };
-  }
-  output.usage = {
-    input_tokens: ledger.inputTokens,
-    output_tokens: ledger.outputTokens,
-    cost_usd: ledger.costUsd,
-    requests: ledger.requests,
-  };
-  writeFileSync(path.join(options.outDir, 'results.json'), `${JSON.stringify(output, null, 2)}\n`);
-  writeFileSync(path.join(options.outDir, 'results.md'), renderMarkdown(output));
-  printLine(
-    `live input_tokens=${ledger.inputTokens} output_tokens=${ledger.outputTokens} cost_usd=${ledger.costUsd.toFixed(6)} requests=${ledger.requests}`,
-  );
-  printLine(`wrote ${options.outDir}`);
-  return 0;
+  const ledger = deps?.ledger ?? new CostLedger();
+  const client = deps?.client ?? new DecisionsClient({ apiKey, ledger });
+  const batches = (['A', 'B', 'C'] as const).filter((name) => wants(options, name));
+  return runLive({
+    narration,
+    rerank,
+    importance,
+    batches,
+    estimate,
+    outDir: options.outDir,
+    checker: batches.includes('A') ? await loadRegexChecker(options.appRoot) : null,
+    ledger,
+    client,
+    printLine,
+  });
 }
 
 if (import.meta.main) {

@@ -1,4 +1,4 @@
-import { estimateInputTokens } from './cost-ledger';
+import { CostCapError, estimateInputTokens } from './cost-ledger';
 import {
   addNoul,
   compareImportance,
@@ -22,6 +22,24 @@ export function estimateRequests(bodies: unknown[]): number {
   return bodies.reduce<number>((sum, body) => sum + estimateInputTokens(body), 0);
 }
 
+/** A cap hit keeps whatever that experiment already scored. */
+export class ExperimentCapStop extends Error {
+  readonly partial: Record<string, unknown>;
+
+  constructor(partial: Record<string, unknown>, cause: CostCapError) {
+    super(cause.message);
+    this.name = 'ExperimentCapStop';
+    this.partial = { ...partial, stopped: 'cost_cap' };
+  }
+}
+
+function rethrowCap(partial: Record<string, unknown>, error: unknown): never {
+  if (error instanceof CostCapError) {
+    throw new ExperimentCapStop(partial, error);
+  }
+  throw error;
+}
+
 export async function runNarration(
   client: DecisionsClient,
   fixtures: NarrationFixture[],
@@ -34,8 +52,17 @@ export async function runNarration(
     NARRATION_QUESTION_IDS.map((id) => [id, emptyRuleScore()]),
   ) as Record<NarrationQuestionId, RuleScore>;
   const flags: Array<{ id: string; rules: string[] }> = [];
+  const partial = (): Record<string, unknown> => ({
+    rules,
+    regex: checker ? { status: 'ran', flags } : { status: 'not-on-ref', flags: [] },
+  });
   for (const fixture of fixtures) {
-    const response = await client.decide(narrationRequest(fixture));
+    let response;
+    try {
+      response = await client.decide(narrationRequest(fixture));
+    } catch (error) {
+      rethrowCap(partial(), error);
+    }
     for (const id of NARRATION_QUESTION_IDS) {
       addNoul(rules[id], fixture.labels[id], requireNoul(response.answers, id));
     }
@@ -46,9 +73,9 @@ export async function runNarration(
       });
     }
   }
-  return {
-    rules,
-    regex: checker ? { status: 'ran', flags } : { status: 'not-on-ref', flags: [] },
+  return partial() as {
+    rules: Record<NarrationQuestionId, RuleScore>;
+    regex: { status: 'not-on-ref' | 'ran'; flags: Array<{ id: string; rules: string[] }> };
   };
 }
 
@@ -90,7 +117,12 @@ export async function runRerank(
 }> {
   const rows: RerankRow[] = [];
   for (const fixture of fixtures) {
-    const response = await client.decide(rerankRequest(fixture));
+    let response;
+    try {
+      response = await client.decide(rerankRequest(fixture));
+    } catch (error) {
+      rethrowCap(summarizeRerank(rows), error);
+    }
     const ranked = [...fixture.candidates].sort((left, right) => {
       return requireNoul(response.answers, right.id) - requireNoul(response.answers, left.id);
     });
@@ -140,7 +172,12 @@ export async function runImportance(
 ): Promise<ImportanceComparison[]> {
   const rows = [];
   for (const chunk of chunkImportance(fixtures, 20)) {
-    const response = await client.decide(importanceRequest(chunk));
+    let response;
+    try {
+      response = await client.decide(importanceRequest(chunk));
+    } catch (error) {
+      rethrowCap({ rows }, error);
+    }
     for (const fixture of chunk) {
       const answer = requireScore(response.answers, fixture.id);
       rows.push(compareImportance(fixture, answer.score, answer.confidence));

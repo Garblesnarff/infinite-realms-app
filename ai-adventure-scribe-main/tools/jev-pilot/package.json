@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Offline pilot for the OpenRouter Decisions API (typesafe/jev-1.13). Not imported by the app.",
   "scripts": {
-    "test": "bun test ./src/decisions-client.test.ts ./src/pilot.test.ts",
+    "test": "bun test ./src/decisions-client.test.ts ./src/pilot.test.ts ./src/cap.test.ts",
     "pilot": "bun src/cli.ts"
   }
 }
