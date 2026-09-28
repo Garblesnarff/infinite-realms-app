@@ -379,9 +379,7 @@ describeWithDb('attack resolution telemetry', () => {
   });
 
   test('cover-adjusted AC is reported at both ends of the adjustment', async () => {
-    // Never checkable in production before this: the engine applied +2/+5 internally and
-    // reported only the final number, so a cover bonus that failed to apply was
-    // indistinguishable from a target with lower AC.
+    // The engine applies +2/+5 and reports both the seated AC and the number compared.
     await setAc(monsterId, 17);
     const width = 12;
     const height = 5;

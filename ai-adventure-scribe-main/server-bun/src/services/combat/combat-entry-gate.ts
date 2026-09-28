@@ -24,6 +24,7 @@
  */
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './scene-spec-sanitizer.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
+import { displayNameFromRoster } from '../../../../shared/engine-display-name';
 import { ValidationError } from '../../lib/errors.js';
 
 import type { CombatEntryFirstAction } from './combat-entry-first-action.js';
@@ -511,7 +512,9 @@ export function buildCombatSeatingTranscript(
         ? participant.characterId === player.characterId
         : participant.name === (player.name || 'Player'));
     if (isPlayer) playerNamed = true;
-    const label = isPlayer ? 'You' : participant.name;
+    const label = isPlayer
+      ? 'You'
+      : displayNameFromRoster(participant.name, [{ id: participant.name, name: participant.name }]);
     const roll = participant.initiative - participant.initiativeModifier;
     const modifier =
       participant.initiativeModifier < 0

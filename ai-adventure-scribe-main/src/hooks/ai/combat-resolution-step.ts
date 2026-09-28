@@ -5,6 +5,7 @@ import {
   repairedTurnNotice,
   turnNotice,
 } from './combat-notice';
+import { facingName, type EngineRosterEntry } from '../../../shared/engine-display-name';
 
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
@@ -208,8 +209,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   );
   const isQueuedIntentActor = (actorId: string): boolean =>
     queuedActorIds.has(actorId) || queuedActorSlugs.has(slugify(actorId));
-  const labelFor = (actorId: string): string =>
-    participants?.find((participant) => participant.id === actorId)?.name ?? actorId;
+  const roster: EngineRosterEntry[] = (participants ?? []).map((participant) => ({
+    id: participant.id,
+    name: participant.name ?? null,
+  }));
+  const labelFor = (actorId: string): string => facingName(undefined, actorId, roster);
   const appendEngineBlock = ({
     source,
     actorId,
@@ -266,7 +270,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       const line = appendEngineBlock({
         source: actorIsPlayer ? 'player' : 'npc',
         actorId: action.actor_id,
-        lines: [formatRefusedSpellOutcome(labelFor(action.actor_id), spell, refusal.message)],
+        lines: [formatRefusedSpellOutcome(action.actor_id, spell, refusal.message, roster)],
         round: combatRound ?? 1,
       });
       if (line) refusalLines.set(refusalRecord, line);
@@ -291,7 +295,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         ...authoritativeResult,
         actorIsPlayer: false,
       });
-      const engineTranscript = formatCombatEngineOutcome(npcResult.action, npcResult.engineResult);
+      const engineTranscript = formatCombatEngineOutcome(
+        npcResult.action,
+        npcResult.engineResult,
+        roster,
+      );
       const npcOrder = participants?.find(
         (participant) => participant.id === npcResult.action.actor_id,
       )?.turnOrder;
@@ -409,7 +417,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       encounterAlreadyConcluded = true;
       return 'combat_ended';
     }
-    const engineTranscript = formatCombatEngineOutcome(action, execution.result);
+    const engineTranscript = formatCombatEngineOutcome(action, execution.result, roster);
     appendEngineBlock({
       source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
       actorId: action.actor_id,

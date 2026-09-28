@@ -1,5 +1,10 @@
-import type { CombatEngineResult, CombatTranscriptAction } from './combat-outcome-transcript';
+import {
+  facingName,
+  formatVersusArmorClass,
+  type EngineRosterEntry,
+} from '../../../shared/engine-display-name';
 
+import type { CombatEngineResult, CombatTranscriptAction } from './combat-outcome-transcript';
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -45,9 +50,10 @@ function spellTargetTrailer(target: string, result: CombatEngineResult): string 
 function formatSpellOutcome(
   action: CombatTranscriptAction,
   result: CombatEngineResult,
+  roster: readonly EngineRosterEntry[] = [],
 ): string | null {
-  const actor = result.actorName ?? action.actor_id ?? 'Actor';
-  const target = result.targetName ?? action.target_ids?.[0] ?? 'target';
+  const actor = facingName(result.actorName, action.actor_id, roster);
+  const target = facingName(result.targetName, action.target_ids?.[0], roster);
   const spell = result.spellName ?? 'a spell';
   const damage = isFiniteNumber(result.finalDamage)
     ? `${result.finalDamage}${result.damageType ? ` ${result.damageType}` : ''} damage.`
@@ -75,7 +81,7 @@ function formatSpellOutcome(
     const missDamage = result.hit ? damage : 'No damage.';
     return (
       `⚙️ Engine: ${actor} cast ${spell} at ${target} — spell attack ${result.d20} + ${result.attackBonus} ` +
-      `= ${result.totalAttackRoll} vs AC ${result.targetAC ?? '?'} — ${outcome}.` +
+      `= ${result.totalAttackRoll} ${formatVersusArmorClass(result)} — ${outcome}.` +
       `${missDamage ? ` ${missDamage}` : ''}${trailer}`
     );
   }
@@ -89,19 +95,22 @@ function formatSpellOutcome(
 export function formatSpellEngineOutcome(
   action: CombatTranscriptAction,
   result: CombatEngineResult,
+  roster: readonly EngineRosterEntry[] = [],
 ): string | null {
   const outcomes = Array.isArray(result.results) ? result.results : [result];
   const lines = outcomes
-    .map((outcome) => formatSpellOutcome(action, outcome))
+    .map((outcome) => formatSpellOutcome(action, outcome, roster))
     .filter((line): line is string => Boolean(line));
   return lines.length ? lines.join('\n\n') : null;
 }
 
-/** Format a refused player spell so the transcript never invents an outcome. */
+/** Format a refused player spell. `actorId` is resolved once, against the roster. */
 export function formatRefusedSpellOutcome(
-  actorLabel: string,
+  actorId: string,
   spellName: string,
   reason: string,
+  roster: readonly EngineRosterEntry[] = [],
 ): string {
-  return `⚙️ Engine: ${actorLabel}'s spell "${spellName}" was refused (${reason}). No roll, no damage, no wound.`;
+  const actor = facingName(undefined, actorId, roster);
+  return `⚙️ Engine: ${actor}'s spell "${spellName}" was refused (${reason}). No roll, no damage, no wound.`;
 }

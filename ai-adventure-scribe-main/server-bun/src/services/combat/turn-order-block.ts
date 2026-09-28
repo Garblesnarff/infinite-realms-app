@@ -1,7 +1,13 @@
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { vitalStateOf, type VitalsInput } from './death-saves-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import {
+  displayNameFromRoster,
+  type EngineRosterEntry,
+} from '../../../../shared/engine-display-name';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
+
+import type { TacticalMap } from '../../tactical/types.js';
 
 /**
  * The initiative order as a sequence, not a set: round number, every combatant in turn order,
@@ -24,7 +30,8 @@ import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.j
  * `combat_participant_status`. Degrades to an empty string on any failure: this is an
  * enrichment, and losing it must never cost the DM the board it is appended to.
  */
-export async function buildTurnOrderBlock(sessionId: string, userId: string): Promise<string> {  try {
+export async function buildTurnOrderBlock(sessionId: string, userId: string): Promise<string> {
+  try {
     const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
     if (!encounter) return '';
     const [state, map] = await Promise.all([
@@ -97,6 +104,24 @@ export type CurrentTurnInfo = {
   round: number;
 };
 
+type NamedParticipant = { id: string; name?: string | null };
+
+/** Roster the player-facing label reads. Slugs stay on the turn-order lines. */
+function rosterFor(
+  participants: readonly NamedParticipant[],
+  map: TacticalMap | null,
+): EngineRosterEntry[] {
+  return participants.map((participant) => {
+    const entity = map ? resolveEntityRef(map.entities, participant.id) : null;
+    return {
+      id: participant.id,
+      name: participant.name ?? null,
+      entityName: entity?.name ?? null,
+      slug: entity ? entitySlug(entity) : slugify(participant.name ?? ''),
+    };
+  });
+}
+
 export async function getCurrentTurnInfo(
   sessionId: string,
   userId: string,
@@ -111,15 +136,24 @@ export async function getCurrentTurnInfo(
     const current = state.currentParticipant;
     if (!current) return null;
     const participant = state.participants.find((p) => p.id === current.id) as
-      | { name?: string; participantType?: string }
+      | { id?: string; name?: string; participantType?: string }
       | undefined;
     // The board is the source of the slug, because the board is what the DM was shown —
-    // same rule as buildTurnOrderBlock above.
+    // same rule as buildTurnOrderBlock above. The label is a display name, never the id.
     const entity = map ? resolveEntityRef(map.entities, current.id) : null;
     const slug = entity ? entitySlug(entity) : slugify(participant?.name ?? current.id);
+    const roster = rosterFor(state.participants as NamedParticipant[], map);
+    if (!roster.some((row) => row.id === current.id)) {
+      roster.push({
+        id: current.id,
+        name: participant?.name ?? null,
+        entityName: entity?.name ?? null,
+        slug,
+      });
+    }
     return {
       slug,
-      label: participant?.name ?? current.id,
+      label: displayNameFromRoster(current.id, roster),
       isPlayer: participant?.participantType === 'player',
       round: state.encounter.currentRound,
     };

@@ -54,7 +54,7 @@ export type AttackTelemetry = {
   attackBonus: number;
   /** `d20 + attackBonus` — the number actually compared against AC. */
   totalAttack: number;
-  /** The target's AC before any cover adjustment. */
+  /** The target's AC before any cover adjustment. The tracker shows this. */
   baseAc: number;
   /** The AC the roll was compared against: `baseAc + coverBonus`. */
   effectiveAc: number;

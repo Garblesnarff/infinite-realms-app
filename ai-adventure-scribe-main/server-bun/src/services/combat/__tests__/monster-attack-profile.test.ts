@@ -176,7 +176,7 @@ describe('precedence: authored -> catalog -> derived -> generic', () => {
     });
     expect(profile.source).toBe('authored');
     expect(profile.attacks[0]).toMatchObject({
-      name: 'Stone Golem attack',
+      name: 'strike',
       attackBonus: 7,
       damageDice: '2d10',
       damageBonus: 4,

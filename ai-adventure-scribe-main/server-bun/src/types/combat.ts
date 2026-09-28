@@ -591,6 +591,12 @@ export interface AttackResult {
   /** The engine's attack modifier, kept beside the die so the total can be audited. */
   attackBonus?: number;
   targetAC: number;
+  /** Seated armor class before cover. Present when the line should explain the bonus. */
+  baseAc?: number;
+  /** `targetAC - baseAc`. Half cover is 2, three-quarters is 5. */
+  coverBonus?: number;
+  /** Tactical cover grade. 1 half, 2 three-quarters. */
+  cover?: number | null;
   totalAttackRoll: number;
   damage?: number;
   damageType?: DamageType;

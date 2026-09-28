@@ -204,7 +204,7 @@ describe('authored attack name and range', () => {
       monsterName: 'Gluten Golem',
     });
     expect(profile.attacks[0]).toMatchObject({
-      name: 'Gluten Golem attack',
+      name: 'strike',
       normalRange: 5,
       ranged: false,
       damageDice: '2d10',
@@ -217,7 +217,7 @@ describe('authored attack name and range', () => {
     const parsed = parseAuthoredStatBlock('**Attack:** +3 to hit, reach 10 ft, 1d6 slashing');
     const profile = resolveMonsterAttackProfile({ authored: parsed, monsterName: 'Tendril' });
     expect(profile.attacks[0]).toMatchObject({
-      name: 'Tendril attack',
+      name: 'strike',
       normalRange: 10,
       ranged: false,
     });

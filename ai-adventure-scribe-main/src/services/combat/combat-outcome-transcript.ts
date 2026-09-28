@@ -6,6 +6,12 @@
  * condition tier instead.
  */
 import { formatSpellEngineOutcome } from './combat-spell-transcript';
+import {
+  facingName,
+  formatVersusArmorClass,
+  playerFacingWeaponName,
+  type EngineRosterEntry,
+} from '../../../shared/engine-display-name';
 
 export { formatRefusedSpellOutcome } from './combat-spell-transcript';
 
@@ -26,6 +32,12 @@ export interface CombatEngineResult {
   attackBonus?: number;
   totalAttackRoll?: number;
   targetAC?: number;
+  /** Seated armor class, before cover. The tracker shows this. */
+  baseAc?: number;
+  /** Added to {@link baseAc} to reach {@link targetAC}. Zero when there is no cover. */
+  coverBonus?: number;
+  /** Tactical cover grade 0–3. 1 is half cover (+2), 2 is three-quarters (+5). */
+  cover?: number | null;
   hit?: boolean;
   finalDamage?: number;
   damageType?: string;
@@ -84,15 +96,16 @@ function targetState(result: CombatEngineResult): string | null {
 export function formatCombatEngineOutcome(
   action: CombatTranscriptAction,
   value: unknown,
+  roster: readonly EngineRosterEntry[] = [],
 ): string | null {
   if (!isRecord(value)) return null;
   if (action.action_type === 'cast_spell') {
-    return formatSpellEngineOutcome(action, value as CombatEngineResult);
+    return formatSpellEngineOutcome(action, value as CombatEngineResult, roster);
   }
   if (action.action_type !== 'attack') return null;
   const result = value as CombatEngineResult;
-  const actor = result.actorName ?? action.actor_id ?? 'Actor';
-  const target = result.targetName ?? action.target_ids?.[0] ?? 'target';
+  const actor = facingName(result.actorName, action.actor_id, roster);
+  const target = facingName(result.targetName, action.target_ids?.[0], roster);
   const lines = [weaponSwapLine(result)].filter((line): line is string => Boolean(line));
 
   if (result.resolvedAs === 'movement_only') {
@@ -113,14 +126,14 @@ export function formatCombatEngineOutcome(
 
   const weapon =
     typeof result.weaponResolution?.resolved === 'string'
-      ? ` with ${result.weaponResolution.resolved}`
+      ? ` with ${playerFacingWeaponName(result.weaponResolution.resolved, actor)}`
       : '';
   const roll =
     isFiniteNumber(result.d20) &&
     isFiniteNumber(result.attackBonus) &&
     isFiniteNumber(result.totalAttackRoll) &&
     isFiniteNumber(result.targetAC)
-      ? `rolled ${result.d20} ${formatModifier(result.attackBonus)} = ${result.totalAttackRoll} vs AC ${result.targetAC}`
+      ? `rolled ${result.d20} ${formatModifier(result.attackBonus)} = ${result.totalAttackRoll} ${formatVersusArmorClass(result)}`
       : `resolved an attack against ${target}`;
   const outcome = result.isCritical && result.hit ? 'CRITICAL HIT' : result.hit ? 'HIT' : 'MISS';
   const auto = result.autoRolled === true ? ' (auto-rolled)' : '';

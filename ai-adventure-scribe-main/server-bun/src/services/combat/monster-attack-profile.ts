@@ -374,7 +374,7 @@ export interface AuthoredAttackFields {
   attackBonus?: number;
   damageDice?: string;
   damageType?: string;
-  /** From `Attack (Name):`. Absent means the profile names the swing `<monster> attack`. */
+  /** From `Attack (Name):`. Absent means the swing is the generic word `strike`. */
   attackName?: string;
   /** Remainder of the Attack line. Geometry is read from this; empty stays melee 5 ft. */
   attackText?: string;
@@ -394,17 +394,18 @@ export function resolveMonsterAttackProfile(input: {
   authored?: AuthoredAttackFields | null;
   catalog?: SrdActionParse | null;
   maxHp?: number | null;
-  /** Used only to name a derived attack after its creature. */
+  /** Kept for callers. The swing is no longer named after the creature (#2306). */
   monsterName?: string | null;
 }): MonsterAttackProfile {
-  const { authored, catalog, maxHp, monsterName } = input;
+  const { authored, catalog, maxHp } = input;
 
   if (authored?.attackBonus !== undefined && authored.damageDice) {
     const split = splitDamageDice(authored.damageDice);
     if (split) {
       // Same geometry reader as the catalog rung. No reach/range prose stays melee 5 ft.
       const geometry = readGeometry(authored.attackText ?? '');
-      const fallbackName = monsterName ? `${monsterName} attack` : 'Attack';
+      // No authored Attack (Name). Never "<Monster> attack" (#2306).
+      const fallbackName = 'strike';
       return {
         source: 'authored',
         attacks: [
@@ -438,7 +439,7 @@ export function resolveMonsterAttackProfile(input: {
     const band = crBandForHitPoints(maxHp);
     return {
       source: 'derived',
-      attacks: [deriveAttackFromHitPoints(maxHp, monsterName ? `${monsterName} attack` : 'Attack')],
+      attacks: [deriveAttackFromHitPoints(maxHp, 'strike')],
       derivation: {
         fromMaxHp: maxHp,
         challengeRating: band.cr,

@@ -319,6 +319,7 @@ export class CombatAttackService {
       refusal: rules.refusal ?? null,
       weaponName: weapon.name || 'attack',
       attackBonus: rules.attackBonus,
+      // The roll is compared to seated AC plus cover. The tracker still shows baseAc.
       targetAc: rules.targetAc,
       baseAc: baseTargetAc,
       coverBonus: rules.targetAc - baseTargetAc,
@@ -367,7 +368,14 @@ export class CombatAttackService {
         ? rollD20(rules.advantage, rules.disadvantage)
         : (providedD20 as number);
 
+      // Seated AC plus cover (half +2, three-quarters +5). The line names the bonus.
       const targetAC = rules.targetAc;
+      const acFacts = {
+        targetAC,
+        baseAc: baseTargetAc,
+        coverBonus: targetAC - baseTargetAc,
+        cover: geometry?.cover ?? null,
+      };
 
       // Check if attack hits
       const hitCheck = checkHit({
@@ -424,7 +432,7 @@ export class CombatAttackService {
           hit: false,
           d20: attackRoll,
           attackBonus: rules.attackBonus,
-          targetAC,
+          ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
           effectiveResistance: false,
           effectiveVulnerability: false,
@@ -508,7 +516,7 @@ export class CombatAttackService {
           hit: true,
           d20: attackRoll,
           attackBonus: rules.attackBonus,
-          targetAC,
+          ...acFacts,
           totalAttackRoll: hitCheck.totalAttackRoll,
           damage: damageCalc.baseDamage,
           damageType: weapon.damageType as DamageType,
@@ -594,6 +602,10 @@ export class CombatAttackService {
     );
     const casterConditions = await getActiveConditionNames(casterId);
     const spellRules = new Map<string, ReturnType<typeof resolveAttackRules>>();
+    const seatedAcByTarget = new Map<
+      string,
+      { seated: number; effective: number; cover: 0 | 1 | 2 | 3 | null }
+    >();
     for (const targetId of targetIds) {
       const targetData = allParticipantDataMap.get(targetId);
       if (!targetData) throw new NotFoundError('Target participant', targetId);
@@ -604,6 +616,14 @@ export class CombatAttackService {
       });
       const from = tacticalMap?.entities.find((entity) => entity.id === casterId);
       const to = tacticalMap?.entities.find((entity) => entity.id === targetId);
+      const geometry =
+        tacticalMap && from && to
+          ? {
+              distanceFeet: getDistance(from, to),
+              hasLineOfSight: checkLineOfSight(tacticalMap, casterId, targetId),
+              cover: getCover(tacticalMap, casterId, targetId),
+            }
+          : undefined;
       const rules = resolveAttackRules({
         strength: casterProfile.scores.str ?? 10,
         dexterity: casterProfile.scores.dex ?? 10,
@@ -620,14 +640,7 @@ export class CombatAttackService {
           ranged: spell.attackType !== 'melee',
           proficient: true,
         },
-        geometry:
-          tacticalMap && from && to
-            ? {
-                distanceFeet: getDistance(from, to),
-                hasLineOfSight: checkLineOfSight(tacticalMap, casterId, targetId),
-                cover: getCover(tacticalMap, casterId, targetId),
-              }
-            : undefined,
+        geometry,
         attackerConditions: casterConditions,
         targetConditions,
       });
@@ -637,6 +650,11 @@ export class CombatAttackService {
           refusal: rules.refusal,
         });
       spellRules.set(targetId, rules);
+      seatedAcByTarget.set(targetId, {
+        seated: targetAc,
+        effective: rules.targetAc,
+        cover: geometry?.cover ?? null,
+      });
     }
     const spellAbility = this.spellcastingAbility(casterProfile.className);
     const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
@@ -647,6 +665,7 @@ export class CombatAttackService {
       casterProfile,
       allParticipantDataMap,
       spellRules,
+      seatedAcByTarget,
       spellModifier,
       spellAttackBonus,
     };
@@ -670,7 +689,7 @@ export class CombatAttackService {
     advantage: boolean;
     disadvantage: boolean;
   }> {
-    const { spell, spellRules, spellAttackBonus } = await this.prepareSpellCast(
+    const { spell, spellRules, seatedAcByTarget, spellAttackBonus } = await this.prepareSpellCast(
       encounterId,
       input,
       userId,
@@ -682,7 +701,7 @@ export class CombatAttackService {
       kind: spell.attackType ? 'attack' : spell.saveAbility ? 'save' : 'auto-hit',
       attackBonus: spellAttackBonus,
       saveDC: 8 + spellAttackBonus,
-      targetAc: rules?.targetAc ?? 0,
+      targetAc: seatedAcByTarget.get(input.targetIds[0] ?? '')?.effective ?? 0,
       advantage: rules?.advantage ?? false,
       disadvantage: rules?.disadvantage ?? false,
     };
@@ -703,6 +722,7 @@ export class CombatAttackService {
       casterProfile,
       allParticipantDataMap,
       spellRules,
+      seatedAcByTarget,
       spellModifier,
       spellAttackBonus,
     } = await this.prepareSpellCast(encounterId, input, userId);
@@ -784,14 +804,20 @@ export class CombatAttackService {
           };
         }
 
-        // Stored participant AC, including a real 10. NULL is unset and falls back to
-        // generic 12 — never an in-band sentinel (#1871).
-        const targetAC =
-          spellRules.get(targetId)?.targetAc ??
-          resolveParticipantArmorClass(targetParticipant.armorClass, {
-            participantId: targetParticipant.id,
-            encounterId,
-          });
+        // Seated AC plus cover. NULL armor class still falls back to generic 12 (#1871).
+        const seatedAc = seatedAcByTarget.get(targetId);
+        const fallbackAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
+          participantId: targetParticipant.id,
+          encounterId,
+        });
+        const baseAc = seatedAc?.seated ?? fallbackAc;
+        const targetAC = seatedAc?.effective ?? fallbackAc;
+        const acFacts = {
+          targetAC,
+          baseAc,
+          coverBonus: targetAC - baseAc,
+          cover: seatedAc?.cover ?? null,
+        };
 
         // Aggregate resistances using the extracted module
         const defenses = aggregateResistances(targetParticipant, targetStats);
@@ -828,7 +854,7 @@ export class CombatAttackService {
             );
             const attackResult: AttackResult = {
               hit: true,
-              targetAC,
+              ...acFacts,
               totalAttackRoll: 0,
               damage: damageCalc.baseDamage,
               damageType,
@@ -885,7 +911,7 @@ export class CombatAttackService {
               hit: false,
               d20: attackRoll,
               attackBonus: spellAttackBonus,
-              targetAC,
+              ...acFacts,
               totalAttackRoll: hitCheckResult.totalAttackRoll,
               effectiveResistance: false,
               effectiveVulnerability: false,
@@ -940,7 +966,7 @@ export class CombatAttackService {
                 hit: true,
                 d20: attackRoll,
                 attackBonus: spellAttackBonus,
-                targetAC,
+                ...acFacts,
                 totalAttackRoll: hitCheckResult.totalAttackRoll,
                 damage: damageCalc.baseDamage,
                 damageType,

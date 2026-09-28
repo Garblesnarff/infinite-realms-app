@@ -64,6 +64,7 @@ vi.mock('../../tactical/engine.js', () => ({
   getDistance: vi.fn(() => 30),
 }));
 
+const { getCover } = await import('../../tactical/engine.js');
 const { CombatAttackService } = await import('../combat/combat-attack-service.js');
 
 const encounterId = 'encounter-spell-test';
@@ -211,6 +212,34 @@ describe('CombatAttackService.resolveSpellAttack', () => {
       finalDamage: 1,
     });
     expect(applyDamage).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the same seated AC across two rounds and explains the cover bonus', async () => {
+    const seated = 12;
+    const rows = participantMap(seated);
+    rows.get(targetId)!.stats = { armorClass: 14 } as never;
+    getParticipantsWithStatsBatch.mockResolvedValue(rows);
+    loadActiveTacticalMap.mockResolvedValue({
+      entities: [
+        { id: casterId, x: 0, y: 0 },
+        { id: targetId, x: 4, y: 0 },
+      ],
+    });
+    vi.mocked(getCover).mockReturnValue(1 as never);
+
+    const first = await resolveSpell('Fire Bolt', undefined, 15);
+    const second = await resolveSpell('Fire Bolt', undefined, 11);
+
+    for (const round of [first.results[0], second.results[0]]) {
+      expect(round).toMatchObject({
+        baseAc: seated,
+        coverBonus: 2,
+        cover: 1,
+        targetAC: seated + 2,
+      });
+    }
+    expect(first.results[0]?.baseAc).toBe(second.results[0]?.baseAc);
+    expect(first.results[0]?.coverBonus).toBe(second.results[0]?.coverBonus);
   });
 
   it('resolves a spell attack miss against AC without an HP write', async () => {

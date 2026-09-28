@@ -1,13 +1,12 @@
 /**
  * What the engine did to whom, in the words the DM narrates from.
  *
- * Its own module, with no imports at all, because it is a pure sentence and its callers are
- * not. `combat-approach-service` pulls in the combat logger, which pulls in the shared pino
- * instance — enough of a graph that a test wanting to assert on this one string could not
- * import it without the whole chain, and in the server suite that chain is poisoned by a
- * process-wide `mock.module` leak from an unrelated file. A string builder with no
- * dependencies is testable from anywhere, which is the point.
+ * The only import is the pure AC phrase. Callers pull in the combat logger, which pulls in
+ * the shared pino instance — enough of a graph that a test wanting to assert on this one
+ * string could not import it without the whole chain, and in the server suite that chain is
+ * poisoned by a process-wide `mock.module` leak from an unrelated file.
  */
+import { formatVersusArmorClass } from '../../../../shared/engine-display-name';
 /**
  * The sentence the DM reads after an attack the engine actually rolled.
  *
@@ -59,6 +58,9 @@ export type ResolvedSpellOutcome = {
   attackBonus?: number;
   totalAttackRoll?: number;
   targetAC?: number;
+  baseAc?: number;
+  coverBonus?: number;
+  cover?: number | null;
   saveAbility?: string;
   saveRoll?: number;
   saveDC?: number;
@@ -144,7 +146,7 @@ export function describeResolvedSpell(
       outcome,
       `${actorLabel} cast ${spellName} at ${targetLabel} — spell attack ${outcome.d20} + ${
         outcome.attackBonus
-      } = ${outcome.totalAttackRoll} vs AC ${outcome.targetAC ?? '?'} — ${result}.`,
+      } = ${outcome.totalAttackRoll} ${formatVersusArmorClass(outcome)} — ${result}.`,
     );
   }
   return resolvedSpellLine(

@@ -32,6 +32,11 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import {
+  facingName,
+  playerFacingWeaponName,
+  type EngineRosterEntry,
+} from '../../../../shared/engine-display-name';
 import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
@@ -292,6 +297,15 @@ async function endCombatIfResolved(encounterId: string, userId: string): Promise
   return true;
 }
 
+function rosterFrom(
+  participants: ReadonlyArray<{ id: string; name?: string | null }>,
+): EngineRosterEntry[] {
+  return participants.map((participant) => ({
+    id: participant.id,
+    name: participant.name ?? null,
+  }));
+}
+
 /** The target's display name, for the sentence the DM is handed when an approach falls short. */
 async function participantLabel(
   encounterId: string,
@@ -299,10 +313,7 @@ async function participantLabel(
   userId: string,
 ): Promise<string> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
-  return (
-    state.participants.find((participant) => participant.id === participantId)?.name ??
-    participantId
-  );
+  return facingName(undefined, participantId, rosterFrom(state.participants));
 }
 
 /**
@@ -333,7 +344,7 @@ async function recordDiscreteActionFact(
   kind: 'dash' | 'dodge' | 'disengage',
 ): Promise<void> {
   const participant = state.participants.find((p) => p.id === actorId);
-  const label = participant?.name ?? actorId;
+  const label = facingName(participant?.name, actorId, rosterFrom(state.participants));
   const map = await loadActiveTacticalMap(sessionId);
   const pastTense = kind === 'dash' ? 'dashed' : kind === 'dodge' ? 'dodged' : 'disengaged';
   await recordDmTacticalFact(sessionId, `${label} ${pastTense}.`, {
@@ -636,7 +647,7 @@ export async function proposeCombatAttack(
     resolvedAttack.type,
     source,
   );
-  const actorLabel = actor.name ?? resolvedAttack.actorId;
+  const actorLabel = facingName(actor.name, resolvedAttack.actorId, rosterFrom(state.participants));
   const targetLabel = await participantLabel(encounterId, resolvedAttack.targetId, userId);
   const equipped = await listEquippedWeaponProfiles(actor);
   const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped);
@@ -843,7 +854,7 @@ export async function executeCombatIntent(
         );
       }
     } else if (intent.type === 'attack') {
-      const actorLabel = actor.name ?? intent.actorId;
+      const actorLabel = facingName(actor.name, intent.actorId, rosterFrom(state.participants));
       const targetLabel = await participantLabel(encounterId, intent.targetId, userId);
       // The approach decision and the resolution must swing the same weapon. Deciding approach
       // from `[0]` while resolving with `intent.weaponId` is how a bow-and-sword character got
@@ -877,7 +888,7 @@ export async function executeCombatIntent(
         targetId: intent.targetId,
         targetName: targetLabel,
         requestedWeapon: grounding.requested,
-        resolvedWeapon: weapon.name || 'attack',
+        resolvedWeapon: playerFacingWeaponName(weapon.name || 'attack', actorLabel),
         weaponSubstituted: !grounding.grounded,
         actorIsPlayer,
       } satisfies AttackVisibilityContext;
@@ -933,7 +944,7 @@ export async function executeCombatIntent(
             actorLabel,
             targetLabel,
             { ...resolvedAttack, autoRolled: actorIsPlayer && resolvedAttack.autoRolled === true },
-            weapon.name,
+            playerFacingWeaponName(weapon.name, actorLabel),
           ),
           {
             kind: movementOnly ? 'move' : 'attack',
@@ -983,7 +994,7 @@ export async function executeCombatIntent(
           },
         );
       }
-      const actorLabel = actor.name ?? intent.actorId;
+      const actorLabel = facingName(actor.name, intent.actorId, rosterFrom(state.participants));
       const spellActorIsPlayer =
         state.participants.find((participant) => participant.id === intent.actorId)
           ?.participantType === 'player';
@@ -1125,9 +1136,11 @@ export async function executeCombatIntent(
       : source === 'dm';
     if (unresolvedActorIsPlayer && (submitted.type === 'spell' || submitted.type === 'attack')) {
       const reason = error instanceof Error ? error.message : 'unknown';
-      const actorLabel =
-        stateForUnresolved?.participants.find((participant) => participant.id === submitted.actorId)
-          ?.name ?? submitted.actorId;
+      const actorLabel = facingName(
+        undefined,
+        submitted.actorId,
+        stateForUnresolved ? rosterFrom(stateForUnresolved.participants) : [],
+      );
       const spellName =
         submitted.type === 'spell'
           ? submitted.spellName || submitted.spellId || 'unknown spell'

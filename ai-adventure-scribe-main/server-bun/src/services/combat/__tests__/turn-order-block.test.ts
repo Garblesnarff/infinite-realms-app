@@ -50,7 +50,7 @@ mock.module('../tactical-map-store.js', () => ({
   deactivateTacticalMap: async () => {},
 }));
 
-const { buildTurnOrderBlock } = await import('../turn-order-block.js');
+const { buildTurnOrderBlock, getCurrentTurnInfo } = await import('../turn-order-block.js');
 const { assignEntitySlugs } = await import('../../../tactical/identity.js');
 
 const participant = (
@@ -161,5 +161,24 @@ describe('the turn order block', () => {
     state = undefined as unknown as Record<string, unknown>;
     map = null;
     expect(await buildTurnOrderBlock(SESSION_ID, 'user_owner')).toBe('');
+  });
+});
+
+describe('current-turn label (#2306)', () => {
+  it('title-cases the slug when the roster has no name, and never returns the UUID', async () => {
+    const nameless = entity(SEEKER_ID, '', 2);
+    nameless.slug = 'the-scholar';
+    state = {
+      encounter: { id: ENCOUNTER_ID, sessionId: SESSION_ID, currentRound: 2 },
+      participants: [participant(SEEKER_ID, '', 0)],
+      currentParticipant: { id: SEEKER_ID },
+    };
+    map = { id: 'map', sessionId: SESSION_ID, entities: [nameless] } as unknown as TacticalMap;
+
+    const turn = await getCurrentTurnInfo(SESSION_ID, 'user_owner');
+
+    expect(turn?.label).toBe('The Scholar');
+    expect(turn?.label).not.toBe(SEEKER_ID);
+    expect(turn?.slug).toBe('the-scholar');
   });
 });

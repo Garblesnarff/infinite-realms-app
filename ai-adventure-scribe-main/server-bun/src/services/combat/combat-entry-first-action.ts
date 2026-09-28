@@ -399,14 +399,15 @@ export async function deriveCombatEntryFirstAction(
   }
 
   const rulesMap = approach ? projectedMap(map, playerParticipant.id, approach.destination) : map;
+  const seatedAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
+    participantId: targetParticipant.id,
+    encounterId: params.combatState.encounter.id,
+  });
   const rules = resolveAttackRules({
     strength: profile.scores.str ?? 10,
     dexterity: profile.scores.dex ?? 10,
     level: profile.level,
-    baseTargetAc: resolveParticipantArmorClass(targetParticipant.armorClass, {
-      participantId: targetParticipant.id,
-      encounterId: params.combatState.encounter.id,
-    }),
+    baseTargetAc: seatedAc,
     weapon: grounded.weapon,
     geometry: geometryFor(rulesMap, playerParticipant.id, targetParticipant.id),
     attackerConditions: await deps.getActiveConditionNames(playerParticipant.id),
