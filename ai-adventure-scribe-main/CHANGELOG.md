@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.20.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.4...v0.20.5) (2026-09-28)
+
+
+### Bug Fixes
+
+* **combat:** first spell at combat entry; no player action without player input ([#2303](https://github.com/Garblesnarff/infinite-realms-production/issues/2303), [#2305](https://github.com/Garblesnarff/infinite-realms-production/issues/2305)) ([#2312](https://github.com/Garblesnarff/infinite-realms-production/issues/2312)) ([1a2ce4d](https://github.com/Garblesnarff/infinite-realms-production/commit/1a2ce4d77896f3a68544081d5c00a4931fce9146))
+
 ## [0.20.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.3...v0.20.4) (2026-09-27)
 
 
