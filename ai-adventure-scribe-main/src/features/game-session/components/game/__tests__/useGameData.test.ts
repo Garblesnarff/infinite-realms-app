@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useGameData } from '../useGameData';
@@ -93,6 +93,35 @@ describe('useGameData', () => {
     expect(result.current.isDM).toBe(true);
     expect(result.current.error).toBe(null);
     expect(result.current.loadingPhase).toBe('greeting');
+  });
+
+  it('refreshes character HP and spell slots after an engine combat event', async () => {
+    const initialCharacter = { id: 'char-1', name: 'Hero', currentHitPoints: 7, spellSlots: [2] };
+    const engineUpdatedCharacter = {
+      id: 'char-1',
+      name: 'Hero',
+      currentHitPoints: 5,
+      spellSlots: [1],
+    };
+    (characterLoaderService.loadCharacterWithSpells as any)
+      .mockResolvedValueOnce(initialCharacter)
+      .mockResolvedValueOnce(engineUpdatedCharacter);
+    (userDataApi.getCampaign as any).mockResolvedValue({ id: 'camp-1', user_id: 'user-1' });
+
+    const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('combat-state-updated'));
+    });
+
+    await waitFor(() =>
+      expect(mockCharacterDispatch).toHaveBeenLastCalledWith({
+        type: 'SET_CHARACTER',
+        payload: engineUpdatedCharacter,
+      }),
+    );
+    expect(characterLoaderService.loadCharacterWithSpells).toHaveBeenCalledTimes(2);
   });
 
   it('should handle missing IDs', async () => {

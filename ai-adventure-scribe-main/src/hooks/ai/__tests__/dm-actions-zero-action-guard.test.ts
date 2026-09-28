@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
+import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { executeStructuredCombatActionWithBoundary } from '@/services/combat/combat-action-executor';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * When the guard is allowed to fire, and when it must keep its hands off the turn.
@@ -163,5 +165,52 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     await invoke({ isInCombat: false, activeEncounter: null });
 
     expect(repairCalls()).toHaveLength(0);
+  });
+
+  it('drops malformed handout actions before the request and logs the drop once', async () => {
+    await invoke({
+      isInCombat: false,
+      activeEncounter: null,
+      result: {
+        text: 'The journal is yours.',
+        handout_actions: [
+          { mode: 'authored', key: 'alpha-journal', title: 'Alpha Journal', giver: 'Darkwater' },
+        ],
+      },
+    });
+
+    expect(userDataApi.applyDmHandoutActions).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[DMHandouts] Dropped invalid handout actions before request',
+      { dropped: 1 },
+    );
+  });
+
+  it('sends only valid handout actions', async () => {
+    vi.mocked(userDataApi.applyDmHandoutActions).mockResolvedValueOnce(
+      new Response(JSON.stringify({ entries: [] }), { status: 200 }),
+    );
+    const authored = {
+      mode: 'authored',
+      key: 'alpha-journal',
+      title: 'Alpha Journal',
+      body: null,
+      giver: 'Professor Darkwater',
+    };
+
+    await invoke({
+      isInCombat: false,
+      activeEncounter: null,
+      result: {
+        text: 'The journal is yours.',
+        handout_actions: [
+          authored,
+          { mode: 'authored', key: 'broken', title: 'Broken', giver: 'Darkwater' },
+        ],
+      },
+    });
+
+    expect(userDataApi.applyDmHandoutActions).toHaveBeenCalledWith('session-1', [authored]);
   });
 });

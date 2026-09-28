@@ -18,12 +18,14 @@ export const useScrollBehavior = (
   hasMore?: boolean,
   loadMore?: () => void,
   isFetchingMore?: boolean,
+  isInCombat = false,
 ) => {
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const isUserScrolledUpRef = useRef(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const previousScrollHeightRef = useRef<number>(0);
   const isLoadingMoreRef = useRef(false);
+  const previousCombatStateRef = useRef(isInCombat);
 
   // Handle scroll events for pagination and user scroll detection
   useEffect(() => {
@@ -60,8 +62,21 @@ export const useScrollBehavior = (
   useEffect(() => {
     const el = messagesRef.current;
     if (!el || isUserScrolledUp) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    el.scrollTop = el.scrollHeight;
   }, [messages, isUserScrolledUp, messagesRef]);
+
+  // Combat entry adds panels and engine output around the transcript. Pin to the latest line at
+  // that transition even if the previous layout's scroll event briefly marked the list as away
+  // from the bottom.
+  useEffect(() => {
+    const enteredCombat = isInCombat && !previousCombatStateRef.current;
+    previousCombatStateRef.current = isInCombat;
+    if (!enteredCombat) return;
+    isUserScrolledUpRef.current = false;
+    setIsUserScrolledUp(false);
+    const el = messagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [isInCombat, messagesRef]);
 
   // Keep the newest line in view when the stream's box shrinks — the roll tray opening below
   // it, for one (#2252). A shrink moves no scroll position, so nothing else would follow it.

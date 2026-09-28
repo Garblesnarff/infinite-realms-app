@@ -122,3 +122,23 @@ describe('reload with an unanswered narrative roll (#2280)', () => {
     expect(screen.queryByText(turn.reply.text)).not.toBeInTheDocument();
   });
 });
+
+describe('DM reply rendering', () => {
+  it('shows each paragraph of one reply once when a later player message arrives', () => {
+    const paragraphOne = 'The archway groans open.';
+    const paragraphTwo = 'Dust rolls across the floor.';
+    render(
+      list([
+        { id: 'player-1', sender: 'player', text: 'I push the door.' },
+        { id: 'dm-1', sender: 'dm', text: `${paragraphOne}\n\n${paragraphTwo}` },
+        { id: 'player-2', sender: 'player', text: 'I step inside.' },
+      ]),
+    );
+
+    const replyText = `${paragraphOne}\n\n${paragraphTwo}`;
+    const renderedReplyParagraphs = [...document.querySelectorAll('p')].filter(
+      (paragraph) => paragraph.textContent === replyText,
+    );
+    expect(renderedReplyParagraphs).toHaveLength(1);
+  });
+});

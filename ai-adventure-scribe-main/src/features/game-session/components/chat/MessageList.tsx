@@ -10,6 +10,7 @@ import type { ChatMessage } from '@/types/game';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useCombat } from '@/contexts/CombatContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import logger from '@/lib/logger';
 import { handleAsyncError } from '@/utils/error-handler';
@@ -77,6 +78,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     } = useMessageContext();
     const { state: characterState } = useCharacter();
     const { state: campaignState } = useCampaign();
+    const { state: combatState } = useCombat();
     const { getAssetImageUrl } = useCampaignAssetsContext();
     const { id: routeCampaignId } = useParams<{ id: string }>();
 
@@ -96,7 +98,14 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
         getAssetImageUrl,
       });
 
-    useScrollBehavior(messagesRef, messages, hasMore, loadMore, isFetchingMore);
+    useScrollBehavior(
+      messagesRef,
+      messages,
+      hasMore,
+      loadMore,
+      isFetchingMore,
+      combatState.isInCombat,
+    );
 
     // Handle option selection
     const handleOptionSelect = React.useCallback(

@@ -441,7 +441,7 @@ const isCombatAction = (value: unknown): value is DMCombatAction => {
   );
 };
 
-const isHandoutAction = (value: unknown): value is DMHandoutAction => {
+export const isHandoutAction = (value: unknown): value is DMHandoutAction => {
   if (!value || typeof value !== 'object') return false;
   const action = value as Record<string, unknown>;
   if (!['authored', 'improvised'].includes(String(action.mode))) return false;

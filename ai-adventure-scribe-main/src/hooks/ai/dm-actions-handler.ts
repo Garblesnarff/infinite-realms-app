@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type {
-  DMAoESpellAction,
-  DMHandoutAction,
-} from '../../../server-bun/src/services/dm/dm-response-schema';
+import type { DMAoESpellAction } from '../../../server-bun/src/services/dm/dm-response-schema';
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { PlayerAttackRollSpec } from '@/services/combat/player-roll-bridge';
@@ -21,6 +18,7 @@ import {
 } from '@/hooks/ai/combat-turn-preflight';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
+import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
@@ -543,15 +541,22 @@ export async function handleDmActionsAndTransitions(
   }
 
   if (sessionId && result.handout_actions?.length) {
-    const handoutResponse = await userDataApi.applyDmHandoutActions(
-      sessionId,
-      result.handout_actions as DMHandoutAction[],
+    const { actions: handoutActions, dropped } = filterValidHandoutActions(
+      result.handout_actions as unknown[],
     );
-    if (handoutResponse.ok) {
-      const payload = (await handoutResponse.json()) as { entries?: JournalHandoutEntry[] };
-      deliveredHandouts = payload.entries;
-    } else {
-      logger.warn('Server refused DM handout batch', await handoutResponse.json());
+    if (dropped > 0) {
+      logger.warn('[DMHandouts] Dropped invalid handout actions before request', {
+        dropped,
+      });
+    }
+    if (handoutActions.length > 0) {
+      const handoutResponse = await userDataApi.applyDmHandoutActions(sessionId, handoutActions);
+      if (handoutResponse.ok) {
+        const payload = (await handoutResponse.json()) as { entries?: JournalHandoutEntry[] };
+        deliveredHandouts = payload.entries;
+      } else {
+        logger.warn('Server refused DM handout batch', await handoutResponse.json());
+      }
     }
   }
 
