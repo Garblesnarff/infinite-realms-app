@@ -15,6 +15,8 @@ import { MessageListContainer } from '../MessageListContainer';
 
 import type { ChatMessage } from '@/types/game';
 
+import { declinedRollMessage } from '@/utils/dm-roll-recovery';
+
 const { processAiResponse } = vi.hoisted(() => ({ processAiResponse: vi.fn() }));
 
 vi.mock('@/contexts/CombatContext', () => ({
@@ -120,6 +122,57 @@ describe('reload with an unanswered narrative roll (#2280)', () => {
     );
     expect(processAiResponse).not.toHaveBeenCalled();
     expect(screen.queryByText(turn.reply.text)).not.toBeInTheDocument();
+  });
+
+  it('#2291: after a cancel, a reload shows the reply and the popup does not come back', () => {
+    const turn = RUN_11_INSIGHT;
+    const declined = {
+      ...declinedRollMessage(turn.rollRequests[0]?.purpose),
+      id: 'declined-1',
+    };
+    // The rows a reload hydrates: the player's turn, the reply, and the saved cancel line.
+    const messages: ChatMessage[] = [
+      { id: 'p1', sender: 'player', text: turn.playerInput },
+      {
+        id: turn.dmMessageId,
+        sender: 'dm',
+        text: turn.reply.text,
+        context: turn.wireBody.context as ChatMessage['context'],
+      },
+      declined,
+    ];
+
+    render(list(messages));
+
+    expect(screen.getByText(turn.reply.text)).toBeInTheDocument();
+    expect(screen.getByText(declined.text)).toBeInTheDocument();
+    expect(processAiResponse).not.toHaveBeenCalled();
+  });
+
+  it('#2291 round 2: cancel the first of two checks, reload: prose still withheld, only the second check comes back', () => {
+    const turn = RUN_11_INSIGHT;
+    const insight = turn.rollRequests[0];
+    const perception = {
+      type: 'skill_check' as const,
+      formula: '1d20+3',
+      purpose: 'Perception check to spot what moves behind the bar',
+    };
+    const messages: ChatMessage[] = [
+      { id: 'p1', sender: 'player', text: turn.playerInput },
+      {
+        id: turn.dmMessageId,
+        sender: 'dm',
+        text: turn.reply.text,
+        rollRequests: [insight, perception] as ChatMessage['rollRequests'],
+      },
+      { ...declinedRollMessage(insight?.purpose), id: 'declined-insight' },
+    ];
+
+    render(list(messages));
+
+    expect(screen.queryByText(turn.reply.text)).not.toBeInTheDocument();
+    expect(processAiResponse).toHaveBeenCalledTimes(1);
+    expect(processAiResponse).toHaveBeenCalledWith([perception]);
   });
 });
 

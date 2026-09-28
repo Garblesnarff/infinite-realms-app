@@ -9,6 +9,7 @@ import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
 import { SessionStateService } from '../session-state-service';
 
+import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 
@@ -276,6 +277,44 @@ describe('AIService', () => {
   // prompt. The block is assembled here as its own piece rather than being embedded in the
   // context section and regex-relocated (the hazard v2 §2.8 calls out), so these assert on
   // ordering and on the assembly staying inert when there is no ground truth to state.
+  // #2291: a cancelled narrative check is saved as a system line; the next DM turn must see it
+  // in its history as the system's words, not the DM's.
+  describe("declined roll in the next turn's history", () => {
+    beforeEach(() => {
+      vi.mocked(ContextBuilder.build).mockResolvedValue('<game_context>canon</game_context>');
+      vi.mocked(llmApiClient.generateText).mockResolvedValue('raw');
+      vi.mocked(processDMResponse).mockResolvedValue({ text: 'processed' } as any);
+      vi.mocked(fetchSceneState).mockResolvedValue(null);
+    });
+
+    it('carries "System: You chose not to roll: …" into <conversation_history>', async () => {
+      const history = conversationHistoryFrom([
+        { id: 'p1', sender: 'player', text: "I study Remy's face." },
+        { id: 'd1', sender: 'dm', text: 'Read him, if you can.' },
+        {
+          id: 's1',
+          sender: 'system',
+          text: 'You chose not to roll: Insight check.',
+          context: { intent: 'roll_declined' },
+        },
+      ]);
+
+      await AIService.chatWithDM({
+        message: 'I just ask him about the previous owner.',
+        context: { sessionId: 'session-2291', gameState: { isInCombat: false } },
+        conversationHistory: history,
+      } as any);
+
+      const prompt = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]?.prompt as string;
+      const historyBlock = prompt.slice(
+        prompt.indexOf('<conversation_history>'),
+        prompt.indexOf('</conversation_history>'),
+      );
+      expect(historyBlock).toContain('System: You chose not to roll: Insight check.');
+      expect(historyBlock).not.toContain('DM: You chose not to roll');
+    });
+  });
+
   describe('chatWithDM scene state', () => {
     const SCENE_STATE =
       '<scene_state>\n<npc name="The Void-Maw" state="DEAD (turn 12)"/>\n</scene_state>';

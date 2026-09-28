@@ -44,11 +44,17 @@ vi.mock('uuid', () => ({
   v4: vi.fn(() => 'test-uuid'),
 }));
 
-import { DM_ROLL_REPLY_TURNS } from '../../../shared/test-fixtures/dm-roll-reply-saves';
+import {
+  DECLINED_ROLL_BODY,
+  DECLINED_ROLL_LINE,
+  DM_ROLL_REPLY_TURNS,
+  RUN_11_INSIGHT,
+} from '../../../shared/test-fixtures/dm-roll-reply-saves';
 import { useMessageQueue } from '../use-message-queue';
 
 import { rollReplyMessage } from '@/features/game-session/components/game/message/use-message-handler-logic';
 import { useToast } from '@/hooks/use-toast';
+import { declinedRollMessage } from '@/utils/dm-roll-recovery';
 
 const createQueryClient = (): QueryClient =>
   new QueryClient({
@@ -512,5 +518,20 @@ describe('useMessageQueue', () => {
       expect(mockInsert).toHaveBeenCalledTimes(5);
       expect(result.current.queueLength).toBe(1);
     });
+  });
+
+  it('#2291: sends the declined-roll line exactly as the route test posts it', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    const line = {
+      ...declinedRollMessage(RUN_11_INSIGHT.rollRequests[0]?.purpose),
+      id: DECLINED_ROLL_LINE.id,
+      timestamp: DECLINED_ROLL_LINE.timestamp,
+    };
+
+    await act(async () => {
+      await result.current.messageMutation.mutateAsync(line);
+    });
+
+    expect(mockSaveSessionMessages).toHaveBeenCalledWith(sessionId, DECLINED_ROLL_BODY);
   });
 });

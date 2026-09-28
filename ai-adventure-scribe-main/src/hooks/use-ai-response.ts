@@ -26,6 +26,7 @@ import {
   reconcileCombatTurnAfterAction,
   type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
+import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
@@ -337,21 +338,7 @@ export const useAIResponse = (): {
         });
 
         // Build conversation history for AIService
-        const conversationHistory = messages.slice(0, -1).map((msg) => ({
-          id: `msg_${Date.now()}_${Math.random()}`,
-          role:
-            msg.sender === 'player' || msg.sender === 'companion'
-              ? ('user' as const)
-              : ('assistant' as const),
-          content:
-            msg.sender === 'companion'
-              ? `Companion ${msg.speakerName ?? msg.characterName ?? 'Unknown'} (in-world speech): ${msg.text}`
-              : msg.text,
-          timestamp: new Date(),
-          narrationSegments: msg.narrationSegments,
-          speakerType: msg.sender,
-          speakerName: msg.speakerName ?? msg.characterName,
-        }));
+        const conversationHistory = conversationHistoryFrom(messages.slice(0, -1));
 
         // Create AI context with combat awareness
         const aiContext = buildAIContext({

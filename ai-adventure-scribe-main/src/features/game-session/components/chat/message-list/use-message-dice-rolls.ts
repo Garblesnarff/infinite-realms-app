@@ -18,6 +18,7 @@ import {
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
 import { hasPendingPlayerRoll } from '@/services/combat/player-roll-bridge';
+import { declinedRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
 
@@ -65,6 +66,7 @@ export function useMessageDiceRolls({
 
   const lastRollRef = useRef<LastRollMeta | null>(null);
   const pendingRollIdRef = useRef<string | null>(null);
+  const cancelledRollIdRef = useRef<string | null>(null);
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
   const [rollError, setRollError] = useState<string | null>(null);
 
@@ -141,18 +143,41 @@ export function useMessageDiceRolls({
    */
   const handleCancelRoll = useCallback(() => {
     if (!currentRoll) return;
+    // A double click can reach here twice against the same stale `currentRoll` before the queue
+    // re-renders; the second call must not write a second declined-roll line (#2291).
+    if (cancelledRollIdRef.current === currentRoll.id) return;
+    cancelledRollIdRef.current = currentRoll.id;
     // Dismissing a combat attack prompt withdraws the attack: the resolution waiting on it skips
     // that action instead of rolling it for the player (#2234). Only a timeout lets the engine
     // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
-    settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
-    settleCombatInitiativeRoll(currentRoll.id, null);
+    const attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
+    const initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
     cancelDiceRoll(currentRoll.id);
+    // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
+    // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
+    // sees the choice. Engine-owned attack and initiative prompts keep #2237's behavior.
+    const engineOwned =
+      attackSettled ||
+      initiativeSettled ||
+      Boolean(currentRoll.combatAttackRoll || currentRoll.combatInitiativeRoll) ||
+      isEngineChannelRollType(currentRoll.requestType);
+    if (!engineOwned) {
+      const declined = declinedRollMessage(currentRoll.description);
+      Promise.resolve()
+        .then(() => onSendMessage(declined))
+        .catch((error: unknown) =>
+          logger.warn('[useMessageDiceRolls] declined-roll line not saved', {
+            rollId: currentRoll.id,
+            error,
+          }),
+        );
+    }
     if (pendingRollIdRef.current === currentRoll.id) {
       pendingRollIdRef.current = null;
       setPendingRollId(null);
     }
     setRollError(null);
-  }, [currentRoll, cancelDiceRoll]);
+  }, [currentRoll, cancelDiceRoll, onSendMessage]);
 
   // Handle manual dice result input with batching support
   const handleManualResult = useCallback(

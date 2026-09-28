@@ -117,3 +117,31 @@ export const TEXTLESS_PENDING_ROLL_BODY: Record<string, unknown> = {
   },
   timestamp: run11.timestamp,
 };
+
+/**
+ * #2291: the system line saved when the player cancels run 11's Insight check, as the client's
+ * save queue posts it (`declinedRollMessage` → `use-message-queue`), under a fixed id and time.
+ */
+export const DECLINED_ROLL_LINE = {
+  id: '5f0b7c1e-2d4a-4e8f-9a61-3c2b1d0e9f77',
+  timestamp: '2026-09-26T03:03:20.000Z',
+  text: `You chose not to roll: ${run11.rollRequests[0]?.purpose}.`,
+};
+
+export const DECLINED_ROLL_BODY: Record<string, unknown> = {
+  id: DECLINED_ROLL_LINE.id,
+  message: DECLINED_ROLL_LINE.text,
+  speaker_type: 'system',
+  context: {
+    location: null,
+    emotion: null,
+    intent: 'roll_declined',
+    handouts: null,
+    combat_transition: null,
+    scene_spec: false,
+    combat_engine_blocks: null,
+    combat_ended: false,
+    narration_segments: null,
+  },
+  timestamp: DECLINED_ROLL_LINE.timestamp,
+};

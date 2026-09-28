@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
 import {
+  DECLINED_ROLL_BODY,
   DM_ROLL_REPLY_TURNS,
   TEXTLESS_PENDING_ROLL_BODY,
 } from '../../../../../shared/test-fixtures/dm-roll-reply-saves';
@@ -140,5 +141,20 @@ describe('POST /v1/sessions/:id/messages — narrative roll replies (#2280)', ()
     // The refusal names the rule, never the submitted values.
     expect(JSON.stringify(body)).not.toContain('Insight check');
     expect(saved).toHaveLength(0);
+  });
+
+  it('#2291: accepts the declined-roll system line as one row with its intent', async () => {
+    const response = await post(DECLINED_ROLL_BODY);
+
+    expect(response.status).toBe(200);
+    const [row] = saved[0] ?? [];
+    expect(row).toEqual(
+      expect.objectContaining({
+        id: DECLINED_ROLL_BODY.id,
+        speakerType: 'system',
+        message: DECLINED_ROLL_BODY.message,
+      }),
+    );
+    expect((row?.context as { intent?: unknown }).intent).toBe('roll_declined');
   });
 });
