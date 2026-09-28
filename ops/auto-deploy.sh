@@ -65,6 +65,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# --- post-deploy smoke (#2293): this script's own dir, before the cd below ----
+DEPLOY_SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+DEPLOY_SELF="$DEPLOY_SELF_DIR/$(basename "${BASH_SOURCE[0]}")"
+# --- end post-deploy smoke ------------------------------------------------------
+
 # Overridable purely so the failure paths can be exercised against a scratch
 # repo without touching production — same reason monitor-infiniterealms.sh takes
 # MONITOR_* overrides. Default is unchanged.
@@ -271,6 +276,32 @@ elif [ -e "$STATE_DIR/train.state" ]; then
   record_state train ok ""
 fi
 # --- end merge-train hold ------------------------------------------------------
+
+# --- post-deploy smoke hold (added 2026-09-27, #2293) ---------------------------
+# ops/smoke.sh runs after every deploy (see the end of this script). When it
+# fails it writes this file, and from then on this script deploys nothing until
+# a human removes it: a deploy that broke a core save must not be buried under
+# the next one. Unlike TRAIN it never goes stale, because nobody forgot it —
+# prod failed a check. While it exists, record_state repeats the smoke alert at
+# most once per REPEAT_SECONDS (smoke.sh seeds the state as just-notified), and
+# removing it clears the alert to RECOVERED on the next tick.
+#
+# With no hold file and no earlier smoke failure this block prints nothing and
+# writes nothing (ops/tests/smoke-deploy.sh checks the cron path is unchanged).
+SMOKE_HOLD_FILE=${DEPLOY_SMOKE_HOLD_FILE:-$STATE_DIR/SMOKE_FAILED}
+if [ -e "$SMOKE_HOLD_FILE" ]; then
+  SMOKE_HOLD_LINE=$(head -n 1 "$SMOKE_HOLD_FILE" 2>/dev/null | cut -c1-300 || true)
+  echo "$(ts) hold smoke: $SMOKE_HOLD_FILE present (${SMOKE_HOLD_LINE:-no detail}). No fetch, no build, no restart. Remove it once prod has been checked or fixed."
+  if [ "$DEPLOY_FORCE" = 1 ]; then
+    echo "$(ts) Refusing --deploy-now: the post-deploy smoke failed. Check prod, then remove $SMOKE_HOLD_FILE and re-run."
+    exit 1
+  fi
+  record_state smoke fail "post-deploy smoke failed and deploys are HELD until a human removes $SMOKE_HOLD_FILE: ${SMOKE_HOLD_LINE:-no detail}"
+  exit 0
+elif [ -e "$STATE_DIR/smoke.state" ]; then
+  record_state smoke ok ""
+fi
+# --- end post-deploy smoke ------------------------------------------------------
 
 # --- open stranger-test run (added 2026-09-22, #2093) -------------------------
 # The HOLD file only works if Playtest remembers to `touch` it. Playtest always
@@ -550,3 +581,32 @@ if [ "$DRY_RUN" = 1 ]; then
 else
   echo "$(ts) Deploy complete ($NEW_HEAD)"
 fi
+
+# --- post-deploy smoke (added 2026-09-27, #2293) ---------------------------------
+# #2250 shipped a save the server refused on every narrative roll, and nothing
+# noticed for a day (#2280). ops/smoke.sh now writes and reads back the #2280
+# message shape as a dedicated account, right after the deploy, and on failure
+# holds further deploys (block above), alerts, and comments once on #2093. It
+# never rolls back. It runs only when its env file exists, so until Hetzner
+# installs that file (on Rob's install line) the cron path is unchanged.
+SMOKE_ENV_FILE=${DEPLOY_SMOKE_ENV:-/etc/infiniterealms/smoke.env}
+SMOKE_SCRIPT=${DEPLOY_SMOKE_SCRIPT:-$DEPLOY_SELF_DIR/smoke.sh}
+if [ -r "$SMOKE_ENV_FILE" ]; then
+  if [ ! -r "$SMOKE_SCRIPT" ]; then
+    echo "$(ts) ALERT: $SMOKE_ENV_FILE exists but $SMOKE_SCRIPT does not; the post-deploy smoke did NOT run."
+    record_state smoke_setup fail "post-deploy smoke is configured ($SMOKE_ENV_FILE) but $SMOKE_SCRIPT is missing, so deploys are NOT being checked. Install ops/smoke.sh next to auto-deploy.sh."
+  else
+    record_state smoke_setup ok ""
+    if ! run env SMOKE_ENV_FILE="$SMOKE_ENV_FILE" SMOKE_APP_DIR="$PWD_REPO" \
+      SMOKE_DEPLOY_SCRIPT="$DEPLOY_SELF" bash "$SMOKE_SCRIPT" "$NEW_HEAD"; then
+      if [ -e "$SMOKE_HOLD_FILE" ]; then
+        echo "$(ts) DEPLOY SMOKE FAILED at $NEW_HEAD — deploys are held by $SMOKE_HOLD_FILE (see the smoke lines above)."
+      else
+        echo "$(ts) DEPLOY SMOKE FAILED at $NEW_HEAD — smoke.sh wrote no hold file, so deploys are NOT held (see its output above)."
+        record_state smoke_setup fail "ops/smoke.sh failed at ${NEW_HEAD:0:8} without writing $SMOKE_HOLD_FILE — it could not run properly, so deploys are NOT being checked. See /var/log/infiniterealms/auto-deploy.log"
+      fi
+      exit 1
+    fi
+  fi
+fi
+# --- end post-deploy smoke ------------------------------------------------------
