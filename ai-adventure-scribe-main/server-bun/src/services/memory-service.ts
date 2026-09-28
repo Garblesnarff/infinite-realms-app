@@ -1,12 +1,15 @@
 import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 
 import { CampaignService } from './campaign-service.js';
-import { generateEmbedding } from './embedding-service.js';
+import { generateEmbedding, generateEmbeddingDetailed } from './embedding-service.js';
+import { RECALL_BUDGET_MS, recallWithBudget, shouldRunMatch, takeRecallSlot } from './memory-recall.js';
 import { SessionService } from './session-service.js';
 import { db } from '../../../db/client';
 import { memories, type Memory, type NewMemory } from '../../../db/schema/index';
+import { EMBEDDING_MODEL } from '../../../shared/embedding-limits.js';
 import { alert } from '../lib/alerting.js';
 import { NotFoundError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Generate a memory's embedding and write it onto the row that already exists.
@@ -165,6 +168,110 @@ export class MemoryService {
       .where(eq(memories.id, memoryId));
   }
 
+  /**
+   * DM recall: a few similar rows, then top-by-importance, deduped, same limit.
+   * Embed + match are capped at {@link RECALL_BUDGET_MS}. Failure returns importance only.
+   */
+  static async recall(
+    sessionId: string,
+    userId: string,
+    query: string,
+    limit: number,
+    plan: string,
+  ) {
+    await SessionService.getSessionById(sessionId, userId);
+    const loadImportant = () => this.list(sessionId, userId, { limit, top: true });
+    if (!query.trim()) {
+      return loadImportant();
+    }
+    // 30 embeds per user per minute. Over the cap we still return importance,
+    // and we never answer 402 or 429 — a DM turn must not fail because of recall.
+    if (!takeRecallSlot(userId)) {
+      logger.warn({ msg: 'MEMORY_RECALL_FALLBACK', sessionId, error: 'rate_limit' });
+      logger.info({ msg: 'MEMORY_RECALL_MS', sessionId, ms: 0, fellBack: true });
+      return loadImportant();
+    }
+    const started = Date.now();
+    const result = await recallWithBudget({
+      limit,
+      loadImportant,
+      loadSimilar: async () => {
+        const remaining = RECALL_BUDGET_MS - (Date.now() - started);
+        if (!shouldRunMatch(started, RECALL_BUDGET_MS)) {
+          throw new Error('memory_recall_budget');
+        }
+        const embedded = await generateEmbeddingDetailed(
+          query,
+          'RETRIEVAL_QUERY',
+          AbortSignal.timeout(Math.max(1, remaining)),
+        );
+        if (!shouldRunMatch(started, RECALL_BUDGET_MS)) {
+          throw new Error('memory_recall_budget');
+        }
+        // Google Gemini embedding price, $0.15 / 1M input tokens. Output is empty.
+        const costUsd = (embedded.inputTokens * 0.15) / 1_000_000;
+        const { AIUsageService } = await import('./ai-usage-service.js');
+        await AIUsageService.recordProviderUsage({
+          userId,
+          plan,
+          type: 'llm_system',
+          provider: 'google',
+          model: EMBEDDING_MODEL,
+          inputTokens: embedded.inputTokens,
+          outputTokens: 0,
+          costUsd,
+          sessionId,
+        });
+        const vector = `[${embedded.values.join(',')}]`;
+        const left = RECALL_BUDGET_MS - (Date.now() - started);
+        const matched = await this.matchWithin(sessionId, userId, vector, limit, 0.7, left);
+        return matched.map((row) => matchRow(row as Record<string, unknown>)) as Awaited<
+          ReturnType<typeof MemoryService.list>
+        >;
+      },
+      logFallback: (error) => {
+        logger.warn({
+          msg: 'MEMORY_RECALL_FALLBACK',
+          sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+    // info, not debug: production logs at info, and Hetzner times recall from this line.
+    logger.info({
+      msg: 'MEMORY_RECALL_MS',
+      sessionId,
+      ms: result.elapsedMs,
+      fellBack: result.fellBack,
+    });
+    return result.rows;
+  }
+
+  /** Match, but stop the statement if the recall budget has only this long left. */
+  private static async matchWithin(
+    sessionId: string,
+    userId: string,
+    embedding: string,
+    limit: number,
+    threshold: number,
+    timeoutMs: number,
+  ): Promise<unknown[]> {
+    await SessionService.getSessionById(sessionId, userId);
+    const ms = String(Math.max(1, Math.floor(timeoutMs)));
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('statement_timeout', ${ms}, true)`);
+      return tx.execute(sql`
+        SELECT * FROM match_memories(
+          ${embedding}::vector,
+          ${sessionId}::uuid,
+          ${threshold}::float,
+          ${limit}::int
+        )
+      `);
+    });
+    return Array.from(result as Iterable<unknown>);
+  }
+
   static async match(
     sessionId: string,
     userId: string,
@@ -198,4 +305,27 @@ export class MemoryService {
     }
     throw new NotFoundError('Memory parent', record.sessionId || record.campaignId || 'unknown');
   }
+}
+
+/** `match_memories` returns snake_case columns. List rows are camelCase. */
+function matchRow(raw: Record<string, unknown>) {
+  return {
+    id: String(raw.id),
+    campaignId: (raw.campaign_id as string | null) ?? null,
+    sessionId: (raw.session_id as string | null) ?? null,
+    type: (raw.type as string | null) ?? null,
+    memoryType: (raw.memory_type as string | null) ?? null,
+    subcategory: (raw.subcategory as string | null) ?? null,
+    content: String(raw.content ?? ''),
+    importance: (raw.importance as number | null) ?? null,
+    narrativeWeight: (raw.narrative_weight as number | null) ?? null,
+    context: raw.context ?? null,
+    metadata: raw.metadata ?? null,
+    emotionalTone: (raw.emotional_tone as string | null) ?? null,
+    storyArc: (raw.story_arc as string | null) ?? null,
+    proseQuality: Boolean(raw.prose_quality),
+    chapterMarker: Boolean(raw.chapter_marker),
+    createdAt: raw.created_at ?? null,
+    updatedAt: raw.updated_at ?? null,
+  };
 }

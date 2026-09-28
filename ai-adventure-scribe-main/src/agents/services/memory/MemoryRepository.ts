@@ -17,6 +17,11 @@ export class MemoryRepository {
     return userDataApi.listMemories(sessionId, { limit, top: true }) as Promise<Memory[]>;
   }
 
+  /** Server embeds the query and merges similarity with top-by-importance (#2282). */
+  async recallMemories(sessionId: string, query: string, limit: number): Promise<Memory[]> {
+    return userDataApi.recallMemories(sessionId, query, limit) as Promise<Memory[]>;
+  }
+
   /**
    * Similarity search over a session's memories.
    *

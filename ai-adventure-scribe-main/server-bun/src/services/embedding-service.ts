@@ -49,34 +49,57 @@ export class EmbeddingError extends Error {
  * the exact failure mode of #1822 — 4530 rows written, 0 ever embedded — so callers are made
  * to decide what to do about a failure instead of inheriting one silently.
  */
-export async function generateEmbedding(
+export type EmbeddingResult = {
+  values: number[];
+  /** Prompt tokens reported by Gemini, or a character estimate when the body omits them. */
+  inputTokens: number;
+};
+
+/**
+ * Same model and width as `generateEmbedding`. Also returns the token count so
+ * a recall can write `ai_usage`. `signal` lets the caller abort inside the
+ * recall budget; insert keeps the 60s ceiling.
+ */
+export async function generateEmbeddingDetailed(
   text: string,
   taskType: EmbeddingTaskType,
-): Promise<number[]> {
+  signal?: AbortSignal,
+): Promise<EmbeddingResult> {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     throw new EmbeddingError('Embedding service unavailable', 503);
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(EMBEDDING_TIMEOUT_MS),
-      body: JSON.stringify({
-        content: { parts: [{ text: text.slice(0, EMBEDDING_MAX_INPUT_CHARS) }] },
-        taskType,
-        outputDimensionality: EMBEDDING_DIMENSIONS,
-      }),
-    },
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: signal ?? AbortSignal.timeout(EMBEDDING_TIMEOUT_MS),
+        body: JSON.stringify({
+          content: { parts: [{ text: text.slice(0, EMBEDDING_MAX_INPUT_CHARS) }] },
+          taskType,
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+        }),
+      },
+    );
+  } catch (error) {
+    throw new EmbeddingError(
+      error instanceof Error ? error.message : 'Embedding request failed',
+      503,
+    );
+  }
 
   if (!response.ok) {
     throw new EmbeddingError('Embedding request failed', response.status >= 500 ? 503 : 502);
   }
 
-  const data = (await response.json()) as { embedding?: { values?: number[] } };
+  const data = (await response.json()) as {
+    embedding?: { values?: number[] };
+    usageMetadata?: { promptTokenCount?: number };
+  };
   const values = data.embedding?.values;
   if (!Array.isArray(values) || values.length !== EMBEDDING_DIMENSIONS) {
     throw new EmbeddingError(
@@ -85,5 +108,18 @@ export async function generateEmbedding(
     );
   }
 
-  return normalizeEmbedding(values);
+  const reported = data.usageMetadata?.promptTokenCount;
+  const inputTokens =
+    typeof reported === 'number' && reported > 0
+      ? reported
+      : Math.max(1, Math.ceil(text.length / 4));
+  return { values: normalizeEmbedding(values), inputTokens };
+}
+
+export async function generateEmbedding(
+  text: string,
+  taskType: EmbeddingTaskType,
+): Promise<number[]> {
+  const result = await generateEmbeddingDetailed(text, taskType);
+  return result.values;
 }

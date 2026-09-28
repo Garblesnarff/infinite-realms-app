@@ -2,8 +2,9 @@ import { MemoryImportanceService } from './MemoryImportanceService';
 import { MemoryRepository } from './MemoryRepository';
 
 import { llmApiClient } from '@/infrastructure/api';
-import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
+import logger from '@/lib/logger';
 import { stripAssetTags } from '@/lib/utils';
+import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import {
   normalizeMemoryType,
   type Memory as UIMemory,
@@ -57,20 +58,27 @@ export class MemoryService {
   }
 
   /**
-   * Recall for the DM's next turn: the session's most important memories.
-   *
-   * This is what live play has always actually done. The similarity branch that used to sit
-   * in front of it embedded the query in the browser behind a flag that was off in
-   * production, against a column that had never held a vector (#1822) — it could not have
-   * returned a match. Similarity recall comes back in PR3, where the server embeds the query
-   * and matches against the vectors PR2 finally writes.
+   * Recall for the DM's next turn. The server embeds this query (RETRIEVAL_QUERY) and
+   * merges similar rows with top-by-importance. The browser does not embed.
    */
   static async getRelevantMemories(
     sessionId: string,
-    _query: string,
+    query: string,
     limit = 10,
   ): Promise<Memory[]> {
-    return repository.loadTopMemories(sessionId, limit);
+    try {
+      return await repository.recallMemories(sessionId, query, limit);
+    } catch (error) {
+      // use-ai-response awaits this inside Promise.all. A network or 5xx from
+      // /recall must not fail the turn; the old importance listing still works.
+      logger.warn('[MemoryService] recall failed; using top memories', error);
+      try {
+        return await repository.loadTopMemories(sessionId, limit);
+      } catch (fallbackError) {
+        logger.warn('[MemoryService] top memories failed; turn runs without memories', fallbackError);
+        return [];
+      }
+    }
   }
 
   /**

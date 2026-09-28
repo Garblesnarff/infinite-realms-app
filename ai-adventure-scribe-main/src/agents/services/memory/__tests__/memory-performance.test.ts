@@ -9,33 +9,36 @@ import { MemoryService } from '../MemoryService';
 // the entire life of the memories table, and PR2 moved embedding to the server. What is left
 // to measure here is the retrieval that live play actually performs: the session's top
 // memories via userDataApi.listMemories().
-const { mockListMemories: baseMockListMemories, setQueryResult, setQueryLatency } = vi.hoisted(
-  () => {
-    let queryResult: any = [];
-    let latencyMs = 0;
+const {
+  mockListMemories: baseMockListMemories,
+  setQueryResult,
+  setQueryLatency,
+} = vi.hoisted(() => {
+  let queryResult: any = [];
+  let latencyMs = 0;
 
-    const listMemories = vi.fn(async () => {
-      if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
-      return queryResult;
-    });
+  const listMemories = vi.fn(async () => {
+    if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
+    return queryResult;
+  });
 
-    return {
-      mockListMemories: listMemories,
-      setQueryResult: (result: any[]) => {
-        queryResult = result;
-      },
-      setQueryLatency: (ms: number) => {
-        latencyMs = ms;
-      },
-    };
-  },
-);
+  return {
+    mockListMemories: listMemories,
+    setQueryResult: (result: any[]) => {
+      queryResult = result;
+    },
+    setQueryLatency: (ms: number) => {
+      latencyMs = ms;
+    },
+  };
+});
 
 // Mock userDataApi - MemoryRepository's real backing store as of the REST API
 // migration (see src/agents/services/memory/MemoryRepository.ts).
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     listMemories: baseMockListMemories,
+    recallMemories: baseMockListMemories,
     matchMemories: vi.fn(),
   },
 }));
@@ -147,7 +150,7 @@ describe('Memory Performance Tests', () => {
       const results = await MemoryService.getRelevantMemories('session-123', 'query', 10);
 
       expect(results).toHaveLength(10);
-      expect(baseMockListMemories).toHaveBeenCalledWith('session-123', { limit: 10, top: true });
+      expect(baseMockListMemories).toHaveBeenCalledWith('session-123', 'query', 10);
     });
   });
 

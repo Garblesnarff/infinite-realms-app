@@ -26,6 +26,7 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     createMemories: vi.fn(async () => []),
     listMemories: vi.fn(async () => []),
+    recallMemories: vi.fn(async () => []),
     matchMemories: vi.fn(async () => []),
   },
 }));
@@ -100,13 +101,39 @@ describe('Client memory writes carry no embedding', () => {
     expect(records[0]).toMatchObject({ content: 'The party swore to find the Dragon Scroll.' });
   });
 
-  it('does not embed the query when recalling memories', async () => {
-    vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
+  it('falls back to top-by-importance when recall rejects, so the turn still runs', async () => {
+    vi.mocked(userDataApi.recallMemories).mockRejectedValue(new Error('network'));
+    vi.mocked(userDataApi.listMemories).mockResolvedValue([
+      { id: 'top', content: 'the standing order' },
+    ]);
+
+    const result = await MemoryService.getRelevantMemories('session-123', 'where is Reeves?', 8);
+
+    expect(result).toEqual([{ id: 'top', content: 'the standing order' }]);
+    expect(userDataApi.listMemories).toHaveBeenCalledWith('session-123', { limit: 8, top: true });
+  });
+
+  it('resolves to no memories when recall and the top listing both reject', async () => {
+    vi.mocked(userDataApi.recallMemories).mockRejectedValue(new Error('network'));
+    vi.mocked(userDataApi.listMemories).mockRejectedValue(new Error('502'));
+
+    await expect(
+      MemoryService.getRelevantMemories('session-123', 'where is Reeves?', 8),
+    ).resolves.toEqual([]);
+  });
+
+  it('sends the query to the server and does not embed in the browser', async () => {
+    vi.mocked(userDataApi.recallMemories).mockResolvedValue([]);
 
     await MemoryService.getRelevantMemories('session-123', 'where is the scroll?', 5);
 
     expect(supabase.functions.invoke).not.toHaveBeenCalled();
     expect(userDataApi.matchMemories).not.toHaveBeenCalled();
-    expect(userDataApi.listMemories).toHaveBeenCalledWith('session-123', { limit: 5, top: true });
+    expect(userDataApi.listMemories).not.toHaveBeenCalled();
+    expect(userDataApi.recallMemories).toHaveBeenCalledWith(
+      'session-123',
+      'where is the scroll?',
+      5,
+    );
   });
 });

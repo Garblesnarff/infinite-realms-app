@@ -534,6 +534,11 @@ export const userDataApi = {
       method: 'PATCH',
       body: JSON.stringify(updates),
     }),
+  recallMemories: (sessionId: string, query: string, limit: number): Promise<any[]> =>
+    request('/v1/memories/recall', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, query, limit }),
+    }),
   matchMemories: (
     sessionId: string,
     embedding: string,

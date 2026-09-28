@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia';
 
+import { AppError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { MemoryService } from '../../services/memory-service.js';
 
@@ -169,6 +170,34 @@ export const memoryRoutes = new Elysia({ prefix: '/v1/memories' })
       body: t.Object({
         importance: t.Optional(t.Number({ minimum: 1, maximum: 10 })),
         narrative_weight: t.Optional(t.Number({ minimum: 1, maximum: 10 })),
+      }),
+    },
+  )
+  .post(
+    '/recall',
+    async ({ body, user, set }) => {
+      try {
+        const rows = await MemoryService.recall(
+          body.session_id,
+          user!.userId,
+          body.query,
+          body.limit ?? 10,
+          user!.plan,
+        );
+        return rows.map((row) => mapMemory(row as MemoryRouteRow));
+      } catch (error) {
+        if (error instanceof AppError) {
+          set.status = error.statusCode;
+          return error.toJSON();
+        }
+        throw error;
+      }
+    },
+    {
+      body: t.Object({
+        session_id: t.String(),
+        query: t.String({ maxLength: 8_000 }),
+        limit: t.Optional(t.Number({ minimum: 1, maximum: 50 })),
       }),
     },
   )

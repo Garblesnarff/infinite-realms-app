@@ -23,6 +23,7 @@ vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     matchMemories: vi.fn(),
     listMemories: vi.fn(),
+    recallMemories: vi.fn(),
   },
 }));
 
@@ -63,12 +64,7 @@ describe('Semantic Search', () => {
 
       await repository.matchMemories('session-123', mockEmbedding, 10, 0.7);
 
-      expect(userDataApi.matchMemories).toHaveBeenCalledWith(
-        'session-123',
-        mockEmbedding,
-        10,
-        0.7,
-      );
+      expect(userDataApi.matchMemories).toHaveBeenCalledWith('session-123', mockEmbedding, 10, 0.7);
     });
 
     // TODO(vitest-config-audit, 2026-07-14): matchMemories() (see
@@ -231,14 +227,10 @@ describe('Semantic Search', () => {
     });
   });
 
-  describe('Recall without a query vector', () => {
-    // The browser used to embed the query here (supabase.functions.invoke
-    // ('generate-embedding')) and hand the vector to matchMemories(). #1822 found that call
-    // was gated off in production for the entire life of the memories table, against a column
-    // that had never held a vector, so it could not have matched anything. Recall is now
-    // openly what it has always been in practice — the session's most important memories —
-    // until PR3 embeds the query server-side.
-    it('returns the top memories for the session and asks for no similarity match', async () => {
+  describe('Recall sends the query to the server', () => {
+    // The browser used to embed the query. #2282 moved that to the server: the client
+    // posts the text and does not build a vector.
+    it('posts the player text to /v1/memories/recall and does not match from the browser', async () => {
       const mockMemories = [
         {
           id: '1',
@@ -252,22 +244,19 @@ describe('Semantic Search', () => {
         },
       ];
 
-      vi.mocked(userDataApi.listMemories).mockResolvedValue(mockMemories);
+      vi.mocked(userDataApi.recallMemories).mockResolvedValue(mockMemories);
 
       const result = await MemoryService.getRelevantMemories('session-123', 'find the sword', 10);
 
       expect(result).toHaveLength(1);
-      expect(userDataApi.listMemories).toHaveBeenCalledWith('session-123', {
-        limit: 10,
-        top: true,
-      });
+      expect(userDataApi.recallMemories).toHaveBeenCalledWith('session-123', 'find the sword', 10);
       expect(userDataApi.matchMemories).not.toHaveBeenCalled();
     });
   });
 
   describe('Empty and No Results Scenarios', () => {
     it('should return empty array when no memories exist', async () => {
-      vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
+      vi.mocked(userDataApi.recallMemories).mockResolvedValue([]);
 
       const result = await MemoryService.getRelevantMemories('session-123', 'query', 10);
 
@@ -275,7 +264,7 @@ describe('Semantic Search', () => {
     });
 
     it('should handle empty query string', async () => {
-      vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
+      vi.mocked(userDataApi.recallMemories).mockResolvedValue([]);
 
       const result = await MemoryService.getRelevantMemories('session-123', '', 10);
 

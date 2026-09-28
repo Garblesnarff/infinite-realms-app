@@ -9,6 +9,8 @@ const FALLBACK_PRICE_PER_MILLION_USD: Record<string, { input: number; output: nu
   'google/gemini-3.1-flash-image': { input: 0.5, output: 60 },
   'bytedance/seed-1.6-flash': { input: 0.075, output: 0.3 },
   'moonshotai/kimi-k2-0905': { input: 0.6, output: 2.5 },
+  // Google AI pricing, gemini-embedding-001, $0.15 / 1M input tokens. No output tokens.
+  'gemini-embedding-001': { input: 0.15, output: 0 },
 };
 
 /**

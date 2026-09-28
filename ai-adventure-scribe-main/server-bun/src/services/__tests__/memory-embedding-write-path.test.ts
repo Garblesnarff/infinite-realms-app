@@ -48,6 +48,10 @@ mock.module('../embedding-service.js', () => ({
     generateCalls.push({ text, taskType });
     return generate(text, taskType);
   },
+  generateEmbeddingDetailed: async (text: string, taskType: string) => ({
+    values: await generate(text, taskType),
+    inputTokens: 1,
+  }),
 }));
 
 mock.module('../../lib/alerting.js', () => ({
