@@ -80,6 +80,71 @@ export type CombatIntent =
 
 export type CombatActionSource = 'player' | 'dm';
 
+/** Who produced the action (#2305); see `COMBAT_ACTION_ORIGINS` in the route's schema. */
+export type CombatActionOrigin =
+  | 'typed'
+  | 'sheet_cast'
+  | 'action_bar'
+  | 'dice_roll'
+  | 'dm'
+  | 'repair';
+
+/** The origins that are this turn's player input. Only these may act for the player. */
+const PLAYER_INPUT_ORIGINS = new Set<CombatActionOrigin>([
+  'typed',
+  'sheet_cast',
+  'action_bar',
+  'dice_roll',
+]);
+
+/** A turn boundary is not an action: the client ends the player's turn after one it resolved. */
+const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
+  'attack',
+  'spell',
+  'move',
+  'dash',
+  'dodge',
+  'disengage',
+]);
+
+/**
+ * The player acts only on the player's own input (#2305). In run M7 round 2 the engine cast
+ * Chill Touch for the player 45 s after a turn in which the player sent nothing; the action
+ * arrived as `source: 'dm'`, exactly like the player's real round-1 cast, so nothing here could
+ * tell them apart. The client now says where each action came from, and an action produced by
+ * the DM or the repair loop is refused for a player actor — and logged with that origin, so the
+ * next such line is one query away.
+ *
+ * An absent origin is accepted and logged as `unmarked`: the server-internal callers and a
+ * client older than this deploy send none. (The other skew direction is harmless too: a server
+ * older than this deploy ignores the field.)
+ */
+function assertPlayerInputOrigin(
+  state: CombatState,
+  intent: SubmittedCombatIntent,
+  source: CombatActionSource,
+  origin: CombatActionOrigin | undefined,
+): void {
+  if (!PLAYER_ORIGIN_GUARDED_TYPES.has(intent.type)) return;
+  const actor = state.participants.find((participant) => participant.id === intent.actorId);
+  if (actor?.participantType !== 'player') return;
+  if (!origin || PLAYER_INPUT_ORIGINS.has(origin)) return;
+  logger.warn({
+    msg: 'PLAYER_ACTION_REFUSED_NO_INPUT',
+    encounterId: state.encounter.id,
+    sessionId: state.encounter.sessionId,
+    actorId: intent.actorId,
+    intentType: intent.type,
+    source,
+    origin,
+  });
+  throw new BusinessLogicError('Player action refused: the player did not declare it this turn', {
+    reason: 'player_action_without_input',
+    origin,
+    intentType: intent.type,
+  });
+}
+
 /**
  * An intent as submitted, before the dispatch resolves it. `expectedVersion` may be absent —
  * which only a DM-sourced intent is allowed to do.
@@ -631,12 +696,21 @@ async function proposeCombatSpell(
   userId: string,
   source: CombatActionSource,
 ): Promise<{ movementOnly: false } & Record<string, unknown>> {
-  const state = await CombatEncounterService.getCombatState(encounterId, userId);
-  const index = await loadSessionEntityIndex(state.encounter.sessionId);
-  const resolved = resolveIntentRefs(submitted, index, state) as Extract<
-    CombatIntent,
-    { type: 'spell' }
-  >;
+  // The same resolution the commit and the attack proposal use. This called a
+  // `resolveIntentRefs` that #2250 had moved into `combat-intent-refs.ts`, so every spell
+  // proposal threw a ReferenceError the route answered as a bare 500 (#2303) — which is why no
+  // player was ever shown a spell-attack die: a failed proposal opens no popup.
+  const initialState = await CombatEncounterService.getCombatState(encounterId, userId);
+  const {
+    state,
+    index,
+    resolved: resolvedRefs,
+  } = await resolveCombatIntentRefsWithRetry(submitted, initialState, {
+    loadState: () => CombatEncounterService.getCombatState(encounterId, userId),
+    loadIndex: loadSessionEntityIndex,
+    warn: (data) => logger.warn(data),
+  });
+  const resolved = resolvedRefs as Extract<CombatIntent, { type: 'spell' }>;
   const { encounter } = await resolveActorTurn(
     encounterId,
     state,
@@ -675,6 +749,7 @@ export async function executeCombatIntent(
   userId: string,
   source: CombatActionSource,
   dmStartedAt?: number,
+  origin?: CombatActionOrigin,
 ): Promise<unknown> {
   let stateForUnresolved: CombatState | null = null;
   try {
@@ -726,6 +801,7 @@ export async function executeCombatIntent(
         status: 'completed',
       } satisfies EncounterAlreadyConcludedResult;
     }
+    assertPlayerInputOrigin(state, resolved, source, origin);
     // Before authorization, because a boundary that has already been crossed is not an
     // authorization question: there is no turn left to be out of.
     const stale = alreadyEndedTurn(state, resolved, source);
@@ -986,6 +1062,7 @@ export async function executeCombatIntent(
       actorId: intent.actorId,
       action: intent.type,
       source,
+      origin: origin ?? 'unmarked',
     });
     const directDamage = Number((result as { finalDamage?: number })?.finalDamage ?? 0);
     const spellDamage =
@@ -1039,6 +1116,7 @@ export async function executeCombatIntent(
       actorId: submitted.actorId,
       action: submitted.type,
       source,
+      origin: origin ?? 'unmarked',
       reason: error instanceof Error ? error.message : 'unknown',
     });
     const unresolvedActorIsPlayer = stateForUnresolved

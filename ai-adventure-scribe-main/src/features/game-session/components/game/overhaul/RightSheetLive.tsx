@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { RightSheet } from './RightSheet';
 import { buildSpellCastContext, buildSpellCastMessage } from './spell-view-model';
@@ -25,6 +25,10 @@ export const RightSheetLive: React.FC<{
   const [preparedOverrides, setPreparedOverrides] = useState<Record<string, boolean>>({});
   const [pendingSpellId, setPendingSpellId] = useState<string>();
   const [spellActionError, setSpellActionError] = useState<string>();
+  const [castingSpellId, setCastingSpellId] = useState<string>();
+  // Synchronous twin of `castingSpellId`: a second click can land before React re-renders the
+  // disabled button, and the state alone would let it through.
+  const castInFlightRef = useRef(false);
 
   useEffect(() => {
     setPreparedOverrides({});
@@ -88,11 +92,20 @@ export const RightSheetLive: React.FC<{
         return;
       }
 
+      // One cast per click, and none while one is in flight (#2305). The send queue plays every
+      // call as its own player turn, so run M7's second Cast click during round 1 came back as a
+      // byte-identical round-2 turn the player never took — and the engine cast for them.
+      if (castInFlightRef.current) return;
+      castInFlightRef.current = true;
+      setCastingSpellId(spell.id);
       setSpellActionError(undefined);
       try {
         await handler(buildSpellCastMessage(spell), buildSpellCastContext(spell));
       } catch (error) {
         setSpellActionError(error instanceof Error ? error.message : 'Unable to cast spell.');
+      } finally {
+        castInFlightRef.current = false;
+        setCastingSpellId(undefined);
       }
     },
     [spellCastHandlerRef],
@@ -104,6 +117,7 @@ export const RightSheetLive: React.FC<{
       sessionId={sessionId}
       isInCombat={isInCombat}
       pendingSpellId={pendingSpellId}
+      castingSpellId={castingSpellId}
       spellActionError={spellActionError}
       onCastSpell={handleCastSpell}
       onTogglePrepared={handleTogglePrepared}

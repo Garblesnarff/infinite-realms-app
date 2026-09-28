@@ -73,6 +73,23 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...defensiveFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 
+/**
+ * Where the action came from (#2305). `source` names the dialect the body speaks and is `dm` for
+ * every client-submitted intent, the player's own casts included, so it cannot answer "who
+ * initiated this". `origin` can: the first four are this turn's player input; `dm` and `repair`
+ * are producers that must never act for the player.
+ */
+export const COMBAT_ACTION_ORIGINS = [
+  'typed',
+  'sheet_cast',
+  'action_bar',
+  'dice_roll',
+  'dm',
+  'repair',
+] as const;
+export type CombatActionOrigin = (typeof COMBAT_ACTION_ORIGINS)[number];
+const originField = t.Optional(t.Union(COMBAT_ACTION_ORIGINS.map((origin) => t.Literal(origin))));
+
 /** The contract. Which dialect applies is decided by `source`, and by nothing else. */
 const combatIntentRequestSchema = t.Union([
   t.Object({
@@ -81,12 +98,14 @@ const combatIntentRequestSchema = t.Union([
     intent: t.Optional(dmCombatIntentSchema),
     dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
     phase: t.Optional(t.Union([t.Literal('propose'), t.Literal('commit')])),
+    origin: originField,
   }),
   t.Object({
     source: t.Optional(t.Literal('player')),
     intent: t.Optional(playerCombatIntentSchema),
     dmStartedAt: t.Optional(t.Number({ minimum: 0 })),
     phase: t.Optional(t.Union([t.Literal('propose'), t.Literal('commit')])),
+    origin: originField,
   }),
 ]);
 
@@ -101,6 +120,7 @@ export const combatIntentEnvelopeSchema = t.Object({
   source: t.Optional(t.Unknown()),
   dmStartedAt: t.Optional(t.Unknown()),
   phase: t.Optional(t.Unknown()),
+  origin: t.Optional(t.Unknown()),
 });
 
 export const combatIntentRequestValidator = getSchemaValidator(combatIntentRequestSchema, {});

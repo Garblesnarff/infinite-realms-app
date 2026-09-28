@@ -21,6 +21,7 @@ import {
 } from '@/hooks/ai/combat-turn-preflight';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
+import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
@@ -54,6 +55,8 @@ export interface HandleDmActionsParams {
   playerMessage?: string;
   /** A submitted dice result is a continuation, not a fresh attempt; the guard stands down. */
   isDiceRollMessage?: boolean;
+  /** How the player gave this turn's input; `null` when no player message started it (#2305). */
+  playerInputOrigin?: PlayerInputOrigin | null;
 }
 
 export interface HandleDmActionsResult {
@@ -167,6 +170,7 @@ export async function handleDmActionsAndTransitions(
     turnCount,
     playerMessage,
     isDiceRollMessage,
+    playerInputOrigin,
     preflightNpcTurns: initialPreflightNpcTurns,
     combatRound,
   } = params;
@@ -626,6 +630,7 @@ export async function handleDmActionsAndTransitions(
         : [],
       playerAttackRoll: entryPlayerAttackRoll,
       combatRound: combatRound ?? activeEncounter.currentRound,
+      playerInputOrigin,
     });
     result = narrationResult;
     responseText = narrationResult.text;

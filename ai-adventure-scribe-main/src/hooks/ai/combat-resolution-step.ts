@@ -18,6 +18,11 @@ import {
   executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
 import {
+  isPlayerInputOrigin,
+  type CombatActionOrigin,
+  type PlayerInputOrigin,
+} from '@/services/combat/combat-action-origin';
+import {
   formatCombatEngineOutcome,
   formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
@@ -85,6 +90,11 @@ export interface CombatResolutionParams {
   preResolvedNpcTurns?: AdvanceNpcTurnsResponse;
   /** Encounter round at the start of this resolution, used for older server payloads. */
   combatRound?: number;
+  /**
+   * How the player gave this turn's input, or `null` when no player message started the turn.
+   * A player-actor action resolves only on player input (#2305).
+   */
+  playerInputOrigin?: PlayerInputOrigin | null;
 }
 
 const sameAction = (left: StructuredCombatAction, right: StructuredCombatAction): boolean =>
@@ -118,6 +128,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     playerAttackRoll,
     preResolvedNpcTurns,
     combatRound,
+    playerInputOrigin,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
@@ -131,6 +142,38 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
    * existed. Recorded here so the resolution pass is told what did NOT happen.
    */
   const refusedActions: Array<Record<string, unknown>> = [];
+  /**
+   * The engine line each refusal printed, so a refusal that a retry later overturns takes its
+   * line with it. Run 13 showed REFUSED and then HIT for one Chill Touch because the retry
+   * dropped the refusal record and left its line behind (#2303): one cast, one engine line.
+   */
+  const refusalLines = new Map<Record<string, unknown>, CombatEngineBlock>();
+  const withdrawRefusalAt = (index: number): Record<string, unknown> | undefined => {
+    const [refusal] = refusedActions.splice(index, 1);
+    const line = refusal ? refusalLines.get(refusal) : undefined;
+    if (line) engineBlocks.splice(engineBlocks.indexOf(line), 1);
+    return refusal;
+  };
+  /**
+   * Player-actor actions no player input produced (#2305): the DM's own batch on a turn the
+   * player did not start, or a repair's re-declaration. None of them reached the engine, and the
+   * narration pass is told they did not happen.
+   */
+  const withheldPlayerActions: Array<Record<string, unknown>> = [];
+  /**
+   * Who produced each action. The DM's batch is the translation of this turn's player input when
+   * there was one — a declaration the server queues for the player's next turn included, since
+   * the player confirms it before it resolves. The repair loop tags its own actions below.
+   */
+  const actionOrigins = new WeakMap<StructuredCombatAction, CombatActionOrigin>();
+  const originOf = (action: StructuredCombatAction): CombatActionOrigin | undefined => {
+    const tagged = actionOrigins.get(action);
+    if (tagged) return tagged;
+    // `undefined` is a caller that predates origins and is not gated; `null` is a turn no
+    // player message started, whose DM batch is the DM's alone.
+    if (playerInputOrigin === undefined) return undefined;
+    return playerInputOrigin ?? 'dm';
+  };
   /** Whose turn it is once everything the engine accepted has been applied. */
   let turnHolder: { id?: string; name?: string } | null = null;
   let encounterAlreadyConcluded = false;
@@ -179,24 +222,26 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     lines: string[];
     round: number;
     serverSequence?: number;
-  }): void => {
+  }): CombatEngineBlock | undefined => {
     const cleanLines = lines.filter((line): line is string => typeof line === 'string' && !!line);
-    if (!cleanLines.length) return;
-    engineBlocks.push({
+    if (!cleanLines.length) return undefined;
+    const block: CombatEngineBlock = {
       sequence: engineBlocks.length,
       ...(serverSequence === undefined ? {} : { serverSequence }),
       round,
       source,
       ...(actorId ? { actor: labelFor(actorId) } : {}),
       lines: cleanLines,
-    });
+    };
+    engineBlocks.push(block);
+    return block;
   };
   const recordRefusal = (action: StructuredCombatAction, refusal: CombatIntentRefusedError) => {
     const queued = isQueuedIntentActor(action.actor_id);
     const actorIsPlayer = isPlayerActor(action.actor_id, participants);
     const reason = combatRefusalReason(refusal);
     if (actorIsPlayer) playerDeclarationWasRefused = true;
-    refusedActions.push({
+    const refusalRecord: Record<string, unknown> = {
       resolved: false,
       ...(queued ? { queued: true } : {}),
       actor: labelFor(action.actor_id),
@@ -210,19 +255,21 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       currentTurn: refusal.details?.currentParticipantId
         ? labelFor(refusal.details.currentParticipantId)
         : (refusal.details?.currentParticipantSlug ?? null),
-    });
+    };
+    refusedActions.push(refusalRecord);
     logger.warn('[CombatRepair] rejected intent', {
       reason,
       intent: redactedCombatIntent(action),
     });
     if (action.action_type === 'cast_spell') {
       const spell = playerCombatSpellLabel(action.spell_id, action.spell_id);
-      appendEngineBlock({
+      const line = appendEngineBlock({
         source: actorIsPlayer ? 'player' : 'npc',
         actorId: action.actor_id,
         lines: [formatRefusedSpellOutcome(labelFor(action.actor_id), spell, refusal.message)],
         round: combatRound ?? 1,
       });
+      if (line) refusalLines.set(refusalRecord, line);
       if (actorIsPlayer) {
         logger.warn('PLAYER_ACTION_UNRESOLVED', { actionType: 'cast_spell', spell });
       }
@@ -294,7 +341,23 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     ? appendAutonomousNpcResults(preResolvedNpcTurns)
     : null;
 
-  const runAction = async (action: StructuredCombatAction): Promise<BatchBoundary> => {
+  /** `null` when the action was withheld and nothing reached the engine; the batch goes on. */
+  const runAction = async (action: StructuredCombatAction): Promise<BatchBoundary | null> => {
+    const origin = originOf(action);
+    if (origin && isPlayerActor(action.actor_id, participants) && !isPlayerInputOrigin(origin)) {
+      logger.warn('PLAYER_ACTION_REFUSED_NO_INPUT', {
+        source: origin,
+        actionType: action.action_type,
+        intent: redactedCombatIntent(action),
+      });
+      withheldPlayerActions.push({
+        actor: labelFor(action.actor_id),
+        action: action.action_type,
+        targets: action.target_ids?.map(labelFor) ?? [],
+        source: origin,
+      });
+      return null;
+    }
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
     let playerDie: PlayerAttackRoll;
@@ -338,6 +401,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       encounterId,
       action,
       playerDie?.d20,
+      ...(origin ? [origin] : []),
     );
     // A retry that arrived after victory is a clean server no-op, not an outcome to narrate.
     // The batch is over either way; do not submit the next action against the dissolved board.
@@ -389,7 +453,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     try {
       const boundary = await runAction(action);
       const dropped = targetedActions.length - actionIndex - 1;
-      if (dropped > 0) {
+      if (boundary && dropped > 0) {
         logger.info(`[CombatBatch] boundary=${boundary} dropped=${dropped}`);
       }
       if (boundary) break;
@@ -413,7 +477,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           const retryBoundary = await runAction(action);
           // The first refusal was transient: the same player action was accepted after the
           // stale NPC turn was settled, so do not ask narration to report it as unresolved.
-          refusedActions.splice(refusalIndex, 1);
+          withdrawRefusalAt(refusalIndex);
           if (retryBoundary) break;
           continue;
         } catch (retryError) {
@@ -451,6 +515,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       const corrected = repaired?.combat_actions?.filter(
         (candidate): candidate is StructuredCombatAction => 'target_ids' in candidate,
       );
+      // The repair re-asks the DM, and a DM re-declaration is not the player's input: a player
+      // action it produces is withheld in `runAction` (#2305). Run 13's HIT line came from here.
+      for (const correctedAction of corrected ?? []) actionOrigins.set(correctedAction, 'repair');
       if (!corrected?.length) {
         logger.warn('[CombatRepair] outcome=failed no usable corrected action; surfacing');
         if (action.action_type === 'cast_spell' && engineBlocks.length) {
@@ -483,9 +550,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         if (correctedBoundary) break;
       }
       if (repairRefused) break;
+      if (correctedBoundary === null) {
+        // Every corrected action was withheld: nothing replaced the refused one, so its refusal
+        // is still what happened.
+        logger.warn('[CombatRepair] outcome=withheld no corrected action came from player input');
+        break;
+      }
       // The corrected action was accepted, so the original refusal is no longer an unresolved
       // player notice. Keep it only when the repair itself was refused.
-      const [repairedRefusal] = refusedActions.splice(repairRefusalIndex, 1);
+      const repairedRefusal = withdrawRefusalAt(repairRefusalIndex);
       if (repairedRefusal?.actorIsPlayer && correctedBoundary !== 'combat_ended') {
         playerRefusalRepaired = true;
       }
@@ -552,6 +625,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
               'damage was dealt, no condition changed. Never narrate an outcome for them. If a ' +
               "refused action was the player's, say plainly that it is not their turn yet and " +
               'whose turn it is.',
+          }
+        : {}),
+      ...(withheldPlayerActions.length
+        ? {
+            withheldPlayerActions,
+            withheldPlayerActionsNote:
+              'The player did NOT declare these; the engine did not resolve them. They did not ' +
+              'happen. Never narrate the player doing anything the player did not say.',
           }
         : {}),
       ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),

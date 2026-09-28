@@ -38,7 +38,7 @@ export async function askPlayerForSpellCast(
   const { encounterId, action, actorLabel, participants } = params;
   const spell = resolvePlayerCombatSpell(action.spell_id, action.spell_id);
   const targetId = action.target_ids[0];
-  const targetLabel = targetId ? labelFor(targetId, participants) : 'the target';
+  let targetLabel = targetId ? labelFor(targetId, participants) : 'the target';
 
   if (!spell || spell.kind === 'auto-hit') {
     return { autoRolled: true, movementOnly: false };
@@ -80,6 +80,9 @@ export async function askPlayerForSpellCast(
           ? { slotLevel: action.slot_level }
           : {}),
       });
+      // The engine names the target it resolved; the DM's ref may be a catalog key such as
+      // `srd:vitruvian-spider` that no participant label matches (#2303).
+      if (proposal.targetLabel) targetLabel = proposal.targetLabel;
       rollSpec = {
         weaponName: proposal.spellName,
         attackBonus: proposal.attackBonus,

@@ -5,6 +5,7 @@ import {
   combatIntentEnvelopeSchema,
   combatIntentRequestValidator,
   describeIntentRejection,
+  type CombatActionOrigin,
 } from './intent-schema.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
@@ -29,17 +30,45 @@ const sessionIdParams = t.Object({
 
 // Elysia's status union is intentionally framework-owned and wider than a simple number.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapIntentError(set: any, error: unknown) {
+function mapIntentError(set: any, error: unknown, logContext: Record<string, unknown> = {}) {
   if (error instanceof AppError) {
     set.status = error.statusCode;
-    if (error.statusCode >= 500) return { error: 'Combat action failed' };
+    if (error.statusCode >= 500) {
+      logIntentFailure(error, logContext);
+      return { error: 'Combat action failed' };
+    }
     // Details ride along on client-fixable answers. A refusal the caller cannot act on is a
     // refusal it will re-send verbatim: "Combat participant not found" says a reference missed,
     // and only the roster beside it says what to write instead.
     return { error: error.message, ...(error.details ? { details: error.details } : {}) };
   }
   set.status = 500;
+  logIntentFailure(error, logContext);
   return { error: 'Combat action failed' };
+}
+
+/**
+ * A 500 is the one answer the client cannot act on, and it used to leave no trace: run 13's
+ * three spell-proposal 500s had only `request.start`/`request.end` in the log (#2303). Every
+ * 5xx now leaves the thrown error beside the request id that surfaced it.
+ */
+function logIntentFailure(error: unknown, logContext: Record<string, unknown>): void {
+  logger.error(
+    {
+      ...logContext,
+      errName: error instanceof Error ? error.name : typeof error,
+      errMessage: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    },
+    'COMBAT_INTENT_FAILED',
+  );
+}
+
+function requestIdOf(context: unknown, request: Request): string {
+  const contextRequestId = (context as { requestId?: unknown }).requestId;
+  return typeof contextRequestId === 'string'
+    ? contextRequestId
+    : request.headers.get('x-request-id') || 'unknown';
 }
 
 export const intentRoutes = new Elysia()
@@ -85,6 +114,7 @@ export const intentRoutes = new Elysia()
         source?: 'player' | 'dm';
         dmStartedAt?: number;
         phase?: 'propose' | 'commit';
+        origin?: CombatActionOrigin;
       };
       if (!payload.intent?.type || !payload.intent.actorId) {
         set.status = 400;
@@ -93,11 +123,7 @@ export const intentRoutes = new Elysia()
       // --- Bad payload: 422 naming the variant that refused it, before any work happens. ---
       if (!combatIntentRequestValidator?.Check(payload)) {
         const rejection = describeIntentRejection(payload);
-        const contextRequestId = (context as { requestId?: unknown }).requestId;
-        const requestId =
-          typeof contextRequestId === 'string'
-            ? contextRequestId
-            : request.headers.get('x-request-id') || 'unknown';
+        const requestId = requestIdOf(context, request);
         logger.warn(
           {
             requestId,
@@ -132,10 +158,18 @@ export const intentRoutes = new Elysia()
           user.userId,
           payload.source === 'dm' ? 'dm' : 'player',
           payload.dmStartedAt,
+          payload.origin,
         );
         return { accepted: true, result };
       } catch (cause) {
-        return mapIntentError(set, cause);
+        return mapIntentError(set, cause, {
+          requestId: requestIdOf(context, request),
+          encounterId: params.encounterId,
+          intentType: payload.intent.type,
+          phase: payload.phase ?? 'commit',
+          source: payload.source ?? 'player',
+          origin: payload.origin ?? null,
+        });
       }
     },
     { params: encounterIdParams, body: combatIntentEnvelopeSchema },

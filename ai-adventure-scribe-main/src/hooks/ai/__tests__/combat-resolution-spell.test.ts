@@ -196,4 +196,61 @@ describe('player spell resolution', () => {
     );
     expect(result.text).not.toContain('wounded');
   });
+
+  it('prints one line for one cast when a refused spell is retried and accepted (#2303)', async () => {
+    // Run 13 printed REFUSED and then HIT for one Chill Touch: the retry dropped the refusal
+    // record but left its engine line in the transcript.
+    const chillTouchHit = {
+      outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 3 }],
+      result: {
+        results: [
+          {
+            actorName: 'Rook',
+            targetName: 'Professor Umeboshi',
+            spellName: 'Chill Touch',
+            d20: 10,
+            attackBonus: 6,
+            totalAttackRoll: 16,
+            targetAC: 15,
+            hit: true,
+            finalDamage: 3,
+            damageType: 'necrotic',
+          },
+        ],
+      },
+      boundary: null,
+    };
+    executeStructuredCombatActionWithBoundary
+      .mockRejectedValueOnce(
+        new CombatIntentRefusedError('Actor is not the current-turn participant', 422, {
+          currentParticipantId: NPC_ID,
+        }),
+      )
+      .mockResolvedValueOnce(chillTouchHit);
+    advanceNpcTurns.mockResolvedValueOnce({
+      results: [],
+      currentParticipant: { id: PLAYER_ID, name: 'Rook' },
+      combatEnded: false,
+      iterationCount: 0,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: [],
+    });
+    chatWithDM.mockResolvedValue({ text: 'A cold hand closes.', narrationSegments: [] });
+
+    const result = await resolveDeclaredCombatActions({
+      encounterId: 'enc-1',
+      sessionId: 'session-1',
+      combatActions: [spellAction('chill-touch')],
+      declarationText: 'I cast Chill Touch.',
+      participants: PARTICIPANTS,
+      aiContext: { sessionId: 'session-1', gameState: { isInCombat: true } },
+      conversationHistory: [],
+    });
+
+    expect(result.text).not.toContain('was refused');
+    expect(result.text.match(/Chill Touch/g)).toHaveLength(1);
+    expect(result.text).toContain('Rook cast Chill Touch at Professor Umeboshi');
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+  });
 });

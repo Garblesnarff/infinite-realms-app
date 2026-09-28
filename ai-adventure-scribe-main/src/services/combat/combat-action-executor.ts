@@ -11,6 +11,7 @@ export {
   type StructuredCombatActionExecution,
 } from './combat-action-boundary';
 
+import type { CombatActionOrigin } from './combat-action-origin';
 import type { DamageType } from '@/types/combat';
 
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
@@ -145,11 +146,16 @@ export class CombatIntentRefusedError extends Error {
   }
 }
 
+/**
+ * `source` is the body's dialect and says `dm` for the player's own casts; `origin` says who
+ * produced the action, and the server refuses a player action no player input made (#2305).
+ */
 export async function executeAuthoritativeCombatIntent(
   encounterId: string,
   intent: ClientCombatIntent,
   source: 'player' | 'dm' = 'player',
   dmStartedAt?: number,
+  origin?: CombatActionOrigin,
 ): Promise<unknown> {
   try {
     const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
@@ -178,7 +184,12 @@ export async function executeAuthoritativeCombatIntent(
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({ intent: authoritativeIntent, source, dmStartedAt }),
+        body: JSON.stringify({
+          intent: authoritativeIntent,
+          source,
+          dmStartedAt,
+          ...(origin ? { origin } : {}),
+        }),
       },
     );
     logServerRequestId('/v1/combat', response);
@@ -241,6 +252,8 @@ export async function executeStructuredCombatActionWithBoundary(
   action: StructuredCombatAction,
   /** The natural d20 the player rolled for this action, when they rolled one. */
   providedD20?: number,
+  /** Who produced the action; the server refuses a player action that no player input made. */
+  origin?: CombatActionOrigin,
 ): Promise<StructuredCombatActionExecution> {
   const dmStartedAt = Date.now();
   let result: unknown;
@@ -256,6 +269,7 @@ export async function executeStructuredCombatActionWithBoundary(
       },
       'dm',
       dmStartedAt,
+      origin,
     );
   } else if (action.action_type === 'cast_spell') {
     const spellName = playerCombatSpellLabel(action.spell_id, action.spell_id);
@@ -274,6 +288,7 @@ export async function executeStructuredCombatActionWithBoundary(
       },
       'dm',
       dmStartedAt,
+      origin,
     );
   } else if (['dash', 'dodge', 'disengage'].includes(action.action_type)) {
     result = await executeAuthoritativeCombatIntent(
@@ -284,6 +299,7 @@ export async function executeStructuredCombatActionWithBoundary(
       },
       'dm',
       dmStartedAt,
+      origin,
     );
   } else if (
     action.action_type === 'move' &&
@@ -295,6 +311,7 @@ export async function executeStructuredCombatActionWithBoundary(
       { type: 'move', actorId: action.actor_id, x: action.x, y: action.y },
       'dm',
       dmStartedAt,
+      origin,
     );
   } else {
     return { outcomes: [], boundary: null };

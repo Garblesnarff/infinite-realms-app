@@ -1,9 +1,11 @@
+import { normalizeMonsterKey } from './monster-key.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { resolveEntityRef } from '../../tactical/identity.js';
 
 export interface CombatIntentRefParticipant {
   id: string;
   name?: string;
+  participantType?: string;
 }
 
 export interface CombatIntentRefState {
@@ -24,6 +26,28 @@ export interface CombatIntentRefSubmission {
 }
 
 type RefLog = (data: Record<string, unknown>) => void;
+
+/** `srd:vitruvian-spider`, `campaign:the-doorkeeper` — a namespaced stat-block key. */
+const CATALOG_REF = /^[a-z][a-z0-9_-]*:\S/i;
+/** The participant types seated from a stat block (see `participant-type.ts`). */
+const CATALOG_SEATED_TYPES = new Set(['npc', 'monster']);
+
+function uniqueCatalogMatch<P extends CombatIntentRefParticipant>(
+  participants: P[],
+  token: string,
+): P | null {
+  const key = normalizeMonsterKey(token.replace(/^[^:]*:/, ''));
+  if (!key) return null;
+  // A catalog key names a stat block, and only creatures are seated from one: a player whose
+  // name happens to normalize to the key (a PC called "Vitruvian Spider") is never its target.
+  const matches = participants.filter(
+    (participant) =>
+      CATALOG_SEATED_TYPES.has(participant.participantType ?? '') &&
+      !!participant.name &&
+      normalizeMonsterKey(participant.name) === key,
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
 
 /** Resolve board tokens to IDs that actually belong to this encounter. */
 export function resolveCombatIntentRefs<T extends CombatIntentRefSubmission>(
@@ -53,6 +77,26 @@ export function resolveCombatIntentRefs<T extends CombatIntentRefSubmission>(
         roster: index.roster(),
       });
       return encounterParticipant.id;
+    }
+
+    // A catalog ref is the creature's stat-block key, not its seat: the DM copies
+    // `srd:vitruvian-spider` out of the scene spec while the board seated `the-vitruvian-spider`
+    // (#2303, run 13). Translate through the one monster-key rule, and only when exactly one
+    // participant answers to it — two spiders stay unresolved rather than becoming the first.
+    const catalogParticipant = CATALOG_REF.test(token)
+      ? uniqueCatalogMatch(state.participants, token)
+      : null;
+    if (catalogParticipant) {
+      warn({
+        msg: 'COMBAT_INTENT_REF_RECONCILED_FROM_CATALOG_REF',
+        encounterId: state.encounter.id,
+        sessionId: state.encounter.sessionId,
+        intentType: submitted.type,
+        role,
+        submittedRef: token,
+        resolvedTo: catalogParticipant.id,
+      });
+      return catalogParticipant.id;
     }
 
     warn({

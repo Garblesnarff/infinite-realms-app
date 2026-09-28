@@ -32,6 +32,7 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import {
   hasPendingPlayerRoll,
   settlePendingPlayerRoll,
@@ -509,6 +510,7 @@ export const useAIResponse = (): {
           turnCount,
           playerMessage: latestMessage.text,
           isDiceRollMessage: !!isDiceRollMessage,
+          playerInputOrigin: playerInputOriginOf(latestMessage),
         });
 
         result = dmActionsResult.result;

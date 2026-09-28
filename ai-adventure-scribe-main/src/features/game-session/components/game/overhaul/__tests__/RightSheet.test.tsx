@@ -132,6 +132,26 @@ describe('RightSheet attacks list', () => {
     expect(onCastSpell).toHaveBeenCalledWith(casterSheet.spells.known[0]);
   });
 
+  it('holds every Cast button while a cast is in flight (#2305)', () => {
+    const onCastSpell = vi.fn();
+    const castingSpellId = casterSheet.spells.known[0].id;
+    render(
+      <RightSheet
+        c={casterSheet}
+        isInCombat
+        castingSpellId={castingSpellId}
+        onCastSpell={onCastSpell}
+      />,
+    );
+
+    const cast = screen.getByRole('button', { name: 'Cast Magic Missile' });
+    expect(cast).toBeDisabled();
+    expect(cast).toHaveTextContent('Casting…');
+    // Run M7's second click became a turn the player never took.
+    fireEvent.click(cast);
+    expect(onCastSpell).not.toHaveBeenCalled();
+  });
+
   it('does not offer a cast action during combat or a preparation toggle to non-casters', () => {
     render(<RightSheet c={casterSheet} isInCombat />);
     expect(screen.queryByRole('button', { name: 'Cast Magic Missile' })).not.toBeInTheDocument();

@@ -83,9 +83,11 @@ const SpellEntry: React.FC<{
   isInCombat: boolean;
   showActions: boolean;
   pendingSpellId?: string;
+  /** A cast in flight; every Cast button waits for it (#2305). */
+  castingSpellId?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
-}> = ({ spell, showActions, pendingSpellId, onCastSpell, onTogglePrepared }) => (
+}> = ({ spell, showActions, pendingSpellId, castingSpellId, onCastSpell, onTogglePrepared }) => (
   <div className="rounded border border-white/5 bg-white/[0.02] p-2">
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
@@ -118,9 +120,10 @@ const SpellEntry: React.FC<{
               variant="outline"
               className="h-6 border-infinite-gold/30 px-1.5 text-[10px] text-infinite-gold"
               aria-label={`Cast ${spell.name}`}
+              disabled={castingSpellId !== undefined}
               onClick={() => void onCastSpell(spell)}
             >
-              Cast
+              {castingSpellId === spell.id ? 'Casting…' : 'Cast'}
             </Button>
           )}
         </div>
@@ -140,6 +143,8 @@ const SpellGroup: React.FC<{
   isInCombat: boolean;
   showActions?: boolean;
   pendingSpellId?: string;
+  /** A cast in flight; every Cast button waits for it (#2305). */
+  castingSpellId?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
 }> = ({
@@ -148,6 +153,7 @@ const SpellGroup: React.FC<{
   isInCombat,
   showActions = true,
   pendingSpellId,
+  castingSpellId,
   onCastSpell,
   onTogglePrepared,
 }) => (
@@ -164,6 +170,7 @@ const SpellGroup: React.FC<{
             isInCombat={isInCombat}
             showActions={showActions}
             pendingSpellId={pendingSpellId}
+            castingSpellId={castingSpellId}
             onCastSpell={onCastSpell}
             onTogglePrepared={onTogglePrepared}
           />
@@ -179,10 +186,20 @@ const SpellsSection: React.FC<{
   c: CharacterSheetVM;
   isInCombat: boolean;
   pendingSpellId?: string;
+  /** A cast in flight; every Cast button waits for it (#2305). */
+  castingSpellId?: string;
   spellActionError?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
-}> = ({ c, isInCombat, pendingSpellId, spellActionError, onCastSpell, onTogglePrepared }) => (
+}> = ({
+  c,
+  isInCombat,
+  pendingSpellId,
+  castingSpellId,
+  spellActionError,
+  onCastSpell,
+  onTogglePrepared,
+}) => (
   <IRPanel>
     <IRPanelHeader title="Spells" />
     <div className="space-y-3 p-2.5">
@@ -224,6 +241,7 @@ const SpellsSection: React.FC<{
         spells={c.spells.cantrips}
         isInCombat={isInCombat}
         pendingSpellId={pendingSpellId}
+        castingSpellId={castingSpellId}
         onCastSpell={c.spellcasting ? onCastSpell : undefined}
         onTogglePrepared={onTogglePrepared}
       />
@@ -232,6 +250,7 @@ const SpellsSection: React.FC<{
         spells={c.spells.known}
         isInCombat={isInCombat}
         pendingSpellId={pendingSpellId}
+        castingSpellId={castingSpellId}
         onCastSpell={c.spellcasting ? onCastSpell : undefined}
         onTogglePrepared={onTogglePrepared}
       />
@@ -277,6 +296,8 @@ export const RightSheet: React.FC<{
   sessionId?: string;
   isInCombat?: boolean;
   pendingSpellId?: string;
+  /** A cast in flight; every Cast button waits for it (#2305). */
+  castingSpellId?: string;
   spellActionError?: string;
   onCastSpell?: (spell: SpellVM) => void | Promise<void>;
   onTogglePrepared?: (spellId: string, isPrepared: boolean) => void | Promise<void>;
@@ -285,6 +306,7 @@ export const RightSheet: React.FC<{
   sessionId,
   isInCombat = false,
   pendingSpellId,
+  castingSpellId,
   spellActionError,
   onCastSpell,
   onTogglePrepared,
@@ -299,6 +321,7 @@ export const RightSheet: React.FC<{
       c={c}
       isInCombat={isInCombat}
       pendingSpellId={pendingSpellId}
+      castingSpellId={castingSpellId}
       spellActionError={spellActionError}
       onCastSpell={onCastSpell}
       onTogglePrepared={onTogglePrepared}

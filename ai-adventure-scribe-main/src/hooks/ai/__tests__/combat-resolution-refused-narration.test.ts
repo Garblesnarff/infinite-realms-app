@@ -215,6 +215,27 @@ describe('a player action the engine refused', () => {
   it('reports a refused repair instead of throwing it as a generic error (#2234)', async () => {
     // Run M4 turn 7 ended in "I encountered an issue processing your message": the repair's own
     // action was refused, and that refusal escaped the loop and discarded the whole turn.
+    // The repaired action is Balthazar's: since #2305 a repair never acts for the player (the
+    // next test), so the refused repair that reaches the engine is the turn holder's.
+    executeStructuredCombatActionWithBoundary.mockImplementation(async () => {
+      throw outOfTurn();
+    });
+    repairRefusedCombatAction.mockResolvedValue({
+      text: 'Balthazar lunges.',
+      combat_actions: [action(NPC_ID, PLAYER_ID)],
+    });
+
+    const result = await run();
+
+    const payload = resolutionPayload();
+    expect(payload.refusedActions).toHaveLength(2);
+    expect(payload.authoritativeCombatResults).toHaveLength(0);
+    expect(result.text).toBeTruthy();
+  });
+
+  it('never lets the repair act for the player: its re-declaration is withheld (#2303, #2305)', async () => {
+    // Run 13: the player's Chill Touch was refused, the repair re-declared it, and the engine
+    // rolled it — REFUSED and HIT for one cast, and a d20 the player never threw.
     repairRefusedCombatAction.mockResolvedValue({
       text: 'The Reveler tries again.',
       combat_actions: [action(PLAYER_ID, NPC_ID)],
@@ -222,8 +243,13 @@ describe('a player action the engine refused', () => {
 
     const result = await run();
 
+    // The player's own declaration reached the engine once; the repair's copy never did.
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
     const payload = resolutionPayload();
-    expect(payload.refusedActions).toHaveLength(2);
+    expect(payload.refusedActions).toHaveLength(1);
+    expect(payload.withheldPlayerActions).toEqual([
+      expect.objectContaining({ actor: 'The Reveler', action: 'attack', source: 'repair' }),
+    ]);
     expect(payload.authoritativeCombatResults).toHaveLength(0);
     expect(result.text).toBeTruthy();
   });
