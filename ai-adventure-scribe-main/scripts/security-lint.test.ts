@@ -27,6 +27,8 @@ describe('security-lint heuristics', () => {
     expect(
       shouldCheckRouteAuth('server-bun/src/routes/v1/public-campaign-templates.ts', '.get('),
     ).toBe(false);
+    // #2293: GET /version is public by design; it must be skipped, not flagged MISSING_AUTH.
+    expect(shouldCheckRouteAuth('server-bun/src/routes/version.ts', ".get('/version'")).toBe(false);
   });
 
   it('recognizes manual request guards used by the server routes', () => {

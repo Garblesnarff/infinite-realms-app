@@ -41,6 +41,8 @@ const PUBLIC_ROUTE_FILES = new Set([
   'server-bun/src/routes/chronicle.tsx',
   'server-bun/src/routes/landing.tsx',
   'server-bun/src/routes/llms.ts',
+  // GET /version: public by design, like /health (#2293); deployed commit + bundle, no secrets.
+  'server-bun/src/routes/version.ts',
   'server-bun/src/routes/v1/auth-token-exchange.ts',
   'server-bun/src/routes/v1/public-campaign-templates.ts',
 ]);

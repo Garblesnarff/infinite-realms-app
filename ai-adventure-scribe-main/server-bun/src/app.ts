@@ -53,6 +53,7 @@ import { worldBuilderRoutes } from './routes/v1/world-builder';
 import { blogApiRoutes } from './routes/v1/blog';
 import { llmsRoutes } from './routes/llms.js';
 import { buildHealthPayload } from './lib/health-payload.js';
+import { versionRoutes } from './routes/version.js';
 
 export function createApp() {
   if (
@@ -190,6 +191,8 @@ export function createApp() {
         description: 'Health check endpoint',
       },
     })
+    // Deployed commit + live client bundle; public, no secrets (#2293)
+    .use(versionRoutes)
     // Prometheus metrics endpoint
     .get(
       '/metrics',

@@ -39,6 +39,7 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 
 - Never delete a test. Never add `.skip` or `.only` to a test.
 - Never paste secret values into code, commits, comments, logs, or PR bodies. Reference env var **names** only. If you accidentally see a secret, do not repeat it.
+- **A PR that changes what the client sends to a server route must include a test that sends that exact body through the real route** — `createRequestPipelineApp().use(<routes>)` or the real-DB suite. A mocked API does not count: #2250's tests mocked it, and the body they approved 422'd on every narrative roll in production (#2280). Pattern: #2286, where one shared fixture (`shared/test-fixtures/dm-roll-reply-saves.ts`) holds the wire body, the client test asserts the client sends exactly it, and the server test posts it through the real route schema.
 
 ## 5. Respect in-flight work
 
@@ -126,6 +127,7 @@ Hetzner is the only merger. Workers open draft PRs; they do not merge, even when
 - **CI green + strategist code-PASS at the same SHA.** Merge only when hosted CI is green **on that SHA** and the strategist has posted `PASS` (code review) **on that SHA**. A PASS on an earlier commit does not cover a later push. A green check on a cancelled-then-rerun SHA is not a green check on this SHA.
 - **No deploys during a stranger-test run.** Merges to `main` auto-deploy. Between Playtest's `run N started` and `run N ended` comments, hold merges. A deploy mid-run drops in-flight turns (#2093).
 - **Prod config changes need an approval line.** Host files such as `scripts/auto-deploy.sh` (and other prod-only config) are not "drive-by" edits. Do not change them without an explicit approval line from Rob naming the file and the change.
+- **Revert on Rob's line.** On Rob's line "You have my permission to revert #X", revert that PR's squash commit on `main` through a PR (`git revert <squash sha>` on a branch off current `origin/main`), merge it, and let it deploy (or `ops/auto-deploy.sh --deploy-now`). This does not need a strategist PASS on the revert. Every other rule still applies: no merge during a stranger-test run, and the revert PR's CI must be green. Then confirm with `curl -s https://api.infiniterealms.app/version` that the revert's commit is live, and say so on #X.
 - **`gh pr ready` only as part of an authorized merge.** Hetzner may run `gh pr ready` on a PR only when Rob's permission line is present, the strategist has posted a code-PASS at the same SHA, and the pull_request CI run is green. Workers never mark a PR ready.
 
 Cancelled GitHub Actions runs are not failures. See the pre-merge procedure for how to read check conclusions.
@@ -139,6 +141,10 @@ Playtest Claude runs stranger tests against production.
 ## Run started / ended comments
 
 At the start of a run, post a comment: **`run N started`**. When the run is over (pass, fail, or abort), post **`run N ended`**. Hetzner holds merges between those two comments. A run with no `ended` comment is still in flight.
+
+## Check the build before turn 1
+
+Before turn 1, open `https://api.infiniterealms.app/version` (or read the `build <short>` line on the account page) and check that it contains the commit the run prompt names. If it does not, **stop and tell Rob. Do not play.** A run on the wrong build tests nothing: runs 12 and M6 played a bundle without the #2280 fix (#2293). Put the `/version` `short` and `bundle` values in the report header.
 
 ## Fail criteria
 
