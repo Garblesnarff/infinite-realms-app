@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.21.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.5...v0.21.0) (2026-09-28)
+
+
+### Features
+
+* **ops:** GET /version + build line + AGENTS.md deploy-safety rules ([#2293](https://github.com/Garblesnarff/infinite-realms-production/issues/2293) A+D) ([#2295](https://github.com/Garblesnarff/infinite-realms-production/issues/2295)) ([31bc5e7](https://github.com/Garblesnarff/infinite-realms-production/commit/31bc5e7cd133d70cff8872b78d63ab68ef16bd97))
+
+
+### Bug Fixes
+
+* **combat:** sync sheet, scrolling and handouts ([#2307](https://github.com/Garblesnarff/infinite-realms-production/issues/2307)) ([#2310](https://github.com/Garblesnarff/infinite-realms-production/issues/2310)) ([b5bf2f2](https://github.com/Garblesnarff/infinite-realms-production/commit/b5bf2f2bba0d9a8056a93f1a8eaa0b3f778c5c5a))
+* **dm:** cancelling a narrative roll records one system line ([#2291](https://github.com/Garblesnarff/infinite-realms-production/issues/2291)) ([#2298](https://github.com/Garblesnarff/infinite-realms-production/issues/2298)) ([f827fad](https://github.com/Garblesnarff/infinite-realms-production/commit/f827fad86e5a6d450d872f1cc2d22559fc45d7da))
+
 ## [0.20.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.4...v0.20.5) (2026-09-28)
 
 
