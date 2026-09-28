@@ -91,8 +91,8 @@ describe('CombatInitiativeService Security', () => {
         CombatEncounterService.startCombat(
           mockSessionId,
           [
-            { name: 'NPC 1', npcId: 'npc-1', initiativeModifier: 2 },
-            { name: 'NPC 2', npcId: 'npc-2', initiativeModifier: 1 },
+            { encounterId: mockEncounterId, name: 'NPC 1', npcId: 'npc-1', initiativeModifier: 2 },
+            { encounterId: mockEncounterId, name: 'NPC 2', npcId: 'npc-2', initiativeModifier: 1 },
           ],
           false,
           mockUserId,
@@ -146,8 +146,8 @@ describe('CombatInitiativeService Security', () => {
       const result = await CombatEncounterService.startCombat(
         mockSessionId,
         [
-          { name: 'NPC 1', npcId: 'npc-1', initiativeModifier: 2 },
-          { name: 'NPC 2', npcId: 'npc-2', initiativeModifier: 1 },
+          { encounterId: mockEncounterId, name: 'NPC 1', npcId: 'npc-1', initiativeModifier: 2 },
+          { encounterId: mockEncounterId, name: 'NPC 2', npcId: 'npc-2', initiativeModifier: 1 },
         ],
         false,
         mockUserId,
@@ -170,7 +170,12 @@ describe('CombatInitiativeService Security', () => {
       await expect(
         CombatInitiativeService.addParticipant(
           mockEncounterId,
-          { name: 'Evil NPC', npcId: 'npc-evil', initiativeModifier: 5 },
+          {
+            encounterId: mockEncounterId,
+            name: 'Evil NPC',
+            npcId: 'npc-evil',
+            initiativeModifier: 5,
+          },
           mockUserId,
         ),
       ).rejects.toThrow(NotFoundError);
@@ -193,7 +198,12 @@ describe('CombatInitiativeService Security', () => {
 
       const result = await CombatInitiativeService.addParticipant(
         mockEncounterId,
-        { name: 'Good NPC', npcId: 'npc-good', initiativeModifier: 3 },
+        {
+          encounterId: mockEncounterId,
+          name: 'Good NPC',
+          npcId: 'npc-good',
+          initiativeModifier: 3,
+        },
         mockUserId,
       );
 

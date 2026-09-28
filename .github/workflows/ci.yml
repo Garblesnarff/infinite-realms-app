@@ -104,6 +104,29 @@ jobs:
       - run: bun run test:vitest
         working-directory: ai-adventure-scribe-main/server-bun
 
+  # Server typecheck gate (#2313). Runs tsc over the server program and fails
+  # on any error in a file not quarantined in
+  # server-bun/typecheck-known-errors.txt; a quarantined file with no errors
+  # fails as a stale entry so the list gets cleaned up. A PR is red if this
+  # job fails — "pre-existing" is not an excuse once main is green.
+  server-typecheck:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
+          restore-keys: |
+            bun-server-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: ai-adventure-scribe-main/server-bun
+      - run: bash scripts/server-typecheck-gate.sh
+        working-directory: ai-adventure-scribe-main
+
   # The real-database suites, which `server-vitest` above cannot run.
   #
   # `bun test` there has no DATABASE_URL, so `hasRealDb` in

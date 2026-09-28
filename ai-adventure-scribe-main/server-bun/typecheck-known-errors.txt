@@ -1,0 +1,18 @@
+# Server typecheck quarantine allowlist (#2313).
+#
+# One entry per line: "<path> : <expected tsc error count>", relative to
+# ai-adventure-scribe-main/server-bun/, followed by its tracking issue.
+# The gate (../scripts/server-typecheck-gate.sh) fails when:
+#   - tsc exits non-zero with no per-file diagnostics (crash / bad config),
+#   - any tsc error is in a file NOT listed here,
+#   - a listed file's error count CHANGES (a new error slipped into a
+#     quarantined file, or the quarantine shrank / resolved — update the
+#     count, or remove the entry and the tsconfig.typecheck.json exclude).
+#
+# Quarantine rule: a file stays listed only while its tracking issue is open.
+# "Pre-existing" is not an excuse once main is green.
+#
+# NOTE (round 3): src/services/combat/combat-intent-service.ts was quarantined
+# here with 1 error (TS2304 resolveIntentRefs, #2312) until #2312 merged
+# (2026-09-28); the entry was removed on rebase because the file is clean.
+src/services/dm/dm-response-schema.ts : 1 # #2314 — TS2322 voice_category string|null vs VoiceCategory union

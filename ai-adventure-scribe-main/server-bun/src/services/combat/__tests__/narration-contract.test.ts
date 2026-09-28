@@ -9,9 +9,9 @@ describe('narration-contract', () => {
   describe('aggregateContractActions', () => {
     it('groups by kind with counts and unanimous hit/miss', () => {
       const aggregated = aggregateContractActions([
-        { kind: 'attack', actorSlug: 'the-veteran', isPlayer: true, hit: true },
-        { kind: 'attack', actorSlug: 'the-veteran', isPlayer: true, hit: true },
-        { kind: 'dash', actorSlug: 'the-veteran', isPlayer: true },
+        { kind: 'attack', actorSlug: 'the-veteran', actorIsPlayer: true, hit: true },
+        { kind: 'attack', actorSlug: 'the-veteran', actorIsPlayer: true, hit: true },
+        { kind: 'dash', actorSlug: 'the-veteran', actorIsPlayer: true },
       ]);
       expect(aggregated).toEqual([
         { kind: 'attack', count: 2, actorSlugs: ['the-veteran'], hit: true, mixed: false },
@@ -21,8 +21,8 @@ describe('narration-contract', () => {
 
     it('marks mixed hit/miss', () => {
       const aggregated = aggregateContractActions([
-        { kind: 'attack', actorSlug: 'the-veteran', isPlayer: true, hit: true },
-        { kind: 'attack', actorSlug: 'the-veteran', isPlayer: true, hit: false },
+        { kind: 'attack', actorSlug: 'the-veteran', actorIsPlayer: true, hit: true },
+        { kind: 'attack', actorSlug: 'the-veteran', actorIsPlayer: true, hit: false },
       ]);
       expect(aggregated[0].mixed).toBe(true);
       expect(aggregated[0].hit).toBeUndefined();
@@ -33,7 +33,7 @@ describe('narration-contract', () => {
     it('emits turn, resolved actions, and a parseable contract_json envelope', () => {
       const block = buildNarrationContract({
         currentTurn: { slug: 'rook', label: 'Rook', isPlayer: true, round: 4 },
-        actions: [{ kind: 'spell', actorSlug: 'rook', isPlayer: true, hit: true }],
+        actions: [{ kind: 'spell', actorSlug: 'rook', actorIsPlayer: true, hit: true }],
         sceneAnchor: 'rook@(3,2) mv30/30',
         sceneDescription: 'A ruined laboratory.',
       });
@@ -61,7 +61,7 @@ describe('narration-contract', () => {
     it('warns the model off success language for a miss', () => {
       const block = buildNarrationContract({
         currentTurn: { slug: 'spider', label: 'Spider', isPlayer: false, round: 4 },
-        actions: [{ kind: 'attack', actorSlug: 'spider', isPlayer: false, hit: false }],
+        actions: [{ kind: 'attack', actorSlug: 'spider', actorIsPlayer: false, hit: false }],
         sceneAnchor: null,
       });
       expect(block).toContain('A MISS is a miss');

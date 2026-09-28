@@ -48,8 +48,12 @@ export const statusRoutes = new Elysia()
   .resolve(async ({ params, user }) => {
     let encounter = null;
     let verification = null;
-    if (params?.encounterId && user) {
-      const result = await verifyEncounterOwnership(params.encounterId, user.userId);
+    // Elysia types `params` as Record<never, string> inside .resolve(), which
+    // runs before the routes below declare their `:encounterId` path params;
+    // at runtime the value is real. (#2313)
+    const encounterId = (params as { encounterId?: string } | undefined)?.encounterId;
+    if (encounterId && user) {
+      const result = await verifyEncounterOwnership(encounterId, user.userId);
       verification = result;
       if (result.success) {
         encounter = result.encounter;

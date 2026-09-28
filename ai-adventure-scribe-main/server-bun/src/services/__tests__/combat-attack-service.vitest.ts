@@ -161,7 +161,7 @@ describe('CombatAttackService', () => {
       attackBonus: 5,
       damageDice: '1d8',
       damageBonus: 2,
-      damageType: 'slashing',
+      damageType: 'slashing' as const,
     };
 
     it('should throw NotFoundError if character is not owned (atomic check)', async () => {

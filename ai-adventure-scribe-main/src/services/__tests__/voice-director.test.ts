@@ -8,15 +8,21 @@ import { VoiceDirector } from '../voice-director';
 import * as routing from '../voice-routing';
 import { clearCharacterVoiceMappings } from '../voice-routing';
 
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  default: {
+// Mock logger. Both `default` and the named `logger` export are provided:
+// the modules under test import the named export (#2313).
+vi.mock('@/lib/logger', () => {
+  const m = {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
-  },
-}));
+  };
+  return {
+    __esModule: true,
+    default: m,
+    logger: m,
+  };
+});
 
 // Mock VoiceAudioService
 vi.mock('../voice/voice-audio-service', () => ({

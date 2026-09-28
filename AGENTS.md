@@ -117,6 +117,12 @@ gh api graphql -f query='query { repository(owner:"Garblesnarff", name:"infinite
 
 Keep the body **under 8k characters**, one line per item, **15 words maximum**, each line leading with its issue or PR link. All detail lives in the linked issue. Sections, in order: **NEEDS ROB**, **IN FLIGHT**, **SPECCED**, **STANDING WARNINGS**, **RECENTLY SHIPPED** (last 7 days, then dropped). A board that does not fit on a screen stops being read, and a board that can only be edited by a full retype gets corrupted.
 
+## 11. Typecheck gates (#2313)
+
+- A PR is red if either typecheck fails; "pre-existing" is not an excuse once main is green.
+- Server: CI job `server-typecheck` runs `scripts/server-typecheck-gate.sh` (tsc over `server-bun/tsconfig.typecheck.json` with per-file, per-count quarantine in `server-bun/typecheck-known-errors.txt`). Root `bun run type-check` runs both halves and reports both even if one fails.
+- A quarantined file stays listed only while its tracking issue is open; the gate fails on any non-zero tsc exit it cannot attribute to a quarantined file, on any error in a non-quarantined file, and when a quarantined file's error count changes (a new error can't hide in a quarantined file; a resolved quarantine can't linger).
+
 ---
 
 # Hetzner (ops) rules

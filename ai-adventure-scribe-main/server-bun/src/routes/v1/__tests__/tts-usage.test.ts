@@ -6,6 +6,8 @@ import { Elysia, status } from 'elysia';
 
 import type { TtsRouteOptions } from '../tts.js';
 
+type TtsUsageService = NonNullable<TtsRouteOptions['usageService']>;
+
 const envKeys = ['DATABASE_URL', 'NODE_ENV', 'ELEVENLABS_API_KEY', 'ELEVEN_LABS_API_KEY'];
 const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
 
@@ -57,7 +59,7 @@ const providerUsage: Array<{
   type: string;
   model?: string;
   plan: string;
-  sessionId?: string;
+  sessionId?: string | null;
 }> = [];
 let fetchStatus = 200;
 let recordThrows = false;
@@ -70,11 +72,13 @@ const app = new Elysia().use(
       name: 'test-tts-usage-limit',
     }) as unknown as TtsRouteOptions['rateLimit'],
     usageService: {
-      checkQuotaAndConsume: async (opts) => {
+      checkQuotaAndConsume: async (
+        opts: Parameters<TtsUsageService['checkQuotaAndConsume']>[0],
+      ) => {
         quotaConsumes.push(opts);
         return { allowed: true, remaining: 1, resetAt: new Date().toISOString() };
       },
-      recordProviderUsage: async (opts) => {
+      recordProviderUsage: async (opts: Parameters<TtsUsageService['recordProviderUsage']>[0]) => {
         providerUsage.push(opts);
         if (recordThrows) throw new Error('usage insert failed');
       },

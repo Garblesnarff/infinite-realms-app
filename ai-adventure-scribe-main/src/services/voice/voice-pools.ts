@@ -1,9 +1,13 @@
 import type { VoiceConfig } from '../voice-routing';
 
 /**
- * Interface for voice pools
+ * Interface for voice pools.
+ *
+ * The pools are iterated as a string-keyed record (Object.entries), so the
+ * index signature keeps `Object.entries(VOICE_POOLS)` precisely typed instead
+ * of degrading to `[string, any][]`. (#2313)
  */
-export interface VoicePool {
+export interface VoicePool extends Record<string, VoiceConfig[]> {
   dm: VoiceConfig[];
   heroes: VoiceConfig[];
   npcs: VoiceConfig[];

@@ -9,7 +9,7 @@ import {
 import type { VoiceConfig } from '../voice-routing';
 import type { VoiceConfig as VoiceDefinition } from './voice-types';
 
-import logger from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 export { VOICE_CATEGORY_VALUES, getCanonicalVoiceCategory, normalizeVoiceCategory };
 

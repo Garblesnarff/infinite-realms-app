@@ -1,0 +1,32 @@
+{
+  // Server typecheck GATE config (#2313). Extends server-bun/tsconfig.json.
+  //
+  // MECHANICS NOTE: tsc's `exclude` only removes files from the `include`
+  // glob — it cannot suppress errors in files pulled into the program via
+  // imports, and every quarantined file below is imported. Enforcement is
+  // therefore file-level AND count-level, in `typecheck-known-errors.txt`
+  // ("<path> : <expected error count>"), applied by
+  // `../scripts/server-typecheck-gate.sh` (any error in a non-listed file
+  // fails the gate; a listed file whose error count changed fails too, so a
+  // new error can't hide in a quarantined file and a resolved quarantine
+  // can't linger). The `exclude` entries here mirror that list as
+  // documentation, each with its tracking issue.
+  //
+  // Quarantine rule: a file stays listed only while its tracking issue is
+  // open. "Pre-existing" is not an excuse once main is green. Un-quarantine
+  // by fixing the errors and deleting the entry here AND in
+  // typecheck-known-errors.txt. See #2314.
+  //
+  // NOTE (round 3): the combat-intent-service.ts entry (TS2304, #2312) was
+  // removed on rebase — #2312 merged 2026-09-28 and the file is clean.
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    // #2314: TS2322 — DerivedNarrationSegment's voice_category (string | null)
+    // vs DMResponse's VoiceCategory union. Threading the VoiceCategory type
+    // through narration-segment-derivation.ts surfaces new errors at its
+    // internal loose assignments, so this is a follow-up, not a drive-by.
+    // (Open PR #2310 also touches this file; coordinate.)
+    "src/services/dm/dm-response-schema.ts"
+  ]
+}

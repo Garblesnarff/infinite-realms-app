@@ -10,6 +10,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowJs": true,
+    // The Bun runtime resolves explicit `.ts` import extensions, and this
+    // codebase uses them deliberately (e.g. server-bun tests importing
+    // shared app modules). Model the runtime so TS5097 stops firing.
+    // Requires noEmit, which is already set. (#2313)
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

@@ -10,7 +10,7 @@ import { normalizeCharacterName } from './voice/voice-utils';
 
 import type { VoiceProviderId } from './voice/voice-provider';
 
-import logger from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 // Re-export utility for backward compatibility and internal use
 export { normalizeCharacterName };

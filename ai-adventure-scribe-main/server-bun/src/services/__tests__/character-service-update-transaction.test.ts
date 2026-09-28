@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
+import type { Character } from '../../../../db/schema/index.js';
+
 const select = mock(() => ({
   from: mock(() => ({
     where: mock(() => ({
@@ -16,7 +18,8 @@ const update = mock(() => ({
 }));
 const insert = mock(() => ({ values: mock(async () => undefined) }));
 const tx = { insert, select, update };
-type TransactionCallback = (tx: typeof tx) => Promise<unknown>;
+// The parameter name must not shadow the `tx` binding above (TS2502). (#2313)
+type TransactionCallback = (transaction: typeof tx) => Promise<unknown>;
 const transaction = mock(async (callback: TransactionCallback) => callback(tx));
 
 mock.module('../../../../db/client', () => ({
@@ -44,11 +47,17 @@ describe('CharacterService.update equipment transaction', () => {
       [{ item_name: 'Longsword', item_type: 'weapon', quantity: 1, equipped: true }],
     );
 
-    expect(result).toEqual({ id: 'character-1', name: 'Updated Hero' });
-    expect(transaction).toHaveBeenCalledOnce();
-    expect(update).toHaveBeenCalledOnce();
-    expect(select).toHaveBeenCalledOnce();
-    expect(insert).toHaveBeenCalledOnce();
+    // The mocked `returning()` row carries only { id, name }; cast the expected
+    // value to the service result type so toEqual keeps its exact-shape
+    // assertion instead of weakening to toMatchObject. (#2313)
+    expect(result).toEqual({
+      id: 'character-1',
+      name: 'Updated Hero',
+    } as Character);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 
   it('propagates equipment failure so the transaction can roll back the character update', async () => {
@@ -63,7 +72,7 @@ describe('CharacterService.update equipment transaction', () => {
         { item_name: 'Longsword' },
       ]),
     ).rejects.toThrow('equipment failed');
-    expect(transaction).toHaveBeenCalledOnce();
-    expect(update).toHaveBeenCalledOnce();
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });

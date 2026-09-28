@@ -21,7 +21,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "type-check": "tsc --noEmit && tsc -p server-bun/tsconfig.json --noEmit",
+    "type-check": "bash scripts/type-check.sh",
     "type-coverage": "type-coverage -p tsconfig.app.json && type-coverage -p server-bun/tsconfig.json",
     "preview": "vite preview",
     "server:dev": "bun run bun:dev",
