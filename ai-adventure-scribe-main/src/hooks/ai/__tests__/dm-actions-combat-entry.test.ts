@@ -67,7 +67,8 @@ vi.mock('@/services/user-data-api', () => ({
     promotePendingCombatIntent: vi.fn(),
   },
 }));
-vi.mock('@/services/combat/combat-zero-action-guard', () => ({
+vi.mock('@/services/combat/combat-zero-action-guard', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   enforceCombatActionOnAttempt: vi.fn().mockResolvedValue(null),
 }));
 
@@ -704,6 +705,19 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       persist: true,
     });
     expect(outcome.result.combat_actions).toEqual([]);
+  });
+
+  it('does not treat a typed message on an entry turn as a silent turn (#2342)', async () => {
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+    await invoke(
+      { combat_transition: 'none', combat_entry_pending: PENDING_ENTRY, combat_actions: [] },
+      refresh,
+      { playerMessage: 'I try to talk the elemental down.', playerInputOrigin: 'typed' },
+    );
+
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalledWith(
+      expect.objectContaining({ silentPlayerTurn: expect.anything() }),
+    );
   });
 
   it('declines combat entry without seating an encounter or resolving the attack', async () => {

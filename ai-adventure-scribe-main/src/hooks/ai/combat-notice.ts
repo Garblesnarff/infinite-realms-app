@@ -45,6 +45,17 @@ export function stillYourTurnNotice(): string {
 }
 
 /**
+ * The player's message declared no combat action at all — talk, a look, a wait — so the engine
+ * had nothing to resolve for it and the turn stays open (#2342). When NPC turns were resolved in
+ * the same reply, "nothing was rolled" would be untrue, so the line speaks only for the player.
+ */
+export function noMechanicalActionNotice(hadEngineLines = false): string {
+  return hadEngineLines
+    ? '*(You took no combat action this turn. It is still your turn.)*'
+    : '*(That was not a combat action — nothing was rolled. It is still your turn.)*';
+}
+
+/**
  * The player's refused declaration was repaired into the turn holder's own action, and the turn
  * is still not the player's. Nothing was "declared out of turn" from the player's point of view
  * any more — they only need to know who acts before them.

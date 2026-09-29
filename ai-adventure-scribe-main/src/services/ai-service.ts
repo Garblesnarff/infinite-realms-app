@@ -77,6 +77,11 @@ export class AIService {
     return generateCampaignName(params);
   }
 
+  /** The request id of the latest DM generation, for log lines written after `chatWithDM`. */
+  static lastRequestId(): string | null {
+    return llmApiClient.lastGenerateRequestId ?? llmApiClient.lastRequestId;
+  }
+
   /**
    * Simplified chat with AI DM for MVP with fallback and streaming support
    * Uses a single AI call instead of complex agent system

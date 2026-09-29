@@ -2,11 +2,17 @@
 import {
   COMBAT_INTENT_OUT_OF_TURN,
   combatRefusalReason,
+  noMechanicalActionNotice,
   redactedCombatIntent,
   repairedTurnNotice,
   stillYourTurnNotice,
   turnNotice,
 } from './combat-notice';
+import {
+  SILENT_PLAYER_TURN_SETUP,
+  silentPlayerTurnPayload,
+  suspectsFabricatedOutcome,
+} from './silent-player-turn';
 import { facingName, type EngineRosterEntry } from '../../../shared/engine-display-name';
 
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
@@ -110,6 +116,12 @@ export interface CombatResolutionParams {
    * batch never casts it, the engine says so in its own line rather than leaving silence (#2304).
    */
   declaredPlayerSpell?: { spellId: string; spellName: string } | null;
+  /**
+   * The player's typed message reached the DM and produced no combat action — nothing declared,
+   * nothing refused, so the engine has no line for it (#2342). Narration is told so, and the
+   * turn stays the player's.
+   */
+  silentPlayerTurn?: { playerMessage: string };
 }
 
 type DeclaredCombatAction = StructuredCombatAction | DMAoESpellAction;
@@ -165,6 +177,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     combatRound,
     playerInputOrigin,
     declaredPlayerSpell,
+    silentPlayerTurn,
   } = params;
 
   const resolvedActions: Array<Record<string, unknown>> = [];
@@ -763,6 +776,17 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       : undefined;
   const playerKeepsTurn = Boolean(keptBy);
   if (keptBy) turnHolder = { id: keptBy.id, name: keptBy.name };
+  // A silent turn resolved nothing, so nothing ended the player's turn. If an NPC pre-flight
+  // stopped short of the player (its safety cap), the note would be false; say nothing then.
+  const silentTurn =
+    Boolean(silentPlayerTurn) &&
+    !combatOver &&
+    refusedActions.length === 0 &&
+    pendingPlayerAreaSpells.length === 0 &&
+    (!turnHolder || isPlayerActor(turnHolder.id ?? '', participants));
+  if (silentTurn && !turnHolder && playerParticipant) {
+    turnHolder = { id: playerParticipant.id, name: playerParticipant.name };
+  }
   const stillTheirTurn = keptBy ? ` It is still ${keptBy.name ?? 'the player'}'s turn.` : '';
   /** What the narration pass is told, in words, about the player's own unresolved action. */
   const unresolvedPlayerAction = refusedPlayerActions.length
@@ -805,10 +829,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     : pendingPlayerAreaSpells.length
       ? 'The declared area spell has not been cast yet; it waits for the player to confirm it on ' +
         'the map. Narrate only the authoritative results supplied, and state whose turn it is.'
-      : encounterAlreadyConcluded
-        ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
-          'as something that happened.'
-        : declarationText;
+      : silentTurn
+        ? SILENT_PLAYER_TURN_SETUP
+        : encounterAlreadyConcluded
+          ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
+            'as something that happened.'
+          : declarationText;
 
   const playerTurn = isPlayerActor(turnHolder?.id ?? '', participants);
   const playerName =
@@ -845,6 +871,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           }
         : {}),
       ...(unresolvedPlayerAction ? { unresolvedPlayerAction } : {}),
+      ...(silentTurn && silentPlayerTurn
+        ? silentPlayerTurnPayload(
+            silentPlayerTurn.playerMessage,
+            orderedEngineTranscriptLines.length > 0,
+          )
+        : {}),
       ...(pendingPlayerAction ? { pendingPlayerAction } : {}),
       ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
       ...(playerTurn
@@ -875,6 +907,28 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     playerTurn && !encounterAlreadyConcluded
       ? ensurePlayerTurnHandoff(narratedText, playerName)
       : narratedText;
+  if (silentTurn) {
+    // No engine line describes this turn, so the turn is stated here rather than hoped for from
+    // the model, and the DM text is only checked, never blocked or retried (#2342). NPC engine
+    // lines in the same pass legitimately narrate hits, so only a turn with none is checked.
+    if (!orderedEngineTranscriptLines.length && suspectsFabricatedOutcome(narration?.text)) {
+      logger.info('DM_FABRICATION_SUSPECT', {
+        requestId: AIService.lastRequestId(),
+        reason: 'silent_player_turn',
+        encounterId,
+      });
+    }
+    return {
+      ...narration,
+      combatEngineBlocks: orderedEngineBlocks,
+      text: ensurePlayerTurnHandoff(
+        `${withoutPlayerTurnHandoff(narratedText, playerName)}\n\n${noMechanicalActionNotice(
+          orderedEngineTranscriptLines.length > 0,
+        )}`,
+        playerName,
+      ),
+    };
+  }
   if (!refusedPlayerActions.length) {
     // After a successful repair the refusal is stale only if the turn came back to the player —
     // the handoff line then says so. If a creature still holds the turn, the player is told who
@@ -926,6 +980,15 @@ export function withdrawnActionNotice(action: StructuredCombatAction): string {
       ? `casting ${playerCombatSpellLabel(action.spell_id, action.spell_id)}`
       : 'that attack';
   return `You dismissed the roll, so ${what} did not happen. It is still your turn — what do you do?`;
+}
+
+/** The notice goes before the handoff, so a handoff the DM already wrote is taken off first. */
+function withoutPlayerTurnHandoff(text: string, playerName: string): string {
+  const handoff = `${playerName}, what do you do?`;
+  const trimmed = text.trimEnd();
+  return trimmed.toLowerCase().endsWith(handoff.toLowerCase())
+    ? trimmed.slice(0, -handoff.length).trimEnd()
+    : trimmed;
 }
 
 function ensurePlayerTurnHandoff(text: string, playerName: string): string {

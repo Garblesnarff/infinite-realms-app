@@ -20,7 +20,10 @@ import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
-import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
+import {
+  enforceCombatActionOnAttempt,
+  looksLikeCombatActionAttempt,
+} from '@/services/combat/combat-zero-action-guard';
 import { declaredSheetSpell } from '@/services/combat/declared-player-spell';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
 import {
@@ -593,6 +596,26 @@ export async function handleDmActionsAndTransitions(
   // warning and the DM narrated a spell that never happened (#2304).
   const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
 
+  // A typed message that produced no combat action, no roll request and no transition: nothing
+  // was declared or refused, so the engine has no line for it and the DM's first-pass prose is
+  // the only account of the turn. It is narrated again against a statement that nothing
+  // happened (#2342). A roll request, a dice result or a sheet cast is a turn in progress.
+  const silentPlayerTurn =
+    isInCombat &&
+    !!activeEncounter &&
+    !entryWasSeated &&
+    !isDiceRollMessage &&
+    playerInputOrigin === 'typed' &&
+    !!playerMessage?.trim() &&
+    // A typed attack the DM answered with only NPC actions, or the repair could not turn into a
+    // player action, is an attack that did not resolve, not a non-action. Not this path.
+    !looksLikeCombatActionAttempt(playerMessage) &&
+    !declaredPlayerSpell &&
+    !result.combat_actions?.length &&
+    !result.roll_requests?.length &&
+    !result.combat_transition &&
+    !/```ROLL_REQUESTS_V1/.test(result.text ?? '');
+
   const hasPreflightEngineLines = Boolean(
     preflightNpcTurns?.results?.length || preflightNpcTurns?.transcriptLines?.length,
   );
@@ -601,7 +624,10 @@ export async function handleDmActionsAndTransitions(
     !preflightCombatEnded &&
     activeEncounter &&
     (isInCombat || hasPreflightEngineLines) &&
-    (result.combat_actions?.length || hasPreflightEngineLines || declaredPlayerSpell)
+    (result.combat_actions?.length ||
+      hasPreflightEngineLines ||
+      declaredPlayerSpell ||
+      silentPlayerTurn)
   ) {
     const narrationResult = await resolveDeclaredCombatActions({
       encounterId: activeEncounter.id,
@@ -623,6 +649,7 @@ export async function handleDmActionsAndTransitions(
       combatRound: combatRound ?? activeEncounter.currentRound,
       playerInputOrigin,
       declaredPlayerSpell,
+      ...(silentPlayerTurn ? { silentPlayerTurn: { playerMessage: playerMessage as string } } : {}),
     });
     result = narrationResult;
     responseText = narrationResult.text;
