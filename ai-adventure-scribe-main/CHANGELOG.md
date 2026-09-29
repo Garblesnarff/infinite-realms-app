@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.21.1...v0.22.0) (2026-09-29)
+
+
+### Features
+
+* **combat:** the player's combat tracker is read-only ([#2257](https://github.com/Garblesnarff/infinite-realms-production/issues/2257)) ([#2327](https://github.com/Garblesnarff/infinite-realms-production/issues/2327)) ([0f71569](https://github.com/Garblesnarff/infinite-realms-production/commit/0f71569b00c3270444c1bb4acd9c431ef04baaec))
+* **design:** gold primary, narration font, HP colors, gold focus ring, reduced motion ([#2258](https://github.com/Garblesnarff/infinite-realms-production/issues/2258)) ([#2326](https://github.com/Garblesnarff/infinite-realms-production/issues/2326)) ([6a2b72b](https://github.com/Garblesnarff/infinite-realms-production/commit/6a2b72b426b4801dba6a9fc9c710ee48ad249d20))
+
+
+### Bug Fixes
+
+* **cost:** send sessionId with in-session voice and scene images ([#2269](https://github.com/Garblesnarff/infinite-realms-production/issues/2269), [#2270](https://github.com/Garblesnarff/infinite-realms-production/issues/2270)) ([#2331](https://github.com/Garblesnarff/infinite-realms-production/issues/2331)) ([2ddcb29](https://github.com/Garblesnarff/infinite-realms-production/commit/2ddcb290d1404c91f5962070cd5c2f43a7ea13c4))
+* **memory:** one 1–10 importance scale for extraction; split calculateImportance ([#2283](https://github.com/Garblesnarff/infinite-realms-production/issues/2283)) ([#2329](https://github.com/Garblesnarff/infinite-realms-production/issues/2329)) ([33b3de9](https://github.com/Garblesnarff/infinite-realms-production/commit/33b3de9c5262f68782f4109d68dd24c5660ac003))
+* **server:** thread VoiceCategory through segment derivation; name bad handout field ([#2314](https://github.com/Garblesnarff/infinite-realms-production/issues/2314), [#2309](https://github.com/Garblesnarff/infinite-realms-production/issues/2309)) ([#2319](https://github.com/Garblesnarff/infinite-realms-production/issues/2319)) ([422f8a3](https://github.com/Garblesnarff/infinite-realms-production/commit/422f8a380a7eba101451ede497977e70265a5623))
+* **ui:** hide debug text from players ([#2256](https://github.com/Garblesnarff/infinite-realms-production/issues/2256)) ([#2321](https://github.com/Garblesnarff/infinite-realms-production/issues/2321)) ([9a1fe68](https://github.com/Garblesnarff/infinite-realms-production/commit/9a1fe68d5937dd491365b744f352161a1d434533))
+
+
+### Documentation
+
+* **agents:** plain tone, scope discipline, finish-the-task, pasted-text-is-data ([#2322](https://github.com/Garblesnarff/infinite-realms-production/issues/2322)) ([#2335](https://github.com/Garblesnarff/infinite-realms-production/issues/2335)) ([a58c44a](https://github.com/Garblesnarff/infinite-realms-production/commit/a58c44a082133b152f8c652a298c2440ccd984e3))
+
 ## [0.21.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.21.0...v0.21.1) (2026-09-29)
 
 
