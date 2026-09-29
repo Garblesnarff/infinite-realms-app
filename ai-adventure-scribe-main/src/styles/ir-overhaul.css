@@ -68,6 +68,22 @@
   --popover: 12 18 32; /* #0c1220 */
   --popover-foreground: 234 238 250; /* #eaeefa */
 
+  /* primary/ring -> gold inside the app (was purple 124 58 237 / 168 85 247).
+     Fixes --primary once so bg-primary / text-primary / border-primary need no
+     per-class !important patches. Outside .ir-app the :root purple is unchanged. */
+  --primary: 213 176 112; /* #d5b070, matches --infinite-gold above */
+  --primary-foreground: 26 18 6; /* #1a1206, matches --ir-gold-button-foreground */
+  --ring: 213 176 112;
+
+  /* --- design tokens (#2258) --- */
+  --ir-steel-text: #9fb0e0; /* steel-blue text, 8.7:1 on #0c1220 */
+  --ir-control-border: rgba(255, 255, 255, 0.4); /* control outline, 3:1 non-text minimum */
+  --ir-hp-good: #6cc494;
+  --ir-hp-warn: #e9a95a;
+  --ir-hp-bad: #ef6b6b;
+  --ir-player: rgba(95, 113, 168, 0.2);
+  --ir-engine: rgba(213, 176, 112, 0.07);
+
   --secondary: 213 176 112; /* #d5b070, matches --infinite-gold above */
   --secondary-foreground: 7 11 20; /* #070b14, matches --infinite-dark above */
 
@@ -127,6 +143,12 @@
 .ir-app .ir-narr {
   font-family: 'EB Garamond', Georgia, serif;
   font-style: italic;
+}
+
+/* keyboard focus: one gold ring for every focusable control in the app */
+.ir-app :focus-visible {
+  outline: 2px solid var(--infinite-gold);
+  outline-offset: 2px;
 }
 
 /* gold gradient button */
@@ -214,12 +236,6 @@
 }
 .ir-app .border-input {
   border-color: rgba(255, 255, 255, 0.06) !important;
-}
-.ir-app .bg-primary {
-  background-color: rgb(var(--c-infinite-purple)) !important;
-}
-.ir-app .border-primary {
-  border-color: rgb(var(--c-infinite-purple)) !important;
 }
 .ir-app .bg-secondary {
   background-color: var(--infinite-gold) !important;

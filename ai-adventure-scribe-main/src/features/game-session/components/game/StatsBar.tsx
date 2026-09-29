@@ -72,20 +72,20 @@ export const StatsBar: React.FC = React.memo(() => {
         icon={Heart}
         value={formatCharacterSheetHitPoints({ current: currentHp, maximum: maxHp })}
         label="HP"
-        color="text-red-600"
+        color="text-ir-hp-bad"
       />
       <StatBadge
         icon={Shield}
         value={armorClass ?? MISSING_ARMOR_CLASS_LABEL}
         label="AC"
-        color="text-blue-600"
+        color="text-ir-steel-text"
       />
-      <StatBadge icon={Zap} value={`+${proficiency}`} label="PROF" color="text-green-600" />
+      <StatBadge icon={Zap} value={`+${proficiency}`} label="PROF" color="text-ir-hp-good" />
       <StatBadge
         icon={Sword}
         value={initiative >= 0 ? `+${initiative}` : initiative}
         label="INIT"
-        color="text-purple-600"
+        color="text-infinite-gold"
       />
     </div>
   );

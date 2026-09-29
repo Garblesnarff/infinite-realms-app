@@ -52,6 +52,11 @@ export const colors = {
   // keeps opacity utilities (e.g. bg-infinite-dark/60) working.
   'infinite-purple': 'rgb(var(--c-infinite-purple) / <alpha-value>)',
   'infinite-gold': 'rgb(var(--c-infinite-gold) / <alpha-value>)',
+  // Hex-valued vars (see .ir-app in ir-overhaul.css): no `/<alpha>` support.
+  'ir-steel-text': 'var(--ir-steel-text)',
+  'ir-hp-good': 'var(--ir-hp-good)',
+  'ir-hp-warn': 'var(--ir-hp-warn)',
+  'ir-hp-bad': 'var(--ir-hp-bad)',
   'infinite-teal': 'rgb(var(--c-infinite-teal) / <alpha-value>)',
   'infinite-dark': 'rgb(var(--c-infinite-dark) / <alpha-value>)',
 

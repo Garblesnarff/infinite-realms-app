@@ -42,18 +42,22 @@ export const keyframes = {
   },
   'glow-pulse': {
     '0%, 100%': {
-      boxShadow: '0 0 10px rgba(124, 58, 237, 0.3), 0 0 20px rgba(124, 58, 237, 0.2)',
+      boxShadow:
+        '0 0 10px rgb(var(--c-infinite-purple) / 0.3), 0 0 20px rgb(var(--c-infinite-purple) / 0.2)',
     },
     '50%': {
-      boxShadow: '0 0 20px rgba(124, 58, 237, 0.5), 0 0 40px rgba(124, 58, 237, 0.3)',
+      boxShadow:
+        '0 0 20px rgb(var(--c-infinite-purple) / 0.5), 0 0 40px rgb(var(--c-infinite-purple) / 0.3)',
     },
   },
   'gold-glow-pulse': {
     '0%, 100%': {
-      boxShadow: '0 0 10px rgba(245, 158, 11, 0.3), 0 0 20px rgba(245, 158, 11, 0.2)',
+      boxShadow:
+        '0 0 10px rgb(var(--c-infinite-gold) / 0.3), 0 0 20px rgb(var(--c-infinite-gold) / 0.2)',
     },
     '50%': {
-      boxShadow: '0 0 20px rgba(245, 158, 11, 0.5), 0 0 40px rgba(245, 158, 11, 0.3)',
+      boxShadow:
+        '0 0 20px rgb(var(--c-infinite-gold) / 0.5), 0 0 40px rgb(var(--c-infinite-gold) / 0.3)',
     },
   },
   shimmer: {
