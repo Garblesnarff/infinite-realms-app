@@ -37,7 +37,7 @@ export interface ProgressiveVoiceState {
   error?: string;
 }
 
-export const useProgressiveVoice = () => {
+export const useProgressiveVoice = ({ sessionId }: { sessionId?: string } = {}) => {
   const { toast } = useToast();
 
   // Persistent settings with type-safe localStorage hooks
@@ -151,6 +151,7 @@ export const useProgressiveVoice = () => {
     stopPlayback: voiceProcessingStopPlayback,
     baseResumePlayback,
     currentAudio,
+    sessionId,
   });
 
   const abortProcessing = React.useCallback(() => {

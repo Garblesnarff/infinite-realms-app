@@ -41,6 +41,7 @@ export interface SceneImageRequest {
   storage?: UploadOptions;
   referenceImageUrl?: string | null; // Optional explicit reference image URL
   assetUrls?: AssetReference[]; // Campaign assets from message (NPCs, locations, etc.)
+  sessionId?: string; // Game session the image is for, so the server can price it to the session
 }
 
 export interface SceneImageResult {
@@ -123,6 +124,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
     model,
     referenceImages: referenceBase64s.length > 0 ? referenceBase64s : undefined,
     quality,
+    sessionId: req.sessionId,
   });
 
   const uploadedUrl = await openRouterService.uploadImage(

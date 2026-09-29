@@ -16,6 +16,8 @@ interface AudioPlayerProps {
   volume: number;
   isMuted: boolean;
   setIsSpeaking: (speaking: boolean) => void;
+  /** Game session the voice is played in; absent outside a session. */
+  sessionId?: string;
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -24,6 +26,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   volume,
   isMuted,
   setIsSpeaking,
+  sessionId,
 }) => {
   const { toast } = useToast();
 
@@ -50,6 +53,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           text,
           voice_settings: voiceSettings,
           model_id: 'eleven_flash_v2_5',
+          sessionId,
         }),
       });
 

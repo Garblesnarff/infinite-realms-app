@@ -207,6 +207,13 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
 
+      // #2157/#2158: the image model is server-controlled. gemini-2.5-flash-image
+      // retires on 2026-10-02; Nano Banana 2 keeps reference-image support.
+      const imageModel = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image';
+
+      let image: string;
+      let inputTokens = 0;
+      let outputTokens = 0;
       try {
         const breaker = getCircuitBreaker('images:openrouter');
         try {
@@ -225,10 +232,6 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           set.status = 500;
           return { error: 'Service unavailable' };
         }
-
-        // #2157/#2158: the image model is server-controlled. gemini-2.5-flash-image
-        // retires on 2026-10-02; Nano Banana 2 keeps reference-image support.
-        const imageModel = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image';
 
         // Build message content based on whether we have reference images
         let content: any = prompt;
@@ -282,17 +285,8 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         };
         const data = (await response.json()) as ORImageResp;
 
-        const recordImageUsage = (): Promise<void> =>
-          AIUsageService.recordProviderUsage({
-            userId,
-            plan,
-            type: 'image',
-            provider: 'openrouter',
-            model: imageModel,
-            inputTokens: data.usage?.prompt_tokens ?? 0,
-            outputTokens: data.usage?.completion_tokens ?? 0,
-            sessionId,
-          });
+        inputTokens = data.usage?.prompt_tokens ?? 0;
+        outputTokens = data.usage?.completion_tokens ?? 0;
 
         const choice = data.choices?.[0];
         const imageRef = extractFromMessage(choice?.message) || extractFromMessage(data);
@@ -309,28 +303,24 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         // Normalize to base64
         if (imageRef.startsWith('data:image/')) {
           const idx = imageRef.indexOf('base64,');
-          const base64 = idx !== -1 ? imageRef.substring(idx + 7) : '';
-          await recordImageUsage();
-          return { image: base64 };
-        }
-
-        // Otherwise assume remote URL; fetch and convert
-        try {
-          const r2 = await fetch(imageRef, {
-            signal: AbortSignal.timeout(IMAGE_PROVIDER_TIMEOUT_MS),
-          });
-          if (!r2.ok) {
-            logger.warn({ msg: 'IMAGE_FETCH_FAILED', url: imageRef, status: r2.status });
+          image = idx !== -1 ? imageRef.substring(idx + 7) : '';
+        } else {
+          // Otherwise assume remote URL; fetch and convert
+          try {
+            const r2 = await fetch(imageRef, {
+              signal: AbortSignal.timeout(IMAGE_PROVIDER_TIMEOUT_MS),
+            });
+            if (!r2.ok) {
+              logger.warn({ msg: 'IMAGE_FETCH_FAILED', url: imageRef, status: r2.status });
+              set.status = 502;
+              return { error: 'Failed to fetch image from provider' };
+            }
+            image = Buffer.from(await r2.arrayBuffer()).toString('base64');
+          } catch (fetchErr) {
+            logger.error({ msg: 'IMAGE_FETCH_ERROR', url: imageRef, error: fetchErr });
             set.status = 502;
-            return { error: 'Failed to fetch image from provider' };
+            return { error: 'Error retrieving image from provider' };
           }
-          const buf = Buffer.from(await r2.arrayBuffer());
-          await recordImageUsage();
-          return { image: buf.toString('base64') };
-        } catch (fetchErr) {
-          logger.error({ msg: 'IMAGE_FETCH_ERROR', url: imageRef, error: fetchErr });
-          set.status = 502;
-          return { error: 'Error retrieving image from provider' };
         }
       } catch (e) {
         logger.error({ msg: 'IMAGE_ERROR', error: e });
@@ -348,6 +338,29 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         set.status = 500;
         return { error: 'Image generation failed' };
       }
+
+      // Recording is not part of the provider try. A thrown insert must not turn a
+      // successful image into a 500 (#2270, same as tts.ts in #2242).
+      try {
+        await AIUsageService.recordProviderUsage({
+          userId,
+          plan,
+          type: 'image',
+          provider: 'openrouter',
+          model: imageModel,
+          inputTokens,
+          outputTokens,
+          sessionId,
+        });
+      } catch (error) {
+        logger.warn({
+          msg: 'IMAGE_USAGE_RECORD_FAILED',
+          error: error instanceof Error ? error.message : error,
+          userId,
+        });
+      }
+
+      return { image };
     },
     {
       body: t.Object({

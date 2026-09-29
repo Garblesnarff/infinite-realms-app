@@ -53,6 +53,7 @@ mock.module('../../../services/ai-usage-service.js', () => ({
     getQuotaStatus: async () => ({ plan: 'pro', usage: 0, remaining: 10 }),
     recordProviderUsage: async (opts: (typeof recorded)[number]) => {
       recorded.push(opts);
+      if (recordThrows) throw new Error('usage insert failed');
     },
   },
 }));
@@ -63,10 +64,12 @@ const app = new Elysia().use(imageRoutes);
 
 let providerStatus = 200;
 let providerBody: unknown = {};
+let recordThrows = false;
 
 beforeEach(() => {
   recorded.length = 0;
   providerStatus = 200;
+  recordThrows = false;
   resetCircuitBreakersForTests();
   globalThis.fetch = (async () =>
     new Response(JSON.stringify(providerBody), {
@@ -137,6 +140,48 @@ describe('POST /v1/images/generate usage', () => {
 
     expect(response.status).toBe(200);
     expect(recorded[0]?.sessionId).toBe('session-2242');
+  });
+
+  it('returns the image when usage recording throws (#2270)', async () => {
+    recordThrows = true;
+    providerBody = {
+      choices: [
+        {
+          message: {
+            images: [{ image_url: { url: 'data:image/png;base64,aGVsbG8=' } }],
+          },
+        },
+      ],
+      usage: { prompt_tokens: 4, completion_tokens: 8 },
+    };
+
+    const response = await app.handle(generateRequest('session-2270'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ image: 'aGVsbG8=' });
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.sessionId).toBe('session-2270');
+  });
+
+  it('returns a fetched image when usage recording throws (#2270)', async () => {
+    recordThrows = true;
+    providerBody = {
+      choices: [{ message: { images: [{ image_url: { url: 'https://cdn.example.com/a.png' } }] } }],
+      usage: { prompt_tokens: 4, completion_tokens: 8 },
+    };
+    globalThis.fetch = (async (input: string | URL | Request) =>
+      String(input).startsWith('https://openrouter.ai/')
+        ? new Response(JSON.stringify(providerBody), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response('hello', { status: 200 })) as unknown as typeof fetch;
+
+    const response = await app.handle(generateRequest());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ image: 'aGVsbG8=' });
+    expect(recorded).toHaveLength(1);
   });
 
   it('does not record usage when the provider returns no image', async () => {

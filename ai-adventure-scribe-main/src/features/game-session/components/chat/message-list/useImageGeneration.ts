@@ -95,6 +95,7 @@ export const useImageGeneration = ({
             campaign,
             character,
             routeCampaignId,
+            sessionId,
             assetUrls,
             label,
             quality: (env.VITE_DM_IMAGE_QUALITY as 'low' | 'medium' | 'high' | undefined) || 'low',

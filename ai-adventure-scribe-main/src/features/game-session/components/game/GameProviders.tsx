@@ -37,7 +37,7 @@ const GameProviders: React.FC<GameProvidersProps> = ({
           <GameProvider characterId={characterId}>
             <MessageProvider sessionId={sessionId}>
               <MemoryProvider sessionId={sessionId}>
-                <VoiceProvider>
+                <VoiceProvider sessionId={sessionId}>
                   <WebMcpCompanionBridge sessionId={sessionId} />
                   {children}
                 </VoiceProvider>

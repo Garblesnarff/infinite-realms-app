@@ -131,6 +131,7 @@ describe('useProgressiveVoice', () => {
         voice_category: undefined,
       }),
       expect.any(AbortSignal),
+      undefined, // no session outside a game session
     );
     await waitFor(() => expect(mockPlayAudioSegment).toHaveBeenCalled());
   });

@@ -61,6 +61,7 @@ function segmentCacheKey(segment: VoiceSegment, provider: VoiceProviderId): stri
 async function generateWithCache(
   segment: VoiceSegment,
   signal?: AbortSignal,
+  sessionId?: string,
 ): Promise<VoiceSegment> {
   if (segment.audioUrl) return segment;
   // Look up under the provider that would serve this segment now; store under
@@ -77,7 +78,7 @@ async function generateWithCache(
       provider: cached.segment.provider,
     };
   }
-  const generated = await VoiceDirector.generateAudio(segment, signal);
+  const generated = await VoiceDirector.generateAudio(segment, signal, sessionId);
   if (generated.audioUrl) {
     rememberSegment(segmentCacheKey(segment, generated.provider ?? expectedProvider), generated);
   }
@@ -111,6 +112,8 @@ interface VoiceProcessingProps {
   stopPlayback: () => void;
   baseResumePlayback: () => Promise<boolean>;
   currentAudio: React.MutableRefObject<HTMLAudioElement | null>;
+  /** Game session the voice is played in; absent outside a session. */
+  sessionId?: string;
 }
 
 export const useVoiceProcessing = ({
@@ -122,6 +125,7 @@ export const useVoiceProcessing = ({
   stopPlayback,
   baseResumePlayback,
   currentAudio,
+  sessionId,
 }: VoiceProcessingProps) => {
   // Audio management
   const abortController = React.useRef<AbortController | null>(null);
@@ -167,7 +171,7 @@ export const useVoiceProcessing = ({
           }
           const requestStartedAt = performance.now();
           try {
-            const generated = await generateWithCache(segments[i], signal);
+            const generated = await generateWithCache(segments[i], signal, sessionId);
             timings[i] = {
               requestMs: performance.now() - requestStartedAt,
               readyMs: performance.now() - prefetchStartedAt,
@@ -267,7 +271,7 @@ export const useVoiceProcessing = ({
 
       logger.info('🏁 Progressive processing complete');
     },
-    [playAudioSegment, setState],
+    [playAudioSegment, setState, sessionId],
   );
 
   /**

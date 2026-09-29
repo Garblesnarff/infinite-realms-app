@@ -77,7 +77,11 @@ export class VoiceAudioService {
    * (quota) or 503 (outage) switches the session to Standard and retries this
    * segment there; any other status is returned as the segment's error.
    */
-  static async generateAudio(segment: VoiceSegment, signal?: AbortSignal): Promise<VoiceSegment> {
+  static async generateAudio(
+    segment: VoiceSegment,
+    signal?: AbortSignal,
+    sessionId?: string,
+  ): Promise<VoiceSegment> {
     const voice: VoiceRef = {
       category: segment.voiceCategory ?? getVoiceCategoryKey({ id: segment.voiceId }),
       voiceId: segment.voiceId,
@@ -88,7 +92,13 @@ export class VoiceAudioService {
         return await VoiceAudioService.generateStandard(segment, voice, signal);
       }
       try {
-        return await VoiceAudioService.generateWith(ElevenLabsProvider, segment, voice, signal);
+        return await VoiceAudioService.generateWith(
+          ElevenLabsProvider,
+          segment,
+          voice,
+          signal,
+          sessionId,
+        );
       } catch (error) {
         if (!(error instanceof VoiceQuotaError || error instanceof VoiceUnavailableError)) {
           throw error;
@@ -124,6 +134,7 @@ export class VoiceAudioService {
     segment: VoiceSegment,
     voice: VoiceRef,
     signal?: AbortSignal,
+    sessionId?: string,
   ): Promise<VoiceSegment> {
     const providerVoiceId = provider.resolveVoiceId(voice);
     const cacheKey = VoiceAudioService.generateCacheKey(provider.id, providerVoiceId, segment.text);
@@ -155,6 +166,7 @@ export class VoiceAudioService {
       voice,
       segment.voiceSettings,
       signal,
+      sessionId,
     );
 
     // Cache the generated audio

@@ -103,8 +103,12 @@ export class VoiceDirector {
   /**
    * Generate audio for a single segment with caching - Delegated to VoiceAudioService
    */
-  static async generateAudio(segment: VoiceSegment, signal?: AbortSignal): Promise<VoiceSegment> {
-    return VoiceAudioService.generateAudio(segment, signal);
+  static async generateAudio(
+    segment: VoiceSegment,
+    signal?: AbortSignal,
+    sessionId?: string,
+  ): Promise<VoiceSegment> {
+    return VoiceAudioService.generateAudio(segment, signal, sessionId);
   }
 
   /**

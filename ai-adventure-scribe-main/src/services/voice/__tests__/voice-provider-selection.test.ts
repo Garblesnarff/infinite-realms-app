@@ -92,6 +92,7 @@ describe('VoiceAudioService provider selection', () => {
       { category: 'goblin', voiceId: segment.voiceId },
       segment.voiceSettings,
       undefined,
+      undefined, // no session outside a game session
     );
     expect(result.provider).toBe('kokoro');
     expect(result.audioUrl).toBe('blob:kokoro');
@@ -194,6 +195,7 @@ describe('VoiceAudioService provider selection', () => {
       { category: 'goblin', voiceId: segment.voiceId },
       segment.voiceSettings,
       undefined,
+      undefined, // no session outside a game session
     );
   });
 });

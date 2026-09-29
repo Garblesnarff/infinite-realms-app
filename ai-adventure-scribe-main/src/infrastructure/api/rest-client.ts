@@ -333,6 +333,8 @@ export interface GenerateImageParams {
   referenceImage?: string; // deprecated single-image form
   referenceImages?: string[];
   quality?: 'low' | 'medium' | 'high';
+  /** Game session the image belongs to; absent for portraits and campaign covers (#2269). */
+  sessionId?: string;
 }
 
 export interface AppendMessageImageParams {
@@ -585,6 +587,7 @@ class LlmApiClient {
         referenceImages:
           params.referenceImages || (params.referenceImage ? [params.referenceImage] : undefined),
         quality: params.quality,
+        sessionId: params.sessionId,
       }),
     });
     const data = await res.json();

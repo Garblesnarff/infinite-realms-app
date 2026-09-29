@@ -40,6 +40,8 @@ export interface VoiceProvider {
     voice: VoiceRef,
     settings: VoiceSegment['voiceSettings'],
     signal?: AbortSignal,
+    /** Game session the voice is for, so the server can price it to the session (#2269). */
+    sessionId?: string,
   ): Promise<GeneratedAudio>;
 }
 

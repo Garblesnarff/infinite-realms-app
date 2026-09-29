@@ -14,7 +14,7 @@ export const ElevenLabsProvider: VoiceProvider = {
     return voice.voiceId;
   },
 
-  async generateAudio(text, voice, settings, signal) {
+  async generateAudio(text, voice, settings, signal, sessionId) {
     const apiBase = import.meta.env.VITE_API_URL || '';
     const response = await fetch(
       `${apiBase}/v1/ai-proxy/voice/${encodeURIComponent(voice.voiceId)}`,
@@ -30,6 +30,7 @@ export const ElevenLabsProvider: VoiceProvider = {
           text,
           model_id: ELEVENLABS_MODEL,
           voice_settings: settings,
+          sessionId,
         }),
       },
     );

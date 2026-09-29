@@ -17,6 +17,7 @@ interface BuildSceneImageRequestParams {
   campaign: CampaignContext | null;
   character: Character | null;
   routeCampaignId?: string;
+  sessionId?: string;
   assetUrls: AssetReference[];
   label: string;
   quality: 'low' | 'medium' | 'high';
@@ -28,6 +29,7 @@ export function buildSceneImageRequest({
   campaign,
   character,
   routeCampaignId,
+  sessionId,
   assetUrls,
   label,
   quality,
@@ -58,6 +60,7 @@ export function buildSceneImageRequest({
     assetUrls: assetUrls.length > 0 ? assetUrls : undefined,
     quality,
     model,
+    sessionId,
     storage: routeCampaignId
       ? { entityType: 'campaign', entityId: routeCampaignId, label }
       : { label },

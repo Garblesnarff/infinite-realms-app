@@ -98,6 +98,32 @@ describe('useVoiceProcessing', () => {
     expect(mockSetState).toHaveBeenCalledWith(expect.any(Function));
   });
 
+  it('passes the game session to each voice generation (#2269)', async () => {
+    const aiSegments = [{ type: 'dm', text: 'Hello', character: 'DM' }];
+    const voiceSegments = [{ character: 'DM', text: 'Hello', voice_category: 'dm' }];
+
+    (VoiceDirector.validateAISegments as any).mockReturnValue(aiSegments);
+    (VoiceDirector.processAISegments as any).mockReturnValue(voiceSegments);
+    (VoiceDirector.generateAudio as any).mockResolvedValue({
+      ...voiceSegments[0],
+      audioUrl: 'http://test.com/audio.mp3',
+    });
+
+    const { result } = renderHook(() =>
+      useVoiceProcessing({ ...defaultProps, sessionId: 'session-2269' }),
+    );
+
+    await act(async () => {
+      await result.current.speakAISegments(aiSegments as any);
+    });
+
+    expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Hello' }),
+      expect.any(AbortSignal),
+      'session-2269',
+    );
+  });
+
   it('should pass each segment voice ID through generation and playback', async () => {
     const aiSegments = [
       { type: 'dm', text: 'The road is clear.' },
@@ -130,11 +156,13 @@ describe('useVoiceProcessing', () => {
       1,
       expect.objectContaining({ voiceId: 'narrator-id' }),
       expect.any(AbortSignal),
+      undefined, // no session outside a game session
     );
     expect(VoiceDirector.generateAudio).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ voiceId: 'guard-id' }),
       expect.any(AbortSignal),
+      undefined, // no session outside a game session
     );
     expect(mockPlayAudioSegment).toHaveBeenNthCalledWith(
       1,
@@ -374,6 +402,7 @@ describe('useVoiceProcessing', () => {
     expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Second Request' }),
       expect.any(AbortSignal),
+      undefined, // no session outside a game session
     );
   });
 
@@ -424,6 +453,7 @@ describe('useVoiceProcessing', () => {
     expect(VoiceDirector.generateAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: '1.1' }),
       expect.any(AbortSignal),
+      undefined, // no session outside a game session
     );
     expect(result.current.abortController.current?.signal.aborted).toBe(true);
     expect(mockPlayAudioSegment).not.toHaveBeenCalledWith(

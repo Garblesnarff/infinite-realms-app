@@ -31,9 +31,10 @@ export function useVoiceContext() {
 
 interface VoiceProviderProps {
   children: React.ReactNode;
+  sessionId?: string;
 }
 
-export function VoiceProvider({ children }: VoiceProviderProps) {
+export function VoiceProvider({ children, sessionId }: VoiceProviderProps) {
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string>('');
 
@@ -53,7 +54,7 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
     setVolume,
     toggleMute,
     initializeAudioContext,
-  } = useProgressiveVoice();
+  } = useProgressiveVoice({ sessionId });
 
   const playMessage = useCallback(
     (messageId: string, text: string, narrationSegments?: NarrationSegment[]) => {
