@@ -76,6 +76,8 @@ describe('CombatInterface', () => {
     expect(screen.getByText('Party Status')).toBeInTheDocument();
   });
 
+  // The action buttons are game-master controls now (#2257): the player view has none, so this
+  // renders the gated GM surface (`isDM`), which still owns them.
   it('re-enables every combat action after a move-only action and NPC hit hand the turn back', () => {
     const player = {
       id: 'player-1',
@@ -120,7 +122,7 @@ describe('CombatInterface', () => {
       enemyParticipants: [npc],
       isPlayersTurn: false,
     } as never);
-    const { rerender } = render(<CombatInterface />);
+    const { rerender } = render(<CombatInterface isDM />);
 
     expect(screen.queryByText("Rook's Turn")).toBeNull();
 
@@ -131,7 +133,7 @@ describe('CombatInterface', () => {
       enemyParticipants: [npc],
       isPlayersTurn: true,
     } as never);
-    rerender(<CombatInterface />);
+    rerender(<CombatInterface isDM />);
 
     expect(screen.getByText("Rook's Turn")).toBeInTheDocument();
     for (const action of [

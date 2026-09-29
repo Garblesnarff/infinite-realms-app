@@ -6,10 +6,8 @@
  * Provides attack buttons and visual enemy representation.
  */
 
-import { Sword, Skull, Zap, Target } from 'lucide-react';
+import { Sword, Skull, Zap, Target, Heart, Shield } from 'lucide-react';
 import React from 'react';
-
-import HPTracker from './HPTracker';
 
 import type { MonsterAttack } from '@/types/combat';
 
@@ -19,10 +17,12 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCombat } from '@/contexts/CombatContext';
+import { getEnemyHealthTier } from '@/utils/hp-utils';
 
 interface EnemyCardProps {
   enemyId: string;
   className?: string;
+  /** Attack buttons show only when a game-master surface passes a handler (#2257). */
   onAttack?: (attack: MonsterAttack) => void;
 }
 
@@ -101,7 +101,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold text-red-700 flex items-center gap-2">
+              <CardTitle className="text-lg font-semibold text-red-400 flex items-center gap-2">
                 {enemy.name}
               </CardTitle>
 
@@ -129,7 +129,19 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <HPTracker participant={enemy} showHPDetails={false} isInteractive={false} />
+        <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-1">
+            <Heart className="w-4 h-4" aria-hidden="true" />
+            <span aria-live="polite">
+              <span className="sr-only">{enemy.name} health: </span>
+              {getEnemyHealthTier(enemy.currentHitPoints, enemy.maxHitPoints)}
+            </span>
+          </span>
+          <span className="flex items-center gap-1" aria-label={`Armor Class: ${enemy.armorClass}`}>
+            <Shield className="w-4 h-4" aria-hidden="true" />
+            AC: {enemy.armorClass}
+          </span>
+        </div>
 
         {enemy.monsterData?.specialAbilities && enemy.monsterData.specialAbilities.length > 0 && (
           <div className="space-y-1">
@@ -145,7 +157,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '
           </div>
         )}
 
-        {enemy.monsterData?.attacks && enemy.monsterData.attacks.length > 0 && (
+        {onAttack && enemy.monsterData?.attacks && enemy.monsterData.attacks.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-medium text-red-700">
               <Sword className="w-3 h-3" />

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { getHPColor } from '@/utils/hp-utils';
+import { getEnemyHealthTier, getPlayerHPBarColor } from '@/utils/hp-utils';
 
 // ===========================
 // Condition Icons & Colors
@@ -43,7 +43,6 @@ export interface ParticipantRowProps {
   participant: CombatParticipant;
   isCurrentTurn: boolean;
   roundNumber: number;
-  onSelectParticipant?: (participantId: string) => void;
   getAssetImageUrl?: (type: string, key: string) => string | null;
 }
 
@@ -52,13 +51,7 @@ export interface ParticipantRowProps {
  * individual participant status (like HP or conditions) remains the same.
  */
 export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
-  ({
-    participant,
-    isCurrentTurn,
-    roundNumber: _roundNumber,
-    onSelectParticipant,
-    getAssetImageUrl,
-  }) => {
+  ({ participant, isCurrentTurn, roundNumber: _roundNumber, getAssetImageUrl }) => {
     const hpPercent =
       participant.maxHitPoints > 0
         ? (participant.currentHitPoints / participant.maxHitPoints) * 100
@@ -66,8 +59,9 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
     const isDead = participant.currentHitPoints === 0 && participant.deathSaves.failures >= 3;
     const _isUnconscious =
       participant.currentHitPoints === 0 && participant.deathSaves.failures < 3;
-    const needsDeathSave = participant.currentHitPoints === 0 && !isDead;
     const isPlayer = participant.participantType === 'player';
+    // Only a player rolls death saves; an enemy at 0 HP reads "Down" and nothing more.
+    const needsDeathSave = isPlayer && participant.currentHitPoints === 0 && !isDead;
 
     // Look up portrait from campaign assets
     const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
@@ -111,37 +105,27 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
       );
     };
 
+    // The row only reports state: nothing here is clickable (#2257). The current turn is the
+    // gold-tinted row; text stays `text-foreground`, so it reads on the dark game theme.
     const rowClasses = cn(
-      'flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none',
+      'flex items-center justify-between rounded-lg border p-3 shadow-sm text-foreground',
       isCurrentTurn
-        ? 'border-amber-300/70 bg-amber-50 ring-1 ring-amber-200'
-        : 'border-border bg-card hover:bg-muted/60',
+        ? 'border-transparent bg-infinite-gold/10 outline outline-1 outline-infinite-gold/45'
+        : 'border-border bg-card',
       isDead && 'opacity-60 grayscale',
     );
 
-    const handleKeyDown = (e: React.KeyboardEvent): void => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onSelectParticipant?.(participant.id);
-      }
-    };
-
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className={rowClasses}
-            onClick={() => onSelectParticipant?.(participant.id)}
-            onKeyDown={handleKeyDown}
-            role="button"
-            tabIndex={0}
-            aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}Select ${participant.name}`}
-          >
+      <div
+        className={rowClasses}
+        data-testid="participant-row"
+        aria-current={isCurrentTurn ? 'true' : undefined}
+      >
         {/* Turn Indicator & Initiative */}
         <div className="flex items-center space-x-3">
           {isCurrentTurn && (
             <ChevronRight
-              className="w-5 h-5 text-amber-600 animate-pulse"
+              className="w-5 h-5 text-infinite-gold animate-pulse"
               role="status"
               aria-live="polite"
               aria-label="Current turn indicator"
@@ -152,10 +136,10 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
             className="flex flex-col items-center"
             aria-label={`Initiative: ${participant.initiative}`}
           >
-            <div className="text-lg font-bold text-gray-700 min-w-[2rem] text-center">
+            <div className="text-lg font-bold text-foreground min-w-[2rem] text-center">
               {participant.initiative}
             </div>
-            <div className="text-xs text-gray-500">init</div>
+            <div className="text-xs text-muted-foreground">init</div>
           </div>
 
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground overflow-hidden">
@@ -211,21 +195,24 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
           <div className="mt-2 flex items-center gap-2">
             <Progress
               value={hpPercent}
-              className="h-2 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
-              tabIndex={0}
-              indicatorClassName={getHPColor(hpPercent)}
+              className="h-1.5 flex-1 rounded-sm bg-muted"
+              indicatorClassName={getPlayerHPBarColor(hpPercent)}
               aria-label={
                 isPlayer
                   ? `${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`
                   : `${participant.name} Health bar`
               }
             />
-            {isPlayer && (
+            {isPlayer ? (
               <span className="min-w-[4rem] text-right text-sm font-medium">
                 {participant.currentHitPoints}/{participant.maxHitPoints}
                 {participant.temporaryHitPoints > 0 && (
                   <span className="text-blue-500">+{participant.temporaryHitPoints}</span>
                 )}
+              </span>
+            ) : (
+              <span className="min-w-[4rem] text-right text-sm font-medium">
+                {getEnemyHealthTier(participant.currentHitPoints, participant.maxHitPoints)}
               </span>
             )}
           </div>
@@ -236,7 +223,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
               className="flex items-center space-x-1 mt-1"
               aria-label={`Death saves: ${participant.deathSaves.successes} successes, ${participant.deathSaves.failures} failures`}
             >
-              <span className="text-xs text-red-600 font-medium" aria-hidden="true">
+              <span className="text-xs text-red-400 font-medium" aria-hidden="true">
                 Death Saves:
               </span>
               <div className="flex space-x-1" aria-hidden="true">
@@ -269,7 +256,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
         {/* AC & Conditions */}
         <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
           <div
-            className="flex items-center gap-1 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
+            className="flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
             aria-label={`Armor Class: ${participant.armorClass}`}
             tabIndex={0}
           >
@@ -304,12 +291,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
             </div>
           )}
         </div>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Select participant to view details</p>
-        </TooltipContent>
-      </Tooltip>
+      </div>
     );
   },
 );
