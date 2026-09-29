@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.21.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.21.0...v0.21.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **combat:** a declared Burning Hands always ends in one engine line ([#2304](https://github.com/Garblesnarff/infinite-realms-production/issues/2304)) ([#2308](https://github.com/Garblesnarff/infinite-realms-production/issues/2308)) ([3d91c45](https://github.com/Garblesnarff/infinite-realms-production/commit/3d91c451ab1e4b2827129c8caff186bf1fcfd732))
+
 ## [0.21.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.20.5...v0.21.0) (2026-09-28)
 
 
