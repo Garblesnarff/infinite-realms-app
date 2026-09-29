@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { toHeaderExcerpt } from './scene-blurb';
 import { useMessageCommandHandler } from './use-message-command-handler';
 import { useMessageSendQueue } from './use-message-send-queue';
 import { useSessionValidator } from '../session/SessionValidator';
@@ -89,22 +90,6 @@ export function rollReplyMessage(
     context: { ...reply.context, rollRequests },
   };
 }
-
-const toHeaderExcerpt = (raw: string, limit = 220) => {
-  if (!raw) return '';
-  const cleaned = raw
-    .replace(/^VISUAL\s+PROMPT:.*$/gim, '')
-    .replace(/^\s*[A-F]\.\s.*$/gim, '')
-    .replace(/\*\*|__|`/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const sentences = cleaned.split(/(?<=[.!?])\s+/);
-  let out = sentences.slice(0, 2).join(' ');
-  if (out.length > limit) {
-    out = out.slice(0, limit).replace(/[ ,;:]+\S*$/, '') + '…';
-  }
-  return out;
-};
 
 export const useMessageHandlerLogic = ({
   sessionId,
@@ -385,7 +370,9 @@ export const useMessageHandlerLogic = ({
               runDeferredTask('scene-state persistence', () =>
                 updateGameSessionState((prev: ExtendedGameSession) => ({
                   ...prev,
-                  current_scene_description: blurb,
+                  // An engine-only reply leaves no scene text: keep the previous description.
+                  current_scene_description:
+                    blurb || headerMode === 'off' ? blurb : prev.current_scene_description,
                 })),
               );
             }
@@ -560,7 +547,9 @@ export const useMessageHandlerLogic = ({
             runDeferredTask('scene-state persistence', () =>
               updateGameSessionState((prev: ExtendedGameSession) => ({
                 ...prev,
-                current_scene_description: blurb,
+                // An engine-only reply leaves no scene text: keep the previous description.
+                current_scene_description:
+                  blurb || headerMode === 'off' ? blurb : prev.current_scene_description,
               })),
             );
             const narrativeOnly = parseMessageOptions(sanitizedAiResponseMessage.text).content;

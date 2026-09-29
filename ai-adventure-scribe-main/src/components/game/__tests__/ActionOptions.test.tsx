@@ -170,4 +170,42 @@ describe('ActionOptions', () => {
     expect(title).toHaveClass('break-words');
     expect(body).toHaveClass('break-words');
   });
+
+  describe('option numbering (#2256)', () => {
+    const showOptions = (options: typeof mockOptions) => {
+      render(<ActionOptions options={options} onOptionSelect={onOptionSelect} delay={0} />);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+    };
+    const labels = () => screen.getAllByText(/^Option \d+$/).map((node) => node.textContent);
+
+    it('numbers options by position when the model repeats a number', () => {
+      showOptions([
+        { id: 'a', number: 1, text: 'Attack the goblin', fullText: '1.' },
+        { id: 'b', number: 1, text: 'Talk to the merchant', fullText: '1.' },
+        { id: 'c', number: 1, text: 'Look around', fullText: '1.' },
+      ]);
+
+      expect(labels()).toEqual(['Option 1', 'Option 2', 'Option 3']);
+      expect(
+        screen.getByRole('button', { name: 'Option 2 - Talk to the merchant' }),
+      ).toBeInTheDocument();
+    });
+
+    it('numbers options by position when the model returns no number', () => {
+      showOptions([
+        { id: 'a', number: 0, text: 'Attack the goblin', fullText: '-' },
+        { id: 'b', number: Number.NaN, text: 'Talk to the merchant', fullText: '-' },
+      ]);
+
+      expect(labels()).toEqual(['Option 1', 'Option 2']);
+    });
+
+    it('keeps the model numbers when they are already in order', () => {
+      showOptions(mockOptions);
+
+      expect(labels()).toEqual(['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5']);
+    });
+  });
 });

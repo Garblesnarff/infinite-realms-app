@@ -150,7 +150,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       shouldClamp && 'max-h-[22rem] overflow-hidden clamp-fade',
     );
 
-    const hasContextMetadata = Boolean(message.context?.emotion || message.context?.location);
+    // The mood word is data for developers, not for players (#2256): it renders in dev builds only.
+    const emotionLabel = import.meta.env.DEV ? message.context?.emotion : undefined;
+    const hasContextMetadata = Boolean(emotionLabel || message.context?.location);
     const timestamp = message.timestamp
       ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '';
@@ -180,12 +182,16 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
                 Round {block.round} · {block.source === 'npc' ? 'NPC turn' : 'Player turn'}
               </div>
               {block.lines.map((line, index) => (
-                <EngineOutcomeChip key={`${block.sequence}-${index}-${line}`} line={line} />
+                <EngineOutcomeChip
+                  key={`${block.sequence}-${index}-${line}`}
+                  line={line}
+                  showLabel={index === 0}
+                />
               ))}
             </section>
           ))}
-          {engineLines.map((line) => (
-            <EngineOutcomeChip key={line} line={line} />
+          {engineLines.map((line, index) => (
+            <EngineOutcomeChip key={line} line={line} showLabel={index === 0} />
           ))}
           {content ? <div className={narrativeClass}>{content}</div> : null}
 
@@ -229,12 +235,12 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
 
           {isFirstInGroup && hasContextMetadata && (
             <div className="mt-5 border-t border-white/10 pt-4 text-sm text-white/70 space-y-2">
-              {message.context?.emotion && (
+              {emotionLabel && (
                 <div className="flex items-center gap-2">
                   <span role="img" aria-label="mood" className="text-lg leading-none">
                     🎭
                   </span>
-                  <span>{message.context.emotion}</span>
+                  <span>{emotionLabel}</span>
                 </div>
               )}
               {message.context?.location && (

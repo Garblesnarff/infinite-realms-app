@@ -218,8 +218,8 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
           </div>
         )}
 
-        {/* Additional context for screen readers */}
-        {narrationSegments && narrationSegments.length > 0 && (
+        {/* Debug note: developer text, never shown to players in a production build (#2256). */}
+        {import.meta.env.DEV && narrationSegments && narrationSegments.length > 0 && (
           <span className="sr-only">
             This message has {narrationSegments.length} voice segments with multiple characters
           </span>

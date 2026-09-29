@@ -22,18 +22,21 @@ export const MessageMetadata: React.FC<MessageMetadataProps> = React.memo(({
   isLastInGroup,
   isPlayer,
 }) => {
+  // The mood word is data for developers, not for players (#2256): it renders in dev builds only.
+  const emotionLabel = import.meta.env.DEV ? message.context?.emotion : undefined;
+  const hasVisibleContext = Boolean(emotionLabel || message.context?.location);
   return (
     <>
       {/* Context metadata - only show on first message */}
-      {isFirstInGroup && message.context && (
+      {isFirstInGroup && hasVisibleContext && (
         <div className="mt-2 pt-2 border-t border-border/20 space-y-1 text-xs opacity-80">
-          {message.context.emotion && (
+          {emotionLabel && (
             <div className="flex items-center">
               <span className="font-medium mr-1">🎭</span>
-              <span>{message.context.emotion}</span>
+              <span>{emotionLabel}</span>
             </div>
           )}
-          {message.context.location && (
+          {message.context?.location && (
             <div className="flex items-center">
               <span className="font-medium mr-1">📍</span>
               <span>{message.context.location}</span>

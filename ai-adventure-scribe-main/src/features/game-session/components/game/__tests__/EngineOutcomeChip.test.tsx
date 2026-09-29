@@ -61,4 +61,32 @@ describe('EngineOutcomeChip', () => {
     expect(label.parentElement).toHaveAccessibleName('Engine MISS');
     expect(screen.queryByText('EngineMISS')).not.toBeInTheDocument();
   });
+
+  describe('single Engine label (#2256)', () => {
+    const PLAIN = '⚙️ Engine: The Goblin is prone.';
+
+    it('does not print a second ENGINE badge for a line with no HIT/MISS outcome', () => {
+      const { container } = render(<EngineOutcomeChip line={PLAIN} />);
+
+      expect(screen.getAllByText('Engine')).toHaveLength(1);
+      expect(container.textContent).not.toMatch(/engine\s*engine/i);
+      expect(screen.getByLabelText('Engine')).toBeInTheDocument();
+      expect(screen.getByText('The Goblin is prone.')).toBeInTheDocument();
+    });
+
+    it('omits the label but keeps the outcome badge when showLabel is false', () => {
+      render(<EngineOutcomeChip line={LINE} showLabel={false} />);
+
+      expect(screen.queryByText('Engine')).not.toBeInTheDocument();
+      expect(screen.getByText('HIT')).toBeInTheDocument();
+      expect(screen.getByLabelText('HIT')).toBeInTheDocument();
+    });
+
+    it('renders only the detail for an unlabelled line with no outcome', () => {
+      const { container } = render(<EngineOutcomeChip line={PLAIN} showLabel={false} />);
+
+      expect(container.textContent).toBe('The Goblin is prone.');
+      expect(container.querySelector('details')).toBeNull();
+    });
+  });
 });

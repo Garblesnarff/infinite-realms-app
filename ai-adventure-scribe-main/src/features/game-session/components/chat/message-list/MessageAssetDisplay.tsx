@@ -21,6 +21,7 @@ import {
 import type { AssetTag } from '../../utils/parse-asset-tags';
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
 
+import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +54,8 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
 }) => {
   const [expandedAsset, setExpandedAsset] = React.useState<CampaignAsset | null>(null);
   const [expandedGenerated, setExpandedGenerated] = React.useState(false);
+  // The empty "Generate / Scene" card stays hidden until the player asks for scene art (#2256).
+  const [sceneArtRequested, setSceneArtRequested] = React.useState(false);
 
   // Resolve asset tags to actual assets (filter out those without images)
   const resolvedAssets = React.useMemo(() => {
@@ -72,6 +75,11 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
   const hasAssets = resolvedAssets.length > 0;
   const hasGeneratedImage = Boolean(generatedImage?.url);
   const hasGenerateButton = Boolean(generatedImage?.onGenerate);
+  // A run in flight or a failed run keeps the card on screen so its state stays visible.
+  const showGenerateCard =
+    !hasGeneratedImage &&
+    hasGenerateButton &&
+    (sceneArtRequested || Boolean(generatedImage?.isGenerating) || Boolean(generatedImage?.error));
 
   // Don't render if nothing to show
   if (!hasAssets && !hasGeneratedImage && !hasGenerateButton) {
@@ -97,12 +105,22 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
           />
         )}
         {/* Generate button (when no image yet) */}
-        {!hasGeneratedImage && hasGenerateButton && (
+        {showGenerateCard && (
           <GenerateButtonCard
             isGenerating={generatedImage?.isGenerating}
             error={generatedImage?.error}
             onGenerate={generatedImage!.onGenerate!}
           />
+        )}
+        {!hasGeneratedImage && hasGenerateButton && !showGenerateCard && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto px-2 py-1 text-xs text-white/60 hover:text-white"
+            onClick={() => setSceneArtRequested(true)}
+          >
+            Show scene art
+          </Button>
         )}
       </div>
 

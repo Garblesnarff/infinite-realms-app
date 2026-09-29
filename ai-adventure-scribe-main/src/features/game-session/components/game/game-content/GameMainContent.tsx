@@ -28,6 +28,7 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { stripAssetTags } from '@/lib/utils';
+import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
 /** Pixels from the top of `card` to the top of `dock`, tracked while `active`. */
 function useHeightAboveDock(
@@ -153,7 +154,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const completionBanner = rollPillLabel
       ? `Please complete the ${rollPillLabel} roll above`
       : null;
-    const sceneBlurb = stripAssetTags(sessionData.current_scene_description || '');
+    // Saved descriptions from before #2256 may still hold "⚙️ Engine:" lines.
+    const sceneBlurb = stripEngineGeneratedLines(
+      stripAssetTags(sessionData.current_scene_description || ''),
+    );
     const overhaul = useOverhaulViewModel({
       chapterLabel: resolveCampaignChapterLabel(sessionData.turn_count),
       sceneBlurb,

@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { MessageMetadata } from '../MessageMetadata';
 
@@ -127,5 +127,40 @@ describe('MessageMetadata', () => {
     );
 
     expect(document.body.textContent).toContain('Mysterious');
+  });
+
+  describe('mood word (#2256)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('does not render the emotion when DEV is false, and keeps the location', () => {
+      vi.stubEnv('DEV', false);
+      const { container, getByText } = render(
+        <MessageMetadata
+          message={mockMessage as any}
+          isFirstInGroup={true}
+          isLastInGroup={true}
+          isPlayer={false}
+        />,
+      );
+
+      expect(container.textContent).not.toContain('Mysterious');
+      expect(getByText('Dark Dungeon')).toBeDefined();
+    });
+
+    it('renders the emotion when DEV is true', () => {
+      vi.stubEnv('DEV', true);
+      const { getByText } = render(
+        <MessageMetadata
+          message={mockMessage as any}
+          isFirstInGroup={true}
+          isLastInGroup={true}
+          isPlayer={false}
+        />,
+      );
+
+      expect(getByText('Mysterious')).toBeDefined();
+    });
   });
 });

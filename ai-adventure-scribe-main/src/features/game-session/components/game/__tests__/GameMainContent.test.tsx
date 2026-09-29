@@ -366,6 +366,26 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(screen.getByTestId('chat-input')).toBeDisabled();
   });
 
+  it('never shows an engine line in the scene subtitle (#2256)', () => {
+    render(
+      <GameMainContent
+        {...baseProps}
+        sessionData={
+          {
+            ...baseProps.sessionData,
+            current_scene_description:
+              '⚙️ Engine: The Veteran rolled 14 + 5 = 19 vs AC 12 — HIT. The goblin reels back.',
+          } as never
+        }
+      />,
+    );
+
+    const header = screen.getByTestId('scene-header');
+    expect(header).not.toHaveTextContent('Engine:');
+    expect(header).not.toHaveTextContent('⚙');
+    expect(header).not.toHaveTextContent('rolled 14');
+  });
+
   it('does not treat session turn_count as a campaign chapter number', () => {
     render(
       <GameMainContent

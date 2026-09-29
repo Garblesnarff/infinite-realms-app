@@ -152,6 +152,8 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                   const IconComponent = getOptionIcon(option.text);
                   const isSelected = selectedOption === option.id;
                   const isDisabled = disabled || (selectedOption && selectedOption !== option.id);
+                  // Numbered by position: the model's own numbers can repeat or be missing (#2256).
+                  const displayNumber = index + 1;
 
                   return (
                     <Tooltip key={option.id} delayDuration={300}>
@@ -168,8 +170,8 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                             aria-pressed={isSelected}
                             aria-label={
                               isSelected
-                                ? `Selected: Option ${option.number} - ${option.text}`
-                                : `Option ${option.number} - ${option.text}`
+                                ? `Selected: Option ${displayNumber} - ${option.text}`
+                                : `Option ${displayNumber} - ${option.text}`
                             }
                             className={`
                             flex items-start gap-3 p-4 h-full w-full text-left justify-start whitespace-normal
@@ -194,7 +196,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
                             <div className="flex-1 min-w-0">
                               <div className="ir-display text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
-                                Option {option.number}
+                                Option {displayNumber}
                               </div>
                               {/* The full bold action name, then the description, both wrapping:
                                   never cut off with an ellipsis (#2281). */}

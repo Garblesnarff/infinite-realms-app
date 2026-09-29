@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { DMMessageVoiceControls } from '../DMMessageVoiceControls';
 
@@ -281,5 +281,33 @@ describe('DMMessageVoiceControls', () => {
     );
 
     expect(screen.getByText(/This message has 1 voice segments/i)).toBeInTheDocument();
+  });
+
+  describe('debug voice-segment note (#2256)', () => {
+    const withSegments = (
+      <DMMessageVoiceControls
+        {...defaultProps}
+        narrationSegments={[{ type: 'character', text: 'Hi', character: 'Elf' } as any]}
+      />
+    );
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('does not render the note when DEV is false, and keeps the play control', () => {
+      vi.stubEnv('DEV', false);
+      const { container } = render(withSegments);
+
+      expect(container.textContent).not.toMatch(/voice segments/i);
+      expect(screen.getByRole('button', { name: /play/i })).toBeInTheDocument();
+    });
+
+    it('renders the note when DEV is true', () => {
+      vi.stubEnv('DEV', true);
+      render(withSegments);
+
+      expect(screen.getByText(/This message has 1 voice segments/i)).toBeInTheDocument();
+    });
   });
 });
