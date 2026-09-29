@@ -1,4 +1,6 @@
 /* eslint-disable max-lines */
+import type { VoiceCategory } from './dm-response-schema.js';
+
 export type ModelNarrationHint = {
   type?: string;
   text?: string | null;
@@ -10,8 +12,11 @@ export type DerivedNarrationSegment = {
   type: 'dm' | 'character' | 'transition';
   text: string;
   character: string | null;
-  voice_category: string | null;
+  voice_category: VoiceCategory | null;
 };
+
+/** A model hint whose voice_category has been canonicalized (or dropped). */
+type UsableHint = ModelNarrationHint & { voice_category: VoiceCategory | null };
 
 const ENGINE_LINE = /^[ \t]*⚙(?:️)?[ \t]*Engine:[^\r\n]*(?:\r?\n|$)/gim;
 const ASSET_PREFIX = '[ASSET:';
@@ -58,17 +63,17 @@ const textsAlign = (left: string, right: string): boolean => {
   );
 };
 
-const matchingHint = (quote: string, hints: ModelNarrationHint[]): ModelNarrationHint | undefined =>
+const matchingHint = <T extends ModelNarrationHint>(quote: string, hints: T[]): T | undefined =>
   hints.find((hint) => {
     if (hint.type === 'dm' || hint.type === 'transition') return false;
     const hintText = typeof hint.text === 'string' ? hint.text : '';
     return Boolean(hintText.trim()) && textsAlign(quote, hintText);
   });
 
-const mentionedHint = (
+const mentionedHint = <T extends ModelNarrationHint>(
   preceding: string,
-  hints: ModelNarrationHint[],
-): ModelNarrationHint | undefined => {
+  hints: T[],
+): T | undefined => {
   const paragraph = preceding.split(/\n{2,}/).pop() ?? preceding;
   const lower = paragraph.toLowerCase();
   return [...hints].reverse().find((hint) => {
@@ -186,7 +191,7 @@ const pushSegment = (
   type: 'dm' | 'character',
   text: string,
   character: string | null,
-  voiceCategory: string | null,
+  voiceCategory: VoiceCategory | null,
 ): void => {
   if (!text) return;
   segments.push({
@@ -204,9 +209,9 @@ const pushSegment = (
 export function deriveNarrationSegments(
   rawText: string,
   modelHints: ModelNarrationHint[] = [],
-  canonicalizeCategory?: (category: string) => string | undefined,
+  canonicalizeCategory?: (category: string) => VoiceCategory | undefined,
 ): DerivedNarrationSegment[] {
-  const usableHints: ModelNarrationHint[] = [];
+  const usableHints: UsableHint[] = [];
   for (const hint of modelHints) {
     const hintText = typeof hint.text === 'string' ? hint.text : '';
     if (!hintText.trim()) continue;
@@ -223,7 +228,7 @@ export function deriveNarrationSegments(
 
   const source = stripEngineGeneratedLines(rawText);
   const segments: DerivedNarrationSegment[] = [];
-  let lastNpc: { name: string; voiceCategory: string | null } | null = null;
+  let lastNpc: { name: string; voiceCategory: VoiceCategory | null } | null = null;
   let preceding = '';
 
   for (const token of tokenizeSource(source)) {
@@ -245,10 +250,7 @@ export function deriveNarrationSegments(
     const quoted = token.raw;
     const hint = matchingHint(quoted, usableHints) || mentionedHint(preceding, usableHints);
     const speakerName = hint?.character?.trim() || lastNpc?.name || null;
-    const voiceCategory =
-      (typeof hint?.voice_category === 'string' && hint.voice_category) ||
-      lastNpc?.voiceCategory ||
-      null;
+    const voiceCategory = hint?.voice_category || lastNpc?.voiceCategory || null;
     if (speakerName) {
       pushSegment(segments, 'character', quoted, speakerName, voiceCategory);
     } else {

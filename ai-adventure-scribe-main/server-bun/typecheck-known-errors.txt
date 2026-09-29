@@ -12,7 +12,5 @@
 # Quarantine rule: a file stays listed only while its tracking issue is open.
 # "Pre-existing" is not an excuse once main is green.
 #
-# NOTE (round 3): src/services/combat/combat-intent-service.ts was quarantined
-# here with 1 error (TS2304 resolveIntentRefs, #2312) until #2312 merged
-# (2026-09-28); the entry was removed on rebase because the file is clean.
-src/services/dm/dm-response-schema.ts : 1 # #2314 — TS2322 voice_category string|null vs VoiceCategory union
+# The quarantine is currently EMPTY: combat-intent-service.ts (#2312) and
+# dm-response-schema.ts (#2314) were both un-quarantined by fixing their errors.

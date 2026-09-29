@@ -441,16 +441,39 @@ const isCombatAction = (value: unknown): value is DMCombatAction => {
   );
 };
 
-export const isHandoutAction = (value: unknown): value is DMHandoutAction => {
-  if (!value || typeof value !== 'object') return false;
+/**
+ * Name of the first field of a handout action that breaks the contract, or
+ * null when the action is valid. Returns a field NAME only, never a value:
+ * the result ends up in a 422 body and in logs, and handout text is DM/player
+ * content. `'action'` means the item is not an object at all.
+ */
+const invalidHandoutField = (value: unknown): string | null => {
+  if (!value || typeof value !== 'object') return 'action';
   const action = value as Record<string, unknown>;
-  if (!['authored', 'improvised'].includes(String(action.mode))) return false;
-  if (typeof action.title !== 'string' || typeof action.giver !== 'string') return false;
-  if (action.key !== null && typeof action.key !== 'string') return false;
-  if (action.body !== null && typeof action.body !== 'string') return false;
-  return action.mode === 'authored'
-    ? typeof action.key === 'string' && action.body === null
-    : action.key === null && typeof action.body === 'string';
+  if (!['authored', 'improvised'].includes(String(action.mode))) return 'mode';
+  if (typeof action.title !== 'string') return 'title';
+  if (typeof action.giver !== 'string') return 'giver';
+  if (action.key !== null && typeof action.key !== 'string') return 'key';
+  if (action.body !== null && typeof action.body !== 'string') return 'body';
+  if (action.mode === 'authored') {
+    if (typeof action.key !== 'string') return 'key';
+    return action.body === null ? null : 'body';
+  }
+  if (action.key !== null) return 'key';
+  return typeof action.body === 'string' ? null : 'body';
+};
+
+export const isHandoutAction = (value: unknown): value is DMHandoutAction =>
+  invalidHandoutField(value) === null;
+
+/** Issue text for the first invalid handout action: its index and field, never its content. */
+const handoutActionsIssue = (actions: unknown): string | null => {
+  if (!Array.isArray(actions)) return 'handout_actions must be an array';
+  for (const [index, action] of actions.entries()) {
+    const field = invalidHandoutField(action);
+    if (field) return `handout_actions[${index}].${field} is invalid`;
+  }
+  return null;
 };
 
 const isStringArray = (value: unknown): value is string[] =>
@@ -499,8 +522,8 @@ export function parseDmResponse(
     return { success: false, issues: ['options must be an array of strings'] };
   if (!Array.isArray(response.map_actions) || !response.map_actions.every(isMapAction))
     return { success: false, issues: ['map_actions contains an invalid action'] };
-  if (!Array.isArray(response.handout_actions) || !response.handout_actions.every(isHandoutAction))
-    return { success: false, issues: ['handout_actions contains an invalid action'] };
+  const handoutIssue = handoutActionsIssue(response.handout_actions);
+  if (handoutIssue) return { success: false, issues: [handoutIssue] };
   if (!Array.isArray(response.combat_actions) || !response.combat_actions.every(isCombatAction))
     return { success: false, issues: ['combat_actions contains an invalid action'] };
 

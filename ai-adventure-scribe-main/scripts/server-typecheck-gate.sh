@@ -28,13 +28,14 @@ cd "$SERVER_DIR" || exit 1
 raw_output="$(bun x tsc -p tsconfig.typecheck.json --noEmit 2>&1)"
 tsc_exit=$?
 
-# Per-file error counts from "path/to/file.ts(line,col): error TSXXXX" lines.
+# Per-file error counts from "path/to/file.ts(line,col): error TSXXXX" lines
+# (.ts, .tsx, .mts, .cts — a .tsx error must be attributed like any other).
 # Paths are relative to server-bun because we run from there.
 declare -A error_counts=()
 while IFS= read -r line; do
   file="${line%%(*}"
   error_counts["$file"]=$(( ${error_counts["$file"]:-0} + 1 ))
-done < <(printf '%s\n' "$raw_output" | grep -oE '^[^ (]+\.ts\([0-9]+,[0-9]+\): error TS[0-9]+')
+done < <(printf '%s\n' "$raw_output" | grep -oE '^[^ (]+\.[cm]?tsx?\([0-9]+,[0-9]+\): error TS[0-9]+')
 
 # Global (non-file) diagnostics, e.g. "error TS5083: Cannot read file ..."
 # from a bad config. These can never map to a quarantined file.

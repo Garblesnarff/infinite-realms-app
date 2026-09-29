@@ -17,16 +17,8 @@
   // by fixing the errors and deleting the entry here AND in
   // typecheck-known-errors.txt. See #2314.
   //
-  // NOTE (round 3): the combat-intent-service.ts entry (TS2304, #2312) was
-  // removed on rebase — #2312 merged 2026-09-28 and the file is clean.
+  // The quarantine is currently empty: #2312 (combat-intent-service.ts) and
+  // #2314 (dm-response-schema.ts) were fixed, not excluded.
   "extends": "./tsconfig.json",
-  "exclude": [
-    "node_modules",
-    // #2314: TS2322 — DerivedNarrationSegment's voice_category (string | null)
-    // vs DMResponse's VoiceCategory union. Threading the VoiceCategory type
-    // through narration-segment-derivation.ts surfaces new errors at its
-    // internal loose assignments, so this is a follow-up, not a drive-by.
-    // (Open PR #2310 also touches this file; coordinate.)
-    "src/services/dm/dm-response-schema.ts"
-  ]
+  "exclude": ["node_modules"]
 }
