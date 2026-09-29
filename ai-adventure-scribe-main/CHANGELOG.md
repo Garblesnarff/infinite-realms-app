@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.0...v0.22.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **combat:** tell the DM a free-text non-action had no mechanical effect ([#2342](https://github.com/Garblesnarff/infinite-realms-production/issues/2342)) ([#2349](https://github.com/Garblesnarff/infinite-realms-production/issues/2349)) ([6019376](https://github.com/Garblesnarff/infinite-realms-production/commit/6019376f061ffbfca5b9382509c5bb1fc1bf6769))
+
 ## [0.22.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.21.1...v0.22.0) (2026-09-29)
 
 
