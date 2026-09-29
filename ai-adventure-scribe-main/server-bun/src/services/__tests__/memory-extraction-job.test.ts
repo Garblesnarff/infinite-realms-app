@@ -117,7 +117,7 @@ describe('runMemoryExtractionJob (#2148)', () => {
       campaignId: CAMPAIGN,
       type: 'npc',
       content: 'Sergeant Vance guards the gate',
-      importance: 5,
+      importance: 9,
       emotionalTone: 'foreboding',
       metadata: {
         category: 'people',
@@ -181,6 +181,17 @@ describe('runMemoryExtractionJob (#2148)', () => {
       memories: Array.from({ length: 30 }, (_, i) => ({ type: 'event', content: `m${i}` })),
     };
     expect(parseExtractionText(JSON.stringify(many), job(), 'job-6')).toHaveLength(10);
+  });
+
+  it('clamps model importance into the 1–10 scale the prompt asks for (#2283)', () => {
+    const text = JSON.stringify({
+      memories: [14, 0, -3, 7.6, 10, 1].map((importance, i) => ({
+        content: `memory ${i}`,
+        importance,
+      })),
+    });
+    const rows = parseExtractionText(text, job(), 'job-7');
+    expect(rows.map((row) => row.importance)).toEqual([10, 1, 1, 8, 10, 1]);
   });
 
   it('counts jobs in flight and logs them as abandoned on shutdown (#2186)', async () => {

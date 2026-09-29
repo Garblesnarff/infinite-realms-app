@@ -75,7 +75,10 @@ export class MemoryService {
       try {
         return await repository.loadTopMemories(sessionId, limit);
       } catch (fallbackError) {
-        logger.warn('[MemoryService] top memories failed; turn runs without memories', fallbackError);
+        logger.warn(
+          '[MemoryService] top memories failed; turn runs without memories',
+          fallbackError,
+        );
         return [];
       }
     }
@@ -118,7 +121,7 @@ Extract 1-4 key memories in this JSON format:
       "type": "npc|location|quest|item|event|story_beat|character_moment|world_detail|dialogue_gem|atmosphere|plot_point|foreshadowing",
       "category": "brief category",
       "content": "concise memory description",
-      "importance": 1-5,
+      "importance": 1-10,
       "emotional_tone": "peaceful|mysterious|foreboding|intense|triumphant|humorous|melancholy|neutral",
       "metadata": {}
     }

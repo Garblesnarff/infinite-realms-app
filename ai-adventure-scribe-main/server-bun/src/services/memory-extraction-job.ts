@@ -69,9 +69,10 @@ function stripAssetTags(text: string): string {
     .trim();
 }
 
+/** The model is asked for 1–10, the live calculateImportance scale (#2283). */
 function clampImportance(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 3;
-  return Math.max(1, Math.min(5, Math.round(value)));
+  return Math.max(1, Math.min(10, Math.round(value)));
 }
 
 /**
