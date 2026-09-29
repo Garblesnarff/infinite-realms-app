@@ -37,6 +37,14 @@ export function turnNotice(
 }
 
 /**
+ * The player's own action was refused for a reason other than turn order — a spell area that
+ * caught nobody, a spell the DM never declared. Nothing resolved, so nothing ended the turn.
+ */
+export function stillYourTurnNotice(): string {
+  return '*(Your declared action was not resolved — it is still your turn.)*';
+}
+
+/**
  * The player's refused declaration was repaired into the turn holder's own action, and the turn
  * is still not the player's. Nothing was "declared out of turn" from the player's point of view
  * any more — they only need to know who acts before them.

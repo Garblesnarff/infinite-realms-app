@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { DMAoESpellAction } from '../../../server-bun/src/services/dm/dm-response-schema';
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { PlayerAttackRollSpec } from '@/services/combat/player-roll-bridge';
@@ -22,6 +21,7 @@ import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
+import { declaredSheetSpell } from '@/services/combat/declared-player-spell';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
 import {
   requestPlayerAttackRoll,
@@ -587,25 +587,11 @@ export async function handleDmActionsAndTransitions(
     if (forcedActions.text) responseText = forcedActions.text;
   }
 
-  if (sessionId && result.combat_actions?.length) {
-    const aoeActions = result.combat_actions.filter(
-      (action: any): action is DMAoESpellAction =>
-        action.action_type === 'cast_spell' && 'origin' in action,
-    );
-    for (const action of aoeActions) {
-      const response = await userDataApi.resolveAoECast(sessionId, {
-        phase: 'propose',
-        actorId: action.actor_id,
-        spellId: action.spell_id,
-        origin: action.origin,
-        direction: action.direction,
-        slotLevel: action.slot_level,
-      });
-      if (!response.ok) {
-        logger.warn('Server refused AoE spell proposal', await response.json());
-      }
-    }
-  }
+  // Area spells are cast inside `resolveDeclaredCombatActions`, in the same batch as every other
+  // declared action, so their engine line, turn boundary, and refusal are reported like any
+  // other. Proposing them here, on the side, is how a refused Burning Hands became a console
+  // warning and the DM narrated a spell that never happened (#2304).
+  const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
 
   const hasPreflightEngineLines = Boolean(
     preflightNpcTurns?.results?.length || preflightNpcTurns?.transcriptLines?.length,
@@ -615,7 +601,7 @@ export async function handleDmActionsAndTransitions(
     !preflightCombatEnded &&
     activeEncounter &&
     (isInCombat || hasPreflightEngineLines) &&
-    (result.combat_actions?.length || hasPreflightEngineLines)
+    (result.combat_actions?.length || hasPreflightEngineLines || declaredPlayerSpell)
   ) {
     const narrationResult = await resolveDeclaredCombatActions({
       encounterId: activeEncounter.id,
@@ -636,6 +622,7 @@ export async function handleDmActionsAndTransitions(
       playerAttackRoll: entryPlayerAttackRoll,
       combatRound: combatRound ?? activeEncounter.currentRound,
       playerInputOrigin,
+      declaredPlayerSpell,
     });
     result = narrationResult;
     responseText = narrationResult.text;

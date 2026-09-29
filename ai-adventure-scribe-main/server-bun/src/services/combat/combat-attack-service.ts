@@ -109,6 +109,25 @@ function spellDamageProfile(
   };
 }
 
+/**
+ * How far a spell reaches a target, in feet. A "Self" area spell reaches as far as its area —
+ * Burning Hands' 15-foot cone — because the tactical engine already chose who is inside it. Read
+ * as a bare number, "Self" was 0 feet, and every Burning Hands on a board was refused as out of
+ * range before a save was rolled (#2304). "Touch" is the 5 feet a melee spell reaches.
+ */
+function spellReachFeet(spell: {
+  range: string;
+  attackType?: string;
+  areaOfEffect?: { sizeFeet: number };
+}): number {
+  const stated = spell.range.match(/\d+/)?.[0];
+  if (/^self\b/i.test(spell.range.trim()) && spell.areaOfEffect)
+    return Math.max(Number(stated ?? 0), spell.areaOfEffect.sizeFeet);
+  if (stated) return Number(stated);
+  if (/^touch\b/i.test(spell.range.trim()) || spell.attackType === 'melee') return 5;
+  return 0;
+}
+
 export class CombatAttackService {
   constructor() {
     // No database client needed - using global db instance
@@ -597,9 +616,7 @@ export class CombatAttackService {
       );
     }
     const tacticalMap = await loadActiveTacticalMap(casterData.participant.encounter.sessionId);
-    const spellRange = Number(
-      spell.range.match(/\d+/)?.[0] ?? (spell.attackType === 'melee' ? 5 : 0),
-    );
+    const spellRange = spellReachFeet(spell);
     const casterConditions = await getActiveConditionNames(casterId);
     const spellRules = new Map<string, ReturnType<typeof resolveAttackRules>>();
     const seatedAcByTarget = new Map<
@@ -644,11 +661,20 @@ export class CombatAttackService {
         attackerConditions: casterConditions,
         targetConditions,
       });
-      if (!rules.legal)
-        throw new BusinessLogicError(`Spell refused: ${rules.refusal}`, {
+      if (!rules.legal) {
+        const targetName = targetData.participant.name ?? 'the target';
+        const why =
+          rules.refusal === 'out_of_range'
+            ? `${targetName} is out of its ${spellRange}-foot reach — move closer and cast it again`
+            : rules.refusal === 'no_line_of_sight'
+              ? `you cannot see ${targetName} — move to where you can and cast it again`
+              : `${targetName} is behind total cover — move or pick another target`;
+        throw new BusinessLogicError(`Spell refused: ${spell.name}: ${why}`, {
           targetId,
           refusal: rules.refusal,
+          reason: rules.refusal,
         });
+      }
       spellRules.set(targetId, rules);
       seatedAcByTarget.set(targetId, {
         seated: targetAc,

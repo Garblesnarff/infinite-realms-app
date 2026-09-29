@@ -2,9 +2,15 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
+import { COMBAT_ACTION_ORIGINS } from './combat/intent-schema.js';
+import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-service.js';
+import {
+  proposeAoECast,
+  resolveAoECast,
+  type AoECastDelta,
+} from '../../services/combat/aoe-cast-service.js';
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { concludeEncounter } from '../../services/combat/combat-ending.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
@@ -23,10 +29,7 @@ import {
 } from '../../services/combat/tactical-action-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
-import {
-  buildTurnOrderBlock,
-  getCurrentTurnInfo,
-} from '../../services/combat/turn-order-block.js';
+import { buildTurnOrderBlock, getCurrentTurnInfo } from '../../services/combat/turn-order-block.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
@@ -56,8 +59,7 @@ async function buildNarrationContractBlock(params: {
 }): Promise<string> {
   const turn = await getCurrentTurnInfo(params.sessionId, params.userId);
   if (!turn && params.actions.length === 0) return '';
-  const sceneAnchor =
-    params.map && turn ? sceneAnchorForActor(params.map, turn.slug) : null;
+  const sceneAnchor = params.map && turn ? sceneAnchorForActor(params.map, turn.slug) : null;
   return (
     '\n\n' +
     buildNarrationContract({
@@ -77,6 +79,12 @@ export interface TacticalMapRouteOptions {
   sessionOwnership?: typeof verifySessionOwnership;
   activeMapLoader?: typeof loadActiveTacticalMap;
   dmTacticalActions?: typeof applyDmTacticalActions;
+}
+
+/** The pipeline's request id when mounted under it, else the caller's header (#2304). */
+function requestIdOf(context: unknown, request: Request): string {
+  const derived = (context as { requestId?: unknown }).requestId;
+  return typeof derived === 'string' ? derived : request.headers.get('x-request-id') || 'unknown';
 }
 
 export function createTacticalMapRoutes({
@@ -367,7 +375,8 @@ export function createTacticalMapRoutes({
       )
       .post(
         '/:id/tactical-map/aoe-cast',
-        async ({ params, body, user, set }) => {
+        async (context) => {
+          const { params, body, user, set, request: httpRequest } = context;
           const access = await sessionOwnership(params.id, user.userId);
           if (!access.success) {
             set.status = access.error!.status;
@@ -379,21 +388,47 @@ export function createTacticalMapRoutes({
             origin: body.origin,
             direction: body.direction,
             slotLevel: body.slotLevel,
+            ...(body.actionOrigin ? { actionOrigin: body.actionOrigin } : {}),
+          };
+          const resolved = async (): Promise<{ delta: AoECastDelta; result: unknown }> => {
+            const { delta, engineResult } = await resolveAoECast(params.id, request, user.userId);
+            return { delta, result: engineResult };
           };
           try {
-            if (body.phase === 'resolve')
-              return { delta: await resolveAoECast(params.id, request, user.userId) };
+            if (body.phase === 'resolve') return await resolved();
             const proposal = await proposeAoECast(params.id, request);
-            if (proposal.autoConfirm)
-              return { delta: await resolveAoECast(params.id, request, user.userId) };
+            if (proposal.autoConfirm) return await resolved();
             if (proposal.hostile) {
               await Bun.sleep(1500);
-              return { delta: await resolveAoECast(params.id, request, user.userId) };
+              return await resolved();
             }
             return proposal;
           } catch (error) {
-            set.status = 422;
-            return { error: error instanceof Error ? error.message : 'AoE cast refused' };
+            // The reason used to live only in the response body, and nginx does not log bodies:
+            // #2304's refusal had to be recovered from a 53-byte length.
+            const message = error instanceof Error ? error.message : 'AoE cast refused';
+            const details = error instanceof AppError ? error.details : undefined;
+            logger.warn(
+              {
+                event: 'AOE_CAST_REFUSED',
+                requestId: requestIdOf(context, httpRequest),
+                sessionId: params.id,
+                actorId: request.actorId,
+                spellId: request.spellId,
+                slotLevel: request.slotLevel,
+                actionOrigin: request.actionOrigin ?? 'unmarked',
+                phase: body.phase,
+                err: message,
+                details,
+              },
+              'AOE_CAST_REFUSED',
+            );
+            if (error instanceof AppError && error.statusCode >= 500) {
+              set.status = 500;
+              return { error: 'AoE cast failed' };
+            }
+            set.status = error instanceof AppError ? error.statusCode : 422;
+            return { error: message, ...(details ? { details } : {}) };
           }
         },
         {
@@ -404,6 +439,9 @@ export function createTacticalMapRoutes({
             origin: t.Object({ x: t.Number(), y: t.Number() }),
             direction: t.Nullable(t.Object({ x: t.Number(), y: t.Number() })),
             slotLevel: t.Nullable(t.Number({ minimum: 1, maximum: 9 })),
+            actionOrigin: t.Optional(
+              t.Union(COMBAT_ACTION_ORIGINS.map((origin) => t.Literal(origin))),
+            ),
           }),
         },
       )
