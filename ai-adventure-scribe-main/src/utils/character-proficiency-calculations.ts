@@ -174,8 +174,11 @@ export const calculateSavingThrowModifiers = (
   if (character.abilityScores) {
     Object.entries(character.abilityScores).forEach(([ability, data]) => {
       const proficient = profSet?.has(ability) ?? false;
+      // An ability entry may lack its persisted modifier; derive it from the
+      // score instead of yielding NaN from `undefined + pb` (#2343 C7).
+      const baseMod = data.modifier ?? Math.floor(((data.score ?? 10) - 10) / 2);
       savingThrows[ability] = {
-        modifier: data.modifier + (proficient ? pb : 0),
+        modifier: baseMod + (proficient ? pb : 0),
         proficient,
       };
     });

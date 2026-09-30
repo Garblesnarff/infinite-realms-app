@@ -1,6 +1,6 @@
 import { lazy } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
 import { AuthProvider } from './contexts/AuthContext';
@@ -106,6 +106,8 @@ function App() {
 
                         {/* Protected app routes */}
                         <Route path="/app/*" element={<ProtectedAppRoutes />} />
+                        {/* /account without /app is a blank page; send it to the real route (#2343 C8). */}
+                        <Route path="/account" element={<Navigate to="/app/account" replace />} />
                       </Routes>
                       <Toaster />
                     </div>

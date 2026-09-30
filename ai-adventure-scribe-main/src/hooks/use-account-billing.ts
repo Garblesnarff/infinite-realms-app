@@ -93,7 +93,17 @@ export function useAccountBilling(
 
         if (quotaRes.ok) {
           const data = await quotaRes.json();
-          setQuota(data);
+          // The quota endpoint returns { plan, limits: { daily: { llm } }, usage,
+          // remaining, resetAt }; map it onto the client QuotaStatus shape so the
+          // usage card shows numbers instead of "/" (#2343 C6).
+          setQuota({
+            plan: data.plan ?? 'free',
+            type: 'llm',
+            used: data.usage ?? 0,
+            limit: data.limits?.daily?.llm ?? -1,
+            remaining: data.remaining ?? 0,
+            resetAt: data.resetAt ?? '',
+          });
         }
       } catch (error) {
         logger.error('Failed to fetch account billing data:', { error });

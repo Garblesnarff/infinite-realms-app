@@ -5,6 +5,7 @@ import { useMessageDiceRolls } from './use-message-dice-rolls';
 import { usePendingDmRollRecovery } from './use-pending-dm-roll-recovery';
 import { isPlayerChatBubble } from './utils/player-chat-bubble';
 
+import type { EngineRosterEntry } from '../../../../../../shared/engine-display-name';
 import type { MessageSendContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
 
@@ -72,6 +73,16 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     usePendingDmRollRecovery({ sessionId, messages, messagesReady });
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
     const spellTargetSave = useSpellTargetSaveHost();
+    // Player-visible names for the pre-cast save alert, resolved the same way
+    // the tracker and the engine lines resolve them (#2343 B4).
+    const engineRoster = useMemo<EngineRosterEntry[]>(
+      () =>
+        (combatState.activeEncounter?.participants ?? []).map((participant) => ({
+          id: participant.id,
+          name: participant.name ?? null,
+        })),
+      [combatState.activeEncounter?.participants],
+    );
     const {
       currentRoll,
       rollRequest,
@@ -136,7 +147,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
           confirmation={entryConfirmation}
           onSpaceChange={onCombatEntrySpaceChange}
         />
-        <SpellTargetSaveCard pending={spellTargetSave} />
+        <SpellTargetSaveCard pending={spellTargetSave} roster={engineRoster} />
 
         <PendingIntentConfirmation
           encounter={combatState.activeEncounter}

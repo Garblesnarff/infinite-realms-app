@@ -30,7 +30,13 @@ function endsWithWholeName(value: string, name: string): boolean {
 }
 
 function getComparableWords(value: string): string[] {
-  return value.match(ASSET_NAME_WORD_PATTERN)?.map((word) => word.toLowerCase()) ?? [];
+  // Strip diacritics before matching so "Möbius" compares as "mobius" against
+  // slug-derived names (#2343 B5). [a-z] in the word pattern is ASCII-only, so
+  // without this the ö splits the word and the prefix match fails.
+  const asciiFolded = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return asciiFolded.match(ASSET_NAME_WORD_PATTERN)?.map((word) => word.toLowerCase()) ?? [];
 }
 
 /**

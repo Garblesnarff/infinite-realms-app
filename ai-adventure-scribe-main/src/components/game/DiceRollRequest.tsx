@@ -195,6 +195,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                         showAnimation={true}
                         advantage={hasAdvantage && !hasDisadvantage}
                         disadvantage={hasDisadvantage && !hasAdvantage}
+                        isAttack={request.type === 'attack'}
                       />
                     </div>
                   )}

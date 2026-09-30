@@ -188,4 +188,78 @@ describe('game-session party view model', () => {
       avatarUrl: undefined,
     });
   });
+
+  it('renders all six saving throws with proficiency bonuses even when ability modifiers are missing (#2343 C7)', () => {
+    const character = {
+      id: 'apprentice-partial-abilities',
+      name: 'The Apprentice',
+      level: 5,
+      race: { name: 'Human', speed: 30, traits: [], languages: [] },
+      class: { name: 'Barbarian', hitDie: 12 },
+      abilityScores: {
+        strength: { score: 10 },
+        dexterity: { score: 14 },
+        constitution: { score: 16 },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 10, modifier: 0, savingThrow: false },
+      },
+      character_stats: { current_hit_points: 7, max_hit_points: 20 },
+    } as unknown as Character;
+
+    const sheet = buildCharacterSheet(character);
+
+    expect(sheet.savingThrows.map((s) => s.label)).toEqual([
+      'STR',
+      'DEX',
+      'CON',
+      'INT',
+      'WIS',
+      'CHA',
+    ]);
+    for (const save of sheet.savingThrows) {
+      expect(save.modifier).toMatch(/^[+-]\d+$/);
+    }
+    // A level-5 Barbarian is proficient in STR and CON saves (PB +3), so the
+    // missing modifiers are derived from the scores and the bonus is added.
+    expect(
+      Object.fromEntries(sheet.savingThrows.map((s) => [s.label, s.modifier])),
+    ).toEqual({
+      STR: '+3',
+      DEX: '+2',
+      CON: '+6',
+      INT: '+0',
+      WIS: '+0',
+      CHA: '+0',
+    });
+  });
+
+  it('leaves a non-proficient save at its plain ability modifier (#2343 C7)', () => {
+    const character = {
+      id: 'wizard-no-modifiers',
+      name: 'The Novice',
+      level: 3,
+      race: { name: 'Human', speed: 30, traits: [], languages: [] },
+      class: { name: 'Wizard', hitDie: 6 },
+      abilityScores: {
+        strength: { score: 8 },
+        dexterity: { score: 14 },
+        constitution: { score: 12 },
+        intelligence: { score: 16 },
+        wisdom: { score: 10 },
+        charisma: { score: 10 },
+      },
+      character_stats: { current_hit_points: 5, max_hit_points: 14 },
+    } as unknown as Character;
+
+    const sheet = buildCharacterSheet(character);
+    const saves = Object.fromEntries(sheet.savingThrows.map((s) => [s.label, s.modifier]));
+
+    // A level-3 Wizard is proficient in INT and WIS saves (PB +2). The
+    // non-proficient STR save stays at its plain modifier.
+    expect(saves['STR']).toBe('-1');
+    expect(saves['DEX']).toBe('+2');
+    expect(saves['INT']).toBe('+5');
+    expect(saves['WIS']).toBe('+2');
+  });
 });

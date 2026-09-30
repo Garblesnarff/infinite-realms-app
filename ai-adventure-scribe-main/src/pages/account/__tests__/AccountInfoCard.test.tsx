@@ -11,4 +11,15 @@ describe('AccountInfoCard build line (#2293)', () => {
     expect(screen.getByTestId('app-build').textContent).toBe(`build ${APP_BUILD_SHORT}`);
     expect(APP_BUILD_SHORT).toBe(APP_BUILD_VERSION.slice(0, 8));
   });
+
+  it('keeps the build tag out of the plan slot (#2343 C6)', () => {
+    render(<AccountInfoCard email="t@example.test" userPlan="free" subscription={null} />);
+    const planValue = screen.getByText('free');
+    expect(planValue.tagName).toBe('DD');
+    expect(planValue.textContent).not.toContain(APP_BUILD_SHORT);
+    // The only "build …" text on the card is the footer line.
+    const buildTexts = screen.getAllByText(new RegExp(`build ${APP_BUILD_SHORT}`));
+    expect(buildTexts).toHaveLength(1);
+    expect(buildTexts[0].getAttribute('data-testid')).toBe('app-build');
+  });
 });

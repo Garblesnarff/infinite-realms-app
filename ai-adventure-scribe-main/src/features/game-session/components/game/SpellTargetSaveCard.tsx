@@ -1,6 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 
+import { displayNameFromRoster, type EngineRosterEntry } from '../../../../../shared/engine-display-name';
+
 import type { PendingSpellTargetSave } from '@/hooks/combat/use-spell-target-save-host';
 
 import { Button } from '@/components/ui/button';
@@ -8,16 +10,22 @@ import { Z_INDEX } from '@/constants/z-index';
 
 interface SpellTargetSaveCardProps {
   pending: PendingSpellTargetSave | null;
+  /**
+   * Combat participants for name resolution. The alert shows the same
+   * player-visible name the tracker and the engine lines show (#2343 B4).
+   */
+  roster?: readonly EngineRosterEntry[];
 }
 
 /**
  * Informational card for save spells: the target rolls, the player does not.
  * Continuing submits the spell; the engine line is the result.
  */
-export const SpellTargetSaveCard: React.FC<SpellTargetSaveCardProps> = ({ pending }) => {
+export const SpellTargetSaveCard: React.FC<SpellTargetSaveCardProps> = ({ pending, roster = [] }) => {
   if (!pending || typeof document === 'undefined') return null;
 
   const { spec } = pending;
+  const targetName = displayNameFromRoster(spec.targetLabel, roster);
 
   return createPortal(
     <div
@@ -32,7 +40,7 @@ export const SpellTargetSaveCard: React.FC<SpellTargetSaveCardProps> = ({ pendin
       >
         <p className="font-semibold text-card-foreground">Target saves</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          {spec.targetLabel} must make a {spec.saveAbility} saving throw against {spec.spellName}.
+          {targetName} must make a {spec.saveAbility} saving throw against {spec.spellName}.
           You do not roll.
         </p>
         <div className="mt-3">

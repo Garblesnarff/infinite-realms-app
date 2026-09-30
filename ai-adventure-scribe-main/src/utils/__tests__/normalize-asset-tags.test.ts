@@ -87,6 +87,15 @@ describe('normalize-asset-tags', () => {
       expect(normalizeAssetTagKeysInContent(input)).toBe(input);
     });
 
+    it('does not prepend a slug-derived name when the visible name has a diacritic (#2343 B5)', () => {
+      const input = '[ASSET:location:the-mobius-shaft-inverted-halls] The Möbius Shaft';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      // Exact rendered failure from the playtest: the slug-derived phrase must
+      // never be prepended ahead of the visible name.
+      expect(result).not.toContain('The Mobius Shaft Inverted Halls');
+    });
+
     it('does not prepend name if it is a standalone tag (no other content)', () => {
       const input = '[ASSET:npc:remy-the-manager]';
       const result = normalizeAssetTagKeysInContent(input);

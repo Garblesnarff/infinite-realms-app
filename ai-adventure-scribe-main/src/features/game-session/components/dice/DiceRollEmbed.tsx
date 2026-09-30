@@ -22,6 +22,11 @@ interface DiceRollEmbedProps {
   showAnimation?: boolean;
   advantage?: boolean;
   disadvantage?: boolean;
+  /**
+   * Whether this roll is an attack. Only attacks can critically hit; a natural
+   * 20 on a check or save is a "Natural 20", not a "Critical Hit!" (#2343 item 9).
+   */
+  isAttack?: boolean;
 }
 
 // Audio for dice rolling
@@ -63,6 +68,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   showAnimation = true,
   advantage = false,
   disadvantage = false,
+  isAttack = false,
 }) => {
   const [result, setResult] = useState<DiceRollResult | null>(null);
   const [isRolling, setIsRolling] = useState(false);
@@ -134,15 +140,19 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
 
   const getCriticalityBadge = (result: DiceRollResult) => {
     if (result.critical) {
+      // Only attacks critically hit; a natural 20 on a check or save is a
+      // "Natural 20" (#2343 item 9).
+      const label = isAttack ? 'Critical Hit!' : 'Natural 20';
+      const ariaLabel = isAttack ? 'Critical Hit' : 'Natural 20';
       return (
         <HexagonalBadge
           variant="status"
           size="sm"
           pulse={true}
           className="text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-glow-teal-md hover:shadow-glow-teal-lg font-semibold"
-          aria-label="Critical Hit"
+          aria-label={ariaLabel}
         >
-          Critical Hit!
+          {label}
         </HexagonalBadge>
       );
     }

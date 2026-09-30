@@ -1,6 +1,8 @@
 import { Heart, Shield, PlusCircle, MinusCircle } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
+import { displayNameFromRoster } from '../../../shared/engine-display-name';
+
 import type { CombatParticipant } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
@@ -44,6 +46,10 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
     const hpString = `${currentHitPoints} / ${maxHitPoints} HP${
       temporaryHitPoints > 0 ? ` (+${temporaryHitPoints} temporary)` : ''
     }`;
+    // The tracker shows the same player-visible name the engine lines use: a raw
+    // slug or UUID is never the text (#2343 B4). A one-entry roster resolves
+    // identically to no roster here, so the shared module does the work alone.
+    const displayName = displayNameFromRoster(participant.name);
 
     const handleDamage = (): void => {
       const damage = parseInt(damageAmount, 10);
@@ -66,7 +72,7 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
         <TooltipProvider>
           <CardContent className="p-4 space-y-4">
             <div className="flex justify-between items-center">
-              <span className="font-semibold">{participant.name}</span>
+              <span className="font-semibold">{displayName}</span>
               <div className="flex items-center gap-4">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -113,8 +119,8 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
                     indicatorClassName={getPlayerHPBarColor(hpPercent)}
                     aria-label={
                       showHPDetails
-                        ? `${participant.name} health: ${hpString}`
-                        : `${participant.name} health: ${getHPStatusDescription(hpPercent)}`
+                        ? `${displayName} health: ${hpString}`
+                        : `${displayName} health: ${getHPStatusDescription(hpPercent)}`
                     }
                   />
                 </TooltipTrigger>
@@ -128,7 +134,7 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
               <div className="flex gap-2">
                 <div className="flex-1 flex gap-1">
                   <Label htmlFor={damageInputId} className="sr-only">
-                    Damage amount for {participant.name}
+                    Damage amount for {displayName}
                   </Label>
                   <Input
                     id={damageInputId}
@@ -146,19 +152,19 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
                         size="sm"
                         variant="destructive"
                         className="h-8"
-                        aria-label={`Apply damage to ${participant.name}`}
+                        aria-label={`Apply damage to ${displayName}`}
                       >
                         <MinusCircle className="w-4 h-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Apply damage to {participant.name}</p>
+                      <p>Apply damage to {displayName}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
                 <div className="flex-1 flex gap-1">
                   <Label htmlFor={healInputId} className="sr-only">
-                    Healing amount for {participant.name}
+                    Healing amount for {displayName}
                   </Label>
                   <Input
                     id={healInputId}
@@ -176,13 +182,13 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
                         size="sm"
                         variant="secondary"
                         className="h-8"
-                        aria-label={`Apply healing to ${participant.name}`}
+                        aria-label={`Apply healing to ${displayName}`}
                       >
                         <PlusCircle className="w-4 h-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Apply healing to {participant.name}</p>
+                      <p>Apply healing to {displayName}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>

@@ -244,13 +244,20 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     return { label: a.label, score, modifier: fmt(abilityMod(score)) };
   });
 
-  const savingThrows: NamedModVM[] = ABILITY_ORDER.map((a) => ({
-    label: a.label,
-    modifier: fmt(
-      stats.savingThrowModifiers?.[a.key]?.modifier ??
-        abilityMod(character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score),
-    ),
-  }));
+  const savingThrows: NamedModVM[] = ABILITY_ORDER.map((a) => {
+    // Last-resort guard (#2343 C7): calculateSavingThrowModifiers now derives a
+    // finite modifier from the score when the ability entry lacks one, so this
+    // fallback should not fire. If it does, rebuild the value from the score
+    // and add the proficiency bonus for proficient saves.
+    const entry = stats.savingThrowModifiers?.[a.key];
+    const fromStats = entry?.modifier;
+    const fallback =
+      abilityMod(character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score) +
+      (entry?.proficient ? (stats.proficiencyBonus ?? 0) : 0);
+    const modifier =
+      typeof fromStats === 'number' && Number.isFinite(fromStats) ? fromStats : fallback;
+    return { label: a.label, modifier: fmt(modifier) };
+  });
 
   // Prefer proficient skills; fall back to a representative set so the panel isn't empty.
   const skillEntries = Object.entries(stats.skillModifiers ?? {});

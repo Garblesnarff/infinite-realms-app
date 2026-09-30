@@ -82,7 +82,15 @@ describe('useAccountBilling', () => {
     window.localStorage.setItem('workos_access_token', 'test-token');
 
     const mockSubscription = { plan: 'legend', status: 'active' };
-    const mockQuota = { used: 5, limit: 100 };
+    // The quota endpoint returns { plan, limits: { daily: { llm } }, usage,
+    // remaining, resetAt }; the hook normalizes it for the usage card (#2343 C6).
+    const mockQuota = {
+      plan: 'pro',
+      limits: { daily: { llm: 100, image: 10, audio: 5 } },
+      usage: 5,
+      remaining: 95,
+      resetAt: '2026-09-29T00:00:00.000Z',
+    };
 
     (global.fetch as any).mockImplementation((url: string) => {
       if (url.endsWith('/v1/billing/subscription')) {
@@ -104,7 +112,14 @@ describe('useAccountBilling', () => {
 
     await waitFor(() => {
       expect(result.current.subscription).toEqual(mockSubscription);
-      expect(result.current.quota).toEqual(mockQuota);
+      expect(result.current.quota).toEqual({
+        plan: 'pro',
+        type: 'llm',
+        used: 5,
+        limit: 100,
+        remaining: 95,
+        resetAt: '2026-09-29T00:00:00.000Z',
+      });
     });
   });
 

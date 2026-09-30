@@ -28,7 +28,9 @@ export const AccountUsageCard: React.FC<AccountUsageCardProps> = ({ quota }) => 
             <div className="flex justify-between text-sm mb-1">
               <span id={quotaLabelId}>AI Messages</span>
               <span>
-                {quota.used} / {quota.limit === -1 ? 'Unlimited' : quota.limit}
+                {/* No plan is unlimited; when the limit is unknown (-1), show
+                    the usage count alone rather than a made-up word (#2343 C6). */}
+                {quota.limit === -1 ? `${quota.used}` : `${quota.used} / ${quota.limit}`}
               </span>
             </div>
             {quota.limit !== -1 ? (

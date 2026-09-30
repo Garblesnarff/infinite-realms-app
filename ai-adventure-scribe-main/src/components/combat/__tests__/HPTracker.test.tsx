@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { vi, describe, it, expect } from 'vitest';
 
 import HPTracker from '../HPTracker';
@@ -127,5 +126,22 @@ describe('HPTracker', () => {
     expect(screen.getByText('Near Death')).toBeInTheDocument();
     const progress = screen.getByRole('progressbar');
     expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: Near Death');
+  });
+
+  it('title-cases a raw slug participant name like the engine lines do (#2343 B4)', () => {
+    const slugParticipant = {
+      ...participant,
+      id: 'shimmering-spore-shape-1',
+      name: 'shimmering-spore-shape-1',
+    };
+    render(<HPTracker {...defaultProps} participant={slugParticipant} />);
+
+    expect(screen.getByText('Shimmering Spore Shape 1')).toBeInTheDocument();
+    expect(screen.queryByText('shimmering-spore-shape-1')).not.toBeInTheDocument();
+    const progress = screen.getByRole('progressbar');
+    expect(progress).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('Shimmering Spore Shape 1'),
+    );
   });
 });
