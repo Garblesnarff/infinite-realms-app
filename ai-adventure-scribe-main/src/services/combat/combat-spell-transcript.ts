@@ -51,9 +51,10 @@ function formatSpellOutcome(
   action: CombatTranscriptAction,
   result: CombatEngineResult,
   roster: readonly EngineRosterEntry[] = [],
+  targetId: string | undefined,
 ): string | null {
   const actor = facingName(result.actorName, action.actor_id, roster);
-  const target = facingName(result.targetName, action.target_ids?.[0], roster);
+  const target = facingName(result.targetName, targetId, roster);
   const spell = result.spellName ?? 'a spell';
   const damage = isFiniteNumber(result.finalDamage)
     ? `${result.finalDamage}${result.damageType ? ` ${result.damageType}` : ''} damage.`
@@ -85,6 +86,10 @@ function formatSpellOutcome(
       `${missDamage ? ` ${missDamage}` : ''}${trailer}`
     );
   }
+  // A healing spell's result is `{hit: true, finalDamage: 0}` with no damage type.
+  if (result.hit === true && result.finalDamage === 0 && !result.damageType) {
+    return `⚙️ Engine: ${actor} cast ${result.spellName ?? 'a healing spell'} at ${target} — HEALS.${trailer}`;
+  }
   if (typeof result.hit === 'boolean') {
     const outcome = result.hit ? 'HIT' : 'MISS';
     return `⚙️ Engine: ${actor} cast ${spell} at ${target} — ${outcome}.${damage ? ` ${damage}` : ''}${trailer}`;
@@ -98,8 +103,11 @@ export function formatSpellEngineOutcome(
   roster: readonly EngineRosterEntry[] = [],
 ): string | null {
   const outcomes = Array.isArray(result.results) ? result.results : [result];
+  // Each result of an area spell belongs to its own target, in `target_ids` order.
   const lines = outcomes
-    .map((outcome) => formatSpellOutcome(action, outcome, roster))
+    .map((outcome, index) =>
+      formatSpellOutcome(action, outcome, roster, action.target_ids?.[index] ?? ''),
+    )
     .filter((line): line is string => Boolean(line));
   return lines.length ? lines.join('\n\n') : null;
 }

@@ -167,6 +167,102 @@ describe('spell engine lines', () => {
     );
   });
 
+  /**
+   * Fixtures follow the producer, `CombatAttackService` save-spell branch: every field it always
+   * sets, including the attack-shaped ones (`hit` is `!saved`, `targetAC` 0, the save roll in
+   * `totalAttackRoll`), and no `actorName` / `targetName`; the names come from the roster.
+   */
+  const areaSaveResult = (overrides: Record<string, unknown>) => ({
+    hit: true,
+    targetAC: 0,
+    totalAttackRoll: 6,
+    damage: 7,
+    damageType: 'fire',
+    damageBeforeResistances: 7,
+    effectiveResistance: false,
+    effectiveVulnerability: false,
+    effectiveImmunity: false,
+    finalDamage: 7,
+    targetNewHp: 4,
+    targetIsConscious: true,
+    targetIsDead: false,
+    targetCondition: 'bloodied',
+    isCritical: false,
+    isNaturalOne: false,
+    isNaturalTwenty: false,
+    spellName: 'Burning Hands',
+    saveAbility: 'dexterity',
+    saveRoll: 6,
+    saveDC: 13,
+    saved: false,
+    ...overrides,
+  });
+  const areaRoster = [
+    { id: 'rook', name: 'Rook' },
+    { id: 'goblin-1', name: 'Goblin Archer' },
+    { id: 'goblin-2', name: 'Goblin Boss' },
+  ];
+
+  it('names each result of an area spell after its own target', () => {
+    const line = formatCombatEngineOutcome(
+      { actor_id: 'rook', action_type: 'cast_spell', target_ids: ['goblin-1', 'goblin-2'] },
+      {
+        results: [
+          areaSaveResult({}),
+          areaSaveResult({
+            saveRoll: 17,
+            totalAttackRoll: 17,
+            hit: false,
+            saved: true,
+            finalDamage: 3,
+            damage: 3,
+            targetNewHp: 12,
+            targetCondition: 'wounded',
+          }),
+        ],
+      },
+      areaRoster,
+    );
+
+    expect(line).toBe(
+      '⚙️ Engine: Rook cast Burning Hands at Goblin Archer — DEX save 6 vs DC 13 — FAIL. ' +
+        '7 fire damage. Goblin Archer is now at 4 HP.\n\n' +
+        '⚙️ Engine: Rook cast Burning Hands at Goblin Boss — DEX save 17 vs DC 13 — PASS. ' +
+        '3 fire damage. Goblin Boss is now at 12 HP.',
+    );
+  });
+
+  it('words a healing result as a heal, not a hit for 0 damage', () => {
+    // Follows the `healing` branch of `CombatAttackService`: no damage type, no spell name.
+    const line = formatCombatEngineOutcome(
+      { actor_id: 'rook', action_type: 'cast_spell', target_ids: ['goblin-1'] },
+      {
+        results: [
+          {
+            hit: true,
+            targetAC: 0,
+            totalAttackRoll: 0,
+            finalDamage: 0,
+            targetNewHp: 9,
+            targetIsConscious: true,
+            targetIsDead: false,
+            effectiveResistance: false,
+            effectiveVulnerability: false,
+            effectiveImmunity: false,
+            isCritical: false,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
+          },
+        ],
+      },
+      areaRoster,
+    );
+
+    expect(line).toBe(
+      '⚙️ Engine: Rook cast a healing spell at Goblin Archer — HEALS. Goblin Archer is now at 9 HP.',
+    );
+  });
+
   it('renders a refused spell with no roll, damage, or wound', () => {
     expect(formatRefusedSpellOutcome('Rook', 'Meteor Swarm', 'unknown spell')).toBe(
       '⚙️ Engine: Rook\'s spell "Meteor Swarm" was refused (unknown spell). No roll, no damage, no wound.',

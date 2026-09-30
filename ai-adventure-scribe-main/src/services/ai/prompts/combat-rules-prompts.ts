@@ -1,4 +1,5 @@
 import {
+  COMBAT_RULES_IN_COMBAT_TEMPLATE,
   COMBAT_RULES_TEMPLATE,
   ENCOUNTER_DIFFICULTY_TEMPLATE,
   COMBAT_ROLL_REQUIREMENTS_TEMPLATE,
@@ -11,8 +12,8 @@ import type {
 } from '@/utils/combatDetection';
 
 export class CombatRulesPrompts {
-  static buildCombatRulesSection(): string {
-    return COMBAT_RULES_TEMPLATE;
+  static buildCombatRulesSection({ inCombat = false }: { inCombat?: boolean } = {}): string {
+    return inCombat ? COMBAT_RULES_IN_COMBAT_TEMPLATE : COMBAT_RULES_TEMPLATE;
   }
 
   static buildEncounterDifficultySection(): string {
@@ -61,10 +62,10 @@ or dialogue. Describe condition only as unharmed, wounded, bloodied, or near dea
 
 **COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
-1. **DECLARE** the current player's attack as a \`"type": "attack"\` entry in \`roll_requests\`,
-   naming attacker and target by their tactical digest ids in \`purpose\` (\`combat_actions\` with
-   \`actor_id\`/\`target_ids\` is accepted for the same attack). The engine rolls it, applies the
-   damage, and reports back.
+1. **DECLARE** the current player's attack as a \`combat_actions\` entry, naming attacker and
+   target by their tactical digest ids in \`actor_id\`/\`target_ids\`. The engine resolves attacks,
+   spells and saves: it rolls the attack, applies the damage, and reports back. Do not request
+   rolls; \`roll_requests\` stays [].
 2. **NEVER** leave an attack undeclared. A swing that exists only in your narration is a swing
    the engine never rolled and the target never felt.
 3. **DESCRIBE** actions cinematically while maintaining mechanical accuracy
@@ -77,13 +78,10 @@ When combat is detected, you MUST:
 
   /**
    * Combat-only. Attacks are declared, not choreographed: the engine paths the attacker into
-   * reach and resolves the result. Asking the model to volunteer the geometry is what this
-   * section used to do, and across a thirty-turn encounter it produced zero moves.
-   *
-   * INTENTIONAL: the worked example is written in the `roll_requests` dialect, matching
-   * COMBAT_ROLL_REQUIREMENTS_TEMPLATE. This section previously demanded `combat_actions` and
-   * forbade `roll_requests` outright, which is the contradiction run 8 was fighting and the
-   * purge run 9 paid for. One teaching, one example, one channel taught as primary.
+   * reach and resolves the result. The engine resolves attacks, spells and saves in combat, and since #2385 the
+   * client drops every DM `roll_request` while an encounter is active, so this section teaches
+   * `combat_actions` only. The worked example stays: run 9 showed that a prompt with no worked
+   * declaration is a prompt the model answers in prose.
    */
   static buildSpatialTurnContractSection(): string {
     return `
@@ -95,15 +93,9 @@ engine reads the tactical digest, walks the attacker as far toward its target as
 and resolves the attack from where it ends up. NPC turns are already resolved by the engine before
 this declaration; do not declare or repair an NPC action.
 
-- Declare an attack as a \`roll_requests\` entry with \`"type": "attack"\` whose \`purpose\` names the
-  attacker and the target by their digest ids. \`combat_actions\` is accepted for the same attack if
-  you prefer explicit id fields; both reach the engine identically.
-- \`roll_requests\` also carries the saving throws and ability checks the fiction demands. For a
-  player ability check, apply the general \`<check_governance>\` contract: request it only for an
-  uncertain outcome with meaningful stakes, let the declared action choose the skill, use the sheet
-  only for its modifier, attach it only to that action, and keep its purpose discovery-safe. Those
-  checks you stop on; attacks you do not - the engine rolls the attack and hands you the result next
-  turn.
+- Declare an attack as a \`combat_actions\` entry with \`actor_id\` and
+  \`target_ids\` copied from the tactical digest. The engine resolves attacks, spells and
+  saves, and applies the damage. Do not request rolls; \`roll_requests\` stays empty.
 - \`map_actions\` moves are for repositioning that is not part of an attack: retreating, taking cover,
   circling to a better angle. Approach before a strike is the engine's job, not yours.
 - Every id you write must be copied verbatim from the tactical digest. The digest's leading token on
@@ -117,7 +109,8 @@ Worked example - three roaches converge on the party's front line. Digest:
 \`shadow-roach-1|Shadow Roach@6,5 mv30/30 vs[the-seeker:25ft/LoS/c0/range]\`
 \`shadow-roach-2|Shadow Roach@10,9 mv30/30 vs[the-seeker:45ft/LoS/c0/range]\`
 On the player's turn, declare only the player's attack:
-\`roll_requests\`: \`[{"type":"attack","formula":"1d20","purpose":"the-seeker attacks shadow-roach-1","dc":null,"ac":null,"advantage":false,"disadvantage":false}]\`
+\`combat_actions\`: \`[{"actor_id":"the-seeker","action_type":"attack","target_ids":["shadow-roach-1"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":0}]\`
+\`roll_requests\`: \`[]\`
 Before this declaration, the engine already resolves the roaches' turns and supplies their results in
 \`<engine_resolved_outcomes>\`:
 - shadow-roach-1 was 25ft away with 30ft of movement: it closes to 5ft and its bite is rolled.

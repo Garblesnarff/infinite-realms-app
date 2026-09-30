@@ -1,8 +1,14 @@
+import { createHash } from 'node:crypto';
+
 import { describe, it, expect } from 'vitest';
 
 import { CombatRulesPrompts } from '../combat-rules-prompts';
+import { RulesPrompts } from '../rules-prompts';
 
 import type { CombatDetectionResult } from '@/utils/combatDetection';
+
+/** Prompt lines are wrapped, so a phrase is compared with its whitespace folded. */
+const flat = (text: string): string => text.replace(/\s+/g, ' ');
 
 describe('CombatRulesPrompts', () => {
   describe('buildCombatRulesSection', () => {
@@ -39,51 +45,47 @@ describe('CombatRulesPrompts', () => {
 
   describe('buildCombatRollRequirementsSection', () => {
     /**
-     * This assertion is the inverse of the one it replaces, deliberately.
-     *
-     * It used to demand that no attack example appear here, on run 8's reasoning that examples
-     * beat instructions and the old examples taught the wrong channel. Run 9 emptied the
-     * prompt of attack examples and the model stopped emitting structured attacks entirely —
-     * twenty-three of them in pure prose across thirty turns. The example is the elicitation;
-     * the server translates whichever channel arrives. So it is required here now.
+     * The engine resolves attacks, spells and saves in combat and the client drops every DM roll_request while an
+     * encounter is active (#2385). The prompt used to teach attacks, saves and checks as
+     * roll_requests, which made the DM ask for rolls that never happen (#2400). The worked
+     * declaration stays, in `combat_actions`: run 9's model stopped declaring without one.
      */
-    it('teaches attacks, saves, and checks as one coherent roll_requests contract', () => {
+    it('teaches combat_actions as the only declaration channel, with a worked example', () => {
       const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
 
       expect(section).toContain('<combat_roll_requirements>');
-      expect(section).toContain('`roll_requests` array');
-      expect(section).toContain('"type": "save"');
-      expect(section).toContain('"type": "check"');
-      expect(section).toContain('"type": "attack"');
-      // The example must be worked, not gestured at: a real purpose naming both digest ids.
-      expect(section).toContain('"purpose": "the-seeker attacks shadow-roach-1 with longsword"');
-      // ...and it must not reintroduce the contradiction it is replacing.
-      expect(section).not.toMatch(/saving throws and ability checks ONLY/i);
+      expect(flat(section)).toContain('the engine resolves attacks, spells and saves');
+      expect(section).toContain('`combat_actions`');
+      expect(section).toContain(
+        '{"actor_id": "the-seeker", "action_type": "attack", "target_ids": ["shadow-roach-1"]',
+      );
+      expect(section).toContain('"roll_requests": []');
       expect(section).toContain('INTENTIONAL_ELICITATION_DIALECT');
-      expect(section).toContain('resolves each one');
-      expect(section).toContain('<check_governance>');
-      expect(section).toContain('undiscovered content');
       expect(section).toContain('</combat_roll_requirements>');
     });
 
-    it('keeps combat_actions documented as an equally valid channel', () => {
+    it('carries no instruction to request a roll', () => {
       const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
-      expect(section).toContain('combat_actions');
-      expect(section).toMatch(/resolved identically|Either channel works/);
+
+      expect(section).not.toContain('"type": "attack"');
+      expect(section).not.toContain('"type": "save"');
+      expect(section).not.toContain('"type": "check"');
+      expect(section).not.toContain('<check_governance>');
+      expect(section).not.toMatch(/declare an attack .* in `?roll_requests/i);
     });
 
     it('names the failure the floor exists to catch: declaring nothing at all', () => {
       const section = CombatRulesPrompts.buildCombatRollRequirementsSection();
-      expect(section).toMatch(/appears in neither array is an attack the engine never rolled/);
+      expect(section).toMatch(/narrating a swing in `text` and declaring nothing/);
     });
   });
 
   describe('buildSpatialTurnContractSection', () => {
-    it('tells the DM to declare attacks and let the engine handle approach', () => {
+    it('tells the DM to declare combat_actions and let the engine handle approach', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
       expect(section).toContain('<spatial_turn_contract>');
-      expect(section).toContain('`roll_requests` entry with `"type": "attack"`');
+      expect(section).toContain('as a `combat_actions` entry');
       expect(section).toContain('walks the attacker');
       // The old instruction — emit a move yourself before attacking — is what the model
       // ignored for thirty turns. It must not survive anywhere in this section.
@@ -94,12 +96,14 @@ describe('CombatRulesPrompts', () => {
       expect(section).toContain('</spatial_turn_contract>');
     });
 
-    it('keeps ability checks under the general check-governance contract', () => {
+    it('says the engine resolves attacks, spells and saves and carries no roll instruction', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
-      expect(section).toContain('<check_governance>');
-      expect(section).toContain('declared action choose the skill');
-      expect(section).toContain('discovery-safe');
+      expect(flat(section)).toContain('The engine resolves attacks, spells and saves');
+      expect(section).toContain('`roll_requests` stays empty');
+      expect(section).not.toContain('"type": "attack"');
+      expect(section).not.toContain('"type":"attack"');
+      expect(section).not.toContain('<check_governance>');
     });
 
     /**
@@ -113,7 +117,7 @@ describe('CombatRulesPrompts', () => {
       const requirements = CombatRulesPrompts.buildCombatRollRequirementsSection();
       for (const section of [contract, requirements]) {
         expect(section).toContain('INTENTIONAL_ELICITATION_DIALECT');
-        expect(section).toContain('"type": "attack"');
+        expect(section).toContain('"action_type":');
         expect(section).not.toMatch(/Do NOT put attacks in `roll_requests`/i);
       }
     });
@@ -122,9 +126,10 @@ describe('CombatRulesPrompts', () => {
       const section = CombatRulesPrompts.buildSpatialTurnContractSection();
 
       // NPC turns are engine-owned; only the player's declaration is model-authored.
-      expect(section).toContain('"purpose":"the-seeker attacks shadow-roach-1"');
-      expect(section).not.toContain('"purpose":"shadow-roach-1 attacks the-seeker"');
-      expect(section).not.toContain('"purpose":"shadow-roach-2 attacks the-seeker"');
+      expect(section).toContain('"actor_id":"the-seeker","action_type":"attack"');
+      expect(section).toContain('"target_ids":["shadow-roach-1"]');
+      expect(section).not.toContain('"actor_id":"shadow-roach-1"');
+      expect(section).not.toContain('"actor_id":"shadow-roach-2"');
       expect(section).toContain('Never emit or repair either roach');
       expect(section).toContain('shadow-roach-1|Shadow Roach@6,5');
       expect(section).toContain('shadow-roach-2|Shadow Roach@10,9');
@@ -268,6 +273,45 @@ describe('CombatRulesPrompts', () => {
       expect(actionLine).not.toContain('against');
       expect(actionLine).not.toContain('with');
       expect(result).toContain('Roll Type: defense, Needs Roll: NO');
+    });
+
+    it('declares the attack as combat_actions and requests no roll', () => {
+      const result = CombatRulesPrompts.formatCombatContext({
+        isCombat: true,
+        combatType: 'melee',
+        confidence: 0.9,
+        shouldStartCombat: false,
+        shouldEndCombat: false,
+      });
+
+      expect(result).toContain('as a `combat_actions` entry');
+      expect(flat(result)).toContain('The engine resolves attacks, spells and saves');
+      expect(result).not.toContain('"type": "attack"');
+      expect(result).not.toMatch(/entry in `roll_requests`/);
+    });
+  });
+
+  describe('the prompt outside combat (#2400)', () => {
+    const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+
+    // GUARD, not a spec: pins the out-of-combat rules of play to the bytes origin/main had before
+    // #2400. A deliberate edit to that prompt fails it; update the hash in the same PR. The other
+    // out-of-combat sections are pinned in context-builder-in-combat-prompt.test.ts.
+    it('is byte-identical to the prompt before the in-combat change', () => {
+      const notCombat: CombatDetectionResult = {
+        isCombat: false,
+        combatType: 'none',
+        confidence: 0,
+        shouldStartCombat: false,
+        shouldEndCombat: false,
+      };
+
+      expect(CombatRulesPrompts.formatCombatContext(notCombat)).toBe('');
+      const rules = RulesPrompts.buildRulesOfPlaySection();
+      expect(rules).toHaveLength(26617);
+      expect(sha256(rules)).toBe(
+        '669af77691a172276409f01bdb9d1ce63eb8c96da1880b90686c99ae9c352a0f',
+      );
     });
   });
 });

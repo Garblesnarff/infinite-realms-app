@@ -307,6 +307,73 @@ MOVEMENT:
 
 </combat>`;
 
+/** Replaces the one occurrence of `from` with `to`; throws if it is absent or repeated, so a template edit cannot silently orphan a variant. */
+const swapText = (source: string, from: string, to: string): string => {
+  if (source.split(from).length !== 2)
+    throw new Error(`combat-rules-templates: text not found exactly once: ${from.slice(0, 60)}`);
+  return source.replace(from, to);
+};
+
+/**
+ * COMBAT_RULES_TEMPLATE as sent while combat is active (#2400). The engine resolves attacks, spells
+ * and saves there and the client drops every DM roll_request (#2385), so the template must not
+ * teach one. The out-of-combat template above is unchanged.
+ */
+export const COMBAT_RULES_IN_COMBAT_TEMPLATE = [
+  [
+    `- Request initiative when combat begins
+- Declare the current player's attack in \`roll_requests\` as a \`"type": "attack"\` entry naming
+  both sides, or in \`combat_actions\` if you prefer to name ids in their own fields. Either way
+  the engine moves the attacker into reach, rolls it against the target's cover-adjusted AC, and
+  applies the damage. You never roll it and never write its result.
+- Request saving throws when effects target players
+`,
+    `- Initiative is already set and every saving throw is the engine's; do not request rolls
+- Declare the current player's attack in \`combat_actions\` with \`actor_id\` and \`target_ids\`. The
+  engine moves the attacker into reach, rolls it against the target's cover-adjusted AC, and
+  applies the damage. You never roll it and never write its result.
+`,
+  ],
+  [
+    `DM: text sets the swing up; \`roll_requests\`: [{"type":"attack","formula":"1d20","purpose":"the-seeker attacks goblin-1 with longsword","dc":null,"ac":null,"advantage":false,"disadvantage":false}]`,
+    `DM: text sets the swing up; \`combat_actions\`: [{"actor_id":"the-seeker","action_type":"attack","target_ids":["goblin-1"],"weapon_id":null,"spell_id":null,"slot_level":null,"movement_feet":0}]`,
+  ],
+  [`     \`roll_requests\`: [], \`combat_actions\`: []`, `     \`combat_actions\`: []`],
+  [` Make a death saving throw!"`, `"`],
+  [
+    `- Each turn at 0 HP, roll a death save (d20, DC 10, no modifiers)`,
+    `- Each turn at 0 HP, the engine rolls a death save (d20, DC 10, no modifiers)`,
+  ],
+  [
+    `2. Add to \`roll_requests\`: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
+3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."`,
+    `2. Do not request the death save; the engine rolls it and reports it in \`<engine_resolved_outcomes>\`
+3. Narrate the result the engine reports: "That's one success. Two more and you stabilize."`,
+  ],
+  [
+    `1. Player casts healing spell: Request roll for healing amount
+2. Add to \`roll_requests\`: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\`
+3. Note: Use "damage" type for healing rolls (positive HP change)
+4. Narrate`,
+    `1. Player casts a healing spell: the engine rolls and applies the healing; do not request a roll
+2. Narrate`,
+  ],
+  [
+    `**Advantage and disadvantage on an attack are applied by the engine.** Set \`advantage\`/
+\`disadvantage\` on a \`roll_requests\` entry only for saves and ability checks; for attacks,
+the conditions below are read off the board and applied when the attack is resolved.`,
+    `**Advantage and disadvantage on an attack are applied by the engine.** The conditions below are
+read off the board and applied when the attack is resolved; you request nothing.`,
+  ],
+  [
+    `**CRITICAL: On a save or ability check, set the \`advantage\`/\`disadvantage\` flag on the roll
+request - never ask for two separate d20 rolls.**
+
+`,
+    ``,
+  ],
+].reduce((text, [from, to]) => swapText(text, from, to), COMBAT_RULES_TEMPLATE);
+
 export const ENCOUNTER_DIFFICULTY_TEMPLATE = `<encounter_difficulty>
 <title>CRITICAL: ENCOUNTER SCALING BY CHARACTER LEVEL</title>
 **ALWAYS match enemy difficulty to character level to prevent instant death!**
@@ -337,50 +404,35 @@ Character Level 9+ (60+ HP):
 </encounter_difficulty>`;
 
 /*
- * INTENTIONAL: this is the elicitation dialect.
+ * INTENTIONAL: this is the elicitation dialect, and in combat it is `combat_actions` only.
  *
- * Do not remove the worked `"type": "attack"` example below, and do not "correct" this block
- * back into "roll_requests is for saves and checks only". It was removed once, in 47205c12, on
- * the reasoning that instructions lose to examples and the old examples were teaching the
- * wrong channel. That reasoning was sound and the outcome was worse: run 9's model, left with
- * no worked attack example anywhere in the prompt, stopped emitting structured attacks
- * altogether — zero roll_requests, zero combat_actions, twenty-three attacks in pure prose
- * across thirty turns, and a board that never moved.
+ * The engine resolves attacks, spells and saves in combat. Since #2385 the client drops every DM `roll_request`
+ * while an encounter is active, whatever its type, so a prompt that still taught attacks, saves
+ * or checks as roll requests taught the DM to ask for rolls that never happen (run 16: attack
+ * rolls for a save spell). Do not remove the worked `combat_actions` example below: run 9's
+ * model, left with no worked declaration anywhere in the prompt, stopped declaring attacks
+ * altogether and narrated twenty-three of them in pure prose.
  *
- * The lesson run 8 taught was that the model would not switch dialects. The lesson run 9
- * taught is that it cannot learn a new one either: it speaks THIS one, or it speaks nothing.
- * So the server no longer argues about the envelope. An attack declared here is intercepted by
- * `legacy-attack-translation.ts` before validation, rewritten into the `combat_action` it
- * always described, and resolved by the engine — auto-approach, cover-adjusted AC, damage,
- * `<engine_resolved_outcomes>` — exactly as a `combat_actions` entry would be.
- *
- * The grep in `prompt-archaeology.test.ts` still forbids attack-roll examples everywhere else;
- * it exempts this block by the marker on the line below and nothing else.
+ * Outside combat the prompt is unchanged and still teaches roll_requests; every other section
+ * that ships in combat has a combat-only variant (#2400).
  */
 export const COMBAT_ROLL_REQUIREMENTS_TEMPLATE = `
 <combat_roll_requirements> <!-- INTENTIONAL_ELICITATION_DIALECT -->
-While combat is active, \`roll_requests\` carries three things: attacks, saving throws, and ability
-checks. You never roll any of them and you never write their outcome - the engine resolves each one
-and reports back in \`<engine_resolved_outcomes>\` on your next turn.
+While combat is active, the engine resolves attacks, spells and saves, and applies the damage. Do not
+request rolls, and never write an outcome - the engine resolves each action and reports back in \`<engine_resolved_outcomes>\` on your next turn.
+Return \`"roll_requests": []\` for every combat response.
 
-Declare an attack by naming BOTH sides in \`purpose\`, using ids copied verbatim from the tactical
-digest. The engine walks the attacker into reach, rolls against the target's cover-adjusted AC, and
-applies the damage; you do not supply \`ac\`, and you do not emit a move to close the distance first.
-Attack: \\\`{"type": "attack", "formula": "1d20", "purpose": "the-seeker attacks shadow-roach-1 with longsword", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\\\`
-Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Dexterity save vs the collapsing floor", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\\\`
-Check: \\\`{"type": "check", "formula": "1d20+mod", "purpose": "Athletics to shove the brazier aside", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\\\`
-For player ability checks, apply the general \`<check_governance>\` contract even while combat is
-active: roll only for uncertainty with meaningful stakes; the declared action chooses the skill and
-the sheet supplies only its modifier; never attach a check to an undeclared or declined action; and
-keep the purpose free of undiscovered content.
-Each entry needs type/formula/purpose/dc/ac/advantage/disadvantage, in the \`roll_requests\` array
-field of your JSON response - never a text block. NPC/enemy turns are already resolved behind the
-screen by the engine before the player's declaration; attacks in this response must belong to the
-current player only. Never emit or repair an NPC \`combat_actions\` entry.
+You declare actions. Declare the current player's attack as a \`combat_actions\` entry, naming
+BOTH sides with ids copied verbatim from the tactical digest. The engine walks the attacker into
+reach, rolls against the target's cover-adjusted AC and applies
+the damage; you supply no \`ac\` or \`dc\`, and you do not emit a move to close the distance first.
+Attack: \`{"actor_id": "the-seeker", "action_type": "attack", "target_ids": ["shadow-roach-1"], "weapon_id": null, "spell_id": null, "slot_level": null, "movement_feet": 0}\`
+Each entry needs actor_id/action_type/target_ids/weapon_id/spell_id/slot_level/movement_feet, in the
+\`combat_actions\` array field of your JSON response - never a text block. NPC/enemy turns are already
+resolved behind the screen by the engine before the player's declaration; actions in this response
+must belong to the current player only. Never emit or repair an NPC \`combat_actions\` entry.
 
-If you would rather name ids in a dedicated field, \`combat_actions\` accepts the same attack and is
-resolved identically. Either channel works. What does NOT work is narrating a swing in \`text\` and
-declaring nothing: an attack that appears in neither array is an attack the engine never rolled, and
-the creature you described striking takes no damage.
-(This replaces the legacy ROLL_REQUESTS_V1 block format).
+What does NOT work is narrating a swing in \`text\` and declaring nothing: an action that appears in
+\`combat_actions\` is the only action the engine rolls, and the creature you described striking
+takes no damage from an action that appears nowhere.
 </combat_roll_requirements>`;

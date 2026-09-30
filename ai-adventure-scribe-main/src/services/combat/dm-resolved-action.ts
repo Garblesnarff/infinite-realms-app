@@ -109,19 +109,7 @@ export function dmFacingResolvedAction(
     action.action_type === 'cast_spell' && results.length > 0 && results.every(isSaveOutcome);
 
   if (!isSaveSpell) {
-    // The transcript formatter names `target_ids[0]` for every result; each result gets its own.
-    const line = Array.isArray(engineResult.results)
-      ? results
-          .map((result, index) =>
-            formatCombatEngineOutcome(
-              { ...action, target_ids: [action.target_ids?.[index] ?? ''] },
-              result,
-              roster,
-            ),
-          )
-          .filter(Boolean)
-          .join('\n\n')
-      : formatCombatEngineOutcome(action, engineResult, roster);
+    const line = formatCombatEngineOutcome(action, engineResult, roster);
     return line ? { ...entry, engineFact: line.replace(/⚙️ Engine: /g, '') } : entry;
   }
   const { autoRolled: _noPlayerDie, ...rest } = entry;

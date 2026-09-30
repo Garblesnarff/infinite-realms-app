@@ -70,9 +70,14 @@ describe('exactly one prompt section teaches an attack as a roll request', () =>
       'rulesOfPlay',
       'spatialTurnContract',
     ]);
-    expect(
-      CombatRulesPrompts.buildCombatRollRequirementsSection().match(ATTACK_ROLL_EXAMPLE) ?? [],
-    ).not.toEqual([]);
+    // In combat the worked declaration is a `combat_actions` entry (#2400): the engine owns
+    // every die and drops every DM roll_request, so no in-combat block teaches one.
+    const COMBAT_ACTION_EXAMPLE = /"action_type"\s*:\s*"attack"/;
+    expect(CombatRulesPrompts.buildCombatRollRequirementsSection()).toMatch(COMBAT_ACTION_EXAMPLE);
+    expect(CombatRulesPrompts.buildSpatialTurnContractSection()).toMatch(COMBAT_ACTION_EXAMPLE);
+    for (const name of ['combatRollRequirements', 'spatialTurnContract', 'combatContext']) {
+      expect(everyPromptSection()[name], name).not.toMatch(/"type"\s*:\s*"(attack|save|check)"/);
+    }
   });
 
   it('the roll request instructions keep their save and check examples', () => {
@@ -99,7 +104,7 @@ describe('exactly one prompt section teaches an attack as a roll request', () =>
 
   it('every section that mentions attacks names a channel that reaches the engine', () => {
     const context = everyPromptSection().combatContext;
-    expect(context).toMatch(/"type": "attack"/);
+    expect(context).toMatch(/`combat_actions` entry/);
     expect(context).not.toMatch(/REQUEST\*\* dice rolls for player actions/);
   });
 

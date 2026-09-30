@@ -74,11 +74,30 @@ Use narrator for DM narration and unknown speakers. Do not invent free-text voic
 </opening_response_structure>`;
   }
 
-  static buildResponseStructureSection(): string {
+  /**
+   * `inCombat` is the variant sent while an encounter is active: the engine resolves attacks,
+   * spells and saves there and the client drops every DM roll_request (#2385), so it teaches none
+   * (#2400). The default is the out-of-combat prompt, unchanged.
+   */
+  static buildResponseStructureSection({ inCombat = false }: { inCombat?: boolean } = {}): string {
     const responseOrder = `1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
 2. **roll_requests field** (if a dice roll is needed): populate it based on the narrative you just wrote - it is a JSON array field, not text in the narrative
 3. **options JSON field**: populate it with player-facing choices in the required format
 4. **VISUAL PROMPT** (optional): Single line for image generation`;
+
+    const responseOrderInCombat = `1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
+2. **combat_actions field**: declare the current player's attack there; \`roll_requests\` stays an empty array
+3. **options JSON field**: populate it with player-facing choices in the required format
+4. **VISUAL PROMPT** (optional): Single line for image generation`;
+
+    const combatDeclarationFormat = `<combat_declaration_format>
+<title>MANDATORY: DECLARE, DO NOT ROLL</title>
+While combat is active the engine resolves attacks, spells and saves. Do not request rolls: leave
+\`roll_requests\` as an empty array \`[]\`. Declare the current player's attack in the \`combat_actions\`
+array field of your JSON response (see <combat_roll_requirements>); the engine rolls it and reports
+back in \`<engine_resolved_outcomes>\` on your next turn.
+**Do NOT narrate the outcome of a declared attack in \`text\` - set it up and stop; narrate what the engine reports next turn.**
+</combat_declaration_format>`;
 
     const diceFormat = `<dice_roll_format>
 <title>MANDATORY: DICE ROLL FORMAT</title>
@@ -97,12 +116,17 @@ here rather than the player rolling it. See <combat_roll_requirements>.
 **Do NOT narrate the outcome of an action in \`text\` while also populating \`roll_requests\` for that same action - request the roll and stop; narrate the result next turn.**
 </dice_roll_format>`;
 
+    const principlesRules = inCombat
+      ? `- Use D&D 5e mechanics when appropriate. The engine resolves attacks, spells and saves during
+  combat: declare the player's attack in \`combat_actions\` and do not request rolls.`
+      : `- Use D&D 5e mechanics when appropriate (ask for ability checks and saving throws; declare
+  attacks as \`"type": "attack"\` roll requests, which the engine resolves during active combat).`;
+
     return `<response_structure>
 <title>DM RESPONSE GUIDELINES</title>
 <core_principles>
 - Respond to the player's action with clear consequences and vivid descriptions.
-- Use D&D 5e mechanics when appropriate (ask for ability checks and saving throws; declare
-  attacks as \`"type": "attack"\` roll requests, which the engine resolves during active combat).
+${principlesRules}
 - Include sensory details and environmental context.
 - Track narrative threads and callback to previous events from memories.
 - Give NPCs distinct voices and personalities.
@@ -110,17 +134,17 @@ here rather than the player rolling it. See <combat_roll_requirements>.
 
 <response_order>
 **Your response MUST follow this exact order:**
-${responseOrder}
+${inCombat ? responseOrderInCombat : responseOrder}
 </response_order>
 
-${diceFormat}
+${inCombat ? combatDeclarationFormat : diceFormat}
 
 <options_field>
 <title>ACTION OPTIONS FORMATTING</title>
 
 Populate the \`options\` JSON field with 2-3 player-facing choices when appropriate. Each element
 must use the \`A. **Bold Action**, description\` format. Keep options out of the narrative \`text\`
-field. Use an empty array when resolving a specific combat action or roll request and no player
+field. Use an empty array when resolving a specific combat action${inCombat ? '' : ' or roll request'} and no player
 choice is appropriate.
 </options_field>
 
@@ -150,7 +174,16 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
 </opening_final_reminders>`;
   }
 
-  static buildFinalRemindersSection(): string {
+  /** `inCombat`: see buildResponseStructureSection. The default is the out-of-combat prompt. */
+  static buildFinalRemindersSection({ inCombat = false }: { inCombat?: boolean } = {}): string {
+    const reminderBlockInCombat = `**RESPONSE ORDER: Narrative (text) → combat_actions field → \`options\` field → VISUAL PROMPT (optional)**
+
+**THE ENGINE RESOLVES ATTACKS, SPELLS AND SAVES. DO NOT REQUEST ROLLS:** leave \`roll_requests\` as \`[]\`.
+**EVERY COMBAT ATTACK MUST BE DECLARED** in \`combat_actions\` naming attacker and target; the
+engine resolves it. An attack you only narrate never happens.
+
+**OPTIONS**: Populate the \`options\` JSON field; each element must use the \`A. **Bold Action**, description\` format. Keep options out of the \`text\` field.`;
+
     const reminderBlock = `**RESPONSE ORDER: Narrative (text) → roll_requests field → \`options\` field → VISUAL PROMPT (optional)**
 
 **DICE ROLLS ARE MANDATORY** for uncertain actions (skill checks, saves, ability checks).
@@ -165,7 +198,7 @@ text marker inside \`text\`. Without it, the dice UI breaks and the player canno
 <final_reminders>
 <title>CRITICAL REMINDERS</title>
 
-${reminderBlock}
+${inCombat ? reminderBlockInCombat : reminderBlock}
 
 Stay in character and follow D&D 5e rules.
 </final_reminders>`;

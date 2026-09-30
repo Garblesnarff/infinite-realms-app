@@ -1,7 +1,75 @@
 import { CombatRulesPrompts } from './combat-rules-prompts';
 
+const PLAYER_ACTION_FIDELITY = `<player_action_fidelity>
+<title>CRITICAL: PRESERVE THE PLAYER'S DECLARED ACTION</title>
+Keep the player's action, target, and intent intact. Do not silently replace it with a different
+action because another action would be easier to resolve or more dramatic.
+
+<questions_to_npcs>
+- A question addressed to an NPC who is present is dialogue. Let the NPC answer; do not convert
+  the question into an Arcana, History, Nature, Religion, or other knowledge check.
+- If the NPC's answer depends on the player's social approach or on reading the NPC's motives,
+  use dialogue with no roll, or an Insight/Persuasion check when the situation is genuinely
+  uncertain or contested. It is never a knowledge check merely because the DM needs information.
+- Use a knowledge check only when the player's declared action is recalling, identifying, or
+  reasoning from the character's own specialized knowledge. The character must be trying to
+  remember or figure something out; do not make a character recall information instead of asking
+  a present NPC.
+</questions_to_npcs>
+
+<failed_checks>
+- A failed check narrates the absence of success for the declared action. A failed recall means
+  the character does not remember or learn anything useful; a failed social check means the
+  intended appeal does not succeed.
+- Never introduce a new action the player did not declare: do not make the character touch,
+  move, attack, open, pick up, taste, or otherwise interact with something merely because a
+  check failed. Any complication must arise from the declared action, not replace it.
+</failed_checks>
+</player_action_fidelity>`;
+
+const DIALOGUE = `<dialogue>
+<title>NPC DIALOGUE REQUIREMENTS</title>
+ALL NPC speech MUST be in direct quotes with attribution:
+✅ "What brings you to my tavern?" the barkeep asks, wiping a glass.
+✅ The guard steps forward. "State your business, stranger."
+❌ The barkeep asks what you want. (NO - use direct quotes!)
+❌ The guard questions you suspiciously. (NO - show the actual words!)
+
+Give NPCs distinct voices:
+- Gruff dwarf: "Bah! What's a human doing in these tunnels?"
+- Elegant elf: "How... unexpected to encounter your kind here."
+- Nervous merchant: "P-perhaps we could... negotiate?"
+</dialogue>`;
+
+/** In combat the engine resolves NPC attacks, spells and saves; the DM only narrates them. */
+const NPC_ROLLS_IN_COMBAT = `<npc_rolls>
+NPC and monster attacks, spells and saves are resolved by the engine, never by you. Do not request
+them and do not invent numbers: narrate what \`<engine_resolved_outcomes>\` reports.
+❌ "The orc swings its greataxe (rolled 16, hits AC 13) dealing 12 slashing damage!" - those
+numbers came from nowhere and the target's HP never changed.
+</npc_rolls>`;
+
 export class RulesPrompts {
-  static buildRulesOfPlaySection(): string {
+  /**
+   * `inCombat` is the variant sent while an encounter is active: the engine resolves attacks,
+   * spells and saves there and drops every DM roll_request (#2385), so it teaches none (#2400).
+   * The default is the out-of-combat prompt, unchanged.
+   */
+  static buildRulesOfPlaySection({ inCombat = false }: { inCombat?: boolean } = {}): string {
+    if (inCombat) {
+      return `<rules_of_play>
+
+${PLAYER_ACTION_FIDELITY}
+
+${NPC_ROLLS_IN_COMBAT}
+
+${DIALOGUE}
+
+${CombatRulesPrompts.buildCombatRulesSection({ inCombat })}
+
+${CombatRulesPrompts.buildEncounterDifficultySection()}
+</rules_of_play>`;
+    }
     return `<rules_of_play>
 
 <when_to_request_rolls>
@@ -64,32 +132,7 @@ Ask yourself:
   "decipher the notebook" before any notebook has been found).
 </check_governance>
 
-<player_action_fidelity>
-<title>CRITICAL: PRESERVE THE PLAYER'S DECLARED ACTION</title>
-Keep the player's action, target, and intent intact. Do not silently replace it with a different
-action because another action would be easier to resolve or more dramatic.
-
-<questions_to_npcs>
-- A question addressed to an NPC who is present is dialogue. Let the NPC answer; do not convert
-  the question into an Arcana, History, Nature, Religion, or other knowledge check.
-- If the NPC's answer depends on the player's social approach or on reading the NPC's motives,
-  use dialogue with no roll, or an Insight/Persuasion check when the situation is genuinely
-  uncertain or contested. It is never a knowledge check merely because the DM needs information.
-- Use a knowledge check only when the player's declared action is recalling, identifying, or
-  reasoning from the character's own specialized knowledge. The character must be trying to
-  remember or figure something out; do not make a character recall information instead of asking
-  a present NPC.
-</questions_to_npcs>
-
-<failed_checks>
-- A failed check narrates the absence of success for the declared action. A failed recall means
-  the character does not remember or learn anything useful; a failed social check means the
-  intended appeal does not succeed.
-- Never introduce a new action the player did not declare: do not make the character touch,
-  move, attack, open, pick up, taste, or otherwise interact with something merely because a
-  check failed. Any complication must arise from the declared action, not replace it.
-</failed_checks>
-</player_action_fidelity>
+${PLAYER_ACTION_FIDELITY}
 
 <roll_request_format>
 <title>HOW TO REQUEST ROLLS</title>
@@ -205,19 +248,7 @@ and tells you what happened in \`<engine_resolved_outcomes>\`. Narrate that.
 numbers came from nowhere and the target's HP never changed.
 </npc_rolls>
 
-<dialogue>
-<title>NPC DIALOGUE REQUIREMENTS</title>
-ALL NPC speech MUST be in direct quotes with attribution:
-✅ "What brings you to my tavern?" the barkeep asks, wiping a glass.
-✅ The guard steps forward. "State your business, stranger."
-❌ The barkeep asks what you want. (NO - use direct quotes!)
-❌ The guard questions you suspiciously. (NO - show the actual words!)
-
-Give NPCs distinct voices:
-- Gruff dwarf: "Bah! What's a human doing in these tunnels?"
-- Elegant elf: "How... unexpected to encounter your kind here."
-- Nervous merchant: "P-perhaps we could... negotiate?"
-</dialogue>
+${DIALOGUE}
 
 ${CombatRulesPrompts.buildCombatRulesSection()}
 

@@ -34,7 +34,10 @@ export class ContextBuilder {
       return contextPrompt;
     }
 
-    contextPrompt += RulesPrompts.buildRulesOfPlaySection();
+    // While combat is active the engine resolves attacks, spells and saves and the client drops
+    // every DM roll_request (#2385), so every section sent then is its combat variant (#2400).
+    const inCombat = combatDetection?.isCombat === true;
+    contextPrompt += RulesPrompts.buildRulesOfPlaySection({ inCombat });
 
     if (combatDetection) {
       contextPrompt += CombatRulesPrompts.formatCombatContext(combatDetection);
@@ -48,13 +51,13 @@ export class ContextBuilder {
       contextPrompt += ContextBuilderPrompts.buildVoiceOptimizationSection();
     }
 
-    contextPrompt += ContextBuilderPrompts.buildResponseStructureSection();
+    contextPrompt += ContextBuilderPrompts.buildResponseStructureSection({ inCombat });
 
     if (voiceContext) {
       contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
     }
 
-    contextPrompt += ContextBuilderPrompts.buildFinalRemindersSection();
+    contextPrompt += ContextBuilderPrompts.buildFinalRemindersSection({ inCombat });
 
     return contextPrompt;
   }
