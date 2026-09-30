@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.1...v0.22.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* **combat:** open the combat-entry popup before the DM answers an out-of-combat attack ([#2341](https://github.com/Garblesnarff/infinite-realms-production/issues/2341)) ([#2350](https://github.com/Garblesnarff/infinite-realms-production/issues/2350)) ([19dc234](https://github.com/Garblesnarff/infinite-realms-production/commit/19dc2345577ea3868e481ca11bb0238093422906))
+* **ingest:** keep causality rule priorities in 1-10 and fail loudly on dropped rows ([#2360](https://github.com/Garblesnarff/infinite-realms-production/issues/2360)) ([#2368](https://github.com/Garblesnarff/infinite-realms-production/issues/2368)) ([676cf0e](https://github.com/Garblesnarff/infinite-realms-production/commit/676cf0e361961a84ac7f744cc62bd4c323f2f829))
+* **memory:** every importance writer on 1-10; rescale 1-5 rows ([#2283](https://github.com/Garblesnarff/infinite-realms-production/issues/2283)) ([#2369](https://github.com/Garblesnarff/infinite-realms-production/issues/2369)) ([270a7f5](https://github.com/Garblesnarff/infinite-realms-production/commit/270a7f5e89d65b8ef5ce404ab31426e7933ae831))
+
 ## [0.22.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.0...v0.22.1) (2026-09-29)
 
 
