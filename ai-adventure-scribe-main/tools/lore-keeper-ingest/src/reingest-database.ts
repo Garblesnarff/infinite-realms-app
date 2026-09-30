@@ -306,7 +306,7 @@ export async function replaceCampaignRules(
   client: SupabaseClient,
   campaignId: string,
   rules: CampaignRule[],
-): Promise<void> {
+): Promise<number> {
   const { error: deleteError } = await client
     .from('campaign_rules')
     .delete()
@@ -314,7 +314,7 @@ export async function replaceCampaignRules(
   if (deleteError)
     throw new Error(`Failed to replace rules for ${campaignId}: ${deleteError.message}`);
 
-  if (rules.length === 0) return;
+  if (rules.length === 0) return 0;
 
   const { error: insertError } = await client.from('campaign_rules').insert(
     rules.map((rule) => ({
@@ -329,4 +329,6 @@ export async function replaceCampaignRules(
   );
   if (insertError)
     throw new Error(`Failed to insert rules for ${campaignId}: ${insertError.message}`);
+
+  return rules.length;
 }

@@ -154,3 +154,37 @@ The first session begins at the edge of the descent.
   assert.equal(session?.entityName, 'Session 1:');
   assert.notEqual(session?.entityName, 'Session 1: :');
 });
+
+function worldSpecWithRules(count: number): string {
+  const rules = Array.from(
+    { length: count },
+    (_, i) => `* IF the party does thing ${i + 1} THEN consequence ${i + 1} follows.`,
+  );
+  return `## 6. Causality Chains & Dynamic World States\n\n${rules.join('\n')}\n\n## 7. Mechanics Reference\n\n* **Note:** unrelated.`;
+}
+
+test('a bible with 8 rules yields 8 causality rules with priorities inside 1-10 (#2360)', () => {
+  const { rules } = chunkCampaignFiles('journey-to-the-inner-world', {
+    worldBuildingSpec: worldSpecWithRules(8),
+  });
+
+  assert.equal(rules.length, 8);
+  const priorities = rules.map((rule) => rule.priority);
+  for (const priority of priorities) {
+    assert.ok(
+      Number.isInteger(priority) && priority >= 1 && priority <= 10,
+      `priority ${priority}`,
+    );
+  }
+  // Readers sort by priority descending, so document order must survive: first rule wins.
+  assert.deepEqual(priorities, [10, 9, 8, 7, 6, 5, 4, 3]);
+});
+
+test('rules past the tenth tie at priority 1 instead of leaving the 1-10 range (#2360)', () => {
+  const { rules } = chunkCampaignFiles('long-bible', { worldBuildingSpec: worldSpecWithRules(12) });
+
+  assert.deepEqual(
+    rules.map((rule) => rule.priority),
+    [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1],
+  );
+});

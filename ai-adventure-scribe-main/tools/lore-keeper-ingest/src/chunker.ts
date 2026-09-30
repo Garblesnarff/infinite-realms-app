@@ -739,7 +739,9 @@ function extractCausalityRules(campaignId: string, content: string): CampaignRul
   const ifThenPattern = /\*?\s*IF\s+(.+?)\s+THEN\s+(.+?)(?:\n|$)/gi;
   const matches = content.matchAll(ifThenPattern);
 
-  let priority = 5;
+  // campaign_rules.priority is constrained to 1-10 and readers sort it descending. Rank by
+  // document order: first rule 10, one less per rule, floor 1 (rules past the tenth tie).
+  let rank = 0;
   for (const match of matches) {
     const [, condition, effect] = match;
 
@@ -749,7 +751,7 @@ function extractCausalityRules(campaignId: string, content: string): CampaignRul
       condition: condition.trim(),
       effect: effect.trim(),
       reversible: !effect.toLowerCase().includes('permanent'),
-      priority: priority--,
+      priority: Math.max(1, 10 - rank++),
       metadata: {},
     });
   }

@@ -2,6 +2,8 @@
  * Types for the Lore Keeper ingestion pipeline
  */
 
+import type { TableCount } from './table-counts.js';
+
 export type ChunkType =
   | 'creative_brief'
   | 'world_building'
@@ -83,5 +85,7 @@ export interface IngestResult {
   chunksCreated: number;
   rulesCreated: number;
   embeddingsGenerated: number;
+  /** Set once the run reaches the database writes; absent for parse/dry-run results. */
+  tableCounts?: TableCount[];
   errors: string[];
 }

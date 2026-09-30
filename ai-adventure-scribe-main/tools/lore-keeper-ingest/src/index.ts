@@ -52,7 +52,9 @@ import {
   upsertStarterCampaignPreservingState,
 } from './reingest-database.js';
 import { isReingestableEntityName, summarizeReingestDiff } from './reingest.js';
+import { formatTableCounts } from './table-counts.js';
 
+import type { TableCount } from './table-counts.js';
 import type {
   CampaignChunk,
   CampaignRule,
@@ -284,6 +286,7 @@ async function main(options: {
           `✅ ${campaignId}: ${result.chunksCreated} chunks, ${result.rulesCreated} rules`,
         );
       }
+      if (result.tableCounts) console.log(`   ${formatTableCounts(result.tableCounts)}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.error(`❌ ${campaignId}: ${message}`);
@@ -322,6 +325,9 @@ async function main(options: {
   if (opts.dryRun) {
     console.log('\n⚠️  DRY RUN - No changes were made to the database');
   }
+
+  // A campaign that could not be fully ingested is not a success. See #2360.
+  if (failed.length > 0) process.exitCode = 1;
 }
 
 interface ReingestCampaign {
@@ -468,7 +474,18 @@ async function runReingestCommand(options: ReingestCommandOptions): Promise<void
 
     await upsertStarterCampaignPreservingState(client, campaign);
     const result = await reingestCampaignChunks(client, chunks, embeddings);
-    await replaceCampaignRules(client, campaign.id, rules);
+    let rulesWritten = 0;
+    try {
+      rulesWritten = await replaceCampaignRules(client, campaign.id, rules);
+    } finally {
+      // Printed on failure too: a rejected rules insert must show up as written 0, not vanish.
+      console.log(
+        `${campaign.slug}: ${formatTableCounts([
+          { table: 'campaign_chunks', attempted: result.parsedChunks, written: result.rowsWritten },
+          { table: 'campaign_rules', attempted: rules.length, written: rulesWritten },
+        ])}`,
+      );
+    }
 
     console.log(
       `${campaign.slug}: applied rows=${result.rowsWritten}, inserted=${result.rowsInserted}, updated=${result.rowsUpdated}, duplicate_rows_removed=${result.duplicateRowsRemoved}, section_marker_rows_removed=${result.sectionMarkerRowsRemoved}`,
@@ -612,6 +629,10 @@ async function ingestCampaign(
   // Database operations
   let chunksCreated = 0;
   let rulesCreated = 0;
+  const tableCounts: TableCount[] = [
+    { table: 'campaign_chunks', attempted: chunks.length, written: 0 },
+    { table: 'campaign_rules', attempted: rules.length, written: 0 },
+  ];
 
   try {
     // Upsert campaign
@@ -627,15 +648,18 @@ async function ingestCampaign(
 
     // Insert chunks and rules
     chunksCreated = await insertCampaignChunks(chunks, embeddings);
+    tableCounts[0].written = chunksCreated;
     rulesCreated = await insertCampaignRules(rules);
+    tableCounts[1].written = rulesCreated;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown database error';
     return {
       campaignId,
       title: campaign.title,
-      chunksCreated: 0,
-      rulesCreated: 0,
-      embeddingsGenerated: 0,
+      chunksCreated,
+      rulesCreated,
+      embeddingsGenerated,
+      tableCounts,
       errors: [`Database error: ${message}`],
     };
   }
@@ -646,6 +670,7 @@ async function ingestCampaign(
     chunksCreated,
     rulesCreated,
     embeddingsGenerated,
+    tableCounts,
     errors: [],
   };
 }
