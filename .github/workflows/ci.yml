@@ -10,6 +10,10 @@ name: CI
 # unprivileged `ghrunner` user, capped at 4 of 8 cores and 6G, with a CPU
 # weight far below the game server so a CI run yields to live traffic.
 # See docs/ci-self-hosted-runner.md.
+#
+# The one exception is the `changes` job (path filters), which runs on
+# `ubuntu-latest`: it takes about 10 seconds and every heavy job waits for it,
+# so it must not queue behind self-hosted jobs.
 
 on:
   push:
@@ -44,7 +48,160 @@ defaults:
     working-directory: ai-adventure-scribe-main
 
 jobs:
+  # Decides which of the heavy jobs a change needs (#2323). A job whose `if:` is
+  # false is `skipped`, and a run whose jobs are all success-or-skipped
+  # concludes `success`, so the merge gate that reads the run conclusion is
+  # unaffected. `checks` does not depend on this job and always runs.
+  #
+  # `base: main` makes a push to a feature branch diff against main (the whole
+  # branch, like the pull_request run of the same commit) instead of against the
+  # previous push, so whichever of the two runs concurrency keeps sees the same
+  # files. On a push to main itself the action falls back to the previous
+  # commit, which is the squash commit's own diff.
+  #
+  # Every filter lists `.github/workflows/**`, so editing a workflow runs
+  # everything. Globs are relative to the repository root.
+  #
+  # This is the one job on a GitHub-hosted runner, on purpose: it takes about
+  # 10 seconds, and every heavy job waits for it, so on the self-hosted runners
+  # it queued behind other runs' jobs (12 minutes in one burst, #2328). About
+  # 10 hosted seconds per run is negligible against the free monthly allowance.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      server: ${{ steps.filter.outputs.server }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: main
+          filters: |
+            frontend:
+              - '.github/workflows/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'ai-adventure-scribe-main/src/**'
+              - 'ai-adventure-scribe-main/shared/**'
+              - 'ai-adventure-scribe-main/public/**'
+              - 'ai-adventure-scribe-main/tailwind/**'
+              - 'ai-adventure-scribe-main/tests/**'
+              - 'ai-adventure-scribe-main/cli/**'
+              - 'ai-adventure-scribe-main/scripts/check-client-build-secrets.mjs'
+              - 'ai-adventure-scribe-main/package.json'
+              - 'ai-adventure-scribe-main/bun.lock'
+              - 'ai-adventure-scribe-main/bunfig.toml'
+              - 'ai-adventure-scribe-main/index.html'
+              - 'ai-adventure-scribe-main/components.json'
+              - 'ai-adventure-scribe-main/eslint.config.js'
+              - 'ai-adventure-scribe-main/postcss.config.js'
+              - 'ai-adventure-scribe-main/vite.config.*'
+              - 'ai-adventure-scribe-main/vitest.config.*'
+              - 'ai-adventure-scribe-main/tailwind*'
+              - 'ai-adventure-scribe-main/tsconfig*'
+              # The client imports these server-bun files directly (dmResponseSchema,
+              # the AppRouter type, the tactical contracts, initiative order and the
+              # spell data), so a change there can break tsc, vitest or the build.
+              - 'ai-adventure-scribe-main/server-bun/src/trpc/**'
+              - 'ai-adventure-scribe-main/server-bun/src/tactical/**'
+              - 'ai-adventure-scribe-main/server-bun/src/services/dm/**'
+              - 'ai-adventure-scribe-main/server-bun/src/services/combat/initiative-order.ts'
+              - 'ai-adventure-scribe-main/server-bun/src/data/spellData*'
+            server:
+              - '.github/workflows/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'ai-adventure-scribe-main/server-bun/**'
+              - 'ai-adventure-scribe-main/shared/**'
+              - 'ai-adventure-scribe-main/db/**'
+              - 'ai-adventure-scribe-main/supabase/**'
+              - 'ai-adventure-scribe-main/scripts/server-typecheck-gate.sh'
+              - 'ai-adventure-scribe-main/scripts/test-migrations.sh'
+              - 'ai-adventure-scribe-main/package.json'
+              - 'ai-adventure-scribe-main/bun.lock'
+              - 'ai-adventure-scribe-main/bunfig.toml'
+              - 'ai-adventure-scribe-main/drizzle.config.ts'
+              # server-bun imports these client files directly (spellData.ts,
+              # the voice routes and their tests).
+              - 'ai-adventure-scribe-main/src/data/**'
+              - 'ai-adventure-scribe-main/src/services/voice/voice-constants.ts'
+              - 'ai-adventure-scribe-main/src/services/voice/voice-pools.ts'
+
+  # Always runs, on every change. Folds what used to be three single-step jobs
+  # (security-lint, server-typecheck, gitleaks) into one, so a run pays for one
+  # checkout, one setup-bun and one install instead of three (#2323). Every step
+  # after the first uses `!cancelled()` so a failing step does not hide the
+  # others: the three jobs used to report independently. The steps that need
+  # installed dependencies also require the install step to have succeeded, so
+  # a failed install is one red step, not several.
+  #
+  # `bun run lint` is here, not in `frontend`: `eslint .` also lints
+  # server-bun/, scripts/ and db/, which the path-filtered `frontend` job does
+  # not run for a server-only change.
+  #
+  # `fetch-depth: 0` is for gitleaks, which scans the full history.
+  # `pull-requests: write` is for gitleaks-action, which comments on the PR.
+  checks:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Repo-root AGENTS.md is a byte-identical copy of
+      # ai-adventure-scribe-main/AGENTS.md (#2104/#2107). Fail here if they drift.
+      # This lived in `frontend`, which is now skipped on a docs-only change --
+      # exactly the change that edits AGENTS.md -- so it runs here instead.
+      - name: AGENTS.md copies must match
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: cmp -s AGENTS.md ai-adventure-scribe-main/AGENTS.md
+      - if: ${{ !cancelled() }}
+        run: node scripts/security-lint.js
+      - name: Gitleaks scan
+        if: ${{ !cancelled() }}
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - if: ${{ !cancelled() }}
+        uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        if: ${{ !cancelled() }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
+          restore-keys: |
+            bun-server-${{ runner.os }}-
+      - id: install
+        if: ${{ !cancelled() }}
+        run: bun install --frozen-lockfile
+      - id: install-server
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun install --frozen-lockfile
+        working-directory: ai-adventure-scribe-main/server-bun
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun run lint
+      # Server typecheck gate (#2313). Runs tsc over the server program and
+      # fails on any error in a file not quarantined in
+      # server-bun/typecheck-known-errors.txt; a quarantined file with no errors
+      # fails as a stale entry so the list gets cleaned up. A PR is red if this
+      # step fails -- "pre-existing" is not an excuse once main is green.
+      - name: Server typecheck gate
+        if: ${{ !cancelled() && steps.install-server.outcome == 'success' }}
+        run: bash scripts/server-typecheck-gate.sh
+        working-directory: ai-adventure-scribe-main
+
   frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -57,12 +214,6 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      # Repo-root AGENTS.md is a byte-identical copy of
-      # ai-adventure-scribe-main/AGENTS.md (#2104/#2107). Fail here if they drift.
-      - name: AGENTS.md copies must match
-        working-directory: .
-        run: cmp -s AGENTS.md ai-adventure-scribe-main/AGENTS.md
-      - run: bun run lint
       - run: bunx tsc --noEmit
       # The runner is deliberately CPU-capped (4 of 8 cores, CPUWeight 20) so a
       # test run cannot starve the game server, which makes this suite roughly
@@ -73,6 +224,8 @@ jobs:
       - run: bun run build
 
   server-vitest:
+    needs: changes
+    if: ${{ needs.changes.outputs.server == 'true' }}
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -103,29 +256,6 @@ jobs:
       # node_modules/.bin that the install two steps up populates.
       - run: bun run test:vitest
         working-directory: ai-adventure-scribe-main/server-bun
-
-  # Server typecheck gate (#2313). Runs tsc over the server program and fails
-  # on any error in a file not quarantined in
-  # server-bun/typecheck-known-errors.txt; a quarantined file with no errors
-  # fails as a stale entry so the list gets cleaned up. A PR is red if this
-  # job fails — "pre-existing" is not an excuse once main is green.
-  server-typecheck:
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - name: Cache bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
-          restore-keys: |
-            bun-server-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: ai-adventure-scribe-main/server-bun
-      - run: bash scripts/server-typecheck-gate.sh
-        working-directory: ai-adventure-scribe-main
 
   # The real-database suites, which `server-vitest` above cannot run.
   #
@@ -184,6 +314,8 @@ jobs:
   # withdrawn. Use pgvector/pgvector:pg16, and check the replay summary says
   # "pgvector available" before trusting any number from it.
   server-real-db:
+    needs: changes
+    if: ${{ needs.changes.outputs.server == 'true' }}
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -275,27 +407,6 @@ jobs:
           [ -n "$db" ] || exit 0
           PGPASSWORD=postgres psql -X -q -h 127.0.0.1 -p 55432 -U postgres -d postgres \
             -c "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE);" || true
-
-  security-lint:
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v4
-      - run: node scripts/security-lint.js
-
-  gitleaks:
-    runs-on: self-hosted
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Gitleaks scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
 
   # Keep the check visible and truthfully skipped until its test harness is
   # self-contained. The old job was never green: it expected an unconfigured
