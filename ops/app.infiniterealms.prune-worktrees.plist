@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- launchd agent for ops/prune-merged-worktrees.sh (#2365). The repo path and the
+     home directory in this file are placeholders that the install command in
+     docs/worktree-hygiene.md fills in; launchd does not expand ~ or $HOME itself. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>app.infiniterealms.prune-worktrees</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/ops/prune-merged-worktrees.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PRUNE_MAIN_CLONE</key>
+    <string>__REPO__</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>5</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/infinite-realms-prune.launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/infinite-realms-prune.launchd.log</string>
+</dict>
+</plist>

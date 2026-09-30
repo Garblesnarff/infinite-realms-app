@@ -50,6 +50,7 @@ Before editing, check open PRs (`gh pr list`). Do not modify files that an unrel
 
 - Use one isolated worktree per issue, named for that issue (for example, `worktrees/issue-1973-spells-section`).
 - Remove the issue worktree after its PR merges.
+- A nightly job removes worktrees of merged or closed PRs; a worker still removes its own when it can.
 - Run `git worktree prune` weekly to clear stale administrative entries.
 
 ## 7. Migrations
