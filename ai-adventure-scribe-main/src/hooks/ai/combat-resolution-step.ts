@@ -3,6 +3,7 @@ import {
   COMBAT_INTENT_OUT_OF_TURN,
   combatRefusalReason,
   noMechanicalActionNotice,
+  playerFacingRefusal,
   redactedCombatIntent,
   repairedTurnNotice,
   stillYourTurnNotice,
@@ -25,6 +26,7 @@ import {
   AOE_AWAITING_CONFIRMATION,
   executeAoECombatAction,
   isAoESpellAction,
+  slotLevelOf,
 } from '@/services/combat/aoe-combat-action';
 import {
   CombatIntentRefusedError,
@@ -45,7 +47,10 @@ import {
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { isSameSpell } from '@/services/combat/declared-player-spell';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
-import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
+import {
+  playerCombatSpellLabel,
+  resolvePlayerCombatSpell,
+} from '@/services/combat/player-combat-spell';
 import { trackPlayerRollDismissal } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { userDataApi } from '@/services/user-data-api';
@@ -91,6 +96,9 @@ export interface CombatResolutionParams {
     participantType?: string;
     turnOrder?: number;
     initiative?: number;
+    isDead?: boolean;
+    isUnconscious?: boolean;
+    currentHitPoints?: number;
   }>;
   /** Actors whose refused declarations are already queued for their next legal turn. */
   queuedIntentActorIds?: string[];
@@ -339,6 +347,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     refusedActions.push(refusalRecord);
     logger.warn('[CombatRepair] rejected intent', {
       reason,
+      ...(refusal.details?.detail ? { detail: refusal.details.detail } : {}),
       intent: redactedCombatIntent(action),
     });
     if (action.action_type === 'cast_spell') {
@@ -346,7 +355,25 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       const line = appendEngineBlock({
         source: actorIsPlayer ? 'player' : 'npc',
         actorId: action.actor_id,
-        lines: [formatRefusedSpellOutcome(action.actor_id, spell, refusal.message, roster)],
+        lines: [
+          formatRefusedSpellOutcome(
+            action.actor_id,
+            spell,
+            playerFacingRefusal(refusal, {
+              actorIsPlayer,
+              actor: labelFor(action.actor_id),
+              turnHolder:
+                refusal.details?.currentParticipantId || refusal.details?.currentParticipantSlug
+                  ? labelFor(
+                      refusal.details.currentParticipantId ??
+                        refusal.details.currentParticipantSlug ??
+                        '',
+                    )
+                  : null,
+            }),
+            roster,
+          ),
+        ],
         round: combatRound ?? 1,
       });
       if (line) refusalLines.set(refusalRecord, line);
@@ -507,7 +534,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const runAoEAction = async (
     action: DMAoESpellAction,
     origin: CombatActionOrigin | undefined,
-  ): Promise<BatchBoundary> => {
+  ): Promise<BatchBoundary | null> => {
     if (!sessionId) {
       throw new CombatIntentRefusedError(
         'the session is not known, so the spell area cannot be placed — cast it again',
@@ -515,7 +542,60 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         { reason: 'aoe_no_session' },
       );
     }
-    const { execution, resolvedAction } = await executeAoECombatAction(sessionId, action, origin);
+    let cast: Awaited<ReturnType<typeof executeAoECombatAction>>;
+    try {
+      cast = await executeAoECombatAction(sessionId, action, origin);
+    } catch (error) {
+      // The sheet's Cast names no target, and the DM wrote a single-target spell (Acid Splash) in
+      // the area shape. Anything else that reaches `no_area_of_effect` (a monster's cast, an area
+      // spell the catalog lacks) keeps its refusal: guessing a target there casts something the
+      // player never asked for (#2374).
+      const sheetCastOfKnownSpell =
+        origin === 'sheet_cast' &&
+        isPlayerActor(action.actor_id, participants) &&
+        resolvePlayerCombatSpell(action.spell_id, action.spell_id) !== null;
+      if (
+        !(error instanceof CombatIntentRefusedError) ||
+        error.details?.reason !== 'no_area_of_effect' ||
+        !sheetCastOfKnownSpell
+      )
+        throw error;
+      // The engine calls every non-player combatant hostile (`isHostile` in
+      // `combat-intent-service.ts`) and the client mapping keeps no faction, so "hostile" here is
+      // "not a player and still standing". One of those is the only creature the cast can mean;
+      // with more, the player is asked, since the engine must not choose for them.
+      const targets = (participants ?? []).filter(
+        (participant) =>
+          participant.participantType !== 'player' &&
+          !participant.isDead &&
+          !participant.isUnconscious &&
+          (participant.currentHitPoints ?? 1) > 0,
+      );
+      if (targets.length !== 1) {
+        throw new CombatIntentRefusedError(
+          `no target selected — name the creature you cast ${playerCombatSpellLabel(action.spell_id, action.spell_id)} at`,
+          422,
+          { reason: 'no_target_selected' },
+        );
+      }
+      // The DM names the caster by digest slug; the save card labels whoever `actor_id` matches.
+      const caster = participants?.find(
+        (participant) =>
+          participant.id === action.actor_id || slugify(participant.name ?? '') === action.actor_id,
+      );
+      const targeted: StructuredCombatAction = {
+        actor_id: caster?.id ?? action.actor_id,
+        action_type: 'cast_spell',
+        target_ids: [targets[0].id],
+        weapon_id: null,
+        spell_id: action.spell_id,
+        slot_level: slotLevelOf(action.slot_level),
+        movement_feet: 0,
+      };
+      if (origin) actionOrigins.set(targeted, origin);
+      return runAction(targeted);
+    }
+    const { execution, resolvedAction } = cast;
     if (execution.boundary === 'encounter_already_concluded') {
       encounterAlreadyConcluded = true;
       return 'combat_ended';

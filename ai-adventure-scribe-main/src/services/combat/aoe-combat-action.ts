@@ -14,6 +14,9 @@ import { userDataApi } from '@/services/user-data-api';
 /** The server answered with a preview the player must confirm on the map; nothing was cast. */
 export const AOE_AWAITING_CONFIRMATION = 'AOE_AWAITING_CONFIRMATION';
 
+/** The route's schema refused the body: the cast was never looked at by the engine. */
+export const AOE_CAST_UNREADABLE = 'aoe_cast_unreadable';
+
 export const isAoESpellAction = (action: unknown): action is DMAoESpellAction =>
   Boolean(
     action &&
@@ -30,7 +33,13 @@ type AoECastResponse = {
   preview?: unknown;
   error?: string;
   details?: CombatRefusalDetails;
+  /** Present when the route's body schema refused the request (`Validation failed`). */
+  issues?: Array<{ path?: string; message?: string }>;
 };
+
+/** The wire's `slotLevel` is a slot (1-9) or `null`: a cantrip spends none, whatever the DM wrote. */
+export const slotLevelOf = (slotLevel: number | null): number | null =>
+  typeof slotLevel === 'number' && slotLevel >= 1 ? slotLevel : null;
 
 /**
  * An area spell, cast through the one route that knows the board (#2304).
@@ -56,12 +65,25 @@ export async function executeAoECombatAction(
     spellId: action.spell_id,
     origin: action.origin,
     direction: action.direction,
-    slotLevel: action.slot_level,
+    slotLevel: slotLevelOf(action.slot_level),
     ...(origin ? { actionOrigin: origin } : {}),
   };
   const response = await userDataApi.resolveAoECast(sessionId, payload);
   const answer = ((await response.json().catch(() => ({}))) ?? {}) as AoECastResponse;
   if (!response.ok) {
+    if (answer.issues?.length) {
+      // The body schema refused the request, so the cast never reached the engine. The fields
+      // ride in `detail` for the log; the player is told the cast was not read, not "Validation
+      // failed".
+      throw new CombatIntentRefusedError(
+        'the game could not read that cast — cast it again and name your target',
+        response.status,
+        {
+          reason: AOE_CAST_UNREADABLE,
+          detail: answer.issues.map((issue) => issue.path || 'body').join(', '),
+        },
+      );
+    }
     throw new CombatIntentRefusedError(
       answer.error || `AoE cast refused (${response.status})`,
       response.status,
@@ -82,7 +104,7 @@ export async function executeAoECombatAction(
     target_ids: (answer.delta.targets ?? []).map((target) => target.entityId),
     weapon_id: null,
     spell_id: action.spell_id,
-    slot_level: action.slot_level,
+    slot_level: slotLevelOf(action.slot_level),
     movement_feet: 0,
   };
   const result = answer.result;

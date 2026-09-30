@@ -20,6 +20,30 @@ export function combatRefusalReason(
   return 'COMBAT_INTENT_REFUSED';
 }
 
+/**
+ * The sentence the engine's refusal line prints in brackets. A player can act on "not your turn"
+ * or "no target selected"; they cannot act on "Actor is not the current-turn participant" or
+ * "Validation failed" (#2374). Refusals that already say what to do keep their own words.
+ */
+export function playerFacingRefusal(
+  refusal: Pick<CombatIntentRefusedError, 'message' | 'details'>,
+  who: { actorIsPlayer: boolean; actor: string; turnHolder: string | null },
+): string {
+  const reason = combatRefusalReason(refusal);
+  if (reason === COMBAT_INTENT_OUT_OF_TURN) {
+    const subject = who.actorIsPlayer ? 'your' : `${who.actor}'s`;
+    return `it is not ${subject} turn${who.turnHolder ? ` — ${who.turnHolder} acts now` : ''}`;
+  }
+  if (reason === COMBAT_INTENT_SCHEMA_REJECTED && refusal.details?.missing?.includes('targetIds')) {
+    return 'no target selected — name the creature you cast it at';
+  }
+  // The envelope's own 422 carries no stage, only the framework's label.
+  if (reason === COMBAT_INTENT_SCHEMA_REJECTED || /^validation failed$/i.test(refusal.message)) {
+    return 'the game could not read that cast — cast it again and name your target';
+  }
+  return refusal.message;
+}
+
 export function turnNotice(
   turnHolder: { id?: string; name?: string } | null,
   holderIsPlayer: boolean,

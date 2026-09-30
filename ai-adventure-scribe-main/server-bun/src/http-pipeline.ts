@@ -151,6 +151,7 @@ export function createRequestPipelineApp() {
         error: error instanceof Error ? error.message : String(error),
         errorName: error instanceof Error ? error.name : 'UnknownError',
         stack: error instanceof Error ? error.stack : undefined,
+        ...(code === 'VALIDATION' ? { issues: validationIssues(error) } : {}),
         msg: 'request.error',
       });
 

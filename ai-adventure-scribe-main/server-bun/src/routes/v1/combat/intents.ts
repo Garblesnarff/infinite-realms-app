@@ -37,6 +37,18 @@ function mapIntentError(set: any, error: unknown, logContext: Record<string, unk
       logIntentFailure(error, logContext);
       return { error: 'Combat action failed' };
     }
+    // A 4xx refusal used to leave no line, so the one a player saw had no reason code in the log
+    // to match it against (#2374).
+    logger.warn(
+      {
+        ...logContext,
+        status: error.statusCode,
+        reason: (error.details as { reason?: string } | undefined)?.reason,
+        stage: (error.details as { stage?: string } | undefined)?.stage,
+        err: error.message,
+      },
+      'COMBAT_INTENT_REFUSED',
+    );
     // Details ride along on client-fixable answers. A refusal the caller cannot act on is a
     // refusal it will re-send verbatim: "Combat participant not found" says a reference missed,
     // and only the roster beside it says what to write instead.
@@ -74,7 +86,8 @@ function requestIdOf(context: unknown, request: Request): string {
 export const intentRoutes = new Elysia()
   .get(
     '/:encounterId/legal-actions',
-    async ({ request, params, set }) => {
+    async (context) => {
+      const { request, params, set } = context;
       const { user, error } = await authenticateRequest(request);
       if (error || !user) {
         set.status = 401;
@@ -88,7 +101,10 @@ export const intentRoutes = new Elysia()
       try {
         return await getLegalCombatActions(params.encounterId, user.userId);
       } catch (cause) {
-        return mapIntentError(set, cause);
+        return mapIntentError(set, cause, {
+          requestId: requestIdOf(context, request),
+          encounterId: params.encounterId,
+        });
       }
     },
     { params: encounterIdParams },

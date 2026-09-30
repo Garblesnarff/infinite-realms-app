@@ -2,6 +2,11 @@
    intent gateway, and the real spell resolution, sharing one board and one set of data mocks. */
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
+import {
+  cantripAoECastWireBody,
+  productionRefusedCantripBody,
+} from '../../../../../shared/test-fixtures/cantrip-aoe-cast';
+
 import type { MapEntity, TacticalMap } from '../../../tactical/types.js';
 
 /**
@@ -26,6 +31,7 @@ const USER_ID = 'user_owner';
 const slots = new Map<number, number>();
 const hp = new Map<string, number>();
 const loggedWarnings: Array<Record<string, unknown>> = [];
+const loggedErrors: Array<Record<string, unknown>> = [];
 
 const noop = () => {};
 const silentLogger = {
@@ -35,17 +41,15 @@ const silentLogger = {
   warn: noop,
   child: () => silentLogger,
 };
+const record = (into: Array<Record<string, unknown>>) => (data: unknown) => {
+  if (data && typeof data === 'object') into.push(data as Record<string, unknown>);
+};
 mock.module('../../../../../db/client', () => ({ db: {} }));
 mock.module('../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
 }));
 mock.module('../../../lib/logger.js', () => ({
-  logger: {
-    ...silentLogger,
-    warn: (data: unknown) => {
-      if (data && typeof data === 'object') loggedWarnings.push(data as Record<string, unknown>);
-    },
-  },
+  logger: { ...silentLogger, warn: record(loggedWarnings), error: record(loggedErrors) },
   combatLogger: silentLogger,
 }));
 mock.module('../../../lib/auth.js', () => ({
@@ -318,6 +322,7 @@ beforeEach(() => {
   hp.set(GOLDWHISK_ID, 40);
   hp.set(IMP_ID, 40);
   loggedWarnings.length = 0;
+  loggedErrors.length = 0;
   apprenticeSpellIds = ['acid-splash', 'chill-touch', 'burning-hands'];
   // Every d20 lands on 11 and every damage die on its middle face.
   random.mockReturnValue(0.5);
@@ -409,6 +414,8 @@ describe('run M7 round 4: the sheet-Cast Burning Hands at level 1', () => {
       sessionId: SESSION_ID,
       actorId: 'the-apprentice',
       spellId: 'burning-hands',
+      // The code is a field of its own, so telemetry can count it without parsing `details`.
+      reason: 'aoe_no_targets',
       details: { reason: 'aoe_no_targets' },
     });
   });
@@ -478,6 +485,45 @@ describe('run M7 round 4: the sheet-Cast Burning Hands at level 1', () => {
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(payload.error).toBeTruthy();
     expect(hp.get(GOLDWHISK_ID)).toBe(40);
+  });
+});
+
+describe('run M9 (#2374, #2375): the sheet-Cast Acid Splash', () => {
+  it('reads the body the client sends for a cantrip, and refuses it as what it is: not an area spell', async () => {
+    const response = await castArea(cantripAoECastWireBody);
+    const payload = (await response.json()) as CastResponse;
+
+    // Past the schema now. Acid Splash names creatures, not an area, so the route says so with a
+    // code the client acts on (it casts the spell at the one hostile) — nothing rolled or spent.
+    expect(response.status).toBe(422);
+    expect(payload.details?.reason).toBe('no_area_of_effect');
+    expect(payload.error).toContain('name its target and cast it again');
+    expect(loggedWarnings.find((entry) => entry.event === 'AOE_CAST_REFUSED')).toMatchObject({
+      spellId: 'acid-splash',
+      slotLevel: null,
+      reason: 'no_area_of_effect',
+    });
+    expect(slots.get(1)).toBe(2);
+    expect(hp.get(GOLDWHISK_ID)).toBe(40);
+  });
+
+  it('refuses the body production refused: a cantrip is not a slot level, so slotLevel 0 is a 422', async () => {
+    const response = await castArea(productionRefusedCantripBody);
+    const payload = (await response.json()) as {
+      error: string;
+      issues?: Array<{ path: string; message: string }>;
+    };
+
+    expect(response.status).toBe(422);
+    expect(payload.error).toBe('Validation failed');
+    expect(payload.issues?.map((issue) => issue.path)).toContain('/slotLevel');
+    expect(hp.get(GOLDWHISK_ID)).toBe(40);
+    expect(hp.get(IMP_ID)).toBe(40);
+    // `request.error` names the failing field and rule, not only that validation failed.
+    expect(loggedErrors.find((entry) => entry.msg === 'request.error')).toMatchObject({
+      requestId: 'req-m7-round-4',
+      issues: [expect.objectContaining({ path: '/slotLevel' })],
+    });
   });
 });
 

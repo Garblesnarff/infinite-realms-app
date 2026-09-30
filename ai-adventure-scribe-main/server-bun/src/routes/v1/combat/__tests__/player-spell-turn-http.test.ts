@@ -501,6 +501,12 @@ describe('run M7 round 2: the player acts only on player input (#2305)', () => {
       expect(trackedEvents).toContainEqual(
         expect.objectContaining({ name: 'action_refused', origin }),
       );
+      // Every 4xx refusal leaves one line with its reason code, for telemetry (#2374).
+      expect(serverLogs).toContainEqual({
+        level: 'warn',
+        msg: 'COMBAT_INTENT_REFUSED',
+        data: expect.objectContaining({ status: 422, reason: 'player_action_without_input' }),
+      });
     },
   );
 

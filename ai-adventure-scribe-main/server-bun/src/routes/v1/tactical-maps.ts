@@ -419,6 +419,7 @@ export function createTacticalMapRoutes({
                 actionOrigin: request.actionOrigin ?? 'unmarked',
                 phase: body.phase,
                 err: message,
+                reason: (details as { reason?: string } | undefined)?.reason,
                 details,
               },
               'AOE_CAST_REFUSED',
