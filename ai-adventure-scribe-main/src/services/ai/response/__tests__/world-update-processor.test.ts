@@ -120,7 +120,7 @@ describe('processWorldAndMemories', () => {
 
       expect(result).toBe('Clean Narrative');
       expect(MemoryManager.saveMemories).toHaveBeenCalledWith([
-        expect.objectContaining({ content: 'Memory 1', session_id: 'session-123' }),
+        expect.objectContaining({ content: 'Memory 1', session_id: 'session-123', importance: 7 }),
       ]);
       expect(WorldBuilderRepository.saveNPCFromXML).toHaveBeenCalled();
       expect(WorldBuilderRepository.saveLocationFromXML).toHaveBeenCalled();

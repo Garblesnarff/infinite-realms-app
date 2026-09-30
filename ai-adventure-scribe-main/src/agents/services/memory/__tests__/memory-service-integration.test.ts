@@ -70,7 +70,7 @@ describe('Memory Service Integration', () => {
   });
 
   describe('Memory Importance Scoring', () => {
-    it('should normalize importance to 1-5 range', async () => {
+    it('should clamp importance to the 1-10 range', async () => {
       mockInsert.mockResolvedValue({
         data: null,
         error: null,
@@ -82,7 +82,7 @@ describe('Memory Service Integration', () => {
           session_id: 'session-123',
           type: 'quest' as MemoryType,
           content: 'Quest memory',
-          importance: 10, // Should be normalized to 5
+          importance: 14, // Should be clamped to 10
           metadata: null,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
@@ -91,7 +91,7 @@ describe('Memory Service Integration', () => {
           session_id: 'session-123',
           type: 'general' as MemoryType,
           content: 'General memory',
-          importance: 0, // Should be normalized to 1
+          importance: 0, // Should be clamped to 1
           metadata: null,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
@@ -101,8 +101,8 @@ describe('Memory Service Integration', () => {
       await MemoryService.saveMemories(memories);
 
       const insertCalls = mockInsert.mock.calls;
-      expect(insertCalls[0][0][0].importance).toBeLessThanOrEqual(5);
-      expect(insertCalls[0][0][1].importance).toBeGreaterThanOrEqual(1);
+      expect(insertCalls[0][0][0].importance).toBe(10);
+      expect(insertCalls[0][0][1].importance).toBe(1);
     });
   });
 

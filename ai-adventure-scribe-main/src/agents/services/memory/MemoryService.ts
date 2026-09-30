@@ -51,7 +51,7 @@ export class MemoryService {
         ...m,
         content,
         type,
-        importance: Math.max(1, Math.min(5, importance)),
+        importance: Math.max(1, Math.min(10, importance)),
       };
     });
     await repository.insertMemories(toInsert as Array<Record<string, any>>);

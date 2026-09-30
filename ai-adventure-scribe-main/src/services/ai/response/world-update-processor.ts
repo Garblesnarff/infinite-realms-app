@@ -115,7 +115,8 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
           content,
           type: 'event' as const,
           memory_type: 'story_event' as const,
-          importance: 4,
+          // Was 4 on the old 1-5 scale; 7 is its value under the #2283 rescale.
+          importance: 7,
           metadata: { source: 'xml_extraction', characterId: context.characterId },
         }));
         await MemoryManager.saveMemories(memoriesToSave);

@@ -22,13 +22,15 @@ export const createInitialMemories = async (
   try {
     logger.info('[Initial Greeting] Creating foundational memories');
 
+    // Importance is on the 1-10 scale; these were 5/4/4/3 on the old 1-5 scale, mapped per #2283.
+
     // Create character introduction memory
     await onMemoryCreated({
       session_id: sessionId,
       type: 'character_moment' as MemoryType,
       subcategory: 'player',
       content: `${character.name}, a ${character.race?.name || character.race} ${character.class?.name || character.class} of level ${character.level || 1}, begins their adventure. Background: ${character.background?.name || character.background || 'Unknown'}.`,
-      importance: 5,
+      importance: 9,
       metadata: {
         character_id: character.id,
         character_name: character.name,
@@ -43,7 +45,7 @@ export const createInitialMemories = async (
       type: 'world_detail' as MemoryType,
       subcategory: 'general',
       content: `Campaign: ${campaign.name || 'Untitled Adventure'}. ${campaign.description || 'A world of adventure awaits.'}`,
-      importance: 4,
+      importance: 7,
       metadata: {
         campaign_id: campaign.id,
         campaign_name: campaign.name,
@@ -59,7 +61,7 @@ export const createInitialMemories = async (
         type: 'location' as MemoryType,
         subcategory: 'current_location',
         content: `Opening Scene: ${greetingText}`,
-        importance: 4,
+        importance: 7,
         metadata: {
           scene_type: 'opening',
           is_initial_memory: true,
@@ -76,7 +78,7 @@ export const createInitialMemories = async (
         type: 'atmosphere' as MemoryType,
         subcategory: 'environment',
         content: atmosphereContent,
-        importance: 3,
+        importance: 5,
         metadata: {
           scene_type: 'opening',
           is_initial_memory: true,

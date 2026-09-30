@@ -33,14 +33,14 @@ export const useMemoryCreation = (sessionId: string | null) => {
       return { isValid: false, processedMemory };
     }
 
-    // Clamp importance score to valid range (1-5) instead of rejecting
-    if (memory.importance && (memory.importance < 1 || memory.importance > 5)) {
+    // Clamp importance score to valid range (1-10, #2283) instead of rejecting
+    if (memory.importance && (memory.importance < 1 || memory.importance > 10)) {
       logger.warn(
         '[Memory Creation] Invalid importance score:',
         memory.importance,
         'clamping to valid range',
       );
-      processedMemory.importance = Math.max(1, Math.min(5, memory.importance));
+      processedMemory.importance = Math.max(1, Math.min(10, memory.importance));
     }
 
     return { isValid: true, processedMemory };
@@ -111,64 +111,70 @@ export const useMemoryCreation = (sessionId: string | null) => {
 
   const { mutateAsync } = createMemory;
 
-  const extractMemories = useCallback(async (content: string) => {
-    try {
-      if (!sessionId) throw new Error('No active session');
+  const extractMemories = useCallback(
+    async (content: string) => {
+      try {
+        if (!sessionId) throw new Error('No active session');
 
-      logger.info('[Memory Creation] Processing content for memory extraction:', content);
+        logger.info('[Memory Creation] Processing content for memory extraction:', content);
 
-      const memorySegments = processContent(content);
-      const filteredSegments: typeof memorySegments = [];
-      const seenContent = new Set<string>();
+        const memorySegments = processContent(content);
+        const filteredSegments: typeof memorySegments = [];
+        const seenContent = new Set<string>();
 
-      for (const segment of memorySegments) {
-        const normalizedContent = segment.content.trim();
-        if (normalizedContent.length < MIN_SEGMENT_LENGTH) {
-          logger.debug('[Memory Creation] Skipping short segment:', normalizedContent);
-          continue;
+        for (const segment of memorySegments) {
+          const normalizedContent = segment.content.trim();
+          if (normalizedContent.length < MIN_SEGMENT_LENGTH) {
+            logger.debug('[Memory Creation] Skipping short segment:', normalizedContent);
+            continue;
+          }
+
+          const dedupeKey = normalizedContent.toLowerCase();
+          if (seenContent.has(dedupeKey)) {
+            logger.debug('[Memory Creation] Skipping duplicate segment:', normalizedContent);
+            continue;
+          }
+
+          seenContent.add(dedupeKey);
+          filteredSegments.push({ ...segment, content: normalizedContent });
         }
 
-        const dedupeKey = normalizedContent.toLowerCase();
-        if (seenContent.has(dedupeKey)) {
-          logger.debug('[Memory Creation] Skipping duplicate segment:', normalizedContent);
-          continue;
+        const prioritizedSegments = [...filteredSegments]
+          .sort((a, b) => b.importance - a.importance)
+          .slice(0, MAX_SEGMENTS_PER_MESSAGE);
+
+        logger.info('[Memory Creation] Classified segments:', prioritizedSegments);
+
+        // Create memories for each classified segment
+        for (const segment of prioritizedSegments) {
+          if (!isValidMemoryType(segment.type)) {
+            logger.warn('[Memory Creation] Skipping segment with invalid type:', segment);
+            continue;
+          }
+
+          await mutateAsync({
+            session_id: sessionId,
+            type: segment.type,
+            content: segment.content,
+            importance: segment.importance,
+            metadata: {},
+          });
         }
 
-        seenContent.add(dedupeKey);
-        filteredSegments.push({ ...segment, content: normalizedContent });
+        logger.info('[Memory Creation] Memory extraction completed successfully');
+      } catch (error) {
+        logger.error('[Memory Creation] Error extracting memories:', error);
+        throw error;
       }
+    },
+    [sessionId, mutateAsync],
+  );
 
-      const prioritizedSegments = [...filteredSegments]
-        .sort((a, b) => b.importance - a.importance)
-        .slice(0, MAX_SEGMENTS_PER_MESSAGE);
-
-      logger.info('[Memory Creation] Classified segments:', prioritizedSegments);
-
-      // Create memories for each classified segment
-      for (const segment of prioritizedSegments) {
-        if (!isValidMemoryType(segment.type)) {
-          logger.warn('[Memory Creation] Skipping segment with invalid type:', segment);
-          continue;
-        }
-
-        await mutateAsync({
-          session_id: sessionId,
-          type: segment.type,
-          content: segment.content,
-          importance: segment.importance,
-          metadata: {},
-        });
-      }
-
-      logger.info('[Memory Creation] Memory extraction completed successfully');
-    } catch (error) {
-      logger.error('[Memory Creation] Error extracting memories:', error);
-      throw error;
-    }
-  }, [sessionId, mutateAsync]);
-
-  return useMemo(() => ({
-    createMemory: createMemory.mutate,
-    extractMemories,
-  }), [createMemory.mutate, extractMemories]);
+  return useMemo(
+    () => ({
+      createMemory: createMemory.mutate,
+      extractMemories,
+    }),
+    [createMemory.mutate, extractMemories],
+  );
 };

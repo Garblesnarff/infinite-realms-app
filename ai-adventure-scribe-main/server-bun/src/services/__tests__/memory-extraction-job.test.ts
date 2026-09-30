@@ -170,7 +170,7 @@ describe('runMemoryExtractionJob (#2148)', () => {
         content: 'The party crossed the river.',
         type: 'story_beat',
         memoryType: 'campaign_summary',
-        importance: 5,
+        importance: 9,
         metadata: { source: 'periodic_summary', turn: 20, jobId: 'job-5' },
       },
     ]);

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 
 import { processContent } from '../memory/classification';
 
-describe('Memory Importance Normalization', () => {
-  it('should normalize importance scores to 1-5 range', () => {
+describe('Memory Importance Scale (1-10, #2283)', () => {
+  it('should keep importance scores in the 1-10 range', () => {
     // Test content that would normally generate high importance scores
     const content = `
       Title: The Epic Quest of Golden Dragon
@@ -17,10 +17,10 @@ describe('Memory Importance Normalization', () => {
 
     const segments = processContent(content);
 
-    // All segments should have importance in the 1-5 range
+    // All segments should have importance in the 1-10 range
     segments.forEach((segment) => {
       expect(segment.importance).toBeGreaterThanOrEqual(1);
-      expect(segment.importance).toBeLessThanOrEqual(5);
+      expect(segment.importance).toBeLessThanOrEqual(10);
     });
   });
 
@@ -29,7 +29,7 @@ describe('Memory Importance Normalization', () => {
     expect(segments).toEqual([]);
   });
 
-  it('should preserve memory types while normalizing importance', () => {
+  it('should preserve memory types while scoring importance', () => {
     const content = 'The brave knight Sir Reginald entered the dark cave.';
     const segments = processContent(content);
 
@@ -38,7 +38,7 @@ describe('Memory Importance Normalization', () => {
       expect(typeof segment.type).toBe('string');
       expect(segment.content).toBeTruthy();
       expect(segment.importance).toBeGreaterThanOrEqual(1);
-      expect(segment.importance).toBeLessThanOrEqual(5);
+      expect(segment.importance).toBeLessThanOrEqual(10);
     });
   });
 
@@ -53,14 +53,15 @@ describe('Memory Importance Normalization', () => {
 
     const segments = processContent(content);
 
-    // At least one segment should have importance >= 4 (high normalized value)
-    const hasHighImportance = segments.some((segment) => segment.importance >= 4);
+    // At least one segment should have importance >= 7: the 1-10 value that the old
+    // Math.round(x / 2) halving mapped to 4, so this is the same threshold on the new scale.
+    const hasHighImportance = segments.some((segment) => segment.importance >= 7);
     expect(hasHighImportance).toBe(true);
 
-    // All segments should still be in normalized range
+    // All segments should still be in the 1-10 range
     segments.forEach((segment) => {
       expect(segment.importance).toBeGreaterThanOrEqual(1);
-      expect(segment.importance).toBeLessThanOrEqual(5);
+      expect(segment.importance).toBeLessThanOrEqual(10);
     });
   });
 });

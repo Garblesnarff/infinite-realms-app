@@ -97,21 +97,17 @@ export const processContent = (content: string): MemorySegment[] => {
 
   return effectiveSegments.map((segment) => {
     const type = classifySegment(segment);
-    let importance = calculateImportance({
+    const importance = calculateImportance({
       content: segment,
       type: mapToImportanceType(type),
     });
     const baseImportance = CLASSIFICATION_PATTERNS[type]?.importance ?? 3;
-    importance = Math.max(importance, baseImportance);
 
-    // Normalize importance score from 1-10 range to 1-5 range
-    // calculateImportance returns 1-10 for internal weighting, but the database expects 1-5
-    const normalizedImportance = Math.min(5, Math.max(1, Math.round(importance / 2)));
-
+    // Stored as is: memories.importance is on the same 1-10 scale as calculateImportance (#2283).
     return {
       content: segment.trim(),
       type,
-      importance: normalizedImportance,
+      importance: Math.max(importance, baseImportance),
     };
   });
 };

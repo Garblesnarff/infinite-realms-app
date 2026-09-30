@@ -128,14 +128,14 @@ describe('useMemoryCreation', () => {
       expect(cachedMemories![0].id).toBe('mem-1');
     });
 
-    it('should clamp importance score to range 1-5', async () => {
+    it('should clamp importance score to range 1-10', async () => {
       const mockMemory = {
         type: 'event' as const,
         content: 'A massive dragon attacked the city.',
-        importance: 10, // Should be clamped to 5
+        importance: 14, // Should be clamped to 10
       };
 
-      const insertSpy = mockInsertChain({ id: 'mem-3', ...mockMemory, importance: 5 });
+      const insertSpy = mockInsertChain({ id: 'mem-3', ...mockMemory, importance: 10 });
 
       const { result } = renderHook(() => useMemoryCreation(sessionId), { wrapper });
 
@@ -146,7 +146,7 @@ describe('useMemoryCreation', () => {
       expect(insertSpy).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
-            importance: 5,
+            importance: 10,
           }),
         ]),
       );

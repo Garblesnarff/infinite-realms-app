@@ -96,7 +96,8 @@ export function parseExtractionText(
         content: summary,
         type: 'story_beat',
         memoryType: 'campaign_summary',
-        importance: 5,
+        // 9 is the old 1-5 top (5) under the #2283 rescale, so new summaries rank with migrated ones.
+        importance: 9,
         metadata: { source: 'periodic_summary', turn: job.turn, jobId },
       },
     ];
