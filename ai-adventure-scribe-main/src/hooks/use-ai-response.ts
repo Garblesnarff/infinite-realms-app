@@ -16,6 +16,11 @@ import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';
 import { fetchGameContext, buildAIContext } from '@/hooks/ai/ai-utils';
 import {
+  heldEntryResult,
+  holdCombatEntryBeforeDm,
+  recentNarrationFrom,
+} from '@/hooks/ai/combat-entry-hold';
+import {
   COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
   NPC_FIRST_ADVANCE_FAILED_NOTICE,
   combatTurnErrorMessage,
@@ -383,8 +388,30 @@ export const useAIResponse = (): {
 
         onTurnPhase?.('preflight');
 
+        // #2341: a message that names an attack on a creature, with no encounter open, asks the
+        // player before the DM is called. The DM answering first is how a Chill Touch got
+        // narrated as a miss with no roll (run 14). Strike goes to the engine below with no
+        // DM text yet; "Do something else" calls the DM with a note that nothing happened.
+        const heldEntry =
+          !activeEncounter && !isDiceRollMessage
+            ? await holdCombatEntryBeforeDm({
+                sessionId,
+                message: latestMessage.text,
+                characterRecord,
+                recentNarration: recentNarrationFrom(messages.slice(0, -1)),
+              })
+            : null;
+        const entryDeclined = heldEntry?.decision === 'declined';
+        if (heldEntry?.decision === 'declined') {
+          aiContext.gameState.combatEntryDeclined = heldEntry.label;
+        }
+        const askDm =
+          heldEntry && heldEntry.decision !== 'declined'
+            ? async () => heldEntryResult(heldEntry.pending)
+            : AIService.chatWithDM;
+
         // Call AIService
-        let result = await AIService.chatWithDM({
+        let result = await askDm({
           message: latestMessage.text,
           context: aiContext,
           conversationHistory,
@@ -420,10 +447,15 @@ export const useAIResponse = (): {
                     preflightNpcTurns?.results?.length ||
                     preflightNpcTurns?.combatEnded,
                   );
-                  const earlyRollRequests = (parsedResult.roll_requests || []) as RollRequest[];
+                  // A declined entry is not a combat turn: whatever the model asked for, no roll
+                  // is prompted and no fight starts (#2341).
+                  const earlyRollRequests = (
+                    entryDeclined ? [] : parsedResult.roll_requests || []
+                  ) as RollRequest[];
                   const earlyShouldStartCombat =
-                    !!parsedResult.combatDetection?.shouldStartCombat ||
-                    parsedResult.combat_transition === 'start';
+                    !entryDeclined &&
+                    (!!parsedResult.combatDetection?.shouldStartCombat ||
+                      parsedResult.combat_transition === 'start');
                   // The engine can still resolve this turn after the text is parsed:
                   // `requestPlayerAttackRoll` and combat resolution both run inside
                   // `handleDmActionsAndTransitions`, which executes after this callback. Rendering
@@ -475,6 +507,22 @@ export const useAIResponse = (): {
             : {}),
         });
 
+        if (entryDeclined) {
+          // The prompt already says nothing happened; this is the half that does not depend on the
+          // model complying, the same blanking the handler's own decline branch does.
+          result = {
+            ...result,
+            combat_transition: 'none',
+            combat_entry_pending: undefined,
+            combat_actions: [],
+            map_actions: [],
+            roll_requests: [],
+            ...(result.combatDetection
+              ? { combatDetection: { ...result.combatDetection, shouldStartCombat: false } }
+              : {}),
+          };
+        }
+
         // Extract response data (result type has both snake_case and camelCase variants)
         let responseText = result.text;
         let narrationSegments = result.narrationSegments;
@@ -498,6 +546,7 @@ export const useAIResponse = (): {
           playerMessage: latestMessage.text,
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin: playerInputOriginOf(latestMessage),
+          entryConfirmed: heldEntry?.decision === 'confirmed',
         });
 
         result = dmActionsResult.result;

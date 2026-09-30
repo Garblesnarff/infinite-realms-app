@@ -8,6 +8,7 @@ import type {
   TacticalMapActionPayload,
 } from '@/services/user-data-api';
 
+import { confirmCombatEntry } from '@/hooks/ai/combat-entry-hold';
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import {
   COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
@@ -19,7 +20,6 @@ import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
-import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import {
   enforceCombatActionOnAttempt,
   looksLikeCombatActionAttempt,
@@ -58,6 +58,8 @@ export interface HandleDmActionsParams {
   isDiceRollMessage?: boolean;
   /** How the player gave this turn's input; `null` when no player message started it (#2305). */
   playerInputOrigin?: PlayerInputOrigin | null;
+  /** The player already chose Strike on this turn's pending entry, before the DM was called (#2341). */
+  entryConfirmed?: boolean;
 }
 
 export interface HandleDmActionsResult {
@@ -212,34 +214,10 @@ export async function handleDmActionsAndTransitions(
       result = { ...result, combat_actions: [], roll_requests: [] };
     } else {
       try {
-        const combatantLabels = pendingEntry.combatants.map((combatant: any) => combatant.name);
-        const declaredTarget = pendingEntry.declaredAttack?.actorName?.trim();
-        const declaredTargets = declaredTarget ? [declaredTarget] : [];
-        const normalizeLabel = (value: string): string =>
-          value
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim();
-        const otherCombatants = declaredTargets.length
-          ? combatantLabels.filter((label: string) => {
-              const normalizedLabel = normalizeLabel(label);
-              return !declaredTargets.some((target) => {
-                const normalizedTarget = normalizeLabel(target);
-                const escapedTarget = normalizedTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const numberedDuplicate = new RegExp(`^${escapedTarget}\\s*\\d+$`);
-                return (
-                  normalizedLabel === normalizedTarget || numberedDuplicate.test(normalizedLabel)
-                );
-              });
-            })
-          : [];
-        const confirmed = await requestCombatEntryConfirmation({
-          actorLabel: player.name,
-          combatantLabels,
-          ...(declaredTargets.length ? { declaredTargets, otherCombatants } : {}),
-          initiativeRoll: null,
-          initiativeModifier: player.initiativeModifier,
-        });
+        // A held entry (#2341) was confirmed before the DM was called; asking again would open
+        // the popup twice.
+        const confirmed =
+          params.entryConfirmed === true || (await confirmCombatEntry(pendingEntry, player));
         if (!confirmed) {
           // A decline is a real answer: do not call `/enter`, do not resolve the model's attack
           // batch, and do not let the pre-entry telegraph become a fabricated outcome.

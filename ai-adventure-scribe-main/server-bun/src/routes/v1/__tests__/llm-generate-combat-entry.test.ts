@@ -10,6 +10,12 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import {
+  DECLARED_ATTACK_PLAYER_INPUT,
+  declaredAttackCheckBody,
+  declinedTurnBody,
+} from '../../../../../shared/test-fixtures/declared-attack-hold';
+
 let generatedResult: Record<string, unknown> = { text: '{}', provider: 'openrouter', model: 'm' };
 let generatedInputs: Record<string, unknown>[] = [];
 const infoLogs: unknown[] = [];
@@ -17,6 +23,7 @@ const warningLogs: unknown[] = [];
 const intentActors = [
   { name: 'Professor Emil Darkwater' },
   { name: 'The Ghoul', monsterId: 'srd:ghoul' },
+  { name: 'Valerius' },
 ];
 
 mock.module('../../../lib/auth.js', () => ({
@@ -419,5 +426,64 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
       (JSON.parse(((await response.json()) as { text: string }).text) as Record<string, unknown>)
         .combat_entry_pending,
     ).toBeUndefined();
+  });
+
+  it("tells the DM run 14's Chill Touch has not been resolved (#2341)", async () => {
+    generatedResult = {
+      text: dmEnvelope({ text: 'Frost gathers on your fingertips.' }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: DECLARED_ATTACK_PLAYER_INPUT,
+      combatEntry: { sessionId: SESSION_ID, player: declaredAttackCheckBody.player },
+    });
+    const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+
+    expect(envelope.combat_entry_pending).toMatchObject({
+      trigger: 'player_intent',
+      declaredAttack: { actorName: 'Valerius', spellName: 'Chill Touch' },
+    });
+    const prompt = String(generatedInputs[0]?.prompt);
+    expect(prompt).toContain('<declared_attack actor="Valerius">');
+    expect(prompt).toContain('has NOT been resolved');
+    expect(prompt).toContain('describe only the moment before the roll');
+  });
+
+  it('does not ask again when the player declined: the turn body carries no combatEntry (#2341)', async () => {
+    generatedResult = {
+      text: dmEnvelope({ text: 'You let the spell fade. Valerius watches from the ceiling.' }),
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({ prompt: 'Continue the scene.', ...declinedTurnBody });
+    const envelope = JSON.parse(((await response.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+
+    expect(response.status).toBe(200);
+    expect(declinedTurnBody).not.toHaveProperty('combatEntry');
+    expect(envelope.combat_entry_pending).toBeUndefined();
+    expect(generatedInputs[0]?.prompt).not.toContain('<declared_attack');
+
+    // The same words with `combatEntry` DO reach the gate: leaving it off is what stops the
+    // second popup, so the client omitting it is the whole fix for a declined turn.
+    const withEntry = await generate({
+      prompt: 'Continue the scene.',
+      ...declinedTurnBody,
+      combatEntry: { sessionId: SESSION_ID, player: declaredAttackCheckBody.player },
+    });
+    const gated = JSON.parse(((await withEntry.json()) as { text: string }).text) as Record<
+      string,
+      unknown
+    >;
+    expect(gated.combat_entry_pending).toMatchObject({ trigger: 'player_intent' });
   });
 });

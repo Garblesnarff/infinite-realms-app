@@ -208,3 +208,46 @@ describe('detectDeclaredAttack', () => {
     expect(attack).not.toHaveProperty('weaponName');
   });
 });
+
+describe('detectDeclaredAttack across sentences (#2341)', () => {
+  const roster = [{ name: 'Valerius' }, { name: 'Dr. Darkwater' }];
+
+  it("finds run 14's Chill Touch in the second sentence", () => {
+    expect(
+      detectDeclaredAttack(
+        'I do not trust him. I cast Chill Touch at Valerius on the ceiling.',
+        roster,
+      ),
+    ).toMatchObject({
+      actorName: 'Valerius',
+      attackSource: 'spell',
+      spellId: 'chill-touch',
+      spellName: 'Chill Touch',
+    });
+  });
+
+  it('finds an attack after an exclamation or a question', () => {
+    expect(detectDeclaredAttack('Enough! I punch Valerius.', roster)).toMatchObject({
+      verb: 'punch',
+      actorName: 'Valerius',
+    });
+    expect(detectDeclaredAttack('Are you sure? I stab Valerius.', roster)).toMatchObject({
+      verb: 'stab',
+      actorName: 'Valerius',
+    });
+  });
+
+  it('keeps a title and its name together', () => {
+    expect(detectDeclaredAttack('I punch Dr. Darkwater.', roster)).toMatchObject({
+      verb: 'punch',
+      actorName: 'Dr. Darkwater',
+    });
+  });
+
+  it('still refuses a sentence that only talks about attacking', () => {
+    expect(
+      detectDeclaredAttack('I do not trust him. I would never punch Valerius.', roster),
+    ).toBeNull();
+    expect(detectDeclaredAttack('I do not trust him. I ask Valerius why.', roster)).toBeNull();
+  });
+});

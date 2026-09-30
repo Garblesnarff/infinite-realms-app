@@ -44,6 +44,16 @@ export type CombatEntryPlayerPayload = {
   hpMax?: number;
 };
 
+/** What `POST /v1/combat/sessions/:id/declared-attack` reads (#2341). */
+export type DeclaredAttackCheckPayload = {
+  playerInput: string;
+  player: CombatEntryPlayerPayload;
+  /** The last DM message: which creatures "him" can mean when a spell names no target. */
+  recentNarration?: string;
+  /** The creature the player picked when asked who a spell is for. */
+  targetName?: string;
+};
+
 export type CombatEntryPayload = {
   combatants: Array<{ name: string; monsterId?: string; count: number }>;
   sceneSpec: unknown;

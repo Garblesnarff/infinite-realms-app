@@ -47,7 +47,15 @@ export interface SpellCastContext {
   spellLevel: number | null;
 }
 
-export type MessageSendContext = DiceRollContext | SpellCastContext;
+/**
+ * Re-run the turn for the player's last message, which has no DM reply because the page was
+ * reloaded while the combat-entry popup held it (#2341). The message is already saved.
+ */
+export interface ResumeUnansweredTurnContext {
+  intent: 'resume_unanswered';
+}
+
+export type MessageSendContext = DiceRollContext | SpellCastContext | ResumeUnansweredTurnContext;
 
 interface MessageListProps {
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;

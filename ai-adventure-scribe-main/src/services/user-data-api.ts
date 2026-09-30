@@ -3,6 +3,7 @@
 import type { SessionListApiRow } from '../../shared/session-list-contract';
 import type {
   CombatEntryPayload,
+  DeclaredAttackCheckPayload,
   PendingCombatIntentPayload,
 } from '@/services/combat/structured-combat-payload';
 
@@ -340,6 +341,15 @@ export const userDataApi = {
     requestResponse(
       `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(entityId)}`,
     ),
+  detectDeclaredAttack: (
+    sessionId: string,
+    payload: DeclaredAttackCheckPayload,
+  ): Promise<Response> =>
+    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/declared-attack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
   enterCombat: (sessionId: string, payload: CombatEntryPayload): Promise<Response> =>
     requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/enter`, {
       method: 'POST',

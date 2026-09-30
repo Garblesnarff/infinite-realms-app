@@ -30,6 +30,7 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
       combatantLabels: pendingSpec.combatantLabels,
       declaredTargets: pendingSpec.declaredTargets ?? [],
       otherCombatants: pendingSpec.otherCombatants ?? [],
+      targetChoices: pendingSpec.targetChoices ?? [],
     });
   }, [pendingSpec]);
 
@@ -63,16 +64,18 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
   const primaryCombatants = declaredTargets.length ? declaredTargets : spec.combatantLabels;
   const combatants = primaryCombatants.length ? primaryCombatants.join(', ') : 'the opposing side';
   const otherCombatants = spec.otherCombatants ?? [];
+  const targetChoices = spec.targetChoices ?? [];
 
   const resolve = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    const action = event.currentTarget.dataset.action;
+    const { action, target } = event.currentTarget.dataset;
     const confirmed = action === 'confirm';
     logger.info('[CombatEntry] confirmation popup resolved', {
       actorLabel: spec.actorLabel,
       confirmed,
       action,
     });
-    (confirmed ? confirmation.confirm : confirmation.decline)();
+    if (confirmed) confirmation.confirm(target);
+    else confirmation.decline();
   };
 
   return createPortal(
@@ -89,7 +92,9 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
       >
         <p className="font-semibold text-card-foreground">Combat is about to begin</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Strike at {combatants}? Your initiative is rolled after you confirm.
+          {targetChoices.length
+            ? `Who is ${spec.spellLabel ?? 'your attack'} for? Your initiative is rolled after you choose.`
+            : `Strike at ${combatants}? Your initiative is rolled after you confirm.`}
         </p>
         {otherCombatants.length > 0 && (
           <p className="mt-1 text-sm text-muted-foreground">
@@ -97,9 +102,24 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
           </p>
         )}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" variant="fantasy" data-action="confirm" onClick={resolve}>
-            [Strike]
-          </Button>
+          {targetChoices.length ? (
+            targetChoices.map((choice) => (
+              <Button
+                key={choice}
+                type="button"
+                variant="fantasy"
+                data-action="confirm"
+                data-target={choice}
+                onClick={resolve}
+              >
+                {`[Strike ${choice}]`}
+              </Button>
+            ))
+          ) : (
+            <Button type="button" variant="fantasy" data-action="confirm" onClick={resolve}>
+              [Strike]
+            </Button>
+          )}
           <Button type="button" variant="outline" data-action="decline" onClick={resolve}>
             [Do something else]
           </Button>

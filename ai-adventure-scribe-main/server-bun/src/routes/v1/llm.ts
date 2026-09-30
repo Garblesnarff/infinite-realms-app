@@ -17,8 +17,8 @@ import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
 import {
-  COMBAT_INTENT_VERBS,
   detectDeclaredAttack,
+  looksLikeCombatIntent,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
 import {
@@ -109,33 +109,12 @@ const extractPlayerInputFromPrompt = (prompt: string): string | undefined => {
   return playerInput || undefined;
 };
 
-const COMBAT_INTENT_IDIOMS = ['take a swing', 'swing at', 'go for'] as const;
-
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const combatIntentPrefilter = new RegExp(
-  [...COMBAT_INTENT_VERBS, ...COMBAT_INTENT_IDIOMS]
-    .sort((left, right) => right.length - left.length)
-    .map(
-      (term) =>
-        `\\b${term
-          .split(/\s+/)
-          .map((word) => escapeRegExp(word))
-          .join('\\s+')}\\b`,
-    )
-    .join('|'),
-  'i',
-);
-
-const looksLikeCombatIntent = (playerInput: string): boolean =>
-  combatIntentPrefilter.test(playerInput);
-
 const escapeXmlAttribute = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 const appendDeclaredAttackDirective = (prompt: string, actorName: string): string => {
   const escapedActor = escapeXmlAttribute(actorName);
-  return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and narrate only the wind-up.</declared_attack>`;
+  return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. It has NOT been resolved: the engine has not rolled, so nothing has hit, missed, or dealt damage, and ${escapedActor} has not reacted or moved. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and describe only the moment before the roll.</declared_attack>`;
 };
 
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })

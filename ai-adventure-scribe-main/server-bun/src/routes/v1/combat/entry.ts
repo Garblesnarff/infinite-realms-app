@@ -10,12 +10,68 @@ import {
   type DerivedCombatant,
   type SeatedCombatEntryOutcome,
 } from '../../../services/combat/combat-entry-gate.js';
+import {
+  actorsMentionedIn,
+  declareSpellAttackOn,
+  detectDeclaredAttack,
+  detectUntargetedAttackSpell,
+  looksLikeCombatIntent,
+  type CombatIntentActor,
+  type DeclaredAttack,
+} from '../../../services/combat/combat-intent-gate.js';
+import { loadCombatIntentActorRoster as defaultLoadCombatIntentActorRoster } from '../../../services/combat/combat-intent-roster.js';
 import { buildInitiativeOrder as defaultBuildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
+import { applyCombatEntryGate } from '../../../services/combat-entry-pipeline.js';
 
 const sessionIdParams = t.Object({
   sessionId: t.String({ minLength: 1, maxLength: 255 }),
 });
+
+const entryPlayerBody = t.Object({
+  characterId: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+  name: t.String({ minLength: 1, maxLength: 200 }),
+  initiativeModifier: t.Number({ minimum: -100, maximum: 100 }),
+  hpCurrent: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
+  hpMax: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
+});
+
+const declaredAttackBody = t.Object({
+  playerInput: t.String({ minLength: 1, maxLength: 20_000 }),
+  player: entryPlayerBody,
+  /** The last DM message: which creatures "him" can mean when the spell names no target. */
+  recentNarration: t.Optional(t.String({ maxLength: 6_000 })),
+  /** The creature the player picked when asked who the spell is for. */
+  targetName: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+});
+
+/** Most creatures the popup offers when the narration names none of them. */
+const MAX_TARGET_CHOICES = 8;
+
+const sameName = (left: string, right: string): boolean =>
+  left.trim().toLocaleLowerCase() === right.trim().toLocaleLowerCase();
+
+type SpellTarget = { attack: DeclaredAttack } | { choices: string[] } | null;
+
+/**
+ * "I cast Fire Bolt at him": a known attack spell with no creature the roster can name. One
+ * creature in the narration is the target; several, or none, are the player's to pick.
+ */
+function resolveSpellTarget(
+  spell: { id: string; name: string },
+  actors: readonly CombatIntentActor[],
+  body: { targetName?: string; recentNarration?: string },
+): SpellTarget {
+  if (body.targetName) {
+    const chosen = actors.find((actor) => sameName(actor.name, body.targetName ?? ''));
+    return chosen ? { attack: declareSpellAttackOn(spell, chosen) } : null;
+  }
+  const mentioned = actorsMentionedIn(body.recentNarration ?? '', actors);
+  const candidates = mentioned.length ? mentioned : actors.slice(0, MAX_TARGET_CHOICES);
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return { attack: declareSpellAttackOn(spell, candidates[0]) };
+  return { choices: candidates.map((actor) => actor.name) };
+}
 
 const enterBody = t.Object({
   combatants: t.Array(
@@ -27,13 +83,7 @@ const enterBody = t.Object({
     { maxItems: 100 },
   ),
   sceneSpec: t.Unknown(),
-  player: t.Object({
-    characterId: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
-    name: t.String({ minLength: 1, maxLength: 200 }),
-    initiativeModifier: t.Number({ minimum: -100, maximum: 100 }),
-    hpCurrent: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
-    hpMax: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 100_000 }))),
-  }),
+  player: entryPlayerBody,
   declaredAttack: t.Optional(
     t.Object({
       verb: t.String({ minLength: 1, maxLength: 80 }),
@@ -182,3 +232,73 @@ function enterResponse(
 }
 
 export const entryRoutes = createCombatEntryRoutes();
+
+export interface DeclaredAttackRouteOptions {
+  authenticateRequest?: typeof defaultAuthenticateRequest;
+  loadCombatIntentActorRoster?: typeof defaultLoadCombatIntentActorRoster;
+}
+
+/**
+ * #2341: the pending entry for a message that names an attack, before the DM is called.
+ *
+ * The popup has to open before any DM text exists, so the client asks here first. This is the
+ * detector `/v1/llm/generate` runs, on the same roster, with no model call in between; a message
+ * that names no attack on a known creature answers `{ pending: null }`.
+ */
+export function createDeclaredAttackRoutes({
+  authenticateRequest = defaultAuthenticateRequest,
+  loadCombatIntentActorRoster = defaultLoadCombatIntentActorRoster,
+}: DeclaredAttackRouteOptions = {}) {
+  return new Elysia().post(
+    '/sessions/:sessionId/declared-attack',
+    async ({ request, params, body, set }) => {
+      const { user, error: authError } = await authenticateRequest(request);
+      if (authError || !user) {
+        set.status = 401;
+        return { error: authError || 'Unauthorized' };
+      }
+
+      if (!UUID_PATTERN.test(params.sessionId)) {
+        set.status = 422;
+        return { error: 'Invalid session id', detail: 'sessionId must be a uuid' };
+      }
+
+      if (!looksLikeCombatIntent(body.playerInput)) return { pending: null };
+      const actors = await loadCombatIntentActorRoster(params.sessionId, user.userId);
+      let declaredAttack = detectDeclaredAttack(body.playerInput, actors);
+      let targetChoice: { spellName: string; candidates: string[] } | undefined;
+      if (!declaredAttack) {
+        const spell = detectUntargetedAttackSpell(body.playerInput);
+        const target = spell ? resolveSpellTarget(spell, actors, body) : null;
+        if (!spell || !target) return { pending: null };
+        if ('choices' in target) {
+          targetChoice = { spellName: spell.name, candidates: target.choices };
+        } else {
+          declaredAttack = target.attack;
+        }
+      }
+      if (!declaredAttack) return { pending: null, targetChoice };
+
+      const gated = await applyCombatEntryGate({
+        result: { text: JSON.stringify({ text: '' }) },
+        userId: user.userId,
+        combatEntry: {
+          sessionId: params.sessionId,
+          player: {
+            characterId: body.player.characterId ?? null,
+            name: body.player.name.trim(),
+            initiativeModifier: body.player.initiativeModifier,
+            ...(body.player.hpCurrent != null ? { hpCurrent: body.player.hpCurrent } : {}),
+            ...(body.player.hpMax != null ? { hpMax: body.player.hpMax } : {}),
+          },
+        },
+        declaredAttack,
+      });
+      const envelope = JSON.parse(gated.text) as { combat_entry_pending?: unknown };
+      return { pending: envelope.combat_entry_pending ?? null };
+    },
+    { params: sessionIdParams, body: declaredAttackBody },
+  );
+}
+
+export const declaredAttackRoutes = createDeclaredAttackRoutes();

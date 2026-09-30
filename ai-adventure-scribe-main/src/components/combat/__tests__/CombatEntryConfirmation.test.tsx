@@ -124,4 +124,35 @@ describe('CombatEntryConfirmation', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Also joining the fight:/)).not.toBeInTheDocument();
   });
+
+  it('asks who an attack spell is for when it named nobody (#2341), and reports the pick', () => {
+    const confirm = vi.fn();
+    const decline = vi.fn();
+
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: {
+            actorLabel: 'The Scholar',
+            combatantLabels: ['Valerius', 'Professor Darkwater'],
+            targetChoices: ['Valerius', 'Professor Darkwater'],
+            spellLabel: 'Fire Bolt',
+            initiativeRoll: null,
+            initiativeModifier: 1,
+          },
+          confirm,
+          decline,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText('Who is Fire Bolt for? Your initiative is rolled after you choose.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '[Strike]' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '[Strike Professor Darkwater]' }));
+    expect(confirm).toHaveBeenCalledWith('Professor Darkwater');
+    fireEvent.click(screen.getByRole('button', { name: '[Do something else]' }));
+    expect(decline).toHaveBeenCalledTimes(1);
+  });
 });

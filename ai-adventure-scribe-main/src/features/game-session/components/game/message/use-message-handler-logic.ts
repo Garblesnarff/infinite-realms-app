@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { toHeaderExcerpt } from './scene-blurb';
+import { useHeldEntryRecovery } from './use-held-entry-recovery';
 import { useMessageCommandHandler } from './use-message-command-handler';
 import { useMessageSendQueue } from './use-message-send-queue';
 import { useSessionValidator } from '../session/SessionValidator';
@@ -105,7 +106,7 @@ export const useMessageHandlerLogic = ({
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
 } => {
-  const { messages, sendMessage, updateMessage } = useMessageContext();
+  const { messages, messagesReady, sendMessage, updateMessage } = useMessageContext();
   const { extractMemories } = useMemoryContext();
   const {
     getAIResponse,
@@ -251,32 +252,40 @@ export const useMessageHandlerLogic = ({
       const newTurnCount = currentTurnCount + 1;
       const currentMessages = messagesRef.current;
       const isFirstMessage = currentMessages.length === 0;
+      // #2341: a resumed turn answers a message that is already saved and already counted.
+      const resumingSavedMessage = providedContext?.intent === 'resume_unanswered';
+      const savedMessage = currentMessages[currentMessages.length - 1];
 
       // Add player message
       // CRITICAL FIX: Use provided context if available (for dice roll results)
       // This preserves the 'dice_roll' intent through the message flow,
       // enabling the roll suppression logic in use-ai-response.ts
-      const playerMessage: ChatMessage = {
-        text: playerInput,
-        sender: 'player',
-        characterName: character?.name,
-        characterAvatar: character?.avatar_url,
-        context: providedContext ?? {
-          intent: isFirstMessage ? 'first_action' : 'query',
-          isFirstMessage,
-        },
-      };
-      await sendMessage(playerMessage); // This adds to UI and saves to dialogue_history
+      const playerMessage: ChatMessage =
+        resumingSavedMessage && savedMessage
+          ? savedMessage
+          : {
+              text: playerInput,
+              sender: 'player',
+              characterName: character?.name,
+              characterAvatar: character?.avatar_url,
+              context: providedContext ?? {
+                intent: isFirstMessage ? 'first_action' : 'query',
+                isFirstMessage,
+              },
+            };
+      if (!resumingSavedMessage) {
+        await sendMessage(playerMessage); // This adds to UI and saves to dialogue_history
 
-      // Update turn count immediately after player message is sent using functional form
-      await updateGameSessionState((prev: ExtendedGameSession) => ({
-        ...prev,
-        turn_count: (prev.turn_count || 0) + 1,
-      }));
-      turnCountAdvanced = true;
+        // Update turn count immediately after player message is sent using functional form
+        await updateGameSessionState((prev: ExtendedGameSession) => ({
+          ...prev,
+          turn_count: (prev.turn_count || 0) + 1,
+        }));
+        turnCountAdvanced = true;
 
-      // Update the ref to reflect the new turn count
-      turnCountRef.current = newTurnCount;
+        // Update the ref to reflect the new turn count
+        turnCountRef.current = newTurnCount;
+      }
 
       // Optional: System acknowledgment (can be removed if AI response is fast)
       // const systemMessage: ChatMessage = { text: "Processing...", sender: 'system', context: { intent: 'acknowledgment' } };
@@ -290,7 +299,10 @@ export const useMessageHandlerLogic = ({
       // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
       // Use ref to get current messages to avoid stale closure
       const aiResponseMessage = await getAIResponse(
-        [...messagesRef.current, playerMessage],
+        [
+          ...(resumingSavedMessage ? messagesRef.current.slice(0, -1) : messagesRef.current),
+          playerMessage,
+        ],
         sessionId,
         undefined,
         turnPhase,
@@ -649,6 +661,14 @@ export const useMessageHandlerLogic = ({
   // Keep the ref current so processSendQueue always dispatches to the latest closure.
   // Synchronous assignment (not useEffect) ensures it's updated before any render-triggered call.
   actualSendMessageRef.current = actualSendMessage;
+
+  useHeldEntryRecovery({
+    sessionId,
+    messages,
+    messagesReady,
+    characterRecord: character as Record<string, unknown> | null | undefined,
+    resumeTurn: (playerInput) => handleSendMessage(playerInput, { intent: 'resume_unanswered' }),
+  });
 
   React.useEffect(() => {
     logCombatTurnUiState({ ...combatTurnUiState, isSending });

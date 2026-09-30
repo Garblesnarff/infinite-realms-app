@@ -13,7 +13,7 @@ import {
 
 export interface PendingCombatEntryConfirmation {
   spec: CombatEntryConfirmationSpec;
-  confirm: () => void;
+  confirm: (target?: string) => void;
   decline: () => void;
 }
 
@@ -48,7 +48,7 @@ export function useCombatEntryConfirmationHost(
   if (!pendingSpec) return null;
   return {
     spec: pendingSpec,
-    confirm: () => settlePendingCombatEntryConfirmation(true),
+    confirm: (target) => settlePendingCombatEntryConfirmation(true, target),
     decline: () => settlePendingCombatEntryConfirmation(false),
   };
 }

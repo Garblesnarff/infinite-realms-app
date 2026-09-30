@@ -202,6 +202,16 @@ const MOVE_FIRST_ACTION = {
   },
 };
 
+const SPELL_ACTION = {
+  actor_id: 'storyteller-1',
+  action_type: 'cast_spell',
+  target_ids: ['vance-1'],
+  weapon_id: null,
+  spell_id: 'fire-bolt',
+  slot_level: null,
+  movement_feet: 0,
+};
+
 const response = (payload: Record<string, unknown> = {}) => ({
   ok: true,
   status: 201,
@@ -917,5 +927,72 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     const outcome = await invoke({ combat_transition: 'none' }, refresh);
     expect(refresh).not.toHaveBeenCalled();
     expect(outcome.isInCombat).toBe(false);
+  });
+
+  it('runs a held entry the player already confirmed: no second popup, initiative, then the spell through the engine (#2341)', async () => {
+    const order: string[] = [];
+    vi.mocked(requestPlayerInitiativeRoll).mockImplementation(async () => {
+      order.push('initiative');
+      return { d20: 16 };
+    });
+    vi.mocked(userDataApi.enterCombat).mockImplementation((async () => {
+      order.push('enter');
+      return response({
+        encounter: { id: 'encounter-1' },
+        first_action: {
+          type: 'spell',
+          actor: 'storyteller-1',
+          actorLabel: 'The Storyteller',
+          target: 'vance-1',
+          targetLabel: 'Vance',
+          source: 'spell',
+          attackSource: 'spell',
+          weaponId: null,
+          weaponName: null,
+          spellId: 'fire-bolt',
+          slotLevel: null,
+          combat_action: SPELL_ACTION,
+        },
+      });
+    }) as any);
+    vi.mocked(requestPlayerAttackRoll).mockImplementation(async () => {
+      order.push('spell attack roll');
+      return { d20: 17 };
+    });
+    vi.mocked(resolveDeclaredCombatActions).mockImplementation((async () => {
+      order.push('engine resolves, DM narrates the engine lines');
+      return { text: 'Frost takes Vance in the chest.', narrationSegments: [] };
+    }) as any);
+
+    const outcome = await invoke(
+      {
+        // The held turn: no DM text exists, only the entry handoff.
+        text: '',
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [],
+        roll_requests: [],
+      },
+      vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER),
+      { entryConfirmed: true },
+    );
+
+    expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
+    expect(order).toEqual([
+      'initiative',
+      'enter',
+      'spell attack roll',
+      'engine resolves, DM narrates the engine lines',
+    ]);
+    expect(requestPlayerAttackRoll).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'spell-attack', attackBonus: 6 }),
+    );
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [SPELL_ACTION],
+        playerAttackRoll: expect.objectContaining({ d20: 17, autoRolled: false }),
+      }),
+    );
+    expect(outcome.responseText).toBe('Frost takes Vance in the chest.');
   });
 });

@@ -1,4 +1,8 @@
 import { isUnarmedAttackVerb, isUnarmedWeaponClaim } from './weapon-catalog.js';
+import {
+  COMBAT_INTENT_VERBS,
+  looksLikeCombatIntent,
+} from '../../../../shared/combat-intent-prefilter';
 import { getSpellByName, isPlayerCombatSpell } from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
 
@@ -27,31 +31,7 @@ export interface DeclaredAttack {
   spellName?: string;
 }
 
-/**
- * Deliberately small, clause-head vocabulary. This is not a classifier: it only recognizes
- * an attack-shaped clause and then resolves the named actor against the server roster.
- */
-export const COMBAT_INTENT_VERBS = [
-  'punch',
-  'hit',
-  'strike',
-  'stab',
-  'slash',
-  'shoot',
-  'attack',
-  'kick',
-  'headbutt',
-  'tackle',
-  'grapple',
-  'shove',
-  'slap',
-  'elbow',
-  'fire at',
-  'swing',
-  'swing at',
-  'throw',
-  'cast',
-] as const;
+export { COMBAT_INTENT_VERBS, looksLikeCombatIntent };
 
 const IGNORABLE_ACTOR_WORDS = new Set(['a', 'an', 'at', 'in', 'on', 'the', 'to']);
 
@@ -72,7 +52,7 @@ const DIRECT_ATTACK_VERBS = [
 ] as const;
 
 const VERB_TOKEN_PATTERN =
-  /(?:punch|hit|strike|stab|slash|shoot|attack|kick|headbutt|tackle|grapple|shove|slap|elbow|fire|swing|throw|cast)(?:es|s)?\b/gi;
+  /(?:punch|hit|strike|stab|slash|shoot|attack|kick|headbutt|tackle|grapple|shove|slap|elbow|fire|swing|throw|hurl|launch|loose|blast|zap|cast)(?:es|s)?\b/gi;
 
 const DECLARATION_BLOCK_PATTERN =
   /\b(?:don't|do not|won't|never|not going to|should\s+i|can\s+i|could\s+i|what\s+if|if\s+i)\b/i;
@@ -134,6 +114,25 @@ const matchActor = (
   return candidates[0]?.actor ?? null;
 };
 
+/**
+ * The attack verb governs the actor only when the actor heads the target phrase: "strike Valerius"
+ * and "strike the professor" do, "strike a bargain with Valerius" does not, though it shares a
+ * word with the roster (#2341). The name has to be one of the first two words of the target.
+ */
+const governsActor = (targetText: string, actor: CombatIntentActor): boolean => {
+  const nameWords = new Set(actorWords(actor.name));
+  const firstNameWord = actorWords(targetText).findIndex((word) => nameWords.has(word));
+  return firstNameWord >= 0 && firstNameWord <= 1;
+};
+
+const matchGoverningActor = (
+  targetText: string,
+  actors: readonly CombatIntentActor[],
+): CombatIntentActor | null => {
+  const actor = matchActor(targetText, actors);
+  return actor && governsActor(targetText, actor) ? actor : null;
+};
+
 const PRONOUN_TARGETS = new Set(['him', 'her', 'them', 'it']);
 
 interface ActorResolution {
@@ -146,7 +145,7 @@ const matchActorOrUnambiguousPronoun = (
   actors: readonly CombatIntentActor[],
   previousApproachTarget?: CombatIntentActor | null,
 ): ActorResolution | null => {
-  const actor = matchActor(targetText, actors);
+  const actor = matchGoverningActor(targetText, actors);
   if (actor) return { actor };
   const pronoun = normalize(targetText);
   if (previousApproachTarget && PRONOUN_TARGETS.has(pronoun)) {
@@ -164,6 +163,25 @@ const toDeclaredAttack = (verb: string, actor: CombatIntentActor): DeclaredAttac
     ...(actor.monsterId?.trim() ? { monsterId: actor.monsterId.trim() } : {}),
   };
 };
+
+/** "Dr. Darkwater" is one name, not two sentences. */
+const TITLE_ABBREVIATION = /(?:^|\s)(?:mr|mrs|ms|dr|st|prof|capt|sgt|lt|col|gen)$/i;
+
+/** Verbs a player uses to send a spell at something. */
+const SPELL_VERBS = 'cast|hurl|launch|loose|fire|blast|zap|unleash';
+
+export const declareSpellAttackOn = (
+  spell: { id: string; name: string },
+  actor: CombatIntentActor,
+): DeclaredAttack => ({
+  ...toDeclaredAttack(`cast ${spell.name}`, actor),
+  attackSource: 'spell',
+  // The legacy declaration shape calls this field `weaponName`; keep the explicit
+  // spell namespace so downstream grounding can never mistake a spell for a weapon.
+  weaponName: `spell:${spell.name}`,
+  spellId: spell.id,
+  spellName: spell.name,
+});
 
 const splitIntoClauses = (input: string): string[] => {
   const clauses: string[] = [];
@@ -192,6 +210,19 @@ const splitIntoClauses = (input: string): string[] => {
     if (quote) continue;
 
     if (character === ',' || character === ';') {
+      pushClause(index);
+      clauseStart = index + 1;
+      continue;
+    }
+
+    // A sentence end starts a new clause (#2341). Without it "I do not trust him. I cast Chill
+    // Touch at Valerius." is one clause that does not begin with the verb, and the declared
+    // attack in its second sentence is never seen.
+    if (
+      /[.!?]/.test(character) &&
+      /\s/.test(input[index + 1] ?? '') &&
+      !(character === '.' && TITLE_ABBREVIATION.test(input.slice(clauseStart, index)))
+    ) {
       pushClause(index);
       clauseStart = index + 1;
       continue;
@@ -275,16 +306,19 @@ interface ClauseAttackMatch {
 }
 
 const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
-  const castMatch = /^cast\s+(.+?)\s+(?:at|on)\s+(.+)$/i.exec(clause);
-  if (castMatch) {
-    return {
-      verb: 'cast',
-      spellName: stripTrailingPunctuation(castMatch[1]),
-      targetText: castMatch[2],
-    };
+  const spellVerbMatch = new RegExp(`^(${SPELL_VERBS})\\s+(.+?)\\s+(?:at|on)\\s+(.+)$`, 'i').exec(
+    clause,
+  );
+  if (spellVerbMatch) {
+    const spellName = stripTrailingPunctuation(spellVerbMatch[2]);
+    const verb = spellVerbMatch[1].toLowerCase();
+    // "cast" always names a spell; "hurl Acid Splash" does, "hurl a rock" is a thrown weapon.
+    if (verb === 'cast' || getSpellByName(spellName)) {
+      return { verb, spellName, targetText: spellVerbMatch[3] };
+    }
   }
 
-  const throwMatch = /^throw\s+.+?\s+at\s+(.+)$/i.exec(clause);
+  const throwMatch = /^(?:throw|hurl|launch|loose)\s+.+?\s+at\s+(.+)$/i.exec(clause);
   if (throwMatch) return { verb: 'throw', targetText: throwMatch[1] };
 
   const takeSwingMatch = /^take\s+a\s+swing\s+(?:at|on)\s+(.+)$/i.exec(clause);
@@ -299,7 +333,7 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
     };
   }
 
-  const fireMatch = /^fire\s+(?:at|on)\s+(.+)$/i.exec(clause);
+  const fireMatch = /^fire(?:\s+.+?)?\s+(?:at|on)\s+(.+)$/i.exec(clause);
   if (fireMatch) return { verb: 'fire at', targetText: fireMatch[1] };
 
   const goForMatch = /^go\s+for\s+(.+)$/i.exec(clause);
@@ -348,18 +382,8 @@ const resolveClauseAttack = (
   if (match.spellName) {
     const spell = getSpellByName(match.spellName);
     if (!spell?.damage || !isPlayerCombatSpell(spell)) return null;
-    const actor = matchActor(match.targetText, actors);
-    return actor
-      ? {
-          ...toDeclaredAttack(`cast ${spell.name}`, actor),
-          attackSource: 'spell',
-          // The legacy declaration shape calls this field `weaponName`; keep the explicit
-          // spell namespace so downstream grounding can never mistake a spell for a weapon.
-          weaponName: `spell:${spell.name}`,
-          spellId: spell.id,
-          spellName: spell.name,
-        }
-      : null;
+    const actor = matchGoverningActor(match.targetText, actors);
+    return actor ? declareSpellAttackOn(spell, actor) : null;
   }
 
   const resolution = matchActorOrUnambiguousPronoun(
@@ -410,4 +434,62 @@ export function detectDeclaredAttack(
     if (match) declaredAttack = match;
   }
   return declaredAttack;
+}
+
+export interface UntargetedAttackSpell {
+  id: string;
+  name: string;
+}
+
+const UNTARGETED_SPELL_PATTERN = new RegExp(
+  `^(?:${SPELL_VERBS})\\s+(.+?)(?:\\s+(?:at|on|toward|towards)\\s+(.+))?$`,
+  'i',
+);
+
+/**
+ * A known attack spell or cantrip cast at "him", "it" or nothing at all ("I cast Fire Bolt at
+ * him"). The roster cannot say who, so `detectDeclaredAttack` returns null, and the DM would
+ * answer first (#2341). The popup asks which creature instead. A named target that is not on the
+ * roster ("at the lantern") is not this: that is not an attack on a creature.
+ */
+export function detectUntargetedAttackSpell(playerInput: string): UntargetedAttackSpell | null {
+  if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
+  for (const rawClause of splitIntoClauses(playerInput.trim().replace(/\s+/g, ' '))) {
+    if (isCombatDeescalationSpeech(rawClause)) continue;
+    const clause = stripLeadingPlayerIntent(stripTrailingPunctuation(rawClause.trim()));
+    if (!clause || isInsideQuote(clause, 0)) continue;
+    if (DECLARATION_BLOCK_PATTERN.test(clause.replace(/[’‘]/g, "'"))) continue;
+    const match = UNTARGETED_SPELL_PATTERN.exec(clause);
+    if (!match) continue;
+    const spell = getSpellByName(stripTrailingPunctuation(match[1]));
+    if (!spell?.damage || !isPlayerCombatSpell(spell)) continue;
+    const target = match[2];
+    if (target && !PRONOUN_TARGETS.has(actorWords(target)[0] ?? '')) continue;
+    return { id: spell.id, name: spell.name };
+  }
+  return null;
+}
+
+const TITLE_WORDS = new Set(['the', 'professor', 'captain', 'doctor', 'lord', 'lady', 'sir']);
+
+/**
+ * Roster actors the narration names, by full name or by one distinctive word of it. Used to
+ * offer the popup the creatures "him" can mean, rather than everyone in the campaign.
+ */
+export function actorsMentionedIn(
+  text: string,
+  actors: readonly CombatIntentActor[],
+): CombatIntentActor[] {
+  const haystack = ` ${normalize(text)} `;
+  return actors.filter((actor) => {
+    const name = normalize(actor.name);
+    if (!name) return false;
+    if (haystack.includes(` ${name} `)) return true;
+    const nameWords = words(actor.name);
+    const distinctive = [
+      nameWords.find((word) => !TITLE_WORDS.has(word)),
+      nameWords.length <= 3 ? nameWords[nameWords.length - 1] : undefined,
+    ];
+    return distinctive.some((word) => word && word.length >= 4 && haystack.includes(` ${word} `));
+  });
 }

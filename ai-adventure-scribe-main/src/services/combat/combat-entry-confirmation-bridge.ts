@@ -10,10 +10,25 @@ export interface CombatEntryConfirmationSpec {
   otherCombatants?: string[];
   initiativeRoll: number | null;
   initiativeModifier: number;
+  /**
+   * An attack spell was named with no creature ("I cast Fire Bolt at him"): the card asks who
+   * it is for instead of asking to strike a declared target (#2341).
+   */
+  targetChoices?: string[];
+  spellLabel?: string;
+}
+
+/** The player's answer: strike (at `target`, when the card asked who) or do something else. */
+export interface CombatEntryAnswer {
+  confirmed: boolean;
+  target?: string;
 }
 
 export interface CombatEntryConfirmationHost {
-  present: (spec: CombatEntryConfirmationSpec, settle: (confirmed: boolean) => void) => () => void;
+  present: (
+    spec: CombatEntryConfirmationSpec,
+    settle: (confirmed: boolean, target?: string) => void,
+  ) => () => void;
 }
 
 export const COMBAT_ENTRY_CONFIRMATION_NO_HOST_CODE = 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE';
@@ -33,7 +48,7 @@ let hostOwnerKey: string | undefined;
 let pending: {
   spec: CombatEntryConfirmationSpec;
   ownerKey: string | undefined;
-  settle: (confirmed: boolean) => void;
+  settle: (confirmed: boolean, target?: string) => void;
   dismiss: () => void;
 } | null = null;
 
@@ -76,12 +91,12 @@ export function hasPendingCombatEntryConfirmation(): boolean {
 }
 
 /** Resolve an entry prompt and dismiss its UI. */
-export function settlePendingCombatEntryConfirmation(confirmed: boolean): boolean {
+export function settlePendingCombatEntryConfirmation(confirmed: boolean, target?: string): boolean {
   if (!pending) return false;
   const settled = pending;
   pending = null;
   settled.dismiss();
-  settled.settle(confirmed);
+  settled.settle(confirmed, target);
   return true;
 }
 
@@ -89,6 +104,13 @@ export function settlePendingCombatEntryConfirmation(confirmed: boolean): boolea
 export function requestCombatEntryConfirmation(
   spec: CombatEntryConfirmationSpec,
 ): Promise<boolean> {
+  return requestCombatEntryAnswer(spec).then((answer) => answer.confirmed);
+}
+
+/** Like `requestCombatEntryConfirmation`, and reports which creature the player picked. */
+export function requestCombatEntryAnswer(
+  spec: CombatEntryConfirmationSpec,
+): Promise<CombatEntryAnswer> {
   if (!host) {
     logger.warn('[CombatEntry] no confirmation host mounted; rejecting entry confirmation');
     return Promise.reject(new CombatEntryConfirmationUnavailableError());
@@ -101,20 +123,20 @@ export function requestCombatEntryConfirmation(
     settlePendingCombatEntryConfirmation(false);
   }
 
-  return new Promise<boolean>((resolve) => {
+  return new Promise<CombatEntryAnswer>((resolve) => {
     let settled = false;
     let dismissPopup = (): void => {};
-    const settle = (confirmed: boolean): void => {
+    const settle = (confirmed: boolean, target?: string): void => {
       if (settled) return;
       settled = true;
       logger.info(`[CombatEntry] confirmation ${confirmed ? 'accepted' : 'declined'}`);
-      resolve(confirmed);
+      resolve({ confirmed, ...(target ? { target } : {}) });
     };
 
     pending = { spec, ownerKey: activeOwnerKey, settle, dismiss: () => dismissPopup() };
-    const hostDismiss = activeHost.present(spec, (confirmed) => {
+    const hostDismiss = activeHost.present(spec, (confirmed, target) => {
       if (pending?.settle === settle) pending = null;
-      settle(confirmed);
+      settle(confirmed, target);
     });
     dismissPopup = hostDismiss;
 
