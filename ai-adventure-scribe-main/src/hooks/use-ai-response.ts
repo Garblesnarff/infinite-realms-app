@@ -32,7 +32,7 @@ import {
   type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
-import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
+import { handleDmActionsAndTransitions, showNpcTurnLines } from '@/hooks/ai/dm-actions-handler';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
@@ -48,6 +48,7 @@ import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
+import { isNarrativeRollRequest } from '@/utils/roll-request/engine-channel';
 
 // Voice narration types
 export interface NarrationSegment {
@@ -299,7 +300,10 @@ export const useAIResponse = (): {
         const combatWasActiveAtRequestStart = isInCombat;
         const combatRoundAtRequestStart = activeEncounter?.currentRound;
         let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
+        let npcLinesShown = false;
         if (isInCombat && !isDiceRollMessage) {
+          // Read before the pre-flight: one that ends combat leaves no encounter to read after.
+          const preflightParticipants = activeEncounter?.participants;
           try {
             const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
               sessionId,
@@ -334,6 +338,13 @@ export const useAIResponse = (): {
               localNotice: NPC_FIRST_ADVANCE_FAILED_NOTICE,
               localNotices: [{ text: NPC_FIRST_ADVANCE_FAILED_NOTICE, persist: true }],
             };
+          }
+          // The tracker HP has moved by now. Say why before the DM call and the player's die
+          // prompt, not after them in the reply (#2386). Outside the try: the server advanced the
+          // NPCs, so a failure here is not a failed advance.
+          if (preflightNpcTurns && onEngineNotice) {
+            showNpcTurnLines(preflightNpcTurns, preflightParticipants, onEngineNotice);
+            npcLinesShown = true;
           }
         }
 
@@ -550,6 +561,7 @@ export const useAIResponse = (): {
           playerInputOrigin: playerInputOriginOf(latestMessage),
           entryConfirmed: heldEntry?.decision === 'confirmed',
           onEngineNotice,
+          npcLinesShown,
         });
 
         result = dmActionsResult.result;
@@ -584,6 +596,11 @@ export const useAIResponse = (): {
             combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
           );
         }
+
+        // The engine may have ended combat during this turn. The roll drop reads this flag, and it
+        // was set when the context was built, so a check the DM asks for after the killing blow
+        // would be dropped as an in-combat request (#2386).
+        aiContext.gameState.isInCombat = isInCombat;
 
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
@@ -642,6 +659,30 @@ export const useAIResponse = (): {
           logger.info('Appended NPC roll continuation to response');
         }
 
+        // A reply with a narrative roll pending is not shown until the player rolls, and its
+        // engine lines are the facts that explain the tracker. Show them now, once, rather than
+        // behind the popup: the roll that survives on a combat-ending turn would otherwise hold
+        // the kill line back (#2386).
+        let replyEngineBlocks = combatEngineBlocks;
+        if (
+          processedRolls.playerRollRequests.some(isNarrativeRollRequest) &&
+          onEngineNotice &&
+          combatEngineBlocks?.length
+        ) {
+          const engineText = combatEngineBlocks
+            .flatMap((block) => block.lines)
+            .filter(Boolean)
+            .join('\n\n');
+          if (engineText && finalResponseText.startsWith(engineText)) {
+            onEngineNotice({ text: engineText, persist: true });
+            finalResponseText = finalResponseText.slice(engineText.length).trimStart();
+            replyEngineBlocks = undefined;
+          } else if (engineText) {
+            // The reply does not lead with its engine lines, so they stay in it, behind the roll.
+            logger.warn('ENGINE_LINES_STRIP_SKIPPED', { sessionId });
+          }
+        }
+
         // Guarantee clickable options on ordinary narrative turns. Combat turns
         // render server-provided legal actions, and roll-request turns pause on
         // the dice UI, so both are excluded.
@@ -673,7 +714,7 @@ export const useAIResponse = (): {
             npcRollResults:
               processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
             handouts: deliveredHandouts,
-            combatEngineBlocks,
+            combatEngineBlocks: replyEngineBlocks,
             combatEnded: combatWasActiveAtRequestStart && !isInCombat,
           },
           narrationSegments,

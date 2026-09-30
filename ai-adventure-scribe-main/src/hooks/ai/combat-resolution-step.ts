@@ -931,6 +931,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     'Player';
   const orderedEngineBlocks = orderCombatEngineBlocks(engineBlocks);
   const orderedEngineTranscriptLines = orderedEngineBlocks.flatMap((block) => block.lines);
+  // Lines already on screen were not re-added to the blocks (`npcLinesShown`), but the pre-flight
+  // NPC turns they came from still happened, so a silent turn is not engine-free (#2386).
+  const hadEngineLines =
+    orderedEngineTranscriptLines.length > 0 ||
+    Boolean(npcLinesShown && preResolvedNpcTurns?.results?.length);
   const narration = await AIService.chatWithDM({
     message: JSON.stringify({
       authoritativeCombatResults: resolvedActions,
@@ -960,10 +965,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         : {}),
       ...(unresolvedPlayerAction ? { unresolvedPlayerAction } : {}),
       ...(silentTurn && silentPlayerTurn
-        ? silentPlayerTurnPayload(
-            silentPlayerTurn.playerMessage,
-            orderedEngineTranscriptLines.length > 0,
-          )
+        ? silentPlayerTurnPayload(silentPlayerTurn.playerMessage, hadEngineLines)
         : {}),
       ...(pendingPlayerAction ? { pendingPlayerAction } : {}),
       ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
@@ -999,7 +1001,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     // No engine line describes this turn, so the turn is stated here rather than hoped for from
     // the model, and the DM text is only checked, never blocked or retried (#2342). NPC engine
     // lines in the same pass legitimately narrate hits, so only a turn with none is checked.
-    if (!orderedEngineTranscriptLines.length && suspectsFabricatedOutcome(narration?.text)) {
+    if (!hadEngineLines && suspectsFabricatedOutcome(narration?.text)) {
       logger.info('DM_FABRICATION_SUSPECT', {
         requestId: AIService.lastRequestId(),
         reason: 'silent_player_turn',
@@ -1010,9 +1012,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ...narration,
       combatEngineBlocks: orderedEngineBlocks,
       text: ensurePlayerTurnHandoff(
-        `${withoutPlayerTurnHandoff(narratedText, playerName)}\n\n${noMechanicalActionNotice(
-          orderedEngineTranscriptLines.length > 0,
-        )}`,
+        `${withoutPlayerTurnHandoff(narratedText, playerName)}\n\n${noMechanicalActionNotice(hadEngineLines)}`,
         playerName,
       ),
     };

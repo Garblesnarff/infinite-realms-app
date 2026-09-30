@@ -76,6 +76,26 @@ describe('processRollRequests: the DM cannot add a roll popup during an encounte
     expect(logger.warn).toHaveBeenCalledTimes(3);
   });
 
+  it('does not remember a dropped request, so the same wording after combat still prompts (#2386)', async () => {
+    const processedSet = new Set<string>();
+
+    const inCombat = await processRollRequests({
+      ...params({ isInCombat: true, encounterId: 'enc-1' }),
+      processedSet,
+    });
+    expect(inCombat.playerRollRequests).toEqual([]);
+    expect(processedSet.size).toBe(0);
+
+    const afterCombat = await processRollRequests({
+      ...params({ isInCombat: false }),
+      processedSet,
+    });
+    expect(afterCombat.playerRollRequests.map((request) => request.type)).toEqual([
+      'attack',
+      'damage',
+    ]);
+  });
+
   it('keeps them when no encounter is active', async () => {
     const processed = await processRollRequests(params({ isInCombat: false }));
 

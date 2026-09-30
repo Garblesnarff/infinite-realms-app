@@ -67,6 +67,11 @@ export interface HandleDmActionsParams {
    * and HP changes on screen with nothing said (#2378).
    */
   onEngineNotice?: (notice: LocalNotice) => void;
+  /**
+   * The caller already put `preflightNpcTurns`' lines on screen (#2386), so the resolution pass
+   * must not print them a second time.
+   */
+  npcLinesShown?: boolean;
 }
 
 export interface HandleDmActionsResult {
@@ -168,6 +173,35 @@ function isCombatEntryConfirmationNoHostError(error: unknown): boolean {
   );
 }
 
+/**
+ * Puts the NPCs' turns on screen now, so the player's dice prompt cannot open while the tracker
+ * shows HP that no line has explained (#2378, #2386). Persisted: the server did not save them.
+ */
+export function showNpcTurnLines(
+  advanced: AdvanceNpcTurnsResponse,
+  participants: any[] | undefined,
+  onEngineNotice: (notice: LocalNotice) => void,
+): void {
+  const roster = (participants ?? []).map((participant) => ({
+    id: participant.id,
+    name: participant.name ?? null,
+  }));
+  const show = (lines: string[]): void => {
+    const text = lines.join('\n\n').trim();
+    if (text) onEngineNotice({ text, persist: true });
+  };
+  for (const npcResult of advanced.results) {
+    show(
+      formatNpcTurnLines(npcResult, roster, {
+        targetHp: isPlayerActor(npcResult.action.target_ids?.[0] ?? '', participants),
+      }),
+    );
+  }
+  if (advanced.capReached) {
+    show(advanced.transcriptLines.filter((line) => line.includes('NPC turn loop stopped after')));
+  }
+}
+
 export async function handleDmActionsAndTransitions(
   params: HandleDmActionsParams,
 ): Promise<HandleDmActionsResult> {
@@ -200,7 +234,7 @@ export async function handleDmActionsAndTransitions(
     | { action: StructuredCombatAction; d20?: number; autoRolled: boolean; cancelled?: boolean }
     | undefined;
   let droppedNpcCombatActions = false;
-  let npcLinesShown = false;
+  let npcLinesShown = params.npcLinesShown === true;
 
   const appendLocalNotice = (notice: unknown, persist = true, immediate = false): void => {
     if (typeof notice !== 'string' || !notice.trim()) return;
@@ -219,22 +253,7 @@ export async function handleDmActionsAndTransitions(
     participants: any[] | undefined,
   ): void => {
     if (!params.onEngineNotice) return;
-    const roster = (participants ?? []).map((participant) => ({
-      id: participant.id,
-      name: participant.name ?? null,
-    }));
-    for (const npcResult of advanced.results) {
-      const lines = formatNpcTurnLines(npcResult, roster, {
-        targetHp: isPlayerActor(npcResult.action.target_ids?.[0] ?? '', participants),
-      });
-      appendLocalNotice(lines.join('\n\n'), true, true);
-    }
-    if (advanced.capReached) {
-      const capLines = advanced.transcriptLines.filter((line) =>
-        line.includes('NPC turn loop stopped after'),
-      );
-      appendLocalNotice(capLines.join('\n\n'), true, true);
-    }
+    showNpcTurnLines(advanced, participants, params.onEngineNotice);
     npcLinesShown = true;
   };
 

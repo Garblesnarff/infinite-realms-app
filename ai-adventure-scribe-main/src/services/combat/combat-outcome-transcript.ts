@@ -2,8 +2,8 @@
  * The small, deterministic part of combat narration that must not depend on the DM model.
  *
  * The server owns the numbers and attaches them to the intent result. This formatter turns those
- * facts into transcript text while deliberately leaving numeric HP out; the engine supplies the
- * condition tier instead.
+ * facts into transcript text. Numeric HP is left out and the engine supplies the condition tier
+ * instead, except for a hit on the player, whose own HP is theirs to see (`targetHp`, #2378).
  */
 import { formatSpellEngineOutcome } from './combat-spell-transcript';
 import {

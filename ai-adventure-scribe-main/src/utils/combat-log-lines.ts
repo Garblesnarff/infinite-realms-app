@@ -22,7 +22,7 @@ function engineLinesOfMessage(message: ChatMessage): string[] {
 /**
  * The lines the combat tracker log shows: the engine lines the chat shows, latest first, at most
  * `limit`. A DM reply held back behind its roll is not on screen in chat, so its lines are not
- * here either.
+ * here either. Engine lines shown ahead of the reply arrive as system rows (#2378, #2386).
  */
 export function combatLogLines(
   messages: readonly ChatMessage[],
@@ -30,7 +30,10 @@ export function combatLogLines(
 ): string[] {
   const withheld = withheldDmRollReplies(messages);
   return messages
-    .filter((message) => message.sender === 'dm' && !withheld.has(message))
+    .filter(
+      (message) =>
+        message.sender === 'system' || (message.sender === 'dm' && !withheld.has(message)),
+    )
     .flatMap(engineLinesOfMessage)
     .slice(-limit)
     .reverse();

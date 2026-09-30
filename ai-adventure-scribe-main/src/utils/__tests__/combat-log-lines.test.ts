@@ -34,6 +34,18 @@ describe('combatLogLines (#2257)', () => {
     ]);
   });
 
+  it('lists engine lines shown ahead of the reply as system rows, in the order the chat shows them (#2386)', () => {
+    const messages: ChatMessage[] = [
+      { sender: 'system', text: engine('Goblin hit you. You are now at 3 HP.') },
+      { sender: 'system', text: 'The pre-flight failed.' },
+      dm(`${engine('Apprentice attacks: MISS.')}\nThe blade whistles past.`),
+    ];
+    expect(combatLogLines(messages)).toEqual([
+      engine('Apprentice attacks: MISS.'),
+      engine('Goblin hit you. You are now at 3 HP.'),
+    ]);
+  });
+
   it('shows exactly what the chat shows after two rounds', () => {
     const round1 = dm(`${engine('Goblin attacks: HIT for 3.')}\nYou stagger.`);
     const round2 = dm('Blocks carry the lines.', {

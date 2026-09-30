@@ -170,7 +170,7 @@ export function dropInCombatRollRequests(
 /**
  * Process roll requests end-to-end:
  * 1. Parse/augment from AI text
- * 2. Deduplicate against previously seen requests
+ * 2. Drop in-combat requests, then deduplicate the rest against previously seen requests
  * 3. Suppress if this is a dice-roll response (prevent infinite loop)
  * 4. Separate NPC rolls and auto-execute them
  * 5. Track attack rolls in rollStateManager
@@ -199,11 +199,13 @@ export async function processRollRequests(params: {
   // Step 1: Parse and augment
   let rollRequests = parseAndAugmentRollRequests(responseText, existingRequests);
 
-  // Step 2: Deduplicate
-  rollRequests = deduplicateRollRequests(rollRequests, processedSet);
-
-  // In combat the engine owns every die; no DM roll_request gets a popup (#1807, #2378).
+  // Step 2: In combat the engine owns every die; no DM roll_request gets a popup (#1807, #2378).
+  // Dropped before dedup so a dropped request is not remembered as processed and the same
+  // wording after combat still prompts (#2386).
   rollRequests = dropInCombatRollRequests(rollRequests, aiContext);
+
+  // Step 2b: Deduplicate the survivors
+  rollRequests = deduplicateRollRequests(rollRequests, processedSet);
 
   // Step 3: Suppress all roll requests when responding to a dice result
   if (isDiceRollMessage && rollRequests.length > 0) {
