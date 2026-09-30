@@ -18,6 +18,7 @@
 
 import { Elysia } from 'elysia';
 
+import { validationIssues } from '../http-pipeline.js';
 import { logger } from '../lib/logger.js';
 
 /**
@@ -159,8 +160,14 @@ export const loggingPlugin = new Elysia({ name: 'logging' })
     // Map error code to status
     const statusCode = mapErrorCodeToStatus(code);
 
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
+    // Elysia's validation message and stack carry the submitted body; log the issues instead (#2382).
+    const isValidation = code === 'VALIDATION';
+    const errorMessage = isValidation
+      ? 'Validation failed'
+      : error instanceof Error
+        ? error.message
+        : String(error);
+    const errorStack = !isValidation && error instanceof Error ? error.stack : undefined;
 
     // Log error
     logger.error(
@@ -174,6 +181,7 @@ export const loggingPlugin = new Elysia({ name: 'logging' })
         errorCode: code,
         errorMessage,
         errorStack,
+        ...(isValidation ? { issues: validationIssues(error) } : {}),
       },
       `✗ ${method} ${path} ${statusCode} ${duration}ms - ${errorMessage}`,
     );

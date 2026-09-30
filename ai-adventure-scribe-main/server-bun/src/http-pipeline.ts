@@ -74,7 +74,7 @@ function resolveRequestId(request: Request): string {
 }
 
 /** Field paths and rule messages of a validation failure, without the values that failed. */
-function validationIssues(error: unknown): Array<{ path: string; message: string }> {
+export function validationIssues(error: unknown): Array<{ path: string; message: string }> {
   const all = (error as { all?: unknown }).all;
   if (!Array.isArray(all)) return [];
   return all.slice(0, 5).map((issue) => {
@@ -144,14 +144,24 @@ export function createRequestPipelineApp() {
       const requestId = resolveRequestId(request);
       set.headers['x-request-id'] = requestId;
 
+      // Elysia's ValidationError.message is a JSON document that holds the submitted body
+      // (`found`), and `stack` starts with that message. A validation failure logs the error kind
+      // and the issues (path + rule, no values) instead, so player text never reaches the log (#2382).
       logger.error({
         requestId,
         method: request.method,
         url: new URL(request.url).pathname,
-        error: error instanceof Error ? error.message : String(error),
-        errorName: error instanceof Error ? error.name : 'UnknownError',
-        stack: error instanceof Error ? error.stack : undefined,
-        ...(code === 'VALIDATION' ? { issues: validationIssues(error) } : {}),
+        ...(code === 'VALIDATION'
+          ? {
+              error: 'Validation failed',
+              errorName: 'ValidationError',
+              issues: validationIssues(error),
+            }
+          : {
+              error: error instanceof Error ? error.message : String(error),
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+              stack: error instanceof Error ? error.stack : undefined,
+            }),
         msg: 'request.error',
       });
 
