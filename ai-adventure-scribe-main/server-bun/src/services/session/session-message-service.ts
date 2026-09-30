@@ -20,6 +20,12 @@ export interface MessagePage {
   total: number;
 }
 
+/** The client marks the opening scene it saves with `context.initial_greeting` (#2379). */
+const isInitialGreeting = (message: {
+  speakerType: string;
+  context?: Record<string, unknown>;
+}): boolean => message.speakerType === 'dm' && message.context?.initial_greeting === true;
+
 /**
  * Session Message Service
  * Handles message history and dialogue management for game sessions.
@@ -141,6 +147,35 @@ export class SessionMessageService {
       });
       if (!session) throw new NotFoundError('Session', sessionId);
 
+      // #2379: a session has one opening scene. The game view can mount twice before the first
+      // greeting lands (the client's init lock is released on unmount), and each mount saves the
+      // greeting under its own id, so the primary key cannot catch the second. Serialise on the
+      // session row, so an overlapping save waits for the first to commit and then sees it, and
+      // keep the greeting already stored instead of writing another.
+      let batch = messages;
+      let existingGreetings: DialogueHistory[] = [];
+      if (messages.some(isInitialGreeting)) {
+        await tx
+          .select({ id: gameSessions.id })
+          .from(gameSessions)
+          .where(eq(gameSessions.id, sessionId))
+          .for('update');
+        existingGreetings = await tx
+          .select()
+          .from(dialogueHistory)
+          .where(
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'dm'),
+              sql`${dialogueHistory.context}->>'initial_greeting' = 'true'`,
+            ),
+          )
+          .limit(1);
+        if (existingGreetings.length > 0) {
+          batch = messages.filter((data) => !isInitialGreeting(data));
+        }
+      }
+
       // #2218: /v1/llm/generate writes the DM reply it produced as a provisional row under the
       // id the client reserved for the turn. The client's own save of that turn carries the same
       // id and its final text, and replaces the provisional row in place rather than being
@@ -149,7 +184,7 @@ export class SessionMessageService {
       // A blank save never replaces stored prose (#2280): the route's `minLength: 1` stops '' but
       // not whitespace, and #2250 tried to write a text-less row under the reply's own id. Such
       // a save falls through to the insert below, where the id conflict makes it a no-op.
-      const dmMessages = messages.filter(
+      const dmMessages = batch.filter(
         (data): data is typeof data & { id: string } =>
           Boolean(data.id) && data.speakerType === 'dm' && data.message.trim().length > 0,
       );
@@ -178,8 +213,8 @@ export class SessionMessageService {
         if (row) reconciled.push(row);
       }
       const reconciledIds = new Set(reconciled.map((row) => row.id));
-      const toInsert = messages.filter((data) => !data.id || !reconciledIds.has(data.id));
-      if (toInsert.length === 0) return reconciled;
+      const toInsert = batch.filter((data) => !data.id || !reconciledIds.has(data.id));
+      if (toInsert.length === 0) return [...existingGreetings, ...reconciled];
 
       const inserted = await tx
         .insert(dialogueHistory)
@@ -207,7 +242,7 @@ export class SessionMessageService {
           })
           .where(eq(gameSessions.id, sessionId));
       }
-      return [...reconciled, ...inserted];
+      return [...existingGreetings, ...reconciled, ...inserted];
     });
   }
 

@@ -160,6 +160,8 @@ describe('useInitialGreeting', () => {
       expect.objectContaining({
         sender: 'dm',
         text: expect.stringContaining(greetingText),
+        // #2379: the server keeps one message with this mark per session.
+        context: { initialGreeting: true },
       }),
     );
 
@@ -315,6 +317,18 @@ describe('useInitialGreeting', () => {
       expect.objectContaining({
         text: expect.stringContaining('You find yourself standing at the threshold'),
       }),
+    );
+  });
+
+  it('does not mark the fallback greeting, so a later real greeting can still be saved (#2379)', async () => {
+    (AIService.generateOpeningMessage as any).mockRejectedValue(new Error('AI Error'));
+
+    renderHook(() => useInitialGreeting(defaultProps));
+
+    await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalled(), { timeout: 2000 });
+
+    expect(onGreetingGenerated).toHaveBeenCalledWith(
+      expect.objectContaining({ context: { isFallback: true } }),
     );
   });
 

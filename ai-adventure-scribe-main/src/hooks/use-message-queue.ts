@@ -167,6 +167,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                 combat_ended: Boolean(message.context.combatEnded ?? message.context.combat_ended),
                 narration_segments: narrationSegments,
                 ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
+                ...(message.context.initialGreeting === true ? { initial_greeting: true } : {}),
               }
             : narrationSegments
               ? {
@@ -294,6 +295,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                 combat_ended: Boolean(message.context.combatEnded ?? message.context.combat_ended),
                 narration_segments: narrationSegments,
                 ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
+                ...(message.context.initialGreeting === true ? { initial_greeting: true } : {}),
               }
             : narrationSegments
               ? {

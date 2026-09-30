@@ -249,6 +249,8 @@ export const useInitialGreeting = ({
         sender: 'dm',
         text: displayTextWithOptions,
         timestamp: new Date().toISOString(),
+        // The server keeps one of these per session, so a second mount cannot add another (#2379).
+        context: { initialGreeting: true },
       };
 
       logger.info(

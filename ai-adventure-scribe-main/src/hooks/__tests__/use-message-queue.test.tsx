@@ -50,6 +50,11 @@ import {
   DM_ROLL_REPLY_TURNS,
   RUN_11_INSIGHT,
 } from '../../../shared/test-fixtures/dm-roll-reply-saves';
+import {
+  INITIAL_GREETING_IDS,
+  initialGreetingMessage,
+  initialGreetingWireBody,
+} from '../../../shared/test-fixtures/initial-greeting-save';
 import { useMessageQueue } from '../use-message-queue';
 
 import { rollReplyMessage } from '@/features/game-session/components/game/message/use-message-handler-logic';
@@ -433,6 +438,24 @@ describe('useMessageQueue', () => {
       }),
     );
   });
+  describe('opening scene (#2379)', () => {
+    it('marks the greeting so the server keeps one per session, and sends exactly the body the route tests post', async () => {
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await result.current.messageMutation.mutateAsync(
+          initialGreetingMessage(INITIAL_GREETING_IDS[0]) as any,
+        );
+      });
+
+      expect(mockSaveSessionMessages).toHaveBeenCalledTimes(1);
+      expect(mockSaveSessionMessages).toHaveBeenCalledWith(
+        sessionId,
+        initialGreetingWireBody(INITIAL_GREETING_IDS[0]),
+      );
+    });
+  });
+
   describe('narrative roll replies (#2280)', () => {
     const refusal = (): Error & { status: number } =>
       Object.assign(new Error('Validation failed (422): /message Expected string length'), {
