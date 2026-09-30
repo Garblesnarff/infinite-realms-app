@@ -223,21 +223,20 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
   });
 
   // Also try table format for Tier 2/3 NPCs
-  const tableMatches = npcSection.matchAll(/\|\s*\*\*(.+?)\*\*\s*\|(.+?)\|(.+?)\|(.+?)\|/g);
-  for (const match of tableMatches) {
-    const [, name, role, location, quirk] = match;
-    const normalizedName = name ? normalizeEntityNameForChunkType(name, 'npc_tier2') : '';
+  for (const row of readNpcTableRows(npcSection)) {
+    const normalizedName = normalizeEntityNameForChunkType(row.name, 'npc_tier2');
     if (
       normalizedName &&
       !isSectionMarkerName(normalizedName) &&
       !chunks.some((c) => c.entityName === normalizedName)
     ) {
+      const raceLine = row.race === undefined ? '' : `\n\nRace: ${row.race || 'Unknown'}`;
       chunks.push({
         campaignId,
         chunkType: 'npc_tier2',
         entityName: normalizedName,
-        content: `**${normalizedName}** - ${role?.trim() || 'Unknown role'}\n\nLocation: ${location?.trim() || 'Unknown'}\n\nQuirk: ${quirk?.trim() || 'None noted'}`,
-        summary: `${normalizedName}: ${role?.trim() || 'NPC'}`,
+        content: `**${normalizedName}** - ${row.role || 'Unknown role'}${raceLine}\n\nLocation: ${row.location || 'Unknown'}\n\nQuirk: ${row.quirk || 'None noted'}`,
+        summary: `${normalizedName}: ${row.role || 'NPC'}`,
         metadata: { tier: 'tier2', fromTable: true },
         sourceFile: 'campaign_bible.md',
         sourceSection: 'NPCs',
@@ -246,6 +245,70 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
   }
 
   return chunks;
+}
+
+interface NpcTableRow {
+  name: string;
+  role: string;
+  race?: string;
+  location: string;
+  quirk: string;
+}
+
+function splitTableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+}
+
+/**
+ * Read `| **Name** | ... |` rows, mapping cells by the table's header row. A row under a
+ * 4-column header (Name | Role | Location | Quirk) and a row under a 5-column header
+ * (Name | Role | Race | Location | Quirk) both land in the right fields. The last cell is the
+ * quirk; it carries any authored stat tail.
+ */
+function readNpcTableRows(npcSection: string): NpcTableRow[] {
+  const rows: NpcTableRow[] = [];
+  const lines = npcSection.split('\n');
+  const isSeparator = (line: string | undefined): boolean =>
+    /^\|[\s:|-]+\|$/.test((line ?? '').trim());
+  let header: string[] | undefined;
+
+  lines.forEach((line, i) => {
+    if (!line.trim().startsWith('|')) {
+      header = undefined;
+      return;
+    }
+    if (isSeparator(line)) return;
+
+    const cells = splitTableCells(line);
+    if (isSeparator(lines[i + 1])) {
+      header = cells.map((cell) => cell.replace(/\*/g, '').trim().toLowerCase());
+      return;
+    }
+    const nameMatch = cells[0]?.match(/^\*\*(.+?)\*\*$/);
+    if (!nameMatch) return;
+
+    const column = (label: string): number => header?.findIndex((h) => h.startsWith(label)) ?? -1;
+    const cellFor = (label: string, legacyIndex: number): string => {
+      const index = column(label);
+      return cells[index >= 0 ? index : legacyIndex] ?? '';
+    };
+    const raceIndex = column('race');
+    const quirkIndex = column('quirk');
+    rows.push({
+      name: nameMatch[1],
+      role: cellFor('role', 1),
+      race: raceIndex >= 0 ? (cells[raceIndex] ?? '') : undefined,
+      location: cellFor('location', 2),
+      quirk: cells[quirkIndex >= 0 ? quirkIndex : header ? cells.length - 1 : 3] ?? '',
+    });
+  });
+
+  return rows;
 }
 
 /**

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { test } from 'bun:test';
 
 import { chunkCampaignFiles } from './chunker.js';
+import { parseAuthoredStatBlock } from '../../../server-bun/src/services/combat/authored-stat-block-parser.js';
 
 test('extracts a Handouts section into RAG-searchable keyed chunks', () => {
   const { chunks } = chunkCampaignFiles('campaigns/eternal-feast', {
@@ -186,5 +188,116 @@ test('rules past the tenth tie at priority 1 instead of leaving the 1-10 range (
   assert.deepEqual(
     rules.map((rule) => rule.priority),
     [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1],
+  );
+});
+
+// Fixtures are the "Minor NPCs" tables copied verbatim from Garblesnarff/infinite-realms-clean:
+// the-eternal-feast (5 columns, stat tails from PR #19) and academy-of-arcane-gastronomy (4 columns).
+const fixture = (name: string) =>
+  readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8');
+const npcTableChunks = (campaignId: string, table: string) =>
+  chunkCampaignFiles(campaignId, { campaignBible: `## 3. NPC Roster\n\n${table}` }).chunks.filter(
+    (chunk) => chunk.chunkType === 'npc_tier2',
+  );
+
+test('5-column Eternal Feast table keeps Race, Location and Quirk in their own fields', () => {
+  const chunks = npcTableChunks('the-eternal-feast', fixture('eternal-feast-minor-npcs.md'));
+  assert.equal(chunks.length, 50);
+
+  const brie = chunks.find((chunk) => chunk.entityName === 'Brie');
+  assert.equal(
+    brie?.content,
+    '**Brie** - Cheesemonger\n\nRace: Awakened Mouse\n\nLocation: Pantry\n\nQuirk: Fears cats, wields a needle sword. *HP:* 12, *AC:* 13, *Attack:* +3 to hit, 1d6 piercing (needle sword)',
+  );
+  assert.equal(brie?.summary, 'Brie: Cheesemonger');
+  assert.deepEqual(brie?.metadata, { tier: 'tier2', fromTable: true });
+
+  const pinch = chunks.find((chunk) => chunk.entityName === 'Pinch');
+  assert.equal(
+    pinch?.content,
+    '**Pinch** - Line Cook\n\nRace: Crab-Person\n\nLocation: Kitchen\n\nQuirk: Only walks sideways, spills soup.',
+  );
+});
+
+test('the stat tail in the last cell of every 14 authored Eternal Feast rows parses', () => {
+  const chunks = npcTableChunks('the-eternal-feast', fixture('eternal-feast-minor-npcs.md'));
+  const authored = [
+    'Brie',
+    'Thud',
+    'Scratch',
+    'Hiss',
+    'Snort',
+    'Frost',
+    'Singe',
+    'Zip',
+    'Maw',
+    'Brine',
+    'Rot',
+    'Shade',
+    'Puff',
+    'Mort',
+  ];
+  for (const name of authored) {
+    const chunk = chunks.find((c) => c.entityName === name);
+    assert.ok(chunk, `${name} chunk exists`);
+    const parsed = parseAuthoredStatBlock(chunk.content);
+    assert.deepEqual(parsed.unparsedLabels, [], name);
+    assert.ok(parsed.parsedFields.includes('maxHp'), `${name} maxHp`);
+    assert.ok(parsed.parsedFields.includes('armorClass'), `${name} armorClass`);
+    assert.ok(parsed.parsedFields.includes('attackBonus'), `${name} attackBonus`);
+  }
+  const brie = parseAuthoredStatBlock(chunks.find((c) => c.entityName === 'Brie')!.content);
+  assert.equal(brie.maxHp, 12);
+  assert.equal(brie.armorClass, 13);
+  assert.equal(brie.attackBonus, 3);
+  assert.equal(brie.damageDice, '1d6');
+  assert.equal(brie.damageType, 'piercing');
+});
+
+test('4-column Academy table rows keep the legacy content shape', () => {
+  const chunks = npcTableChunks('academy-of-arcane-gastronomy', fixture('academy-minor-npcs.md'));
+  assert.equal(chunks.length, 50);
+  assert.equal(
+    chunks.find((chunk) => chunk.entityName === 'Salty')?.content,
+    '**Salty** - Student\n\nLocation: Academy Kitchen\n\nQuirk: Cries salt tears when he cuts onions.',
+  );
+  assert.ok(chunks.every((chunk) => !chunk.content.includes('Race:')));
+});
+
+// The reader used before #2402: four positional cells, nothing else.
+const legacyRowContent = (row: string): string | undefined => {
+  const match = row.match(/\|\s*\*\*(.+?)\*\*\s*\|(.+?)\|(.+?)\|(.+?)\|/);
+  if (!match) return undefined;
+  const [, name, role, location, quirk] = match;
+  return `**${name.replace(/^"|"$/g, '')}** - ${role.trim()}\n\nLocation: ${location.trim()}\n\nQuirk: ${quirk.trim()}`;
+};
+
+test('every 4-column Academy row reads exactly as the old four-cell reader did', () => {
+  const table = fixture('academy-minor-npcs.md');
+  const chunks = npcTableChunks('academy-of-arcane-gastronomy', table);
+  const rows = table.split('\n').filter((line) => line.startsWith('| **'));
+  assert.equal(rows.length, 50);
+  rows.forEach((row, index) => {
+    assert.equal(chunks[index].content, legacyRowContent(row), row);
+  });
+});
+
+test('header cells decide the mapping: bold header, Race after Location, and a table without a header', () => {
+  const chunks = npcTableChunks(
+    'edge',
+    [
+      '| **Name** | **Role** | **Location** | **Race** | **Quirk** |',
+      '| :--- | :--- | :--- | :--- | :--- |',
+      '| **Old Tom** | Fisherman | Port Royal | Human | Dreams he is a fish. |',
+      '',
+      '| **Mina** | Baker | Oven Row | Hums off-key. |',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    chunks.map((chunk) => chunk.content),
+    [
+      '**Old Tom** - Fisherman\n\nRace: Human\n\nLocation: Port Royal\n\nQuirk: Dreams he is a fish.',
+      '**Mina** - Baker\n\nLocation: Oven Row\n\nQuirk: Hums off-key.',
+    ],
   );
 });
