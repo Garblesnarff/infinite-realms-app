@@ -143,19 +143,28 @@ function isCombatContext(aiContext: Record<string, unknown>): boolean {
   return gameState?.isInCombat === true;
 }
 
-/** Combat attacks resolve through combat_actions; a second popup discards the first roll. */
-export function dropInCombatAttackRequests(
+/**
+ * While an encounter is active the engine owns every die: attacks resolve through
+ * combat_actions, and damage, saves and everything else come out of the same resolution. A DM
+ * roll_request of any type is a second popup that discards the first roll (#1807) or, when the
+ * player's turn already resolved, a die the DM invented after the fact. Run 15 kept the DM's
+ * "Critical damage roll" 1d6 after a natural 7, and the popup withheld the engine's attack line
+ * (#2378).
+ */
+export function dropInCombatRollRequests(
   rollRequests: RollRequest[],
   aiContext: Record<string, unknown>,
 ): RollRequest[] {
-  if (!isCombatContext(aiContext)) return rollRequests;
-  const kept = rollRequests.filter((request) => request.type !== 'attack');
-  if (kept.length !== rollRequests.length) {
-    logger.info(
-      `[RollProcessor] Dropped ${rollRequests.length - kept.length} in-combat attack roll_request(s); the engine owns those dice`,
-    );
+  if (!isCombatContext(aiContext) || rollRequests.length === 0) return rollRequests;
+  const gameState = aiContext.gameState as Record<string, unknown>;
+  for (const request of rollRequests) {
+    logger.warn('DM_ROLL_REQUEST_DROPPED', {
+      encounterId: gameState.encounterId ?? null,
+      type: request.type,
+      purpose: request.purpose,
+    });
   }
-  return kept;
+  return [];
 }
 
 /**
@@ -193,9 +202,8 @@ export async function processRollRequests(params: {
   // Step 2: Deduplicate
   rollRequests = deduplicateRollRequests(rollRequests, processedSet);
 
-  // In combat, attacks belong to combat_actions / the engine popup. A leftover attack
-  // roll_request is a second die for the same declaration (#1807).
-  rollRequests = dropInCombatAttackRequests(rollRequests, aiContext);
+  // In combat the engine owns every die; no DM roll_request gets a popup (#1807, #2378).
+  rollRequests = dropInCombatRollRequests(rollRequests, aiContext);
 
   // Step 3: Suppress all roll requests when responding to a dice result
   if (isDiceRollMessage && rollRequests.length > 0) {

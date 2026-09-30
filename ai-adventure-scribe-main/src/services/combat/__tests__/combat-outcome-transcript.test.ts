@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatCombatEngineOutcome,
+  formatNpcTurnLines,
   formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
 } from '../combat-outcome-transcript';
@@ -167,11 +168,74 @@ describe('spell engine lines', () => {
   });
 
   it('renders a refused spell with no roll, damage, or wound', () => {
-    expect(
-      formatRefusedSpellOutcome('Rook', 'Meteor Swarm', 'unknown spell'),
-    ).toBe(
+    expect(formatRefusedSpellOutcome('Rook', 'Meteor Swarm', 'unknown spell')).toBe(
       '⚙️ Engine: Rook\'s spell "Meteor Swarm" was refused (unknown spell). No roll, no damage, no wound.',
     );
   });
-});
 
+  describe('HP left when an NPC hits the player (#2378)', () => {
+    const npcSwing = {
+      actor_id: 'emil-1',
+      action_type: 'attack',
+      target_ids: ['scholar-1'],
+    };
+    const hit = {
+      actorName: 'Professor Emil Darkwater',
+      targetName: 'The Scholar',
+      d20: 14,
+      attackBonus: 3,
+      totalAttackRoll: 17,
+      targetAC: 11,
+      hit: true,
+      finalDamage: 6,
+      damageType: 'bludgeoning',
+      targetNewHp: 1,
+      targetCondition: 'near death' as const,
+      weaponResolution: { resolved: 'Quarterstaff', substituted: false },
+    };
+
+    it('prints attacker, roll vs AC, damage and the HP the player has left', () => {
+      const line = formatCombatEngineOutcome(npcSwing, hit, [], { targetHp: true });
+
+      expect(line).toBe(
+        '⚙️ Engine: Professor Emil Darkwater rolled 14 + 3 = 17 vs AC 11 against The Scholar with Quarterstaff — HIT. 6 bludgeoning damage. The Scholar is now at 1 HP and is near death.',
+      );
+    });
+
+    it('names the state at 0 HP and prints nothing extra on a miss', () => {
+      expect(
+        formatCombatEngineOutcome(
+          npcSwing,
+          { ...hit, targetNewHp: 0, targetIsConscious: false },
+          [],
+          { targetHp: true },
+        ),
+      ).toContain('The Scholar is now at 0 HP and is unconscious.');
+      expect(
+        formatCombatEngineOutcome(
+          npcSwing,
+          { ...hit, hit: false, finalDamage: 0, targetNewHp: undefined },
+          [],
+          { targetHp: true },
+        ),
+      ).toContain('MISS. No damage.');
+    });
+
+    it('leaves numeric HP out when the target is not the player', () => {
+      const line = formatCombatEngineOutcome(npcSwing, hit);
+
+      expect(line).not.toContain('1 HP');
+      expect(line).toContain('The Scholar is near death.');
+    });
+
+    it('returns an NPC turn as its engine line followed by the server lines', () => {
+      expect(
+        formatNpcTurnLines(
+          { action: npcSwing, engineResult: hit, transcriptLines: ['⚙️ Engine: death save'] },
+          [],
+          { targetHp: true },
+        ),
+      ).toEqual([expect.stringContaining('now at 1 HP'), '⚙️ Engine: death save']);
+    });
+  });
+});

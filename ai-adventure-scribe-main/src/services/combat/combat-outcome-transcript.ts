@@ -97,6 +97,8 @@ export function formatCombatEngineOutcome(
   action: CombatTranscriptAction,
   value: unknown,
   roster: readonly EngineRosterEntry[] = [],
+  /** `targetHp`: the target is the player, whose own HP is theirs to see (#2378). */
+  options: { targetHp?: boolean } = {},
 ): string | null {
   if (!isRecord(value)) return null;
   if (action.action_type === 'cast_spell') {
@@ -145,9 +147,28 @@ export function formatCombatEngineOutcome(
     line += ' No damage.';
   }
   const state = targetState(result);
-  if (state) line += ` ${target} is ${state}.`;
+  if (options.targetHp && result.hit && isFiniteNumber(result.targetNewHp)) {
+    line += ` ${target} is now at ${result.targetNewHp} HP${state ? ` and is ${state}` : ''}.`;
+  } else if (state) {
+    line += ` ${target} is ${state}.`;
+  }
   lines.push(line);
   return lines.join('\n\n');
+}
+
+/** The engine lines one NPC turn printed: its own outcome, then the server's extra lines. */
+export function formatNpcTurnLines(
+  npcResult: { action: CombatTranscriptAction; engineResult?: unknown; transcriptLines?: string[] },
+  roster: readonly EngineRosterEntry[],
+  options: { targetHp?: boolean } = {},
+): string[] {
+  const outcome = formatCombatEngineOutcome(
+    npcResult.action,
+    npcResult.engineResult,
+    roster,
+    options,
+  );
+  return [...(outcome ? [outcome] : []), ...(npcResult.transcriptLines ?? [])];
 }
 
 /** Put engine facts before model prose so option parsing cannot discard them as trailing text. */

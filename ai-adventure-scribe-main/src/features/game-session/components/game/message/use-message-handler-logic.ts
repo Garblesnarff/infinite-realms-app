@@ -8,6 +8,7 @@ import { useSessionValidator } from '../session/SessionValidator';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
 import type { MessageSendContext } from '../../chat/MessageList';
+import type { LocalNotice } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 
@@ -296,6 +297,17 @@ export const useMessageHandlerLogic = ({
       // display-ready reply under it, and the early render and the final save below reuse it,
       // so the turn is one row whichever side writes it and a dead tab cannot lose the reply.
       const dmMessageId = crypto.randomUUID();
+      const showEngineNotice = (notice: LocalNotice): void => {
+        runDeferredTask('local notice persistence', () =>
+          sendMessage({
+            text: notice.text,
+            sender: 'system',
+            timestamp: new Date().toISOString(),
+            persist: notice.persist,
+            context: { intent: 'combat_pending_intent' },
+          }),
+        );
+      };
       // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
       // Use ref to get current messages to avoid stale closure
       const aiResponseMessage = await getAIResponse(
@@ -391,6 +403,7 @@ export const useMessageHandlerLogic = ({
           }
         },
         dmMessageId,
+        showEngineNotice,
       );
       // Sanitize the AI response text first
       const processedText = sanitizeDMText(aiResponseMessage.text);
@@ -436,17 +449,7 @@ export const useMessageHandlerLogic = ({
         (aiResponseMessage.localNotice
           ? [{ text: aiResponseMessage.localNotice, persist: true }]
           : []);
-      for (const notice of localNotices) {
-        runDeferredTask('local notice persistence', () =>
-          sendMessage({
-            text: notice.text,
-            sender: 'system',
-            timestamp: new Date().toISOString(),
-            persist: notice.persist,
-            context: { intent: 'combat_pending_intent' },
-          }),
-        );
-      }
+      for (const notice of localNotices) showEngineNotice(notice);
 
       // A roll is still pending: the player has not rolled, so no narration may be shown or
       // saved for this turn. Everything else renders — including a turn whose early render was

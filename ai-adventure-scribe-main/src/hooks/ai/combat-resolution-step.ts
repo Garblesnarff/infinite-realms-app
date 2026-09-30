@@ -41,6 +41,7 @@ import {
 } from '@/services/combat/combat-action-origin';
 import {
   formatCombatEngineOutcome,
+  formatNpcTurnLines,
   formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
 } from '@/services/combat/combat-outcome-transcript';
@@ -112,6 +113,11 @@ export interface CombatResolutionParams {
   };
   /** NPC actions resolved before the player's declaration reached chatWithDM. */
   preResolvedNpcTurns?: AdvanceNpcTurnsResponse;
+  /**
+   * The pre-resolved NPC turns' engine lines were already on screen before the player's die was
+   * asked for (#2378). The DM still narrates them; this pass must not print them a second time.
+   */
+  npcLinesShown?: boolean;
   /** Encounter round at the start of this resolution, used for older server payloads. */
   combatRound?: number;
   /**
@@ -182,6 +188,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     queuedIntentActorIds,
     playerAttackRoll,
     preResolvedNpcTurns,
+    npcLinesShown,
     combatRound,
     playerInputOrigin,
     declaredPlayerSpell,
@@ -387,22 +394,21 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const appendAutonomousNpcResults = (
     advanced: AdvanceNpcTurnsResponse,
     afterPlayerAction = false,
+    linesShown = false,
   ): BatchBoundary => {
     const defaultRound = combatRoundFrom(advanced, combatRound ?? 1);
     const playerOrder = participants?.find(
       (participant) => participant.participantType === 'player',
     )?.turnOrder;
     for (const npcResult of advanced.results) {
-      const { transcriptLines, ...authoritativeResult } = npcResult;
+      const { transcriptLines: _printedLines, ...authoritativeResult } = npcResult;
       resolvedActions.push({
         ...authoritativeResult,
         actorIsPlayer: false,
       });
-      const engineTranscript = formatCombatEngineOutcome(
-        npcResult.action,
-        npcResult.engineResult,
-        roster,
-      );
+      const engineLines = formatNpcTurnLines(npcResult, roster, {
+        targetHp: isPlayerActor(npcResult.action.target_ids?.[0] ?? '', participants),
+      });
       const npcOrder = participants?.find(
         (participant) => participant.id === npcResult.action.actor_id,
       )?.turnOrder;
@@ -421,17 +427,19 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         (wrapsRound || typeof playerOrder !== 'number' || typeof npcOrder !== 'number')
           ? defaultRound + 1
           : defaultRound;
-      appendEngineBlock({
-        source: 'npc',
-        actorId: npcResult.action.actor_id,
-        lines: [...(engineTranscript ? [engineTranscript] : []), ...transcriptLines],
-        round: combatRoundFrom(npcResult, inferredRound),
-        serverSequence: combatSequenceFrom(npcResult),
-      });
+      if (!linesShown) {
+        appendEngineBlock({
+          source: 'npc',
+          actorId: npcResult.action.actor_id,
+          lines: engineLines,
+          round: combatRoundFrom(npcResult, inferredRound),
+          serverSequence: combatSequenceFrom(npcResult),
+        });
+      }
     }
     // Death-save lines are attached to their result above. The top-level stream carries the
     // safety-cap line, which has no individual action to attach to.
-    if (advanced.capReached) {
+    if (advanced.capReached && !linesShown) {
       appendEngineBlock({
         source: 'npc',
         lines: advanced.transcriptLines.filter((line) =>
@@ -449,7 +457,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // NPC results into this same narration pass so the reply contains one ordered account of the
   // NPC engine lines followed by the player's action.
   const preflightBoundary = preResolvedNpcTurns
-    ? appendAutonomousNpcResults(preResolvedNpcTurns)
+    ? appendAutonomousNpcResults(preResolvedNpcTurns, false, npcLinesShown)
     : null;
 
   /** `null` when the action was withheld and nothing reached the engine; the batch goes on. */

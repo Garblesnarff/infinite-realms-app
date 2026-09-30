@@ -45,9 +45,10 @@ import {
   deduplicateRollRequests,
   parseAndAugmentRollRequests,
   processRollRequests,
-  dropInCombatAttackRequests,
+  dropInCombatRollRequests,
 } from '../roll-processor';
 
+import logger from '@/lib/logger';
 import * as npcRollHandler from '@/services/ai/npc-roll-handler';
 import * as npcAutoRoller from '@/services/combat/npc-auto-roller';
 import { rollStateManager } from '@/services/combat/rollStateManager';
@@ -174,9 +175,9 @@ describe('roll-processor', () => {
     });
   });
 
-  describe('dropInCombatAttackRequests', () => {
-    it('drops attack requests during combat so a second popup cannot discard the first roll', () => {
-      const kept = dropInCombatAttackRequests(
+  describe('dropInCombatRollRequests', () => {
+    it('drops every request type during combat and logs each one (#2378; #1807 dropped attacks only)', () => {
+      const kept = dropInCombatRollRequests(
         [
           {
             type: 'attack',
@@ -185,17 +186,30 @@ describe('roll-processor', () => {
           },
           { type: 'check', formula: '1d20+wis', purpose: 'Perception check' },
         ],
-        { gameState: { isInCombat: true } },
+        { gameState: { isInCombat: true, encounterId: 'enc-1' } },
       );
-      expect(kept).toHaveLength(1);
-      expect(kept[0].type).toBe('check');
+      expect(kept).toEqual([]);
+      expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_DROPPED', {
+        encounterId: 'enc-1',
+        type: 'attack',
+        purpose: 'The Storyteller punches Dishwasher Prime',
+      });
+      expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_DROPPED', {
+        encounterId: 'enc-1',
+        type: 'check',
+        purpose: 'Perception check',
+      });
     });
 
-    it('leaves exploration attacks alone when combat is not active', () => {
-      const requests = [{ type: 'attack', formula: '1d20+4', purpose: 'Longsword attack' }];
-      expect(dropInCombatAttackRequests(requests, { gameState: { isInCombat: false } })).toEqual(
+    it('leaves exploration rolls alone when combat is not active', () => {
+      const requests = [
+        { type: 'attack', formula: '1d20+4', purpose: 'Longsword attack' },
+        { type: 'damage', formula: '1d8+2', purpose: 'Longsword damage' },
+      ];
+      expect(dropInCombatRollRequests(requests, { gameState: { isInCombat: false } })).toEqual(
         requests,
       );
+      expect(logger.warn).not.toHaveBeenCalled();
     });
   });
 

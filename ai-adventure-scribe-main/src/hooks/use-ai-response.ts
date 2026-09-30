@@ -162,6 +162,7 @@ export const useAIResponse = (): {
     onTurnPhase?: TurnPhaseReporter,
     onTextReady?: (message: EnhancedChatMessage, options: TextReadyOptions) => Promise<void> | void,
     dmMessageId?: string,
+    onEngineNotice?: (notice: LocalNotice) => void,
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
@@ -225,6 +226,7 @@ export const useAIResponse = (): {
         options: TextReadyOptions,
       ) => Promise<void> | void,
       dmMessageId?: string,
+      onEngineNotice?: (notice: LocalNotice) => void,
     ): Promise<EnhancedChatMessage> => {
       try {
         logger.info('Getting AI response for session:', sessionId);
@@ -547,6 +549,7 @@ export const useAIResponse = (): {
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin: playerInputOriginOf(latestMessage),
           entryConfirmed: heldEntry?.decision === 'confirmed',
+          onEngineNotice,
         });
 
         result = dmActionsResult.result;

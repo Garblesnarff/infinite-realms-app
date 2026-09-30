@@ -253,6 +253,7 @@ describe('session-continuity regression', () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(String), // #2218: the DM row id reserved for this turn
+      expect.any(Function), // #2378: shows an engine line the moment it exists
     );
   });
 
@@ -310,6 +311,7 @@ describe('session-continuity regression', () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(String), // #2218: the DM row id reserved for this turn
+      expect.any(Function), // #2378: shows an engine line the moment it exists
     );
   });
 
