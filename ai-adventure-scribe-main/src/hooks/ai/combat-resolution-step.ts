@@ -47,6 +47,7 @@ import {
 } from '@/services/combat/combat-outcome-transcript';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { isSameSpell } from '@/services/combat/declared-player-spell';
+import { dmFacingResolvedAction, ENGINE_FACT_NOTE } from '@/services/combat/dm-resolved-action';
 import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
 import {
   playerCombatSpellLabel,
@@ -938,7 +939,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     Boolean(npcLinesShown && preResolvedNpcTurns?.results?.length);
   const narration = await AIService.chatWithDM({
     message: JSON.stringify({
-      authoritativeCombatResults: resolvedActions,
+      authoritativeCombatResults: resolvedActions.map((entry) =>
+        dmFacingResolvedAction(entry, roster),
+      ),
+      ...(resolvedActions.length ? { authoritativeCombatResultsNote: ENGINE_FACT_NOTE } : {}),
       ...(encounterAlreadyConcluded ? { encounterAlreadyConcluded: true } : {}),
       // Named as refusals, not as results, and carrying no outcome to narrate — because there
       // is none. The engine rolled nothing for these.

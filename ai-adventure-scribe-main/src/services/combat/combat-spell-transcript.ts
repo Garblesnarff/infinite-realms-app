@@ -16,7 +16,7 @@ function targetState(result: CombatEngineResult): string | null {
   return result.targetCondition ?? null;
 }
 
-function displaySaveAbility(ability: string): string {
+export function displaySaveAbility(ability: string): string {
   const names: Record<string, string> = {
     str: 'STR',
     strength: 'STR',
