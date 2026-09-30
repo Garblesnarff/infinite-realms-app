@@ -299,7 +299,6 @@ export const useAIResponse = (): {
         );
 
         const combatWasActiveAtRequestStart = isInCombat;
-        const combatRoundAtRequestStart = activeEncounter?.currentRound;
         let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
         let npcLinesShown = false;
         if (isInCombat && !isDiceRollMessage) {
@@ -562,7 +561,7 @@ export const useAIResponse = (): {
           aiContext,
           conversationHistory,
           preflightNpcTurns,
-          combatRound: combatRoundAtRequestStart,
+          combatRound: activeEncounter?.currentRound,
           userPlan: userPlan || undefined,
           turnCount,
           playerMessage: latestMessage.text,

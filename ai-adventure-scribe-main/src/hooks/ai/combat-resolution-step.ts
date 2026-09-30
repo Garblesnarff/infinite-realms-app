@@ -197,6 +197,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     silentPlayerTurn,
   } = params;
 
+  /** The round the player is acting in: recovering a stale NPC holder can wrap the order first. */
+  let playerRound = combatRound;
   const resolvedActions: Array<Record<string, unknown>> = [];
   const engineBlocks: CombatEngineBlock[] = [];
   /**
@@ -383,7 +385,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
             roster,
           ),
         ],
-        round: combatRound ?? 1,
+        round: playerRound ?? 1,
       });
       if (line) refusalLines.set(refusalRecord, line);
       if (actorIsPlayer) {
@@ -618,7 +620,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
       actorId: action.actor_id,
       lines: engineTranscript ? [engineTranscript] : [],
-      round: combatRoundFrom(execution.result, combatRound ?? 1),
+      round: combatRoundFrom(execution.result, playerRound ?? 1),
       serverSequence: combatSequenceFrom(execution.result),
     });
     resolvedActions.push({
@@ -677,7 +679,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           lines: [
             `⚙️ Engine: ${actor}'s ${spell} is placed on the tactical map and waits for you — confirm the spell area there to cast it. Nothing has been rolled yet.`,
           ],
-          round: combatRound ?? 1,
+          round: playerRound ?? 1,
         });
         continue;
       }
@@ -694,6 +696,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         const refusalIndex = refusedActions.length - 1;
         const advanced = await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId);
         const recoveryBoundary = appendAutonomousNpcResults(advanced, true);
+        playerRound = advanced.round ?? playerRound;
         if (recoveryBoundary === 'combat_ended') break;
         try {
           const retryBoundary = await runAction(action);
@@ -833,7 +836,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       source: 'player',
       ...(playerParticipant ? { actorId: playerParticipant.id } : {}),
       lines: [formatRefusedSpellOutcome(actor, declaredPlayerSpell.spellName, reason)],
-      round: combatRound ?? 1,
+      round: playerRound ?? 1,
     });
     logger.warn('PLAYER_ACTION_UNRESOLVED', {
       actionType: 'cast_spell',

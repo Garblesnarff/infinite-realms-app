@@ -17,6 +17,8 @@ export type NpcTurnAction = {
 
 export type NpcTurnOutcome = {
   action: NpcTurnAction;
+  /** The encounter round this NPC acted in, read before its turn ended and the order could wrap. */
+  round: number;
   outcomes: Array<{
     participantId: string;
     newHp?: number;
@@ -33,6 +35,8 @@ export type NpcTurnOutcome = {
 export type AdvanceNpcTurnsResult = {
   results: NpcTurnOutcome[];
   currentParticipant: { id: string; name: string; participantType: string } | null;
+  /** The encounter round after the last NPC turn: the round the next turn holder is in. */
+  round: number;
   combatEnded: boolean;
   iterationCount: number;
   iterationCap: number;
@@ -309,6 +313,7 @@ export async function advanceNpcTurns(
     transcriptLines.push(...resultTranscript);
     results.push({
       action,
+      round: state.encounter.currentRound,
       outcomes: outcomesFrom(action, engineResult),
       ...(engineResult !== undefined ? { engineResult } : {}),
       actorIsPlayer: false,
@@ -358,6 +363,7 @@ export async function advanceNpcTurns(
           participantType: finalState.currentParticipant.participantType,
         }
       : null,
+    round: finalState.encounter.currentRound,
     combatEnded,
     iterationCount,
     iterationCap,

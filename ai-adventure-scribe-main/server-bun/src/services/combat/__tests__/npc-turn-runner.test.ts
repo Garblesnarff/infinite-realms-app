@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 
+import {
+  THREE_ACTOR_PLAYER_MIDDLE_NPC_BATCHES,
+  TWO_ACTOR_PLAYER_FIRST_NPC_BATCHES,
+} from '../../../../../shared/test-fixtures/advance-npc-turns-rounds';
+import { InitiativeMechanics } from '../initiative-mechanics.js';
 import { advanceNpcTurns, type NpcTurnRunnerDependencies } from '../npc-turn-runner.js';
 
 type TestParticipant = {
@@ -314,5 +319,186 @@ describe('advanceNpcTurns', () => {
     expect(result.currentParticipant?.id).toBe('npc1');
     expect(intents.filter((intent) => intent.type === 'attack')).toHaveLength(4);
     expect(result.transcriptLines.join('\n')).toContain('stopped after 4 iterations');
+  });
+});
+
+/**
+ * A fight played with the engine's own turn arithmetic: `end_turn` goes through
+ * `InitiativeMechanics.calculateNextTurn`, the function `CombatInitiativeService.advanceTurn`
+ * calls, so `encounter.currentRound` moves exactly as it does in production.
+ */
+function fight(order: Array<'player' | 'npc'>) {
+  const seats = order.map((kind, index) =>
+    kind === 'player' ? participant('p1', 'player') : participant(`npc${index}`, 'monster'),
+  );
+  const encounter = {
+    id: 'encounter-1',
+    sessionId: 'session-1',
+    status: 'active',
+    currentRound: 1,
+    currentTurnOrder: 0,
+  };
+  const endTurn = () => {
+    const next = InitiativeMechanics.calculateNextTurn(
+      encounter.currentTurnOrder,
+      seats.length,
+      encounter.currentRound,
+    );
+    encounter.currentTurnOrder = next.nextTurnOrder;
+    encounter.currentRound = next.newRoundNumber;
+  };
+  const dependencies: NpcTurnRunnerDependencies = {
+    getCombatState: async () =>
+      ({
+        encounter: { ...encounter },
+        participants: seats,
+        turnOrder: [],
+        currentParticipant: seats[encounter.currentTurnOrder],
+      }) as never,
+    getDefaultWeapon: async () => weapon,
+    executeIntent: async (_encounterId, intent) => {
+      if (intent.type === 'end_turn') {
+        endTurn();
+        return { currentParticipant: seats[encounter.currentTurnOrder] };
+      }
+      return { actorName: 'npc', targetName: 'The Seeker', hit: false, d20: 4 };
+    },
+  };
+  const labels: string[] = [];
+  /** The player's turn as the client labels it: the encounter round the player is acting in. */
+  const playerActs = () => {
+    labels.push(`ROUND ${encounter.currentRound} · PLAYER`);
+    endTurn();
+  };
+  const npcsAct = async () => {
+    const batch = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+    for (const entry of batch.results) labels.push(`ROUND ${entry.round} · NPC`);
+    return batch;
+  };
+  return { encounter, labels, playerActs, npcsAct, seats };
+}
+
+describe('advanceNpcTurns round labels (#2393)', () => {
+  it.each([2, 3, 4])(
+    'the engine changes the round only when the order wraps, for a %i-actor fight',
+    (actors) => {
+      let turnOrder = 0;
+      let round = 1;
+      const rounds: number[] = [];
+      for (let turn = 0; turn < actors * 3; turn += 1) {
+        rounds.push(round);
+        const next = InitiativeMechanics.calculateNextTurn(turnOrder, actors, round);
+        expect(next.newRound).toBe(next.nextTurnOrder === 0);
+        turnOrder = next.nextTurnOrder;
+        round = next.newRoundNumber;
+      }
+      expect(rounds).toEqual(
+        Array.from({ length: actors * 3 }, (_, turn) => Math.floor(turn / actors) + 1),
+      );
+    },
+  );
+
+  it('2 actors, player first: the round changes only when the order wraps', async () => {
+    const f = fight(['player', 'npc']);
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      await f.npcsAct();
+    }
+    expect(f.labels).toEqual([
+      'ROUND 1 · PLAYER',
+      'ROUND 1 · NPC',
+      'ROUND 2 · PLAYER',
+      'ROUND 2 · NPC',
+    ]);
+  });
+
+  it('2 actors, NPC first: the round changes only when the order wraps', async () => {
+    const f = fight(['npc', 'player']);
+    await f.npcsAct();
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      await f.npcsAct();
+    }
+    expect(f.labels).toEqual([
+      'ROUND 1 · NPC',
+      'ROUND 1 · PLAYER',
+      'ROUND 2 · NPC',
+      'ROUND 2 · PLAYER',
+      'ROUND 3 · NPC',
+    ]);
+  });
+
+  it("3 actors, player first: both NPCs share the player's round", async () => {
+    const f = fight(['player', 'npc', 'npc']);
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      await f.npcsAct();
+    }
+    expect(f.labels).toEqual([
+      'ROUND 1 · PLAYER',
+      'ROUND 1 · NPC',
+      'ROUND 1 · NPC',
+      'ROUND 2 · PLAYER',
+      'ROUND 2 · NPC',
+      'ROUND 2 · NPC',
+    ]);
+  });
+
+  it('3 actors, NPC first: the NPCs before the player open the next round', async () => {
+    const f = fight(['npc', 'npc', 'player']);
+    await f.npcsAct();
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      await f.npcsAct();
+    }
+    expect(f.labels).toEqual([
+      'ROUND 1 · NPC',
+      'ROUND 1 · NPC',
+      'ROUND 1 · PLAYER',
+      'ROUND 2 · NPC',
+      'ROUND 2 · NPC',
+      'ROUND 2 · PLAYER',
+      'ROUND 3 · NPC',
+      'ROUND 3 · NPC',
+    ]);
+  });
+
+  it('3 actors, player in the middle: one batch crosses the wrap and labels each side of it', async () => {
+    const f = fight(['npc', 'player', 'npc']);
+    await f.npcsAct();
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      await f.npcsAct();
+    }
+    expect(f.labels).toEqual([
+      'ROUND 1 · NPC',
+      'ROUND 1 · PLAYER',
+      'ROUND 1 · NPC',
+      'ROUND 2 · NPC',
+      'ROUND 2 · PLAYER',
+      'ROUND 2 · NPC',
+      'ROUND 3 · NPC',
+    ]);
+  });
+
+  it('returns the exact bodies the client label test feeds through the real label builder', async () => {
+    const f = fight(['player', 'npc']);
+    const bodies = [];
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      bodies.push(await f.npcsAct());
+    }
+    expect(bodies).toEqual(TWO_ACTOR_PLAYER_FIRST_NPC_BATCHES);
+    expect(f.encounter.currentRound).toBe(3);
+  });
+
+  it('returns the exact bodies for a player seated between two NPCs, one body spanning the wrap', async () => {
+    const f = fight(['npc', 'player', 'npc']);
+    const bodies = [await f.npcsAct()];
+    for (let turn = 0; turn < 2; turn += 1) {
+      f.playerActs();
+      bodies.push(await f.npcsAct());
+    }
+    expect(bodies).toEqual(THREE_ACTOR_PLAYER_MIDDLE_NPC_BATCHES);
   });
 });

@@ -617,6 +617,9 @@ describe('a turn the engine accepted in full', () => {
       results: [
         {
           action: action(NPC_ID, PLAYER_ID),
+          // The runner stamps the round the NPC acted in (#2393); a two-actor fight with the
+          // player first has the NPC answering in the player's own round.
+          round: 1,
           outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }],
           engineResult: npcEngineResult,
           actorIsPlayer: false,
@@ -624,6 +627,7 @@ describe('a turn the engine accepted in full', () => {
         },
       ],
       currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+      round: 2,
       combatEnded: false,
       iterationCount: 1,
       iterationCap: 4,
@@ -658,7 +662,7 @@ describe('a turn the engine accepted in full', () => {
     expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
     expect(result.combatEngineBlocks).toMatchObject([
       { source: 'player', round: 1 },
-      { source: 'npc', round: 2 },
+      { source: 'npc', round: 1 },
     ]);
   });
 
