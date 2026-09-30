@@ -119,6 +119,15 @@ export const EQUIPMENT_NAME_ALIASES: Record<string, string> = {
   [normalizeEquipmentLookupKey('pan pipes')]: 'pan-flute',
   [normalizeEquipmentLookupKey('costume collection')]: 'clothes-costume',
   [normalizeEquipmentLookupKey('wine flask')]: 'flask-or-tankard',
+  // SRD "Noun, adjective" names, as a player or author writes them.
+  [normalizeEquipmentLookupKey('light crossbow')]: 'crossbow-light',
+  [normalizeEquipmentLookupKey('heavy crossbow')]: 'crossbow-heavy',
+  [normalizeEquipmentLookupKey('hand crossbow')]: 'crossbow-hand',
+  [normalizeEquipmentLookupKey('hooded lantern')]: 'lantern-hooded',
+  [normalizeEquipmentLookupKey('bullseye lantern')]: 'lantern-bullseye',
+  [normalizeEquipmentLookupKey('crossbow bolts (20)')]: 'crossbow-bolt',
+  [normalizeEquipmentLookupKey('case with 20 crossbow bolts')]: 'case-crossbow-bolt',
+  [normalizeEquipmentLookupKey('two shortswords')]: 'shortsword',
 };
 
 const equipmentByLookupKey = new Map<string, Equipment>();

@@ -17,6 +17,45 @@ function sqlFiles(directory: string): string[] {
   });
 }
 
+// Plain-string seed items that are campaign flavor rather than SRD equipment. They become
+// described trinkets on purpose; a new name here needs the same decision.
+const CUSTOM_FLAVOR_ITEMS = [
+  'trophy from fallen enemy',
+  'trophy from dangerous quarry',
+  'ink and quill',
+  'research notes on the Abyss',
+  'eldritch focus',
+  'dark ritual components',
+  "patron's gift",
+  'dark cloak',
+  'underground survival kit',
+  'Underdark navigation tools',
+  'journal filled with stories',
+  'prayer book',
+  'hospitality vestments',
+  'lucky charms',
+  'serving tray',
+  'Feywild party favors',
+  'artifacts from various cultures',
+  'hand bell',
+  'brass pocket telescope',
+  'copper still coil',
+  'iron slag talisman',
+  'deck of marked cards',
+  'brass magnifying loupe',
+  'patched wingsuit',
+  "rigger's needle roll",
+  'brass altimeter',
+  'waxed chart case',
+  'wind-chime charm',
+  'Council patrol insignia',
+  'brass drill-bit pendant',
+  'brass survey theodolite',
+  'waxed map case',
+  'chapel bell clapper',
+  'sound-shell that replays one sound',
+];
+
 describe('starter template equipment resolver audit', () => {
   it('resolves the seven curated custom-item aliases without broad journal matching', () => {
     const aliases = {
@@ -73,5 +112,57 @@ describe('starter template equipment resolver audit', () => {
         }),
       ).toBe(true);
     }
+  });
+
+  it('resolves SRD "Noun, adjective" items written as adjective-first names', () => {
+    const expected = {
+      'light crossbow': ['Crossbow, light', 'weapon', 5],
+      'heavy crossbow': ['Crossbow, heavy', 'weapon', 18],
+      'hand crossbow': ['Crossbow, hand', 'weapon', 3],
+      'hooded lantern': ['Lantern, hooded', 'gear', 0],
+      'bullseye lantern': ['Lantern, bullseye', 'gear', 0],
+      'studded leather': ['Studded Leather', 'armor', 13],
+    } as const;
+    for (const [alias, [name, category, weight]] of Object.entries(expected)) {
+      const resolved = resolveEquipmentByName(alias);
+      expect(resolved?.name.toLowerCase()).toBe(name.toLowerCase());
+      expect(resolved?.category).toBe(category);
+      expect(resolved?.weight).toBe(weight);
+    }
+    expect(transformStarterEquipment(['light crossbow', 'hooded lantern'])).toEqual([
+      expect.objectContaining({ item_name: 'Crossbow, light', item_type: 'weapon' }),
+      expect.objectContaining({ item_name: 'Lantern, hooded', item_type: 'gear' }),
+    ]);
+  });
+
+  it('extracts equipment from INSERT ... SELECT seeds', () => {
+    const sql = `INSERT INTO public.starter_character_templates (
+  template_key,
+  equipment
+) SELECT
+  'the-driller',
+  '["light crossbow", "dungeoneer''s pack"]'
+FROM public.starter_campaigns
+WHERE id = 'x'
+ON CONFLICT (template_key) DO UPDATE SET equipment = EXCLUDED.equipment;`;
+    expect(extractStarterTemplateEquipment(sql)).toEqual([['light crossbow', "dungeoneer's pack"]]);
+  });
+
+  it('resolves every plain-string starter item in every seed except named custom flavor items', () => {
+    const seedPaths = sqlFiles(join(process.cwd(), 'supabase/migrations')).filter((path) =>
+      /_seed_.*character_templates\.sql$/.test(path),
+    );
+    // A shape change in the seeds must fail here instead of silently auditing nothing.
+    expect(seedPaths.length).toBeGreaterThanOrEqual(5);
+
+    const unresolved = new Set<string>();
+    for (const path of seedPaths) {
+      const lists = extractStarterTemplateEquipment(readFileSync(path, 'utf8'));
+      expect(lists.length, path).toBeGreaterThan(0);
+      for (const item of lists.flat()) {
+        if (typeof item === 'string' && !resolveEquipmentByName(item)) unresolved.add(item);
+      }
+    }
+    expect([...unresolved].filter((name) => !CUSTOM_FLAVOR_ITEMS.includes(name))).toEqual([]);
   });
 });
