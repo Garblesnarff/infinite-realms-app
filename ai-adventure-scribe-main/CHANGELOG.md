@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.2...v0.22.3) (2026-09-30)
+
+
+### Bug Fixes
+
+* **combat:** engine and NPC lines reach the screen; drop every DM roll_request in combat ([#2378](https://github.com/Garblesnarff/infinite-realms-production/issues/2378)) ([#2385](https://github.com/Garblesnarff/infinite-realms-production/issues/2385)) ([e81d45b](https://github.com/Garblesnarff/infinite-realms-production/commit/e81d45b29c54e4bba61a7a30717b7e5eaa004fbe))
+* **combat:** sheet Cast of a cantrip no longer 422s; refusals say why ([#2374](https://github.com/Garblesnarff/infinite-realms-production/issues/2374), [#2375](https://github.com/Garblesnarff/infinite-realms-production/issues/2375)) ([#2377](https://github.com/Garblesnarff/infinite-realms-production/issues/2377)) ([e44ecf4](https://github.com/Garblesnarff/infinite-realms-production/commit/e44ecf4efeb8ab377c5abc631f7d53e5476d9df6))
+* **session:** save the opening scene once per session ([#2379](https://github.com/Garblesnarff/infinite-realms-production/issues/2379)) ([#2383](https://github.com/Garblesnarff/infinite-realms-production/issues/2383)) ([5a3ec5a](https://github.com/Garblesnarff/infinite-realms-production/commit/5a3ec5a6cf14aaa1169155b23eba12f6769ce4a6))
+
 ## [0.22.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.1...v0.22.2) (2026-09-30)
 
 
