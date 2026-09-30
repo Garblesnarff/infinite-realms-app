@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.4...v0.22.5) (2026-09-30)
+
+
+### Bug Fixes
+
+* **client:** [#2343](https://github.com/Garblesnarff/infinite-realms-production/issues/2343) groups B and C plus item 9 ([#2351](https://github.com/Garblesnarff/infinite-realms-production/issues/2351)) ([681b079](https://github.com/Garblesnarff/infinite-realms-production/commit/681b07953dff352ae109a0add563ba02e9508b1d))
+* **combat:** engine-line round changes only when the initiative order wraps ([#2393](https://github.com/Garblesnarff/infinite-realms-production/issues/2393)) ([#2397](https://github.com/Garblesnarff/infinite-realms-production/issues/2397)) ([5e67b2e](https://github.com/Garblesnarff/infinite-realms-production/commit/5e67b2e779bd72f9717f4dff16fea04830761a29))
+* **combat:** sheet save card names the creature, says Continue, comes before the DM ([#2392](https://github.com/Garblesnarff/infinite-realms-production/issues/2392)) ([#2395](https://github.com/Garblesnarff/infinite-realms-production/issues/2395)) ([ecc7562](https://github.com/Garblesnarff/infinite-realms-production/commit/ecc7562ac4a1b1d3909ac1e023a3f44fd4222fc5))
+* **dm:** hand the narration pass a save spell's outcome as a fact to restate ([#2391](https://github.com/Garblesnarff/infinite-realms-production/issues/2391)) ([#2396](https://github.com/Garblesnarff/infinite-realms-production/issues/2396)) ([11c1c94](https://github.com/Garblesnarff/infinite-realms-production/commit/11c1c94945d4a82ddb91b543bc63c81ce683f6a0))
+
 ## [0.22.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.3...v0.22.4) (2026-09-30)
 
 
