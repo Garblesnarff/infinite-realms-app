@@ -9,6 +9,7 @@ import {
 import type * as CombatActionExecutor from '@/services/combat/combat-action-executor';
 
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
+import { holdSaveCardBeforeDm } from '@/services/combat/sheet-cast-save-hold';
 import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-bridge';
 
 /**
@@ -180,6 +181,27 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
       '⚙️ Engine: The Apprentice cast Acid Splash at Corrupted Shard — DEX save 12 vs DC 13 — FAIL. 2 acid damage. Corrupted Shard is now at 5 HP.',
     ]);
     expect(engineLines(result).join('\n')).not.toContain('refused');
+  });
+
+  it('asks once when the card was already shown before the DM call (#2392)', async () => {
+    resolveAoECast.mockResolvedValue(NO_AREA);
+    executeStructuredCombatActionWithBoundary.mockResolvedValue({
+      outcomes: [],
+      result: ACID_SPLASH_RESULT,
+      boundary: null,
+    });
+    const participants = [APPRENTICE, SHARD];
+
+    await holdSaveCardBeforeDm({
+      origin: 'sheet_cast',
+      spellId: 'acid-splash',
+      activeEncounter: { currentTurnParticipantId: APPRENTICE_ID, participants },
+    });
+    expect(presented).toHaveLength(1);
+    await resolve(participants, [dmCantripAoEAction]);
+
+    expect(presented).toHaveLength(1);
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
   });
 
   it('with two hostiles, refuses with "no target selected" and opens no alert', async () => {

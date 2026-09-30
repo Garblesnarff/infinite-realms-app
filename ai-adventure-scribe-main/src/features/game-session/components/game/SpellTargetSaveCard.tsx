@@ -45,7 +45,7 @@ export const SpellTargetSaveCard: React.FC<SpellTargetSaveCardProps> = ({ pendin
         </p>
         <div className="mt-3">
           <Button type="button" variant="fantasy" onClick={pending.continue}>
-            [Cast]
+            Continue
           </Button>
         </div>
       </section>

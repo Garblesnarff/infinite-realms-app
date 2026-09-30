@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SpellTargetSaveCard } from '../SpellTargetSaveCard';
 
 describe('SpellTargetSaveCard', () => {
-  it('shows a target-saves card with no player roll and continues on Cast', () => {
+  it('shows a target-saves card with no player roll and continues on Continue', () => {
     const onContinue = vi.fn();
 
     render(
@@ -29,7 +29,9 @@ describe('SpellTargetSaveCard', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/1d20/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '[Cast]' }));
+    // The player already pressed Cast; the card's button carries on, it does not cast again (#2392).
+    expect(screen.queryByRole('button', { name: /cast/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 

@@ -55,6 +55,7 @@ import {
 } from '@/services/combat/player-combat-spell';
 import { trackPlayerRollDismissal } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
+import { standingHostiles } from '@/services/combat/sheet-cast-save-hold';
 import { userDataApi } from '@/services/user-data-api';
 import {
   combatRoundFrom,
@@ -569,17 +570,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         !sheetCastOfKnownSpell
       )
         throw error;
-      // The engine calls every non-player combatant hostile (`isHostile` in
-      // `combat-intent-service.ts`) and the client mapping keeps no faction, so "hostile" here is
-      // "not a player and still standing". One of those is the only creature the cast can mean;
-      // with more, the player is asked, since the engine must not choose for them.
-      const targets = (participants ?? []).filter(
-        (participant) =>
-          participant.participantType !== 'player' &&
-          !participant.isDead &&
-          !participant.isUnconscious &&
-          (participant.currentHitPoints ?? 1) > 0,
-      );
+      // One standing hostile is the only creature the cast can mean; with more, the player is
+      // asked, since the engine must not choose for them. The sheet's Cast showed its card for
+      // that same creature before the DM was called (`holdSaveCardBeforeDm`, #2392).
+      const targets = standingHostiles(participants ?? []);
       if (targets.length !== 1) {
         throw new CombatIntentRefusedError(
           `no target selected — name the creature you cast ${playerCombatSpellLabel(action.spell_id, action.spell_id)} at`,

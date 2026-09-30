@@ -4,6 +4,7 @@ import logger from '@/lib/logger';
 import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import { consumeHeldSaveCard } from '@/services/combat/sheet-cast-save-hold';
 import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 
 export interface PlayerSpellCastParams {
@@ -45,15 +46,18 @@ export async function askPlayerForSpellCast(
   }
 
   if (spell.kind === 'save') {
-    try {
-      await requestSpellTargetSave({
-        actorLabel,
-        targetLabel,
-        spellName: spell.name,
-        saveAbility: spell.saveAbility ?? 'DEX',
-      });
-    } catch (error) {
-      logger.warn('[SpellSave] target-save card failed; submitting the spell anyway', error);
+    // The sheet's Cast already showed this card before the DM was called (#2392).
+    if (!consumeHeldSaveCard(spell.name, targetLabel)) {
+      try {
+        await requestSpellTargetSave({
+          actorLabel,
+          targetLabel,
+          spellName: spell.name,
+          saveAbility: spell.saveAbility ?? 'DEX',
+        });
+      } catch (error) {
+        logger.warn('[SpellSave] target-save card failed; submitting the spell anyway', error);
+      }
     }
     return { autoRolled: true, movementOnly: false };
   }

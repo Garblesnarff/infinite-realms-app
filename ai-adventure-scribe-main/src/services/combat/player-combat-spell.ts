@@ -10,6 +10,8 @@ export interface PlayerCombatSpell {
   name: string;
   kind: PlayerCombatSpellKind;
   saveAbility?: 'DEX';
+  /** Names one creature. Burning Hands is a save spell too, but a cone: its targets come from the map. */
+  singleTarget?: true;
 }
 
 const PLAYER_COMBAT_SPELLS: readonly PlayerCombatSpell[] = [
@@ -17,8 +19,14 @@ const PLAYER_COMBAT_SPELLS: readonly PlayerCombatSpell[] = [
   { id: 'ray-of-frost', name: 'Ray of Frost', kind: 'attack' },
   { id: 'chill-touch', name: 'Chill Touch', kind: 'attack' },
   { id: 'eldritch-blast', name: 'Eldritch Blast', kind: 'attack' },
-  { id: 'acid-splash', name: 'Acid Splash', kind: 'save', saveAbility: 'DEX' },
-  { id: 'sacred-flame', name: 'Sacred Flame', kind: 'save', saveAbility: 'DEX' },
+  { id: 'acid-splash', name: 'Acid Splash', kind: 'save', saveAbility: 'DEX', singleTarget: true },
+  {
+    id: 'sacred-flame',
+    name: 'Sacred Flame',
+    kind: 'save',
+    saveAbility: 'DEX',
+    singleTarget: true,
+  },
   { id: 'magic-missile', name: 'Magic Missile', kind: 'auto-hit' },
   // #2233: the premade Wizard's and Sorcerer's leveled damage spell; the engine rolls the saves.
   { id: 'burning-hands', name: 'Burning Hands', kind: 'save', saveAbility: 'DEX' },

@@ -43,6 +43,7 @@ import {
   hasPendingPlayerRoll,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
+import { holdSaveCardBeforeDm } from '@/services/combat/sheet-cast-save-hold';
 import { MemoryManager } from '@/services/memory-manager';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
@@ -347,6 +348,14 @@ export const useAIResponse = (): {
             npcLinesShown = true;
           }
         }
+
+        // #2392: the sheet's Cast of a save spell asks the player before the DM is called; the
+        // card needs no model output, and the DM's reply used to come first.
+        await holdSaveCardBeforeDm({
+          origin: playerInputOriginOf(latestMessage),
+          spellId: latestMessage.context?.spellId,
+          activeEncounter: isInCombat ? activeEncounter : null,
+        });
 
         logger.debug('Calling DM Agent with context:', {
           gameContext,
