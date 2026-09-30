@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.3...v0.22.4) (2026-09-30)
+
+
+### Bug Fixes
+
+* **combat:** ordinary in-combat turns show NPC lines early; roll drop on fresh state, before dedup ([#2386](https://github.com/Garblesnarff/infinite-realms-production/issues/2386) A) ([#2388](https://github.com/Garblesnarff/infinite-realms-production/issues/2388)) ([747e41d](https://github.com/Garblesnarff/infinite-realms-production/commit/747e41d42c3667fb849cb01af68696c1164f19bb))
+
 ## [0.22.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.2...v0.22.3) (2026-09-30)
 
 
