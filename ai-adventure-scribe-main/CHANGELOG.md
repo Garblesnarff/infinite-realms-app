@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.5...v0.22.6) (2026-09-30)
+
+
+### Bug Fixes
+
+* **combat:** area-spell line names each target; in-combat prompt says combat_actions only ([#2400](https://github.com/Garblesnarff/infinite-realms-production/issues/2400)) ([#2404](https://github.com/Garblesnarff/infinite-realms-production/issues/2404)) ([1bae85a](https://github.com/Garblesnarff/infinite-realms-production/commit/1bae85ab48f09450f7bb97c701b6f82691751628))
+* **equipment:** resolve starter crossbow and lantern names, audit SELECT seeds ([#2370](https://github.com/Garblesnarff/infinite-realms-production/issues/2370)) ([#2405](https://github.com/Garblesnarff/infinite-realms-production/issues/2405)) ([72e2051](https://github.com/Garblesnarff/infinite-realms-production/commit/72e20515b4bb82ddf01fecccd430d90e6f75aa9f))
+* **lore-keeper-ingest:** map tier-2 NPC table cells by header row ([#2402](https://github.com/Garblesnarff/infinite-realms-production/issues/2402)) ([#2407](https://github.com/Garblesnarff/infinite-realms-production/issues/2407)) ([0576a99](https://github.com/Garblesnarff/infinite-realms-production/commit/0576a990936ccc93169e334b53167bc255d7466a))
+* **server:** request.error does not log the submitted body on validation failure ([#2382](https://github.com/Garblesnarff/infinite-realms-production/issues/2382)) ([#2403](https://github.com/Garblesnarff/infinite-realms-production/issues/2403)) ([e370568](https://github.com/Garblesnarff/infinite-realms-production/commit/e37056877b937cb23fbabb11f6ccd0868a2ca5ec))
+
 ## [0.22.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.4...v0.22.5) (2026-09-30)
 
 
