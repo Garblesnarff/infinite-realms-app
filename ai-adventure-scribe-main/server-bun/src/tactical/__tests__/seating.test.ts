@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { resolveSceneCombatant, seatEntityWithinReach, UNKNOWN_CREATURE } from '../seating.js';
+import {
+  isPlayerCharacterName,
+  resolveSceneCombatant,
+  seatEntityWithinReach,
+  UNKNOWN_CREATURE,
+} from '../seating.js';
 
 const makeMap = () => ({
   id: 'map-1',
@@ -119,5 +124,63 @@ describe('resolveSceneCombatant', () => {
       }).name,
     ).toBe('Hulking Guard');
     expect(resolveSceneCombatant({ candidateName: 'Player 1' }).name).toBe(UNKNOWN_CREATURE);
+  });
+});
+
+describe('a combatant never takes a player character name (#2438)', () => {
+  const PLAYER_NAMES = ['The Apprentice'];
+  const NARRATION =
+    'You push past the shelves. The Bitter End Mercenary, a scarred sellsword, raises a blade.';
+
+  it('reads every spelling prose gives the player as the player', () => {
+    for (const spelling of ['The Apprentice', 'Apprentice', 'apprentice', 'the apprentice']) {
+      expect(isPlayerCharacterName(spelling, PLAYER_NAMES)).toBe(true);
+    }
+    expect(isPlayerCharacterName('Apprentice 2', PLAYER_NAMES)).toBe(true);
+    expect(isPlayerCharacterName('Apprentice of the Bitter End', PLAYER_NAMES)).toBe(false);
+    expect(isPlayerCharacterName('The Bitter End Mercenary', PLAYER_NAMES)).toBe(false);
+    expect(isPlayerCharacterName('Apprentice', [])).toBe(false);
+  });
+
+  it('replaces "Apprentice" for the PC "The Apprentice" with the creature the prose names', () => {
+    const result = resolveSceneCombatant({
+      candidateName: 'Apprentice',
+      sceneDescription: NARRATION,
+      playerNames: PLAYER_NAMES,
+    });
+    expect(result).toMatchObject({ name: 'Bitter End Mercenary', source: 'scene' });
+  });
+
+  it('does not take the PC name from the scene entity or the fallback either', () => {
+    expect(
+      resolveSceneCombatant({
+        candidateName: 'Hostile Creature',
+        sceneEntityName: 'The Apprentice',
+        fallbackName: 'Apprentice',
+        playerNames: PLAYER_NAMES,
+      }).name,
+    ).toBe(UNKNOWN_CREATURE);
+  });
+
+  it('skips a PC named in the prose and reads the creature after it', () => {
+    const result = resolveSceneCombatant({
+      candidateName: 'Hostile Creature',
+      sceneDescription:
+        'Goldwhisk looks at the Apprentice Mage and frowns. The Bitter End Mercenary raises a blade.',
+      playerNames: ['The Apprentice Mage'],
+    });
+    expect(result.name).toBe('Bitter End Mercenary');
+  });
+
+  it('strips a count from the candidate only: PC "Agent 7" is not "Agent 8"', () => {
+    expect(isPlayerCharacterName('Agent 8', ['Agent 7'])).toBe(false);
+    expect(isPlayerCharacterName('Agent 7', ['Agent 7'])).toBe(true);
+    expect(isPlayerCharacterName('Apprentice 3', ['The Apprentice'])).toBe(true);
+  });
+
+  it('keeps the name when no player carries it', () => {
+    expect(resolveSceneCombatant({ candidateName: 'Apprentice', playerNames: ['Rook'] }).name).toBe(
+      'Apprentice',
+    );
   });
 });

@@ -3,6 +3,11 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import {
+  UNSEATED_TARGET_TOKEN,
+  unresolvedTargetRefusalBody,
+} from '../../../../../../shared/test-fixtures/unresolved-target-refusal';
+
 import type { MapEntity, TacticalMap } from '../../../../tactical/types.js';
 import type { AttackRollInput } from '../../../../types/combat.js';
 
@@ -434,6 +439,18 @@ describe('the intent boundary resolves numbered slugs and refuses what it cannot
     expect(body.details?.roster).toContain('the-void-maw');
     expect(body.details?.roster).toContain('the-seeker');
     // The engine is never handed a reference the board could not translate.
+    expect(attackInputs).toHaveLength(0);
+  });
+
+  it('answers an unseated target with exactly the body the client reads (#2438)', async () => {
+    const response = await postIntent({
+      intent: { type: 'attack', actorId: 'the-void-maw', targetId: UNSEATED_TARGET_TOKEN },
+      source: 'dm',
+    });
+    const body = (await response.json()) as { details?: { roster?: string } };
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual(unresolvedTargetRefusalBody('attack', body.details?.roster ?? ''));
     expect(attackInputs).toHaveLength(0);
   });
 

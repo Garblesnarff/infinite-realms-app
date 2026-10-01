@@ -397,6 +397,7 @@ jobs:
             src/services/__tests__/combat-pending-intent.real-db.test.ts \
             src/services/__tests__/combat-intent-roster.real-db.test.ts \
             src/services/__tests__/combat-entry-transcript.real-db.test.ts \
+            src/services/__tests__/combat-seat-player-name.real-db.test.ts \
             src/services/__tests__/companions.real-db.test.ts \
             src/services/__tests__/dm-reply-reconcile.real-db.test.ts \
             src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts \

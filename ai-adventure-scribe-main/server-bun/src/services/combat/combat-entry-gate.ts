@@ -29,6 +29,7 @@ import {
   rosterEntryForParticipant,
 } from '../../../../shared/engine-display-name';
 import { ValidationError } from '../../lib/errors.js';
+import { isPlayerCharacterName } from '../../tactical/seating.js';
 
 import type { CombatEntryFirstAction } from './combat-entry-first-action.js';
 import type { DeclaredAttack } from './combat-intent-gate.js';
@@ -162,8 +163,12 @@ export function deriveEntryCombatants(
   response: CombatEntryResponse,
   playerName: string,
 ): DerivedCombatant[] {
+  // The player is never one of the hostiles. A reference to them arrives as "The Apprentice",
+  // `the-apprentice` or just `apprentice`, so this compares names, not slugs (#2438).
+  const isPlayer = (name: string): boolean => isPlayerCharacterName(name, [playerName]);
   const authored = asArray(response.combatants)
     .filter((entry) => typeof entry?.name === 'string' && entry.name.trim())
+    .filter((entry) => !isPlayer(entry.name))
     .map((entry) => ({
       name: entry.name.trim(),
       monsterId:
@@ -174,7 +179,6 @@ export function deriveEntryCombatants(
     }));
   if (authored.length) return authored;
 
-  const playerSlug = slugify(playerName);
   const referenced = new Set<string>();
   for (const action of asArray(response.map_actions)) {
     const target = mapActionTarget(action);
@@ -185,11 +189,11 @@ export function deriveEntryCombatants(
       if (typeof target === 'string' && target.trim()) referenced.add(slugify(target));
     }
   }
-  referenced.delete(playerSlug);
   referenced.delete('');
 
-  if (referenced.size) {
-    return [...referenced].map((slug) => ({ name: titleize(slug), count: 1 }));
+  const hostiles = [...referenced].map((slug) => titleize(slug)).filter((name) => !isPlayer(name));
+  if (hostiles.length) {
+    return hostiles.map((name) => ({ name, count: 1 }));
   }
   return [{ name: 'Hostile Creature', count: 1 }];
 }

@@ -6,12 +6,17 @@ import type {
 
 export const COMBAT_INTENT_SCHEMA_REJECTED = 'COMBAT_INTENT_SCHEMA_REJECTED';
 export const COMBAT_INTENT_OUT_OF_TURN = 'COMBAT_INTENT_OUT_OF_TURN';
+/** The target the action named is not a combatant in this fight (#2438). */
+export const COMBAT_INTENT_UNRESOLVED_TARGET = 'COMBAT_INTENT_UNRESOLVED_TARGET';
 
 export function combatRefusalReason(
   refusal: Pick<CombatIntentRefusedError, 'message' | 'details'>,
 ): string {
   const details = refusal.details;
   if (typeof details?.reason === 'string' && details.reason.trim()) return details.reason;
+  if (details?.resource === 'Combat participant' && details.role === 'target') {
+    return COMBAT_INTENT_UNRESOLVED_TARGET;
+  }
   if (details?.stage === 'intent_schema') return COMBAT_INTENT_SCHEMA_REJECTED;
   if (details?.currentParticipantId || details?.currentParticipantSlug) {
     return COMBAT_INTENT_OUT_OF_TURN;
@@ -33,6 +38,9 @@ export function playerFacingRefusal(
   if (reason === COMBAT_INTENT_OUT_OF_TURN) {
     const subject = who.actorIsPlayer ? 'your' : `${who.actor}'s`;
     return `it is not ${subject} turn${who.turnHolder ? ` — ${who.turnHolder} acts now` : ''}`;
+  }
+  if (reason === COMBAT_INTENT_UNRESOLVED_TARGET) {
+    return 'no creature by that name is in this fight — name one of the creatures on the board';
   }
   if (reason === COMBAT_INTENT_SCHEMA_REJECTED && refusal.details?.missing?.includes('targetIds')) {
     return 'no target selected — name the creature you cast it at';
@@ -66,6 +74,15 @@ export function turnNotice(
  */
 export function stillYourTurnNotice(): string {
   return '*(Your declared action was not resolved — it is still your turn.)*';
+}
+
+/**
+ * The player named a target that is not in the fight. Nothing was rolled and the turn is still
+ * theirs; the creatures that are here are listed so they can pick one (#2438).
+ */
+export function unresolvedTargetNotice(creatures: readonly string[]): string {
+  const who = creatures.length ? ` Who do you mean: ${creatures.join(', ')}?` : '';
+  return `*(No creature by that name is in this fight, so nothing was resolved — it is still your turn.${who})*`;
 }
 
 /**

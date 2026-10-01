@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   COMBAT_INTENT_OUT_OF_TURN,
+  COMBAT_INTENT_UNRESOLVED_TARGET,
   combatRefusalReason,
   noMechanicalActionNotice,
   playerFacingRefusal,
@@ -8,6 +9,7 @@ import {
   repairedTurnNotice,
   stillYourTurnNotice,
   turnNotice,
+  unresolvedTargetNotice,
 } from './combat-notice';
 import { enforceNarrationGate } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
@@ -745,6 +747,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           // A refused spell already has an engine line. Do not swallow it behind a thrown error.
           break;
         }
+        // A target that is not in the fight is the player's to re-name, not a failed turn: the
+        // refusal is recorded and the notice below tells them who is here (#2438). A creature's
+        // refusal only costs its own action, as in the `repairSpent` branch above.
+        if (combatRefusalReason(error) === COMBAT_INTENT_UNRESOLVED_TARGET) {
+          if (isPlayerActor(action.actor_id, participants)) break;
+          continue;
+        }
         throw error;
       }
       // The corrected turn replaces the refused one. A second refusal is not repaired again.
@@ -1053,13 +1062,23 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     `[CombatRepair] player_action_refused actor=${refusedPlayerActions[0].actor} ` +
       `turn=${String(refusedPlayerActions[0].currentTurn ?? 'unknown')}`,
   );
-  const notice = playerKeepsTurn
-    ? stillYourTurnNotice()
-    : turnNotice(
-        turnHolder,
-        isPlayerActor(turnHolder?.id ?? '', participants),
-        String(refusedPlayerActions[0].refusalReason ?? ''),
-      );
+  // Said whoever holds the turn: after NPC pre-flight `turnHolder` is already the player, which
+  // would otherwise read as "declared out of turn" for a target that simply is not here.
+  const notice = refusedPlayerActions.some(
+    (refusal) => refusal.refusalReason === COMBAT_INTENT_UNRESOLVED_TARGET,
+  )
+    ? unresolvedTargetNotice(
+        standingHostiles(participants ?? []).flatMap((participant) =>
+          participant.name ? [participant.name] : [],
+        ),
+      )
+    : playerKeepsTurn
+      ? stillYourTurnNotice()
+      : turnNotice(
+          turnHolder,
+          isPlayerActor(turnHolder?.id ?? '', participants),
+          String(refusedPlayerActions[0].refusalReason ?? ''),
+        );
   const refusedText = `${narratedText}\n\n${notice}`.trim();
   return {
     ...narration,

@@ -55,28 +55,86 @@ function titleizeCreatureType(value: string): string {
     .join(' ');
 }
 
-function nameFromSceneDescription(description: string): string | undefined {
+/**
+ * A name a player character already answers to: the same words once the article, case and
+ * punctuation are set aside, with or without a trailing count on the candidate ("Apprentice 2").
+ * Prose and slugs drop the article ("The Apprentice" -> "Apprentice"), so exact equality alone
+ * would miss the very name that reached the board in run M10 (#2438). The count is stripped from
+ * the candidate only: a PC called "Agent 7" is not "Agent 8".
+ */
+function comparableName(value: string): string {
+  return withoutLeadingArticle(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** True when `value` equals, or is the article-less / numbered form of, a PC's name. */
+export function isPlayerCharacterName(
+  value: string | null | undefined,
+  playerNames: readonly (string | null | undefined)[] = [],
+): boolean {
+  const name = value ? comparableName(value) : '';
+  if (!name) return false;
+  const withoutCount = name.replace(/\s+\d+$/, '');
+  return playerNames.some((player) => {
+    const playerName = player ? comparableName(player) : '';
+    return Boolean(playerName) && (playerName === name || playerName === withoutCount);
+  });
+}
+
+/** The first match whose name is not a player's: a PC named in the prose must not hide the creature after it. */
+function firstNameMatch(
+  description: string,
+  pattern: RegExp,
+  pick: (match: RegExpMatchArray) => string | undefined,
+  isPlayer: (name: string) => boolean,
+): string | undefined {
+  for (const match of description.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))) {
+    const name = pick(match);
+    if (name && !isPlayer(name)) return name;
+  }
+  return undefined;
+}
+
+function nameFromSceneDescription(
+  description: string,
+  isPlayer: (name: string) => boolean = () => false,
+): string | undefined {
+  const article = (match: RegExpMatchArray): string | undefined =>
+    match[1] ? withoutLeadingArticle(match[1]) : undefined;
   // Scene headings and phrases such as "The Chiropteran Hulk" are the stable names the
   // prose-declaration path still has when the structured combatant was emitted as Player 1.
-  const heading = description.match(
+  const heading = firstNameMatch(
+    description,
     /(?:^|\n)\s*(?:#+\s*)?(?:the\s+)?((?:[A-Z][A-Za-z'’-]*\s+){1,5}[A-Z][A-Za-z'’-]*)(?:\s*\([^\n)]*\))?\s*(?:$|\n)/m,
+    article,
+    isPlayer,
   );
-  if (heading?.[1]) return withoutLeadingArticle(heading[1]);
+  if (heading) return heading;
 
-  const named = description.match(
+  const named = firstNameMatch(
+    description,
     /\b(?:called|named|known\s+as)\s+(?:the\s+)?((?:[A-Z][A-Za-z'’-]*\s+){0,4}[A-Z][A-Za-z'’-]*)\b/,
+    article,
+    isPlayer,
   );
-  if (named?.[1]) return withoutLeadingArticle(named[1]);
+  if (named) return named;
 
-  const articleName = description.match(
+  const articleName = firstNameMatch(
+    description,
     /\bthe\s+((?:[A-Z][A-Za-z'’-]*\s+){1,4}[A-Z][A-Za-z'’-]*)\b/,
+    article,
+    isPlayer,
   );
-  if (articleName?.[1]) return withoutLeadingArticle(articleName[1]);
+  if (articleName) return articleName;
 
-  const creatureType = description.match(
-    /\b(?:a|an|the)\s+((?:[A-Za-z][A-Za-z'-]*\s+){0,3}(?:hulk|creature|monster|beast|golem|dragon|ogre|troll|giant|guard|captain|soldier|ranger|mage|professor|scholar))\b/i,
+  return firstNameMatch(
+    description,
+    /\b(?:a|an|the)\s+((?:[A-Za-z][A-Za-z'-]*\s+){0,3}(?:hulk|creature|monster|beast|golem|dragon|ogre|troll|giant|guard|captain|soldier|mercenary|ranger|mage|professor|scholar))\b/i,
+    (match) => (match[1] ? titleizeCreatureType(match[1]) : undefined),
+    isPlayer,
   );
-  return creatureType?.[1] ? titleizeCreatureType(creatureType[1]) : undefined;
 }
 
 export interface SceneCombatantResolution {
@@ -189,18 +247,24 @@ export function resolveSceneCombatant(params: {
   sceneEntityName?: string | null;
   sceneDescription?: string | null;
   fallbackName?: string | null;
+  /** Player characters in the fight: a combatant never takes one of their names (#2438). */
+  playerNames?: readonly (string | null | undefined)[];
 }): SceneCombatantResolution {
+  const isUsable = (value: string | null | undefined): boolean =>
+    !isUnresolvedNpcName(value) && !isPlayerCharacterName(value, params.playerNames);
   const candidate = params.candidateName?.trim();
-  const inputNameIsResolved = Boolean(candidate && !isUnresolvedNpcName(candidate));
+  const inputNameIsResolved = Boolean(candidate && isUsable(candidate));
 
   const sceneName =
-    params.sceneEntityName?.trim() && !isUnresolvedNpcName(params.sceneEntityName)
+    params.sceneEntityName?.trim() && isUsable(params.sceneEntityName)
       ? withoutLeadingArticle(params.sceneEntityName)
       : params.sceneDescription?.trim()
-        ? nameFromSceneDescription(params.sceneDescription)
+        ? nameFromSceneDescription(params.sceneDescription, (name) =>
+            isPlayerCharacterName(name, params.playerNames),
+          )
         : undefined;
   const fallback =
-    params.fallbackName?.trim() && !isUnresolvedNpcName(params.fallbackName)
+    params.fallbackName?.trim() && isUsable(params.fallbackName)
       ? withoutLeadingArticle(params.fallbackName)
       : undefined;
   const name = inputNameIsResolved

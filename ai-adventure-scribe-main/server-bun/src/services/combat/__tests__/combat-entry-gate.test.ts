@@ -285,6 +285,79 @@ describe('deriveEntryCombatants', () => {
       { name: 'Hostile Creature', count: 1 },
     ]);
   });
+
+  describe('the PC "The Apprentice" (run M10, #2438)', () => {
+    const attackOn = (...targets: string[]) => ({
+      actor_id: 'the-bitter-end-mercenary',
+      action_type: 'attack' as const,
+      target_ids: targets,
+      weapon_id: null,
+      spell_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    });
+
+    it('does not seat the player, referenced as `apprentice`, as the hostile', () => {
+      const derived = deriveEntryCombatants(
+        response({ combat_actions: [attackOn('apprentice', 'the-bitter-end-mercenary')] }),
+        'The Apprentice',
+      );
+      expect(derived).toEqual([{ name: 'The Bitter End Mercenary', count: 1 }]);
+    });
+
+    it('seats one unnamed hostile when the only reference is the player', () => {
+      const derived = deriveEntryCombatants(
+        response({ combat_actions: [attackOn('apprentice')] }),
+        'The Apprentice',
+      );
+      expect(derived).toEqual([{ name: 'Hostile Creature', count: 1 }]);
+    });
+
+    it('drops an authored combatant that carries the player name', () => {
+      expect(
+        deriveEntryCombatants(
+          response({
+            // The DM schema requires all three fields; an unnamed-stat creature sends `monster_id: ''`.
+            combatants: [
+              { monster_id: '', name: 'Apprentice', count: 1 },
+              { monster_id: '', name: 'The Bitter End Mercenary', count: 1 },
+            ],
+          }),
+          'The Apprentice',
+        ),
+      ).toEqual([{ name: 'The Bitter End Mercenary', monsterId: undefined, count: 1 }]);
+      expect(
+        deriveEntryCombatants(
+          response({ combatants: [{ monster_id: '', name: 'The Apprentice', count: 1 }] }),
+          'The Apprentice',
+        ),
+      ).toEqual([{ name: 'Hostile Creature', count: 1 }]);
+    });
+
+    it('hands the popup the mercenary, never the player', async () => {
+      const { deps, started } = stubDeps();
+      const player = { ...PLAYER, name: 'The Apprentice' };
+      const narration =
+        'You push past the shelves. The Bitter End Mercenary, a scarred sellsword, raises a blade.';
+      const seated = await seatDetectedResponse(
+        {
+          sessionId: SESSION_ID,
+          userId: USER_ID,
+          player,
+          response: response({
+            text: narration,
+            combat_transition: 'start',
+            combat_actions: [attackOn('apprentice')],
+          }),
+        },
+        deps,
+      );
+      expect(seated?.entered).toBe(true);
+      const hostiles = started[0].participants.slice(1);
+      expect(hostiles.map((participant) => participant.name)).not.toContain('Apprentice');
+      expect(hostiles[0].sceneDescription).toContain('The Bitter End Mercenary');
+    });
+  });
 });
 
 describe('synthesizeSceneSpec — scene_spec is optional (#1779 §2)', () => {

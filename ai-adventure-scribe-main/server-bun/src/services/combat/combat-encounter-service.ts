@@ -46,6 +46,7 @@ import { isCompanionsEnabled } from '../../lib/companion-feature.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import {
+  isPlayerCharacterName,
   isUnresolvedNpcName,
   resolveSceneCombatant,
   UNKNOWN_CREATURE,
@@ -203,19 +204,41 @@ export class CombatEncounterService {
         participantsToSeat.filter((input) => Boolean(input.characterId)).length,
       );
 
+      // Every name a player character answers to, from the stored row and from the input. No
+      // other combatant may be seated under one of them (#2438).
+      const playerNames = [
+        ...participantsToSeat.filter((input) => input.characterId).map((input) => input.name),
+        ...characterRows.map((row) => row.character.name),
+      ];
+
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
       const npcFallbackSeats: NpcStatFallbackSeat[] = [];
       const participantsWithInitiative = participantsToSeat.map((input) => {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
+        // A creature carrying a player's name (a prose-derived "Apprentice" for the PC "The
+        // Apprentice") is unnamed, not the player: it is resolved from the scene like any other
+        // unresolved label.
+        const inputName =
+          !input.characterId && isPlayerCharacterName(input.name, playerNames)
+            ? UNKNOWN_CREATURE
+            : input.name;
+        if (inputName !== input.name) {
+          logger.warn({
+            msg: 'COMBAT_SEAT_NAME_IS_PLAYER_NAME',
+            encounterId: encounter.id,
+            source: input.source ?? 'combat-entry',
+          });
+        }
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
         const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;
         const sceneResolution = resolveSceneCombatant({
-          candidateName: input.name,
+          candidateName: inputName,
           sceneEntityName: input.sceneEntityName,
           sceneDescription: input.sceneDescription,
+          playerNames,
         });
         const lookupName =
-          !input.characterId && isUnresolvedNpcName(input.name) ? sceneResolution.name : input.name;
+          !input.characterId && isUnresolvedNpcName(inputName) ? sceneResolution.name : inputName;
         // Structured DM combatants carry an id instead of a database row. Resolving it walks
         // the ladder -- campaign-authored bible stats, then the SRD catalog, then generic NPC
         // numbers -- and every rung down is logged rather than silently swallowed.
@@ -224,13 +247,14 @@ export class CombatEncounterService {
             ? resolveCombatantStats(campaignIndex, input.monsterId, lookupName, { sessionId })
             : null;
         const participantName =
-          !input.characterId && isUnresolvedNpcName(input.name)
+          !input.characterId && isUnresolvedNpcName(inputName)
             ? resolveSceneCombatant({
-                candidateName: input.name,
+                candidateName: inputName,
                 sceneEntityName: npc?.name ?? monster?.monsterName ?? sceneResolution.name,
                 fallbackName: sceneResolution.name,
+                playerNames,
               }).name
-            : input.name;
+            : inputName;
         // `participantName` stays the DM's label: targeting, the entry gate and per-seat HP key
         // on it. Players read the bible heading instead (see `bestiaryDisplayName`).
         const bestiaryName = bestiaryDisplayName(participantName, monster);
@@ -412,7 +436,7 @@ export class CombatEncounterService {
           logger.info({
             msg: 'COMBAT_PARTY_SCALING',
             sessionId,
-            combatantName: input.name,
+            combatantName: participantName,
             monsterId: input.monsterId ?? null,
             partySize: scaled.partySize,
             baseline: scaled.scaling.baseline,
