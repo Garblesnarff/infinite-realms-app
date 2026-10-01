@@ -95,25 +95,44 @@ function addCandidate(
   candidatesByIdentity.set(identity, candidates);
 }
 
-async function deleteRows(client: SupabaseClient, ids: Set<string>): Promise<void> {
+async function deleteRows(
+  client: SupabaseClient,
+  campaignId: string,
+  ids: Set<string>,
+  options: { onlyWithoutImageUrl?: boolean } = {},
+): Promise<string[]> {
   const rowIds = [...ids];
+  const deleted: string[] = [];
   for (let index = 0; index < rowIds.length; index += 100) {
     const batch = rowIds.slice(index, index + 100);
-    const { error } = await client.from('campaign_chunks').delete().in('id', batch);
+    let query = client
+      .from('campaign_chunks')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .in('id', batch);
+    // The DB re-checks what the caller's snapshot said: a row that gained an image_url since
+    // the read is not deleted.
+    if (options.onlyWithoutImageUrl) query = query.is('metadata->>image_url', null);
+    const { data, error } = await query.select('id');
     if (error) throw new Error(`Failed to remove stale campaign chunks: ${error.message}`);
+    deleted.push(...(data ?? []).map((row: { id: string }) => row.id));
   }
+  return deleted;
 }
 
 /**
- * Delete the stale rows `--remove-stale` is allowed to delete. A row with an
- * image_url is never deleted, whatever the caller passes.
+ * Delete the stale rows `--remove-stale` is allowed to delete, inside one campaign. A row with
+ * an image_url is never deleted, whatever the caller passes. Returns the ids the DB deleted.
  */
-export async function removeStaleRows(client: SupabaseClient, rows: StaleRow[]): Promise<number> {
+export async function removeStaleRows(
+  client: SupabaseClient,
+  campaignId: string,
+  rows: StaleRow[],
+): Promise<string[]> {
   const ids = new Set(
     rows.filter((row) => row.removedByRemoveStale && !row.hasImageUrl).map((row) => row.id),
   );
-  await deleteRows(client, ids);
-  return ids.size;
+  return deleteRows(client, campaignId, ids, { onlyWithoutImageUrl: true });
 }
 
 export async function readExistingCampaignChunks(
@@ -253,7 +272,7 @@ export async function reingestCampaignChunks(
     }
   }
 
-  await deleteRows(client, rowsToDelete);
+  await deleteRows(client, campaignId, rowsToDelete);
 
   const result: ReingestResult = {
     parsedChunks: parsedChunks.length,

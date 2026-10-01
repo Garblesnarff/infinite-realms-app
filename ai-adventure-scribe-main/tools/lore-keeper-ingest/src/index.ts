@@ -516,8 +516,16 @@ async function runReingestCommand(options: ReingestCommandOptions): Promise<void
     );
 
     if (options.removeStale) {
-      const removed = await removeStaleRows(client, staleByCampaign.get(campaign.id) || []);
-      console.log(`${campaign.slug}: stale_rows_removed=${removed}`);
+      const removed = await removeStaleRows(
+        client,
+        campaign.id,
+        staleByCampaign.get(campaign.id) || [],
+      );
+      console.log(
+        `${campaign.slug}: stale_rows_removed=${removed.length}${
+          removed.length > 0 ? ` ids=${removed.join(',')}` : ''
+        }`,
+      );
     }
   }
 }

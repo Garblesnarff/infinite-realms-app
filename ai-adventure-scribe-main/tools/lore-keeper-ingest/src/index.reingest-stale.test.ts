@@ -67,8 +67,11 @@ beforeAll(() => {
         return json(table === 'campaign_chunks' ? existingRows : []);
       }
       if (request.method === 'DELETE' && table === 'campaign_chunks') {
-        chunkDeleteQueries.push(decodeURIComponent(url.search));
-        return json([]);
+        const query = decodeURIComponent(url.search);
+        chunkDeleteQueries.push(query);
+        // PostgREST returns the deleted rows for `.select('id')`; the tool prints these ids.
+        const ids = /id=in\.\(([^)]*)\)/.exec(query)?.[1]?.split(',') ?? [];
+        return json(ids.map((id) => ({ id })));
       }
       if (request.method !== 'DELETE') writes.push(`${request.method} ${table}`);
       return request.method === 'DELETE' ? json([]) : new Response(null, { status: 201 });
@@ -175,8 +178,10 @@ test('--apply --remove-stale deletes the stale row without image_url and never t
   const output = await runReingest(['--apply', '--skip-embeddings', '--remove-stale']);
 
   assert.ok(!process.exitCode, output);
-  assert.match(output, new RegExp(`${CAMPAIGN}: stale_rows_removed=1`));
+  assert.match(output, new RegExp(`${CAMPAIGN}: stale_rows_removed=1 ids=hall-old`));
   assert.equal(chunkDeleteQueries.length, 1);
   assert.match(chunkDeleteQueries[0] ?? '', /hall-old/);
+  assert.match(chunkDeleteQueries[0] ?? '', new RegExp(`campaign_id=eq\\.${CAMPAIGN}`));
+  assert.match(chunkDeleteQueries[0] ?? '', /metadata->>image_url=is\.null/);
   assert.doesNotMatch(chunkDeleteQueries[0] ?? '', /keep-with-image|hall-clean/);
 });

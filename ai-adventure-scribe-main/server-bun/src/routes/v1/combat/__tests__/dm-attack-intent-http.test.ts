@@ -628,6 +628,22 @@ describe('honest rejection of anything the intent union refuses', () => {
     expect(body.detail).toContain('attack');
   });
 
+  it('logs at most 32 characters of an unknown intent type; the 422 body is unchanged (#2427)', async () => {
+    const longType = `${'x'.repeat(40)}$&tail`;
+    warnings.length = 0;
+    const response = await postIntent({
+      intent: { type: longType, actorId: 'the-seeker' },
+      source: 'dm',
+    });
+    const body = (await response.json()) as { detail: string };
+    expect(response.status).toBe(422);
+    expect(body.detail).toContain(JSON.stringify(longType));
+    const logged = warnings.find((entry) => entry.field === 'intent.type');
+    expect(logged?.reason).toContain(JSON.stringify('x'.repeat(32)));
+    expect(String(logged?.reason)).not.toContain('x'.repeat(33));
+    expect(String(logged?.reason)).not.toContain('tail');
+  });
+
   it('never answers a bad body with a 5xx', async () => {
     for (const body of [
       { intent: { type: 'attack' }, source: 'dm' },

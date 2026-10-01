@@ -174,6 +174,32 @@ describe('POST /v1/ai-proxy/voice usage', () => {
     }
   });
 
+  it('#2176: rejects 5001 characters before any quota use or provider call, and accepts 5000', async () => {
+    forwardedBody = '';
+    const tooLong = await app.handle(speak('tts-cost-user', 'a'.repeat(5001)));
+
+    expect(tooLong.status).toBe(422);
+    expect(quotaConsumes).toHaveLength(0);
+    expect(providerUsage).toHaveLength(0);
+    expect(forwardedBody).toBe('');
+
+    const atLimit = await app.handle(speak('tts-cost-user', 'a'.repeat(5000)));
+    expect(atLimit.status).toBe(200);
+  });
+
+  it('#2176: rejects an oversized model_id instead of reading it', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/ai-proxy/voice/voice-1', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer tts-cost-user' },
+        body: JSON.stringify({ text: 'The lantern flickers.', model_id: 'm'.repeat(101) }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(quotaConsumes).toHaveLength(0);
+  });
+
   it('writes session_id when the request includes a session', async () => {
     const response = await app.handle(
       speak('tts-cost-user', 'The lantern flickers.', 'session-2242'),

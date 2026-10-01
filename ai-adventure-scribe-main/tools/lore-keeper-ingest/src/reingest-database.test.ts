@@ -12,13 +12,14 @@ type FakeCalls = {
   updates: Array<{ id: string; payload: Record<string, unknown> }>;
   inserts: Array<Record<string, unknown>>;
   deleted: string[];
+  deleteFilters: Array<{ campaigns: string[]; ids: string[]; noImage: boolean }>;
 };
 
 function fakeClient(rows: Array<Record<string, unknown>>): {
   client: SupabaseClient;
   calls: FakeCalls;
 } {
-  const calls: FakeCalls = { updates: [], inserts: [], deleted: [] };
+  const calls: FakeCalls = { updates: [], inserts: [], deleted: [], deleteFilters: [] };
   const client = {
     from: () => ({
       select: () => ({
@@ -34,12 +35,43 @@ function fakeClient(rows: Array<Record<string, unknown>>): {
         calls.inserts.push(payload);
         return { data: null, error: null };
       },
-      delete: () => ({
-        in: async (_column: string, ids: string[]) => {
-          calls.deleted.push(...ids);
-          return { data: null, error: null };
-        },
-      }),
+      // Applies the filters the way PostgREST does, over `rows`: only a row in the filtered
+      // campaign, in the id list, and (with the image guard) without metadata.image_url goes.
+      delete: () => {
+        const filters = { campaigns: [] as string[], ids: [] as string[], noImage: false };
+        const builder = {
+          eq: (_column: string, value: string) => {
+            filters.campaigns.push(value);
+            return builder;
+          },
+          in: (_column: string, ids: string[]) => {
+            filters.ids = ids;
+            return builder;
+          },
+          is: (column: string, value: null) => {
+            assert.equal(column, 'metadata->>image_url');
+            assert.equal(value, null);
+            filters.noImage = true;
+            return builder;
+          },
+          select: async () => {
+            const hit = rows.filter(
+              (candidate) =>
+                filters.campaigns.every((campaign) => candidate.campaign_id === campaign) &&
+                filters.ids.includes(candidate.id as string) &&
+                !(
+                  filters.noImage &&
+                  (candidate.metadata as Record<string, unknown> | undefined)?.image_url
+                ),
+            );
+            const hitIds = hit.map((candidate) => candidate.id as string);
+            calls.deleted.push(...hitIds);
+            calls.deleteFilters.push({ ...filters });
+            return { data: hitIds.map((id) => ({ id })), error: null };
+          },
+        };
+        return builder;
+      },
     }),
   } as unknown as SupabaseClient;
 
@@ -183,24 +215,73 @@ test('leaves the existing embedding stamp alone when embeddings are skipped', as
   });
 });
 
-test('removeStaleRows deletes the rows flagged for removal and never one with an image_url', async () => {
-  const { client, calls } = fakeClient([]);
-  const stale = (id: string, hasImageUrl: boolean, removedByRemoveStale: boolean): StaleRow => ({
-    id,
-    chunkType: 'location',
-    entityName: id,
-    hasImageUrl,
-    removedByApply: false,
-    refusedByApply: false,
-    removedByRemoveStale,
-  });
+const stale = (id: string, hasImageUrl: boolean, removedByRemoveStale: boolean): StaleRow => ({
+  id,
+  chunkType: 'location',
+  entityName: id,
+  hasImageUrl,
+  removedByApply: false,
+  refusedByApply: false,
+  removedByRemoveStale,
+});
 
-  const removed = await removeStaleRows(client, [
+const chunkRow = (
+  id: string,
+  campaignId: string,
+  metadata: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  id,
+  campaign_id: campaignId,
+  chunk_type: 'location',
+  entity_name: id,
+  metadata,
+  source_file: 'campaign_bible.md',
+  source_section: 'Locations',
+  created_at: '2026-08-13T00:00:00.000Z',
+});
+
+test('removeStaleRows deletes the rows flagged for removal and never one with an image_url', async () => {
+  const { client, calls } = fakeClient([
+    chunkRow('plain', 'camp-a'),
+    chunkRow('with-image', 'camp-a', { image_url: 'https://cdn.example/a.png' }),
+    chunkRow('with-image-unflagged', 'camp-a', { image_url: 'https://cdn.example/b.png' }),
+  ]);
+
+  const removed = await removeStaleRows(client, 'camp-a', [
     stale('plain', false, true),
     stale('with-image', true, true),
     stale('with-image-unflagged', true, false),
   ]);
 
-  assert.equal(removed, 1);
+  assert.deepEqual(removed, ['plain']);
   assert.deepEqual(calls.deleted, ['plain']);
+});
+
+test('removeStaleRows guards the delete in the DB: a row that gained an image_url after the read survives', async () => {
+  // The caller's snapshot says the row has no image; the DB row has one by delete time.
+  const { client, calls } = fakeClient([
+    chunkRow('raced', 'camp-a', { image_url: 'https://cdn.example/new.png' }),
+  ]);
+
+  const removed = await removeStaleRows(client, 'camp-a', [stale('raced', false, true)]);
+
+  assert.deepEqual(removed, []);
+  assert.deepEqual(calls.deleted, []);
+  assert.deepEqual(calls.deleteFilters, [{ campaigns: ['camp-a'], ids: ['raced'], noImage: true }]);
+});
+
+test('removeStaleRows never deletes a row of another campaign, even with a matching id in the list', async () => {
+  const { client, calls } = fakeClient([
+    chunkRow('shared-id', 'camp-b'),
+    chunkRow('own', 'camp-a'),
+  ]);
+
+  const removed = await removeStaleRows(client, 'camp-a', [
+    stale('shared-id', false, true),
+    stale('own', false, true),
+  ]);
+
+  assert.deepEqual(removed, ['own']);
+  assert.deepEqual(calls.deleted, ['own']);
+  assert.ok(calls.deleteFilters.every((filter) => filter.campaigns[0] === 'camp-a'));
 });

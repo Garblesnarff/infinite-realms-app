@@ -113,9 +113,34 @@ const degradedGenerateEnvelope = (): {
 const MAX_GENERATE_TOKENS = 8192;
 const MAX_EXTRACT_TOKENS = 1500;
 
+// #2427: the section names measurePromptSections (src/services/ai/shared/prompt-metrics.ts) emits.
+// The client sends this record, so only these keys, with numeric values, go into the log.
+const PROMPT_METRIC_KEYS = [
+  'campaign_and_canon',
+  'tactical',
+  'scene_state',
+  'system',
+  'history',
+  'player_input',
+] as const;
+
 const clampMaxTokens = (value: unknown, fallback: number, max: number): number => {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
   return Math.min(Math.max(1, n), max);
+};
+
+// #2425: say when the server replaced what the client sent. Route, user and two flags only: the
+// client's model string and prompt never go into the log.
+const warnIfClientInputReplaced = (
+  route: string,
+  userId: string,
+  sent: { model?: unknown; maxTokens?: unknown },
+  used: { model?: string; maxTokens: number },
+): void => {
+  const modelDropped = sent.model !== undefined && sent.model !== null && used.model === undefined;
+  const clamped = sent.maxTokens !== undefined && sent.maxTokens !== used.maxTokens;
+  if (!modelDropped && !clamped) return;
+  logger.warn({ msg: 'LLM_CLIENT_INPUT_REPLACED', route, userId, modelDropped, clamped });
 };
 
 // Only a model the server already configures may be requested; anything else uses the default.
@@ -200,6 +225,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       } = body || {};
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
+      warnIfClientInputReplaced(
+        'generate',
+        user.userId,
+        { model, maxTokens: body?.maxTokens },
+        { model: safeModel, maxTokens: safeMaxTokens },
+      );
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
@@ -220,7 +251,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                   (sum: number, value: unknown) => sum + (typeof value === 'number' ? value : 0),
                   0,
                 );
-          const line = `[PromptMetrics] ${JSON.stringify({ ...metricsRecord, total })}`;
+          const loggedMetrics: Record<string, number> = {};
+          for (const key of PROMPT_METRIC_KEYS) {
+            const value = metricsRecord[key];
+            if (typeof value === 'number' && Number.isFinite(value)) loggedMetrics[key] = value;
+          }
+          const line = `[PromptMetrics] ${JSON.stringify({ ...loggedMetrics, total })}`;
           if (total > 30_000) {
             logger.warn(line);
           } else {
@@ -470,6 +506,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       } = body || {};
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
+      warnIfClientInputReplaced(
+        'generate/stream',
+        user.userId,
+        { model, maxTokens: body?.maxTokens },
+        { model: safeModel, maxTokens: safeMaxTokens },
+      );
       const quota = await AIUsageService.checkQuotaAndConsume({
         userId: user.userId,
         plan: user.plan,
@@ -556,10 +598,15 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'AI quota exceeded', resetAt: quota.resetAt };
       }
 
-      const result = await LLMProviderService.extract({
-        prompt,
-        maxTokens: clampMaxTokens(maxTokens, 1000, MAX_EXTRACT_TOKENS),
-      });
+      const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_EXTRACT_TOKENS);
+      warnIfClientInputReplaced(
+        'extract',
+        user.userId,
+        { maxTokens: body?.maxTokens },
+        { maxTokens: safeMaxTokens },
+      );
+
+      const result = await LLMProviderService.extract({ prompt, maxTokens: safeMaxTokens });
 
       if (result.error) {
         alert('llm_extraction_degraded', { error: result.error });

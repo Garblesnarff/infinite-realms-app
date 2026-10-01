@@ -19,7 +19,7 @@ const ttsRequestSchema = t.Object({
   // Absent for voices that are not tied to a game session (previews, tools).
   sessionId: t.Optional(t.String({ maxLength: 255 })),
   // Accepted so existing clients keep validating; the server pins the model (#2158).
-  model_id: t.Optional(t.String()),
+  model_id: t.Optional(t.String({ maxLength: 100 })),
   voice_settings: t.Optional(
     t.Object({
       stability: t.Optional(t.Number({ minimum: 0, maximum: 1 })),

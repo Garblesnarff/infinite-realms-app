@@ -140,11 +140,18 @@ export const intentRoutes = new Elysia()
       if (!combatIntentRequestValidator?.Check(payload)) {
         const rejection = describeIntentRejection(payload);
         const requestId = requestIdOf(context, request);
+        // #2427: a type that matches no variant is client text; the log keeps its first 32 chars.
+        const sentType = String(payload.intent.type);
+        const loggedDetail = rejection.variant
+          ? rejection.detail
+          : rejection.detail.replace(JSON.stringify(sentType), () =>
+              JSON.stringify(sentType.slice(0, 32)),
+            );
         logger.warn(
           {
             requestId,
             field: rejection.missing[0] ?? (rejection.variant ? 'intent' : 'intent.type'),
-            reason: rejection.detail,
+            reason: loggedDetail,
           },
           'COMBAT_INTENT_SCHEMA_REJECTED',
         );

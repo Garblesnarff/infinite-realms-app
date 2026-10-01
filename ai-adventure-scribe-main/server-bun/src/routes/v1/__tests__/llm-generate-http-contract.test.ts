@@ -19,6 +19,7 @@ let streamError: unknown = new Error('upstream stream failed');
 let loggedInfoLines: string[] = [];
 let loggedWarnLines: string[] = [];
 let loggedInfoEntries: Record<string, unknown>[] = [];
+let loggedWarnEntries: Record<string, unknown>[] = [];
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -36,6 +37,9 @@ const testLogger = {
   },
   warn: (msg: unknown) => {
     if (typeof msg === 'string') loggedWarnLines.push(msg);
+    if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
+      loggedWarnEntries.push(msg as Record<string, unknown>);
+    }
   },
   error: () => {},
   child: () => testLogger,
@@ -79,7 +83,8 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
-const { getConfiguredOpenRouterModels } = await import('../../../services/llm-model-config.js');
+const { getConfiguredGeminiModels, getConfiguredOpenRouterModels } =
+  await import('../../../services/llm-model-config.js');
 const app = createRequestPipelineApp().use(llmRoutes);
 
 // Body shape of LlmApiClient.generateText (src/infrastructure/api/rest-client.ts) for a DM turn
@@ -132,6 +137,41 @@ describe('#2158 client model and maxTokens guard', () => {
     const [configured] = getConfiguredOpenRouterModels();
     await postLlm('generate', clientBody({ model: configured }));
     expect(generatedInput?.model).toBe(configured);
+  });
+
+  it('passes a configured Gemini model and logs nothing', async () => {
+    loggedWarnEntries = [];
+    const [configured] = getConfiguredGeminiModels();
+    await postLlm('generate', clientBody({ model: configured, provider: 'gemini' }));
+    expect(generatedInput?.model).toBe(configured);
+    expect(loggedWarnEntries.filter((e) => e.msg === 'LLM_CLIENT_INPUT_REPLACED')).toEqual([]);
+  });
+
+  it('logs route, user and flags only when a model is dropped or maxTokens is clamped', async () => {
+    loggedWarnEntries = [];
+    await postLlm(
+      'generate',
+      clientBody({ model: 'anthropic/claude-opus-4', maxTokens: 1_000_000 }),
+    );
+    await postLlm('generate', clientBody({ maxTokens: 8192 }));
+    await postLlm('generate/stream', clientBody({ model: 'anthropic/claude-opus-4' }));
+    const replaced = loggedWarnEntries.filter((e) => e.msg === 'LLM_CLIENT_INPUT_REPLACED');
+    expect(replaced).toEqual([
+      {
+        msg: 'LLM_CLIENT_INPUT_REPLACED',
+        route: 'generate',
+        userId: 'smoke-user',
+        modelDropped: true,
+        clamped: true,
+      },
+      {
+        msg: 'LLM_CLIENT_INPUT_REPLACED',
+        route: 'generate/stream',
+        userId: 'smoke-user',
+        modelDropped: true,
+        clamped: false,
+      },
+    ]);
   });
 
   it('applies the same guard on the stream route', async () => {
@@ -439,6 +479,41 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       const line = loggedWarnLines.find((entry) => entry.startsWith('[PromptMetrics] '));
       expect(line).toBeDefined();
       expect(loggedInfoLines.find((entry) => entry.startsWith('[PromptMetrics] '))).toBeUndefined();
+    });
+
+    it('logs only the sections measurePromptSections produces, never other client keys (#2427)', async () => {
+      loggedInfoLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            prompt: 'hello with metrics',
+            metrics: {
+              campaign_and_canon: 500,
+              tactical: 40,
+              scene_state: 50,
+              system: 120,
+              history: 300,
+              player_input: 20,
+              total: 1030,
+              'Vance the Sheriff': 7,
+            },
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const line = loggedInfoLines.find((entry) => entry.startsWith('[PromptMetrics] '));
+      expect(JSON.parse(line!.slice('[PromptMetrics] '.length))).toEqual({
+        campaign_and_canon: 500,
+        tactical: 40,
+        scene_state: 50,
+        system: 120,
+        history: 300,
+        player_input: 20,
+        total: 1030,
+      });
     });
 
     it('still works for requests without a metrics field (old clients, backward compatible)', async () => {

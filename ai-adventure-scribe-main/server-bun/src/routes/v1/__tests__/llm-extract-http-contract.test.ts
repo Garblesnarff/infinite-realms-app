@@ -7,6 +7,7 @@ let extractionResult: Record<string, unknown> = {
   provider: 'openrouter',
   model: 'fallback/model',
 };
+let loggedWarnEntries: Record<string, unknown>[] = [];
 const alerts: Array<{ kind: string; detail: Record<string, unknown> }> = [];
 
 mock.module('../../../lib/auth.js', () => ({
@@ -23,7 +24,9 @@ mock.module('../../../lib/alerting.js', () => ({
 const testLogger = {
   debug: () => {},
   info: () => {},
-  warn: () => {},
+  warn: (msg: unknown) => {
+    if (msg && typeof msg === 'object') loggedWarnEntries.push(msg as Record<string, unknown>);
+  },
   error: () => {},
   child: () => testLogger,
 };
@@ -94,6 +97,33 @@ describe('POST /v1/llm/extract HTTP contract', () => {
     expect(extractedInput?.maxTokens).toBe(1200);
     await send(1_000_000);
     expect(extractedInput?.maxTokens).toBe(1500);
+  });
+
+  it('uses 1000 when the client sends no maxTokens, and warns only when it clamps', async () => {
+    loggedWarnEntries = [];
+    const post = (body: Record<string, unknown>): Promise<Response> =>
+      app.handle(
+        new Request('http://localhost/v1/llm/extract', {
+          method: 'POST',
+          headers: { authorization: 'Bearer extract-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'extract memories from this exchange', ...body }),
+        }),
+      );
+
+    await post({});
+    expect(extractedInput?.maxTokens).toBe(1000);
+    expect(loggedWarnEntries).toEqual([]);
+
+    await post({ maxTokens: 1_000_000 });
+    expect(loggedWarnEntries).toEqual([
+      {
+        msg: 'LLM_CLIENT_INPUT_REPLACED',
+        route: 'extract',
+        userId: 'extract-user',
+        modelDropped: false,
+        clamped: true,
+      },
+    ]);
   });
 
   it('returns a degraded memory envelope instead of 502 when all models fail', async () => {
