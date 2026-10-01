@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 
 import { authenticateRequest as defaultAuthenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
+import { logger } from '../../../lib/logger.js';
 import { combatEntryGateDeps as defaultCombatEntryGateDeps } from '../../../services/combat/combat-entry-gate-deps.js';
 import {
   seatCombatEntry as defaultSeatCombatEntry,
@@ -56,14 +57,16 @@ type SpellTarget = { attack: DeclaredAttack } | { choices: string[] } | null;
 /**
  * An attack spell with no creature the roster can name: "I cast Fire Bolt at him", or the sheet's
  * Cast button, which names none at all. The creatures it can mean are the ones the last DM
- * message names; with none named, the ones this session has seen. A campaign NPC nobody has met
- * is never offered (#2415). "Him" with one candidate is that candidate; no pronoun is the
- * player's to pick, however few there are, so a creature is never chosen for them.
+ * message names, and only those. With none named, the ones this session has met: its ledger and
+ * its map. A campaign NPC the player has not met is offered only when the narration names it
+ * (#2415, #2445). "Him" with one candidate is that candidate; no pronoun is the player's to
+ * pick, however few there are, so a creature is never chosen for them.
  */
 function resolveSpellTarget(
   spell: { id: string; name: string; pronoun?: string },
   actors: readonly CombatIntentActor[],
   body: { targetName?: string; recentNarration?: string },
+  sessionId: string,
 ): SpellTarget {
   if (body.targetName) {
     const chosen = actors.find((actor) => sameName(actor.name, body.targetName ?? ''));
@@ -71,13 +74,26 @@ function resolveSpellTarget(
   }
   const mentioned = actorsMentionedIn(body.recentNarration ?? '', actors);
   const candidates = mentioned.length
-    ? mentioned
-    : actors.filter((actor) => !actor.campaignOnly).slice(0, MAX_TARGET_CHOICES);
+    ? mentioned.map((actor) => ({ actor, basis: 'named_in_last_message' }))
+    : actors
+        .filter((actor) => actor.source !== 'campaign')
+        .slice(0, MAX_TARGET_CHOICES)
+        .map((actor) => ({ actor, basis: actor.source ?? 'unknown' }));
+  logger.debug({
+    msg: 'COMBAT_ENTRY_TARGET_CANDIDATES',
+    sessionId,
+    spellId: spell.id,
+    roster: actors.length,
+    candidates: candidates.map(({ actor, basis }) => ({
+      id: actor.actorSlug ?? actor.slug ?? actor.name,
+      basis,
+    })),
+  });
   if (candidates.length === 0) return null;
   if (candidates.length === 1 && spell.pronoun) {
-    return { attack: declareSpellAttackOn(spell, candidates[0]) };
+    return { attack: declareSpellAttackOn(spell, candidates[0].actor) };
   }
-  return { choices: candidates.map((actor) => actor.name) };
+  return { choices: candidates.map(({ actor }) => actor.name) };
 }
 
 const enterBody = t.Object({
@@ -276,7 +292,7 @@ export function createDeclaredAttackRoutes({
       let targetChoice: { spellName: string; candidates: string[] } | undefined;
       if (!declaredAttack) {
         const spell = detectUntargetedAttackSpell(body.playerInput);
-        const target = spell ? resolveSpellTarget(spell, actors, body) : null;
+        const target = spell ? resolveSpellTarget(spell, actors, body, params.sessionId) : null;
         if (!spell || !target) return { pending: null };
         if ('choices' in target) {
           targetChoice = { spellName: spell.name, candidates: target.choices };

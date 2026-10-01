@@ -181,8 +181,8 @@ describeWithDb('combat intent roster and player-intent seating', () => {
     const roster = await loadCombatIntentActorRoster(sessionId, userId);
 
     expect(roster).toEqual([
-      { name: 'Ledger Warden' },
-      { name: 'Campaign Sentinel', actorSlug: campaignNpcId, campaignOnly: true },
+      { name: 'Ledger Warden', source: 'ledger' },
+      { name: 'Campaign Sentinel', actorSlug: campaignNpcId, source: 'campaign' },
     ]);
 
     const declaredAttack = detectDeclaredAttack('I punch Ledger Warden', roster);

@@ -138,3 +138,21 @@ describe("the sheet Cast button's tag (#2415)", () => {
     ).toBeNull();
   });
 });
+
+describe('a quoted nickname is not a name on its own (#2445)', () => {
+  const roster = [{ name: '"Iron" Jawn' }, { name: 'Captain Sarah Reeves' }];
+  const named = (narration: string): string[] =>
+    actorsMentionedIn(narration, roster).map((actor) => actor.name);
+
+  it('does not read "iron" in the prose as "Iron" Jawn', () => {
+    expect(named('Reeves grips the iron rail and peers into the chasm.')).toEqual([
+      'Captain Sarah Reeves',
+    ]);
+  });
+
+  it('still names him by surname or by the whole name', () => {
+    expect(named('Jawn nods.')).toEqual(['"Iron" Jawn']);
+    expect(named('"Iron" Jawn nods.')).toEqual(['"Iron" Jawn']);
+    expect(named('Iron Jawn nods.')).toEqual(['"Iron" Jawn']);
+  });
+});

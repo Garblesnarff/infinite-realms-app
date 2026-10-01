@@ -51,7 +51,9 @@ function actorsFromFacts(facts: unknown[]): CombatIntentActor[] {
       row.value && typeof row.value === 'object' ? (row.value as Record<string, unknown>) : {};
     const subjectName = typeof row.subjectName === 'string' ? row.subjectName : '';
     const displayName = stringField(value, 'name', 'displayName', 'display_name') ?? subjectName;
-    if (displayName.trim()) actors.push({ name: titleizeCanonicalName(displayName) });
+    if (displayName.trim()) {
+      actors.push({ name: titleizeCanonicalName(displayName), source: 'ledger' });
+    }
   }
   return actors;
 }
@@ -107,6 +109,7 @@ export async function loadCombatIntentActorRoster(
       if (!name) continue;
       addActor(actors, {
         name,
+        source: 'map',
         ...(entity.slug?.trim() ? { actorSlug: entity.slug.trim() } : {}),
       });
     }
@@ -150,7 +153,7 @@ export async function loadCombatIntentActorRoster(
     ]);
 
     for (const npc of campaignNpcs) {
-      addActor(actors, { name: npc.name, actorSlug: npc.id, campaignOnly: true });
+      addActor(actors, { name: npc.name, actorSlug: npc.id, source: 'campaign' });
     }
     for (const asset of campaignAssets) {
       if (!asset.entityName?.trim()) continue;
@@ -160,7 +163,7 @@ export async function loadCombatIntentActorRoster(
           : {};
       addActor(actors, {
         name: asset.entityName,
-        campaignOnly: true,
+        source: 'campaign',
         ...(stringField(metadata, 'slug', 'actor_slug', 'actorSlug')
           ? { actorSlug: stringField(metadata, 'slug', 'actor_slug', 'actorSlug') }
           : {}),

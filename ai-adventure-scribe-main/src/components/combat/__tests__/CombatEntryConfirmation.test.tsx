@@ -154,4 +154,36 @@ describe('CombatEntryConfirmation', () => {
     fireEvent.click(screen.getByRole('button', { name: '[Do something else]' }));
     expect(decline).toHaveBeenCalledTimes(1);
   });
+  it('logs its label and choice lists as separate arrays, so the logger never prints [Circular] (#2445)', () => {
+    const candidates = ['Captain Sarah Reeves'];
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          // The picker (`holdForTargetChoice`) hands one array to both fields.
+          spec: {
+            actorLabel: 'The Scholar',
+            combatantLabels: candidates,
+            targetChoices: candidates,
+            spellLabel: 'Chill Touch',
+            initiativeRoll: null,
+            initiativeModifier: 1,
+          },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    // The mocked logger keeps earlier tests' calls: this test's mount log is the last one.
+    const mountLogs = vi
+      .mocked(logger.info)
+      .mock.calls.filter(([message]) => message === '[CombatEntry] confirmation popup mounted');
+    const logged = mountLogs[mountLogs.length - 1][1] as {
+      combatantLabels: string[];
+      targetChoices: string[];
+    };
+    expect(logged.targetChoices).toEqual(['Captain Sarah Reeves']);
+    expect(logged.combatantLabels).toEqual(['Captain Sarah Reeves']);
+    expect(logged.targetChoices).not.toBe(logged.combatantLabels);
+  });
 });

@@ -9,6 +9,8 @@ import {
 } from '@/services/combat/combat-entry-confirmation-bridge';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
+import { stripOptionMenus } from '@/utils/memory/segmentation';
+import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
 export type PendingCombatEntry = NonNullable<AIResponse['combat_entry_pending']>;
 
@@ -53,11 +55,20 @@ export type DeclaredAttackCheck =
 /** The last DM message, sent so the server can tell which creatures "him" can mean. */
 const RECENT_NARRATION_CHARS = 4_000;
 
+/**
+ * Without its option menu: "c. **Consult the iron spike**" is an action the player may take,
+ * not a creature in the scene, and its words matched a nickname in run 18 (#2445). The two
+ * strippers cover different formats: the UI's parser takes bold letters (`**A.** **Act**`),
+ * letters past C and numbers; the memory one takes plain lowercase `c. **Act**`.
+ */
 export function recentNarrationFrom(
   messages: ReadonlyArray<{ sender?: string; text?: string }>,
 ): string | undefined {
   const lastDm = [...messages].reverse().find((message) => message.sender === 'dm' && message.text);
-  return lastDm?.text?.slice(-RECENT_NARRATION_CHARS);
+  const narrative = lastDm?.text
+    ? stripOptionMenus(parseMessageOptions(lastDm.text).content)
+    : undefined;
+  return narrative?.slice(-RECENT_NARRATION_CHARS) || undefined;
 }
 
 /**

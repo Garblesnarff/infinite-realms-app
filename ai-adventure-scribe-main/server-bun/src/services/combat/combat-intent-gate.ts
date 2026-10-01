@@ -14,10 +14,11 @@ export interface CombatIntentActor {
   slug?: string;
   monsterId?: string;
   /**
-   * Known only from the campaign's authored cast, never seen in this session's ledger or on its
-   * map. Such an actor can be named, but nothing says it is in the scene (#2415).
+   * Where the roster learned this actor: this session's ledger, this session's map, or only the
+   * campaign's authored cast. A `campaign` actor can be named, but nothing says the player has
+   * met it (#2415, #2445). The first source to report an actor wins.
    */
-  campaignOnly?: boolean;
+  source?: 'ledger' | 'map' | 'campaign';
 }
 
 export interface DeclaredAttack {
@@ -503,10 +504,15 @@ export function actorsMentionedIn(
     if (!name) return false;
     if (haystack.includes(` ${name} `)) return true;
     const nameWords = words(actor.name);
+    // A quoted nickname ("Iron" Jawn) is not a name on its own: "iron" in the narration is a
+    // rail, not the man (#2445). The full name above still matches it.
+    const nicknameWords = new Set(
+      [...actor.name.matchAll(/["“]([^"”]+)["”]/g)].flatMap((quoted) => words(quoted[1])),
+    );
     const distinctive = [
-      nameWords.find((word) => !TITLE_WORDS.has(word)),
+      nameWords.find((word) => !TITLE_WORDS.has(word) && !nicknameWords.has(word)),
       nameWords.length <= 3 ? nameWords[nameWords.length - 1] : undefined,
-    ];
+    ].filter((word) => word && !nicknameWords.has(word));
     return distinctive.some((word) => word && word.length >= 4 && haystack.includes(` ${word} `));
   });
 }

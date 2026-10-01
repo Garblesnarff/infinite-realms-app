@@ -59,14 +59,14 @@ describe('loadCombatIntentActorRoster', () => {
     const roster = await loadCombatIntentActorRoster('session-1', 'user-1');
 
     expect(roster).toEqual([
-      { name: 'Professor Emil Darkwater' },
-      { name: 'Orc Brute', actorSlug: 'orc-brute' },
-      { name: 'Campaign NPC', actorSlug: 'npc-1', campaignOnly: true },
+      { name: 'Professor Emil Darkwater', source: 'ledger' },
+      { name: 'Orc Brute', actorSlug: 'orc-brute', source: 'map' },
+      { name: 'Campaign NPC', actorSlug: 'npc-1', source: 'campaign' },
       {
         name: 'Asset NPC',
         actorSlug: 'asset-npc',
         monsterId: 'srd:bandit',
-        campaignOnly: true,
+        source: 'campaign',
       },
     ]);
   });

@@ -286,4 +286,42 @@ describe('an attack spell with no creature named ("I cast Fire Bolt at him")', (
     ).toHaveLength(4000);
     expect(recentNarrationFrom([{ sender: 'player', text: 'hello' }])).toBeUndefined();
   });
+
+  it('leaves the option menu out: "Consult the iron spike" is not a creature in the scene (#2445)', () => {
+    // Run 18's last DM message had this shape: scene text, then lettered options in bold.
+    const dmMessage =
+      'Captain Sarah Reeves grips the rail. "What we will find is failure," she says.\n\n' +
+      'a. **Ask Professor Darkwater**, about the journal page.\n' +
+      'b. **Descend the shaft**, rung by rung.\n' +
+      'c. **Consult the iron spike**, driven into the wall.';
+    const narration = recentNarrationFrom([
+      { sender: 'dm', text: dmMessage },
+      { sender: 'player', text: 'I cast Chill Touch.' },
+    ]);
+
+    expect(narration).toContain('Captain Sarah Reeves');
+    expect(narration).not.toMatch(/iron spike|Ask Professor Darkwater/);
+  });
+
+  it.each([
+    [
+      'bold letter',
+      '**A.** **Ask Professor Darkwater**, about it.\n**D.** **Consult the iron spike**, now.',
+    ],
+    [
+      'letter inside the bold',
+      '**A. Ask Professor Darkwater**, about it.\n**D. Consult the iron spike**, now.',
+    ],
+    [
+      'four options',
+      'A. **Ask Professor Darkwater**, a.\nB. **Go**, b.\nC. **Wait**, c.\nD. **Consult the iron spike**, d.',
+    ],
+    ['numbered', '1. **Ask Professor Darkwater**, about it.\n2. **Consult the iron spike**, now.'],
+  ])('leaves out an option menu written as: %s', (_format, menu) => {
+    const narration = recentNarrationFrom([
+      { sender: 'dm', text: `Captain Sarah Reeves grips the rail.\n\n${menu}` },
+    ]);
+
+    expect(narration).toBe('Captain Sarah Reeves grips the rail.');
+  });
 });

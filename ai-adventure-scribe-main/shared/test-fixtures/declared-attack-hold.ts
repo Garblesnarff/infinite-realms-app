@@ -73,11 +73,30 @@ export const SHEET_CAST_PLAYER_INPUT =
 export const SHEET_CAST_RECENT_NARRATION =
   'Captain Sarah Reeves approaches behind you, her lantern guttering. Below, shadows that do not cast light shift along the shaft.';
 
-/** What `loadCombatIntentActorRoster` returns for that session: ledger NPCs are titleized. */
+/** What `loadCombatIntentActorRoster` returns for a session that has met these two: ledger NPCs. */
 export const sheetCastRoster = [
-  { name: 'Captain Sarah Reeves' },
-  { name: 'Professor Emil Darkwater' },
+  { name: 'Captain Sarah Reeves', source: 'ledger' as const },
+  { name: 'Professor Emil Darkwater', source: 'ledger' as const },
 ];
+
+/**
+ * Run 18 (#2445): a fresh Abyssal Descent session, nothing met yet, so every actor is one the
+ * loader read from the campaign's authored cast (`npcs` rows and starter-campaign chunks).
+ * `"Iron" Jawn` is the campaign's own spelling, quotes included.
+ */
+export const abyssalRoster = [
+  { name: '"Iron" Jawn', actorSlug: 'iron-jawn', source: 'campaign' as const },
+  {
+    name: 'Professor Emil Darkwater',
+    actorSlug: 'professor-emil-darkwater',
+    source: 'campaign' as const,
+  },
+  { name: 'Captain Sarah Reeves', actorSlug: 'captain-sarah-reeves', source: 'campaign' as const },
+];
+
+/** Run 18's last DM message names Reeves, and has "iron" in it: a rail, not a man. */
+export const ABYSSAL_RECENT_NARRATION =
+  'Captain Sarah Reeves grips the iron rail and peers into the chasm. "What we will find is failure," she says.';
 
 export const sheetCastCheckBody = {
   playerInput: SHEET_CAST_PLAYER_INPUT,

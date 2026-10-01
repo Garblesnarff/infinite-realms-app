@@ -20,10 +20,12 @@ export const CombatEntryConfirmation: React.FC<CombatEntryConfirmationProps> = (
     if (!pendingSpec) return;
     logger.info('[CombatEntry] confirmation popup mounted', {
       actorLabel: pendingSpec.actorLabel,
-      combatantLabels: pendingSpec.combatantLabels,
-      declaredTargets: pendingSpec.declaredTargets ?? [],
-      otherCombatants: pendingSpec.otherCombatants ?? [],
-      targetChoices: pendingSpec.targetChoices ?? [],
+      // Copies: the picker passes one array as both labels and choices, and the logger prints a
+      // value it has already seen as "[Circular]" (#2445).
+      combatantLabels: [...pendingSpec.combatantLabels],
+      declaredTargets: [...(pendingSpec.declaredTargets ?? [])],
+      otherCombatants: [...(pendingSpec.otherCombatants ?? [])],
+      targetChoices: [...(pendingSpec.targetChoices ?? [])],
     });
   }, [pendingSpec]);
 

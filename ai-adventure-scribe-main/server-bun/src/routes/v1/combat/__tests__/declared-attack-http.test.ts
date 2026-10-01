@@ -8,6 +8,8 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
 import {
+  ABYSSAL_RECENT_NARRATION,
+  abyssalRoster,
   DECLARED_ATTACK_SESSION_ID,
   declaredAttackCheckBody,
   pickedTargetCheckBody,
@@ -27,7 +29,7 @@ const { createRequestPipelineApp } = await import('../../../../http-pipeline.js'
 const { createDeclaredAttackRoutes } = await import('../entry.js');
 
 let authenticated = true;
-let roster: Array<{ name: string; campaignOnly?: boolean }> = [];
+let roster: Array<{ name: string; source?: 'ledger' | 'map' | 'campaign' }> = [];
 const defaultRoster = [{ name: 'Valerius' }, { name: 'Professor Darkwater' }];
 const rosterCalls: Array<{ sessionId: string; userId: string }> = [];
 const authenticateRequest = async () =>
@@ -206,7 +208,7 @@ describe('declared-attack for a sheet cast with no target', () => {
   });
 
   it('offers the creatures this session has seen when the narration names none, never an unmet campaign NPC', async () => {
-    roster = [...sheetCastRoster, { name: 'Warden Ilsa Vane', campaignOnly: true }];
+    roster = [...sheetCastRoster, { name: 'Warden Ilsa Vane', source: 'campaign' as const }];
     const response = await post({ ...sheetCastCheckBody, recentNarration: 'The wind rises.' });
     const body = (await response.json()) as SheetCastBody;
 
@@ -217,7 +219,7 @@ describe('declared-attack for a sheet cast with no target', () => {
   });
 
   it('starts nothing when no creature is present', async () => {
-    roster = [{ name: 'Warden Ilsa Vane', campaignOnly: true }];
+    roster = [{ name: 'Warden Ilsa Vane', source: 'campaign' as const }];
     const unmet = await post({ ...sheetCastCheckBody, recentNarration: 'The wind rises.' });
     expect(await unmet.json()).toEqual({ pending: null });
 
@@ -254,5 +256,59 @@ describe('declared-attack for a sheet cast with no target', () => {
         spellName: 'Chill Touch',
       },
     });
+  });
+});
+
+/**
+ * #2445 (run 18): build d6852f04 offered "Iron" Jawn, Professor Darkwater and Captain Reeves
+ * when the last DM message named only Reeves. None had been met: it was a fresh session.
+ */
+describe('declared-attack candidates on the Abyssal Descent roster', () => {
+  const sheetCast = { ...sheetCastCheckBody, recentNarration: ABYSSAL_RECENT_NARRATION };
+  const candidatesFor = async (body: Record<string, unknown>): Promise<string[] | null> => {
+    const response = await post(body);
+    const json = (await response.json()) as SheetCastBody;
+    return json.targetChoice?.candidates ?? null;
+  };
+
+  beforeEach(() => {
+    authenticated = true;
+    roster = abyssalRoster;
+    rosterCalls.splice(0);
+  });
+
+  it('offers only Reeves when the last DM message names her, though "iron" is in it', async () => {
+    expect(await candidatesFor(sheetCast)).toEqual(['Captain Sarah Reeves']);
+  });
+
+  it('offers nobody, and starts nothing, when it names no one and nobody has been met', async () => {
+    const response = await post({ ...sheetCast, recentNarration: 'The wind rises.' });
+    expect(await response.json()).toEqual({ pending: null });
+  });
+
+  it('falls back to the creature met earlier, never to the unmet campaign NPCs', async () => {
+    roster = [
+      abyssalRoster[0],
+      abyssalRoster[1],
+      { ...abyssalRoster[2], source: 'ledger' as const },
+    ];
+    expect(await candidatesFor({ ...sheetCast, recentNarration: 'The wind rises.' })).toEqual([
+      'Captain Sarah Reeves',
+    ]);
+  });
+
+  it('offers every creature the message names, and a nickname-only mention names no one', async () => {
+    expect(
+      await candidatesFor({
+        ...sheetCast,
+        recentNarration: 'Reeves and Darkwater peer over the iron rail.',
+      }),
+    ).toEqual(['Professor Emil Darkwater', 'Captain Sarah Reeves']);
+    expect(
+      await candidatesFor({
+        ...sheetCast,
+        recentNarration: 'Jawn strides in, and Reeves salutes him.',
+      }),
+    ).toEqual(['"Iron" Jawn', 'Captain Sarah Reeves']);
   });
 });
