@@ -257,6 +257,77 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
   });
 
+  describe('a typed cast in the area shape (#2443)', () => {
+    // Run M10: "I cast Acid Splash at the Bitter End Mercenary", declared by the DM as
+    // `dmCantripAoEAction` and refused by the route as `no_area_of_effect`.
+    const typed = (playerMessage: string, participants = [APPRENTICE, SHARD, IMP]) =>
+      resolve(participants, [dmCantripAoEAction], { playerInputOrigin: 'typed', playerMessage });
+
+    beforeEach(() => {
+      resolveAoECast.mockResolvedValue(NO_AREA);
+      executeStructuredCombatActionWithBoundary.mockResolvedValue({
+        outcomes: [],
+        result: ACID_SPLASH_RESULT,
+        boundary: null,
+      });
+    });
+
+    it('casts it at the one creature the player named, among several', async () => {
+      const result = await typed('I cast Acid Splash at the Corrupted Shard');
+
+      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+      expect(executeStructuredCombatActionWithBoundary.mock.calls[0].slice(0, 2)).toEqual([
+        'enc-m9',
+        expect.objectContaining({
+          actor_id: APPRENTICE_ID,
+          action_type: 'cast_spell',
+          spell_id: 'acid-splash',
+          target_ids: [SHARD_ID],
+          slot_level: null,
+        }),
+      ]);
+      expect(engineLines(result).join('\n')).not.toContain('refused');
+      // The route refused once; nothing asks the DM to declare it again.
+      expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+    });
+
+    it('does not guess when the words name nobody on the board', async () => {
+      const result = await typed('I cast Acid Splash at the Sour Knight');
+
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+      expect(engineLines(result).join('\n')).toContain(
+        'Acid Splash has no area of effect — name its target and cast it again',
+      );
+    });
+
+    it('does not guess when the words name two creatures', async () => {
+      await typed('I cast Acid Splash at the Corrupted Shard and the Kitchen Imp');
+
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    });
+
+    it('does not pick a downed creature the player named', async () => {
+      await typed('I cast Acid Splash at the Corrupted Shard', [
+        APPRENTICE,
+        { ...SHARD, isDead: true, currentHitPoints: 0 },
+        IMP,
+      ]);
+
+      expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    });
+  });
+
+  it('spends no repair call on a refused typed player cast (#2443)', async () => {
+    resolveAoECast.mockResolvedValue(NO_AREA);
+
+    await resolve([APPRENTICE, SHARD, IMP], [dmCantripAoEAction], {
+      playerInputOrigin: 'typed',
+      playerMessage: 'I cast Acid Splash at the Sour Knight',
+    });
+
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['a typed cast, which names its own target', { playerInputOrigin: 'typed' }, {}],
     ['an area spell the player list does not know', {}, { spell_id: 'fireball' }],

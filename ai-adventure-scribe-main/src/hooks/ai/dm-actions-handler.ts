@@ -705,6 +705,7 @@ export async function handleDmActionsAndTransitions(
       playerAttackRoll: entryPlayerAttackRoll,
       combatRound: combatRound ?? activeEncounter.currentRound,
       playerInputOrigin,
+      playerMessage,
       declaredPlayerSpell,
       ...(silentPlayerTurn ? { silentPlayerTurn: { playerMessage: playerMessage as string } } : {}),
     });

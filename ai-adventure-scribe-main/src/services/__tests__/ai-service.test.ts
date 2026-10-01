@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { quotaExceededBody } from '../../../shared/test-fixtures/llm-quota-exceeded';
 import { generateCampaignDescription, generateCampaignName } from '../ai/campaign-generator';
 import { ContextBuilder } from '../ai/context-builder';
 import {
@@ -15,6 +16,7 @@ import { SessionStateService } from '../session-state-service';
 
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { llmApiClient } from '@/infrastructure/api';
+import { QuotaExceededError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 
 // Mock dependencies
@@ -228,6 +230,25 @@ describe('AIService', () => {
       await expect(AIService.chatWithDM(mockParams)).rejects.toThrow(
         'Failed to get DM response - AI service unavailable',
       );
+    });
+
+    it('hands the daily-quota refusal to the caller as it came, reset time included (#2443)', async () => {
+      const quota = new QuotaExceededError(
+        'API 402: AI quota exceeded',
+        quotaExceededBody.resetAt,
+        3_600_000,
+      );
+      vi.mocked(llmApiClient.generateText).mockRejectedValue(quota);
+
+      await expect(
+        AIService.chatWithDM({
+          message: 'I cast Acid Splash',
+          context: mockContext as any,
+          conversationHistory: [],
+        }),
+      ).rejects.toBe(quota);
+      // One request, no second provider and no regeneration behind the refusal.
+      expect(llmApiClient.generateText).toHaveBeenCalledTimes(1);
     });
 
     it('labels response post-processing failures separately from provider failures', async () => {

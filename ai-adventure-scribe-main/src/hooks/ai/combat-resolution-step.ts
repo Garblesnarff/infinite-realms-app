@@ -130,6 +130,8 @@ export interface CombatResolutionParams {
    * A player-actor action resolves only on player input (#2305).
    */
   playerInputOrigin?: PlayerInputOrigin | null;
+  /** What the player typed this turn; a typed cantrip in the area shape takes its target from it. */
+  playerMessage?: string;
   /**
    * The spell the player's own message declared (the sheet's Cast button tags it). When the DM's
    * batch never casts it, the engine says so in its own line rather than leaving silence (#2304).
@@ -196,6 +198,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     npcLinesShown,
     combatRound,
     playerInputOrigin,
+    playerMessage,
     declaredPlayerSpell,
     silentPlayerTurn,
   } = params;
@@ -564,24 +567,34 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     try {
       cast = await executeAoECombatAction(sessionId, action, origin);
     } catch (error) {
-      // The sheet's Cast names no target, and the DM wrote a single-target spell (Acid Splash) in
-      // the area shape. Anything else that reaches `no_area_of_effect` (a monster's cast, an area
-      // spell the catalog lacks) keeps its refusal: guessing a target there casts something the
-      // player never asked for (#2374).
-      const sheetCastOfKnownSpell =
-        origin === 'sheet_cast' &&
+      // The sheet's Cast names no target, and a typed cast names it in words; either way the DM
+      // wrote a single-target spell (Acid Splash) in the area shape. Anything else that reaches
+      // `no_area_of_effect` (a monster's cast, an area spell the catalog lacks) keeps its
+      // refusal: guessing a target there casts something the player never asked for (#2374).
+      const playerCastOfKnownSpell =
+        (origin === 'sheet_cast' || origin === 'typed') &&
         isPlayerActor(action.actor_id, participants) &&
         resolvePlayerCombatSpell(action.spell_id, action.spell_id) !== null;
       if (
         !(error instanceof CombatIntentRefusedError) ||
         error.details?.reason !== 'no_area_of_effect' ||
-        !sheetCastOfKnownSpell
+        !playerCastOfKnownSpell
       )
         throw error;
-      // One standing hostile is the only creature the cast can mean; with more, the player is
-      // asked, since the engine must not choose for them. The sheet's Cast showed its card for
-      // that same creature before the DM was called (`holdSaveCardBeforeDm`, #2392).
-      const targets = standingHostiles(participants ?? []);
+      // The sheet's Cast has one standing hostile as the only creature it can mean (it showed
+      // its card for that creature before the DM was called, `holdSaveCardBeforeDm`, #2392); with
+      // more, the player is asked, since the engine must not choose for them. A typed cast means
+      // the one creature the player named; when the words name none or several, the engine's
+      // refusal stands (#2438 reports it).
+      const hostiles = standingHostiles(participants ?? []);
+      let targets = hostiles;
+      if (origin === 'typed') {
+        const message = (playerMessage ?? '').toLowerCase();
+        targets = hostiles.filter(
+          (hostile) => !!hostile.name && message.includes(hostile.name.toLowerCase()),
+        );
+        if (targets.length !== 1) throw error;
+      }
       if (targets.length !== 1) {
         throw new CombatIntentRefusedError(
           `no target selected — name the creature you cast ${playerCombatSpellLabel(action.spell_id, action.spell_id)} at`,
@@ -734,16 +747,34 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         logger.warn(`[CombatRepair] outcome=refused_again actor=${action.actor_id}`);
         continue;
       }
-      repairSpent = true;
       const repairRefusalIndex = refusedActions.length - 1;
-      const repaired = await repairRefusedCombatAction({
-        refusal: error,
-        refusedAction: asTargeted(action),
-        aiContext,
-        conversationHistory,
-        userPlan,
-        turnCount,
-      });
+      // A refused player action cannot be repaired into anything: the repair's re-declaration of
+      // it is withheld in `runAction` (#2305), and only a creature's turn can come back (the
+      // out-of-turn case names whose turn it is). Anything else would spend an `llm` unit for
+      // nothing — three on one typed Acid Splash in run M10, the last of the day's quota (#2443).
+      const refusedOrigin = originOf(action);
+      const playerActionNoRepairCanReplace =
+        !!refusedOrigin &&
+        isPlayerInputOrigin(refusedOrigin) &&
+        isPlayerActor(action.actor_id, participants) &&
+        !(refusedCurrentParticipantId && !isPlayerActor(refusedCurrentParticipantId, participants));
+      let repaired: Awaited<ReturnType<typeof repairRefusedCombatAction>> = null;
+      if (playerActionNoRepairCanReplace) {
+        // Same end as a repair whose re-declaration is withheld: the refusal stays in the report
+        // and the turn is narrated, not thrown.
+        logger.info(`[CombatRepair] outcome=skipped actor=${action.actor_id} reason=player_action`);
+        break;
+      } else {
+        repairSpent = true;
+        repaired = await repairRefusedCombatAction({
+          refusal: error,
+          refusedAction: asTargeted(action),
+          aiContext,
+          conversationHistory,
+          userPlan,
+          turnCount,
+        });
+      }
       const corrected = repaired?.combat_actions?.filter(isDeclaredCombatAction);
       // The repair re-asks the DM, and a DM re-declaration is not the player's input: a player
       // action it produces is withheld in `runAction` (#2305). Run 13's HIT line came from here.

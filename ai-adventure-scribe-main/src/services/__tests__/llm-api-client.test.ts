@@ -2,10 +2,13 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { quotaExceededBody } from '../../../shared/test-fixtures/llm-quota-exceeded';
+
 import { llmApiClient } from '@/infrastructure/api';
 import {
   BACKGROUND_LLM_RETRY_BUDGET_MS,
   createTurnPhaseReporter,
+  QuotaExceededError,
 } from '@/infrastructure/api/rest-client';
 import * as loggerModule from '@/lib/logger';
 
@@ -283,6 +286,30 @@ describe('LlmApiClient', () => {
         provider: 'gemini',
         model: 'gemini-2.5-flash-lite',
       });
+    });
+
+    it('reads the 402 quota refusal as a QuotaExceededError and sends no second request (#2443)', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 402,
+        statusText: 'Payment Required',
+        headers: { get: (name: string) => (name === 'retry-after' ? '1800' : null) },
+        text: () => Promise.resolve(JSON.stringify(quotaExceededBody)),
+      });
+
+      const error = await llmApiClient
+        .generateText({ prompt: 'Hello', provider: 'openrouter' })
+        .catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(QuotaExceededError);
+      expect(error).toMatchObject({
+        status: 402,
+        retryable: false,
+        resetAt: quotaExceededBody.resetAt,
+        retryAfterMs: 1_800_000,
+      });
+      // Not the other provider, and not a network retry: a retry cannot succeed before the reset.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('should fallback to openrouter if gemini is not configured', async () => {

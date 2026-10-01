@@ -203,6 +203,17 @@ export class ApiClientError extends Error {
   }
 }
 
+/** `/v1/llm/generate` answered 402: the plan's daily AI budget is spent until `resetAt`. */
+export class QuotaExceededError extends ApiClientError {
+  readonly resetAt?: string;
+
+  constructor(message: string, resetAt?: string, retryAfterMs?: number) {
+    super(message, 402, false, retryAfterMs);
+    this.name = 'QuotaExceededError';
+    this.resetAt = resetAt;
+  }
+}
+
 export class SessionExpiredError extends ApiClientError {
   constructor() {
     super(SESSION_EXPIRED_MESSAGE, 401, false);
@@ -418,6 +429,7 @@ class LlmApiClient {
           message?: string;
           retryable?: boolean;
           retry_after?: number;
+          resetAt?: string;
         } | null = null;
         try {
           body = text ? (JSON.parse(text) as typeof body) : null;
@@ -429,13 +441,22 @@ class LlmApiClient {
         const headerRetryAfter = Number(res.headers?.get('retry-after'));
         const retryAfterSeconds =
           body?.retry_after ?? (Number.isFinite(headerRetryAfter) ? headerRetryAfter : undefined);
+        const retryAfterMs =
+          retryAfterSeconds && retryAfterSeconds > 0
+            ? Math.ceil(retryAfterSeconds * 1000)
+            : undefined;
+        if (res.status === 402 && isGenerateRoute(path)) {
+          throw new QuotaExceededError(
+            `API ${res.status}: ${message}`,
+            typeof body?.resetAt === 'string' ? body.resetAt : undefined,
+            retryAfterMs,
+          );
+        }
         throw new ApiClientError(
           `API ${res.status}: ${message}`,
           res.status,
           retryable,
-          retryAfterSeconds && retryAfterSeconds > 0
-            ? Math.ceil(retryAfterSeconds * 1000)
-            : undefined,
+          retryAfterMs,
         );
       }
       return res;

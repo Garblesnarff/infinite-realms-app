@@ -25,6 +25,7 @@ import type { SessionVoiceContext } from './voice-consistency-service';
 import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 
 import { llmApiClient } from '@/infrastructure/api';
+import { QuotaExceededError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 
 export type { AIResponse, ChatMessage, NarrationSegment, GameContext } from './ai/shared/types';
@@ -377,6 +378,8 @@ export class AIService {
         });
       } catch (providerError) {
         logger.error('LLM API failed:', providerError);
+        // The daily quota is the player's to read, with its reset time; wrapping it hides both.
+        if (providerError instanceof QuotaExceededError) throw providerError;
         throw new Error('Failed to get DM response - AI service unavailable', {
           cause: providerError,
         });

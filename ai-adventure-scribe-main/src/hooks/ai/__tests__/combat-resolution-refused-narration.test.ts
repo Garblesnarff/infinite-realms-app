@@ -254,6 +254,29 @@ describe('a player action the engine refused', () => {
     expect(result.text).toBeTruthy();
   });
 
+  it('still repairs a typed player action refused because a creature holds the turn (#2443)', async () => {
+    // The skip is for refusals no repair can answer. Here the refusal names whose turn it is, and
+    // the repair's one useful result is that creature's own action.
+    const result = await run({ playerInputOrigin: 'typed' });
+
+    expect(repairRefusedCombatAction).toHaveBeenCalledTimes(1);
+    expect(resolutionPayload().authoritativeCombatResults[0].action.actor_id).toBe(NPC_ID);
+    expect(result.text).toBeTruthy();
+  });
+
+  it('spends no repair call on a typed player action refused for any other reason (#2443)', async () => {
+    executeStructuredCombatActionWithBoundary.mockRejectedValue(
+      new CombatIntentRefusedError('No spell slot left at that level', 422, {}),
+    );
+
+    const result = await run({ playerInputOrigin: 'typed' });
+
+    // The refusal is reported and the turn narrated, as when a repair's re-declaration is withheld.
+    expect(resolutionPayload().refusedActions).toHaveLength(1);
+    expect(result.text).toBeTruthy();
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+  });
+
   it('queues a refused pending declaration instead of repairing it as the current-turn actor', async () => {
     await run({ queuedIntentActorIds: [PLAYER_ID] });
 

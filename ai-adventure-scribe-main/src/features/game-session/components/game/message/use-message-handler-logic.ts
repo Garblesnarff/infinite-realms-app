@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   createTurnPhaseReporter,
   isNetworkError,
+  QuotaExceededError,
   SESSION_EXPIRED_MESSAGE,
   SessionExpiredError,
   subscribeToNetworkRetry,
@@ -68,6 +69,22 @@ function runDeferredTask(label: string, task: () => Promise<unknown>): void {
     .finally(() => {
       if (timeoutId) clearTimeout(timeoutId);
     });
+}
+
+/** What the player reads when the daily AI budget is spent; the reset time is the server's. */
+export function quotaExceededMessage(resetAt?: string): string {
+  const reset = resetAt ? new Date(resetAt) : null;
+  const when =
+    reset && !Number.isNaN(reset.getTime())
+      ? ` It resets ${reset.toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZoneName: 'short',
+        })}.`
+      : '';
+  return `You have used today's AI limit, so the DM cannot answer yet.${when} Your message is kept in the box; send it again after the reset.`;
 }
 
 /**
@@ -586,6 +603,7 @@ export const useMessageHandlerLogic = ({
           error !== null &&
           (error as { status?: unknown }).status === 401);
       const networkError = isNetworkError(error);
+      const quotaExceeded = error instanceof QuotaExceededError;
       handleAsyncError(error, {
         userMessage: sessionExpired ? SESSION_EXPIRED_MESSAGE : 'Failed to process your message',
         showToast: false,
@@ -599,9 +617,11 @@ export const useMessageHandlerLogic = ({
       // Provide user feedback and recovery options
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       const combatIntentFailure = error instanceof CombatIntentRefusedError && !error.isRepairable;
-      const recoveryMessage = combatIntentFailure
-        ? 'The server could not complete that combat action. Please try again.'
-        : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
+      const recoveryMessage = quotaExceeded
+        ? quotaExceededMessage(error.resetAt)
+        : combatIntentFailure
+          ? 'The server could not complete that combat action. Please try again.'
+          : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
 
       // Add a system error message to the conversation
       if (!sessionExpired && !networkError) {
@@ -647,12 +667,14 @@ export const useMessageHandlerLogic = ({
       toast({
         title: sessionExpired
           ? 'Session expired'
-          : combatIntentFailure
-            ? 'Combat action failed'
-            : 'Processing Error',
+          : quotaExceeded
+            ? 'Daily AI limit reached'
+            : combatIntentFailure
+              ? 'Combat action failed'
+              : 'Processing Error',
         description: sessionExpired
           ? SESSION_EXPIRED_MESSAGE
-          : combatIntentFailure
+          : quotaExceeded || combatIntentFailure
             ? recoveryMessage
             : 'I had trouble responding to your message. The conversation has been restored and you can try again.',
         variant: 'destructive',

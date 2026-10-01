@@ -245,24 +245,24 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     expect(narrationCall().payload.unresolvedPlayerAction).toBeUndefined();
   });
 
-  it('withholds an area spell the repair invents for the player, and keeps the refusal line', async () => {
+  it('does not ask the repair to re-declare a refused player area spell, and keeps the refusal line', async () => {
     vi.mocked(userDataApi.resolveAoECast).mockResolvedValue(jsonResponse(422, REFUSED));
-    // The DM's repair re-declares the area. That is the DM's input, not the player's (#2305).
+    // The repair's re-declaration of a player action is withheld (#2305), so the call is not made
+    // at all (#2443): it would only spend an `llm` unit.
     vi.mocked(repairRefusedCombatAction).mockResolvedValue({
       combat_actions: [{ ...DM_AOE_ACTION, actor_id: APPRENTICE_ID }],
     } as any);
 
     const outcome = await invoke();
 
+    expect(repairRefusedCombatAction).not.toHaveBeenCalled();
     expect(userDataApi.resolveAoECast).toHaveBeenCalledTimes(1);
     const lines = playerEngineLines(outcome);
     expect(lines).toEqual([
       `⚙️ Engine: The Apprentice's spell "Burning Hands" was refused (${REFUSED.error}). No roll, no damage, no wound.`,
     ]);
     const { payload } = narrationCall();
-    expect(payload.withheldPlayerActions).toEqual([
-      expect.objectContaining({ actor: 'The Apprentice', action: 'cast_spell', source: 'repair' }),
-    ]);
+    expect(payload.withheldPlayerActions).toBeUndefined();
     expect(payload.unresolvedPlayerAction).toContain(
       "The Apprentice's Burning Hands was NOT resolved",
     );
