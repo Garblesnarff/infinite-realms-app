@@ -17,6 +17,7 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { logger } from '../../lib/logger.js';
+import { UserPlanCache } from '../../lib/user-plan-cache.js';
 import {
   claimStripeEvent,
   getPlanFromPriceId,
@@ -38,6 +39,110 @@ function getStripe(): Stripe {
   return stripe;
 }
 
+// auth.ts caches the plan per user for 5 minutes; drop it whenever the webhook writes users.plan.
+function invalidatePlanCache(rows: readonly Record<string, unknown>[]): void {
+  for (const row of rows) UserPlanCache.delete(String(row.id));
+}
+
+const idOf = (ref: string | { id: string } | null | undefined): string | null =>
+  typeof ref === 'string' ? ref : (ref?.id ?? null);
+
+/**
+ * Find the user whose CURRENT subscription the charge paid for (charge.invoice -> invoice.subscription
+ * must equal users.stripe_subscription_id). Anything else is logged and ignored. The charge is re-read
+ * with the pinned client before calling this: webhook payload shape follows the endpoint's API version.
+ */
+async function resolveChargeOwner(
+  stripeClient: Stripe,
+  charge: Stripe.Charge,
+  eventId: string,
+): Promise<{ userId: string; subscriptionId: string } | null> {
+  const chargeId = charge.id;
+  const customerId = idOf(charge.customer);
+  if (!customerId) {
+    logger.error({ msg: 'STRIPE_CHARGE_CUSTOMER_UNRESOLVED', alert: true, eventId, chargeId });
+    return null;
+  }
+
+  const invoice =
+    typeof charge.invoice === 'string'
+      ? await stripeClient.invoices.retrieve(charge.invoice)
+      : charge.invoice;
+  const chargeSubscriptionId = idOf(invoice?.subscription);
+
+  const rows =
+    await sql`SELECT id, stripe_subscription_id FROM users WHERE stripe_customer_id = ${customerId} LIMIT 1`;
+  const user = rows[0];
+  if (!user) {
+    logger.warn({ msg: 'STRIPE_CHARGE_USER_NOT_FOUND', eventId, chargeId, customerId });
+    return null;
+  }
+  if (!chargeSubscriptionId) {
+    if (user.stripe_subscription_id) {
+      logger.warn({
+        msg: 'STRIPE_CHARGE_NO_INVOICE_LINK',
+        eventId,
+        chargeId,
+        userId: String(user.id),
+      });
+    }
+    return null;
+  }
+  if (chargeSubscriptionId !== user.stripe_subscription_id) {
+    logger.info({
+      msg: 'STRIPE_CHARGE_NOT_CURRENT_SUBSCRIPTION',
+      eventId,
+      chargeId,
+      userId: String(user.id),
+    });
+    return null;
+  }
+  return { userId: String(user.id), subscriptionId: chargeSubscriptionId };
+}
+
+// Cancel now (no period-end renewal). An already-canceled subscription is not an error.
+async function cancelSubscription(stripeClient: Stripe, subscriptionId: string): Promise<void> {
+  try {
+    await stripeClient.subscriptions.cancel(subscriptionId);
+  } catch (err) {
+    const alreadyCanceled =
+      (err as { code?: string }).code === 'resource_missing' ||
+      (await stripeClient.subscriptions.retrieve(subscriptionId).catch(() => null))?.status ===
+        'canceled';
+    if (!alreadyCanceled) throw err;
+    logger.info({ msg: 'STRIPE_SUBSCRIPTION_ALREADY_CANCELED', subscriptionId });
+  }
+}
+
+async function endPaidPlan(
+  userId: string,
+  subscriptionId: string,
+  status: 'refunded' | 'disputed',
+): Promise<void> {
+  const updated = await sql`
+    UPDATE users
+    SET plan = 'free', stripe_subscription_id = NULL, subscription_status = ${status}, updated_at = NOW()
+    WHERE id = ${userId} AND stripe_subscription_id = ${subscriptionId}
+    RETURNING id
+  `;
+  invalidatePlanCache(updated);
+}
+
+// Ends the 'disputed' hold: only a user still marked disputed on this subscription is touched.
+async function releaseDispute(
+  userId: string,
+  subscriptionId: string,
+  plan: string,
+  status: string,
+): Promise<void> {
+  const updated = await sql`
+    UPDATE users
+    SET plan = ${plan}, subscription_status = ${status}, updated_at = NOW()
+    WHERE id = ${userId} AND stripe_subscription_id = ${subscriptionId} AND subscription_status = 'disputed'
+    RETURNING id
+  `;
+  invalidatePlanCache(updated);
+}
 
 /**
  * Get or create Stripe customer for user
@@ -45,7 +150,7 @@ function getStripe(): Stripe {
 async function getOrCreateStripeCustomer(
   stripeClient: Stripe,
   userId: string,
-  email: string
+  email: string,
 ): Promise<string> {
   // Check if user already has a Stripe customer ID
   const rows = await sql`
@@ -118,7 +223,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         const customerId = await getOrCreateStripeCustomer(
           stripeClient,
           user.userId,
-          user.email || ''
+          user.email || '',
         );
 
         // Create checkout session
@@ -153,7 +258,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         successUrl: t.Optional(t.String()),
         cancelUrl: t.Optional(t.String()),
       }),
-    }
+    },
   )
 
   /**
@@ -279,7 +384,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         eventId: event.id,
       });
 
-      if (!await claimStripeEvent(event.id, event.type)) {
+      if (!(await claimStripeEvent(event.id, event.type))) {
         logger.info({ msg: 'STRIPE_WEBHOOK_DUPLICATE', eventId: event.id, type: event.type });
         return { received: true, duplicate: true };
       }
@@ -296,14 +401,15 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           if (!userId) {
             const email = session.customer_details?.email || session.customer_email;
             if (email) {
-              const matches = await sql`SELECT id FROM users WHERE lower(email) = lower(${email}) LIMIT 2`;
+              const matches =
+                await sql`SELECT id FROM users WHERE lower(email) = lower(${email}) LIMIT 2`;
               if (matches.length === 1) userId = String(matches[0].id);
             }
           }
 
           if (userId) {
             // Update user with subscription info
-            await sql`
+            const updated = await sql`
               UPDATE users
               SET
                 plan = 'pro',
@@ -312,7 +418,9 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
                 subscription_status = 'active',
                 updated_at = NOW()
               WHERE id = ${userId}
+              RETURNING id
             `;
+            invalidatePlanCache(updated);
 
             logger.info({
               msg: 'SUBSCRIPTION_ACTIVATED',
@@ -332,10 +440,16 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
             });
           } else {
             logger.error({
-              msg: 'STRIPE_PAID_CUSTOMER_UNRESOLVED', alert: true, severity: 'critical',
-              eventId: event.id, sessionId: session.id, customerId, subscriptionId,
+              msg: 'STRIPE_PAID_CUSTOMER_UNRESOLVED',
+              alert: true,
+              severity: 'critical',
+              eventId: event.id,
+              sessionId: session.id,
+              customerId,
+              subscriptionId,
               customerEmail: session.customer_details?.email || session.customer_email || null,
-              amountTotal: session.amount_total, currency: session.currency,
+              amountTotal: session.amount_total,
+              currency: session.currency,
             });
           }
           break;
@@ -348,15 +462,18 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           const priceId = subscription.items.data[0]?.price.id;
           const plan = getPlanFromPriceId(priceId);
 
-          // Update user based on customer ID
-          await sql`
+          // Update user based on customer ID; an open dispute stays free until charge.dispute.closed
+          const updated = await sql`
             UPDATE users
             SET
               plan = ${status === 'active' ? plan : 'free'},
               subscription_status = ${status},
               updated_at = NOW()
             WHERE stripe_customer_id = ${customerId}
+              AND subscription_status IS DISTINCT FROM 'disputed'
+            RETURNING id
           `;
+          invalidatePlanCache(updated);
 
           logger.info({
             msg: 'SUBSCRIPTION_UPDATED',
@@ -382,15 +499,21 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           const customerId = subscription.customer as string;
 
           // Downgrade user to free
-          await sql`
+          const updated = await sql`
             UPDATE users
             SET
               plan = 'free',
               stripe_subscription_id = NULL,
-              subscription_status = 'canceled',
+              subscription_status = CASE
+                WHEN subscription_status = 'refunded' THEN 'refunded'
+                WHEN subscription_status = 'disputed' AND stripe_subscription_id IS NULL THEN 'disputed'
+                ELSE 'canceled'
+              END,
               updated_at = NOW()
             WHERE stripe_customer_id = ${customerId}
+            RETURNING id
           `;
+          invalidatePlanCache(updated);
 
           logger.info({
             msg: 'SUBSCRIPTION_CANCELED',
@@ -417,6 +540,8 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
               subscription_status = 'past_due',
               updated_at = NOW()
             WHERE stripe_customer_id = ${customerId}
+              AND subscription_status IS DISTINCT FROM 'disputed'
+              AND subscription_status IS DISTINCT FROM 'refunded'
           `;
 
           logger.warn({
@@ -436,6 +561,109 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           break;
         }
 
+        case 'charge.refunded': {
+          // Read refunded/customer/invoice from the pinned client, not the payload.
+          const charge = await stripeClient.charges.retrieve(
+            (event.data.object as Stripe.Charge).id,
+          );
+          if (!charge.refunded) {
+            logger.info({ msg: 'CHARGE_PARTIALLY_REFUNDED', chargeId: charge.id });
+            break;
+          }
+          const owner = await resolveChargeOwner(stripeClient, charge, event.id);
+          if (!owner) break;
+
+          await cancelSubscription(stripeClient, owner.subscriptionId);
+          await endPaidPlan(owner.userId, owner.subscriptionId, 'refunded');
+          logger.info({
+            msg: 'CHARGE_REFUNDED_DOWNGRADE',
+            userId: owner.userId,
+            chargeId: charge.id,
+          });
+          break;
+        }
+
+        case 'charge.dispute.created': {
+          const dispute = event.data.object as Stripe.Dispute;
+          // Re-read: events can arrive out of order, and an inquiry (warning_*) is not a chargeback.
+          const current = await stripeClient.disputes.retrieve(dispute.id);
+          if (current.status !== 'needs_response' && current.status !== 'under_review') {
+            logger.info({
+              msg: 'DISPUTE_CREATED_NO_DOWNGRADE',
+              disputeId: dispute.id,
+              status: current.status,
+            });
+            break;
+          }
+          const charge = await stripeClient.charges.retrieve(idOf(dispute.charge) as string);
+          const owner = await resolveChargeOwner(stripeClient, charge, event.id);
+          if (!owner) break;
+
+          // Subscription stays on file so a won dispute can restore the plan.
+          const updated = await sql`
+            UPDATE users
+            SET plan = 'free', subscription_status = 'disputed', updated_at = NOW()
+            WHERE id = ${owner.userId} AND stripe_subscription_id = ${owner.subscriptionId}
+            RETURNING id
+          `;
+          invalidatePlanCache(updated);
+          logger.warn({
+            msg: 'CHARGE_DISPUTED_DOWNGRADE',
+            userId: owner.userId,
+            disputeId: dispute.id,
+          });
+          break;
+        }
+
+        case 'charge.dispute.closed': {
+          const dispute = event.data.object as Stripe.Dispute;
+          const won = dispute.status === 'won' || dispute.status === 'warning_closed';
+          if (!won && dispute.status !== 'lost') {
+            logger.info({
+              msg: 'DISPUTE_CLOSED_NO_ACTION',
+              disputeId: dispute.id,
+              status: dispute.status,
+            });
+            break;
+          }
+          const charge = await stripeClient.charges.retrieve(idOf(dispute.charge) as string);
+          const owner = await resolveChargeOwner(stripeClient, charge, event.id);
+          if (!owner) break;
+
+          if (!won) {
+            await cancelSubscription(stripeClient, owner.subscriptionId);
+            await endPaidPlan(owner.userId, owner.subscriptionId, 'disputed');
+            logger.warn({
+              msg: 'DISPUTE_LOST_DOWNGRADE',
+              userId: owner.userId,
+              disputeId: dispute.id,
+            });
+            break;
+          }
+
+          // Whatever Stripe says, the 'disputed' hold ends here so renewals can set the plan again.
+          const subscription = await stripeClient.subscriptions.retrieve(owner.subscriptionId);
+          const priceId = subscription.items.data[0]?.price.id;
+          const plan = getPlanFromPriceId(priceId);
+          if (subscription.status !== 'active' || plan === 'free') {
+            logger.warn({
+              msg:
+                subscription.status !== 'active'
+                  ? 'DISPUTE_WON_SUBSCRIPTION_INACTIVE'
+                  : 'DISPUTE_WON_UNKNOWN_PRICE',
+              userId: owner.userId,
+              disputeId: dispute.id,
+              status: subscription.status,
+              priceId,
+            });
+            await releaseDispute(owner.userId, owner.subscriptionId, 'free', subscription.status);
+            break;
+          }
+          await releaseDispute(owner.userId, owner.subscriptionId, plan, 'active');
+          logger.info({ msg: 'DISPUTE_WON_RESTORED', userId: owner.userId, disputeId: dispute.id });
+          break;
+        }
+
         default:
           logger.info({ msg: 'UNHANDLED_WEBHOOK_EVENT', type: event.type });
       }
@@ -446,7 +674,11 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         try {
           await sql`DELETE FROM processed_stripe_events WHERE event_id = ${claimedEventId}`;
         } catch (releaseError) {
-          logger.error({ msg: 'STRIPE_WEBHOOK_CLAIM_RELEASE_FAILED', eventId: claimedEventId, error: releaseError });
+          logger.error({
+            msg: 'STRIPE_WEBHOOK_CLAIM_RELEASE_FAILED',
+            eventId: claimedEventId,
+            error: releaseError,
+          });
         }
       }
       logger.error({ msg: 'WEBHOOK_ERROR', error: err });
