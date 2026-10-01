@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.24.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.23.0...v0.24.0) (2026-10-01)
+
+
+### Features
+
+* **combat:** engine result cards, turn bar, chat dividers, encounter states ([#2417](https://github.com/Garblesnarff/infinite-realms-production/issues/2417)) ([#2429](https://github.com/Garblesnarff/infinite-realms-production/issues/2429)) ([9b028ba](https://github.com/Garblesnarff/infinite-realms-production/commit/9b028baadd1b5f983890dfd26e3c408b4dd0b14b))
+
+
+### Bug Fixes
+
+* **combat:** enemy never takes the PC's name; unseated typed target gets a notice ([#2438](https://github.com/Garblesnarff/infinite-realms-production/issues/2438)) ([#2444](https://github.com/Garblesnarff/infinite-realms-production/issues/2444)) ([cdb6dac](https://github.com/Garblesnarff/infinite-realms-production/commit/cdb6dac05ec326ff3747a9ae86f564e0ea1ce66c))
+* **combat:** sheet Cast popup offers only creatures the last DM message names ([#2445](https://github.com/Garblesnarff/infinite-realms-production/issues/2445)) ([#2446](https://github.com/Garblesnarff/infinite-realms-production/issues/2446)) ([9d47249](https://github.com/Garblesnarff/infinite-realms-production/commit/9d4724945b85b6a3334ad3988051b8107166b79d))
+* **combat:** strip invented creatures from the whole envelope on an untargeted cast ([#2421](https://github.com/Garblesnarff/infinite-realms-production/issues/2421) follow-up) ([#2441](https://github.com/Garblesnarff/infinite-realms-production/issues/2441)) ([62a9e63](https://github.com/Garblesnarff/infinite-realms-production/commit/62a9e635f6da5d83ecad87472eb4f39abcac2c25))
+* polish explore and tactical map UX ([#2436](https://github.com/Garblesnarff/infinite-realms-production/issues/2436)) ([49c5371](https://github.com/Garblesnarff/infinite-realms-production/commit/49c53715646ab2d187614fddd851b9d7d245f168))
+* review follow-ups from [#2426](https://github.com/Garblesnarff/infinite-realms-production/issues/2426) (items 2, 3, 5) ([#2442](https://github.com/Garblesnarff/infinite-realms-production/issues/2442)) ([e123dca](https://github.com/Garblesnarff/infinite-realms-production/commit/e123dcad048d8285a064fae6191662f3c07b7b71))
+
 ## [0.23.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.8...v0.23.0) (2026-10-01)
 
 
