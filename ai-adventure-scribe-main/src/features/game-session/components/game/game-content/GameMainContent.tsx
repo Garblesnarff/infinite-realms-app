@@ -29,6 +29,8 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { stripAssetTags } from '@/lib/utils';
+import { useDmWaiting } from '@/services/ai/dm-wait';
+import { useSheetCastProgress } from '@/services/combat/sheet-cast-progress';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
 /** Pixels from the top of `card` to the top of `dock`, tracked while `active`. */
@@ -143,6 +145,14 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const dockRef = React.useRef<HTMLDivElement>(null);
     const mapSheetHeight = useHeightAboveDock(showMapSheet, cardRef, dockRef);
     const { queueStatus } = useMessageContext();
+    // The pill covers the whole wait for the DM, not only the database write the queue reports
+    // (#2418). A cast's result is shown by scrolling the feed to its newest card.
+    const dmWaiting = useDmWaiting();
+    const castPhase = useSheetCastProgress().cast?.phase;
+    React.useEffect(() => {
+      const feed = chatScrollRef.current;
+      if (castPhase === 'done' && feed) feed.scrollTop = feed.scrollHeight;
+    }, [castPhase]);
     const { state: gameState } = useGame();
     // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
     // The queue's current roll is the only request with a visible control (the dice popup in
@@ -347,7 +357,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   )}
 
                   {/* A pending roll's status sits with the tray below; this is only the DM wait. */}
-                  {!rollPillLabel && queueStatus === 'processing' && (
+                  {!rollPillLabel && (dmWaiting || queueStatus === 'processing') && (
                     <div
                       className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
                       style={{ zIndex: Z_INDEX.DROPDOWN }}

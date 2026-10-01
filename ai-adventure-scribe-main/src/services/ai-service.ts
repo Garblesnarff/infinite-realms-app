@@ -5,6 +5,7 @@ import {
   processDMResponseSideEffects,
   runDeferredDMResponseWork,
 } from './ai/dm-response-processor';
+import { trackDmWait } from './ai/dm-wait';
 import { enforceNarrationContract } from './ai/narration-contract-check';
 import { formatConversationHistoryMessage } from './ai/shared/conversation-history';
 import { measurePromptSections } from './ai/shared/prompt-metrics';
@@ -119,6 +120,8 @@ export class AIService {
      * `message` so the player's words reach memory and the context builder unchanged.
      */
     narrationViolation?: string;
+    /** #2418: aborts the generate request, so a cancelled cast stops waiting for the DM. */
+    signal?: AbortSignal;
   }): Promise<AIResponse> {
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
@@ -339,6 +342,7 @@ export class AIService {
           metrics: promptMetrics,
           combatEntry,
           dmReply: params.dmReply,
+          signal: params.signal,
         });
         reportTurnPhase(
           params.onTurnPhase,
@@ -446,7 +450,9 @@ export class AIService {
 
     // Store promise in in-flight map and return it
     inFlight.set(key, { ts: now, promise: p });
-    return p;
+    // A cancelled call must not answer a retry of the same message inside the dedupe window.
+    if (params.signal) p.catch(() => inFlight.delete(key));
+    return trackDmWait(p);
   }
 
   /**

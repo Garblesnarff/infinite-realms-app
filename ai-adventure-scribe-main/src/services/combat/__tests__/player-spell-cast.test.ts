@@ -41,7 +41,7 @@ describe('askPlayerForSpellCast', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
-    vi.mocked(requestSpellTargetSave).mockResolvedValue(undefined);
+    vi.mocked(requestSpellTargetSave).mockResolvedValue('continue');
   });
 
   it('opens a spell-attack roll popup for Fire Bolt', async () => {
@@ -67,6 +67,17 @@ describe('askPlayerForSpellCast', () => {
       targetLabel: 'Professor Umeboshi',
       spellName: 'Acid Splash',
       saveAbility: 'DEX',
+    });
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+  });
+
+  it('withdraws the cast when the player cancels on the card: no engine call may follow (#2418)', async () => {
+    vi.mocked(requestSpellTargetSave).mockResolvedValue('cancel');
+
+    await expect(ask('acid-splash')).resolves.toEqual({
+      autoRolled: false,
+      movementOnly: false,
+      cancelled: true,
     });
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
   });

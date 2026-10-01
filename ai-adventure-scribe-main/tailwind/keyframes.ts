@@ -95,4 +95,8 @@ export const keyframes = {
     '0%, 100%': { opacity: '1' },
     '50%': { opacity: '0.8' },
   },
+  'cast-indeterminate': {
+    '0%': { transform: 'translateX(-100%)' },
+    '100%': { transform: 'translateX(300%)' },
+  },
 };

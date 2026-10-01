@@ -25,9 +25,14 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** Easy and Medium show a target's AC and a save's DC; Hard does not (#2393, Rob 2026-10-01). */
+/**
+ * Easy and any difficulty with "medium" in its name show a target's AC and a save's DC; Hard and
+ * Deadly do not (#2393, Rob 2026-10-01). A difficulty that is none of these shows them.
+ */
 export function showTargetNumbersByDefault(difficulty: string | null | undefined): boolean {
-  return difficulty?.trim().toLowerCase() !== 'hard';
+  const name = difficulty?.trim().toLowerCase() ?? '';
+  if (name.includes('medium')) return true;
+  return !name.includes('hard') && !name.includes('deadly');
 }
 
 /**

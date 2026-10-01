@@ -258,6 +258,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                   <RailOverStoryLayer
                     key={isLeftCollapsed ? 'right' : 'left'}
                     onClose={handleRailOverStoryClose}
+                    sizeByCast={isLeftCollapsed}
                   >
                     {isLeftCollapsed ? rightPanel : leftPanel}
                   </RailOverStoryLayer>,

@@ -9,11 +9,40 @@ import {
 import type { SpellTargetSaveSpec } from '@/services/combat/spell-target-save-bridge';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
-import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-bridge';
+import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
+import {
+  resetSheetCastProgress,
+  beginSheetCast,
+  getSheetCastSnapshot,
+} from '@/services/combat/sheet-cast-progress';
+import {
+  cancelPendingSpellTargetSave,
+  setSpellTargetSaveHost,
+} from '@/services/combat/spell-target-save-bridge';
 
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/services/combat/combat-attack-proposal', () => ({
+  proposeAuthoritativeSpell: vi.fn(),
+}));
+
+/**
+ * What `/v1/combat/:id/intent` answers to `phase: 'propose'` for a save spell: the shape of
+ * `CombatAttackService.proposeSpellAttack` (`saveDC` is 8 + the caster's spell attack bonus, here
+ * +6 for the Scholar) plus the route's `movementOnly: false`.
+ */
+const SAVE_SPELL_PROPOSAL = {
+  movementOnly: false as const,
+  spellId: 'acid-splash',
+  spellName: 'Acid Splash',
+  kind: 'save' as const,
+  attackBonus: 6,
+  saveDC: 14,
+  targetAc: 12,
+  advantage: false,
+  disadvantage: false,
+};
 
 /**
  * #2392. Encounters come from `mapAuthoritativeCombat`, the producer the client uses for every
@@ -62,6 +91,9 @@ describe('holdSaveCardBeforeDm (#2392)', () => {
   beforeEach(() => {
     presented.length = 0;
     clearHeldSaveCard();
+    resetSheetCastProgress();
+    vi.mocked(proposeAuthoritativeSpell).mockReset();
+    vi.mocked(proposeAuthoritativeSpell).mockResolvedValue(SAVE_SPELL_PROPOSAL);
     setSpellTargetSaveHost({
       present: (spec, settle) => {
         presented.push(spec);
@@ -91,8 +123,92 @@ describe('holdSaveCardBeforeDm (#2392)', () => {
         targetLabel: 'Captain Sarah Reeves',
         spellName: 'Acid Splash',
         saveAbility: 'DEX',
+        saveDc: 14,
       },
     ]);
+    // The DC comes from the engine's read-only proposal, for the caster and the one target.
+    expect(proposeAuthoritativeSpell).toHaveBeenCalledWith('enc-2392', {
+      type: 'spell',
+      actorId: PLAYER_ID,
+      targetIds: [SARAH_ID],
+      spellId: 'acid-splash',
+      spellName: 'Acid Splash',
+    });
+  });
+
+  it('shows the card with no DC when the engine refuses or fails the proposal', async () => {
+    vi.mocked(proposeAuthoritativeSpell).mockRejectedValue(
+      new Error('Combat action rejected (404)'),
+    );
+
+    await hold(encounter([player, sarah]));
+
+    expect(presented).toEqual([
+      {
+        actorLabel: 'The Apprentice',
+        targetLabel: 'Captain Sarah Reeves',
+        spellName: 'Acid Splash',
+        saveAbility: 'DEX',
+      },
+    ]);
+  });
+
+  it('does not let a slow DC proposal hold the card: it shows without the DC after 2 s', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(proposeAuthoritativeSpell).mockReturnValue(new Promise(() => {}));
+
+      const held = hold(encounter([player, sarah]));
+      await vi.advanceTimersByTimeAsync(2000);
+      await held;
+
+      expect(presented).toEqual([
+        {
+          actorLabel: 'The Apprentice',
+          targetLabel: 'Captain Sarah Reeves',
+          spellName: 'Acid Splash',
+          saveAbility: 'DEX',
+        },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ends the turn before the DM when the player cancels the card, and holds nothing', async () => {
+    setSpellTargetSaveHost({
+      present: (spec) => {
+        presented.push(spec);
+        queueMicrotask(() => cancelPendingSpellTargetSave());
+        return () => {};
+      },
+    });
+    await expect(hold(encounter([player, sarah]))).resolves.toBe('cancelled');
+
+    expect(consumeHeldSaveCard('Acid Splash', 'Captain Sarah Reeves')).toBe(false);
+  });
+
+  it('moves a sheet cast to the save phase while the card waits, and back to the DM on Continue', async () => {
+    beginSheetCast('Acid Splash');
+    let continueCard: () => void = () => {};
+    setSpellTargetSaveHost({
+      present: (spec, settle) => {
+        presented.push(spec);
+        continueCard = settle;
+        return () => {};
+      },
+    });
+
+    const held = hold(encounter([player, sarah]));
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(getSheetCastSnapshot().cast).toMatchObject({
+      phase: 'save',
+      targetName: 'Captain Sarah Reeves',
+    });
+
+    continueCard();
+    await held;
+    expect(getSheetCastSnapshot().cast).toMatchObject({ phase: 'dm', savePassed: true });
   });
 
   it('does not settle until the player continues, so the caller can hold the DM call', async () => {
@@ -109,8 +225,8 @@ describe('holdSaveCardBeforeDm (#2392)', () => {
       done = true;
     });
 
-    await Promise.resolve();
-    expect(presented).toHaveLength(1);
+    // The engine's DC proposal is awaited first, so the card comes a tick or two later.
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
     expect(done).toBe(false);
     continueCard();
     await held;

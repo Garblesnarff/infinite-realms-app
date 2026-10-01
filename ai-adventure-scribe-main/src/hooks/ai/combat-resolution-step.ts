@@ -57,6 +57,11 @@ import {
 } from '@/services/combat/player-combat-spell';
 import { trackPlayerRollDismissal } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
+import {
+  beginSheetCastCommit,
+  reopenSheetCast,
+  reportSheetCastResult,
+} from '@/services/combat/sheet-cast-progress';
 import { standingHostiles } from '@/services/combat/sheet-cast-save-hold';
 import { userDataApi } from '@/services/user-data-api';
 import {
@@ -292,6 +297,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     | null;
   /** The player's own action whose roll prompt they dismissed. Nothing after it resolves. */
   let cancelledPlayerAction: StructuredCombatAction | null = null;
+  /** How it was withdrawn: a dismissed roll prompt, or Cancel cast (nothing was spent). */
+  let withdrawnHow: 'dismissed' | 'cancelled' = 'dismissed';
   const playerDieByAction = new WeakMap<StructuredCombatAction, PlayerAttackRoll>();
   const queuedActorIds = new Set(queuedIntentActorIds ?? []);
   const queuedActorSlugs = new Set(
@@ -473,6 +480,23 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     ? appendAutonomousNpcResults(preResolvedNpcTurns, false, npcLinesShown)
     : null;
 
+  /**
+   * The sheet's cast is about to reach the engine. False means go on; true means the player
+   * cancelled first, so the action is withdrawn and nothing is spent.
+   */
+  const withdrawnBySheetCancel = (
+    action: DeclaredCombatAction,
+    origin: CombatActionOrigin | undefined,
+    targetName: string | undefined,
+  ): boolean => {
+    if (origin !== 'sheet_cast' || !isPlayerActor(action.actor_id, participants)) return false;
+    if (beginSheetCastCommit(targetName)) return false;
+    cancelledPlayerAction = asTargeted(action);
+    withdrawnHow = 'cancelled';
+    logger.info('[SpellCast] player cancelled the cast before the engine; action withdrawn');
+    return true;
+  };
+
   /** `null` when the action was withheld and nothing reached the engine; the batch goes on. */
   const runAction = async (declared: DeclaredCombatAction): Promise<BatchBoundary | null> => {
     const origin = originOf(declared);
@@ -491,7 +515,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       });
       return null;
     }
-    if (isAoESpellAction(declared)) return runAoEAction(declared, origin);
+    if (isAoESpellAction(declared)) {
+      // The engine spends the slot inside the area call, so the commit is taken first; a Cancel
+      // pressed while it runs is refused. A refused area (single-target spell in the area shape)
+      // spent nothing: `runAoEAction` reopens the cast before it falls back to `runAction`.
+      if (withdrawnBySheetCancel(declared, origin, undefined)) return 'turn_ended';
+      return runAoEAction(declared, origin);
+    }
     const action = declared;
     // The player throws their own attack die; monsters keep rolling behind the screen. The
     // detour is scoped to attacks with a target, since that is the roll the popup can describe.
@@ -515,9 +545,18 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         const asked = await trackPlayerRollDismissal(() =>
           action.action_type === 'attack'
             ? askPlayerForAttackDie({ encounterId, action, actorLabel })
-            : askPlayerForSpellCast({ encounterId, action, actorLabel, participants }),
+            : askPlayerForSpellCast({
+                encounterId,
+                action,
+                actorLabel,
+                participants,
+                fromSheetCast: origin === 'sheet_cast',
+              }),
         );
-        playerDie = asked.dismissed ? { autoRolled: false, cancelled: true } : asked.value;
+        const cancelledOnCard = (asked.value as { cancelled?: boolean } | null)?.cancelled === true;
+        if (cancelledOnCard) withdrawnHow = 'cancelled';
+        playerDie =
+          asked.dismissed || cancelledOnCard ? { autoRolled: false, cancelled: true } : asked.value;
       } else {
         playerDie = null;
       }
@@ -530,6 +569,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       logger.info('[PlayerRoll] player dismissed the roll prompt; action withdrawn', {
         actionType: action.action_type,
       });
+      return 'turn_ended';
+    }
+    // From here the engine spends the slot. A Cancel cast pressed before this line wins, and the
+    // action is withdrawn like a dismissed prompt; one pressed after it is refused (#2418).
+    const targetId = action.target_ids[0];
+    if (withdrawnBySheetCancel(action, origin, targetId ? labelFor(targetId) : undefined)) {
       return 'turn_ended';
     }
     const execution = await executeStructuredCombatActionWithBoundary(
@@ -607,6 +652,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         (participant) =>
           participant.id === action.actor_id || slugify(participant.name ?? '') === action.actor_id,
       );
+      if (origin === 'sheet_cast') reopenSheetCast();
       const targeted: StructuredCombatAction = {
         actor_id: caster?.id ?? action.actor_id,
         action_type: 'cast_spell',
@@ -635,6 +681,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   ): Promise<BatchBoundary> => {
     notePlayerSpell(action);
     const engineParts = formatCombatEngineParts(action, execution.result, roster);
+    if (isPlayerActor(action.actor_id, participants)) {
+      for (const part of engineParts) {
+        if (part.card.kind === 'spell') reportSheetCastResult(part.card);
+      }
+    }
     appendEngineBlock({
       source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
       actorId: action.actor_id,
@@ -846,7 +897,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     const orderedBlocks = orderCombatEngineBlocks(engineBlocks);
     return {
       text: prependCombatEngineTranscript(
-        withdrawnActionNotice(cancelledPlayerAction),
+        withdrawnActionNotice(cancelledPlayerAction, withdrawnHow),
         orderedBlocks.flatMap((block) => block.lines),
       ),
       combatEngineBlocks: orderedBlocks,
@@ -1134,11 +1185,17 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
 }
 
 /** What the player sees after dismissing an attack or spell prompt. */
-export function withdrawnActionNotice(action: StructuredCombatAction): string {
+export function withdrawnActionNotice(
+  action: StructuredCombatAction,
+  how: 'dismissed' | 'cancelled' = 'dismissed',
+): string {
   const what =
     action.action_type === 'cast_spell'
       ? `casting ${playerCombatSpellLabel(action.spell_id, action.spell_id)}`
       : 'that attack';
+  if (how === 'cancelled') {
+    return `You cancelled the cast, so ${what} did not happen and no spell slot was used. It is still your turn — what do you do?`;
+  }
   return `You dismissed the roll, so ${what} did not happen. It is still your turn — what do you do?`;
 }
 

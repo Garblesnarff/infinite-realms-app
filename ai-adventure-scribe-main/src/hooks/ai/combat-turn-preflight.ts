@@ -30,6 +30,9 @@ export const COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED = 'COMBAT_ENTRY_NPC_FIRST_ADV
 export const NPC_FIRST_ADVANCE_FAILED_NOTICE =
   'The other combatants are still acting — try again in a moment.';
 
+/** The player cancelled a cast from the sheet or on the save card; the engine spent nothing. */
+export const SPELL_CAST_CANCELLED_NOTICE = 'Cast cancelled. No spell slot was used.';
+
 export function preflightErrorStatus(error: unknown): number | string | null {
   if (!error || typeof error !== 'object') return null;
   const status = (error as { status?: unknown }).status;

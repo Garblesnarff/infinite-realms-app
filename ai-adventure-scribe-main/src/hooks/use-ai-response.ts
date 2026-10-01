@@ -23,6 +23,7 @@ import {
 import {
   COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
   NPC_FIRST_ADVANCE_FAILED_NOTICE,
+  SPELL_CAST_CANCELLED_NOTICE,
   combatTurnErrorMessage,
   combatTurnUiStateForEncounter,
   INITIAL_COMBAT_TURN_UI_STATE,
@@ -50,6 +51,7 @@ import {
   hasPendingPlayerRoll,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
+import { sheetCastSignal } from '@/services/combat/sheet-cast-progress';
 import { holdSaveCardBeforeDm } from '@/services/combat/sheet-cast-save-hold';
 import { MemoryManager } from '@/services/memory-manager';
 import { userDataApi } from '@/services/user-data-api';
@@ -397,13 +399,30 @@ export const useAIResponse = (): {
         });
         timingCheckpoint = performance.now();
 
+        /** The turn is withdrawn: no DM text, one notice, and the turn state reads as settled. */
+        const castCancelledReply = (notice: string): EnhancedChatMessage => {
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+          );
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+            localNotice: notice,
+            localNotices: [{ text: notice, persist: true }],
+          };
+        };
+
         // #2392: the sheet's Cast of a save spell asks the player before the DM is called; the
         // card needs no model output, and the DM's reply used to come first.
-        await holdSaveCardBeforeDm({
+        const heldSave = await holdSaveCardBeforeDm({
           origin: playerInputOriginOf(latestMessage),
           spellId: latestMessage.context?.spellId,
           activeEncounter: isInCombat ? activeEncounter : null,
         });
+        // Cancel cast (#2418): the DM was never called and the engine spent nothing.
+        if (heldSave === 'cancelled') return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
 
         logger.info('TURN_PREFLIGHT_TIMING', {
           sessionId,
@@ -515,8 +534,25 @@ export const useAIResponse = (): {
             ? async () => heldEntryResult(heldEntry.pending)
             : AIService.chatWithDM;
 
+        // A cast from the sheet can be cancelled while the DM reads the scene (#2418). Aborting
+        // the request is safe: the slot is spent only when the engine is handed the cast, after
+        // this reply, and an in-combat turn's prose and side effects are not saved until then.
+        const castSignal = playerInputOrigin === 'sheet_cast' ? sheetCastSignal() : null;
+        // Cancelled while queued behind another turn, or during the context fetch above.
+        if (castSignal?.aborted) return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
+        const askDmUnlessCancelled = async (
+          params: Parameters<typeof AIService.chatWithDM>[0],
+        ): Promise<AIResponse | null> => {
+          try {
+            return await askDm({ ...params, ...(castSignal ? { signal: castSignal } : {}) });
+          } catch (error) {
+            if (castSignal?.aborted) return null;
+            throw error;
+          }
+        };
+
         // Call AIService
-        let result = await askDm({
+        const answered = await askDmUnlessCancelled({
           message: latestMessage.text,
           context: aiContext,
           conversationHistory,
@@ -532,10 +568,13 @@ export const useAIResponse = (): {
             ? {
                 dmReply: {
                   messageId: dmMessageId,
+                  // A cast that can still be cancelled keeps its prose off the server too: a
+                  // provisional row would narrate a cast the player gave up after a reload.
                   inCombat: Boolean(
                     isInCombat ||
                     preflightNpcTurns?.results?.length ||
-                    preflightNpcTurns?.combatEnded,
+                    preflightNpcTurns?.combatEnded ||
+                    castSignal,
                   ),
                   // The client's own gate predicate, so the server's harm check stands down on
                   // exactly the turns the client gate does (a dice-roll message, say).
@@ -623,6 +662,9 @@ export const useAIResponse = (): {
               }
             : {}),
         });
+        if (!answered || castSignal?.aborted)
+          return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
+        let result = answered;
 
         if (entryDeclined) {
           // The prompt already says nothing happened; this is the half that does not depend on the

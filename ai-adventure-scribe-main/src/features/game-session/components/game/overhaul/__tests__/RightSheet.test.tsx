@@ -145,11 +145,42 @@ describe('RightSheet attacks list', () => {
     );
 
     const cast = screen.getByRole('button', { name: 'Cast Magic Missile' });
-    expect(cast).toBeDisabled();
+    // aria-disabled, not disabled (#2418): the button keeps its place in the tab order.
+    expect(cast).toHaveAttribute('aria-disabled', 'true');
+    expect(cast).not.toBeDisabled();
     expect(cast).toHaveTextContent('Casting…');
     // Run M7's second click became a turn the player never took.
     fireEvent.click(cast);
     expect(onCastSpell).not.toHaveBeenCalled();
+  });
+
+  it('marks the other Cast buttons aria-disabled while one cast runs, and none before (#2418)', () => {
+    const onCastSpell = vi.fn();
+    const { rerender } = render(<RightSheet c={casterSheet} onCastSpell={onCastSpell} />);
+
+    const fireBolt = screen.getByRole('button', { name: 'Cast Fire Bolt' });
+    expect(fireBolt).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(fireBolt);
+    expect(onCastSpell).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <RightSheet c={casterSheet} castingSpellId="magic-missile" onCastSpell={onCastSpell} />,
+    );
+    const waiting = screen.getByRole('button', { name: 'Cast Fire Bolt' });
+    expect(waiting).toHaveAttribute('aria-disabled', 'true');
+    expect(waiting).toHaveTextContent('Cast');
+    fireEvent.click(waiting);
+    expect(onCastSpell).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives every Cast button at least 44 px of height and readable text (#2418)', () => {
+    render(<RightSheet c={casterSheet} onCastSpell={vi.fn()} />);
+
+    for (const name of ['Cast Fire Bolt', 'Cast Magic Missile']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toHaveClass('min-h-11');
+      expect(button.className).not.toMatch(/text-\[10px\]|\bh-6\b/);
+    }
   });
 
   it('does not offer a cast action during combat or a preparation toggle to non-casters', () => {

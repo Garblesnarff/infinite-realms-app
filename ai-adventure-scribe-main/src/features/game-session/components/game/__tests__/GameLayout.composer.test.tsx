@@ -207,7 +207,11 @@ describe.each([390, 665])('game layout at %i px (#2281)', (width) => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Character' }));
 
     const layer = screen.getByTestId('rail-over-story');
-    expect(layer).toHaveClass('absolute', 'inset-0');
+    // A bottom sheet in the story box's flow (#2418), not a cover: the feed above it shrinks and
+    // keeps its newest card. It takes 68% of the box when nothing is casting.
+    expect(layer).toHaveClass('relative', 'shrink-0');
+    expect(layer).not.toHaveClass('absolute', 'inset-0');
+    expect(layer).toHaveStyle({ height: '68%' });
     expect(layer.parentElement).toBe(screen.getByTestId('story-box'));
     expectOverStoryNotComposer(screen.getByTestId('character-sheet'));
     expectNoFixedOverlayShowing();

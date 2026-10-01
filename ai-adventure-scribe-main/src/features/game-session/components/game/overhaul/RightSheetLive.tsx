@@ -9,6 +9,11 @@ import type { SpellVM } from './types';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { characterSpellService } from '@/services/characterSpellApi';
+import {
+  beginSheetCast,
+  finishSheetCast,
+  useSheetCastProgress,
+} from '@/services/combat/sheet-cast-progress';
 
 /**
  * Live-wired character sheet rail, reading from the character / combat contexts.
@@ -30,6 +35,7 @@ export const RightSheetLive: React.FC<{
   // Synchronous twin of `castingSpellId`: a second click can land before React re-renders the
   // disabled button, and the state alone would let it through.
   const castInFlightRef = useRef(false);
+  const { cast: storeCast } = useSheetCastProgress();
 
   useEffect(() => {
     setPreparedOverrides({});
@@ -51,6 +57,15 @@ export const RightSheetLive: React.FC<{
       },
     };
   }, [preparedOverrides, vm.character]);
+
+  // A reopened sheet (or the other mount of it) learns of a cast in flight from the store, not from
+  // this instance's own state, so its Cast buttons wait too.
+  const storeCastingSpellId =
+    storeCast && storeCast.phase !== 'done'
+      ? ([...sheet.spells.cantrips, ...sheet.spells.known].find(
+          (spell) => spell.name === storeCast.spellName,
+        )?.id ?? storeCast.spellName)
+      : undefined;
 
   const handleTogglePrepared = useCallback(
     async (spellId: string, isPrepared: boolean): Promise<void> => {
@@ -100,12 +115,19 @@ export const RightSheetLive: React.FC<{
       castInFlightRef.current = true;
       setCastingSpellId(spell.id);
       setSpellActionError(undefined);
+      // Another mount of the sheet is casting: its dock and signal are not this click's to take.
+      if (!beginSheetCast(spell.name)) {
+        castInFlightRef.current = false;
+        setCastingSpellId(undefined);
+        return;
+      }
       try {
         onCastStart?.();
         await handler(buildSpellCastMessage(spell), buildSpellCastContext(spell));
       } catch (error) {
         setSpellActionError(error instanceof Error ? error.message : 'Unable to cast spell.');
       } finally {
+        finishSheetCast();
         castInFlightRef.current = false;
         setCastingSpellId(undefined);
       }
@@ -119,7 +141,7 @@ export const RightSheetLive: React.FC<{
       sessionId={sessionId}
       isInCombat={isInCombat}
       pendingSpellId={pendingSpellId}
-      castingSpellId={castingSpellId}
+      castingSpellId={castingSpellId ?? storeCastingSpellId}
       spellActionError={spellActionError}
       onCastSpell={handleCastSpell}
       onTogglePrepared={handleTogglePrepared}

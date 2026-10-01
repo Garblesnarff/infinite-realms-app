@@ -1,9 +1,26 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  ENEMY_FAILS_SAVE,
+  FIGHT_ROSTER,
+  REEVES,
+  SCHOLAR,
+  spellAction,
+} from '../../../../../../shared/test-fixtures/engine-results';
 import { GameMainContent } from '../game-content/GameMainContent';
 import { RollTray } from '../game-content/roll-tray-slot';
+
+import { trackDmWait } from '@/services/ai/dm-wait';
+import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
+import {
+  beginSheetCast,
+  beginSheetCastCommit,
+  finishSheetCast,
+  reportSheetCastResult,
+  resetSheetCastProgress,
+} from '@/services/combat/sheet-cast-progress';
 
 const state = vi.hoisted(() => ({
   queueStatus: 'idle',
@@ -80,8 +97,14 @@ vi.mock('../overhaul/SceneHeader', () => ({
   ),
 }));
 vi.mock('../../chat/MessageList', () => ({
-  MessageList: ({ suppressEmptyState }: { suppressEmptyState: boolean }) => (
-    <div data-testid="message-list" data-suppress-empty={suppressEmptyState}>
+  MessageList: ({
+    suppressEmptyState,
+    containerRef,
+  }: {
+    suppressEmptyState: boolean;
+    containerRef?: React.RefObject<HTMLDivElement>;
+  }) => (
+    <div ref={containerRef} data-testid="message-list" data-suppress-empty={suppressEmptyState}>
       streamed DM narrative
       <div data-testid="dice-card">d20: 18</div>
       <button>Quick action</button>
@@ -173,6 +196,8 @@ const baseProps = {
   showSafetyInfo: false,
 };
 
+const handlerRef = { spellCastHandlerRef: { current: null } };
+
 describe('GameMainContent overhaul behavior contract', () => {
   beforeEach(() => {
     state.queueStatus = 'idle';
@@ -212,6 +237,77 @@ describe('GameMainContent overhaul behavior contract', () => {
     expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
     expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toHaveAttribute('data-suppress-empty', 'true');
+  });
+
+  // #2418: the pill read the message queue, which only covers the database write of the player's
+  // message. It must stay up for the whole wait for the DM, whatever the queue says.
+  it('keeps the "Dungeon Master is thinking" pill up for the whole DM call, not the queue write', async () => {
+    state.queueStatus = 'idle';
+    let answer!: () => void;
+    const call = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { rerender } = render(<GameMainContent {...baseProps} {...handlerRef} />);
+    expect(screen.queryByText('Dungeon Master is thinking...')).not.toBeInTheDocument();
+
+    act(() => {
+      void trackDmWait(call);
+    });
+    expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
+    // The queue write finishes long before the reply: the pill stays.
+    state.queueStatus = 'idle';
+    rerender(<GameMainContent {...baseProps} {...handlerRef} />);
+    expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
+
+    await act(async () => {
+      answer();
+      await call;
+    });
+    expect(screen.queryByText('Dungeon Master is thinking...')).not.toBeInTheDocument();
+  });
+
+  it('scrolls the feed to its newest card when a cast resolves (#2418)', () => {
+    render(<GameMainContent {...baseProps} {...handlerRef} />);
+    const feed = screen.getByTestId('message-list');
+    Object.defineProperty(feed, 'scrollHeight', { configurable: true, value: 900 });
+    feed.scrollTop = 0;
+
+    act(() => {
+      beginSheetCast('Acid Splash');
+      beginSheetCastCommit('Captain Sarah Reeves');
+      reportSheetCastResult(
+        formatCombatEngineParts(spellAction(SCHOLAR, REEVES), ENEMY_FAILS_SAVE, FIGHT_ROSTER)[0]
+          .card,
+      );
+      finishSheetCast();
+    });
+
+    expect(feed.scrollTop).toBe(900);
+    act(() => resetSheetCastProgress());
+  });
+
+  it('puts the pill away while a roll waits for the player, even with a DM call counted', async () => {
+    state.currentRoll = {
+      id: 'save-1',
+      status: 'pending',
+      requestType: 'saving_throw',
+      description: 'Wisdom saving throw',
+    };
+    let answer!: () => void;
+    const call = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    render(<GameMainContent {...baseProps} {...handlerRef} />);
+
+    act(() => {
+      void trackDmWait(call);
+    });
+    expect(screen.queryByText('Dungeon Master is thinking...')).not.toBeInTheDocument();
+
+    await act(async () => {
+      answer();
+      await call;
+    });
   });
 
   it('blocks input while a dice request is pending', () => {

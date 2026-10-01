@@ -1,8 +1,9 @@
 import type { CombatActionOrigin } from '@/services/combat/combat-action-origin';
 
 import logger from '@/lib/logger';
+import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
-import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
+import { askTargetSave } from '@/services/combat/sheet-cast-progress';
 
 interface HoldParticipant {
   id: string;
@@ -25,6 +26,49 @@ export const standingHostiles = <P extends HoldParticipant>(participants: readon
       !participant.isUnconscious &&
       (participant.currentHitPoints ?? 1) > 0,
   );
+
+/**
+ * The caster's save DC for the card's "Save DC 14" line, from the engine's own read-only proposal
+ * (it claims no action and spends no slot). The card is only a hint, so a refusal or a failed
+ * call leaves the DC off; the engine still resolves the cast, or refuses it, as before. Only the
+ * sheet's Cast asks: a save spell the DM declares shows its card with no DC, as before.
+ */
+const DC_PROPOSAL_TIMEOUT_MS = 2000;
+
+async function proposedSaveDc(
+  encounterId: string | undefined,
+  intent: {
+    actorId: string;
+    targetId: string;
+    spellId: string;
+    spellName: string;
+    slotLevel?: number;
+  },
+): Promise<number | undefined> {
+  if (!encounterId) return undefined;
+  try {
+    // A hint must not hold the card: past this the card shows without the DC.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('DC proposal timed out')), DC_PROPOSAL_TIMEOUT_MS);
+    });
+    const proposal = await Promise.race([
+      proposeAuthoritativeSpell(encounterId, {
+        type: 'spell',
+        actorId: intent.actorId,
+        targetIds: [intent.targetId],
+        spellId: intent.spellId,
+        spellName: intent.spellName,
+        ...(intent.slotLevel ? { slotLevel: intent.slotLevel } : {}),
+      }),
+      timeout,
+    ]).finally(() => clearTimeout(timer));
+    return Number.isFinite(proposal.saveDC) ? proposal.saveDC : undefined;
+  } catch (error) {
+    logger.info('[SpellSave] no DC for the card; the engine proposal was refused or failed', error);
+    return undefined;
+  }
+}
 
 let held: { spellName: string; targetLabel: string } | null = null;
 
@@ -54,10 +98,11 @@ export async function holdSaveCardBeforeDm(params: {
   origin: CombatActionOrigin | null;
   spellId: string | undefined;
   activeEncounter: {
+    id?: string;
     currentTurnParticipantId?: string | null;
     participants?: readonly HoldParticipant[];
   } | null;
-}): Promise<void> {
+}): Promise<'cancelled' | void> {
   clearHeldSaveCard();
   const { origin, spellId, activeEncounter } = params;
   const participants = activeEncounter?.participants ?? [];
@@ -79,13 +124,25 @@ export async function holdSaveCardBeforeDm(params: {
   // The label askPlayerForSpellCast gives the same creature, so the declared cast can tell the
   // card was already shown. The card renders the display name (#2343 B4).
   const targetLabel = targets[0].name ?? targets[0].id;
+  const saveDc = await proposedSaveDc(activeEncounter?.id, {
+    actorId: caster.id,
+    targetId: targets[0].id,
+    spellId: spell.id,
+    spellName: spell.name,
+  });
   try {
-    await requestSpellTargetSave({
-      actorLabel: caster.name ?? 'You',
-      targetLabel,
-      spellName: spell.name,
-      saveAbility: spell.saveAbility ?? 'DEX',
-    });
+    const answer = await askTargetSave(
+      {
+        actorLabel: caster.name ?? 'You',
+        targetLabel,
+        spellName: spell.name,
+        saveAbility: spell.saveAbility ?? 'DEX',
+        ...(saveDc !== undefined ? { saveDc } : {}),
+      },
+      true,
+    );
+    // Nothing was sent to the DM and the engine has spent nothing: the turn ends here.
+    if (answer === 'cancel') return 'cancelled';
   } catch (error) {
     logger.warn('[SpellSave] target-save card failed; the DM turn continues', error);
     return;

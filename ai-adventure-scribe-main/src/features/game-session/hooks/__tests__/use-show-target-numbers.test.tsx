@@ -21,6 +21,11 @@ describe('Show target numbers (#2417)', () => {
     ['Medium', true],
     ['hard', false],
     ['Hard', false],
+    ['deadly', false],
+    ['Deadly', false],
+    ['medium-hard', true],
+    ['Medium Challenge', true],
+    ['easy', true],
     [undefined, true],
   ])('starts %s as %s', (difficulty, expected) => {
     campaign.difficulty = difficulty;

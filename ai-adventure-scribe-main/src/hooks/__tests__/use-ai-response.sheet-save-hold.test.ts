@@ -16,6 +16,12 @@ import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-s
 import { useCombat } from '@/contexts/CombatContext';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { AIService } from '@/services/ai-service';
+import {
+  beginSheetCast,
+  cancelSheetCast,
+  finishSheetCast,
+  resetSheetCastProgress,
+} from '@/services/combat/sheet-cast-progress';
 import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-bridge';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -41,6 +47,20 @@ vi.mock('@/services/user-data-api', () => ({
   },
 }));
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));
+// The engine's read-only answer to "what would this spell be?": `proposeSpellAttack`'s output.
+vi.mock('@/services/combat/combat-attack-proposal', () => ({
+  proposeAuthoritativeSpell: vi.fn().mockResolvedValue({
+    movementOnly: false,
+    spellId: 'acid-splash',
+    spellName: 'Acid Splash',
+    kind: 'save',
+    attackBonus: 6,
+    saveDC: 14,
+    targetAc: 12,
+    advantage: false,
+    disadvantage: false,
+  }),
+}));
 vi.mock('@/hooks/ai/dm-actions-handler', () => ({ handleDmActionsAndTransitions: vi.fn() }));
 vi.mock('@/services/memory-manager', () => ({
   MemoryManager: { getRelevantMemories: vi.fn().mockResolvedValue([]) },
@@ -141,6 +161,7 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSheetCastProgress();
     order = [];
     presented = [];
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
@@ -182,6 +203,7 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
     expect(presented[0]).toMatchObject({
       targetLabel: 'Captain Sarah Reeves',
       spellName: 'Acid Splash',
+      saveDc: 14,
     });
     expect(AIService.chatWithDM).not.toHaveBeenCalled();
     expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
@@ -201,5 +223,109 @@ describe('useAIResponse: the sheet save card comes before the DM (#2392)', () =>
 
     expect(presented).toEqual([]);
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(3);
+  });
+
+  describe('Cancel cast (#2418)', () => {
+    const CANCELLED = 'Cast cancelled. No spell slot was used.';
+
+    it('on the card: the DM is never called, nothing reaches the engine, and one notice says so', async () => {
+      inFight(sarah);
+      beginSheetCast('Acid Splash');
+
+      const turn = play(sheetCast('acid-splash', 'Acid Splash'));
+      await cardIsOpen();
+      cancelSheetCast();
+      const reply = await turn;
+
+      expect(reply).toMatchObject({
+        text: '',
+        sender: 'dm',
+        localNotice: CANCELLED,
+        localNotices: [{ text: CANCELLED, persist: true }],
+      });
+      expect(AIService.chatWithDM).not.toHaveBeenCalled();
+      expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
+    });
+
+    it('while the DM reads: the request carries the cast’s signal, and aborting it ends the turn with the notice', async () => {
+      inFight(sarah, imp);
+      beginSheetCast('Acid Splash');
+      vi.mocked(AIService.chatWithDM).mockImplementation(
+        ((params: any) =>
+          new Promise((_resolve, reject) => {
+            params.signal.addEventListener('abort', () =>
+              reject(new Error('Failed to get DM response - AI service unavailable')),
+            );
+          })) as any,
+      );
+
+      const turn = play(sheetCast('acid-splash', 'Acid Splash'));
+      await vi.waitFor(() => expect(AIService.chatWithDM).toHaveBeenCalledTimes(1));
+      expect((vi.mocked(AIService.chatWithDM).mock.calls[0][0] as any).signal).toBeInstanceOf(
+        AbortSignal,
+      );
+      cancelSheetCast();
+      const reply = await turn;
+
+      expect(reply).toMatchObject({ text: '', localNotice: CANCELLED });
+      expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
+      finishSheetCast();
+    });
+
+    it('cancelled before the DM call (queued behind another turn): the DM is never called', async () => {
+      inFight(sarah, imp);
+      beginSheetCast('Acid Splash');
+      cancelSheetCast();
+
+      const reply = await play(sheetCast('acid-splash', 'Acid Splash'));
+
+      expect(reply).toMatchObject({ text: '', localNotice: CANCELLED });
+      expect(AIService.chatWithDM).not.toHaveBeenCalled();
+      finishSheetCast();
+    });
+
+    it('a reply that arrives after the cancel is dropped, not shown', async () => {
+      inFight(sarah, imp);
+      beginSheetCast('Acid Splash');
+      vi.mocked(AIService.chatWithDM).mockImplementation((async () => {
+        cancelSheetCast();
+        return { text: 'The acid hisses.', roll_requests: [] };
+      }) as any);
+
+      const reply = await play(sheetCast('acid-splash', 'Acid Splash'));
+
+      expect(reply).toMatchObject({ text: '', localNotice: CANCELLED });
+      expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
+      finishSheetCast();
+    });
+
+    it('asks the server not to keep prose for a cast that can still be cancelled', async () => {
+      inFight(sarah, imp);
+      beginSheetCast('Acid Splash');
+      await play(sheetCast('acid-splash', 'Acid Splash'));
+      finishSheetCast();
+
+      const call = vi.mocked(AIService.chatWithDM).mock.calls[0][0] as any;
+      // A dmReply is only sent when the caller reserved a message id.
+      if (call.dmReply) expect(call.dmReply.inCombat).toBe(true);
+    });
+
+    it('a DM failure that is not a cancel still fails the turn', async () => {
+      inFight(sarah, imp);
+      beginSheetCast('Acid Splash');
+      vi.mocked(AIService.chatWithDM).mockRejectedValue(new Error('AI service unavailable'));
+
+      await expect(play(sheetCast('acid-splash', 'Acid Splash'))).rejects.toThrow(
+        'AI service unavailable',
+      );
+      finishSheetCast();
+    });
+
+    it('a typed cast carries no signal: there is no cast on the sheet to cancel', async () => {
+      inFight(sarah);
+      await play({ ...sheetCast('acid-splash', 'Acid Splash'), context: { intent: 'query' } });
+
+      expect((vi.mocked(AIService.chatWithDM).mock.calls[0][0] as any).signal).toBeUndefined();
+    });
   });
 });

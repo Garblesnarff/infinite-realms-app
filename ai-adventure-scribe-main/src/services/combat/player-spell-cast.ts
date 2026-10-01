@@ -4,8 +4,8 @@ import logger from '@/lib/logger';
 import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import { askTargetSave, withSheetCastRoll } from '@/services/combat/sheet-cast-progress';
 import { consumeHeldSaveCard } from '@/services/combat/sheet-cast-save-hold';
-import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 
 export interface PlayerSpellCastParams {
   /** When present, the popup's spell, bonus, and AC come from the engine's proposal (#2233). */
@@ -13,12 +13,16 @@ export interface PlayerSpellCastParams {
   action: StructuredCombatAction;
   actorLabel: string;
   participants?: Array<{ id: string; name?: string }>;
+  /** The cast was pressed on the sheet, so the casting dock follows it (#2418). */
+  fromSheetCast?: boolean;
 }
 
 export interface PlayerSpellCastResult {
   d20?: number;
   autoRolled: boolean;
   movementOnly: boolean;
+  /** The player cancelled on the target-saves card: nothing is sent to the engine. */
+  cancelled?: boolean;
 }
 
 const labelFor = (
@@ -47,7 +51,7 @@ const reasonForLog = (error: unknown): string =>
 export async function askPlayerForSpellCast(
   params: PlayerSpellCastParams,
 ): Promise<PlayerSpellCastResult> {
-  const { encounterId, action, actorLabel, participants } = params;
+  const { encounterId, action, actorLabel, participants, fromSheetCast = false } = params;
   const spell = resolvePlayerCombatSpell(action.spell_id, action.spell_id);
   const targetId = action.target_ids[0];
   let targetLabel = targetId ? labelFor(targetId, participants) : 'the target';
@@ -60,12 +64,16 @@ export async function askPlayerForSpellCast(
     // The sheet's Cast already showed this card before the DM was called (#2392).
     if (!consumeHeldSaveCard(spell.name, targetLabel)) {
       try {
-        await requestSpellTargetSave({
-          actorLabel,
-          targetLabel,
-          spellName: spell.name,
-          saveAbility: spell.saveAbility ?? 'DEX',
-        });
+        const answer = await askTargetSave(
+          {
+            actorLabel,
+            targetLabel,
+            spellName: spell.name,
+            saveAbility: spell.saveAbility ?? 'DEX',
+          },
+          fromSheetCast,
+        );
+        if (answer === 'cancel') return { autoRolled: false, movementOnly: false, cancelled: true };
       } catch (error) {
         logger.warn('[SpellSave] target-save card failed; submitting the spell anyway', error);
       }
@@ -122,12 +130,14 @@ export async function askPlayerForSpellCast(
   }
 
   try {
-    const outcome = await requestPlayerAttackRoll({
-      kind: 'spell-attack',
-      actorLabel,
-      targetLabel,
-      ...rollSpec,
-    });
+    const outcome = await withSheetCastRoll(fromSheetCast, () =>
+      requestPlayerAttackRoll({
+        kind: 'spell-attack',
+        actorLabel,
+        targetLabel,
+        ...rollSpec,
+      }),
+    );
     if (outcome.d20 === null) return { autoRolled: true, movementOnly: false };
     return { d20: outcome.d20, autoRolled: false, movementOnly: false };
   } catch (error) {

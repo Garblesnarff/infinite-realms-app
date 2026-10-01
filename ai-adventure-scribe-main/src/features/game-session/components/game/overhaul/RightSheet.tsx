@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { CastingDock } from './CastingDock';
+
 import type { CharacterSheetVM, SpellVM } from './types';
 
 import { Button } from '@/components/ui/button';
@@ -114,14 +116,18 @@ const SpellEntry: React.FC<{
             </Button>
           )}
           {onCastSpell && (
+            // aria-disabled, not disabled (#2418): the button stays in the tab order and a screen
+            // reader says why nothing happens. The click is ignored while a cast is in flight.
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-6 border-infinite-gold/30 px-1.5 text-[10px] text-infinite-gold"
+              className="min-h-11 min-w-16 border-infinite-gold/30 px-3 text-sm text-infinite-gold aria-disabled:opacity-50"
               aria-label={`Cast ${spell.name}`}
-              disabled={castingSpellId !== undefined}
-              onClick={() => void onCastSpell(spell)}
+              aria-disabled={castingSpellId !== undefined ? true : undefined}
+              onClick={() => {
+                if (castingSpellId === undefined) void onCastSpell(spell);
+              }}
             >
               {castingSpellId === spell.id ? 'Casting…' : 'Cast'}
             </Button>
@@ -311,7 +317,8 @@ export const RightSheet: React.FC<{
   onCastSpell,
   onTogglePrepared,
 }) => (
-  <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
+  <div tabIndex={-1} className="flex h-full flex-col gap-3 overflow-y-auto pr-1 outline-none">
+    <CastingDock />
     <SheetHeader c={c} />
     {sessionId ? <CompanionPartyStrip sessionId={sessionId} /> : null}
     <CoreStats c={c} />

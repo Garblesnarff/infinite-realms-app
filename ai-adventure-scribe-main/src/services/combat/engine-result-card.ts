@@ -258,7 +258,8 @@ export function isEngineResultCard(value: unknown): value is EngineResultCard {
       (typeof card.math === 'object' &&
         card.math !== null &&
         ((card.math as { kind?: unknown }).kind !== 'attack' ||
-          typeof (card.math as { ac?: unknown }).ac === 'object')))
+          ((card.math as { ac?: unknown }).ac !== null &&
+            typeof (card.math as { ac?: unknown }).ac === 'object'))))
   );
 }
 

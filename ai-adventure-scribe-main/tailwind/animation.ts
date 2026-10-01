@@ -18,4 +18,5 @@ export const animation = {
   sparkle: 'sparkle 1s cubic-bezier(0.4, 0, 0.2, 1)',
   celebration: 'celebration 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
   'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
+  'cast-indeterminate': 'cast-indeterminate 1.6s ease-in-out infinite',
 };

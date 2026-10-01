@@ -24,7 +24,7 @@ const BADGE_TONES: Record<EngineBadgeTone, string> = {
   grey: 'bg-[#475569] text-white',
 };
 
-const EngineBadgeView: React.FC<{ badge: EngineBadge }> = ({ badge }) => {
+export const EngineBadgeView: React.FC<{ badge: EngineBadge }> = ({ badge }) => {
   const Icon = BADGE_ICONS[badge.icon];
   return (
     <span

@@ -333,6 +333,8 @@ describe('saved cards (#2417)', () => {
     expect(isEngineResultCard(card)).toBe(true);
     expect(isEngineResultCard({ ...card, math: { kind: 'attack', d20: 1 } })).toBe(false);
     expect(isEngineResultCard({ ...card, math: null })).toBe(false);
+    // `typeof null` is 'object': a saved attack whose `ac` is null would throw when the math line is drawn.
+    expect(isEngineResultCard({ ...card, math: { ...card.math, ac: null } })).toBe(false);
     expect(isEngineResultCard({ kind: 'attack', side: 'party', line: 'x' })).toBe(false);
   });
 });

@@ -305,6 +305,8 @@ export interface GenerateTextParams {
   provider?: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
   onStream?: (chunk: string) => void;
+  /** Aborts the request; the caller treats the resulting AbortError as a cancel. */
+  signal?: AbortSignal;
   requestType?: 'user' | 'system';
   onResponseMetadata?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
   /**
@@ -502,6 +504,7 @@ class LlmApiClient {
       this.fetchWithAuth(params.onStream ? '/v1/llm/generate/stream' : '/v1/llm/generate', {
         method: 'POST',
         retryBudgetMs: BACKGROUND_LLM_RETRY_BUDGET_MS,
+        ...(params.signal ? { signal: params.signal } : {}),
         body: JSON.stringify({
           prompt: params.prompt,
           player_input: params.player_input,
