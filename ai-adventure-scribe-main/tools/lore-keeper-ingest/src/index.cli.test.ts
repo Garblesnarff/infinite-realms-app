@@ -51,7 +51,7 @@ afterEach(() => {
     const repoPath = createdRepos.pop();
     if (repoPath) rmSync(repoPath, { recursive: true, force: true });
   }
-  process.exitCode = undefined;
+  process.exitCode = 0;
 });
 
 test('reingest receives the --repo-path and --campaign values the operator passes', async () => {

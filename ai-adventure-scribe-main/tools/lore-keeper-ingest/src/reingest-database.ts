@@ -13,7 +13,7 @@ import {
 } from './reingest.js';
 import { embeddingProvenance } from '../../../shared/embedding-limits.js';
 
-import type { ExistingCampaignChunk } from './reingest.js';
+import type { ExistingCampaignChunk, StaleRow } from './reingest.js';
 import type { CampaignChunk, CampaignRule, ParsedCampaign } from './types.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -102,6 +102,18 @@ async function deleteRows(client: SupabaseClient, ids: Set<string>): Promise<voi
     const { error } = await client.from('campaign_chunks').delete().in('id', batch);
     if (error) throw new Error(`Failed to remove stale campaign chunks: ${error.message}`);
   }
+}
+
+/**
+ * Delete the stale rows `--remove-stale` is allowed to delete. A row with an
+ * image_url is never deleted, whatever the caller passes.
+ */
+export async function removeStaleRows(client: SupabaseClient, rows: StaleRow[]): Promise<number> {
+  const ids = new Set(
+    rows.filter((row) => row.removedByRemoveStale && !row.hasImageUrl).map((row) => row.id),
+  );
+  await deleteRows(client, ids);
+  return ids.size;
 }
 
 export async function readExistingCampaignChunks(

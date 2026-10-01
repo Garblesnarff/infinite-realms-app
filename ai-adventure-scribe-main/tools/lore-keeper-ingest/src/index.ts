@@ -48,12 +48,14 @@ import {
 import {
   readExistingCampaignChunks,
   reingestCampaignChunks,
+  removeStaleRows,
   replaceCampaignRules,
   upsertStarterCampaignPreservingState,
 } from './reingest-database.js';
-import { isReingestableEntityName, summarizeReingestDiff } from './reingest.js';
+import { isReingestableEntityName, listStaleRows, summarizeReingestDiff } from './reingest.js';
 import { formatTableCounts } from './table-counts.js';
 
+import type { StaleRow } from './reingest.js';
 import type { TableCount } from './table-counts.js';
 import type {
   CampaignChunk,
@@ -152,6 +154,11 @@ export function buildProgram(): Command {
     .option('--apply', 'Write the safe re-ingestion changes (dry-run by default)', false)
     .option('-v, --verbose', 'Show detailed output', false)
     .option('-s, --skip-embeddings', 'Skip embedding generation when applying', false)
+    .option(
+      '--remove-stale',
+      'With --apply, delete existing rows the chunk set no longer matches, except rows with an image_url',
+      false,
+    )
     .option('-p, --repo-path <path>', 'Path to the campaign repo', DEFAULT_CAMPAIGN_REPO_PATH)
     .action(reingestCommand);
 
@@ -341,7 +348,17 @@ interface ReingestCommandOptions {
   apply: boolean;
   verbose: boolean;
   skipEmbeddings: boolean;
+  removeStale: boolean;
   repoPath: string;
+}
+
+function describeStaleRow(row: StaleRow): string {
+  let action = 'apply: leave; apply with --remove-stale: delete';
+  if (row.removedByApply) action = 'apply: delete (section marker)';
+  else if (row.refusedByApply)
+    action = 'apply: ERROR, refuses to delete an asset-linked section marker';
+  else if (row.hasImageUrl) action = 'apply: leave (has image_url, never deleted)';
+  return `    stale ${row.id} chunk_type=${row.chunkType} entity_name=${JSON.stringify(row.entityName)} has_image_url=${row.hasImageUrl} -> ${action}`;
 }
 
 async function reingestCommand(options: ReingestCommandOptions): Promise<void> {
@@ -433,16 +450,20 @@ async function runReingestCommand(options: ReingestCommandOptions): Promise<void
   console.log(`Repository: ${repoPath}`);
   console.log(`Campaigns: ${campaigns.length}\n`);
 
+  const staleByCampaign = new Map<string, StaleRow[]>();
   for (const { campaign, chunks, rules } of campaigns) {
     const existingRows = await readExistingCampaignChunks(client, campaign.id);
     const diff = summarizeReingestDiff(chunks, existingRows);
+    const staleRows = listStaleRows(chunks, existingRows);
+    staleByCampaign.set(campaign.id, staleRows);
     console.log(
       `${campaign.slug}: entities added=${diff.entitiesAdded}, renamed=${diff.entitiesRenamed}, unchanged=${diff.entitiesUnchanged}, image_url rows preserved=${diff.imageUrlRowsPreserved}`,
     );
-    if (options.verbose) {
+    if (options.verbose || !options.apply) {
       console.log(
-        `  chunks=${chunks.length}, rules=${rules.length}, existing_rows=${existingRows.length}`,
+        `  chunks=${chunks.length}, rules=${rules.length}, existing_rows=${existingRows.length}, stale_rows=${staleRows.length}`,
       );
+      for (const row of staleRows) console.log(describeStaleRow(row));
     }
   }
 
@@ -450,6 +471,9 @@ async function runReingestCommand(options: ReingestCommandOptions): Promise<void
     console.log(
       '\nDRY RUN: no database changes made. Pass --apply to write safe re-ingestion changes.',
     );
+    if (options.removeStale) {
+      console.log('--remove-stale only acts together with --apply; nothing was removed.');
+    }
     return;
   }
 
@@ -490,6 +514,11 @@ async function runReingestCommand(options: ReingestCommandOptions): Promise<void
     console.log(
       `${campaign.slug}: applied rows=${result.rowsWritten}, inserted=${result.rowsInserted}, updated=${result.rowsUpdated}, duplicate_rows_removed=${result.duplicateRowsRemoved}, section_marker_rows_removed=${result.sectionMarkerRowsRemoved}`,
     );
+
+    if (options.removeStale) {
+      const removed = await removeStaleRows(client, staleByCampaign.get(campaign.id) || []);
+      console.log(`${campaign.slug}: stale_rows_removed=${removed}`);
+    }
   }
 }
 

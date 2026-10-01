@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 
 import { test } from 'bun:test';
 
-import { reingestCampaignChunks } from './reingest-database.js';
+import { reingestCampaignChunks, removeStaleRows } from './reingest-database.js';
 import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from '../../../shared/embedding-limits.js';
 
+import type { StaleRow } from './reingest.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type FakeCalls = {
@@ -180,4 +181,26 @@ test('leaves the existing embedding stamp alone when embeddings are skipped', as
     embeddingModel: 'text-embedding-004',
     embeddingDimensions: 768,
   });
+});
+
+test('removeStaleRows deletes the rows flagged for removal and never one with an image_url', async () => {
+  const { client, calls } = fakeClient([]);
+  const stale = (id: string, hasImageUrl: boolean, removedByRemoveStale: boolean): StaleRow => ({
+    id,
+    chunkType: 'location',
+    entityName: id,
+    hasImageUrl,
+    removedByApply: false,
+    refusedByApply: false,
+    removedByRemoveStale,
+  });
+
+  const removed = await removeStaleRows(client, [
+    stale('plain', false, true),
+    stale('with-image', true, true),
+    stale('with-image-unflagged', true, false),
+  ]);
+
+  assert.equal(removed, 1);
+  assert.deepEqual(calls.deleted, ['plain']);
 });

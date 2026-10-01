@@ -198,6 +198,17 @@ jobs:
         if: ${{ !cancelled() && steps.install-server.outcome == 'success' }}
         run: bash scripts/server-typecheck-gate.sh
         working-directory: ai-adventure-scribe-main
+      # lore-keeper-ingest has its own package-lock and node_modules, so the
+      # workspace installs above do not provide its dependencies. Hosted CI ran
+      # none of its tests before (#2419): #2368 and #2407 relied on local runs.
+      - id: install-lore-keeper-ingest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm ci
+        working-directory: ai-adventure-scribe-main/tools/lore-keeper-ingest
+      - name: Lore keeper ingest tests
+        if: ${{ !cancelled() && steps.install-lore-keeper-ingest.outcome == 'success' }}
+        run: bun test tools/lore-keeper-ingest
+        working-directory: ai-adventure-scribe-main
 
   frontend:
     needs: changes

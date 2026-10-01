@@ -176,6 +176,46 @@ export function summarizeReingestDiff(
   return summary;
 }
 
+export interface StaleRow {
+  id: string;
+  chunkType: string;
+  entityName: string | null;
+  hasImageUrl: boolean;
+  /** Plain `--apply` deletes it: an unused section marker (apply throws on one with an image_url). */
+  removedByApply: boolean;
+  /** Plain `--apply` throws on it: an unused section marker that has an image_url. */
+  refusedByApply: boolean;
+  /** `--apply --remove-stale` deletes it: no image_url, and plain apply leaves it. */
+  removedByRemoveStale: boolean;
+}
+
+/**
+ * List the existing rows that no parsed chunk matches. Uses the same identity
+ * as the apply path, so a row listed here is one apply never updates. Read-only.
+ */
+export function listStaleRows(
+  chunks: CampaignChunk[],
+  existingRows: ExistingCampaignChunk[],
+): StaleRow[] {
+  const parsedIdentities = new Set(dedupeCampaignChunks(chunks).map(chunkIdentity));
+
+  return existingRows
+    .filter((row) => !parsedIdentities.has(existingChunkIdentity(row)))
+    .map((row) => {
+      const imageLinked = hasImageUrl(row.metadata);
+      const sectionMarker = row.entity_name != null && isSectionMarkerName(row.entity_name);
+      return {
+        id: row.id,
+        chunkType: row.chunk_type,
+        entityName: row.entity_name,
+        hasImageUrl: imageLinked,
+        removedByApply: sectionMarker && !imageLinked,
+        refusedByApply: sectionMarker && imageLinked,
+        removedByRemoveStale: !sectionMarker && !imageLinked,
+      };
+    });
+}
+
 export function isReingestableEntityName(entityName: string | null | undefined): boolean {
   return entityName == null || !isSectionMarkerName(entityName);
 }
