@@ -47,6 +47,10 @@ import {
   inventoryItems,
   starterCampaigns,
 } from '../../../../db/schema/index';
+import {
+  displayNameFromRoster,
+  rosterEntryForParticipant,
+} from '../../../../shared/engine-display-name';
 
 type LogPayload = Record<string, unknown>;
 
@@ -99,11 +103,13 @@ if (hasRealDb) assertSafeMonsterAttackDatabase(realDbUrl);
 const emitted: LogPayload[] = [];
 const profileLogs: LogPayload[] = [];
 const fallbackLogs: LogPayload[] = [];
+const npcFallbackLogs: LogPayload[] = [];
 
 const record = (payload: LogPayload): void => {
   if (payload.msg === 'COMBAT_ATTACK_RESOLVED') emitted.push(payload);
   if (payload.msg === 'COMBAT_MONSTER_ATTACK_PROFILE') profileLogs.push(payload);
   if (payload.msg === 'COMBAT_MONSTER_ATTACK_FALLBACK') fallbackLogs.push(payload);
+  if (payload.msg === 'NPC_STAT_FALLBACK') npcFallbackLogs.push(payload);
 };
 
 const info = mock(record);
@@ -132,6 +138,9 @@ const { CombatEncounterService } = await importWithRealDb(
 );
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
+);
+const { deriveCombatEntryFirstAction } = await importWithRealDb(
+  () => import('../combat/combat-entry-first-action.js'),
 );
 const { clearCampaignMonsterCache } = await importWithRealDb(
   () => import('../combat/campaign-monster-resolution.js'),
@@ -210,6 +219,41 @@ const AUTHORED_ATTACKER_CHUNK = [
 ].join('\n');
 
 /**
+ * Captain Sarah Reeves as the lore-keeper chunker emits her (npc_tier1, entity name without the
+ * list number), with the block content PR infinite-realms-clean #18 adds under the NPC entry.
+ * Traced with the real `chunkCampaignFiles` on her bible entry; see the PR description.
+ */
+const REEVES_CHUNK = [
+  '**2. Captain Sarah Reeves** (Human Fighter) - Stoic, scarred, pragmatic.',
+  '*   **Voice:** Low, raspy, clipped military cadence. No contractions.',
+  '*   **Goal:** Extract as many living people as possible.',
+  '*   **Secret:** She is already infected by the Spores; her left arm is numb.',
+  '*   *HP:* 45, *AC:* 15 (chain shirt).',
+  '*   *Attack:* +3 to hit, 1d8 slashing (longsword)',
+].join('\n');
+
+/** An NPC bio with no block, today's norm for every bible NPC. */
+const QUILL_CHUNK = [
+  '**Quill** (Human Scribe) - Nervous, ink-stained.',
+  '*   **Voice:** Whispers.',
+  '*   **Goal:** Finish the ledger.',
+  '*   **Secret:** Forged the last entry.',
+].join('\n');
+
+/** The Academy creature and the NPC bio that shares its normalized name (leading "The"). */
+const FLAVOR_ELEMENTAL_CHUNK = [
+  '**Flavor-Elemental (Corrupted)**',
+  '',
+  '*HP:* 80, *AC:* 14.',
+  '*Attack:* +3 to hit, 2d8+2 psychic',
+].join('\n');
+const FLAVOR_ELEMENTAL_NPC_BIO = [
+  '**The Flavor-Elemental (Corrupted)** (Elemental) - Discordant.',
+  '*   **Voice:** A cacophony of tastes.',
+  '*   **Goal:** Spread corruption.',
+].join('\n');
+
+/**
  * Four player characters, deliberately.
  *
  * This suite asserts that a creature swings the numbers ITS STAT BLOCK PRINTS, and every
@@ -239,6 +283,10 @@ describeWithDb('monsters attack with their own numbers', () => {
     glutenGolem: 'Gluten Golem',
     authored: 'Authored Attacker',
     improvised: 'The Doorkeeper',
+    reeves: 'Captain Sarah Reeves',
+    quill: 'Quill',
+    shardA: 'Corrupted Shard A',
+    shardB: 'Corrupted Shard B',
   };
 
   beforeAll(async () => {
@@ -305,6 +353,31 @@ describeWithDb('monsters attack with their own numbers', () => {
         entityName: NAMES.authored,
         content: AUTHORED_ATTACKER_CHUNK,
       },
+      {
+        campaignId: starterCampaignId,
+        chunkType: 'npc_tier1' as const,
+        entityName: 'Captain Sarah Reeves',
+        content: REEVES_CHUNK,
+      },
+      {
+        campaignId: starterCampaignId,
+        chunkType: 'npc_tier1' as const,
+        entityName: NAMES.quill,
+        content: QUILL_CHUNK,
+      },
+      // Inserted before the monster on purpose: the bestiary entry must win either way.
+      {
+        campaignId: starterCampaignId,
+        chunkType: 'npc_tier1' as const,
+        entityName: 'The Flavor-Elemental (Corrupted)',
+        content: FLAVOR_ELEMENTAL_NPC_BIO,
+      },
+      {
+        campaignId: starterCampaignId,
+        chunkType: 'monster' as const,
+        entityName: 'Flavor-Elemental (Corrupted)',
+        content: FLAVOR_ELEMENTAL_CHUNK,
+      },
     ]);
     // The index is memoized per campaign; a stale entry from another suite would resolve
     // against a bible this test did not write.
@@ -345,6 +418,22 @@ describeWithDb('monsters attack with their own numbers', () => {
         },
         // No monsterId and no bible entry: DM improvisation that resolves nowhere.
         { encounterId: '', name: NAMES.improvised, initiativeModifier: 0 },
+        // Name-only bible NPC with an authored block, and one whose bio has none.
+        { encounterId: '', name: NAMES.reeves, initiativeModifier: 0 },
+        { encounterId: '', name: NAMES.quill, initiativeModifier: 0 },
+        // One bestiary creature seated twice under DM-invented labels.
+        {
+          encounterId: '',
+          name: NAMES.shardA,
+          monsterId: 'flavor_elemental_corrupted',
+          initiativeModifier: 0,
+        },
+        {
+          encounterId: '',
+          name: NAMES.shardB,
+          monsterId: 'flavor_elemental_corrupted',
+          initiativeModifier: 0,
+        },
       ] as Parameters<typeof CombatEncounterService.startCombat>[1],
       false,
       userId,
@@ -495,18 +584,170 @@ describeWithDb('monsters attack with their own numbers', () => {
     expect(line.attackBonus).toBe(7);
   });
 
-  test('a creature that resolves nowhere falls back to generic AND says so', async () => {
-    expect(await storedProfile(ids.improvised)).toBeNull();
+  test('an NPC that resolves nowhere fights on an HP-derived attack, and the fallback is logged once', async () => {
+    const profile = await storedProfile(ids.improvised);
+    // No HP anywhere: the documented default (20 HP), house band CR 1/8 => +3, 1d6.
+    expect(profile?.source).toBe('derived');
+    expect(profile?.derivation).toMatchObject({ fromMaxHp: 20, challengeRating: '1/8' });
+    expect((profile?.attacks as LogPayload[])[0]).toMatchObject({
+      attackBonus: 3,
+      damageDice: '1d6',
+    });
 
     const line = await attack(ids.improvised, heroId);
-    expect(line.profileSource).toBe('generic');
-    expect(line.weapon).toBe('Unarmed Strike');
-    // Correct behaviour, but it must be visible: an unresolved creature swinging 1d1 is
-    // indistinguishable in play from one that simply rolled badly.
-    const fallback = fallbackLogs.find((entry) => entry.combatantName === NAMES.improvised);
-    expect(fallback).toBeDefined();
-    expect(fallback!.hasStoredProfile).toBe(false);
-    expect(String(fallback!.consequence)).toContain('Unarmed Strike');
+    expect(line.profileSource).toBe('derived');
+    expect(line.attackBonus).toBe(3);
+
+    // One line for the whole encounter, not one per improvised seat; it names both NPCs with
+    // no block and neither the authored NPC nor any bestiary creature.
+    expect(npcFallbackLogs).toHaveLength(1);
+    expect(npcFallbackLogs[0]).toMatchObject({
+      encounterId,
+      reason: 'no_authored_block_default_hp',
+    });
+    const seats = npcFallbackLogs[0]!.seats as LogPayload[];
+    expect(seats.map((seat) => seat.npcName).sort()).toEqual(
+      [NAMES.improvised, NAMES.quill].sort(),
+    );
+    // The old generic path (1d1 Unarmed Strike) is gone for these seats.
+    expect(fallbackLogs.find((entry) => entry.combatantName === NAMES.improvised)).toBeUndefined();
+  });
+
+  test('a bible NPC with an authored block fights on it, and never reaches the fallback', async () => {
+    const profile = await storedProfile(ids.reeves);
+    expect(profile?.source).toBe('authored');
+    expect((profile?.attacks as LogPayload[])[0]).toMatchObject({
+      attackBonus: 3,
+      damageDice: '1d8',
+      damageBonus: 0,
+      damageType: 'slashing',
+    });
+    const [seat] = await db
+      .select({ maxHp: combatParticipants.maxHp, armorClass: combatParticipants.armorClass })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, ids.reeves));
+    expect(seat).toEqual({ maxHp: 45, armorClass: 15 });
+
+    const line = await attack(ids.reeves, heroId);
+    expect(line.profileSource).toBe('authored');
+    expect(line.attackBonus).toBe(3);
+    const seats = npcFallbackLogs[0]!.seats as LogPayload[];
+    expect(seats.map((entry) => entry.npcName)).not.toContain(NAMES.reeves);
+  });
+
+  test('an NPC bio never shadows the bestiary creature of the same normalized name', async () => {
+    const profile = await storedProfile(ids.shardA);
+    expect(profile?.source).toBe('authored');
+    expect((profile?.attacks as LogPayload[])[0]).toMatchObject({
+      attackBonus: 3,
+      damageDice: '2d8',
+      damageBonus: 2,
+      damageType: 'psychic',
+    });
+  });
+
+  test('two seats of one bestiary creature keep the DM labels as names and show numbered headings', async () => {
+    expect(ids.shardA).toBeDefined();
+    expect(ids.shardB).toBeDefined();
+    expect(ids.shardA).not.toBe(ids.shardB);
+    const names = await db
+      .select({ id: combatParticipants.id, name: combatParticipants.name })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [ids.shardA, ids.shardB]));
+    expect(names.map((row) => row.name).sort()).toEqual([NAMES.shardA, NAMES.shardB]);
+
+    const a = await storedProfile(ids.shardA);
+    const b = await storedProfile(ids.shardB);
+    expect(new Set([a?.displayName, b?.displayName])).toEqual(
+      new Set(['Flavor-Elemental (Corrupted) 1', 'Flavor-Elemental (Corrupted) 2']),
+    );
+    // What players read, through the shared roster rule the engine lines use.
+    const roster = [
+      rosterEntryForParticipant({ id: ids.shardA, name: NAMES.shardA, monsterAttack: a }),
+      rosterEntryForParticipant({ id: ids.shardB, name: NAMES.shardB, monsterAttack: b }),
+    ];
+    expect(displayNameFromRoster(ids.shardA, roster)).toBe(a?.displayName as string);
+    // ... and a reference by the DM's own label still finds the same seat.
+    expect(displayNameFromRoster(NAMES.shardB, roster)).toBe(b?.displayName as string);
+  });
+
+  test('a DM declaration by the original label resolves to the right seat', async () => {
+    const participants = await db
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.encounterId, encounterId));
+    const deps = {
+      listEquippedWeaponProfiles: async () => [],
+      getParticipantAbilityProfile: async () => ({
+        level: 3,
+        savingThrowProficiencies: [],
+        scores: { str: 16 },
+        saveBonuses: {},
+        spellIds: [],
+      }),
+      getActiveConditionNames: async () => [],
+      loadActiveTacticalMap: async () => null,
+      logger: { warn: () => {} },
+    } as unknown as Parameters<typeof deriveCombatEntryFirstAction>[1];
+
+    for (const [label, expected] of [
+      [NAMES.shardA, ids.shardA],
+      [NAMES.shardB, ids.shardB],
+    ] as const) {
+      const action = await deriveCombatEntryFirstAction(
+        {
+          sessionId,
+          combatState: { encounter: { id: encounterId }, participants: participants as never },
+          player: { characterId, name: NAMES.hero },
+          declaredAttack: {
+            verb: 'attack',
+            actorName: label,
+            monsterId: 'flavor_elemental_corrupted',
+          },
+        },
+        deps,
+      );
+      expect(action?.target).toBe(expected);
+    }
+  });
+
+  test('a solo party with a supplied hpMax derives from RAW hp, then scales the derived profile', async () => {
+    const [soloSession] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 2, status: 'active', starterCampaignId })
+      .returning({ id: gameSessions.id });
+    npcFallbackLogs.length = 0;
+    const state = await CombatEncounterService.startCombat(
+      soloSession.id,
+      [
+        { encounterId: '', characterId, name: NAMES.hero, initiativeModifier: 1 },
+        { encounterId: '', name: 'Sergeant Holt', hpMax: 100, initiativeModifier: 0 },
+      ] as Parameters<typeof CombatEncounterService.startCombat>[1],
+      false,
+      userId,
+    );
+    try {
+      const holt = state.participants.find((participant) => participant.name === 'Sergeant Holt')!;
+      // 100 raw HP -> band CR 2 (+3, 17/round); 1 of 4 => factor 0.25 => 25 HP.
+      expect(holt.maxHp).toBe(25);
+      const profile = (holt as unknown as { monsterAttack: LogPayload }).monsterAttack;
+      expect(profile.source).toBe('derived');
+      expect(profile.derivation).toMatchObject({ fromMaxHp: 100, challengeRating: '2' });
+      expect(profile.partyScaling).toMatchObject({
+        partySize: 1,
+        factor: 0.25,
+        rawMaxHp: 100,
+        scaledMaxHp: 25,
+      });
+      expect(npcFallbackLogs).toHaveLength(1);
+      expect(npcFallbackLogs[0]).toMatchObject({ reason: 'no_authored_block_hp_derived' });
+    } finally {
+      await db
+        .delete(combatParticipants)
+        .where(eq(combatParticipants.encounterId, state.encounter.id));
+      await db.delete(combatEncounters).where(eq(combatEncounters.id, state.encounter.id));
+      await db.delete(gameSessions).where(eq(gameSessions.id, soloSession.id));
+    }
   });
 
   test('player attacks are untouched by any of this', async () => {

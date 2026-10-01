@@ -34,6 +34,7 @@ import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import {
   facingName,
+  rosterEntryForParticipant,
   playerFacingWeaponName,
   type EngineRosterEntry,
 } from '../../../../shared/engine-display-name';
@@ -298,12 +299,9 @@ async function endCombatIfResolved(encounterId: string, userId: string): Promise
 }
 
 function rosterFrom(
-  participants: ReadonlyArray<{ id: string; name?: string | null }>,
+  participants: ReadonlyArray<{ id: string; name?: string | null; monsterAttack?: unknown }>,
 ): EngineRosterEntry[] {
-  return participants.map((participant) => ({
-    id: participant.id,
-    name: participant.name ?? null,
-  }));
+  return participants.map(rosterEntryForParticipant);
 }
 
 /** The target's display name, for the sentence the DM is handed when an approach falls short. */

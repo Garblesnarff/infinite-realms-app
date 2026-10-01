@@ -357,6 +357,52 @@ describe('buildEntryParticipants', () => {
   });
 });
 
+describe('seating transcript display name (#2398)', () => {
+  const seat = (name: string, monsterAttack: unknown, turnOrder: number) => ({
+    id: `seat-${turnOrder}`,
+    name,
+    initiative: 12,
+    initiativeModifier: 0,
+    participantType: 'monster',
+    turnOrder,
+    monsterAttack,
+  });
+
+  it('prints the bestiary heading while the participant name stays the DM label', () => {
+    const line = buildCombatSeatingTranscript(
+      [
+        {
+          id: 'player',
+          name: PLAYER.name,
+          initiative: 18,
+          initiativeModifier: 2,
+          characterId: PLAYER.characterId,
+          turnOrder: 0,
+        },
+        // monsterAttack as `startCombat` stores it for a bestiary creature seated under a
+        // DM label: the profile jsonb with the display name set at seating.
+        seat(
+          'Corrupted Shard A',
+          { source: 'authored', attacks: [], displayName: 'Flavor-Elemental (Corrupted) 1' },
+          1,
+        ),
+        seat(
+          'Corrupted Shard B',
+          { source: 'authored', attacks: [], displayName: 'Flavor-Elemental (Corrupted) 2' },
+          2,
+        ),
+        seat('Doorkeeper', { source: 'derived', attacks: [] }, 3),
+      ],
+      PLAYER,
+      16,
+    );
+    expect(line).toContain('Flavor-Elemental (Corrupted) 1: 12 + 0 = 12.');
+    expect(line).toContain('Flavor-Elemental (Corrupted) 2: 12 + 0 = 12.');
+    expect(line).toContain('Doorkeeper: 12 + 0 = 12.');
+    expect(line).not.toContain('Corrupted Shard');
+  });
+});
+
 describe('detectCombatEntry', () => {
   it('returns a pending handoff without invoking any seating dependency', () => {
     const { deps, started, maps } = stubDeps();

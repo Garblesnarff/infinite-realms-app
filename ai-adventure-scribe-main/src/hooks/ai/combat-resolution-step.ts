@@ -11,7 +11,11 @@ import {
 } from './combat-notice';
 import { enforceNarrationGate } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
-import { facingName, type EngineRosterEntry } from '../../../shared/engine-display-name';
+import {
+  facingName,
+  rosterEntryForParticipant,
+  type EngineRosterEntry,
+} from '../../../shared/engine-display-name';
 
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
@@ -293,10 +297,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   );
   const isQueuedIntentActor = (actorId: string): boolean =>
     queuedActorIds.has(actorId) || queuedActorSlugs.has(slugify(actorId));
-  const roster: EngineRosterEntry[] = (participants ?? []).map((participant) => ({
-    id: participant.id,
-    name: participant.name ?? null,
-  }));
+  const roster: EngineRosterEntry[] = (participants ?? []).map(rosterEntryForParticipant);
   const labelFor = (actorId: string): string => facingName(undefined, actorId, roster);
   const appendEngineBlock = ({
     source,

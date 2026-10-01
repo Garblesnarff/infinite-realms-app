@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { rosterEntryForParticipant } from '../../../shared/engine-display-name';
+
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { PlayerAttackRollSpec } from '@/services/combat/player-roll-bridge';
@@ -182,10 +184,7 @@ export function showNpcTurnLines(
   participants: any[] | undefined,
   onEngineNotice: (notice: LocalNotice) => void,
 ): void {
-  const roster = (participants ?? []).map((participant) => ({
-    id: participant.id,
-    name: participant.name ?? null,
-  }));
+  const roster = (participants ?? []).map(rosterEntryForParticipant);
   const show = (lines: string[]): void => {
     const text = lines.join('\n\n').trim();
     if (text) onEngineNotice({ text, persist: true });

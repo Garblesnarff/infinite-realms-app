@@ -12,9 +12,18 @@ import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { abilityModifier } from './combat-rules.js';
-import { resolveCombatantStats } from './combatant-stat-resolution.js';
+import {
+  assignBestiaryDisplayNames,
+  bestiaryDisplayName,
+  resolveCombatantStats,
+} from './combatant-stat-resolution.js';
 import { appendActiveCompanionInputs } from './companion-seating.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
+import {
+  deriveNpcFallbackProfile,
+  logNpcStatFallback,
+  type NpcStatFallbackSeat,
+} from './npc-stat-fallback.js';
 import { seatParticipantArmorClass } from './participant-armor-class.js';
 import { resolveParticipantType } from './participant-type.js';
 import { scaleMonsterForParty } from './party-scaling.js';
@@ -195,6 +204,7 @@ export class CombatEncounterService {
       );
 
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
+      const npcFallbackSeats: NpcStatFallbackSeat[] = [];
       const participantsWithInitiative = participantsToSeat.map((input) => {
         const character = input.characterId ? charactersById.get(input.characterId) : undefined;
         const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
@@ -221,6 +231,9 @@ export class CombatEncounterService {
                 fallbackName: sceneResolution.name,
               }).name
             : input.name;
+        // `participantName` stays the DM's label: targeting, the entry gate and per-seat HP key
+        // on it. Players read the bible heading instead (see `bestiaryDisplayName`).
+        const bestiaryName = bestiaryDisplayName(participantName, monster);
         // Characters and NPCs keep historical HP/speed placeholders. AC 10 is a legal
         // unarmored value, so a missing AC source writes NULL rather than inventing 10
         // (#1871). Monsters still fall through to SRD or generic-NPC numbers.
@@ -295,23 +308,40 @@ export class CombatEncounterService {
          */
         const scalable =
           !input.characterId && !input.npcId && (monster !== null || input.hpMax != null);
+        const npcHasAuthoredAttacks =
+          Boolean(Array.isArray(npcStats.actions) && npcStats.actions.length) ||
+          Boolean(Array.isArray(npcStats.attacks) && npcStats.attacks.length);
+        const sceneAttackMayGround = !input.characterId && (!input.npcId || !npcHasAuthoredAttacks);
+        // Neither a character nor a bible/SRD stat block, and no authored attack on its NPC
+        // row: an NPC with no block. Its scene weapon carries +0 to hit, so it fights on HP.
+        // Derived from RAW hit points, before party scaling, and scaled below the same way a
+        // monster's profile is; deriving from scaled HP would scale the damage twice.
+        const suppliedHp = Number(npcStats.maxHp ?? npcStats.hitPoints ?? input.hpMax);
+        const npcFallback =
+          !input.characterId && monster === null && sceneAttackMayGround
+            ? deriveNpcFallbackProfile({
+                npcId: input.npcId,
+                npcName: participantName,
+                knownMaxHp: Number.isFinite(suppliedHp) && suppliedHp > 0 ? rawMaxHp : null,
+                grounded: sceneResolution.attackProfile ?? null,
+              })
+            : null;
+        if (npcFallback) npcFallbackSeats.push(npcFallback.seat);
         const scaled = scalable
           ? scaleMonsterForParty({
               rawMaxHp,
               rawCurrentHp,
-              attackProfile: monster?.attackProfile ?? null,
+              attackProfile: npcFallback?.profile ?? monster?.attackProfile ?? null,
               partySize,
             })
           : null;
         const maxHp = scaled ? scaled.maxHp : rawMaxHp;
         const currentHp = scaled ? scaled.currentHp : rawCurrentHp;
-        const resolvedAttackProfile = scaled?.attackProfile ?? monster?.attackProfile ?? null;
-        const npcHasAuthoredAttacks =
-          Boolean(Array.isArray(npcStats.actions) && npcStats.actions.length) ||
-          Boolean(Array.isArray(npcStats.attacks) && npcStats.attacks.length);
-        const sceneAttackMayGround = !input.characterId && (!input.npcId || !npcHasAuthoredAttacks);
+        const resolvedAttackProfile =
+          scaled?.attackProfile ?? npcFallback?.profile ?? monster?.attackProfile ?? null;
         const sceneAttackMayOverride = Boolean(
           sceneResolution.attackProfile &&
+          !npcFallback &&
           (!resolvedAttackProfile ||
             resolvedAttackProfile.source === 'derived' ||
             resolvedAttackProfile.source === 'generic'),
@@ -434,15 +464,22 @@ export class CombatEncounterService {
           // holds. Resolving once here, where the campaign index and the catalog are both
           // in hand, is also what lets the row record WHICH rung supplied the numbers.
           monsterAttack: attackProfile,
+          bestiaryName: monster?.source === 'campaign' ? bestiaryName : null,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
       });
+
+      logNpcStatFallback(encounter.id, npcFallbackSeats);
+      assignBestiaryDisplayNames(participantsWithInitiative);
 
       // Sort by initiative (desc), then by modifier (desc) for ties to match calculateTurnOrder logic
       const sortedValues = InitiativeMechanics.sortParticipants(participantsWithInitiative);
 
       const participantValues = sortedValues.map(
-        ({ currentHp: _currentHp, tacticalSize: _tacticalSize, ...p }, index) => ({
+        (
+          { currentHp: _currentHp, tacticalSize: _tacticalSize, bestiaryName: _bestiaryName, ...p },
+          index,
+        ) => ({
           ...p,
           turnOrder: index,
           isActive: true,

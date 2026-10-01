@@ -56,6 +56,7 @@ export function createCombatParticipant(
     id: partial.id || crypto.randomUUID(),
     participantType: partial.participantType || 'monster',
     name: partial.name || 'Unknown',
+    displayName: partial.displayName,
     characterId: partial.characterId,
     initiative: shouldRollInitiative
       ? rollDie(20) + (partial.initiative || 0)

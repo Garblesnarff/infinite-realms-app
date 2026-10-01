@@ -28,6 +28,8 @@ import type { Equipment } from '@/data/equipmentOptions';
 export interface CombatParticipant {
   id: string;
   name: string;
+  /** Bible heading to show players when it differs from `name` (the DM's label; #2398). */
+  displayName?: string;
   participantType: 'player' | 'enemy' | 'npc';
   characterId?: string;
   characterClass?: string;
@@ -45,7 +47,12 @@ export interface CombatParticipant {
   magicAttackBonus?: number;
   magicDamageBonus?: number;
   magicSaveBonus?: number;
-  magicAbilityBonuses?: Partial<Record<'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma', number>>;
+  magicAbilityBonuses?: Partial<
+    Record<
+      'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma',
+      number
+    >
+  >;
   magicSpecialProperties?: string[];
   initiative: number;
   initiativeBonus?: number;

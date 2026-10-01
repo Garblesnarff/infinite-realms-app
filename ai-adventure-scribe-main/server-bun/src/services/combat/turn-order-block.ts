@@ -3,6 +3,7 @@ import { vitalStateOf, type VitalsInput } from './death-saves-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import {
   displayNameFromRoster,
+  rosterEntryForParticipant,
   type EngineRosterEntry,
 } from '../../../../shared/engine-display-name';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
@@ -104,7 +105,7 @@ export type CurrentTurnInfo = {
   round: number;
 };
 
-type NamedParticipant = { id: string; name?: string | null };
+type NamedParticipant = { id: string; name?: string | null; monsterAttack?: unknown };
 
 /** Roster the player-facing label reads. Slugs stay on the turn-order lines. */
 function rosterFor(
@@ -114,8 +115,7 @@ function rosterFor(
   return participants.map((participant) => {
     const entity = map ? resolveEntityRef(map.entities, participant.id) : null;
     return {
-      id: participant.id,
-      name: participant.name ?? null,
+      ...rosterEntryForParticipant(participant),
       entityName: entity?.name ?? null,
       slug: entity ? entitySlug(entity) : slugify(participant.name ?? ''),
     };

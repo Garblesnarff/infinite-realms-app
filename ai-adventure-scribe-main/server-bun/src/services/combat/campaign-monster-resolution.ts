@@ -25,13 +25,19 @@ import { logger } from '../../lib/logger.js';
  * Chunk types that can carry a stat block.
  *
  * `encounter` is included because some bibles stat creatures inside encounter entries.
- * Note what is NOT here: academy-of-arcane-gastronomy files its "Sugar Golem" under
- * `npc_tier1` — but that entry is a pure narrative bio (Voice/Goal/Secret) with no HP, AC
- * or Speed anywhere in it, so widening the type filter would not recover a single number.
- * That campaign's creatures have no authored mechanics at all, which is a content gap
- * rather than a lookup gap; the audit script reports it as such.
+ * `npc_tier1..3` are included because a bible can give a combat-capable NPC an `*HP:* /
+ * *AC:* / *Attack:*` block under its NPC entry (Captain Sarah Reeves, #2398). Most NPC
+ * entries are narrative bios (Voice/Goal/Secret) with no numbers; `buildCampaignMonsterIndex`
+ * drops an NPC chunk that parses to nothing, so those never shadow an SRD creature of the
+ * same name ("Goblin", "Dragon" are tier-2 minor NPCs in the Academy bible).
  */
-export const STAT_BEARING_CHUNK_TYPES = ['monster', 'encounter'] as const;
+export const STAT_BEARING_CHUNK_TYPES = [
+  'monster',
+  'encounter',
+  'npc_tier1',
+  'npc_tier2',
+  'npc_tier3',
+] as const;
 
 /**
  * Performance: one indexed query per campaign per process, memoized.

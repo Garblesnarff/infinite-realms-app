@@ -41,6 +41,8 @@ export const emptyCampaignMonsterIndex = (campaignId: string): CampaignMonsterIn
   chunkCount: 0,
 });
 
+const isNpcChunk = (chunkType: string): boolean => chunkType.startsWith('npc_');
+
 /** Parses every chunk once, at load time, so combat start never parses markdown per combatant. */
 export function buildCampaignMonsterIndex(
   campaignId: string,
@@ -52,13 +54,21 @@ export function buildCampaignMonsterIndex(
   for (const row of rows) {
     if (!row.entityName) continue;
     const key = normalizeMonsterKey(row.entityName);
-    if (!key || index.byKey.has(key)) continue;
+    if (!key) continue;
+    const existing = index.byKey.get(key);
+    // A bestiary entry outranks an NPC entry of the same name ("The Flavor-Elemental
+    // (Corrupted)" is an NPC bio; "Flavor-Elemental (Corrupted)" is the monster).
+    if (existing && (!isNpcChunk(existing.chunkType) || isNpcChunk(row.chunkType))) continue;
     const parsed = parseAuthoredStatBlock(row.content);
+    const coverage = gradeCoverage(parsed);
+    // An NPC bio with no block is not a stat source; keeping it would hide the SRD rung. And a
+    // chunk that reads as nothing never displaces an entry that does carry a block.
+    if ((isNpcChunk(row.chunkType) || existing) && coverage === 'none') continue;
     index.byKey.set(key, {
       entityName: row.entityName,
       chunkType: row.chunkType,
       parsed,
-      coverage: gradeCoverage(parsed),
+      coverage,
     });
   }
 

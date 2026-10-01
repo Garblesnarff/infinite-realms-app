@@ -158,7 +158,9 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
         {/* Participant Info */}
         <div className="flex-1 ml-4">
           <div className="flex items-center gap-2">
-            <h4 className={`font-semibold ${isDead ? 'line-through' : ''}`}>{participant.name}</h4>
+            <h4 className={`font-semibold ${isDead ? 'line-through' : ''}`}>
+              {participant.displayName ?? participant.name}
+            </h4>
 
             {/* Action Status Indicators */}
             {isCurrentTurn && (

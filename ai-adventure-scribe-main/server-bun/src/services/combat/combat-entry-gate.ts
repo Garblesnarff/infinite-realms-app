@@ -24,7 +24,10 @@
  */
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './scene-spec-sanitizer.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
-import { displayNameFromRoster } from '../../../../shared/engine-display-name';
+import {
+  displayNameFromRoster,
+  rosterEntryForParticipant,
+} from '../../../../shared/engine-display-name';
 import { ValidationError } from '../../lib/errors.js';
 
 import type { CombatEntryFirstAction } from './combat-entry-first-action.js';
@@ -394,6 +397,8 @@ export interface CombatEntryStartParticipant {
   armorClass?: number | null;
   encounterId?: string;
   turnOrder?: number;
+  /** Stored attack profile; carries the bestiary `displayName` (#2398). */
+  monsterAttack?: unknown;
 }
 
 export interface CombatEntryStartResult {
@@ -514,7 +519,9 @@ export function buildCombatSeatingTranscript(
     if (isPlayer) playerNamed = true;
     const label = isPlayer
       ? 'You'
-      : displayNameFromRoster(participant.name, [{ id: participant.name, name: participant.name }]);
+      : displayNameFromRoster(participant.name, [
+          rosterEntryForParticipant({ ...participant, id: participant.name }),
+        ]);
     const roll = participant.initiative - participant.initiativeModifier;
     const modifier =
       participant.initiativeModifier < 0

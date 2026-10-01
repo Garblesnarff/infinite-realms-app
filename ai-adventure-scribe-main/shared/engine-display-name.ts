@@ -13,10 +13,37 @@ export const GENERIC_WEAPON_NAME = 'strike';
 export type EngineRosterEntry = {
   id: string;
   name?: string | null;
+  /**
+   * The name a player reads, when it differs from the `name` the engine and the DM key on
+   * (a bestiary creature seated under a DM-invented label shows the bible heading).
+   * `name` still matches a reference; `displayName` only changes the text shown.
+   */
+  displayName?: string | null;
   /** Name on the tactical-map entity, when the roster row has none. */
   entityName?: string | null;
   slug?: string | null;
 };
+
+/**
+ * A roster row for a combat participant. The bestiary display name travels on the stored
+ * `monsterAttack` jsonb (there is no column for it), so every roster builder reads it here.
+ */
+export function rosterEntryForParticipant(participant: {
+  id: string;
+  name?: string | null;
+  /** Client participants carry the heading directly; server rows carry it on `monsterAttack`. */
+  displayName?: string | null;
+  monsterAttack?: unknown;
+}): EngineRosterEntry {
+  const displayName =
+    participant.displayName ??
+    (participant.monsterAttack as { displayName?: unknown } | null | undefined)?.displayName;
+  return {
+    id: participant.id,
+    name: participant.name ?? null,
+    ...(typeof displayName === 'string' && displayName.trim() ? { displayName } : {}),
+  };
+}
 
 export function isUuid(value: string): boolean {
   return UUID_RE.test(value.trim());
@@ -76,7 +103,7 @@ export function displayNameFromRoster(
 ): string {
   const token = (ref ?? '').trim();
   const entry = token ? roster.find((row) => matches(row, token)) : undefined;
-  const rosterName = usableName(entry?.name);
+  const rosterName = usableName(entry?.displayName) ?? usableName(entry?.name);
   if (rosterName) return rosterName;
   const entityName = usableName(entry?.entityName);
   if (entityName) return entityName;

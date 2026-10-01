@@ -18,6 +18,7 @@ import {
   resolveMonsterAttackProfile,
   type MonsterAttackProfile,
 } from './monster-attack-profile.js';
+import { normalizeMonsterKey } from './monster-key.js';
 import {
   GENERIC_NPC_STATS,
   resolveSrdMonsterStats,
@@ -220,4 +221,56 @@ export function resolveCombatantStats(
   });
 
   return null;
+}
+
+const DUPLICATE_SUFFIX = /\s+\d+$/;
+
+/**
+ * The name a seated combatant carries.
+ *
+ * A DM can declare its own label for a creature it seats by `monsterId` ("Corrupted Shard")
+ * while the bible entry, the bestiary button and the art link all read "Flavor-Elemental
+ * (Corrupted)" (#2398, M9 #2372). A campaign-authored creature takes the bible's heading, so
+ * the engine lines, the tracker and the bestiary agree. A declared name that already matches
+ * the heading keeps its spelling and its duplicate number ("Shadow Roach 2"); a renamed one
+ * keeps the number too. Only the campaign rung renames: an SRD near-miss is an inference, and
+ * renaming on an inference would put a wrong name on the tracker.
+ */
+export function bestiaryDisplayName(
+  declaredName: string,
+  monster: ResolvedCombatantStats | null,
+): string {
+  if (monster?.source !== 'campaign') return declaredName;
+  const base = declaredName.replace(DUPLICATE_SUFFIX, '');
+  if (normalizeMonsterKey(base) === normalizeMonsterKey(monster.monsterName)) return declaredName;
+  return `${monster.monsterName}${declaredName.match(DUPLICATE_SUFFIX)?.[0] ?? ''}`;
+}
+
+/**
+ * Writes the display name onto each campaign-creature seat's stored profile.
+ *
+ * Seats are grouped by the heading players would read, including seats whose DM label already
+ * equals it: an un-renamed "Flavor-Elemental (Corrupted)" and a renamed "Corrupted Shard" show
+ * the same text, so a group of two is numbered "... 1" and "... 2" and stays distinguishable.
+ * A lone seat whose heading equals its own name needs no display name.
+ */
+export function assignBestiaryDisplayNames<
+  T extends {
+    name: string;
+    bestiaryName: string | null;
+    monsterAttack: MonsterAttackProfile | null;
+  },
+>(seats: T[]): void {
+  const groups = new Map<string, T[]>();
+  for (const seat of seats) {
+    if (!seat.bestiaryName || !seat.monsterAttack) continue;
+    groups.set(seat.bestiaryName, [...(groups.get(seat.bestiaryName) ?? []), seat]);
+  }
+  for (const [heading, group] of groups) {
+    group.forEach((seat, index) => {
+      const displayName = group.length > 1 ? `${heading} ${index + 1}` : heading;
+      if (displayName === seat.name) return;
+      seat.monsterAttack = { ...seat.monsterAttack!, displayName };
+    });
+  }
 }

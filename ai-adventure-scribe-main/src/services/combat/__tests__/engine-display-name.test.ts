@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  displayNameFromRoster,
   formatVersusArmorClass,
+  rosterEntryForParticipant,
   playerFacingWeaponName,
   titleCaseSlug,
 } from '../../../../shared/engine-display-name';
@@ -157,5 +159,34 @@ describe('slug and weapon fallbacks (#2306)', () => {
     );
     expect(playerFacingWeaponName('Sneak Attack', 'The Vitruvian Spider')).toBe('Sneak Attack');
     expect(playerFacingWeaponName('Opportunity Attack')).toBe('Opportunity Attack');
+  });
+});
+
+describe('bestiary display name on the roster (#2398)', () => {
+  const shard = rosterEntryForParticipant({
+    id: 'seat-1',
+    name: 'Corrupted Shard A',
+    monsterAttack: {
+      source: 'authored',
+      attacks: [],
+      displayName: 'Flavor-Elemental (Corrupted) 1',
+    },
+  });
+
+  it('shows the bible heading for the seat id and for the DM label', () => {
+    expect(displayNameFromRoster('seat-1', [shard])).toBe('Flavor-Elemental (Corrupted) 1');
+    expect(displayNameFromRoster('Corrupted Shard A', [shard])).toBe(
+      'Flavor-Elemental (Corrupted) 1',
+    );
+  });
+
+  it('falls back to the participant name when there is no stored display name', () => {
+    const plain = rosterEntryForParticipant({
+      id: 'seat-2',
+      name: 'Doorkeeper',
+      monsterAttack: null,
+    });
+    expect(plain).toEqual({ id: 'seat-2', name: 'Doorkeeper' });
+    expect(displayNameFromRoster('seat-2', [plain])).toBe('Doorkeeper');
   });
 });

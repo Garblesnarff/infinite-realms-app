@@ -56,6 +56,13 @@ export interface MonsterAttackProfile {
   source: AttackProfileSource;
   attacks: MonsterAttack[];
   /**
+   * Bible heading (plus seat number) to show players, set at seating when the DM's label for
+   * a campaign creature differs from it. `participant.name` stays the DM's label because
+   * targeting, the entry gate and per-seat HP key on it. Read via
+   * `rosterEntryForParticipant`; there is no column, and this jsonb is per seat.
+   */
+  displayName?: string;
+  /**
    * Attacks the monster has that this engine cannot resolve, kept as names only so the
    * telemetry can say what a creature is *not* using. Silence here would read as a creature
    * with no such abilities rather than one whose abilities were dropped.

@@ -20,6 +20,8 @@ type ServerParticipant = {
   isActive?: boolean;
   status?: ServerStatus | null;
   conditions?: ServerCondition[];
+  /** Stored attack profile; only its `displayName` is read here. */
+  monsterAttack?: { displayName?: string } | null;
 };
 type ServerEncounter = {
   id: string;
@@ -51,6 +53,7 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
         characterId: participant.characterId ?? undefined,
         participantType: participant.participantType === 'player' ? 'player' : 'monster',
         name: participant.name,
+        displayName: participant.monsterAttack?.displayName,
         initiative: participant.initiative,
         initiativeBonus: participant.initiativeModifier,
         armorClass: participant.armorClass,

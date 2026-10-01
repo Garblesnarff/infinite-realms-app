@@ -49,7 +49,7 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(
     // The tracker shows the same player-visible name the engine lines use: a raw
     // slug or UUID is never the text (#2343 B4). A one-entry roster resolves
     // identically to no roster here, so the shared module does the work alone.
-    const displayName = displayNameFromRoster(participant.name);
+    const displayName = displayNameFromRoster(participant.displayName ?? participant.name);
 
     const handleDamage = (): void => {
       const damage = parseInt(damageAmount, 10);
