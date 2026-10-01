@@ -45,6 +45,11 @@ vi.mock('uuid', () => ({
 }));
 
 import {
+  PREVIOUSLY_ON_IDS,
+  previouslyOnMessage,
+  previouslyOnWireBody,
+} from '../../../shared/test-fixtures/continuation-session-init-save';
+import {
   DECLINED_ROLL_BODY,
   DECLINED_ROLL_LINE,
   DM_ROLL_REPLY_TURNS,
@@ -453,6 +458,49 @@ describe('useMessageQueue', () => {
         sessionId,
         initialGreetingWireBody(INITIAL_GREETING_IDS[0]),
       );
+    });
+  });
+
+  describe('"Previously On" recap (#2386)', () => {
+    it('marks the recap so the server keeps one per session, and sends exactly the body the route tests post', async () => {
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await result.current.messageMutation.mutateAsync(
+          previouslyOnMessage(PREVIOUSLY_ON_IDS[0]) as any,
+        );
+      });
+
+      expect(mockSaveSessionMessages).toHaveBeenCalledTimes(1);
+      expect(mockSaveSessionMessages).toHaveBeenCalledWith(
+        sessionId,
+        previouslyOnWireBody(PREVIOUSLY_ON_IDS[0]),
+      );
+    });
+
+    it('keeps the mark when the recap is saved again from the retry queue', async () => {
+      mockInsert
+        .mockResolvedValueOnce({ error: { message: 'Fail' } })
+        .mockResolvedValueOnce({ error: { message: 'Fail' } })
+        .mockResolvedValueOnce({ error: { message: 'Fail' } })
+        .mockResolvedValue({ error: null });
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        const saved = result.current.messageMutation.mutateAsync(
+          previouslyOnMessage(PREVIOUSLY_ON_IDS[0]) as any,
+        );
+        const handled = saved.catch(() => undefined);
+        await vi.runAllTimersAsync();
+        await handled;
+      });
+      await act(async () => {
+        await result.current.retryQueuedMessages();
+      });
+
+      expect(mockSaveSessionMessages).toHaveBeenLastCalledWith(sessionId, [
+        previouslyOnWireBody(PREVIOUSLY_ON_IDS[0]),
+      ]);
     });
   });
 

@@ -1,11 +1,16 @@
-import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 
 import { CampaignService } from './campaign-service.js';
 import { generateEmbedding, generateEmbeddingDetailed } from './embedding-service.js';
-import { RECALL_BUDGET_MS, recallWithBudget, shouldRunMatch, takeRecallSlot } from './memory-recall.js';
+import {
+  RECALL_BUDGET_MS,
+  recallWithBudget,
+  shouldRunMatch,
+  takeRecallSlot,
+} from './memory-recall.js';
 import { SessionService } from './session-service.js';
 import { db } from '../../../db/client';
-import { memories, type Memory, type NewMemory } from '../../../db/schema/index';
+import { gameSessions, memories, type Memory, type NewMemory } from '../../../db/schema/index';
 import { EMBEDDING_MODEL } from '../../../shared/embedding-limits.js';
 import { alert } from '../lib/alerting.js';
 import { NotFoundError } from '../lib/errors.js';
@@ -55,6 +60,18 @@ async function attachEmbeddingsInOrder(rows: Memory[]): Promise<void> {
     await attachEmbedding(row.id, row.content, row.sessionId ?? undefined);
   }
 }
+
+/** A memory row read back without its embedding, as `list()` returns it. */
+type StoredMemory = Omit<Memory, 'embedding'>;
+
+/**
+ * The client marks the foundational memories it writes when a session opens with
+ * `metadata.is_initial_memory` (#2386). Each session has one per (type, subcategory).
+ */
+const isInitialMemory = (record: NewMemory): boolean =>
+  Boolean(record.sessionId) &&
+  (record.metadata as { is_initial_memory?: unknown } | null | undefined)?.is_initial_memory ===
+    true;
 
 export class MemoryService {
   static async list(
@@ -123,15 +140,73 @@ export class MemoryService {
       }),
     ]);
 
-    const inserted = await db.insert(memories).values(records).returning();
+    const { rows, fresh }: { rows: Array<Memory | StoredMemory>; fresh: Memory[] } = records.some(
+      isInitialMemory,
+    )
+      ? await MemoryService.insertInitialOnce(records)
+      : await db
+          .insert(memories)
+          .values(records)
+          .returning()
+          .then((inserted) => ({ rows: inserted, fresh: inserted }));
 
     // The write is done; embedding happens after it and off the caller's clock. Explicitly
     // voided so it can never be awaited by accident and can never surface as an unhandled
     // rejection — see attachEmbedding above for why this is not a bug to be "fixed" by
     // awaiting it.
-    void attachEmbeddingsInOrder(inserted);
+    void attachEmbeddingsInOrder(fresh);
 
-    return inserted;
+    return rows;
+  }
+
+  /**
+   * #2386: a session has one set of opening memories. The game view can mount twice before the
+   * first greeting lands, and each mount writes the set, so a record marked `is_initial_memory`
+   * is skipped when the session already holds one of the same (type, subcategory) and that one
+   * is returned in its place. Serialised on the session row like the once-per-session messages
+   * in SessionMessageService.addMessages, so an overlapping write waits for the first to commit
+   * and then sees it. `fresh` is what this call inserted, the only rows that need embedding.
+   */
+  private static async insertInitialOnce(
+    records: NewMemory[],
+  ): Promise<{ rows: Array<Memory | StoredMemory>; fresh: Memory[] }> {
+    return db.transaction(async (tx) => {
+      // In id order, so two batches that span the same sessions cannot lock them crosswise.
+      const sessionIds = [...new Set(records.filter(isInitialMemory).map((r) => r.sessionId!))];
+      for (const sessionId of sessionIds.sort()) {
+        await tx
+          .select({ id: gameSessions.id })
+          .from(gameSessions)
+          .where(eq(gameSessions.id, sessionId))
+          .for('no key update');
+      }
+
+      const stored = new Map<NewMemory, StoredMemory>();
+      for (const record of records.filter(isInitialMemory)) {
+        const existing = await tx.query.memories.findFirst({
+          where: and(
+            eq(memories.sessionId, record.sessionId!),
+            sql`${memories.metadata}->>'is_initial_memory' = 'true'`,
+            record.type == null ? isNull(memories.type) : eq(memories.type, record.type),
+            record.subcategory == null
+              ? isNull(memories.subcategory)
+              : eq(memories.subcategory, record.subcategory),
+          ),
+          columns: { embedding: false },
+          orderBy: asc(memories.createdAt),
+        });
+        if (existing) stored.set(record, existing);
+      }
+
+      const toInsert = records.filter((record) => !stored.has(record));
+      const fresh =
+        toInsert.length > 0 ? await tx.insert(memories).values(toInsert).returning() : [];
+      const freshRows = new Map(toInsert.map((record, index) => [record, fresh[index]!]));
+      return {
+        rows: records.map((record) => stored.get(record) ?? freshRows.get(record)!),
+        fresh,
+      };
+    });
   }
 
   static async getById(memoryId: string, userId: string) {

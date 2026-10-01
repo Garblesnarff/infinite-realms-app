@@ -3,6 +3,10 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import {
+  PREVIOUSLY_ON_TEXT,
+  previouslyOnMessage,
+} from '../../../shared/test-fixtures/continuation-session-init-save';
 import { useInitialGreeting } from '../use-initial-greeting';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -284,6 +288,31 @@ describe('useInitialGreeting', () => {
         context: { previouslyOn: true },
       }),
     );
+  });
+
+  it('hands the save queue the recap exactly as the route tests post it (#2386)', async () => {
+    const props = {
+      ...defaultProps,
+      sessionData: { turn_count: 0, session_number: 2 },
+    };
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ result: { data: { previouslyOn: PREVIOUSLY_ON_TEXT } } }),
+    });
+    (AIService.generateOpeningMessage as any).mockResolvedValue(
+      'Opening message: the ruined watchtower rises above the valley while morning fog curls around its stones.',
+    );
+
+    renderHook(() => useInitialGreeting(props));
+
+    await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalledTimes(2), { timeout: 2000 });
+
+    // The shared fixture fixes the id and timestamp; the hook mints its own.
+    expect(onGreetingGenerated).toHaveBeenNthCalledWith(1, {
+      ...previouslyOnMessage('unused'),
+      id: expect.any(String),
+      timestamp: expect.any(String),
+    });
   });
 
   it('should handle fetch recap failure gracefully', async () => {

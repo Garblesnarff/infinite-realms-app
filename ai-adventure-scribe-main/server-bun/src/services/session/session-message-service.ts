@@ -20,11 +20,21 @@ export interface MessagePage {
   total: number;
 }
 
-/** The client marks the opening scene it saves with `context.initial_greeting` (#2379). */
-const isInitialGreeting = (message: {
+/**
+ * DM messages a session holds once: the opening scene (`context.initial_greeting`, #2379) and
+ * the "Previously On" recap of a continuation session (`context.previously_on`, #2386). The
+ * client marks them when it saves them.
+ */
+const ONCE_PER_SESSION_MARKS = ['initial_greeting', 'previously_on'] as const;
+type OncePerSessionMark = (typeof ONCE_PER_SESSION_MARKS)[number];
+
+const oncePerSessionMark = (message: {
   speakerType: string;
   context?: Record<string, unknown>;
-}): boolean => message.speakerType === 'dm' && message.context?.initial_greeting === true;
+}): OncePerSessionMark | undefined =>
+  message.speakerType === 'dm'
+    ? ONCE_PER_SESSION_MARKS.find((mark) => message.context?.[mark] === true)
+    : undefined;
 
 /**
  * Session Message Service
@@ -147,33 +157,45 @@ export class SessionMessageService {
       });
       if (!session) throw new NotFoundError('Session', sessionId);
 
-      // #2379: a session has one opening scene. The game view can mount twice before the first
-      // greeting lands (the client's init lock is released on unmount), and each mount saves the
-      // greeting under its own id, so the primary key cannot catch the second. Serialise on the
-      // session row, so an overlapping save waits for the first to commit and then sees it, and
-      // keep the greeting already stored instead of writing another.
+      // #2379: a session has one opening scene, and #2386: one "Previously On" recap. The game
+      // view can mount twice before the first greeting lands (the client's init lock is released
+      // on unmount), and each mount saves under its own id, so the primary key cannot catch the
+      // second. Serialise on the session row, so an overlapping save waits for the first to
+      // commit and then sees it, and keep the message already stored instead of writing another.
+      // NO KEY UPDATE rather than UPDATE: two saves still queue behind each other, but the
+      // foreign-key check of an unrelated insert into a child table of the session does not.
       let batch = messages;
-      let existingGreetings: DialogueHistory[] = [];
-      if (messages.some(isInitialGreeting)) {
+      const existingOnce: DialogueHistory[] = [];
+      if (messages.some((message) => oncePerSessionMark(message))) {
         await tx
           .select({ id: gameSessions.id })
           .from(gameSessions)
           .where(eq(gameSessions.id, sessionId))
-          .for('update');
-        existingGreetings = await tx
-          .select()
-          .from(dialogueHistory)
-          .where(
-            and(
-              eq(dialogueHistory.sessionId, sessionId),
-              eq(dialogueHistory.speakerType, 'dm'),
-              sql`${dialogueHistory.context}->>'initial_greeting' = 'true'`,
-            ),
-          )
-          .limit(1);
-        if (existingGreetings.length > 0) {
-          batch = messages.filter((data) => !isInitialGreeting(data));
+          .for('no key update');
+        const storedMarks = new Set<OncePerSessionMark>();
+        for (const mark of new Set(messages.map(oncePerSessionMark))) {
+          if (!mark) continue;
+          const [stored] = await tx
+            .select()
+            .from(dialogueHistory)
+            .where(
+              and(
+                eq(dialogueHistory.sessionId, sessionId),
+                eq(dialogueHistory.speakerType, 'dm'),
+                sql`${dialogueHistory.context}->>(${mark}::text) = 'true'`,
+              ),
+            )
+            .orderBy(asc(dialogueHistory.timestamp))
+            .limit(1);
+          if (stored) {
+            existingOnce.push(stored);
+            storedMarks.add(mark);
+          }
         }
+        batch = messages.filter((message) => {
+          const mark = oncePerSessionMark(message);
+          return !mark || !storedMarks.has(mark);
+        });
       }
 
       // #2218: /v1/llm/generate writes the DM reply it produced as a provisional row under the
@@ -214,7 +236,7 @@ export class SessionMessageService {
       }
       const reconciledIds = new Set(reconciled.map((row) => row.id));
       const toInsert = batch.filter((data) => !data.id || !reconciledIds.has(data.id));
-      if (toInsert.length === 0) return [...existingGreetings, ...reconciled];
+      if (toInsert.length === 0) return [...existingOnce, ...reconciled];
 
       const inserted = await tx
         .insert(dialogueHistory)
@@ -242,7 +264,7 @@ export class SessionMessageService {
           })
           .where(eq(gameSessions.id, sessionId));
       }
-      return [...existingGreetings, ...reconciled, ...inserted];
+      return [...existingOnce, ...reconciled, ...inserted];
     });
   }
 

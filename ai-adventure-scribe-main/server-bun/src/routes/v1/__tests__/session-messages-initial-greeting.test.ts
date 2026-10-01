@@ -11,6 +11,11 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
 import {
+  PREVIOUSLY_ON_IDS,
+  PREVIOUSLY_ON_TEXT,
+  previouslyOnWireBody,
+} from '../../../../../shared/test-fixtures/continuation-session-init-save';
+import {
   INITIAL_GREETING_IDS,
   INITIAL_GREETING_TEXT,
   initialGreetingWireBody,
@@ -123,5 +128,22 @@ describe('POST /v1/sessions/:id/messages — opening scene (#2379)', () => {
       }),
     );
     expect((row?.context as { initial_greeting?: unknown }).initial_greeting).toBe(true);
+  });
+
+  it('accepts the "Previously On" recap the client saves and passes its mark to the service (#2386)', async () => {
+    const response = await post(previouslyOnWireBody(PREVIOUSLY_ON_IDS[0]));
+
+    expect(response.status).toBe(200);
+    expect(saved).toHaveLength(1);
+    const [row] = saved[0] ?? [];
+    expect(row).toEqual(
+      expect.objectContaining({
+        id: PREVIOUSLY_ON_IDS[0],
+        sessionId: 'session-1',
+        speakerType: 'dm',
+        message: PREVIOUSLY_ON_TEXT,
+      }),
+    );
+    expect((row?.context as { previously_on?: unknown }).previously_on).toBe(true);
   });
 });
