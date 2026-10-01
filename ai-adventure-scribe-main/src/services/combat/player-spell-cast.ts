@@ -72,6 +72,10 @@ export async function askPlayerForSpellCast(
     advantage: false,
     disadvantage: false,
   };
+  if (encounterId && !targetId) {
+    // No creature to propose against: any popup would show the guessed +0 / AC 0 described above.
+    return { autoRolled: true, movementOnly: false };
+  }
   if (encounterId && targetId) {
     try {
       const proposal = await proposeAuthoritativeSpell(encounterId, {

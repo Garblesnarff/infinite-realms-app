@@ -1258,11 +1258,13 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         isPlayerCombatSpell(spell) &&
         all.findIndex((candidate) => candidate?.id === spell.id) === index,
     );
-  const hasAvailableSpell = spells.some((spell) => {
+  // One suggestion per spell on the character's own list. A single "Cast a prepared spell" chip
+  // went to the DM as text, and the DM picked Fire Bolt for a wizard who does not have it (#2343 A3).
+  for (const spell of spells) {
     const usesBonusAction = spell!.castingTime.toLowerCase().includes('bonus action');
-    return usesBonusAction ? !actor.bonusActionUsed : !actor.actionUsed;
-  });
-  if (hasAvailableSpell) actions.push({ type: 'spell', label: 'Cast a prepared spell' });
+    if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
+    actions.push({ type: 'spell', label: `Cast ${spell!.name}`, spellId: spell!.id });
+  }
   actions.push({ type: 'end_turn', label: 'End turn' });
   return { encounterId, version: state.encounter.version, actorId: actor.id, actions };
 }

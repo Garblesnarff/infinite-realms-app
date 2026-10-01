@@ -19,6 +19,13 @@ export function declaredSheetSpell(
 }
 
 /**
+ * The player's own words without the sheet's tag: `I cast Chill Touch.`. The tag is for the
+ * engine and stays in the stored and sent message; the bubble the player reads drops it (#2343 A2).
+ */
+export const withoutSpellCastTag = (message: string): string =>
+  message.replace(/\s*\[spell_id=[^\]]*\]/g, '');
+
+/**
  * One spell's identity across the spellings the DM, the sheet, and the engine use: the scoped
  * catalog id when it is a combat spell, else the same slug rule the server's
  * `resolveCatalogSpell` applies (`chill_touch`, `Chill Touch`, and `chill-touch` are one spell).

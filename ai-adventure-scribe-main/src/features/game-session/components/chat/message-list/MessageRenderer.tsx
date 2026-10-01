@@ -15,6 +15,7 @@ import {
 } from '@/components/combat/CombatMessage';
 import { InitiativeMessage } from '@/components/combat/messages/InitiativeMessage';
 import { DiceRollMessage } from '@/components/game/DiceRollMessage';
+import { withoutSpellCastTag } from '@/services/combat/declared-player-spell';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
 interface MessageRendererProps {
@@ -64,7 +65,11 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     const parsedMessage = isDM ? parseMessageOptions(message.text) : null;
 
     // Truncation logic
-    const baseText = parsedMessage ? parsedMessage.content || message.text : message.text;
+    const baseText = parsedMessage
+      ? parsedMessage.content || message.text
+      : message.sender === 'player'
+        ? withoutSpellCastTag(message.text)
+        : message.text;
     const isLongMessage = baseText.length > 200;
     const isExpanded = expandedMessages.has(messageId);
     const displayText =
