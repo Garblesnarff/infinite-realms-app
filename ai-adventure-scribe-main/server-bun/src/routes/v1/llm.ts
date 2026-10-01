@@ -36,6 +36,10 @@ import {
   parseLlmEnvelope,
   rewriteNarrationSegmentsFromEnvelope,
 } from '../../services/dm/dm-response-schema.js';
+import {
+  getConfiguredGeminiModels,
+  getConfiguredOpenRouterModels,
+} from '../../services/llm-model-config.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 
 /**
@@ -103,6 +107,24 @@ const degradedGenerateEnvelope = (): {
   reason: LLM_GENERATE_DEGRADED_REASON,
   text: LLM_GENERATE_DEGRADED_TEXT,
 });
+
+// #2158: the browser must not choose the model or the output size. The DM turn asks for 8192
+// (src/services/ai-service.ts), so that is the generate ceiling; extraction asks for 1000-1200.
+const MAX_GENERATE_TOKENS = 8192;
+const MAX_EXTRACT_TOKENS = 1500;
+
+const clampMaxTokens = (value: unknown, fallback: number, max: number): number => {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
+  return Math.min(Math.max(1, n), max);
+};
+
+// Only a model the server already configures may be requested; anything else uses the default.
+const allowlistedModel = (model: unknown): string | undefined => {
+  if (typeof model !== 'string') return undefined;
+  const trimmed = model.trim();
+  const allowed = new Set([...getConfiguredOpenRouterModels(), ...getConfiguredGeminiModels()]);
+  return allowed.has(trimmed) ? trimmed : undefined;
+};
 
 const extractPlayerInputFromPrompt = (prompt: string): string | undefined => {
   const match = /<player_input>\s*([\s\S]*?)\s*<\/player_input>\s*$/i.exec(prompt);
@@ -176,6 +198,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         player_input: requestedPlayerInput,
         dmReply,
       } = body || {};
+      const safeModel = allowlistedModel(model);
+      const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
@@ -265,8 +289,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
       let result = await LLMProviderService.generate({
         prompt: llmPrompt,
-        model,
-        maxTokens,
+        model: safeModel,
+        maxTokens: safeMaxTokens,
         temperature,
         history,
         provider,
@@ -276,8 +300,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       result = await enforceCombatTransitionContract({
         result,
         prompt: llmPrompt,
-        model,
-        maxTokens,
+        model: safeModel,
+        maxTokens: safeMaxTokens,
         temperature,
         history,
         provider,
@@ -442,6 +466,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         provider = 'openrouter',
         responseSchema,
       } = body || {};
+      const safeModel = allowlistedModel(model);
+      const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
       const quota = await AIUsageService.checkQuotaAndConsume({
         userId: user.userId,
         plan: user.plan,
@@ -455,8 +481,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       try {
         const stream = await LLMProviderService.stream({
           prompt,
-          model,
-          maxTokens,
+          model: safeModel,
+          maxTokens: safeMaxTokens,
           temperature,
           history,
           provider,
@@ -530,7 +556,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
       const result = await LLMProviderService.extract({
         prompt,
-        maxTokens,
+        maxTokens: clampMaxTokens(maxTokens, 1000, MAX_EXTRACT_TOKENS),
       });
 
       if (result.error) {

@@ -10,6 +10,7 @@ let generatedResult: Record<string, unknown> = {
   provider: 'openrouter',
   model: 'test/model',
 };
+let streamedInputs: Record<string, unknown>[] = [];
 let streamError: unknown = new Error('upstream stream failed');
 
 // Captures for the #1688 prompt-metrics log lines. Unlike the other logger
@@ -68,7 +69,8 @@ mock.module('../../../services/llm-provider-service.js', () => ({
       generatedInputs.push(input);
       return generatedQueue.shift() || generatedResult;
     },
-    stream: async () => {
+    stream: async (input: Record<string, unknown>) => {
+      streamedInputs.push(input);
       if (streamError) throw streamError;
       return new ReadableStream<Uint8Array>();
     },
@@ -77,7 +79,72 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
+const { getConfiguredOpenRouterModels } = await import('../../../services/llm-model-config.js');
 const app = createRequestPipelineApp().use(llmRoutes);
+
+// Body shape of LlmApiClient.generateText (src/infrastructure/api/rest-client.ts) for a DM turn
+// (src/services/ai-service.ts: temperature 0.9, maxTokens 8192, requestType 'user'), with the two
+// fields #2158 guards overridden. JSON.stringify drops undefined fields, as in production.
+const clientBody = (overrides: Record<string, unknown>): string =>
+  JSON.stringify({
+    prompt: 'The party enters the banquet hall. What do they see?',
+    player_input: 'I look around',
+    model: undefined,
+    maxTokens: 8192,
+    temperature: 0.9,
+    history: undefined,
+    provider: 'openrouter',
+    requestType: 'user',
+    ...overrides,
+  });
+
+const postLlm = (path: string, body: string): Promise<Response> =>
+  app.handle(
+    new Request(`http://localhost/v1/llm/${path}`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+      body,
+    }),
+  );
+
+describe('#2158 client model and maxTokens guard', () => {
+  it('keeps the maxTokens the DM turn really sends (8192) and drops an unlisted model', async () => {
+    generatedInputs = [];
+    const response = await postLlm('generate', clientBody({ model: 'anthropic/claude-opus-4' }));
+
+    expect(response.status).toBe(200);
+    expect(generatedInput?.model).toBeUndefined();
+    expect(generatedInput?.maxTokens).toBe(8192);
+  });
+
+  it('clamps an oversized or invalid maxTokens on generate', async () => {
+    await postLlm('generate', clientBody({ maxTokens: 1_000_000 }));
+    expect(generatedInput?.maxTokens).toBe(8192);
+
+    await postLlm('generate', clientBody({ maxTokens: -5 }));
+    expect(generatedInput?.maxTokens).toBe(1);
+
+    await postLlm('generate', clientBody({ maxTokens: undefined }));
+    expect(generatedInput?.maxTokens).toBe(1000);
+  });
+
+  it('passes a model the server already configures', async () => {
+    const [configured] = getConfiguredOpenRouterModels();
+    await postLlm('generate', clientBody({ model: configured }));
+    expect(generatedInput?.model).toBe(configured);
+  });
+
+  it('applies the same guard on the stream route', async () => {
+    streamedInputs = [];
+    await postLlm(
+      'generate/stream',
+      clientBody({ model: 'anthropic/claude-opus-4', maxTokens: 1_000_000 }),
+    );
+    expect(streamedInputs).toHaveLength(1);
+    expect(streamedInputs[0].model).toBeUndefined();
+    expect(streamedInputs[0].maxTokens).toBe(8192);
+  });
+});
 
 describe('POST /v1/llm/generate HTTP contract', () => {
   it('accepts a realistic gameplay payload through the production serializer', async () => {

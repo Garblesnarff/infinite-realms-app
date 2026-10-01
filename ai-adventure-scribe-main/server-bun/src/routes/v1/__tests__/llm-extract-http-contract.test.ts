@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+let extractedInput: Record<string, unknown> | undefined;
 let extractionResult: Record<string, unknown> = {
   text: '{"memories":[]}',
   provider: 'openrouter',
@@ -50,7 +51,10 @@ mock.module('../../../services/ai-usage-service.js', () => ({
 }));
 mock.module('../../../services/llm-provider-service.js', () => ({
   LLMProviderService: {
-    extract: async () => extractionResult,
+    extract: async (input: Record<string, unknown>) => {
+      extractedInput = input;
+      return extractionResult;
+    },
     generate: async () => ({ text: '', provider: 'openrouter', model: 'test/model' }),
   },
 }));
@@ -74,6 +78,22 @@ describe('POST /v1/llm/extract HTTP contract', () => {
       provider: 'openrouter',
       model: 'fallback/model',
     };
+  });
+
+  it('clamps the client maxTokens to 1500 and keeps a normal 1200', async () => {
+    const send = (maxTokens: number): Promise<Response> =>
+      app.handle(
+        new Request('http://localhost/v1/llm/extract', {
+          method: 'POST',
+          headers: { authorization: 'Bearer extract-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: 'extract memories from this exchange', maxTokens }),
+        }),
+      );
+
+    await send(1200);
+    expect(extractedInput?.maxTokens).toBe(1200);
+    await send(1_000_000);
+    expect(extractedInput?.maxTokens).toBe(1500);
   });
 
   it('returns a degraded memory envelope instead of 502 when all models fail', async () => {
