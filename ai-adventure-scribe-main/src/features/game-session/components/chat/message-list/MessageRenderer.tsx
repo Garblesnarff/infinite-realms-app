@@ -36,6 +36,8 @@ interface MessageRendererProps {
   onGenerateScene: (message: ChatMessage & { id?: string; timestamp?: string }) => Promise<void>;
   onOptionSelect: (optionText: string) => Promise<void>;
   characterName?: string;
+  /** The divider key of the last engine block printed before this message (#2417). */
+  previousEngineKey?: string;
 }
 
 /**
@@ -60,6 +62,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     onGenerateScene,
     onOptionSelect,
     characterName: _characterName,
+    previousEngineKey,
   }) => {
     // Parse for this message
     const parsedMessage = isDM ? parseMessageOptions(message.text) : null;
@@ -163,6 +166,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             isGeneratingImage={generatingFor.has(messageId)}
             imageError={genErrorByMessage[messageId]}
             onGenerateImage={() => onGenerateScene(message)}
+            previousEngineKey={previousEngineKey}
           />
         ) : isCompanion ? (
           <CompanionMessage message={message} displayText={displayText} />
@@ -202,6 +206,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       prev.isDM === next.isDM &&
       prev.isCompanion === next.isCompanion &&
       prev.characterName === next.characterName &&
+      prev.previousEngineKey === next.previousEngineKey &&
       prev.onGenerateScene === next.onGenerateScene &&
       prev.onOptionSelect === next.onOptionSelect;
 

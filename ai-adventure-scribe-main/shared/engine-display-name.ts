@@ -22,6 +22,8 @@ export type EngineRosterEntry = {
   /** Name on the tactical-map entity, when the roster row has none. */
   entityName?: string | null;
   slug?: string | null;
+  /** The participant type (`player`, `monster`, `npc`), when the roster row came from a participant. */
+  participantType?: string | null;
 };
 
 /**

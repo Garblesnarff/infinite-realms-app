@@ -320,7 +320,13 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
 
     // HP moved in the pre-flight, so its line is on screen before the die is asked for.
     expect(order).toEqual([`line: ${EMIL_LINE}`, 'prompt: attack Quarterstaff']);
-    expect(shown).toEqual([{ text: EMIL_LINE, persist: true }]);
+    expect(shown).toEqual([
+      {
+        text: EMIL_LINE,
+        persist: true,
+        cards: [expect.objectContaining({ kind: 'attack', line: EMIL_LINE })],
+      },
+    ]);
     // Shown once: the reply does not print it a second time.
     expect(response.text).not.toContain(EMIL_LINE);
     expect(response.localNotices).toBeUndefined();
@@ -371,7 +377,13 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     // Combat ended inside the engine call, so the check is a post-combat one: the popup opens.
     expect(response.rollRequests).toEqual([POST_COMBAT_CHECK]);
     // The reply waits for that roll, so the kill line goes on screen on its own, once.
-    expect(shown).toEqual([{ text: KILL_LINE, persist: true }]);
+    expect(shown).toEqual([
+      {
+        text: KILL_LINE,
+        persist: true,
+        cards: [expect.objectContaining({ kind: 'attack', line: KILL_LINE })],
+      },
+    ]);
     expect(response.text).not.toContain(KILL_LINE);
     expect(response.context?.combatEngineBlocks).toBeUndefined();
     expect(response.context?.combatEnded).toBe(true);
@@ -415,7 +427,13 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     const shown: LocalNotice[] = [];
     const response = await play((notice) => shown.push(notice), 'I look around the study.');
 
-    expect(shown).toEqual([{ text: EMIL_LINE, persist: true }]);
+    expect(shown).toEqual([
+      {
+        text: EMIL_LINE,
+        persist: true,
+        cards: [expect.objectContaining({ kind: 'attack', line: EMIL_LINE })],
+      },
+    ]);
     // The narration pass is told the NPC results stand, not that nothing happened to anyone,
     // and still carries them.
     const narrationCall = vi.mocked(AIService.chatWithDM).mock.calls[1][0];
@@ -474,7 +492,13 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     const shown: LocalNotice[] = [];
     const response = await play((notice) => shown.push(notice));
 
-    expect(shown).toEqual([{ text: EMIL_LINE, persist: true }]);
+    expect(shown).toEqual([
+      {
+        text: EMIL_LINE,
+        persist: true,
+        cards: [expect.objectContaining({ kind: 'attack', line: EMIL_LINE })],
+      },
+    ]);
     expect(response.text).not.toContain(EMIL_LINE);
     expect(response.text).toContain('The professor lowers his staff.');
     expect(response.context?.combatEnded).toBe(true);

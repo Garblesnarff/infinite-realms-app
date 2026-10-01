@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { rosterEntryForParticipant } from '../../../shared/engine-display-name';
 
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
@@ -22,12 +21,17 @@ import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
-import { formatNpcTurnLines } from '@/services/combat/combat-outcome-transcript';
+import {
+  engineRosterOf,
+  formatNpcTurnOutcome,
+  npcTurnOptions,
+} from '@/services/combat/combat-outcome-transcript';
 import {
   enforceCombatActionOnAttempt,
   looksLikeCombatActionAttempt,
 } from '@/services/combat/combat-zero-action-guard';
 import { declaredSheetSpell } from '@/services/combat/declared-player-spell';
+import { initiativeCard, type EngineResultCard } from '@/services/combat/engine-result-card';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
 import {
   requestPlayerAttackRoll,
@@ -184,17 +188,18 @@ export function showNpcTurnLines(
   participants: any[] | undefined,
   onEngineNotice: (notice: LocalNotice) => void,
 ): void {
-  const roster = (participants ?? []).map(rosterEntryForParticipant);
-  const show = (lines: string[]): void => {
+  const roster = engineRosterOf(participants);
+  const show = (lines: string[], cards?: EngineResultCard[]): void => {
     const text = lines.join('\n\n').trim();
-    if (text) onEngineNotice({ text, persist: true });
+    if (text) onEngineNotice({ text, persist: true, ...(cards?.length ? { cards } : {}) });
   };
   for (const npcResult of advanced.results) {
-    show(
-      formatNpcTurnLines(npcResult, roster, {
-        targetHp: isPlayerActor(npcResult.action.target_ids?.[0] ?? '', participants),
-      }),
+    const { lines, cards } = formatNpcTurnOutcome(
+      npcResult,
+      roster,
+      npcTurnOptions(participants, npcResult.action.target_ids?.[0]),
     );
+    show(lines, cards);
   }
   if (advanced.capReached) {
     show(advanced.transcriptLines.filter((line) => line.includes('NPC turn loop stopped after')));
@@ -318,7 +323,20 @@ export async function handleDmActionsAndTransitions(
             // `seatCombatEntry` already persisted this exact system row. Keep it
             // visible locally, but do not send it through the client persistence
             // queue a second time.
-            appendLocalNotice((entryPayload as any)?.seatingTranscript, false, true);
+            const seatingLine = (entryPayload as any)?.seatingTranscript;
+            const seatingCard =
+              typeof seatingLine === 'string' && params.onEngineNotice
+                ? initiativeCard((entryPayload as any)?.participants ?? [], seatingLine.trim())
+                : null;
+            if (seatingCard && params.onEngineNotice) {
+              params.onEngineNotice({
+                text: seatingLine.trim(),
+                persist: false,
+                cards: [seatingCard],
+              });
+            } else {
+              appendLocalNotice(seatingLine, false, true);
+            }
             appendLocalNotice((entryPayload as any)?.notice);
             const enteredEncounterId =
               typeof (entryPayload as any)?.encounter?.id === 'string'

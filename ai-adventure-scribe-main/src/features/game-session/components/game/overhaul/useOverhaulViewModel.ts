@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { FROZEN_CAMPAIGN_CHAPTER_LABEL } from './campaign-chapter';
+import { summarizeCombatTurn } from './combat-turn-order';
 import { buildSpellsViewModel } from './spell-view-model';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 
@@ -24,6 +25,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
+import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 import {
@@ -396,15 +398,18 @@ export function useOverhaulViewModel(opts?: {
   return useMemo<GameOverhaulViewModel>(() => {
     const sheet = buildCharacterSheet(character);
 
+    const turn = summarizeCombatTurn(encounter);
     const combatants: CombatantVM[] = (encounter?.participants ?? [])
+      .filter((p) => p.isActive !== false)
       .slice()
       .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
       .map((p) => ({
         id: p.id,
         initiative: p.initiative ?? 0,
         name: p.name,
-        isEnemy: p.participantType === 'enemy',
+        isEnemy: isHostileParticipantType(p.participantType),
         isActive: encounter?.currentTurnParticipantId === p.id,
+        state: turn?.actors.find((actor) => actor.id === p.id)?.state,
       }));
 
     const protagonist = character
@@ -444,6 +449,7 @@ export function useOverhaulViewModel(opts?: {
       combat: {
         active: !!encounter,
         round: encounter?.currentRound ?? 1,
+        actedCount: turn ? turn.turn - 1 : undefined,
         combatants,
       },
       character: sheet,

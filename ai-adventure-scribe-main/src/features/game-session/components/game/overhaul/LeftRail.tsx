@@ -103,37 +103,47 @@ const Party: React.FC<{ party: PartyMemberVM[]; partyMax: number }> = ({ party, 
   </IRPanel>
 );
 
-const EncounterTracker: React.FC<{ round: number; combatants: CombatantVM[] }> = ({
-  round,
-  combatants,
-}) => (
+const STATE_LABEL = { acted: 'Acted', now: 'Now', waiting: 'Waiting' } as const;
+
+const EncounterTracker: React.FC<{
+  round: number;
+  actedCount?: number;
+  combatants: CombatantVM[];
+}> = ({ round, actedCount, combatants }) => (
   <IRPanel>
     <IRPanelHeader title="Encounter Tracker" />
-    <div className="flex items-center justify-between px-3 pb-1 pt-2">
-      <span className="text-[11px] text-foreground/80">Round {round}</span>
-      <span className="ir-display text-[9px] uppercase tracking-[1.5px] text-infinite-gold/70">
-        Init Order
-      </span>
+    <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2">
+      <span className="whitespace-nowrap text-[11px] text-foreground/80">Round {round}</span>
+      {actedCount !== undefined && (
+        <span className="text-[11px] text-foreground/80">
+          {actedCount} of {combatants.length} have acted this round
+        </span>
+      )}
     </div>
     <div className="space-y-1 p-2 pt-1">
       {combatants.map((c) => (
         <div
           key={c.id}
-          className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
+          data-state={c.state}
+          className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-white ${
             c.isEnemy
-              ? 'border-red-500/40 bg-red-500/10'
-              : c.isActive
-                ? 'border-infinite-gold/40 bg-infinite-gold/10'
-                : 'border-white/5 bg-white/[0.02]'
-          }`}
+              ? 'border-white/5 border-l-4 border-l-red-500 bg-red-500/10'
+              : 'border-white/5 bg-white/[0.02]'
+          } ${c.isActive ? 'ring-1 ring-infinite-gold' : ''}`}
         >
-          <span
-            className={`ir-display w-6 text-sm font-bold ${c.isEnemy ? 'text-red-400' : 'text-infinite-gold'}`}
-          >
+          <span className="ir-display w-6 text-sm font-bold">
             {String(c.initiative).padStart(2, '0')}
           </span>
-          <span className="flex-1 truncate text-xs text-foreground/90">{c.name}</span>
-          <span className="h-3.5 w-3.5 rounded-sm border border-white/20" aria-hidden="true" />
+          <span className="flex-1 truncate text-xs">{c.name}</span>
+          {c.state && (
+            <span
+              className={`text-[10px] uppercase tracking-wide ${
+                c.state === 'now' ? 'font-bold text-infinite-gold' : 'text-white/70'
+              }`}
+            >
+              {STATE_LABEL[c.state]}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -144,13 +154,19 @@ export const LeftRail: React.FC<{
   campaign: CampaignSummaryVM;
   party: PartyMemberVM[];
   partyMax: number;
-  combat: { active: boolean; round: number; combatants: CombatantVM[] };
+  combat: { active: boolean; round: number; actedCount?: number; combatants: CombatantVM[] };
 }> = ({ campaign, party, partyMax, combat }) => (
   <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
     <CurrentCampaign campaign={campaign} />
     <CurrentObjective campaign={campaign} />
     <RegionMap campaign={campaign} />
     <Party party={party} partyMax={partyMax} />
-    {combat.active && <EncounterTracker round={combat.round} combatants={combat.combatants} />}
+    {combat.active && (
+      <EncounterTracker
+        round={combat.round}
+        actedCount={combat.actedCount}
+        combatants={combat.combatants}
+      />
+    )}
   </div>
 );

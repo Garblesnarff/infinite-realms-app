@@ -1,5 +1,6 @@
 import type { ChatMessage } from '@/types/game';
 
+import { hideTargetNumbers, isEngineResultCard } from '@/services/combat/engine-result-card';
 import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
 import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 import { extractEngineGeneratedLines } from '@/utils/engine-lines';
@@ -12,11 +13,21 @@ export const COMBAT_LOG_LIMIT = 20;
  * Engine lines one DM message shows in chat, oldest first. Same rule as `DMMessage`: structured
  * combat blocks win, and the `⚙️ Engine:` lines in the text are only read when there are none.
  */
-function engineLinesOfMessage(message: ChatMessage): string[] {
+function engineLinesOfMessage(message: ChatMessage, showTargetNumbers: boolean): string[] {
+  // With the setting off a line loses the target's AC and the save DC where a card says which
+  // phrases they are; a line saved before cards existed has no card and keeps its text.
+  const hide = (lines: string[], cards: unknown): string[] =>
+    showTargetNumbers || !Array.isArray(cards)
+      ? lines
+      : lines.map((line) =>
+          cards
+            .filter(isEngineResultCard)
+            .reduce((text, card) => hideTargetNumbers(text, card), line),
+        );
   const blocks = combatEngineBlocksFromContext(message.context);
-  if (blocks.length) return blocks.flatMap((block) => block.lines);
+  if (blocks.length) return blocks.flatMap((block) => hide(block.lines, block.cards));
   const { lines } = extractEngineGeneratedLines(removeRollRequestsFromMessage(message.text ?? ''));
-  return lines;
+  return hide(lines, message.context?.engineCards);
 }
 
 /**
@@ -27,6 +38,7 @@ function engineLinesOfMessage(message: ChatMessage): string[] {
 export function combatLogLines(
   messages: readonly ChatMessage[],
   limit: number = COMBAT_LOG_LIMIT,
+  showTargetNumbers = true,
 ): string[] {
   const withheld = withheldDmRollReplies(messages);
   return messages
@@ -34,7 +46,7 @@ export function combatLogLines(
       (message) =>
         message.sender === 'system' || (message.sender === 'dm' && !withheld.has(message)),
     )
-    .flatMap(engineLinesOfMessage)
+    .flatMap((message) => engineLinesOfMessage(message, showTargetNumbers))
     .slice(-limit)
     .reverse();
 }

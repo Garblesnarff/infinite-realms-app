@@ -806,7 +806,8 @@ export const useAIResponse = (): {
             .filter(Boolean)
             .join('\n\n');
           if (engineText && finalResponseText.startsWith(engineText)) {
-            onEngineNotice({ text: engineText, persist: true });
+            const cards = combatEngineBlocks.flatMap((block) => block.cards ?? []);
+            onEngineNotice({ text: engineText, persist: true, ...(cards.length ? { cards } : {}) });
             finalResponseText = finalResponseText.slice(engineText.length).trimStart();
             replyEngineBlocks = undefined;
           } else if (engineText) {

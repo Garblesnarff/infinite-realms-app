@@ -135,3 +135,8 @@ export function useCampaign() {
   }
   return context;
 }
+
+/** Like {@link useCampaign}, but `undefined` outside a provider instead of throwing. */
+export function useOptionalCampaign() {
+  return useContext(CampaignContext);
+}

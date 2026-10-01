@@ -1,3 +1,5 @@
+import type { EngineResultCard } from '@/services/combat/engine-result-card';
+
 export type CombatEngineBlockSource = 'player' | 'npc';
 
 export interface CombatEngineBlock {
@@ -9,6 +11,8 @@ export interface CombatEngineBlock {
   source: CombatEngineBlockSource;
   actor?: string;
   lines: string[];
+  /** One card per engine result among `lines`, built from the engine result fields (#2417). */
+  cards?: EngineResultCard[];
 }
 
 function asFiniteNumber(value: unknown): number | undefined {
@@ -93,4 +97,35 @@ export function combatMessageEndedCombat(message: {
     message.sender === 'dm' &&
     Boolean(message.context?.combatEnded ?? message.context?.combat_ended)
   );
+}
+
+/**
+ * What the chat divider compares: the round and the actor. A block with no actor (the NPC loop's
+ * safety line) is not an actor's turn, so it never starts a divider.
+ */
+export function engineBlockDividerKey(block: CombatEngineBlock): string | undefined {
+  return block.actor ? `${block.round}|${block.actor}` : undefined;
+}
+
+/**
+ * For each DM message that carries engine blocks, the divider key of the last block before it
+ * (`undefined` at the start of a fight), so a divider prints only where the round or the actor
+ * changes, across messages as well as inside one. A message that ends combat starts the next
+ * fight afresh.
+ */
+export function previousEngineDividerKeys<
+  M extends { sender?: string; context?: Record<string, unknown> },
+>(messages: readonly M[]): Map<M, string | undefined> {
+  const previous = new Map<M, string | undefined>();
+  let last: string | undefined;
+  for (const message of messages) {
+    if (message.sender !== 'dm') continue;
+    const blocks = combatEngineBlocksFromContext(message.context);
+    if (blocks.length) {
+      previous.set(message, last);
+      for (const block of blocks) last = engineBlockDividerKey(block) ?? last;
+    }
+    if (combatMessageEndedCombat(message)) last = undefined;
+  }
+  return previous;
 }

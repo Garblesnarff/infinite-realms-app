@@ -42,6 +42,7 @@ vi.mock('../overhaul/useOverhaulViewModel', () => ({
     campaign: { chapter: 'Chapter 1' },
   }),
 }));
+vi.mock('../overhaul/CombatTurnBar', () => ({ CombatTurnBarLive: () => null }));
 vi.mock('../overhaul/SceneHeader', () => ({
   SceneHeader: ({ title }: { title: string }) => <header>{title}</header>,
 }));

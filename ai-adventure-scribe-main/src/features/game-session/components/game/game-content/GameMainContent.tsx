@@ -4,12 +4,14 @@ import React, { memo } from 'react';
 import { GamePanelControls } from './GamePanelControls';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
 import { RollTraySlotProvider } from './roll-tray-slot';
+import { TargetNumbersToggle } from './TargetNumbersToggle';
 import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
 import { MessageHandler } from '../message/MessageHandler';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
+import { CombatTurnBarLive } from '../overhaul/CombatTurnBar';
 import { SceneHeader } from '../overhaul/SceneHeader';
 import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
 import { StatsBar } from '../StatsBar';
@@ -19,7 +21,6 @@ import type { SpellCastHandlerRef } from '../spell-cast-handler';
 import type { CombatTurnPreflightStatus } from '@/hooks/ai/combat-turn-preflight';
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
-import { CombatStatus } from '@/components/combat/CombatStatus';
 import { SafetyBanner } from '@/components/safety/SafetyBanner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -206,6 +207,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   onRightToggle={onRightToggle}
                   onSceneBlurbToggle={onSceneBlurbToggle}
                 />
+                <TargetNumbersToggle />
                 {showMapButton && (
                   <Button
                     type="button"
@@ -252,7 +254,6 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
             {isRightCollapsed && (
               <div className="flex items-center justify-center gap-3 border-t border-white/5 px-3 py-2 text-sm">
                 <StatsBar />
-                <CombatStatus />
               </div>
             )}
           </div>
@@ -301,6 +302,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     data-testid="story-box"
                     className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
                   >
+                    <CombatTurnBarLive turnInFlight={isProcessing} />
                     <MessageList
                       onSendFullMessage={handleSendMessage}
                       sessionId={sessionId}

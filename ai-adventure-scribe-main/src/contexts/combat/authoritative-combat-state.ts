@@ -65,6 +65,7 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
         bonusActionTaken: participant.bonusActionUsed ?? false,
         reactionTaken: participant.reactionUsed ?? false,
         isUnconscious: participant.status ? !participant.status.isConscious : false,
+        isActive: participant.isActive,
         conditions: (participant.conditions ?? []).flatMap((entry) =>
           entry.condition?.name
             ? [

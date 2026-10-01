@@ -6,6 +6,7 @@
  */
 
 import type { NarrationSegment } from '@/services/ai/shared/types';
+import type { EngineResultCard } from '@/services/combat/engine-result-card';
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 import type { RollRequest } from '@/types/roll-request';
 import type { CombatDetectionResult } from '@/utils/combatDetection';
@@ -41,6 +42,8 @@ export interface ImageRequest {
 export interface LocalNotice {
   text: string;
   persist: boolean;
+  /** Cards that stand for `text` on screen (the seating card); `text` stays the screen reader line. */
+  cards?: EngineResultCard[];
 }
 
 /**

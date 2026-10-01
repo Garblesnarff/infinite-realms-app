@@ -33,6 +33,8 @@ export interface CombatantVM {
   name: string;
   isEnemy?: boolean;
   isActive?: boolean;
+  /** Where the actor stands in this round's pass through the order. */
+  state?: 'acted' | 'now' | 'waiting';
 }
 
 export interface AttackVM {
@@ -146,6 +148,8 @@ export interface GameOverhaulViewModel {
   combat: {
     active: boolean;
     round: number;
+    /** How many of the combatants have acted this round. */
+    actedCount?: number;
     combatants: CombatantVM[];
   };
   character: CharacterSheetVM;

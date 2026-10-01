@@ -1,6 +1,7 @@
 import type { Campaign } from './campaign';
 import type { Memory } from './memory';
 import type { RollRequest } from './roll-request';
+import type { EngineResultCard } from '@/services/combat/engine-result-card';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 import type { ActionOption } from '@/utils/parseMessageOptions';
@@ -21,6 +22,8 @@ export interface MessageContext {
   intent?: string | null;
   combat_transition?: 'none' | 'start' | 'end' | null;
   combatEngineBlocks?: CombatEngineBlock[];
+  /** Cards that stand for a system row's text, e.g. the seating card (#2417). */
+  engineCards?: EngineResultCard[];
   combatEnded?: boolean;
   /** Structured DM roll requests retained so a pending popup can be restored after reload. */
   rollRequests?: RollRequest[];

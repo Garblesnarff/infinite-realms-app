@@ -1,5 +1,7 @@
 import React, { memo, useMemo } from 'react';
 
+import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
+
 import type { SpellCastHandlerRef } from '../spell-cast-handler';
 
 import CombatInterface from '@/components/combat/CombatInterface';
@@ -32,10 +34,11 @@ interface GameCombatSheetProps {
 export const GameCombatSheet: React.FC<GameCombatSheetProps> = memo(
   ({ showTracker, setShowTracker, isDM, spellCastHandlerRef }) => {
     const { messages = [] } = useMessageContext();
+    const { showTargetNumbers } = useShowTargetNumbers();
     // Only read the chat while the sheet is open; the log is the engine lines the chat shows.
     const logLines = useMemo(
-      () => (showTracker ? combatLogLines(messages) : []),
-      [showTracker, messages],
+      () => (showTracker ? combatLogLines(messages, undefined, showTargetNumbers) : []),
+      [showTracker, messages, showTargetNumbers],
     );
 
     return (

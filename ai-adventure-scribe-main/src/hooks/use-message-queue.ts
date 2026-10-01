@@ -169,6 +169,9 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
                 ...(message.context.initialGreeting === true ? { initial_greeting: true } : {}),
                 ...(message.context.previouslyOn === true ? { previously_on: true } : {}),
+                ...(Array.isArray(message.context.engineCards)
+                  ? { engineCards: message.context.engineCards }
+                  : {}),
               }
             : narrationSegments
               ? {
@@ -298,6 +301,9 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
                 ...(message.context.initialGreeting === true ? { initial_greeting: true } : {}),
                 ...(message.context.previouslyOn === true ? { previously_on: true } : {}),
+                ...(Array.isArray(message.context.engineCards)
+                  ? { engineCards: message.context.engineCards }
+                  : {}),
               }
             : narrationSegments
               ? {

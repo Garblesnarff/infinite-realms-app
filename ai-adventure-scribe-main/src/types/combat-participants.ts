@@ -87,6 +87,8 @@ export interface CombatParticipant {
   isStable?: boolean;
   isDead?: boolean;
   isUnconscious?: boolean;
+  /** `false` once the server has taken the participant out of the initiative order. */
+  isActive?: boolean;
 
   // Weapon tracking
   mainHandWeapon?: Equipment;

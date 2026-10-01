@@ -71,6 +71,7 @@ vi.mock('../overhaul/useOverhaulViewModel', () => ({
     };
   },
 }));
+vi.mock('../overhaul/CombatTurnBar', () => ({ CombatTurnBarLive: () => null }));
 vi.mock('../overhaul/SceneHeader', () => ({
   SceneHeader: ({ title, blurb }: { title: string; blurb?: string }) => (
     <header data-testid="scene-header">

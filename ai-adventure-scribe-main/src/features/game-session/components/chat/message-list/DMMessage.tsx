@@ -4,8 +4,11 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { formatNarrative } from './formatNarrative';
 import { MessageAssetDisplay } from './MessageAssetDisplay';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
+import { CombatRoundDivider } from './CombatRoundDivider';
 import { HandoutCard } from '../../handouts/HandoutCard';
 import { EngineOutcomeChip } from '../../game/EngineOutcomeChip';
+import { EngineResultCardView } from '../../game/EngineResultCardView';
+import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
 
 import type { ChatMessage } from '@/types/game';
 
@@ -14,7 +17,8 @@ import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
 import { extractEngineGeneratedLines } from '@/utils/engine-lines';
-import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
+import { isEngineResultCard } from '@/services/combat/engine-result-card';
+import { combatEngineBlocksFromContext, engineBlockDividerKey } from '@/utils/combat-engine-blocks';
 import { resolveNarrationSegments } from '@/utils/narration-segments';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 import { parseAssetTags } from '../../../utils/parse-asset-tags';
@@ -31,6 +35,8 @@ interface DMMessageProps {
   isGeneratingImage: boolean;
   imageError?: string;
   onGenerateImage: () => void;
+  /** The divider key of the last engine block printed before this message (#2417). */
+  previousEngineKey?: string;
 }
 
 /**
@@ -51,7 +57,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     isGeneratingImage,
     imageError,
     onGenerateImage,
+    previousEngineKey,
   }) => {
+    const { showTargetNumbers } = useShowTargetNumbers();
     // Get campaign assets for displaying entity images
     const { getAsset } = useCampaignAssetsContext();
     const { setSceneBackground } = useSceneBackground();
@@ -171,25 +179,45 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
               ◆ Previously on your adventure...
             </div>
           )}
-          {combatEngineBlocks.map((block) => (
-            <section
-              key={`combat-engine-${block.sequence}`}
-              aria-label={`Combat engine round ${block.round}`}
-              className="mb-3 rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2"
-              data-testid="combat-engine-block"
-            >
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-200/70">
-                Round {block.round} · {block.source === 'npc' ? 'NPC turn' : 'Player turn'}
-              </div>
-              {block.lines.map((line, index) => (
-                <EngineOutcomeChip
-                  key={`${block.sequence}-${index}-${line}`}
-                  line={line}
-                  showLabel={index === 0}
-                />
-              ))}
-            </section>
-          ))}
+          {combatEngineBlocks.map((block, blockIndex) => {
+            const cards = Array.isArray(block.cards) ? block.cards.filter(isEngineResultCard) : [];
+            // A line a card stands for is not printed twice; any other line keeps its chip.
+            const chipLines = block.lines.filter(
+              (line) =>
+                !cards.some((card) => line.includes(card.line) || card.covers?.includes(line)),
+            );
+            const key = engineBlockDividerKey(block);
+            const previousKey = combatEngineBlocks
+              .slice(0, blockIndex)
+              .reduce<
+                string | undefined
+              >((last, earlier) => engineBlockDividerKey(earlier) ?? last, previousEngineKey);
+            return (
+              <section
+                key={`combat-engine-${block.sequence}`}
+                aria-label={`Combat engine round ${block.round}`}
+                data-testid="combat-engine-block"
+              >
+                {block.actor && key !== previousKey && (
+                  <CombatRoundDivider round={block.round} actor={block.actor} />
+                )}
+                {cards.map((card, index) => (
+                  <EngineResultCardView
+                    key={`${block.sequence}-card-${index}-${card.line}`}
+                    card={card}
+                    showTargetNumbers={showTargetNumbers}
+                  />
+                ))}
+                {chipLines.map((line, index) => (
+                  <EngineOutcomeChip
+                    key={`${block.sequence}-${index}-${line}`}
+                    line={line}
+                    showLabel={cards.length === 0 && index === 0}
+                  />
+                ))}
+              </section>
+            );
+          })}
           {engineLines.map((line, index) => (
             <EngineOutcomeChip key={line} line={line} showLabel={index === 0} />
           ))}

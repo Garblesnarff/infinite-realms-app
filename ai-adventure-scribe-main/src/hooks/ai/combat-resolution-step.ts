@@ -13,14 +13,11 @@ import {
 } from './combat-notice';
 import { enforceNarrationGate } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
-import {
-  facingName,
-  rosterEntryForParticipant,
-  type EngineRosterEntry,
-} from '../../../shared/engine-display-name';
+import { facingName, type EngineRosterEntry } from '../../../shared/engine-display-name';
 
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
+import type { EngineResultCard } from '@/services/combat/engine-result-card';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 
 import logger from '@/lib/logger';
@@ -43,9 +40,11 @@ import {
   type PlayerInputOrigin,
 } from '@/services/combat/combat-action-origin';
 import {
-  formatCombatEngineOutcome,
-  formatNpcTurnLines,
-  formatRefusedSpellOutcome,
+  engineRosterOf,
+  formatCombatEngineParts,
+  formatNpcTurnOutcome,
+  npcTurnOptions,
+  formatRefusedSpellPart,
   prependCombatEngineTranscript,
 } from '@/services/combat/combat-outcome-transcript';
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
@@ -105,6 +104,7 @@ export interface CombatResolutionParams {
     isDead?: boolean;
     isUnconscious?: boolean;
     currentHitPoints?: number;
+    maxHitPoints?: number;
   }>;
   /** Actors whose refused declarations are already queued for their next legal turn. */
   queuedIntentActorIds?: string[];
@@ -299,18 +299,20 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   );
   const isQueuedIntentActor = (actorId: string): boolean =>
     queuedActorIds.has(actorId) || queuedActorSlugs.has(slugify(actorId));
-  const roster: EngineRosterEntry[] = (participants ?? []).map(rosterEntryForParticipant);
+  const roster: EngineRosterEntry[] = engineRosterOf(participants);
   const labelFor = (actorId: string): string => facingName(undefined, actorId, roster);
   const appendEngineBlock = ({
     source,
     actorId,
     lines,
+    cards,
     round,
     serverSequence,
   }: {
     source: CombatEngineBlock['source'];
     actorId?: string;
     lines: string[];
+    cards?: EngineResultCard[];
     round: number;
     serverSequence?: number;
   }): CombatEngineBlock | undefined => {
@@ -323,6 +325,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       source,
       ...(actorId ? { actor: labelFor(actorId) } : {}),
       lines: cleanLines,
+      ...(cards?.length ? { cards } : {}),
     };
     engineBlocks.push(block);
     return block;
@@ -363,28 +366,28 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     });
     if (action.action_type === 'cast_spell') {
       const spell = playerCombatSpellLabel(action.spell_id, action.spell_id);
+      const refused = formatRefusedSpellPart(
+        action.actor_id,
+        spell,
+        playerFacingRefusal(refusal, {
+          actorIsPlayer,
+          actor: labelFor(action.actor_id),
+          turnHolder:
+            refusal.details?.currentParticipantId || refusal.details?.currentParticipantSlug
+              ? labelFor(
+                  refusal.details.currentParticipantId ??
+                    refusal.details.currentParticipantSlug ??
+                    '',
+                )
+              : null,
+        }),
+        roster,
+      );
       const line = appendEngineBlock({
         source: actorIsPlayer ? 'player' : 'npc',
         actorId: action.actor_id,
-        lines: [
-          formatRefusedSpellOutcome(
-            action.actor_id,
-            spell,
-            playerFacingRefusal(refusal, {
-              actorIsPlayer,
-              actor: labelFor(action.actor_id),
-              turnHolder:
-                refusal.details?.currentParticipantId || refusal.details?.currentParticipantSlug
-                  ? labelFor(
-                      refusal.details.currentParticipantId ??
-                        refusal.details.currentParticipantSlug ??
-                        '',
-                    )
-                  : null,
-            }),
-            roster,
-          ),
-        ],
+        lines: [refused.line],
+        cards: [refused.card],
         round: playerRound ?? 1,
       });
       if (line) refusalLines.set(refusalRecord, line);
@@ -410,9 +413,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         ...authoritativeResult,
         actorIsPlayer: false,
       });
-      const engineLines = formatNpcTurnLines(npcResult, roster, {
-        targetHp: isPlayerActor(npcResult.action.target_ids?.[0] ?? '', participants),
-      });
+      const { lines: engineLines, cards: engineCards } = formatNpcTurnOutcome(
+        npcResult,
+        roster,
+        npcTurnOptions(participants, npcResult.action.target_ids?.[0]),
+      );
       const npcOrder = participants?.find(
         (participant) => participant.id === npcResult.action.actor_id,
       )?.turnOrder;
@@ -436,6 +441,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           source: 'npc',
           actorId: npcResult.action.actor_id,
           lines: engineLines,
+          cards: engineCards,
           round: combatRoundFrom(npcResult, inferredRound),
           serverSequence: combatSequenceFrom(npcResult),
         });
@@ -615,11 +621,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     autoRolled: boolean,
   ): Promise<BatchBoundary> => {
     notePlayerSpell(action);
-    const engineTranscript = formatCombatEngineOutcome(action, execution.result, roster);
+    const engineParts = formatCombatEngineParts(action, execution.result, roster);
     appendEngineBlock({
       source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
       actorId: action.actor_id,
-      lines: engineTranscript ? [engineTranscript] : [],
+      lines: engineParts.length ? [engineParts.map((part) => part.line).join('\n\n')] : [],
+      cards: engineParts.map((part) => part.card),
       round: combatRoundFrom(execution.result, playerRound ?? 1),
       serverSequence: combatSequenceFrom(execution.result),
     });
@@ -839,10 +846,12 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       refusalReason: 'PLAYER_SPELL_NOT_DECLARED',
       currentTurn: null,
     });
+    const refused = formatRefusedSpellPart(actor, declaredPlayerSpell.spellName, reason);
     appendEngineBlock({
       source: 'player',
       ...(playerParticipant ? { actorId: playerParticipant.id } : {}),
-      lines: [formatRefusedSpellOutcome(actor, declaredPlayerSpell.spellName, reason)],
+      lines: [refused.line],
+      cards: [refused.card],
       round: playerRound ?? 1,
     });
     logger.warn('PLAYER_ACTION_UNRESOLVED', {

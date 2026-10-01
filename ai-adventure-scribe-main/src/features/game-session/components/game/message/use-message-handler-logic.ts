@@ -304,7 +304,10 @@ export const useMessageHandlerLogic = ({
             sender: 'system',
             timestamp: new Date().toISOString(),
             persist: notice.persist,
-            context: { intent: 'combat_pending_intent' },
+            context: {
+              intent: 'combat_pending_intent',
+              ...(notice.cards ? { engineCards: notice.cards } : {}),
+            },
           }),
         );
       };

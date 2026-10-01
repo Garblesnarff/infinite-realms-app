@@ -352,7 +352,11 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
     // saves it.
     expect(shown).toEqual([
       { text: SEATING_LINE, persist: false },
-      { text: EMIL_LINE, persist: true },
+      {
+        text: EMIL_LINE,
+        persist: true,
+        cards: [expect.objectContaining({ kind: 'attack', line: EMIL_LINE })],
+      },
     ]);
   });
 

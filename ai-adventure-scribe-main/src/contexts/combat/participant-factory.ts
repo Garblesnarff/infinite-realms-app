@@ -73,6 +73,7 @@ export function createCombatParticipant(
     isStable: partial.isStable,
     isDead: partial.isDead,
     isUnconscious: partial.isUnconscious,
+    ...(partial.isActive === false ? { isActive: false } : {}),
     actionTaken: partial.actionTaken || false,
     bonusActionTaken: partial.bonusActionTaken || false,
     reactionTaken: partial.reactionTaken || false,

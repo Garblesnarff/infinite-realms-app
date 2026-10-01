@@ -22,6 +22,7 @@ import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 import { useSpellTargetSaveHost } from '@/hooks/combat/use-spell-target-save-host';
 import { markPlayerRollCommitted } from '@/services/combat/player-roll-bridge';
+import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
 import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
 interface MessageListContainerProps {
@@ -93,6 +94,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     // Combat asks the player for their own attack die through this popup. Registered here
     // because this is where the queue is already rendered; see use-player-roll-host.
     usePlayerRollHost();
+
+    const previousEngineKeys = useMemo(() => previousEngineDividerKeys(messages), [messages]);
 
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {
@@ -231,6 +234,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onGenerateScene={onGenerateScene}
                       onOptionSelect={onOptionSelect}
                       characterName={group.messages[0].characterName}
+                      previousEngineKey={previousEngineKeys.get(message)}
                     />
                   );
                 })}
