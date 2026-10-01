@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.7](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.6...v0.22.7) (2026-10-01)
+
+
+### Bug Fixes
+
+* **combat:** warn when authored Speed text is discarded ([#2399](https://github.com/Garblesnarff/infinite-realms-production/issues/2399)) ([#2409](https://github.com/Garblesnarff/infinite-realms-production/issues/2409)) ([c1957e6](https://github.com/Garblesnarff/infinite-realms-production/commit/c1957e623aaf02629e3ff06e0ddb3253ab4a0ce1))
+* **dm:** enforce the no-engine-event narration gate in and out of combat ([#2373](https://github.com/Garblesnarff/infinite-realms-production/issues/2373)) ([#2381](https://github.com/Garblesnarff/infinite-realms-production/issues/2381)) ([4f5f354](https://github.com/Garblesnarff/infinite-realms-production/commit/4f5f3547ab08dbdaef4d3b06736508575ea4b645))
+* **game:** sheet-owned roll copy, docked combat confirmation and GM spell picker ([#2343](https://github.com/Garblesnarff/infinite-realms-production/issues/2343) D) ([#2411](https://github.com/Garblesnarff/infinite-realms-production/issues/2411)) ([2091122](https://github.com/Garblesnarff/infinite-realms-production/commit/2091122563c8b415bd3d0c4374b684834375e1c5))
+* **session:** save the Previously On recap and opening memories once per session ([#2386](https://github.com/Garblesnarff/infinite-realms-production/issues/2386) B) ([#2410](https://github.com/Garblesnarff/infinite-realms-production/issues/2410)) ([a3f241f](https://github.com/Garblesnarff/infinite-realms-production/commit/a3f241f0948d87172e5ad13254dc1da49a3b21b8))
+
 ## [0.22.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.5...v0.22.6) (2026-09-30)
 
 
