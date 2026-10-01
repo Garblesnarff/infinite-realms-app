@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.22.8](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.7...v0.22.8) (2026-10-01)
+
+
+### Bug Fixes
+
+* **combat:** [#2343](https://github.com/Garblesnarff/infinite-realms-production/issues/2343) group A — per-spell cast chips, hide cast tag, pin sheet spell prompt ([#2413](https://github.com/Garblesnarff/infinite-realms-production/issues/2413)) ([9c0fdba](https://github.com/Garblesnarff/infinite-realms-production/commit/9c0fdba0acc609c9bdede4b441a131a403589d44))
+* **combat:** NPC with no stat block fights on HP-derived attack; bestiary creatures carry the bible name ([#2398](https://github.com/Garblesnarff/infinite-realms-production/issues/2398)) ([#2406](https://github.com/Garblesnarff/infinite-realms-production/issues/2406)) ([a20504b](https://github.com/Garblesnarff/infinite-realms-production/commit/a20504b10ffe18d09d63093e71ba700b9f67b30b))
+
 ## [0.22.7](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.6...v0.22.7) (2026-10-01)
 
 
