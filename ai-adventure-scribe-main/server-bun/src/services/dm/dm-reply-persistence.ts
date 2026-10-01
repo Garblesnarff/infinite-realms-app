@@ -49,6 +49,7 @@ const nonEmptyArray = (value: unknown): boolean => Array.isArray(value) && value
  */
 export function dmReplySkipReason(
   envelope: Record<string, unknown> | null,
+  { narrationGated = true }: { narrationGated?: boolean } = {},
 ): DmReplySkipReason | null {
   if (!envelope) return 'unparsed_envelope';
   if (typeof envelope.text !== 'string' || !envelope.text.trim()) return 'empty_text';
@@ -59,8 +60,10 @@ export function dmReplySkipReason(
     return 'combat_actions';
   }
   // The client withholds a reply like this until its narration gate has ruled on it (#2373), so
-  // the provisional copy is not written either; the client saves the reply it keeps.
-  if (suspectsFabricatedOutcome(envelope.text, { playerMayHaveActed: true })) {
+  // the provisional copy is not written either; the client saves the reply it keeps. The gate
+  // does not run on a roll-result turn (the engine's lines are the account of it), so the
+  // client says when it will not, and the detector is skipped here too.
+  if (narrationGated && suspectsFabricatedOutcome(envelope.text, { playerMayHaveActed: true })) {
     return 'unverified_harm_claim';
   }
   return null;
@@ -85,6 +88,8 @@ export interface PersistDmReplyParams {
   envelope: Record<string, unknown> | null;
   /** The client saw no active encounter when it sent the turn. */
   clientInCombat?: boolean;
+  /** The client will run its narration gate on this turn. Absent means it will. */
+  narrationGated?: boolean;
 }
 
 export interface PersistDmReplyResult {
@@ -99,7 +104,9 @@ export interface PersistDmReplyResult {
 export async function persistGeneratedDmReply(
   params: PersistDmReplyParams,
 ): Promise<PersistDmReplyResult> {
-  const reason = params.clientInCombat ? 'client_in_combat' : dmReplySkipReason(params.envelope);
+  const reason = params.clientInCombat
+    ? 'client_in_combat'
+    : dmReplySkipReason(params.envelope, { narrationGated: params.narrationGated });
   if (reason || !params.envelope)
     return { persisted: false, reason: reason ?? 'unparsed_envelope' };
 

@@ -109,6 +109,25 @@ describe('dmReplySkipReason — the same boundary as the client early render', (
     ).toBeNull();
   });
 
+  test('a roll-result turn is not run through the harm detector: the client gate does not run there', () => {
+    const harmful = explorationEnvelope({
+      text:
+        'As you speak, you narrowly avoid a strike from the entity, though a glancing blow ' +
+        'still leaves you feeling rattled and wounded.',
+    });
+    expect(dmReplySkipReason(harmful, { narrationGated: false })).toBeNull();
+    // A silent turn, and a client that does not say, keep the detector.
+    expect(dmReplySkipReason(harmful, { narrationGated: true })).toBe('unverified_harm_claim');
+    expect(dmReplySkipReason(harmful)).toBe('unverified_harm_claim');
+    // Everything else the client holds back stays held back on a roll turn.
+    expect(
+      dmReplySkipReason(
+        { ...harmful, roll_requests: [{ type: 'skill_check', formula: '1d20' }] },
+        { narrationGated: false },
+      ),
+    ).toBe('roll_requests');
+  });
+
   test('an unparsed or empty completion is not written', () => {
     expect(dmReplySkipReason(null)).toBe('unparsed_envelope');
     expect(dmReplySkipReason(explorationEnvelope({ text: '   ' }))).toBe('empty_text');

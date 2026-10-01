@@ -181,7 +181,7 @@ export const loggingPlugin = new Elysia({ name: 'logging' })
         errorCode: code,
         errorMessage,
         errorStack,
-        ...(isValidation ? { issues: validationIssues(error) } : {}),
+        ...(isValidation ? { issues: validationIssues(error, { schemaPathsOnly: true }) } : {}),
       },
       `✗ ${method} ${path} ${statusCode} ${duration}ms - ${errorMessage}`,
     );

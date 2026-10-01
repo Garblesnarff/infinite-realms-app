@@ -12,7 +12,7 @@ import {
   type ParseCoverage,
   type ParsedStatBlock,
 } from './authored-stat-block-parser.js';
-import { normalizeMonsterKey } from './monster-key.js';
+import { monsterKeyTokens, normalizeMonsterKey } from './monster-key.js';
 
 export interface AuthoredMonster {
   entityName: string;
@@ -75,14 +75,61 @@ export function buildCampaignMonsterIndex(
   return index;
 }
 
+/** Honorifics a seat label may lead with when the bible spells the NPC out in full. */
+const NPC_TITLES = new Set([
+  'captain',
+  'sergeant',
+  'lieutenant',
+  'commander',
+  'general',
+  'lord',
+  'lady',
+  'sir',
+  'dame',
+  'doctor',
+  'professor',
+  'father',
+  'mother',
+  'brother',
+  'sister',
+  'master',
+  'elder',
+]);
+
+/**
+ * The one inexact match: a seat labelled "<title> <surname>" ("Captain Reeves") reaches the
+ * single bible entry that starts with that title, ends with that surname and carries more
+ * words between ("Captain Sarah Reeves"). Two or more such entries means the seat label does
+ * not say which NPC is meant, so nothing is returned and the caller keeps its fallback.
+ */
+const findTitledPartialMatch = (
+  index: CampaignMonsterIndex,
+  name: string,
+): AuthoredMonster | null => {
+  const seat = monsterKeyTokens(name);
+  if (seat.length < 2 || !NPC_TITLES.has(seat[0]!)) return null;
+
+  const matches: AuthoredMonster[] = [];
+  for (const entry of index.byKey.values()) {
+    const tokens = monsterKeyTokens(entry.entityName);
+    if (tokens.length <= seat.length) continue;
+    if (tokens[0] !== seat[0] || tokens[tokens.length - 1] !== seat[seat.length - 1]) continue;
+    let next = 1;
+    for (const token of tokens) if (token === seat[next]) next += 1;
+    if (next >= seat.length) matches.push(entry);
+  }
+  return matches.length === 1 ? matches[0]! : null;
+};
+
 /**
  * Matches a combatant against the campaign's authored creatures.
  *
  * Both the DM's `monster_id` and the combatant's display name are tried, each normalized by
  * the shared rule, so "Gluten Golem", "gluten_golem", "gluten-golem" and "GLUTEN GOLEM" all
- * reach the same chunk. Matching is exact-after-normalization only — there is deliberately
- * no fuzzy matching against authored names, because a bible's creatures are the author's
- * canon and guessing between two of them would hand one creature's numbers to another.
+ * reach the same chunk. Beyond that, the only inexact match is a titled name against the one
+ * bible entry it abbreviates (`findTitledPartialMatch`). There is deliberately no other fuzzy
+ * matching against authored names, because a bible's creatures are the author's canon and
+ * guessing between two of them would hand one creature's numbers to another.
  */
 export function findAuthoredMonster(
   index: CampaignMonsterIndex,
@@ -94,5 +141,5 @@ export function findAuthoredMonster(
     const hit = index.byKey.get(normalizeMonsterKey(candidate));
     if (hit) return hit;
   }
-  return null;
+  return name ? findTitledPartialMatch(index, name) : null;
 }

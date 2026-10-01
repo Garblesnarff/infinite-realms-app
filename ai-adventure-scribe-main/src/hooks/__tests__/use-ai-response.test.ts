@@ -196,7 +196,9 @@ describe('useAIResponse', () => {
       );
 
       expect(AIService.chatWithDM).toHaveBeenCalledWith(
-        expect.objectContaining({ dmReply: { messageId: DM_ID, inCombat: false } }),
+        expect.objectContaining({
+          dmReply: { messageId: DM_ID, inCombat: false, narrationGated: true },
+        }),
       );
     });
 
@@ -229,7 +231,38 @@ describe('useAIResponse', () => {
       );
 
       expect(AIService.chatWithDM).toHaveBeenCalledWith(
-        expect.objectContaining({ dmReply: { messageId: DM_ID, inCombat: true } }),
+        expect.objectContaining({
+          dmReply: { messageId: DM_ID, inCombat: true, narrationGated: false },
+        }),
+      );
+    });
+
+    it('tells the server a dice-roll turn is not gated, so its reply is kept even with harm words', async () => {
+      const { AIService } = await import('@/services/ai-service');
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'The blade bites your arm.' });
+
+      const { result } = renderHook(() => useAIResponse());
+      await result.current.getAIResponse(
+        [
+          {
+            text: 'I rolled 4',
+            sender: 'player',
+            timestamp: new Date().toISOString(),
+            context: { intent: 'dice_roll' },
+          },
+        ] as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        undefined,
+        DM_ID,
+      );
+
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dmReply: { messageId: DM_ID, inCombat: false, narrationGated: false },
+        }),
       );
     });
 

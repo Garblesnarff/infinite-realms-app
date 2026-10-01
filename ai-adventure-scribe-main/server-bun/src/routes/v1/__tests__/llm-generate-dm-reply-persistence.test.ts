@@ -11,6 +11,7 @@ import { Elysia } from 'elysia';
 
 let generatedResult: Record<string, unknown> = { text: '', provider: 'openrouter', model: 't/m' };
 let loggedInfo: Record<string, unknown>[] = [];
+let loggedErrors: Record<string, unknown>[] = [];
 let usageCalls: Record<string, unknown>[] = [];
 let addMessageCalls: Array<{ data: Record<string, unknown>; userId: string }> = [];
 
@@ -26,7 +27,9 @@ const testLogger = {
     if (msg && typeof msg === 'object') loggedInfo.push(msg as Record<string, unknown>);
   },
   warn: () => {},
-  error: () => {},
+  error: (msg: unknown) => {
+    if (msg && typeof msg === 'object') loggedErrors.push(msg as Record<string, unknown>);
+  },
   child: () => testLogger,
 };
 mock.module('../../../lib/logger.js', () => ({
@@ -135,6 +138,7 @@ const persistenceLine = (): Record<string, unknown> | undefined =>
 
 beforeEach(() => {
   loggedInfo = [];
+  loggedErrors = [];
   usageCalls = [];
   addMessageCalls = [];
 });
@@ -201,6 +205,41 @@ describe('POST /v1/llm/generate — the server keeps the DM reply it generated (
     );
   });
 
+  describe('a reply that claims harm (#2373, #2426 item 4)', () => {
+    const harmfulReply = {
+      ...explorationReply,
+      text:
+        'As you speak, you narrowly avoid a strike from the entity, though a glancing blow ' +
+        'still leaves you feeling rattled and wounded.',
+    };
+
+    it('is still held back on a silent turn: the client gate has not ruled on it', async () => {
+      await generate(harmfulReply, {
+        dmReply: { messageId: DM_MESSAGE_ID, inCombat: false, narrationGated: true },
+      });
+
+      expect(addMessageCalls).toHaveLength(0);
+      expect(persistenceLine()).toEqual(
+        expect.objectContaining({ persisted: false, reason: 'unverified_harm_claim' }),
+      );
+    });
+
+    it('is persisted on a roll turn, where the client does not run the gate', async () => {
+      await generate(harmfulReply, {
+        dmReply: { messageId: DM_MESSAGE_ID, inCombat: false, narrationGated: false },
+      });
+
+      expect(addMessageCalls).toHaveLength(1);
+      expect(persistenceLine()).toEqual(expect.objectContaining({ persisted: true, reason: null }));
+    });
+
+    it('is held back when an older client does not say', async () => {
+      await generate(harmfulReply);
+
+      expect(addMessageCalls).toHaveLength(0);
+    });
+  });
+
   it('leaves non-DM generations alone: no row, no session on the usage row, no new field', async () => {
     const response = await generate(explorationReply, {});
 
@@ -209,6 +248,19 @@ describe('POST /v1/llm/generate — the server keeps the DM reply it generated (
     expect(addMessageCalls).toHaveLength(0);
     expect(persistenceLine()).toBeUndefined();
     expect(usageCalls).toEqual([expect.objectContaining({ sessionId: undefined })]);
+  });
+
+  it('a bad metrics record never puts its client-chosen key in the request.error line (#2426 item 6)', async () => {
+    const SECRET_KEY = 'CLIENT-KEY-MARKER-5be0a7';
+    const response = await generate(explorationReply, {
+      dmReply: { messageId: DM_MESSAGE_ID, inCombat: false },
+      metrics: { [SECRET_KEY]: 'not a number' },
+    });
+
+    expect(response.status).toBe(422);
+    const line = loggedErrors.find((entry) => entry.msg === 'request.error');
+    expect(line?.issues).toEqual([expect.objectContaining({ path: '/metrics/*' })]);
+    expect(JSON.stringify(loggedErrors)).not.toContain(SECRET_KEY);
   });
 
   it('rejects a dmReply id that is not a uuid', async () => {

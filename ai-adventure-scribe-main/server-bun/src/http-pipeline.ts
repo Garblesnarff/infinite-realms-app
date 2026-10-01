@@ -73,14 +73,74 @@ function resolveRequestId(request: Request): string {
   return id;
 }
 
-/** Field paths and rule messages of a validation failure, without the values that failed. */
-export function validationIssues(error: unknown): Array<{ path: string; message: string }> {
+type SchemaNode = Record<string, unknown>;
+
+const isNode = (value: unknown): value is SchemaNode =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** One path segment down a TypeBox schema, or null when the node does not declare it. */
+const declaredChild = (node: SchemaNode, segment: string): SchemaNode | null => {
+  const properties = node.properties;
+  if (isNode(properties) && Object.hasOwn(properties, segment) && isNode(properties[segment])) {
+    return properties[segment];
+  }
+  if (isNode(node.items) && /^\d+$/.test(segment)) return node.items;
+  for (const key of ['anyOf', 'allOf', 'oneOf']) {
+    const branches = node[key];
+    if (!Array.isArray(branches)) continue;
+    for (const branch of branches) {
+      const child = isNode(branch) ? declaredChild(branch, segment) : null;
+      if (child) return child;
+    }
+  }
+  return null;
+};
+
+/** The schema every client-chosen key of a record (`t.Record`, `additionalProperties`) maps to. */
+const recordValueSchema = (node: SchemaNode): SchemaNode | null => {
+  const patterns = node.patternProperties;
+  const value = isNode(patterns) ? Object.values(patterns)[0] : node.additionalProperties;
+  return isNode(value) ? value : null;
+};
+
+/**
+ * The failing instance path rewritten as a schema path: a segment the schema declares stays,
+ * a segment the client chose (a `t.Record` key, an `additionalProperties` name) becomes `*`.
+ * Without the schema nothing can be told apart, so every segment is `*`.
+ */
+function schemaPath(root: unknown, instancePath: string): string {
+  let node: SchemaNode | null = isNode(root) ? root : null;
+  const segments = instancePath.split('/').slice(1);
+  return segments
+    .map((segment) => {
+      const child = node ? declaredChild(node, segment) : null;
+      if (child) {
+        node = child;
+        return segment;
+      }
+      node = node ? recordValueSchema(node) : null;
+      return '*';
+    })
+    .map((segment) => `/${segment}`)
+    .join('');
+}
+
+/**
+ * Field paths and rule messages of a validation failure, without the values that failed.
+ * `schemaPathsOnly` is for log lines: record keys the client chose are not written there.
+ */
+export function validationIssues(
+  error: unknown,
+  { schemaPathsOnly = false }: { schemaPathsOnly?: boolean } = {},
+): Array<{ path: string; message: string }> {
   const all = (error as { all?: unknown }).all;
   if (!Array.isArray(all)) return [];
+  const root = (error as { validator?: { schema?: unknown } }).validator?.schema;
   return all.slice(0, 5).map((issue) => {
     const { path, message } = (issue ?? {}) as { path?: unknown; message?: unknown };
+    const instancePath = typeof path === 'string' ? path : '';
     return {
-      path: typeof path === 'string' ? path : '',
+      path: schemaPathsOnly ? schemaPath(root, instancePath) : instancePath,
       message: typeof message === 'string' ? message : 'invalid',
     };
   });
@@ -155,7 +215,7 @@ export function createRequestPipelineApp() {
           ? {
               error: 'Validation failed',
               errorName: 'ValidationError',
-              issues: validationIssues(error),
+              issues: validationIssues(error, { schemaPathsOnly: true }),
             }
           : {
               error: error instanceof Error ? error.message : String(error),

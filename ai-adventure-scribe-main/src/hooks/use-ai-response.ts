@@ -537,6 +537,9 @@ export const useAIResponse = (): {
                     preflightNpcTurns?.results?.length ||
                     preflightNpcTurns?.combatEnded,
                   ),
+                  // The client's own gate predicate, so the server's harm check stands down on
+                  // exactly the turns the client gate does (a dice-roll message, say).
+                  narrationGated: holdSideEffects,
                 },
               }
             : {}),

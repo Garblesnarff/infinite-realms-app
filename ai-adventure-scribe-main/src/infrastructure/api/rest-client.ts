@@ -314,7 +314,7 @@ export interface GenerateTextParams {
    * under it before responding, and the client's own save of the turn replaces that row in
    * place. Only the main DM turn sends it.
    */
-  dmReply?: { messageId: string; inCombat?: boolean };
+  dmReply?: { messageId: string; inCombat?: boolean; narrationGated?: boolean };
   combatEntry?: {
     sessionId: string;
     player: {

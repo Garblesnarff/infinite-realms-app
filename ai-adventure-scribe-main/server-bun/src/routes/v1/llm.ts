@@ -368,6 +368,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           messageId: dmReply.messageId,
           envelope,
           clientInCombat: dmReply.inCombat === true,
+          narrationGated: dmReply.narrationGated,
         });
         dmReplyPersisted = persistence.persisted;
         logger.info({
@@ -410,6 +411,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                 '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
             }),
             inCombat: t.Optional(t.Boolean()),
+            narrationGated: t.Optional(t.Boolean()),
           }),
         ),
         model: t.Optional(t.String()),

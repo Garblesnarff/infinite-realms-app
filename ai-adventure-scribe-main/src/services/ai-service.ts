@@ -107,7 +107,7 @@ export class AIService {
      * #2218: the id reserved for this turn's DM row, so the server can persist the reply, and
      * whether the engine may still resolve the turn (in which case the server must not).
      */
-    dmReply?: { messageId: string; inCombat: boolean };
+    dmReply?: { messageId: string; inCombat: boolean; narrationGated?: boolean };
     /**
      * #2373: do not write memory, world updates or voice assignments for this reply. They are
      * returned on `heldSideEffects` for the caller to run once it has decided to keep the reply.

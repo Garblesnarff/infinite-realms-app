@@ -63,6 +63,35 @@ describe('a validation failure never logs the submitted body (#2382)', () => {
     expect(JSON.stringify(lines)).not.toContain(MARKER);
   });
 
+  it('a record key the client chose becomes * in the log, and the client answer is unchanged', async () => {
+    lines = [];
+    const SECRET_KEY = 'CLIENT-KEY-MARKER-9d41e2';
+    // The shape of /v1/llm/generate's `metrics`, plus an array and a nested object.
+    const app = createRequestPipelineApp().post('/m', () => ({ ok: true }), {
+      body: t.Object({
+        metrics: t.Record(t.String(), t.Number()),
+        items: t.Array(t.Object({ name: t.String() })),
+      }),
+    });
+    const response = await app.handle(
+      new Request('http://localhost/m', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-request-id': 'req-record' },
+        body: JSON.stringify({ metrics: { [SECRET_KEY]: 'not a number' }, items: [{ name: 1 }] }),
+      }),
+    );
+    expect(response.status).toBe(422);
+
+    const line = lines.find((entry) => entry.msg === 'request.error');
+    const paths = (line?.issues as Array<{ path: string }>).map((issue) => issue.path);
+    expect(paths).toContain('/metrics/*');
+    expect(paths).toContain('/items/0/name');
+    expect(JSON.stringify(lines)).not.toContain(SECRET_KEY);
+    // The 422 body is for the caller's own debugging and keeps the real path.
+    const payload = (await response.json()) as { issues: Array<{ path: string }> };
+    expect(payload.issues.map((issue) => issue.path)).toContain(`/metrics/${SECRET_KEY}`);
+  });
+
   it('the answer to the client still names the field and leaves the value out', async () => {
     lines = [];
     const app = createRequestPipelineApp().post('/cast', () => ({ ok: true }), schema);

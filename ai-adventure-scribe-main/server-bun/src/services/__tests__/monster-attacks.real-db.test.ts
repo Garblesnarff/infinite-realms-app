@@ -240,6 +240,14 @@ const QUILL_CHUNK = [
   '*   **Secret:** Forged the last entry.',
 ].join('\n');
 
+const VOSS_CHUNK = (name: string, hp: number): string =>
+  [
+    `**${name}** (Human Fighter) - Brisk.`,
+    '*   **Goal:** Hold the gate.',
+    `*   *HP:* ${hp}, *AC:* 14.`,
+    '*   *Attack:* +2 to hit, 1d6 piercing (spear)',
+  ].join('\n');
+
 /** The Academy creature and the NPC bio that shares its normalized name (leading "The"). */
 const FLAVOR_ELEMENTAL_CHUNK = [
   '**Flavor-Elemental (Corrupted)**',
@@ -285,6 +293,8 @@ describeWithDb('monsters attack with their own numbers', () => {
     improvised: 'The Doorkeeper',
     reeves: 'Captain Sarah Reeves',
     quill: 'Quill',
+    reevesTitled: 'Captain Reeves',
+    vossAmbiguous: 'Lieutenant Voss',
     shardA: 'Corrupted Shard A',
     shardB: 'Corrupted Shard B',
   };
@@ -365,6 +375,19 @@ describeWithDb('monsters attack with their own numbers', () => {
         entityName: NAMES.quill,
         content: QUILL_CHUNK,
       },
+      // Two authored NPCs a "Lieutenant Voss" seat could mean: the label does not choose.
+      {
+        campaignId: starterCampaignId,
+        chunkType: 'npc_tier1' as const,
+        entityName: 'Lieutenant Dray Voss',
+        content: VOSS_CHUNK('Lieutenant Dray Voss', 30),
+      },
+      {
+        campaignId: starterCampaignId,
+        chunkType: 'npc_tier1' as const,
+        entityName: 'Lieutenant Kell Voss',
+        content: VOSS_CHUNK('Lieutenant Kell Voss', 35),
+      },
       // Inserted before the monster on purpose: the bestiary entry must win either way.
       {
         campaignId: starterCampaignId,
@@ -421,6 +444,9 @@ describeWithDb('monsters attack with their own numbers', () => {
         // Name-only bible NPC with an authored block, and one whose bio has none.
         { encounterId: '', name: NAMES.reeves, initiativeModifier: 0 },
         { encounterId: '', name: NAMES.quill, initiativeModifier: 0 },
+        // The DM's short form of her name, and a short form that fits two authored NPCs.
+        { encounterId: '', name: NAMES.reevesTitled, initiativeModifier: 0 },
+        { encounterId: '', name: NAMES.vossAmbiguous, initiativeModifier: 0 },
         // One bestiary creature seated twice under DM-invented labels.
         {
           encounterId: '',
@@ -607,7 +633,7 @@ describeWithDb('monsters attack with their own numbers', () => {
     });
     const seats = npcFallbackLogs[0]!.seats as LogPayload[];
     expect(seats.map((seat) => seat.npcName).sort()).toEqual(
-      [NAMES.improvised, NAMES.quill].sort(),
+      [NAMES.improvised, NAMES.quill, NAMES.vossAmbiguous].sort(),
     );
     // The old generic path (1d1 Unarmed Strike) is gone for these seats.
     expect(fallbackLogs.find((entry) => entry.combatantName === NAMES.improvised)).toBeUndefined();
@@ -633,6 +659,27 @@ describeWithDb('monsters attack with their own numbers', () => {
     expect(line.attackBonus).toBe(3);
     const seats = npcFallbackLogs[0]!.seats as LogPayload[];
     expect(seats.map((entry) => entry.npcName)).not.toContain(NAMES.reeves);
+  });
+
+  test('a titled short name reaches the one authored NPC; an ambiguous one keeps the fallback', async () => {
+    const profile = await storedProfile(ids.reevesTitled);
+    expect(profile?.source).toBe('authored');
+    expect((profile?.attacks as LogPayload[])[0]).toMatchObject({
+      attackBonus: 3,
+      damageDice: '1d8',
+    });
+    const [seat] = await db
+      .select({ maxHp: combatParticipants.maxHp, armorClass: combatParticipants.armorClass })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, ids.reevesTitled));
+    expect(seat).toEqual({ maxHp: 45, armorClass: 15 });
+
+    const ambiguous = await storedProfile(ids.vossAmbiguous);
+    expect(ambiguous?.source).toBe('derived');
+    // NPC_STAT_FALLBACK was recorded once at seating, by the first test in this suite.
+    const seats = npcFallbackLogs[0]!.seats as LogPayload[];
+    expect(seats.map((entry) => entry.npcName)).toContain(NAMES.vossAmbiguous);
+    expect(seats.map((entry) => entry.npcName)).not.toContain(NAMES.reevesTitled);
   });
 
   test('an NPC bio never shadows the bestiary creature of the same normalized name', async () => {
