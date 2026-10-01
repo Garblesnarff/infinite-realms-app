@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CombatEntryConfirmation } from '../CombatEntryConfirmation';
 
-import { Z_INDEX } from '@/constants/z-index';
 import logger from '@/lib/logger';
 
 vi.mock('@/lib/logger', () => ({
@@ -36,9 +35,9 @@ describe('CombatEntryConfirmation', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Initiative: rolled after confirmation')).not.toBeInTheDocument();
     const overlay = screen.getByTestId('combat-entry-confirmation-overlay');
-    expect(overlay.parentElement).toBe(document.body);
-    expect(overlay).toHaveClass('fixed', 'bottom-40', 'left-1/2');
-    expect(overlay).toHaveStyle({ zIndex: Z_INDEX.COMBAT_ENTRY_CONFIRMATION });
+    expect(overlay.parentElement).toHaveAttribute('data-testid', 'roll-tray');
+    expect(overlay).toHaveClass('w-full');
+    expect(overlay).not.toHaveClass('fixed', 'absolute', 'sticky');
     const strike = screen.getByRole('button', { name: '[Strike]' });
     const declineButton = screen.getByRole('button', { name: '[Do something else]' });
     const card = screen.getByRole('alert', { name: 'Combat entry confirmation' });

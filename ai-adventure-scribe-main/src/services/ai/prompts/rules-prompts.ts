@@ -140,6 +140,9 @@ ${PLAYER_ACTION_FIDELITY}
 \`narration_segments\`, etc.) - it is NOT a code block or text marker. When an action has an
 uncertain outcome, populate \`roll_requests\` with one entry per roll needed. Leave it as an
 empty array \`[]\` when no roll is needed.**
+For checks, saves and initiative, request only the die ("1d20"). The character sheet supplies
+all modifiers. Never state or guess a numeric modifier in text, narration_segments, options,
+or purpose: say "Make an Investigation check", not "Roll 1d20+4".
 Once a check is resolved, its outcome is settled; never request the same check again for the same information.
 Every turn must advance the situation rather than restate the same scene or tableau.
 
@@ -147,7 +150,7 @@ Each entry in \`roll_requests\` looks like:
 \`\`\`json
 {
   "type": "check",
-  "formula": "1d20+modifier",
+  "formula": "1d20",
   "purpose": "Description of what this roll is for",
   "dc": 14,
   "ac": null,
@@ -161,7 +164,7 @@ Each entry in \`roll_requests\` looks like:
   checks are always "check" - do NOT invent other type strings like "skill_check"). "attack" is
   how every attack is declared, both at the moment combat starts and on every turn after it;
   during active combat the engine resolves it instead of the player rolling it.
-- **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
+- **formula**: Dice notation ("1d20" for checks/saves/initiative; e.g., "2d6+4" for damage)
 - **purpose**: Brief explanation of the declared action (e.g., "Stealth check to sneak past guards");
   never name undiscovered content or an outcome the player has not established
 - **dc**: Difficulty Class for checks/saves, or \`null\` if not applicable
@@ -171,10 +174,10 @@ Each entry in \`roll_requests\` looks like:
 </field_requirements>
 
 <examples>
-Stealth: \`{"type": "check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\`
-Persuasion: \`{"type": "check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
-Perception: \`{"type": "check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\`
-Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
+Stealth: \`{"type": "check", "formula": "1d20", "purpose": "Stealth check to avoid detection", "dc": 14, "ac": null, "advantage": false, "disadvantage": false}\`
+Persuasion: \`{"type": "check", "formula": "1d20", "purpose": "Persuasion to convince the merchant", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
+Perception: \`{"type": "check", "formula": "1d20", "purpose": "Perception to notice hidden details", "dc": 12, "ac": null, "advantage": false, "disadvantage": false}\`
+Save: \`{"type": "save", "formula": "1d20", "purpose": "Dexterity save to dodge fireball", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}\`
 Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 </examples>
 
@@ -224,7 +227,7 @@ DO NOT, in the same turn you populate \`roll_requests\`:
 
 ✅ CORRECT:
 \`text\`: "The ancient wall looms before you, its stones worn smooth by centuries of rain. You'll need to find handholds carefully."
-\`roll_requests\`: \`[{"type": "check", "formula": "1d20+athletics", "purpose": "Athletics check to climb the wall", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}]\`
+\`roll_requests\`: \`[{"type": "check", "formula": "1d20", "purpose": "Athletics check to climb the wall", "dc": 15, "ac": null, "advantage": false, "disadvantage": false}]\`
 
 ❌ WRONG:
 \`text\`: "The ancient wall looms before you... You manage to find purchase on the weathered stone and pull yourself up..." (resolves the climb before any roll happened)

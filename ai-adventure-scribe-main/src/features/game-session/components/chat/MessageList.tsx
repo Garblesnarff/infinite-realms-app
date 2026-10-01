@@ -93,7 +93,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
     const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
     const internalRef = useRef<HTMLDivElement | null>(null);
     const messagesRef = (containerRef as React.RefObject<HTMLDivElement>) || internalRef;
-    const [combatEntrySpace, setCombatEntrySpace] = useState(0);
 
     // Custom hooks for feature isolation
     const { generatingFor, imageByMessage, genErrorByMessage, handleGenerateScene } =
@@ -152,7 +151,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
-            paddingBottom: combatEntrySpace || undefined,
           }}
         >
           <MessageListContainer
@@ -172,7 +170,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             isFetchingMore={isFetchingMore}
             hasMore={hasMore}
             suppressEmptyState={suppressEmptyState}
-            onCombatEntrySpaceChange={setCombatEntrySpace}
           />
         </div>
       </div>

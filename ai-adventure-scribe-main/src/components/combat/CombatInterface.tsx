@@ -9,7 +9,7 @@
  */
 
 import { Shield, Users, X, RefreshCw } from 'lucide-react';
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
 
 import ActionPanel from './ActionPanel';
 import CombatLogSection from './CombatLogSection';
@@ -19,21 +19,39 @@ import HPTracker from './HPTracker';
 import InitiativeTracker from './InitiativeTracker';
 import ReactionOpportunityPanel from './ReactionOpportunityPanel';
 
+import type { SpellCastHandlerRef } from '@/features/game-session/components/game/spell-cast-handler';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RightSheetLive } from '@/features/game-session/components/game/overhaul/RightSheetLive';
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
 interface CombatInterfaceProps {
   /** Game-master controls. Defaults to false: the player view is read-only. */
   isDM?: boolean;
+  spellCastHandlerRef?: SpellCastHandlerRef;
+  onSpellCastStart?: () => void;
   /** Engine lines for the log, latest first (the same lines the chat shows). */
   logLines?: readonly string[];
 }
 
-const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false, logLines = [] }) => {
+const CombatInterface: React.FC<CombatInterfaceProps> = ({
+  isDM = false,
+  logLines = [],
+  spellCastHandlerRef,
+  onSpellCastStart,
+}) => {
   const trackerId = useId();
+  const [spellPickerOpen, setSpellPickerOpen] = useState(false);
   const {
     state,
     activeEncounter,
@@ -98,6 +116,24 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false, logLine
   return (
     <TooltipProvider>
       <div className="space-y-6">
+        {isDM && (
+          <Dialog open={spellPickerOpen} onOpenChange={setSpellPickerOpen}>
+            <DialogContent className="max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Cast Spell — your character</DialogTitle>
+                <DialogDescription>Choose a spell from your character sheet.</DialogDescription>
+              </DialogHeader>
+              <RightSheetLive
+                isInCombat={isInCombat}
+                spellCastHandlerRef={spellCastHandlerRef}
+                onCastStart={() => {
+                  setSpellPickerOpen(false);
+                  onSpellCastStart?.();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
         {/* Combat Header */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -178,6 +214,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false, logLine
                   actionValidation={actionValidation}
                   onCombatAction={handleCombatAction}
                   onNextTurn={nextTurn}
+                  onOpenSpellPicker={() => setSpellPickerOpen(true)}
                   onRollInitiative={rollInitiative}
                   onTwoWeaponAttack={handleTwoWeaponAttack}
                   onEnhancedAttack={handleEnhancedAttack}

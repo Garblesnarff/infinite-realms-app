@@ -135,6 +135,7 @@ export class AIService {
     }
 
     const p = (async () => {
+      let preparationCheckpoint = performance.now();
       let rawResponse: string;
       let voiceContext: SessionVoiceContext | null = null;
       let isFirstMessage = false;
@@ -154,6 +155,13 @@ export class AIService {
             logger.warn('Failed to retrieve memories:', memoryError);
           }
         }
+
+        logger.info('TURN_GENERATE_PREPARATION_TIMING', {
+          sessionId: params.context.sessionId,
+          stage: 'memory-fallback',
+          ms: Math.round(performance.now() - preparationCheckpoint),
+        });
+        preparationCheckpoint = performance.now();
 
         // Get voice context for multi-voice narration
         // TEMPORARILY DISABLED for option button testing
@@ -185,14 +193,42 @@ export class AIService {
             relevantMemories,
             voiceContext,
             isFirstMessage,
+          }).then((value) => {
+            logger.info('TURN_GENERATE_PREPARATION_TIMING', {
+              sessionId: params.context.sessionId,
+              stage: 'context-prompt',
+              ms: Math.round(performance.now() - preparationCheckpoint),
+            });
+            return value;
           }),
           params.context.sessionId
-            ? fetchSceneState(params.context.sessionId)
+            ? fetchSceneState(params.context.sessionId).then((value) => {
+                logger.info('TURN_GENERATE_PREPARATION_TIMING', {
+                  sessionId: params.context.sessionId,
+                  stage: 'scene-state',
+                  ms: Math.round(performance.now() - preparationCheckpoint),
+                });
+                return value;
+              })
             : Promise.resolve(null),
           shouldLoadRollOutcome && params.context.sessionId
-            ? SessionStateService.getLatestRollOutcome(params.context.sessionId)
+            ? SessionStateService.getLatestRollOutcome(params.context.sessionId).then((value) => {
+                logger.info('TURN_GENERATE_PREPARATION_TIMING', {
+                  sessionId: params.context.sessionId,
+                  stage: 'latest-roll-outcome',
+                  ms: Math.round(performance.now() - preparationCheckpoint),
+                });
+                return value;
+              })
             : Promise.resolve(null),
         ]);
+
+        logger.info('TURN_GENERATE_PREPARATION_TIMING', {
+          sessionId: params.context.sessionId,
+          stage: 'prompt-scene-state-roll-outcome-parallel',
+          ms: Math.round(performance.now() - preparationCheckpoint),
+        });
+        preparationCheckpoint = performance.now();
 
         // Rendered verbatim from the fact ledger; never assembled or interpreted client-side.
         // Empty when there is no ground truth to state, which leaves both prompts
@@ -282,6 +318,11 @@ export class AIService {
             ? { sessionId: params.context.sessionId, player: entryPlayer }
             : undefined;
 
+        logger.info('TURN_GENERATE_PREPARATION_TIMING', {
+          sessionId: params.context.sessionId,
+          stage: 'prompt-assembly-and-metrics',
+          ms: Math.round(performance.now() - preparationCheckpoint),
+        });
         reportTurnPhase(params.onTurnPhase, 'generate start');
         rawResponse = await llmApiClient.generateText({
           prompt: fullPrompt,

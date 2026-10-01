@@ -18,7 +18,8 @@ export const RightSheetLive: React.FC<{
   sessionId?: string;
   isInCombat?: boolean;
   spellCastHandlerRef?: SpellCastHandlerRef;
-}> = React.memo(({ sessionId, isInCombat = false, spellCastHandlerRef }) => {
+  onCastStart?: () => void;
+}> = React.memo(({ sessionId, isInCombat = false, spellCastHandlerRef, onCastStart }) => {
   const { state: characterState, dispatch } = useCharacter();
   const vm = useOverhaulViewModel();
   const character = characterState.character;
@@ -100,6 +101,7 @@ export const RightSheetLive: React.FC<{
       setCastingSpellId(spell.id);
       setSpellActionError(undefined);
       try {
+        onCastStart?.();
         await handler(buildSpellCastMessage(spell), buildSpellCastContext(spell));
       } catch (error) {
         setSpellActionError(error instanceof Error ? error.message : 'Unable to cast spell.');
@@ -108,7 +110,7 @@ export const RightSheetLive: React.FC<{
         setCastingSpellId(undefined);
       }
     },
-    [spellCastHandlerRef],
+    [spellCastHandlerRef, onCastStart],
   );
 
   return (

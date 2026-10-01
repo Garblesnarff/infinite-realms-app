@@ -3,14 +3,30 @@
  * it starts an action or changes state. These tests render the real tracker parts (only the
  * data hooks are stubbed) so a control added to any of them shows up here.
  */
-import { render, screen, within, type RenderResult } from '@testing-library/react';
+import { fireEvent, render, screen, within, type RenderResult } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CombatInterface from '../CombatInterface';
 
+import type { SpellCastHandlerRef } from '@/features/game-session/components/game/spell-cast-handler';
+
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { wizard as wizardClass } from '@/data/classes/wizard';
+import { buildSpellsViewModel } from '@/features/game-session/components/game/overhaul/spell-view-model';
 import { useCombatActions } from '@/hooks/use-combat-actions';
+import { calculateAllCharacterStats } from '@/utils/character-calculations';
+import { convertCharacterDetailsToCharacter } from '@/utils/character-converter';
+
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: () => ({ state: { character: casterCharacter }, dispatch: vi.fn() }),
+}));
+vi.mock('@/contexts/CampaignContext', () => ({
+  useCampaign: () => ({ state: { campaign: null } }),
+}));
+vi.mock('@/features/game-session/components/game/overhaul/useOverhaulViewModel', () => ({
+  useOverhaulViewModel: () => ({ character: casterSheet }),
+}));
 
 vi.mock('@/hooks/use-combat-actions', () => ({ useCombatActions: vi.fn() }));
 
@@ -23,6 +39,43 @@ vi.mock('@/contexts/CombatContext', () => ({
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
   useCampaignAssetsContext: () => ({ getAssetImageUrl: () => null }),
 }));
+
+// Real character converter and sheet spell mapper; the picker receives the same full VM
+// that RightSheetLive reads from useOverhaulViewModel in a game session.
+const casterCharacter = {
+  ...convertCharacterDetailsToCharacter({
+    id: 'char-1',
+    name: 'The Apprentice',
+    level: 1,
+    character_stats: [
+      { intelligence: 16, strength: 10, dexterity: 12, constitution: 10, wisdom: 10, charisma: 10 },
+    ],
+  }),
+  class: wizardClass,
+  cantrips: ['chill-touch'],
+  knownSpells: ['magic-missile'],
+  preparedSpells: ['magic-missile'],
+};
+const casterSheet = {
+  name: casterCharacter.name,
+  subtitle: 'Human · Wizard',
+  level: 1,
+  xpCurrent: 0,
+  xpMax: 300,
+  hpCurrent: 7,
+  hpMax: 7,
+  ac: 12,
+  initiative: '+1',
+  speed: 30,
+  abilityScores: [],
+  savingThrows: [],
+  skills: [],
+  attacks: [],
+  conditions: [],
+  equipment: [],
+  inventory: [],
+  ...buildSpellsViewModel(casterCharacter, calculateAllCharacterStats(casterCharacter)),
+};
 
 const REMOVED_CONTROLS =
   /End Combat|Next Turn|Apply damage|Apply healing|Grapple|Shove|Two-Weapon|Cast Spell|Ready Action|Dash|Dodge|Help|Hide$|Roll Initiative|Initiative$/i;
@@ -70,6 +123,8 @@ function renderFight({
   round = 2,
   logLines = [] as string[],
   isDM,
+  spellCastHandlerRef,
+  onSpellCastStart,
 }: {
   turn?: 'gob' | 'pc';
   playerHp?: number;
@@ -77,6 +132,8 @@ function renderFight({
   round?: number;
   logLines?: string[];
   isDM?: boolean;
+  spellCastHandlerRef?: SpellCastHandlerRef;
+  onSpellCastStart?: () => void;
 } = {}): RenderResult {
   const pc = apprentice(playerHp);
   const enemy = goblin(enemyHp);
@@ -138,7 +195,12 @@ function renderFight({
   } as never);
   return render(
     <TooltipProvider>
-      <CombatInterface logLines={logLines} {...(isDM === undefined ? {} : { isDM })} />
+      <CombatInterface
+        logLines={logLines}
+        spellCastHandlerRef={spellCastHandlerRef}
+        onSpellCastStart={onSpellCastStart}
+        {...(isDM === undefined ? {} : { isDM })}
+      />
     </TooltipProvider>,
   );
 }
@@ -254,12 +316,32 @@ describe('CombatInterface player view (#2257)', () => {
   });
 
   it('keeps the game-master controls behind isDM', () => {
-    renderFight({ turn: 'pc', isDM: true });
+    const castHandler = vi.fn(() => new Promise<void>(() => {}));
+    const closeTracker = vi.fn();
+    renderFight({
+      turn: 'pc',
+      isDM: true,
+      spellCastHandlerRef: { current: castHandler },
+      onSpellCastStart: closeTracker,
+    });
     expect(
       screen.getByRole('button', { name: /End current combat encounter/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Next Turn/i })).toBeInTheDocument();
     expect(screen.getAllByLabelText(/Apply damage to/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Cast Spell' })).toBeInTheDocument();
+    const cast = screen.getByRole('button', { name: 'Cast Spell' });
+    expect(cast).toBeInTheDocument();
+    fireEvent.click(cast);
+    expect(screen.getByRole('dialog')).toHaveTextContent('Cast Spell — your character');
+    fireEvent.click(screen.getByRole('button', { name: 'Cast Chill Touch' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(closeTracker).toHaveBeenCalledOnce();
+    expect(castHandler).toHaveBeenCalledWith(
+      'I cast Chill Touch [spell_id=chill-touch, spell_level=cantrip].',
+      { intent: 'spell_cast', spellId: 'chill-touch', spellLevel: 0 },
+    );
+    expect(
+      vi.mocked(useCombatActions).mock.results.at(-1)?.value.handleCombatAction,
+    ).not.toHaveBeenCalled();
   });
 });

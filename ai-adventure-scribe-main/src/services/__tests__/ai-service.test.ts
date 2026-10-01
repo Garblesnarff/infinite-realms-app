@@ -71,6 +71,7 @@ vi.mock('@/lib/logger', () => ({
 describe('AIService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(fetchSceneState).mockResolvedValue(null);
     vi.mocked(SessionStateService.getLatestRollOutcome).mockResolvedValue(null);
   });
 

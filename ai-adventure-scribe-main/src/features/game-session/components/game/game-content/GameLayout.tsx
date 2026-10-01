@@ -269,6 +269,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 showTracker={showTracker}
                 setShowTracker={setShowTracker}
                 isDM={isDM}
+                spellCastHandlerRef={spellCastHandlerRef}
               />
             </div>
           </TacticalMapProvider>

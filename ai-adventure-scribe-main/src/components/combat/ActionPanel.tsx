@@ -30,6 +30,7 @@ interface ActionPanelProps {
     additionalData?: unknown,
   ) => void;
   onNextTurn: () => void;
+  onOpenSpellPicker: () => void;
   onRollInitiative: (participantId: string) => void;
   onTwoWeaponAttack: (participantId: string, targetId?: string) => void;
   onEnhancedAttack: (
@@ -67,6 +68,7 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
     actionValidation,
     onCombatAction,
     onNextTurn,
+    onOpenSpellPicker,
     onRollInitiative,
     onTwoWeaponAttack,
     onEnhancedAttack,
@@ -178,11 +180,7 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
               />
 
               <div className="flex gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onCombatAction('cast_spell', currentParticipant.id)}
-                >
+                <Button variant="outline" size="sm" onClick={onOpenSpellPicker}>
                   Cast Spell
                 </Button>
               </div>

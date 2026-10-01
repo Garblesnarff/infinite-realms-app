@@ -363,6 +363,28 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     throw new Error('Opening message failed structured-output integrity checks');
   }
 
+  // Player check modifiers come from the sheet; model-authored d20 bonuses must not leak
+  // into prose, voice, options or the roll purpose while the dialog uses the sheet value.
+  if (
+    (structuredResponse?.roll_requests || roll_requests)?.some((roll: any) =>
+      ['check', 'save', 'initiative'].includes(roll.type),
+    )
+  ) {
+    const withoutModelModifier = (text: string): string =>
+      text.replace(/\b(1?d20)\s*[+−-]\s*\d+\b/gi, '$1');
+    result.text = withoutModelModifier(result.text);
+    result.narrationSegments = result.narrationSegments?.map((segment) => ({
+      ...segment,
+      text: segment.text ? withoutModelModifier(segment.text) : segment.text,
+    }));
+    if (structuredResponse) {
+      structuredResponse.options = structuredResponse.options?.map(withoutModelModifier);
+    }
+    for (const roll of (structuredResponse?.roll_requests || roll_requests) ?? []) {
+      if (typeof roll.purpose === 'string') roll.purpose = withoutModelModifier(roll.purpose);
+    }
+  }
+
   // Normalize malformed asset tags before persistence, rendering, and memory extraction.
   result.text = normalizeAssetTagsInContent(result.text);
   if (structuredResponse?.combat_actions?.length) {

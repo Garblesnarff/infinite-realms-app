@@ -308,9 +308,9 @@ describe('CombatRulesPrompts', () => {
 
       expect(CombatRulesPrompts.formatCombatContext(notCombat)).toBe('');
       const rules = RulesPrompts.buildRulesOfPlaySection();
-      expect(rules).toHaveLength(26617);
+      expect(rules).toHaveLength(26874);
       expect(sha256(rules)).toBe(
-        '669af77691a172276409f01bdb9d1ce63eb8c96da1880b90686c99ae9c352a0f',
+        'b914eda1af7159cd8d0232c0d01ae147034d7a7f40df3d5ab6d5ec226daa667c',
       );
     });
   });

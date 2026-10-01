@@ -6,6 +6,7 @@ import { voiceConsistencyService } from '../../voice-consistency-service';
 import { WorldBuilderService, WorldBuilderRepository } from '../../world-builders';
 import { applyAssetPostProcessing, getCachedAssets, insertAssetTags } from '../asset-processor';
 import { processDMResponse } from '../dm-response-processor';
+import { parseDmResponse } from '../dm-response-schema';
 import { parseXMLTagsFromResponse } from '../xml-parser';
 
 import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
@@ -725,4 +726,47 @@ describe('processDMResponse', () => {
       expect(result.roll_requests || []).toHaveLength(0);
     });
   });
+});
+
+// Full wire shape produced by the canonical dmResponseSchema structured-output contract.
+const INVESTIGATION_RESPONSE = {
+  text: 'Make an Investigation check (1d20+4, DC 14).',
+  narration_segments: [
+    { type: 'dm', text: 'Roll 1d20+4 for Investigation.', character: null, voice_category: null },
+  ],
+  options: ['Investigate (1d20+4)'],
+  roll_requests: [
+    {
+      type: 'check',
+      formula: '1d20+4',
+      purpose: 'Investigation (1d20+4)',
+      dc: 14,
+      ac: null,
+      advantage: false,
+      disadvantage: false,
+    },
+  ],
+  combat_transition: 'none',
+  scene_spec: null,
+  map_actions: [],
+  handout_actions: [],
+  combatants: [],
+  combat_actions: [],
+};
+
+it('removes the model d20 bonus from every visible projection of a narrative roll', async () => {
+  expect(parseDmResponse(INVESTIGATION_RESPONSE).success).toBe(true);
+  const result = await processDMResponse({
+    rawResponse: JSON.stringify(INVESTIGATION_RESPONSE),
+    context: { campaignId: 'campaign-456', characterId: 'character-789' },
+    message: 'I search the room',
+    conversationHistory: [],
+    isFirstMessage: false,
+    voiceContext: null,
+    deferSideEffects: true,
+  });
+  expect(result.text).toBe('Make an Investigation check (1d20, DC 14).');
+  expect(result.narrationSegments?.[0].text).toBe('Make an Investigation check (1d20, DC 14).');
+  expect(result.options).toEqual(['Investigate (1d20)']);
+  expect(result.roll_requests?.[0].purpose).toBe('Investigation (1d20)');
 });

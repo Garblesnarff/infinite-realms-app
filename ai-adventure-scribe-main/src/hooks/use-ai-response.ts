@@ -238,6 +238,7 @@ export const useAIResponse = (): {
       onEngineNotice?: (notice: LocalNotice) => void,
     ): Promise<EnhancedChatMessage> => {
       try {
+        let timingCheckpoint = performance.now();
         logger.info('Getting AI response for session:', sessionId);
 
         const latestMessage = messages[messages.length - 1];
@@ -280,6 +281,12 @@ export const useAIResponse = (): {
         // and structured action execution — reads these two locals, so a fight the server ended
         // on a killing blow (or started while this closure was already captured) is seen here.
         let activeEncounter = await refreshCombatState();
+        logger.info('TURN_PREFLIGHT_TIMING', {
+          sessionId,
+          stage: 'incoming-roll-log-and-combat-refresh',
+          ms: Math.round(performance.now() - timingCheckpoint),
+        });
+        timingCheckpoint = performance.now();
         let isInCombat = activeEncounter?.phase === 'active';
 
         // Detect if this is the first player message in the session
@@ -288,10 +295,38 @@ export const useAIResponse = (): {
         // ⚡ Bolt: Parallelize fetching game context, voice context, and relevant memories to reduce latency.
         // This reduces total request time by executing all context retrieval concurrently.
         const [gameContext, voiceContext, relevantMemories] = await Promise.all([
-          fetchGameContext(sessionId),
-          voiceConsistencyService.getSessionVoiceContext(sessionId),
-          MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8),
+          fetchGameContext(sessionId).then((value) => {
+            logger.info('TURN_PREFLIGHT_TIMING', {
+              sessionId,
+              stage: 'game-context',
+              ms: Math.round(performance.now() - timingCheckpoint),
+            });
+            return value;
+          }),
+          voiceConsistencyService.getSessionVoiceContext(sessionId).then((value) => {
+            logger.info('TURN_PREFLIGHT_TIMING', {
+              sessionId,
+              stage: 'voice-context',
+              ms: Math.round(performance.now() - timingCheckpoint),
+            });
+            return value;
+          }),
+          MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8).then((value) => {
+            logger.info('TURN_PREFLIGHT_TIMING', {
+              sessionId,
+              stage: 'relevant-memories',
+              ms: Math.round(performance.now() - timingCheckpoint),
+            });
+            return value;
+          }),
         ]);
+
+        logger.info('TURN_PREFLIGHT_TIMING', {
+          sessionId,
+          stage: 'game-voice-memory-parallel',
+          ms: Math.round(performance.now() - timingCheckpoint),
+        });
+        timingCheckpoint = performance.now();
 
         if (!gameContext) {
           throw new Error('Failed to fetch game context');
@@ -355,6 +390,13 @@ export const useAIResponse = (): {
           }
         }
 
+        logger.info('TURN_PREFLIGHT_TIMING', {
+          sessionId,
+          stage: 'npc-turns',
+          ms: Math.round(performance.now() - timingCheckpoint),
+        });
+        timingCheckpoint = performance.now();
+
         // #2392: the sheet's Cast of a save spell asks the player before the DM is called; the
         // card needs no model output, and the DM's reply used to come first.
         await holdSaveCardBeforeDm({
@@ -362,6 +404,13 @@ export const useAIResponse = (): {
           spellId: latestMessage.context?.spellId,
           activeEncounter: isInCombat ? activeEncounter : null,
         });
+
+        logger.info('TURN_PREFLIGHT_TIMING', {
+          sessionId,
+          stage: 'save-card-player-wait',
+          ms: Math.round(performance.now() - timingCheckpoint),
+        });
+        timingCheckpoint = performance.now();
 
         logger.debug('Calling DM Agent with context:', {
           gameContext,
@@ -414,6 +463,12 @@ export const useAIResponse = (): {
           currentTurn: activeEncounter?.currentTurnParticipantId,
         });
 
+        logger.info('TURN_PREFLIGHT_TIMING', {
+          sessionId,
+          stage: 'history-context-and-tactical-fetch',
+          ms: Math.round(performance.now() - timingCheckpoint),
+        });
+        timingCheckpoint = performance.now();
         onTurnPhase?.('preflight');
 
         // #2341: a message that names an attack on a creature, with no encounter open, asks the
@@ -429,6 +484,11 @@ export const useAIResponse = (): {
                 recentNarration: recentNarrationFrom(messages.slice(0, -1)),
               })
             : null;
+        logger.info('TURN_PREFLIGHT_TIMING', {
+          sessionId,
+          stage: 'combat-entry-detection-and-player-wait',
+          ms: Math.round(performance.now() - timingCheckpoint),
+        });
         const entryDeclined = heldEntry?.decision === 'declined';
         if (heldEntry?.decision === 'declined') {
           aiContext.gameState.combatEntryDeclined = heldEntry.label;

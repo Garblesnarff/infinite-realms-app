@@ -30,6 +30,7 @@ describe('ActionPanel player controls', () => {
           actionValidation={null}
           onCombatAction={vi.fn()}
           onNextTurn={vi.fn()}
+          onOpenSpellPicker={vi.fn()}
           onRollInitiative={vi.fn()}
           onTwoWeaponAttack={vi.fn()}
           onEnhancedAttack={vi.fn()}

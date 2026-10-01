@@ -1,5 +1,7 @@
 import React, { memo, useMemo } from 'react';
 
+import type { SpellCastHandlerRef } from '../spell-cast-handler';
+
 import CombatInterface from '@/components/combat/CombatInterface';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useMessageContext } from '@/contexts/MessageContext';
@@ -24,10 +26,11 @@ interface GameCombatSheetProps {
   showTracker: boolean;
   setShowTracker: (show: boolean) => void;
   isDM: boolean;
+  spellCastHandlerRef?: SpellCastHandlerRef;
 }
 
 export const GameCombatSheet: React.FC<GameCombatSheetProps> = memo(
-  ({ showTracker, setShowTracker, isDM }) => {
+  ({ showTracker, setShowTracker, isDM, spellCastHandlerRef }) => {
     const { messages = [] } = useMessageContext();
     // Only read the chat while the sheet is open; the log is the engine lines the chat shows.
     const logLines = useMemo(
@@ -38,7 +41,12 @@ export const GameCombatSheet: React.FC<GameCombatSheetProps> = memo(
     return (
       <Sheet open={showTracker} onOpenChange={setShowTracker}>
         <SheetContent side="right" className="w-full sm:w-[420px] sm:max-w-[480px] overflow-y-auto">
-          <CombatInterface isDM={isDM && import.meta.env.DEV} logLines={logLines} />
+          <CombatInterface
+            isDM={isDM && import.meta.env.DEV}
+            logLines={logLines}
+            spellCastHandlerRef={spellCastHandlerRef}
+            onSpellCastStart={() => setShowTracker(false)}
+          />
         </SheetContent>
       </Sheet>
     );

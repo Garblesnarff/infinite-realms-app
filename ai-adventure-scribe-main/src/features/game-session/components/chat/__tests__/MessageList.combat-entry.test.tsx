@@ -85,7 +85,7 @@ describe('MessageList combat-entry reservation', () => {
     vi.restoreAllMocks();
   });
 
-  it('adds card height plus a gap to the message-list bottom while pending, then removes it', async () => {
+  it('docks the confirmation in normal flow without reserving overlay padding', async () => {
     render(<MessageList sessionId="session-1" suppressEmptyState />);
     const messageList = screen.getByRole('log');
 
@@ -94,7 +94,8 @@ describe('MessageList combat-entry reservation', () => {
     });
 
     await waitFor(() => {
-      expect(Number.parseFloat(messageList.style.paddingBottom)).toBeGreaterThan(0);
+      expect(screen.getByRole('alert', { name: 'Combat entry confirmation' })).toBeInTheDocument();
+      expect(messageList.style.paddingBottom).toBe('');
     });
 
     act(() => {

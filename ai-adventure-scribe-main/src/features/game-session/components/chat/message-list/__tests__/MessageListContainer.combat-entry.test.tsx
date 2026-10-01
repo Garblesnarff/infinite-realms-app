@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '../../ChatInput';
 import { MessageListContainer } from '../MessageListContainer';
 
-import { Z_INDEX } from '@/constants/z-index';
 import {
   requestCombatEntryConfirmation,
   settlePendingCombatEntryConfirmation,
@@ -115,8 +114,8 @@ describe('MessageListContainer combat entry hit testing', () => {
     const strikeRect = strike.getBoundingClientRect();
     const elementAtStrike = document.elementFromPoint(strikeRect.left + 1, strikeRect.top + 1);
     expect(elementAtStrike).toBe(strike);
-    expect(overlay).toHaveClass('bottom-40');
-    expect(overlay).toHaveStyle({ zIndex: Z_INDEX.COMBAT_ENTRY_CONFIRMATION });
+    expect(overlay.parentElement).toHaveAttribute('data-testid', 'roll-tray');
+    expect(overlay).not.toHaveClass('fixed', 'absolute', 'sticky');
     expect(overlay.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       composer.getBoundingClientRect().top,
     );

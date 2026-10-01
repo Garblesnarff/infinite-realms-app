@@ -128,7 +128,7 @@ describe('the prompt outside combat (#2400)', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
     expect(sha256(RulesPrompts.buildRulesOfPlaySection())).toBe(
-      '669af77691a172276409f01bdb9d1ce63eb8c96da1880b90686c99ae9c352a0f',
+      'b914eda1af7159cd8d0232c0d01ae147034d7a7f40df3d5ab6d5ec226daa667c',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
       'b29b276ba637e3fe7c8414e183d23081bea4f74d12297212df0ab06d11c2376a',

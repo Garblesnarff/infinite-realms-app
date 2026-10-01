@@ -38,7 +38,6 @@ interface MessageListContainerProps {
   hasMore?: boolean;
   suppressEmptyState?: boolean;
   messagesReady?: boolean;
-  onCombatEntrySpaceChange?: (space: number) => void;
 }
 
 /**
@@ -67,7 +66,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     hasMore,
     suppressEmptyState = false,
     messagesReady = true,
-    onCombatEntrySpaceChange,
   }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     usePendingDmRollRecovery({ sessionId, messages, messagesReady });
@@ -143,10 +141,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
 
     return (
       <>
-        <CombatEntryConfirmation
-          confirmation={entryConfirmation}
-          onSpaceChange={onCombatEntrySpaceChange}
-        />
         <SpellTargetSaveCard pending={spellTargetSave} roster={engineRoster} />
 
         <PendingIntentConfirmation
@@ -245,6 +239,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
             </div>
           </div>
         ))}
+
+        <CombatEntryConfirmation confirmation={entryConfirmation} />
 
         {/* The current roll from the GameContext queue, docked in the roll tray between the
             story and the chat box (#2252) rather than floating inside the scroll area. */}

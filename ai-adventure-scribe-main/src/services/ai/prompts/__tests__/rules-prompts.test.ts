@@ -32,3 +32,10 @@ describe('RulesPrompts combat transition contract', () => {
     expect(prompt).toContain('never name undiscovered content');
   });
 });
+
+it('requests bare d20s and leaves narrative roll modifiers to the character sheet', () => {
+  const prompt = RulesPrompts.buildRulesOfPlaySection();
+  expect(prompt).toContain('Never state or guess a numeric modifier');
+  expect(prompt).toContain('"formula": "1d20"');
+  expect(prompt).not.toMatch(/"type": "(?:check|save|initiative)", "formula": "1d20\+/);
+});
