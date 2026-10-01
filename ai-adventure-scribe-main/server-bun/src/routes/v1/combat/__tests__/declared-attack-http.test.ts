@@ -13,6 +13,8 @@ import {
   DECLARED_ATTACK_SESSION_ID,
   declaredAttackCheckBody,
   pickedTargetCheckBody,
+  RUN19_RECENT_NARRATION,
+  run19Roster,
   sheetCastCheckBody,
   sheetCastRoster,
   untargetedSpellCheckBody,
@@ -303,17 +305,37 @@ describe('declared-attack candidates on the Abyssal Descent roster', () => {
     expect(await response.json()).toEqual({ pending: null });
   });
 
+  it('names a campaign NPC only in full: a surname or nickname alone offers no one (#2458)', async () => {
+    expect(
+      await candidatesFor({
+        ...sheetCast,
+        recentNarration: 'Reeves and Darkwater peer over the iron rail while Jawn waits.',
+      }),
+    ).toBeNull();
+  });
+
+  it('run 19: "basalt" and "mother of pearl" do not offer Mother Basalt, only Reeves (#2458)', async () => {
+    roster = run19Roster;
+    expect(await candidatesFor({ ...sheetCast, recentNarration: RUN19_RECENT_NARRATION })).toEqual([
+      'Captain Sarah Reeves',
+    ]);
+    expect(
+      await candidatesFor({ ...sheetCast, recentNarration: 'Mother Basalt steps forward.' }),
+    ).toEqual(['Mother Basalt']);
+  });
+
   it('offers every creature the message names, and a nickname-only mention names no one', async () => {
     expect(
       await candidatesFor({
         ...sheetCast,
-        recentNarration: 'Reeves and Darkwater peer over the iron rail.',
+        recentNarration:
+          'Captain Sarah Reeves and Professor Emil Darkwater peer over the iron rail.',
       }),
     ).toEqual(['Professor Emil Darkwater', 'Captain Sarah Reeves']);
     expect(
       await candidatesFor({
         ...sheetCast,
-        recentNarration: 'Jawn strides in, and Reeves salutes him.',
+        recentNarration: 'Iron Jawn strides in, and Captain Sarah Reeves salutes him.',
       }),
     ).toEqual(['"Iron" Jawn', 'Captain Sarah Reeves']);
   });

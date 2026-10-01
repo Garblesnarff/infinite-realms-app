@@ -156,3 +156,38 @@ describe('a quoted nickname is not a name on its own (#2445)', () => {
     expect(named('Iron Jawn nods.')).toEqual(['"Iron" Jawn']);
   });
 });
+
+describe('one common word does not name an actor (#2458)', () => {
+  const roster = [
+    { name: 'Mother Basalt' },
+    { name: 'Captain Sarah Reeves' },
+    { name: 'Professor Emil Darkwater' },
+  ];
+  const named = (narration: string, actors: typeof roster = roster): string[] =>
+    actorsMentionedIn(narration, actors).map((actor) => actor.name);
+
+  it('names no one from "basalt" or "mother" in ordinary prose', () => {
+    expect(named('The basalt walls glisten.')).toEqual([]);
+    expect(named('A button of mother of pearl rolls away.')).toEqual([]);
+  });
+
+  it('names her by her full name', () => {
+    expect(named('Mother Basalt steps forward.')).toEqual(['Mother Basalt']);
+  });
+
+  it('still names a given-name-and-surname actor by title + surname, surname or given name', () => {
+    expect(named('Captain Reeves nods.')).toEqual(['Captain Sarah Reeves']);
+    expect(named('Reeves nods.')).toEqual(['Captain Sarah Reeves']);
+    expect(named('Emil stammers.')).toEqual(['Professor Emil Darkwater']);
+  });
+
+  it('does not let the title alone name a titled actor', () => {
+    expect(named('The captain of the guard waits.')).toEqual([]);
+  });
+
+  it('names a campaign NPC only in full', () => {
+    const campaign = roster.map((actor) => ({ ...actor, source: 'campaign' as const }));
+    expect(named('Reeves nods. Captain Reeves nods.', campaign)).toEqual([]);
+    expect(named('Captain Sarah Reeves nods.', campaign)).toEqual(['Captain Sarah Reeves']);
+  });
+});

@@ -98,6 +98,19 @@ export const abyssalRoster = [
 export const ABYSSAL_RECENT_NARRATION =
   'Captain Sarah Reeves grips the iron rail and peers into the chasm. "What we will find is failure," she says.';
 
+/**
+ * Run 19 (#2458): the same session with "Mother Basalt", a campaign NPC nobody had met, on the
+ * roster. The loader gives her `source: 'campaign'`.
+ */
+export const run19Roster = [
+  ...abyssalRoster,
+  { name: 'Mother Basalt', actorSlug: 'mother-basalt', source: 'campaign' as const },
+];
+
+/** Names Reeves in full; "basalt" and "mother" are cave and trinket words, not Mother Basalt. */
+export const RUN19_RECENT_NARRATION =
+  'Captain Sarah Reeves holds her lantern high. The basalt walls glisten with damp, like mother of pearl.';
+
 export const sheetCastCheckBody = {
   playerInput: SHEET_CAST_PLAYER_INPUT,
   player: declaredAttackCheckBody.player,

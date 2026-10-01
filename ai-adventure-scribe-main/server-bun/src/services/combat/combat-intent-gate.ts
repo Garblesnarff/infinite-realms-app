@@ -488,11 +488,34 @@ export function detectUntargetedAttackSpell(playerInput: string): UntargetedAtta
   return null;
 }
 
-const TITLE_WORDS = new Set(['the', 'professor', 'captain', 'doctor', 'lord', 'lady', 'sir']);
+const HONORIFICS = [
+  'professor',
+  'captain',
+  'doctor',
+  'lord',
+  'lady',
+  'sir',
+  'dame',
+  'mother',
+  'father',
+  'brother',
+  'sister',
+  'master',
+  'elder',
+  'sergeant',
+  'lieutenant',
+  'commander',
+  'general',
+];
+const HONORIFIC_WORDS = new Set(HONORIFICS);
+const TITLE_WORDS = new Set(['the', ...HONORIFICS]);
 
 /**
- * Roster actors the narration names, by full name or by one distinctive word of it. Used to
- * offer the popup the creatures "him" can mean, rather than everyone in the campaign.
+ * Roster actors the narration names: by full name, by title + surname ("Captain Reeves"), or
+ * by one distinctive word of a name that has a given name as well as a surname. A name that is
+ * only a title and one word ("Mother Basalt") is named in full or not at all: "basalt" in a
+ * cave and "mother of pearl" name no one (#2458). A campaign NPC the player may not have met
+ * is named only in full. Used to offer the popup the creatures "him" can mean.
  */
 export function actorsMentionedIn(
   text: string,
@@ -503,12 +526,18 @@ export function actorsMentionedIn(
     const name = normalize(actor.name);
     if (!name) return false;
     if (haystack.includes(` ${name} `)) return true;
+    if (actor.source === 'campaign') return false;
     const nameWords = words(actor.name);
+    const honorific = HONORIFIC_WORDS.has(nameWords[0] ?? '') ? nameWords[0] : undefined;
+    const surname = nameWords[nameWords.length - 1];
+    if (honorific && surname && haystack.includes(` ${honorific} ${surname} `)) return true;
     // A quoted nickname ("Iron" Jawn) is not a name on its own: "iron" in the narration is a
     // rail, not the man (#2445). The full name above still matches it.
     const nicknameWords = new Set(
       [...actor.name.matchAll(/["“]([^"”]+)["”]/g)].flatMap((quoted) => words(quoted[1])),
     );
+    // Title and one more word, no nickname: nothing but the whole name names them.
+    if (honorific && nameWords.length === 2 && nicknameWords.size === 0) return false;
     const distinctive = [
       nameWords.find((word) => !TITLE_WORDS.has(word) && !nicknameWords.has(word)),
       nameWords.length <= 3 ? nameWords[nameWords.length - 1] : undefined,
