@@ -1112,6 +1112,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         standingHostiles(participants ?? []).flatMap((participant) =>
           participant.name ? [participant.name] : [],
         ),
+        { holder: turnHolder, holderIsPlayer: playerTurn },
+        resolvedActions.length > 0,
       )
     : playerKeepsTurn
       ? stillYourTurnNotice()

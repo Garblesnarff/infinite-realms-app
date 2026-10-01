@@ -77,12 +77,24 @@ export function stillYourTurnNotice(): string {
 }
 
 /**
- * The player named a target that is not in the fight. Nothing was rolled and the turn is still
- * theirs; the creatures that are here are listed so they can pick one (#2438).
+ * The player named a target that is not in the fight. The creatures that are here are listed so
+ * they can pick one (#2438). Nothing about this refusal moved the turn, but a creature's action
+ * resolved in the same reply (a repair) can have: the notice says "nothing was resolved" only
+ * when nothing was, and names the turn holder, in `turnNotice`'s words, when it is not the player.
  */
-export function unresolvedTargetNotice(creatures: readonly string[]): string {
+export function unresolvedTargetNotice(
+  creatures: readonly string[],
+  turn: { holder: { id?: string; name?: string } | null; holderIsPlayer: boolean },
+  resolvedEarlier: boolean,
+): string {
+  const lead = 'No creature by that name is in this fight';
+  const outcome = resolvedEarlier ? 'that action was not resolved' : 'nothing was resolved';
+  if (!turn.holderIsPlayer) {
+    const here = creatures.length ? ` The creatures here: ${creatures.join(', ')}.` : '';
+    return `*(${lead}, so ${outcome}.${here})*\n\n${turnNotice(turn.holder, false)}`;
+  }
   const who = creatures.length ? ` Who do you mean: ${creatures.join(', ')}?` : '';
-  return `*(No creature by that name is in this fight, so nothing was resolved — it is still your turn.${who})*`;
+  return `*(${lead}, so ${outcome} — it is ${resolvedEarlier ? 'your turn' : 'still your turn'}.${who})*`;
 }
 
 /**

@@ -5,6 +5,7 @@ import {
   resolveSceneCombatant,
   seatEntityWithinReach,
   UNKNOWN_CREATURE,
+  uniqueCollidedSeatNames,
 } from '../seating.js';
 
 const makeMap = () => ({
@@ -182,5 +183,40 @@ describe('a combatant never takes a player character name (#2438)', () => {
     expect(resolveSceneCombatant({ candidateName: 'Apprentice', playerNames: ['Rook'] }).name).toBe(
       'Apprentice',
     );
+  });
+});
+
+describe('uniqueCollidedSeatNames (#2444)', () => {
+  it('leaves a single collided seat with a name of its own as it is', () => {
+    expect(uniqueCollidedSeatNames(['Rook', 'Mercenary'], [false, true])).toEqual([
+      'Rook',
+      'Mercenary',
+    ]);
+  });
+
+  it('numbers collided seats that share a name', () => {
+    expect(
+      uniqueCollidedSeatNames(['Rook', 'Mercenary', 'Mercenary'], [false, true, true]),
+    ).toEqual(['Rook', 'Mercenary 1', 'Mercenary 2']);
+  });
+
+  it('numbers a collided seat whose name a seat that did not collide already holds', () => {
+    expect(uniqueCollidedSeatNames(['Mercenary', 'Mercenary'], [false, true])).toEqual([
+      'Mercenary',
+      'Mercenary 1',
+    ]);
+  });
+
+  it('skips a number another seat already holds', () => {
+    expect(
+      uniqueCollidedSeatNames(['Mercenary 1', 'Mercenary', 'Mercenary'], [false, true, true]),
+    ).toEqual(['Mercenary 1', 'Mercenary 2', 'Mercenary 3']);
+  });
+
+  it('compares names the way a player name is compared: case, article and punctuation', () => {
+    expect(uniqueCollidedSeatNames(['The Mercenary', 'mercenary!'], [true, true])).toEqual([
+      'The Mercenary 1',
+      'mercenary! 2',
+    ]);
   });
 });

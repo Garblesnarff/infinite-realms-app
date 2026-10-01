@@ -9,6 +9,7 @@
 
 import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 
+import { findBibleNameInProse } from './campaign-monster-index.js';
 import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { abilityModifier } from './combat-rules.js';
@@ -19,6 +20,7 @@ import {
 } from './combatant-stat-resolution.js';
 import { appendActiveCompanionInputs } from './companion-seating.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
+import { normalizeMonsterKey } from './monster-key.js';
 import {
   deriveNpcFallbackProfile,
   logNpcStatFallback,
@@ -50,6 +52,7 @@ import {
   isUnresolvedNpcName,
   resolveSceneCombatant,
   UNKNOWN_CREATURE,
+  uniqueCollidedSeatNames,
 } from '../../tactical/seating.js';
 
 import type { EntitySize } from '../../tactical/types.js';
@@ -211,6 +214,28 @@ export class CombatEncounterService {
         ...characterRows.map((row) => row.character.name),
       ];
 
+      // A seat that collides with a PC's name is renamed. The bible creature its prose names, word
+      // for word, comes first; no two seats share a name (#2444).
+      const collidesWithPlayer = (input: CreateParticipantInput): boolean =>
+        !input.characterId && isPlayerCharacterName(input.name, playerNames);
+      const takenNames = new Set(
+        participantsToSeat
+          .filter((input) => !collidesWithPlayer(input))
+          .map((i) => normalizeMonsterKey(i.name)),
+      );
+      const bibleSeatNames = new Map<CreateParticipantInput, string>();
+      for (const input of participantsToSeat.filter(collidesWithPlayer)) {
+        const named = findBibleNameInProse(
+          campaignIndex,
+          [input.sceneEntityName, input.sceneDescription].filter(Boolean).join('\n'),
+          (name) =>
+            isPlayerCharacterName(name, playerNames) || takenNames.has(normalizeMonsterKey(name)),
+        );
+        if (!named) continue;
+        bibleSeatNames.set(input, named);
+        takenNames.add(normalizeMonsterKey(named));
+      }
+
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
       const npcFallbackSeats: NpcStatFallbackSeat[] = [];
       const participantsWithInitiative = participantsToSeat.map((input) => {
@@ -218,10 +243,9 @@ export class CombatEncounterService {
         // A creature carrying a player's name (a prose-derived "Apprentice" for the PC "The
         // Apprentice") is unnamed, not the player: it is resolved from the scene like any other
         // unresolved label.
-        const inputName =
-          !input.characterId && isPlayerCharacterName(input.name, playerNames)
-            ? UNKNOWN_CREATURE
-            : input.name;
+        const inputName = collidesWithPlayer(input)
+          ? (bibleSeatNames.get(input) ?? UNKNOWN_CREATURE)
+          : input.name;
         if (inputName !== input.name) {
           logger.warn({
             msg: 'COMBAT_SEAT_NAME_IS_PLAYER_NAME',
@@ -491,6 +515,14 @@ export class CombatEncounterService {
           bestiaryName: monster?.source === 'campaign' ? bestiaryName : null,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
+      });
+
+      const seatNames = uniqueCollidedSeatNames(
+        participantsWithInitiative.map((seat) => seat.name),
+        participantsToSeat.map(collidesWithPlayer),
+      );
+      participantsWithInitiative.forEach((seat, i) => {
+        seat.name = seatNames[i];
       });
 
       logNpcStatFallback(encounter.id, npcFallbackSeats);

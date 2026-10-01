@@ -9,6 +9,7 @@ import {
   UNSEATED_TARGET_TOKEN,
   unresolvedTargetRefusalBody,
 } from '../../../../shared/test-fixtures/unresolved-target-refusal';
+import { turnNotice } from '../combat-notice';
 
 import type * as PlayerAttackRoll from '@/services/combat/player-attack-roll';
 
@@ -181,6 +182,77 @@ describe('a typed target that matches no combatant (#2438)', () => {
 
     expect(result.text).toContain('No creature by that name is in this fight');
     expect(result.text).not.toContain('out of turn');
+  });
+
+  describe('when creatures already acted in this reply (#2444)', () => {
+    /** The shape `advanceNpcTurns` returns (`AdvanceNpcTurnsResponse`): the mercenary struck first. */
+    const preflight = (currentParticipant: (typeof PARTICIPANTS)[number], capReached: boolean) =>
+      ({
+        results: [
+          {
+            action: {
+              actor_id: MERCENARY_ID,
+              action_type: 'attack',
+              target_ids: [APPRENTICE_ID],
+              weapon_id: null,
+              spell_id: null,
+              slot_level: null,
+              movement_feet: 0,
+            },
+            outcomes: [{ finalDamage: 5, hit: true }],
+            actorIsPlayer: false,
+            transcriptLines: ['Bitter End Mercenary HIT, 5 damage'],
+          },
+        ],
+        currentParticipant,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached,
+        transcriptLines: ['Bitter End Mercenary HIT, 5 damage'],
+      }) as any;
+    const runAfterPreflight = (response: any) =>
+      resolveDeclaredCombatActions({
+        encounterId: '18b7f4d6-57c1-4fe5-a9ed-17e1127dc16e',
+        sessionId: '35fd47e5-416d-4e79-be3b-f594beaa4a1f',
+        combatActions: [declared('attack')],
+        declarationText: 'I attack the Sour Knight.',
+        aiContext: { gameState: { isInCombat: true } },
+        conversationHistory: [],
+        participants: PARTICIPANTS,
+        playerInputOrigin: 'typed',
+        preResolvedNpcTurns: response,
+      });
+
+    it("does not say nothing was resolved, though the turn is the player's", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(404, unresolvedTargetRefusalBody('attack', ROSTER)));
+      repairRefusedCombatAction.mockResolvedValue(null);
+
+      const result = await runAfterPreflight(preflight(PARTICIPANTS[0], false));
+
+      expect(result.text).toContain(
+        'No creature by that name is in this fight, so that action was not resolved',
+      );
+      expect(result.text).toContain('it is your turn.');
+      expect(result.text).toContain('Who do you mean: Bitter End Mercenary?');
+      expect(result.text).not.toContain('nothing was resolved');
+      expect(result.text).not.toContain('still your turn');
+    });
+
+    it("does not say it is still the player's turn when a creature holds it", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(404, unresolvedTargetRefusalBody('attack', ROSTER)));
+      repairRefusedCombatAction.mockResolvedValue(null);
+
+      const result = await runAfterPreflight(preflight(PARTICIPANTS[1], true));
+
+      expect(result.text).toContain(
+        'No creature by that name is in this fight, so that action was not resolved',
+      );
+      expect(result.text).toContain(turnNotice(PARTICIPANTS[1], false));
+      expect(result.text).toContain("it is Bitter End Mercenary's turn");
+      expect(result.text).not.toContain('nothing was resolved');
+      expect(result.text).not.toContain('still your turn');
+    });
   });
 
   it("a creature's own unresolved target ends only its action, not the turn", async () => {

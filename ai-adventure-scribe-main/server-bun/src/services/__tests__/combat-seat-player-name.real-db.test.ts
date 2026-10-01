@@ -17,7 +17,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts. Refuses every target
  * except the dedicated CI Postgres at 127.0.0.1:55432 because it deletes stale fixtures first.
  */
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { eq, like } from 'drizzle-orm';
 
 import {
@@ -30,12 +30,14 @@ import {
   testId,
 } from './fixtures/real-db.js';
 import {
+  campaignChunks,
   campaigns,
   characterStats,
   characters,
   combatEncounters,
   combatParticipants,
   gameSessions,
+  starterCampaigns,
 } from '../../../../db/schema/index';
 
 import type { CombatEntryResponse } from '../combat/combat-entry-gate.js';
@@ -79,6 +81,9 @@ const { CombatEncounterService } = await importWithRealDb(
 );
 const { buildCombatSeatingTranscript, buildEntryParticipants, detectCombatEntry } =
   await importWithRealDb(() => import('../combat/combat-entry-gate.js'));
+const { clearCampaignMonsterCache } = await importWithRealDb(
+  () => import('../combat/campaign-monster-resolution.js'),
+);
 
 const PLAYER_NAME = 'The Apprentice';
 const NARRATION =
@@ -90,6 +95,7 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
   const userId = testId(FIXTURE_OWNER_PREFIX);
   const encounterIds: string[] = [];
 
+  const starterCampaignId = testId('seat-bible');
   let campaignId: string;
   let characterId: string;
   const sessionIds: string[] = [];
@@ -121,6 +127,8 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
   afterAll(async () => {
     if (!hasRealDb) return;
     try {
+      await db.delete(campaignChunks).where(eq(campaignChunks.campaignId, starterCampaignId));
+      await db.delete(starterCampaigns).where(eq(starterCampaigns.id, starterCampaignId));
       for (const id of encounterIds) {
         await db.delete(combatParticipants).where(eq(combatParticipants.encounterId, id));
         await db.delete(combatEncounters).where(eq(combatEncounters.id, id));
@@ -133,10 +141,16 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
     }
   });
 
-  const newSession = async (sessionNumber: number): Promise<string> => {
+  const newSession = async (sessionNumber: number, withBible = false): Promise<string> => {
     const [row] = await db
       .insert(gameSessions)
-      .values({ campaignId, characterId, sessionNumber, status: 'active' })
+      .values({
+        campaignId,
+        characterId,
+        sessionNumber,
+        status: 'active',
+        ...(withBible ? { starterCampaignId } : {}),
+      })
       .returning({ id: gameSessions.id });
     sessionIds.push(row.id);
     return row.id;
@@ -216,5 +230,119 @@ describeWithDb('a seated enemy never takes the player character name (#2438)', (
         .filter((participant) => !participant.characterId)
         .map((participant) => participant.name),
     ).toEqual(['Unknown creature']);
+  });
+
+  describe('the collided seat takes a name of its own (#2444)', () => {
+    const hostileNames = (state: Awaited<ReturnType<typeof startAndRecord>>): string[] =>
+      state.participants
+        .filter((participant) => !participant.characterId)
+        .map((participant) => participant.name);
+    const staleSeats = (count: number, prose: string) =>
+      buildEntryParticipants(player(), [{ name: 'Apprentice', count }], {
+        sceneDescription: prose,
+        source: 'combat_transition',
+      });
+
+    beforeAll(async () => {
+      await db.insert(starterCampaigns).values({
+        id: starterCampaignId,
+        slug: starterCampaignId,
+        title: 'Seat Name Fixture Bible',
+        genre: ['fixture'],
+        tone: ['diagnostic'],
+        difficulty: 'medium',
+        premise: 'A bible that exists only to be seated from.',
+      });
+      // Chunk shapes follow the lore-keeper's: an NPC bio with a stat block, and one without.
+      await db.insert(campaignChunks).values([
+        {
+          campaignId: starterCampaignId,
+          chunkType: 'npc_tier1' as const,
+          entityName: 'Captain Sarah Reeves',
+          content: [
+            '**Captain Sarah Reeves** (Human Fighter) - Stoic, scarred, pragmatic.',
+            '*   *HP:* 45, *AC:* 15 (chain shirt).',
+            '*   *Attack:* +3 to hit, 1d8 slashing (longsword)',
+          ].join('\n'),
+        },
+        {
+          campaignId: starterCampaignId,
+          chunkType: 'npc_tier1' as const,
+          entityName: 'Quill',
+          content:
+            '**Quill** (Human Scribe) - Nervous, ink-stained.\n*   **Goal:** Finish the ledger.',
+        },
+      ]);
+      clearCampaignMonsterCache();
+    });
+
+    test('the bible NPC the prose names, word for word, is the seat', async () => {
+      const id = await newSession(4, true);
+      const state = await startAndRecord(
+        id,
+        staleSeats(1, 'Captain Sarah Reeves levels her pistol at you.') as never,
+      );
+
+      expect(hostileNames(state)).toEqual(['Captain Sarah Reeves']);
+      // The stat block came with the name: the authored 45 HP (before party scaling), not the
+      // generic fallback.
+      const [row] = await db
+        .select({ profile: combatParticipants.monsterAttack })
+        .from(combatParticipants)
+        .where(eq(combatParticipants.encounterId, state.encounter.id))
+        .then((rows) => rows.filter((candidate) => candidate.profile));
+      expect(row?.profile).toMatchObject({
+        source: 'authored',
+        attacks: [{ attackBonus: 3 }],
+        partyScaling: { rawMaxHp: 45 },
+      });
+    });
+
+    test('two collided seats never share a name, whoever the prose names', async () => {
+      const id = await newSession(5, true);
+      const state = await startAndRecord(
+        id,
+        staleSeats(2, 'Quill hides behind Captain Sarah Reeves, who has already drawn.') as never,
+      );
+
+      expect(hostileNames(state).sort()).toEqual(['Captain Sarah Reeves', 'Quill']);
+    });
+
+    test('two collided seats with only a generic name in the prose are numbered', async () => {
+      const id = await newSession(6);
+      const state = await startAndRecord(id, staleSeats(2, NARRATION) as never);
+
+      expect(hostileNames(state).sort()).toEqual([
+        'Bitter End Mercenary 1',
+        'Bitter End Mercenary 2',
+      ]);
+    });
+
+    test('two collided seats with nothing in the prose are numbered, never the player', async () => {
+      const id = await newSession(7);
+      const state = await startAndRecord(
+        id,
+        staleSeats(2, 'Combat begins where the characters already stand.') as never,
+      );
+
+      expect(hostileNames(state).sort()).toEqual(['Unknown creature 1', 'Unknown creature 2']);
+    });
+
+    test('a seat that did not collide keeps its name beside a collided one', async () => {
+      const id = await newSession(8);
+      const participants = [
+        ...staleSeats(1, NARRATION),
+        ...buildEntryParticipants(player(), [{ name: 'Bitter End Mercenary', count: 1 }], {
+          sceneDescription: NARRATION,
+          source: 'combat_transition',
+        }).slice(1),
+      ];
+      const state = await startAndRecord(id, participants as never);
+
+      expect(hostileNames(state).sort()).toEqual([
+        'Bitter End Mercenary',
+        'Bitter End Mercenary 1',
+      ]);
+    });
   });
 });

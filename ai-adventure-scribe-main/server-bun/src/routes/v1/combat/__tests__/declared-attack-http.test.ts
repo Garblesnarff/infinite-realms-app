@@ -297,6 +297,12 @@ describe('declared-attack candidates on the Abyssal Descent roster', () => {
     ]);
   });
 
+  it('never offers an actor with no source as a fallback candidate', async () => {
+    roster = [{ name: 'Captain Sarah Reeves' }, { ...abyssalRoster[0], source: undefined }];
+    const response = await post({ ...sheetCast, recentNarration: 'The wind rises.' });
+    expect(await response.json()).toEqual({ pending: null });
+  });
+
   it('offers every creature the message names, and a nickname-only mention names no one', async () => {
     expect(
       await candidatesFor({

@@ -157,11 +157,14 @@ const withoutCombatEntryFields = (envelope: Record<string, unknown>): Record<str
  * Drop every reference to a combatant the roster does not know. Map and combat actions name
  * entities by id or slug, so a reference is invented when it equals the name, id or monster id of
  * a combatant the roster rejected. References to anything else stay: a map entity's id need not
- * match its roster slug.
+ * match its roster slug. `entered` is every combatant the gate read for this turn, before the
+ * roster filter: when the DM omits `combatants` they come from the action targets, and the actions
+ * that name an invented one must go with it.
  */
 const withoutInventedCreatures = (
   envelope: Record<string, unknown>,
   roster: readonly CombatIntentActor[],
+  entered: readonly { name: string; monsterId?: string }[],
 ): Record<string, unknown> => {
   const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
   const field = (item: unknown, key: string): unknown =>
@@ -190,6 +193,13 @@ const withoutInventedCreatures = (
     for (const key of ['name', 'monster_id']) {
       const reference = normalizeCombatantName(text(field(combatant, key)));
       if (reference) invented.add(reference);
+    }
+  }
+  for (const combatant of entered) {
+    if (isOnRoster({ name: combatant.name, monster_id: combatant.monsterId })) continue;
+    for (const reference of [combatant.name, combatant.monsterId ?? '']) {
+      const normalized = normalizeCombatantName(reference);
+      if (normalized) invented.add(normalized);
     }
   }
   const isInvented = (reference: unknown): boolean =>
@@ -346,8 +356,17 @@ export async function applyCombatEntryGate(params: {
       });
       return { ...sanitizedResult, text: JSON.stringify(withoutCombatEntryFields(envelope)) };
     }
+    // A target id that is the player's own is a hostile the gate derived by mistake, not an
+    // invented creature: the player's actions must stay.
+    const playerId = normalizeCombatantName(combatEntry.player.characterId ?? '');
+    envelope = withoutInventedCreatures(
+      envelope,
+      untargetedSpellRoster,
+      pending.combatants.filter(
+        (combatant) => !playerId || normalizeCombatantName(combatant.name) !== playerId,
+      ),
+    );
     pending = { ...pending, combatants: known };
-    envelope = withoutInventedCreatures(envelope, untargetedSpellRoster);
   }
 
   if (!pending) return sanitizedResult;

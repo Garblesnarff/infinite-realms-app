@@ -44,7 +44,12 @@ const indexOf = (campaignId: string, entries: Record<string, string>): CampaignM
       coverage: gradeCoverage(parsed),
     });
   }
-  return { campaignId, byKey, chunkCount: Object.keys(entries).length };
+  return {
+    campaignId,
+    byKey,
+    chunkCount: Object.keys(entries).length,
+    blocklessNpcs: new Map(),
+  };
 };
 
 const ETERNAL_FEAST = indexOf('the-eternal-feast', {
@@ -60,6 +65,7 @@ const EMPTY_INDEX: CampaignMonsterIndex = {
   campaignId: 'academy-of-arcane-gastronomy',
   byKey: new Map(),
   chunkCount: 0,
+  blocklessNpcs: new Map(),
 };
 
 beforeEach(() => {

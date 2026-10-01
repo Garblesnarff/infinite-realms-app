@@ -83,6 +83,42 @@ export function isPlayerCharacterName(
   });
 }
 
+/**
+ * Seat names with every collided seat made unique among all seats. `collided[i]` marks a seat
+ * whose name was taken from the scene because it collided with a player's (#2438). A collided
+ * seat whose name another seat also holds is numbered ("Mercenary 1", "Mercenary 2"); a seat
+ * that did not collide keeps its name.
+ */
+export function uniqueCollidedSeatNames(
+  names: readonly string[],
+  collided: readonly boolean[],
+): string[] {
+  const result = [...names];
+  const used = new Set(names.filter((_, i) => !collided[i]).map(comparableName));
+  const groups = new Map<string, number[]>();
+  names.forEach((name, i) => {
+    if (collided[i])
+      groups.set(comparableName(name), [...(groups.get(comparableName(name)) ?? []), i]);
+  });
+  for (const [key, seats] of groups) {
+    if (seats.length === 1 && !used.has(key)) {
+      used.add(key);
+      continue;
+    }
+    let count = 0;
+    for (const i of seats) {
+      let candidate: string;
+      do {
+        count += 1;
+        candidate = `${names[i]} ${count}`;
+      } while (used.has(comparableName(candidate)));
+      used.add(comparableName(candidate));
+      result[i] = candidate;
+    }
+  }
+  return result;
+}
+
 /** The first match whose name is not a player's: a PC named in the prose must not hide the creature after it. */
 function firstNameMatch(
   description: string,

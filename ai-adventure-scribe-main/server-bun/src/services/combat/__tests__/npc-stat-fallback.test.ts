@@ -46,7 +46,12 @@ const indexOf = (entries: Record<string, string>): CampaignMonsterIndex => {
       coverage: gradeCoverage(parsed),
     });
   }
-  return { campaignId: 'academy-of-arcane-gastronomy', byKey, chunkCount: byKey.size };
+  return {
+    campaignId: 'academy-of-arcane-gastronomy',
+    byKey,
+    chunkCount: byKey.size,
+    blocklessNpcs: new Map(),
+  };
 };
 
 const ACADEMY = indexOf({

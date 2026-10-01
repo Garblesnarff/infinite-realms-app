@@ -514,6 +514,25 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
       });
     const envelopeOf = async (response: Response): Promise<Record<string, unknown>> =>
       JSON.parse(((await response.json()) as { text: string }).text);
+    const playerId = declaredAttackCheckBody.player.characterId;
+    // Shapes follow DMMapAction / DMTargetedCombatAction in dm-response-schema.ts.
+    const forcedMove = (target: string): Record<string, unknown> => ({
+      action: 'forced_move',
+      target,
+      mode: 'shove',
+      origin: null,
+      distance: 5,
+      destination: null,
+    });
+    const attack = (actorId: string, targetIds: string[]): Record<string, unknown> => ({
+      actor_id: actorId,
+      action_type: 'attack',
+      target_ids: targetIds,
+      weapon_id: null,
+      spell_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    });
 
     it('never seats a combatant the DM invented, and starts no fight', async () => {
       intentActors = sheetCastRoster;
@@ -563,25 +582,6 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
 
     it('also strips the invented creature from the envelope the client applies after the player confirms', async () => {
       intentActors = sheetCastRoster;
-      const playerId = declaredAttackCheckBody.player.characterId;
-      // Shapes follow DMMapAction / DMTargetedCombatAction in dm-response-schema.ts.
-      const forcedMove = (target: string): Record<string, unknown> => ({
-        action: 'forced_move',
-        target,
-        mode: 'shove',
-        origin: null,
-        distance: 5,
-        destination: null,
-      });
-      const attack = (actorId: string, targetIds: string[]): Record<string, unknown> => ({
-        actor_id: actorId,
-        action_type: 'attack',
-        target_ids: targetIds,
-        weapon_id: null,
-        spell_id: null,
-        slot_level: null,
-        movement_feet: 0,
-      });
       generatedResult = unseenShadowReply({
         text: dmEnvelope({
           combat_transition: 'start',
@@ -623,6 +623,62 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
         { action: 'move', entityId: 'goblin-1', x: 2, y: 2, changes: null },
       ]);
       expect(envelope.combat_actions).toEqual([attack(playerId, ['captain-sarah-reeves'])]);
+    });
+
+    it('strips the invented creature when the DM omits combatants and the actions name it (#2441 NIT A)', async () => {
+      intentActors = sheetCastRoster;
+      generatedResult = unseenShadowReply({
+        text: dmEnvelope({
+          combat_transition: 'start',
+          combatants: [],
+          map_actions: [forcedMove('unseen-shadow'), forcedMove('captain-sarah-reeves')],
+          combat_actions: [
+            attack('unseen-shadow', [playerId]),
+            attack(playerId, ['unseen-shadow']),
+            attack(playerId, ['captain-sarah-reeves']),
+          ],
+        }),
+      });
+
+      const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+      expect(envelope.combat_entry_pending).toMatchObject({
+        combatants: [{ name: 'Captain Sarah Reeves', count: 1 }],
+      });
+      expect(envelope.map_actions).toEqual([forcedMove('captain-sarah-reeves')]);
+      expect(envelope.combat_actions).toEqual([attack(playerId, ['captain-sarah-reeves'])]);
+    });
+
+    it('strips a place with no entityId whose name is only in changes (#2441 NIT A)', async () => {
+      intentActors = sheetCastRoster;
+      const place = (changes: Record<string, unknown>): Record<string, unknown> => ({
+        action: 'place',
+        entityId: null,
+        x: 5,
+        y: 5,
+        changes,
+      });
+      const shadowOnly = place({ name: 'Unseen Shadow', type: 'monster' });
+      const reevesOnly = place({ name: 'Captain Sarah Reeves', type: 'npc' });
+      // Without `combatants` the gate reads them from the action targets; with them it takes them as given.
+      const authored = [
+        { monster_id: '', name: 'Unseen Shadow', count: 1 },
+        { monster_id: '', name: 'Captain Sarah Reeves', count: 1 },
+      ];
+      for (const combatants of [[], authored]) {
+        generatedResult = unseenShadowReply({
+          text: dmEnvelope({
+            combat_transition: 'start',
+            combatants,
+            map_actions: [shadowOnly, reevesOnly],
+            combat_actions: [attack(playerId, ['unseen-shadow', 'captain-sarah-reeves'])],
+          }),
+        });
+
+        const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+        expect(envelope.map_actions).toEqual([reevesOnly]);
+      }
     });
 
     it('fails closed when the roster cannot be loaded (empty roster): the invented fight is dropped', async () => {

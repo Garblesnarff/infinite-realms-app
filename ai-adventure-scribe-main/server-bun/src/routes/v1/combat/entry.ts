@@ -76,7 +76,7 @@ function resolveSpellTarget(
   const candidates = mentioned.length
     ? mentioned.map((actor) => ({ actor, basis: 'named_in_last_message' }))
     : actors
-        .filter((actor) => actor.source !== 'campaign')
+        .filter((actor) => actor.source === 'ledger' || actor.source === 'map')
         .slice(0, MAX_TARGET_CHOICES)
         .map((actor) => ({ actor, basis: actor.source ?? 'unknown' }));
   logger.debug({
