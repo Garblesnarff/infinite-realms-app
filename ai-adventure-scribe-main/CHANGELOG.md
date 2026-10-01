@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.24.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.24.0...v0.24.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **combat:** review follow-ups 2a, entry and seating NITs ([#2448](https://github.com/Garblesnarff/infinite-realms-production/issues/2448)) ([#2452](https://github.com/Garblesnarff/infinite-realms-production/issues/2452)) ([79b6710](https://github.com/Garblesnarff/infinite-realms-production/commit/79b671015b48a632554c6db950a8e0f1f4657a54))
+* **llm:** quota 402 message, no repair call for refused player actions, typed cantrip target ([#2443](https://github.com/Garblesnarff/infinite-realms-production/issues/2443)) ([#2451](https://github.com/Garblesnarff/infinite-realms-production/issues/2451)) ([1d11657](https://github.com/Garblesnarff/infinite-realms-production/commit/1d11657f0ec0d64ec8d6c26711e12daf4b5aa066))
+
 ## [0.24.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.23.0...v0.24.0) (2026-10-01)
 
 
