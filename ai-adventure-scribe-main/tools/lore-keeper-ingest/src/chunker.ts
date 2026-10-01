@@ -192,12 +192,21 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
   ];
 
   let npcBlocks: string[] = [];
+  let blockPattern = patterns[0];
   for (const pattern of patterns) {
+    blockPattern = pattern;
     npcBlocks = npcSection.split(pattern).filter((b) => b.trim());
     if (npcBlocks.length > 1) break;
   }
 
-  npcBlocks.forEach((block, index) => {
+  // Every block but the last ends where the next NPC starts. The last has no next NPC, so it
+  // would run on through the tier-2 table and hand its stats to the first table row (#2428).
+  // Its tier is still read from the whole block so a chunk's type and name do not change.
+  const lastBlock = npcBlocks.length - 1;
+  const beforeFirstNpc = npcSection.slice(0, Math.max(0, npcSection.search(blockPattern)));
+
+  npcBlocks.forEach((wholeBlock, index) => {
+    const block = index === lastBlock ? endLastNpcBlock(wholeBlock, beforeFirstNpc) : wholeBlock;
     // Try multiple name extraction patterns
     let nameMatch = block.match(/^\d+\.\s*\*\*(.+?)\*\*/);
     if (!nameMatch) {
@@ -206,7 +215,7 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
     }
     if (!nameMatch) return;
 
-    const tier = determineTier(block, index);
+    const tier = determineTier(wholeBlock, index);
     const name = normalizeEntityNameForChunkType(nameMatch[1], tier);
     if (!name || isSectionMarkerName(name)) return;
 
@@ -245,6 +254,26 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
   }
 
   return chunks;
+}
+
+/**
+ * End the last numbered NPC block at the first table row, `[TAG:` line, or heading at the same
+ * or a higher level than the heading the NPC list sits under. With no heading above the list,
+ * any heading ends it.
+ */
+function endLastNpcBlock(block: string, textBeforeFirstNpc: string): string {
+  const listLevel = [...textBeforeFirstNpc.matchAll(/^(#{1,6})\s/gm)].at(-1)?.[1].length ?? 7;
+  const lines = block.split('\n');
+  const end = lines.findIndex((line, i) => {
+    if (i === 0) return false;
+    const headingLevel = line.match(/^(#{1,6})\s/)?.[1].length;
+    return (
+      line.trim().startsWith('|') ||
+      /^[#\s`]*\[TAG:/.test(line) ||
+      (headingLevel !== undefined && headingLevel <= listLevel)
+    );
+  });
+  return end === -1 ? block : lines.slice(0, end).join('\n');
 }
 
 interface NpcTableRow {

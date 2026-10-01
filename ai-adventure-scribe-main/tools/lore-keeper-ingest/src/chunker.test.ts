@@ -6,6 +6,8 @@ import { test } from 'bun:test';
 import { chunkCampaignFiles } from './chunker.js';
 import { parseAuthoredStatBlock } from '../../../server-bun/src/services/combat/authored-stat-block-parser.js';
 
+import type { CampaignChunk } from './types.js';
+
 test('extracts a Handouts section into RAG-searchable keyed chunks', () => {
   const { chunks } = chunkCampaignFiles('campaigns/eternal-feast', {
     campaignBible: `## Handouts
@@ -300,4 +302,159 @@ test('header cells decide the mapping: bold header, Race after Location, and a t
       '**Mina** - Baker\n\nLocation: Oven Row\n\nQuirk: Hums off-key.',
     ],
   );
+});
+
+// #2428: the last numbered tier-1 NPC has no next NPC to end it. Bibles are shaped like the live
+// ones: numbered entries under the NPC roster, then the tier-2 table (5 columns, as in the Eternal
+// Feast bible) whose first row carries a stat tail. Every chunk below comes from chunkCampaignFiles.
+const npcEntry = (n: number, name: string, stats = ''): string =>
+  `${n}. **${name}** (Human Fighter) - A veteran of the road. **Voice:** Gruff. **Goal:** Reach the coast. **Secret:** Owes a debt.${stats}`;
+const blockStats =
+  '\n*   *HP:* 75.\n*   *AC:* 14.\n*   *Attack:* +3 to hit, 2d8+2 psychic (verdict)';
+const rowOneWithStats =
+  '| **Brie** | Cheesemonger | Awakened Mouse | Pantry | Fears cats, wields a needle sword. *HP:* 12, *AC:* 13, *Attack:* +3 to hit, 1d6 piercing (needle sword) |';
+const tier2Table = [
+  '| Name | Role | Race | Location | Quirk (Low Probability) |',
+  '| :--- | :--- | :--- | :--- | :--- |',
+  rowOneWithStats,
+  '| **Pinch** | Line Cook | Crab-Person | Kitchen | Only walks sideways, spills soup. |',
+].join('\n');
+const rosterBible = (
+  lastEntryStats: string,
+  between: string,
+  listHeading = '### Major NPCs',
+): string =>
+  [
+    '## 3. NPC Roster',
+    '',
+    listHeading,
+    '',
+    npcEntry(1, 'Alder'),
+    '',
+    npcEntry(2, 'Bram'),
+    '',
+    npcEntry(3, 'Quill', lastEntryStats),
+    '',
+    between,
+    '',
+    tier2Table,
+    '',
+    '## 4. Locations',
+  ].join('\n');
+const npcChunks = (bible: string): CampaignChunk[] =>
+  chunkCampaignFiles('the-eternal-feast', { campaignBible: bible }).chunks.filter((chunk) =>
+    chunk.chunkType.startsWith('npc_'),
+  );
+const chunkNamed = (chunks: CampaignChunk[], name: string): CampaignChunk => {
+  const chunk = chunks.find((c) => c.entityName === name);
+  assert.ok(chunk, `${name} chunk exists`);
+  return chunk;
+};
+const quillContent = (bible: string): string | undefined =>
+  npcChunks(bible).find((chunk) => chunk.entityName === 'Quill')?.content;
+
+test('the last tier-1 NPC without a block does not take the first table row stats (#2428)', () => {
+  const chunks = npcChunks(rosterBible('', '[TAG: NPC_TIER_2]\n### Minor NPCs (Table of 50)'));
+  assert.deepEqual(
+    chunks.map((chunk) => [chunk.chunkType, chunk.entityName]),
+    [
+      ['npc_tier1', 'Alder'],
+      ['npc_tier1', 'Bram'],
+      ['npc_tier1', 'Quill'],
+      ['npc_tier2', 'Brie'],
+      ['npc_tier2', 'Pinch'],
+    ],
+  );
+
+  const quill = chunkNamed(chunks, 'Quill');
+  assert.equal(quill.content, npcEntry(3, 'Quill'));
+  assert.deepEqual(parseAuthoredStatBlock(quill.content).parsedFields, []);
+
+  const brie = parseAuthoredStatBlock(chunkNamed(chunks, 'Brie').content);
+  assert.equal(brie.maxHp, 12);
+  assert.equal(brie.armorClass, 13);
+  assert.equal(brie.attackBonus, 3);
+});
+
+test('a last tier-1 NPC with its own block keeps exactly that block (#2428)', () => {
+  const chunks = npcChunks(
+    rosterBible(blockStats, '[TAG: NPC_TIER_2]\n### Minor NPCs (Table of 50)'),
+  );
+  const quill = chunkNamed(chunks, 'Quill');
+  assert.equal(quill.content, npcEntry(3, 'Quill', blockStats));
+  const parsed = parseAuthoredStatBlock(quill.content);
+  assert.equal(parsed.maxHp, 75);
+  assert.equal(parsed.armorClass, 14);
+  assert.equal(parsed.attackBonus, 3);
+  assert.equal(parseAuthoredStatBlock(chunkNamed(chunks, 'Brie').content).maxHp, 12);
+});
+
+// Each boundary on its own: nothing else sits between the last NPC and the table.
+for (const [boundary, between] of [
+  ['a [TAG: line', '[TAG: NPC_TIER_2]'],
+  ['a backticked [TAG: line', '`[TAG: NPC_TIER_2]`'],
+  ['a deeper heading that carries the [TAG: marker', '#### [TAG: NPC_TIER_2]'],
+  ['a heading at the same level as the NPC list heading', '### Tier 2: Minor NPC Database'],
+  ['the first table row', ''],
+] as const) {
+  test(`the last tier-1 block ends at ${boundary} (#2428)`, () => {
+    assert.equal(quillContent(rosterBible('', between)), npcEntry(3, 'Quill'));
+  });
+}
+
+test('the last tier-1 block ends at a heading above the NPC list heading (#2428)', () => {
+  assert.equal(
+    quillContent(rosterBible('', '### Minor NPCs\n\nProse before the table.', '#### Major NPCs')),
+    npcEntry(3, 'Quill'),
+  );
+});
+
+test('with no heading above the NPC list, any heading ends the last tier-1 block (#2428)', () => {
+  const bible = rosterBible('', '#### Minor NPCs\n\nProse before the table.').replace(
+    '### Major NPCs',
+    '[TAG: NPC_TIER_1]',
+  );
+  assert.equal(quillContent(bible), npcEntry(3, 'Quill'));
+});
+
+test('a deeper heading inside the last tier-1 block does not end it (#2428)', () => {
+  assert.equal(
+    quillContent(rosterBible('', '#### Notes\nStays with Quill until the table starts.')),
+    `${npcEntry(3, 'Quill')}\n\n#### Notes\nStays with Quill until the table starts.`,
+  );
+});
+
+test('the real Eternal Feast table does not leak into the last tier-1 NPC (#2428)', () => {
+  const bible = [
+    '## 3. NPC Roster',
+    '',
+    '### Major NPCs (20 Profiles)',
+    '',
+    npcEntry(1, 'Alder'),
+    '',
+    npcEntry(2, 'Quill'),
+    '',
+    '[TAG: NPC_TIER_2]',
+    fixture('eternal-feast-minor-npcs.md'),
+  ].join('\n');
+  const chunks = npcChunks(bible);
+  assert.equal(chunks.length, 2 + 50);
+  assert.equal(quillContent(bible), npcEntry(2, 'Quill'));
+  assert.equal(chunks.filter((chunk) => chunk.chunkType === 'npc_tier2').length, 50);
+});
+
+test('a short last tier-1 NPC keeps its chunk type and name once the table is cut off (#2428)', () => {
+  const bible = [
+    '## 3. NPC Roster',
+    '',
+    '### Major NPCs',
+    '',
+    '1. **Quill** (Kenku Critic) - Mimics.',
+    '',
+    '[TAG: NPC_TIER_2]',
+    fixture('eternal-feast-minor-npcs.md'),
+  ].join('\n');
+  const quill = chunkNamed(npcChunks(bible), 'Quill');
+  assert.equal(quill.chunkType, 'npc_tier1');
+  assert.equal(quill.content, '1. **Quill** (Kenku Critic) - Mimics.');
 });
