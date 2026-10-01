@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.23.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.8...v0.23.0) (2026-10-01)
+
+
+### Features
+
+* **lore-keeper-ingest:** list stale rows, --remove-stale, tool tests in CI ([#2419](https://github.com/Garblesnarff/infinite-realms-production/issues/2419)) ([#2424](https://github.com/Garblesnarff/infinite-realms-production/issues/2424)) ([ff7b249](https://github.com/Garblesnarff/infinite-realms-production/commit/ff7b24999c8206e835e47052c43d3ff0cbc3d2af))
+
+
+### Bug Fixes
+
+* **combat:** sheet Cast with no target offers scene creatures, never an invented one ([#2415](https://github.com/Garblesnarff/infinite-realms-production/issues/2415)) ([#2421](https://github.com/Garblesnarff/infinite-realms-production/issues/2421)) ([d7c57ee](https://github.com/Garblesnarff/infinite-realms-production/commit/d7c57ee64e0468215cd754c57012c61b12be6e6b))
+* **combat:** zero-action guard reads combat_transition 'none' as no transition ([#2380](https://github.com/Garblesnarff/infinite-realms-production/issues/2380)) ([#2422](https://github.com/Garblesnarff/infinite-realms-production/issues/2422)) ([27f2830](https://github.com/Garblesnarff/infinite-realms-production/commit/27f283026880fca13bf0f06e335786d54583ab81))
+* isolate worktree hooks and support macOS Bash 3.2 ([#2437](https://github.com/Garblesnarff/infinite-realms-production/issues/2437)) ([523720e](https://github.com/Garblesnarff/infinite-realms-production/commit/523720e37ab6cd06b7fa167045d4947913874dba))
+* **lore-keeper-ingest:** end the last tier-1 NPC block before the tier-2 table ([#2428](https://github.com/Garblesnarff/infinite-realms-production/issues/2428)) ([#2432](https://github.com/Garblesnarff/infinite-realms-production/issues/2432)) ([2f56e16](https://github.com/Garblesnarff/infinite-realms-production/commit/2f56e16ad05da6e3ef7f9b2503a18e667b73a03b))
+* review follow-ups from [#2426](https://github.com/Garblesnarff/infinite-realms-production/issues/2426) (items 1, 4, 6) ([#2427](https://github.com/Garblesnarff/infinite-realms-production/issues/2427)) ([fdbb13c](https://github.com/Garblesnarff/infinite-realms-production/commit/fdbb13c2ad900dbb84b9898303d98694a4680cec))
+* **server:** allowlist LLM model and clamp maxTokens ([#2158](https://github.com/Garblesnarff/infinite-realms-production/issues/2158)) — revival of [#2174](https://github.com/Garblesnarff/infinite-realms-production/issues/2174) ([#2425](https://github.com/Garblesnarff/infinite-realms-production/issues/2425)) ([d6852f0](https://github.com/Garblesnarff/infinite-realms-production/commit/d6852f04bf975fc246f56a18cfd007af4b265d8c))
+* **server:** pin the ElevenLabs model server-side ([#2158](https://github.com/Garblesnarff/infinite-realms-production/issues/2158)) ([#2176](https://github.com/Garblesnarff/infinite-realms-production/issues/2176)) ([acaaaf6](https://github.com/Garblesnarff/infinite-realms-production/commit/acaaaf6275f741ad1546b6e1c43756f1458c81ee))
+* **ui:** gold focus ring on input, textarea, and tabs ([#2324](https://github.com/Garblesnarff/infinite-realms-production/issues/2324)) ([#2433](https://github.com/Garblesnarff/infinite-realms-production/issues/2433)) ([599e79c](https://github.com/Garblesnarff/infinite-realms-production/commit/599e79cbe5c49b8d3e89f30f620095224ad9d4f6))
+
 ## [0.22.8](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.22.7...v0.22.8) (2026-10-01)
 
 
