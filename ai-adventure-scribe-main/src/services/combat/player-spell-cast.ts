@@ -99,7 +99,13 @@ export async function askPlayerForSpellCast(
         disadvantage: proposal.disadvantage,
       };
     } catch (error) {
-      logger.info('[SpellAttack] proposal refused or failed; the engine resolves the cast', error);
+      // A silent engine roll here would look like a popup that never opened, so say why (no
+      // player text: ids and the refusal reason only).
+      logger.warn('[SpellAttack] proposal refused or failed; the engine resolves the cast', {
+        actorId: action.actor_id,
+        spellId: action.spell_id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
       return { autoRolled: true, movementOnly: false };
     }
   }

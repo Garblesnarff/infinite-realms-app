@@ -11,6 +11,7 @@ import {
   type PlayerAttackRollSpec,
   type PlayerRollSpec,
 } from '@/services/combat/player-roll-bridge';
+import { clearHeldSaveCard, holdSaveCardBeforeDm } from '@/services/combat/sheet-cast-save-hold';
 import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-bridge';
 
 /**
@@ -128,6 +129,7 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearHeldSaveCard();
     rollPrompts.length = 0;
     saveCards.length = 0;
     // The player rolls a natural 14 the moment the prompt appears, and continues the save card.
@@ -274,6 +276,37 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
         saveAbility: 'DEX',
       }),
     ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary.mock.calls[0][2]).toBeUndefined();
+  });
+
+  // #2426 item 2 (#2413 NIT): the sheet's Cast already showed the card before the DM was called
+  // (#2392), so the declared cast consumes it instead of showing a second one. The hold is the
+  // real producer: `holdSaveCardBeforeDm` shows the card and records it for `consumeHeldSaveCard`.
+  it('shows one "Target saves" card, not two, and no die, when the sheet Cast already held it', async () => {
+    await holdSaveCardBeforeDm({
+      origin: 'sheet_cast',
+      spellId: 'acid-splash',
+      activeEncounter: {
+        currentTurnParticipantId: APPRENTICE_ID,
+        participants: [
+          { ...APPRENTICE, currentHitPoints: 10 },
+          { ...SHARD, currentHitPoints: 7 },
+        ],
+      },
+    });
+    expect(saveCards).toHaveLength(1);
+
+    await resolve([{ ...dmChillTouchAction, spell_id: 'acid-splash' }], 'Acid Splash');
+
+    expect(saveCards).toEqual([
+      expect.objectContaining({
+        targetLabel: 'Corrupted Shard',
+        spellName: 'Acid Splash',
+        saveAbility: 'DEX',
+      }),
+    ]);
+    expect(rollPrompts).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(executeStructuredCombatActionWithBoundary.mock.calls[0][2]).toBeUndefined();
   });

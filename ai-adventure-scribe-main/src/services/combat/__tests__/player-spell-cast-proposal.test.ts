@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { askPlayerForSpellCast } from '../player-spell-cast';
 
 import { describeAttackRoll, attackModifierForRoll } from '@/hooks/combat/use-player-roll-host';
+import logger from '@/lib/logger';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
@@ -96,5 +97,33 @@ describe('askPlayerForSpellCast with an engine proposal (#2233)', () => {
       movementOnly: false,
     });
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+  });
+
+  it('logs one warn with actor id, spell id and reason when the engine refuses the proposal (#2426)', async () => {
+    const reason = "Spell refused: Fire Bolt is not on The Apprentice's sheet";
+    vi.mocked(proposeAuthoritativeSpell).mockRejectedValue(
+      new CombatIntentRefusedError(reason, 422),
+    );
+
+    await castChillTouch('fire-bolt');
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[SpellAttack] proposal refused or failed; the engine resolves the cast',
+      { actorId: 'the-apprentice', spellId: 'fire-bolt', reason },
+    );
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it('logs one warn with actor id, spell id and reason when the proposal call throws (#2426)', async () => {
+    vi.mocked(proposeAuthoritativeSpell).mockRejectedValue(new Error('network down'));
+
+    await expect(castChillTouch()).resolves.toEqual({ autoRolled: true, movementOnly: false });
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[SpellAttack] proposal refused or failed; the engine resolves the cast',
+      { actorId: 'the-apprentice', spellId: 'chill_touch', reason: 'network down' },
+    );
   });
 });

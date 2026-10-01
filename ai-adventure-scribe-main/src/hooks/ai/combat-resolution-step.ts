@@ -982,8 +982,6 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           ? silentPlayerTurnPayload(silentPlayerTurn.playerMessage, hadEngineLines)
           : {}),
         ...(pendingPlayerAction ? { pendingPlayerAction } : {}),
-        // The gate's second ask: the reply it rejected, named (#2373).
-        ...(violation ? { narrationViolation: violation } : {}),
         ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
         ...(playerTurn
           ? {
@@ -1004,6 +1002,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       userPlan: userPlan || undefined,
       turnCount,
       ...(narrationGated ? { holdSideEffects: true } : {}),
+      // The gate's second ask: the reply it rejected, named (#2373). A param, not part of
+      // `message`, so it reaches the prompt rules and never the memory-extraction input.
+      ...(violation ? { narrationViolation: violation } : {}),
     });
   let narration = await narrate();
   if (narrationGated) {

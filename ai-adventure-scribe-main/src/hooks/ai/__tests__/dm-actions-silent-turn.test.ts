@@ -273,10 +273,17 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
     const calls = vi.mocked(AIService.chatWithDM).mock.calls;
     expect(JSON.parse(calls[0][0].message)).not.toHaveProperty('narrationViolation');
+    expect(calls[0][0].narrationViolation).toBeUndefined();
     const retry = JSON.parse(calls[1][0].message);
     expect(retry.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE);
-    expect(retry.narrationViolation).toContain('strike from the entity');
-    expect(retry.narrationViolation).toContain('feeling rattled and wounded');
+    // #2426 item 5: the note rides the prompt-rules param. `message` is what memory extraction
+    // reads, so it must hold none of the violation text.
+    expect(calls[1][0].narrationViolation).toContain('strike from the entity');
+    expect(calls[1][0].narrationViolation).toContain('feeling rattled and wounded');
+    expect(retry).not.toHaveProperty('narrationViolation');
+    expect(calls[1][0].message).not.toContain('strike from the entity');
+    expect(calls[1][0].message).not.toContain('feeling rattled and wounded');
+    expect(calls[1][0].message).not.toContain(calls[1][0].narrationViolation);
     expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
