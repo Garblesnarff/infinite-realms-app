@@ -27,8 +27,34 @@ import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
 import { CharacterVitalsService } from '../../services/character-vitals-service.js';
+import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
 import type { Character, CharacterStats } from '../../../../db/schema/index';
+
+/**
+ * Overlay the engine's spell-slot table onto the sheet-facing character
+ * payload. The `character_spell_slots` table is the single source of truth for
+ * slot usage (#2459); the legacy `characters.spell_slots` JSONB is only a
+ * fallback for characters that have no slot rows yet.
+ */
+export async function overlayEngineSpellSlots(
+  mapped: Record<string, unknown> | null,
+  characterId: string,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!mapped) return mapped;
+  const { slots } = await SpellSlotDataAccess.getCharacterSpellSlots(characterId, userId);
+  if (slots.length === 0) return mapped;
+  return {
+    ...mapped,
+    spell_slots: Object.fromEntries(
+      slots.map((slot) => [
+        slot.spellLevel,
+        { max: slot.totalSlots, current: slot.totalSlots - slot.usedSlots },
+      ]),
+    ),
+  };
+}
 
 /**
  * Validation schema for character operations
@@ -411,9 +437,15 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id
    * Get a single character by ID
    */
-  .get('/:id', async ({ character }) => {
+  .get('/:id', async ({ character, user }) => {
     // 🛡️ Sentinel: Already verified and fetched by derive/onBeforeHandle
-    return mapCharacterToApi(character as Character & { stats?: CharacterStats });
+    const resolved = character as (Character & { stats?: CharacterStats }) | null;
+    if (!resolved) return null;
+    const mapped = mapCharacterToApi(resolved);
+    if (!mapped) return mapped;
+    // Serve the engine's slot table so the sheet shows the same source the
+    // engine spends from (#2459).
+    return overlayEngineSpellSlots(mapped, resolved.id, user!.userId);
   })
 
   /**

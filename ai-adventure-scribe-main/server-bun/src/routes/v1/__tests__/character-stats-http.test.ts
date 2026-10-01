@@ -27,6 +27,10 @@ mock.module('../../../lib/logger.js', () => ({
 mock.module('../../../../../db/client', () => ({ db: {} }));
 mock.module('../../../../../db/schema/index', () => ({
   spells: { id: 'id', name: 'name' },
+  // characters.ts now also loads spell-slot-data-access, which imports these.
+  characters: {},
+  characterSpellSlots: {},
+  spellSlotUsageLog: {},
 }));
 mock.module('../../../services/campaign-service.js', () => ({ CampaignService: {} }));
 mock.module('../../../services/character/character-spell-service.js', () => ({

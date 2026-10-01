@@ -26,6 +26,7 @@ import {
 import { NotFoundError } from '../lib/errors.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
+import { SpellSlotsService } from './spell-slots-service.js';
 
 import type {
   HitDieType,
@@ -338,6 +339,9 @@ export class RestService {
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
+    // The engine's slot table is the single source the sheet reads, so a long
+    // rest resets it alongside the JSONB above (#2459).
+    await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
     await ClassFeaturesService.restoreFeatures({ characterId, restType: 'long', userId });
 
     const participants = await db.query.combatParticipants.findMany({

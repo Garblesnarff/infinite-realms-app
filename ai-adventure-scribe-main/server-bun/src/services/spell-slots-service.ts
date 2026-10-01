@@ -22,7 +22,7 @@ import {
   InternalServerError,
 } from '../lib/errors.js';
 import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
-import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
+import { CLASS_SPELLCASTING, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
 import type {
   SpellSlot,
@@ -114,7 +114,7 @@ export class SpellSlotsService {
 
     // Get current slot state with ownership verification
     // ⚡ Bolt: Using explicit JOIN instead of EXISTS for better visibility and slightly better performance in some DB engines.
-    const [slotData] = await (db as any)
+    let [slotData] = await (db as any)
       .select({
         id: characterSpellSlots.id,
         characterId: characterSpellSlots.characterId,
@@ -133,8 +133,12 @@ export class SpellSlotsService {
       )
       .limit(1);
 
+    // The engine's slot table is the single source of truth, but characters
+    // created before their rows existed (e.g. premade starter-campaign
+    // characters, #2459) have none. Derive the missing rows from the real
+    // class progression table instead of refusing the cast.
     if (!slotData) {
-      throw new NotFoundError(`Level ${slotLevelUsed} spell slots for character`, characterId);
+      slotData = await this.ensureSpellSlotRow(characterId, userId, slotLevelUsed);
     }
 
     // Check if slot is available
@@ -237,6 +241,138 @@ export class SpellSlotsService {
    */
   static canUpcast(spellName: string, baseLevel: number, targetLevel: number): UpcastValidation {
     return SpellSlotMechanics.canUpcast(spellName, baseLevel, targetLevel);
+  }
+
+  /**
+   * Resolve a character's class name to the class-table union, or null when the
+   * stored value matches no known class.
+   */
+  private static normalizeClassName(raw: string | null): ClassName | null {
+    const normalized = (raw ?? '').trim().toLowerCase();
+    if (!normalized) return null;
+    const match = (Object.keys(CLASS_SPELLCASTING) as ClassName[]).find(
+      (name) => name.toLowerCase() === normalized,
+    );
+    return match ?? null;
+  }
+
+  /**
+   * Return the slot row for a character/level, creating it from the real class
+   * progression table when it is missing. Only missing levels are inserted;
+   * existing rows (and their used counts) are never touched. When the class
+   * grants no slots at that level, throws a BusinessLogicError naming the
+   * cause instead of the generic "not found" refusal (#2459).
+   */
+  private static async ensureSpellSlotRow(
+    characterId: string,
+    userId: string,
+    slotLevelUsed: number,
+  ): Promise<Pick<SpellSlot, 'id' | 'characterId' | 'spellLevel' | 'totalSlots' | 'usedSlots'>> {
+    const [character] = await db
+      .select({
+        name: characters.name,
+        class: characters.class,
+        level: characters.level,
+        classLevels: characters.classLevels,
+      })
+      .from(characters)
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    const level = character.level && character.level > 0 ? character.level : 1;
+    const fail = (reason: string): never => {
+      throw new BusinessLogicError(
+        `${character.name || 'Character'} has no level ${slotLevelUsed} spell slots (${reason})`,
+        { characterId, class: character.class, level, slotLevelUsed },
+      );
+    };
+
+    const className =
+      this.normalizeClassName(character.class) ??
+      fail(`unrecognized class "${character.class ?? 'unknown'}"`);
+
+    // Multiclass characters use the PHB combined progression, not the
+    // single-class table at total level (a Wizard 1 / Fighter 1 is caster
+    // level 1, not Wizard 2).
+    const classLevels = Array.isArray(character.classLevels)
+      ? character.classLevels
+          .map((entry) => {
+            const raw = entry as { className?: unknown; level?: unknown };
+            const name =
+              typeof raw.className === 'string' ? this.normalizeClassName(raw.className) : null;
+            const entryLevel = typeof raw.level === 'number' && raw.level > 0 ? raw.level : 0;
+            return name && entryLevel > 0 ? { className: name, level: entryLevel } : null;
+          })
+          .filter((entry): entry is { className: ClassName; level: number } => entry !== null)
+      : [];
+    const multiclass = classLevels.length > 1;
+
+    // Warlocks resolve here but their class table grants no slots: pact magic
+    // is tracked separately, so the refusal below names that cause.
+    const calculation = multiclass
+      ? SpellSlotMechanics.calculateMulticlassSpellSlots(classLevels)
+      : SpellSlotMechanics.calculateSpellSlots(className, level);
+    const granted = calculation.slots[slotLevelUsed] ?? 0;
+    if (granted <= 0) {
+      fail(
+        multiclass
+          ? `multiclass caster level grants no level ${slotLevelUsed} spell slots`
+          : `${className} ${level} grants no level ${slotLevelUsed} spell slots`,
+      );
+    }
+
+    const existing = await db
+      .select({ spellLevel: characterSpellSlots.spellLevel })
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, characterId));
+    const existingLevels = new Set(existing.map((row) => row.spellLevel));
+    const toInsert = Object.entries(calculation.slots)
+      .filter(([slotLevel, total]) => total > 0 && !existingLevels.has(Number(slotLevel)))
+      .map(([slotLevel, total]) => ({
+        characterId,
+        spellLevel: Number(slotLevel),
+        totalSlots: total,
+        usedSlots: 0,
+      }));
+    if (toInsert.length > 0) {
+      await db
+        .insert(characterSpellSlots)
+        .values(toInsert)
+        .onConflictDoNothing({
+          target: [characterSpellSlots.characterId, characterSpellSlots.spellLevel],
+        });
+    }
+
+    const [row] = await db
+      .select({
+        id: characterSpellSlots.id,
+        characterId: characterSpellSlots.characterId,
+        spellLevel: characterSpellSlots.spellLevel,
+        totalSlots: characterSpellSlots.totalSlots,
+        usedSlots: characterSpellSlots.usedSlots,
+      })
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, slotLevelUsed),
+        ),
+      )
+      .limit(1);
+
+    if (!row) {
+      throw new InternalServerError('Failed to initialize spell slots');
+    }
+    return row;
   }
 
   /**

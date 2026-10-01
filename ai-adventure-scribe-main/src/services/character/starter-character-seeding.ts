@@ -93,7 +93,10 @@ function findClass(className: string): CharacterClass | undefined {
   );
 }
 
-function getSpellSlots(className: string, level: number): Record<string, number> | undefined {
+function getSpellSlots(
+  className: string,
+  level: number,
+): Record<string, { max: number; current: number } | number> | undefined {
   if (className.toLowerCase() === 'warlock') {
     const pact = getPactMagicProgression(level);
     return pact
@@ -104,17 +107,23 @@ function getSpellSlots(className: string, level: number): Record<string, number>
   const slots = getSpellSlotsByLevel(className, level);
   if (slots.length === 0 || slots.every((slot) => slot === 0)) return undefined;
 
-  return {
-    caster_level: level,
-    ...Object.fromEntries(slots.map((slot, index) => [`spell_slots_${index + 1}`, slot])),
-  };
+  // Stored in the { level: { max, current } } shape the sheet parses from
+  // `characters.spell_slots`. The old `spell_slots_N` keys were dropped by the
+  // parser, so premade casters silently fell back to computed slots (#2459).
+  return Object.fromEntries(
+    slots
+      .map(
+        (slot, index) => [String(index + 1), { max: slot, current: slot }] as const,
+      )
+      .filter(([, slot]) => slot.max > 0),
+  );
 }
 
 export interface StarterSpellSeed {
   cantrips: string[];
   knownSpells: string[];
   preparedSpells: string[];
-  spellSlots?: Record<string, number>;
+  spellSlots?: Record<string, { max: number; current: number } | number>;
 }
 
 export interface StarterSpellQuotas {

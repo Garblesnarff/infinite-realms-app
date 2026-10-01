@@ -26,6 +26,7 @@ vi.mock('../../../../db/client', () => ({
     select: vi.fn(() => {
       const mock = {
         from: vi.fn(() => mock),
+        leftJoin: vi.fn(() => mock),
         where: vi.fn(() => mock),
         limit: vi.fn(() => mock),
         orderBy: vi.fn(() => mock),
@@ -133,6 +134,16 @@ describe('RestService Security', () => {
         values: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'event-456' }]),
         }),
+      });
+
+      // #2459: takeLongRest resets the engine's slot table through
+      // SpellSlotsService.restoreSpellSlots, whose ownership check is a
+      // select→from→leftJoin→where chain. Resolve it as "character found, no
+      // slot rows", so the restore is a no-op here.
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([{ slot: null, charId: mockCharacterId }]),
       });
 
       const result = await RestService.takeLongRest(mockCharacterId, mockUserId);
