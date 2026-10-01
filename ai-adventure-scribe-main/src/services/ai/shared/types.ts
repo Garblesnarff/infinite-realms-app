@@ -68,6 +68,11 @@ export interface CampaignParams {
  */
 export interface AIResponse {
   text: string;
+  /**
+   * #2373: memory, world-update and voice work parked by `holdSideEffects`, to run only for the
+   * reply a caller keeps. Runs once however often it is called; see `releaseHeldSideEffects`.
+   */
+  heldSideEffects?: () => Promise<void>;
   options?: unknown[];
   narrationSegments?: NarrationSegment[];
   roll_requests?: unknown[];

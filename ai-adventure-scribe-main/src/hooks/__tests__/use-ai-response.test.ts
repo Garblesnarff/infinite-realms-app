@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-import { useAIResponse } from '../use-ai-response';
+import { useAIResponse, type EnhancedChatMessage } from '../use-ai-response';
 
 import { useCombat } from '@/contexts/CombatContext';
+import { NEUTRAL_NO_EFFECT_LINE } from '@/hooks/ai/narration-gate';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -53,6 +54,7 @@ vi.mock('@/services/user-data-api', () => ({
 vi.mock('@/services/ai-service', () => ({
   AIService: {
     chatWithDM: vi.fn(),
+    lastRequestId: vi.fn(),
   },
 }));
 
@@ -960,5 +962,250 @@ describe('useAIResponse', () => {
       earlyRollPromptAllowed: false,
     });
     expect(onTextReady.mock.calls[0][0]).toMatchObject({ text: parsed.text, sender: 'dm' });
+  });
+  // #2373: outside combat, a turn with no roll, dice result or combat declaration has no engine
+  // line, so the DM's reply is the only account of it. One that claims harm is rejected.
+  describe('#2373: a narrative turn with no engine event', () => {
+    const sessionContext = {
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'char-1',
+      campaign: {},
+      character: { id: 'char-1' },
+    };
+    const HARM =
+      'The guard turns on you. As you speak, you narrowly avoid a strike from his halberd, though a ' +
+      'glancing blow still leaves you feeling rattled and wounded.';
+    const CLEAN =
+      'The guard folds his arms and studies you in silence, then nods you toward the gate.';
+
+    const play = async (
+      replies: Array<Record<string, unknown>>,
+      messages: unknown[] = mockMessages,
+      onTextReady?: (...args: any[]) => unknown,
+    ): Promise<{
+      chat: Mock;
+      response: EnhancedChatMessage;
+    }> => {
+      const { AIService } = await import('@/services/ai-service');
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      vi.mocked(AIService.lastRequestId).mockReturnValue('req-narrative');
+      const chat = vi.mocked(AIService.chatWithDM);
+      // A failed test must not leave its queued replies for the next one.
+      chat.mockReset();
+      for (const raw of replies) {
+        // The envelope processDMResponse produces: every array present, the transition 'none'.
+        const reply = {
+          roll_requests: [],
+          combat_actions: [],
+          combat_transition: 'none',
+          map_actions: [],
+          handout_actions: [],
+          ...raw,
+        };
+        chat.mockImplementationOnce(async (params: any) => {
+          await params.onTextReady?.(reply);
+          return reply as never;
+        });
+      }
+      const { result } = renderHook(() => useAIResponse());
+      const response = await result.current.getAIResponse(
+        messages as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        onTextReady as any,
+      );
+      return { chat, response };
+    };
+
+    it('asks again with the violation named and uses the clean reply', async () => {
+      const { chat, response } = await play([{ text: HARM }, { text: CLEAN }]);
+
+      expect(chat).toHaveBeenCalledTimes(2);
+      const retry = chat.mock.calls[1][0];
+      // The violation travels in its own field: the player's message is what memory extraction
+      // and the context builder see, untouched.
+      expect(retry.message).toBe('Hello');
+      expect(retry.narrationViolation).toContain('Your previous reply for this turn was rejected');
+      expect(retry.narrationViolation).toContain('strike from his halberd');
+      // The second ask renders nothing early, and the server keeps nothing.
+      expect(retry.onTextReady).toBeUndefined();
+      expect(retry).not.toHaveProperty('dmReply');
+      expect(response.text).toContain(CLEAN);
+      expect(response.text).not.toContain('halberd');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'DM_NARRATION_REJECTED',
+        expect.objectContaining({
+          reason: 'harm_claim_without_engine_event',
+          sessionId: mockSessionId,
+          requestId: 'req-narrative',
+          branch: 'narrative',
+          attempt: 1,
+        }),
+      );
+    });
+
+    it('says nothing happened when the second reply claims harm again', async () => {
+      const { chat, response } = await play([
+        { text: HARM, narrationSegments: [{ type: 'narration', text: HARM }] },
+        { text: HARM },
+      ]);
+
+      expect(chat).toHaveBeenCalledTimes(2);
+      expect(response.text).toContain(NEUTRAL_NO_EFFECT_LINE);
+      expect(response.text).not.toContain('halberd');
+      expect(response.narrationSegments).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'DM_NARRATION_REJECTED',
+        expect.objectContaining({ attempt: 2, branch: 'narrative' }),
+      );
+    });
+
+    it('passes a reply with no harm claims untouched, with one DM call', async () => {
+      const { chat, response } = await play([{ text: CLEAN }]);
+
+      expect(chat).toHaveBeenCalledTimes(1);
+      expect(response.text).toContain(CLEAN);
+      expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+    });
+
+    it('lets the player’s own spell through: it is their action, narrated', async () => {
+      const own = 'Your spell lights the corridor, and the guard shields his eyes.';
+      const { chat, response } = await play([{ text: own }]);
+
+      expect(chat).toHaveBeenCalledTimes(1);
+      expect(response.text).toContain(own);
+    });
+
+    it.each([
+      [
+        'a roll request the dice popup owns',
+        [{ text: HARM, roll_requests: [{ type: 'skill' }] }],
+        mockMessages,
+      ],
+      [
+        'a dice result the player just submitted',
+        [{ text: HARM }],
+        [{ text: 'I rolled 4', sender: 'player', context: { intent: 'dice_roll' } }],
+      ],
+      [
+        'a turn no player message started',
+        [{ text: HARM }],
+        [{ text: 'Begin.', sender: 'dm', timestamp: new Date().toISOString() }],
+      ],
+      ['a combat declaration', [{ text: HARM, combat_actions: [{}] }], mockMessages],
+    ])('stands down for %s: the DM is not asked again', async (_label, replies, messages) => {
+      const { chat } = await play(replies as any, messages as any);
+
+      expect(chat).toHaveBeenCalledTimes(1);
+      expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+    });
+
+    describe('a rejected reply writes nothing', () => {
+      const held = (): { heldSideEffects: ReturnType<typeof vi.fn> } => ({
+        heldSideEffects: vi.fn().mockResolvedValue(undefined),
+      });
+
+      it('parks the first ask’s memory writes and runs only the reply it keeps', async () => {
+        const rejected = held();
+        const kept = held();
+
+        const { chat } = await play([
+          { text: HARM, ...rejected },
+          { text: CLEAN, ...kept },
+        ]);
+
+        expect(chat.mock.calls[0][0].holdSideEffects).toBe(true);
+        expect(chat.mock.calls[1][0].holdSideEffects).toBe(true);
+        expect(rejected.heldSideEffects).not.toHaveBeenCalled();
+        expect(kept.heldSideEffects).toHaveBeenCalledTimes(1);
+      });
+
+      it('writes nothing for either reply when both claim harm', async () => {
+        const first = held();
+        const second = held();
+
+        const { response } = await play([
+          { text: HARM, ...first },
+          { text: HARM, ...second },
+        ]);
+
+        expect(response.text).toContain(NEUTRAL_NO_EFFECT_LINE);
+        expect(first.heldSideEffects).not.toHaveBeenCalled();
+        expect(second.heldSideEffects).not.toHaveBeenCalled();
+      });
+
+      it('runs a clean reply’s writes, and those of a turn the gate stands down for', async () => {
+        const clean = held();
+        await play([{ text: CLEAN, ...clean }]);
+        expect(clean.heldSideEffects).toHaveBeenCalledTimes(1);
+
+        const rolled = held();
+        await play([{ text: HARM, roll_requests: [{ type: 'skill' }], ...rolled }]);
+        expect(rolled.heldSideEffects).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('stands down when the pre-flight NPC turns ended the fight: the DM is describing the engine’s own hit', async () => {
+      const { useCombat } = await import('@/contexts/CombatContext');
+      const liveEncounter = {
+        id: 'encounter-1',
+        phase: 'active',
+        currentTurnParticipantId: 'npc-1',
+        currentRound: 2,
+        participants: [
+          { id: 'player-1', characterId: 'char-1', name: 'Terra', participantType: 'player' },
+          { id: 'npc-1', name: 'Click', participantType: 'npc' },
+        ],
+      };
+      vi.mocked(useCombat).mockReturnValue({
+        state: { isInCombat: true, activeEncounter: liveEncounter },
+        // Turn start sees the live fight; the post-preflight refresh sees it ended.
+        refreshCombatState: vi.fn().mockResolvedValueOnce(liveEncounter).mockResolvedValue(null),
+      } as any);
+      vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+        results: [
+          {
+            action: {
+              actor_id: 'npc-1',
+              action_type: 'attack',
+              target_ids: ['player-1'],
+              weapon_id: null,
+              spell_id: null,
+              slot_level: null,
+              movement_feet: 0,
+            },
+            outcomes: [],
+            actorIsPlayer: false,
+            transcriptLines: ['Click hits Terra for 3 damage.'],
+          },
+        ],
+        currentParticipant: null,
+        combatEnded: true,
+      } as any);
+      const account = 'Click’s last lash strikes you down, and the fight is over.';
+      const kept = { heldSideEffects: vi.fn().mockResolvedValue(undefined) };
+
+      const { chat, response } = await play([{ text: account, ...kept }]);
+
+      expect(userDataApi.advanceNpcTurns).toHaveBeenCalled();
+      expect(chat).toHaveBeenCalledTimes(1);
+      expect(chat.mock.calls[0][0]).not.toHaveProperty('holdSideEffects');
+      expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+      expect(response.text).toContain(account);
+      expect(response.text).not.toContain(NEUTRAL_NO_EFFECT_LINE);
+    });
+
+    it('holds back the early render of a reply the gate will reject, and only that', async () => {
+      const early = vi.fn();
+      await play([{ text: HARM }, { text: CLEAN }], mockMessages, early);
+      expect(early).toHaveBeenCalledTimes(1);
+      expect(early.mock.calls[0][1]).toMatchObject({ suppressRender: true });
+
+      early.mockClear();
+      await play([{ text: CLEAN }], mockMessages, early);
+      expect(early.mock.calls[0][1]).toMatchObject({ suppressRender: false });
+    });
   });
 });

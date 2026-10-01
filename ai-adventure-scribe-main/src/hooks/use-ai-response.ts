@@ -34,8 +34,15 @@ import {
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions, showNpcTurnLines } from '@/hooks/ai/dm-actions-handler';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
+import {
+  enforceNarrationGate,
+  narrativeTurnHasNoEngineEvent,
+  releaseHeldSideEffects,
+  type NarrativeTurn,
+} from '@/hooks/ai/narration-gate';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
+import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
@@ -426,6 +433,23 @@ export const useAIResponse = (): {
         if (heldEntry?.decision === 'declined') {
           aiContext.gameState.combatEntryDeclined = heldEntry.label;
         }
+        const playerInputOrigin = playerInputOriginOf(latestMessage);
+        // A declined entry's reply is checked as a plain narrative turn: its combat fields are
+        // blanked below, whatever the model asked for. A turn that began in combat, or whose
+        // pre-flight ran NPC turns, is never narrative: the pre-flight can end the fight and
+        // clear `isInCombat`, and the DM is then describing the engine's own hits.
+        const narrativeTurnOf = (reply: AIResponse): NarrativeTurn => ({
+          isInCombat:
+            isInCombat ||
+            combatWasActiveAtRequestStart ||
+            Boolean(preflightNpcTurns?.results?.length || preflightNpcTurns?.combatEnded),
+          isDiceRollMessage: !!isDiceRollMessage,
+          playerInputOrigin,
+          result: entryDeclined ? { text: reply.text } : reply,
+        });
+        // Only a turn that could end up gated parks its memory and world writes; the rest write
+        // as they always did.
+        const holdSideEffects = narrativeTurnHasNoEngineEvent(narrativeTurnOf({ text: '' }));
         const askDm =
           heldEntry && heldEntry.decision !== 'declined'
             ? async () => heldEntryResult(heldEntry.pending)
@@ -440,6 +464,7 @@ export const useAIResponse = (): {
           turnCount,
           relevantMemories,
           onTurnPhase,
+          ...(holdSideEffects ? { holdSideEffects } : {}),
           // #2218: the server persists a display-ready reply under the id the caller reserved.
           // `inCombat` carries the same combat-sequence test the early render uses below, so
           // the server never keeps prose for a turn the engine may still resolve.
@@ -483,8 +508,16 @@ export const useAIResponse = (): {
                   // the declaration prose first shows an outcome the dice have not decided yet
                   // (#2139), so any turn the engine may resolve suppresses the early render.
                   // Non-combat, non-roll turns keep it (the #2095 fast-render win).
+                  // A narrative reply the gate below would reject is not shown first (#2373); a
+                  // clean one keeps the early render.
+                  const earlyGateMayReject =
+                    narrativeTurnHasNoEngineEvent(narrativeTurnOf(parsedResult)) &&
+                    suspectsFabricatedOutcome(parsedResult.text, { playerMayHaveActed: true });
                   const suppressRender =
-                    combatSequencePending || earlyShouldStartCombat || earlyRollRequests.length > 0;
+                    combatSequencePending ||
+                    earlyShouldStartCombat ||
+                    earlyRollRequests.length > 0 ||
+                    earlyGateMayReject;
                   // Combat turns hand their roll requests to the engine, not to the dice popup
                   // (#2190). Only a narrative roll turn outside combat may prompt early.
                   const earlyRollPromptAllowed =
@@ -544,6 +577,34 @@ export const useAIResponse = (): {
           };
         }
 
+        // #2373: outside combat, a turn with no roll, no dice result and no combat declaration has
+        // no engine line, so the reply is the only account of it. One that claims harm is asked
+        // for again with the violation named, then replaced. The in-combat twin of this check is
+        // in combat-resolution-step.ts, and both go through `enforceNarrationGate`.
+        if (narrativeTurnHasNoEngineEvent(narrativeTurnOf(result))) {
+          result = (
+            await enforceNarrationGate({
+              narration: result,
+              sessionId,
+              branch: 'narrative',
+              playerMayHaveActed: true,
+              regenerate: (violation) =>
+                AIService.chatWithDM({
+                  message: latestMessage.text,
+                  narrationViolation: violation,
+                  holdSideEffects: true,
+                  context: aiContext,
+                  conversationHistory,
+                  userPlan: userPlan || undefined,
+                  turnCount,
+                  relevantMemories,
+                }),
+            })
+          ).narration;
+        } else {
+          releaseHeldSideEffects(result);
+        }
+
         // Extract response data (result type has both snake_case and camelCase variants)
         let responseText = result.text;
         let narrationSegments = result.narrationSegments;
@@ -566,7 +627,7 @@ export const useAIResponse = (): {
           turnCount,
           playerMessage: latestMessage.text,
           isDiceRollMessage: !!isDiceRollMessage,
-          playerInputOrigin: playerInputOriginOf(latestMessage),
+          playerInputOrigin,
           entryConfirmed: heldEntry?.decision === 'confirmed',
           onEngineNotice,
           npcLinesShown,

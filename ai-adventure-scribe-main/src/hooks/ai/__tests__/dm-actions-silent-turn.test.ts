@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
+import { NEUTRAL_NO_EFFECT_LINE } from '../narration-gate';
 import {
   SILENT_PLAYER_TURN_NOTE,
   SILENT_PLAYER_TURN_NOTE_WITH_ENGINE_LINES,
@@ -69,6 +70,12 @@ const TALK = 'I try to talk the elemental down.';
 const FABRICATED =
   'Your spell connects with the shimmering spore-creature, and it retaliates with a viscous ' +
   'lash that strikes you hard. You are wounded and reeling.';
+/** Run M9, round 3 (#2373): DM message 16, verbatim. No engine line, HP 4/7 before and after. */
+const M9_FABRICATED =
+  'Your attempt to bridge the divide with words falls flat as the pulsating shard remains ' +
+  'entirely unresponsive, its erratic energy ignoring your plea completely. As you speak, you ' +
+  'narrowly avoid a strike from the entity, though a glancing blow still leaves you feeling ' +
+  'rattled and wounded.';
 const HONEST =
   'The Apprentice raises open hands and speaks softly. The elemental pauses, spores drifting, ' +
   'and its glow flickers as it listens.';
@@ -84,8 +91,22 @@ const DODGE = {
   movement_feet: 0,
 };
 
-const invoke = (overrides: Record<string, unknown> = {}): Promise<Outcome> =>
-  handleDmActionsAndTransitions({
+/**
+ * The envelope `processDMResponse` produces on every reply: each array present, the transition
+ * the string 'none', never absent (#2373). Fixtures that leave these out are how #2349 shipped a
+ * predicate that never held in production.
+ */
+const PROD_RESULT = {
+  combat_actions: [],
+  roll_requests: [],
+  combat_transition: 'none',
+  map_actions: [],
+  handout_actions: [],
+};
+
+const invoke = (overrides: Record<string, unknown> = {}): Promise<Outcome> => {
+  const { result: resultOverrides, ...rest } = overrides;
+  return handleDmActionsAndTransitions({
     sessionId: 'session-m8',
     characterRecord: { id: 'char-1' },
     activeEncounter: ENCOUNTER,
@@ -95,9 +116,10 @@ const invoke = (overrides: Record<string, unknown> = {}): Promise<Outcome> =>
     conversationHistory: [],
     playerMessage: TALK,
     playerInputOrigin: 'typed',
-    result: { text: FABRICATED, combat_actions: [] },
-    ...overrides,
+    result: { ...PROD_RESULT, text: FABRICATED, ...(resultOverrides as object) },
+    ...rest,
   } as HandlerParams);
+};
 
 const narrationCall = (): { payload: Record<string, unknown>; setup: string } => {
   const calls = vi.mocked(AIService.chatWithDM).mock.calls;
@@ -186,6 +208,17 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     expect(outcome.result.combatEngineBlocks).toEqual([]);
   });
 
+  it('runs on the envelope production sends: combat_transition is "none", not absent (#2373)', async () => {
+    // processDMResponse writes `combat_transition: transition || 'none'` on every reply, so the
+    // predicate that read "no transition" as a falsy field never held in prod (run M9, R3).
+    const outcome = await invoke({
+      result: { text: FABRICATED, combat_actions: [], combat_transition: 'none' },
+    });
+
+    expect(noteCalls()).toHaveLength(1);
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
+  });
+
   it('does not double the handoff when the DM already ended with it', async () => {
     vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: `${HONEST}\n\n${HANDOFF}` } as never);
 
@@ -195,28 +228,131 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     expect(outcome.responseText.split(HANDOFF)).toHaveLength(2);
   });
 
-  it('logs DM_FABRICATION_SUSPECT with the request id when the DM text still narrates a hit', async () => {
-    vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: FABRICATED } as never);
+  // #2349 logged this and let it through ("Log-only: no retry, and the turn is not blocked").
+  // #2373 makes it a rule: the reply is rejected, asked for again, then replaced.
+  it('rejects a reply that still narrates a hit: asks once more, then says nothing happened', async () => {
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      text: FABRICATED,
+      narrationSegments: [{ type: 'narration', text: FABRICATED }],
+    } as never);
 
     const outcome = await invoke();
 
-    expect(logger.info).toHaveBeenCalledWith(
-      'DM_FABRICATION_SUSPECT',
-      expect.objectContaining({ requestId: 'req-m8-r3', encounterId: 'encounter-m8' }),
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
+    expect(outcome.responseText).toBe(`${NEUTRAL_NO_EFFECT_LINE}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(outcome.responseText).not.toContain(FABRICATED);
+    // The voice segments carried the same words; they go with them.
+    expect(outcome.narrationSegments).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'DM_NARRATION_REJECTED',
+      expect.objectContaining({
+        reason: 'harm_claim_without_engine_event',
+        sessionId: 'session-m8',
+        requestId: 'req-m8-r3',
+        branch: 'combat',
+        encounterId: 'encounter-m8',
+        attempt: 1,
+      }),
     );
-    // Log-only: no retry, and the turn is not blocked.
-    expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
-    expect(outcome.responseText).toContain(FABRICATED);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'DM_NARRATION_REJECTED',
+      expect.objectContaining({ attempt: 2 }),
+    );
   });
 
-  it('does not log when the DM text is clean or only denies the outcome', async () => {
+  it('rejects the M9 parley narration, names the violation, and keeps the clean retry', async () => {
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce({ text: M9_FABRICATED } as never)
+      .mockResolvedValueOnce({ text: HONEST } as never);
+
+    const outcome = await invoke({
+      playerMessage: 'I try to talk it down.',
+      result: { text: M9_FABRICATED, combat_actions: [], combat_transition: 'none' },
+    });
+
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
+    const calls = vi.mocked(AIService.chatWithDM).mock.calls;
+    expect(JSON.parse(calls[0][0].message)).not.toHaveProperty('narrationViolation');
+    const retry = JSON.parse(calls[1][0].message);
+    expect(retry.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE);
+    expect(retry.narrationViolation).toContain('strike from the entity');
+    expect(retry.narrationViolation).toContain('feeling rattled and wounded');
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'DM_NARRATION_REJECTED',
+      expect.objectContaining({ attempt: 1, branch: 'combat' }),
+    );
+  });
+
+  it('fails closed when the second ask throws: the claim is not shipped', async () => {
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce({ text: M9_FABRICATED } as never)
+      .mockRejectedValueOnce(new Error('upstream 503'));
+
+    const outcome = await invoke();
+
+    expect(outcome.responseText).toBe(`${NEUTRAL_NO_EFFECT_LINE}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'DM_NARRATION_REJECTED',
+      expect.objectContaining({ attempt: 2, reason: 'regeneration_failed' }),
+    );
+  });
+
+  it('passes a clean reply, or one that only denies the outcome, with one DM call each', async () => {
     await invoke();
     vi.mocked(AIService.chatWithDM).mockResolvedValue({
       text: 'Nothing lands: no spell, no hit, no damage. The elemental only listens.',
     } as never);
     await invoke();
 
-    expect(logger.info).not.toHaveBeenCalledWith('DM_FABRICATION_SUSPECT', expect.anything());
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
+    expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+  });
+
+  describe('a rejected reply writes nothing (#2373)', () => {
+    const held = (): { heldSideEffects: ReturnType<typeof vi.fn> } => ({
+      heldSideEffects: vi.fn().mockResolvedValue(undefined),
+    });
+
+    it('parks the narration’s memory writes, and runs only the reply it keeps', async () => {
+      const rejected = held();
+      const kept = held();
+      vi.mocked(AIService.chatWithDM)
+        .mockResolvedValueOnce({ text: M9_FABRICATED, ...rejected } as never)
+        .mockResolvedValueOnce({ text: HONEST, ...kept } as never);
+
+      await invoke();
+
+      for (const [params] of vi.mocked(AIService.chatWithDM).mock.calls) {
+        expect(params.holdSideEffects).toBe(true);
+      }
+      expect(rejected.heldSideEffects).not.toHaveBeenCalled();
+      expect(kept.heldSideEffects).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes nothing for either reply when both claim harm', async () => {
+      const first = held();
+      const second = held();
+      vi.mocked(AIService.chatWithDM)
+        .mockResolvedValueOnce({ text: M9_FABRICATED, ...first } as never)
+        .mockResolvedValueOnce({ text: M9_FABRICATED, ...second } as never);
+
+      const outcome = await invoke();
+
+      expect(outcome.responseText).toContain(NEUTRAL_NO_EFFECT_LINE);
+      expect(first.heldSideEffects).not.toHaveBeenCalled();
+      expect(second.heldSideEffects).not.toHaveBeenCalled();
+    });
+
+    it('runs a clean first reply’s writes', async () => {
+      const first = held();
+      vi.mocked(AIService.chatWithDM).mockResolvedValueOnce({ text: HONEST, ...first } as never);
+
+      await invoke();
+
+      expect(first.heldSideEffects).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('with an NPC attack resolved in the pre-flight', () => {
@@ -233,14 +369,51 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       expect(outcome.responseText.trimEnd().endsWith(HANDOFF)).toBe(true);
     });
 
+    it('does not gate a pass whose NPC lines are already on screen (#2388)', async () => {
+      vi.mocked(AIService.chatWithDM).mockResolvedValue({
+        text: 'The elemental lashes out and hits you as you speak.',
+      } as never);
+
+      const outcome = await invoke({
+        preflightNpcTurns: PREFLIGHT_NPC_ATTACK,
+        npcLinesShown: true,
+        onEngineNotice: vi.fn(),
+      });
+
+      expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0]).not.toHaveProperty(
+        'holdSideEffects',
+      );
+      expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+      expect(outcome.responseText).toContain('hits you as you speak');
+    });
+
+    it('does not gate the DM’s account of a pre-flight hit that ended the fight', async () => {
+      const account = 'The elemental’s last lash strikes you down as the fight ends.';
+      vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: account } as never);
+
+      const outcome = await invoke({
+        preflightNpcTurns: { ...PREFLIGHT_NPC_ATTACK, combatEnded: true },
+        result: { text: account },
+      });
+
+      expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+      expect(outcome.responseText).toContain(account);
+      expect(outcome.responseText).not.toContain(NEUTRAL_NO_EFFECT_LINE);
+    });
+
     it('does not flag the NPC’s own hit as a fabrication', async () => {
       vi.mocked(AIService.chatWithDM).mockResolvedValue({
         text: 'The elemental lashes out and hits you as you speak.',
       } as never);
 
-      await invoke({ preflightNpcTurns: PREFLIGHT_NPC_ATTACK });
+      const outcome = await invoke({ preflightNpcTurns: PREFLIGHT_NPC_ATTACK });
 
       expect(logger.info).not.toHaveBeenCalledWith('DM_FABRICATION_SUSPECT', expect.anything());
+      // The engine has a line for this turn, so the gate is not consulted and nobody is re-asked.
+      expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
+      expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
+      expect(outcome.responseText).toContain('hits you as you speak');
     });
   });
 

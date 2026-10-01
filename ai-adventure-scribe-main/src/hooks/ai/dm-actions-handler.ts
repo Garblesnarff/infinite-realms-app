@@ -648,7 +648,8 @@ export async function handleDmActionsAndTransitions(
     !declaredPlayerSpell &&
     !result.combat_actions?.length &&
     !result.roll_requests?.length &&
-    !result.combat_transition &&
+    // `processDMResponse` writes 'none' on every reply, so "no transition" is 'none' or absent (#2373).
+    (!result.combat_transition || result.combat_transition === 'none') &&
     !/```ROLL_REQUESTS_V1/.test(result.text ?? '');
 
   const hasPreflightEngineLines = Boolean(

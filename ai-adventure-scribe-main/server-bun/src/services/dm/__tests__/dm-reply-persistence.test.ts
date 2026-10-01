@@ -93,6 +93,22 @@ describe('dmReplySkipReason — the same boundary as the client early render', (
     );
   });
 
+  test('a reply claiming harm is held back until the client has ruled on it (#2373)', () => {
+    expect(
+      dmReplySkipReason(
+        explorationEnvelope({
+          text:
+            'As you speak, you narrowly avoid a strike from the entity, though a glancing blow ' +
+            'still leaves you feeling rattled and wounded.',
+        }),
+      ),
+    ).toBe('unverified_harm_claim');
+    // The player's own spell, narrated outside combat, is not a claim against them.
+    expect(
+      dmReplySkipReason(explorationEnvelope({ text: 'Your spell lights the corridor ahead.' })),
+    ).toBeNull();
+  });
+
   test('an unparsed or empty completion is not written', () => {
     expect(dmReplySkipReason(null)).toBe('unparsed_envelope');
     expect(dmReplySkipReason(explorationEnvelope({ text: '   ' }))).toBe('empty_text');
@@ -160,6 +176,18 @@ describe('persistGeneratedDmReply', () => {
     });
 
     expect(result).toEqual({ persisted: false, reason: 'roll_requests' });
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('writes nothing for a reply claiming harm: the client saves the one it keeps (#2373)', async () => {
+    const result = await persistGeneratedDmReply({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      messageId: MESSAGE_ID,
+      envelope: explorationEnvelope({ text: 'The blow leaves you wounded and bleeding.' }),
+    });
+
+    expect(result).toEqual({ persisted: false, reason: 'unverified_harm_claim' });
     expect(addMessageCalls).toHaveLength(0);
   });
 

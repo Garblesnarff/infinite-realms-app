@@ -9,11 +9,8 @@ import {
   stillYourTurnNotice,
   turnNotice,
 } from './combat-notice';
-import {
-  SILENT_PLAYER_TURN_SETUP,
-  silentPlayerTurnPayload,
-  suspectsFabricatedOutcome,
-} from './silent-player-turn';
+import { enforceNarrationGate } from './narration-gate';
+import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
 import { facingName, type EngineRosterEntry } from '../../../shared/engine-display-name';
 
 import type { DMAoESpellAction } from '@/services/ai/dm-response-schema';
@@ -934,61 +931,82 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const hadEngineLines =
     orderedEngineTranscriptLines.length > 0 ||
     Boolean(npcLinesShown && preResolvedNpcTurns?.results?.length);
-  const narration = await AIService.chatWithDM({
-    message: JSON.stringify({
-      authoritativeCombatResults: resolvedActions.map((entry) =>
-        dmFacingResolvedAction(entry, roster),
-      ),
-      ...(resolvedActions.length ? { authoritativeCombatResultsNote: ENGINE_FACT_NOTE } : {}),
-      ...(encounterAlreadyConcluded ? { encounterAlreadyConcluded: true } : {}),
-      // Named as refusals, not as results, and carrying no outcome to narrate — because there
-      // is none. The engine rolled nothing for these.
-      ...(refusedActions.length
-        ? {
-            refusedActions,
-            refusedActionsNote:
-              'These were REJECTED by the engine. They did not happen: no roll was made, no ' +
-              'damage was dealt, no condition changed. Never narrate an outcome for them. ' +
-              (playerKeepsTurn
-                ? "If a refused action was the player's, say plainly that it did not happen " +
-                  'and that it is still their turn.'
-                : "If a refused action was the player's, say plainly that it is not their turn " +
-                  'yet and whose turn it is.'),
-          }
-        : {}),
-      ...(withheldPlayerActions.length
-        ? {
-            withheldPlayerActions,
-            withheldPlayerActionsNote:
-              'The player did NOT declare these; the engine did not resolve them. They did not ' +
-              'happen. Never narrate the player doing anything the player did not say.',
-          }
-        : {}),
-      ...(unresolvedPlayerAction ? { unresolvedPlayerAction } : {}),
-      ...(silentTurn && silentPlayerTurn
-        ? silentPlayerTurnPayload(silentPlayerTurn.playerMessage, hadEngineLines)
-        : {}),
-      ...(pendingPlayerAction ? { pendingPlayerAction } : {}),
-      ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
-      ...(playerTurn
-        ? {
-            turnHandoff: `End your response with: "${playerName}, what do you do?"`,
-          }
-        : {}),
-    }),
-    context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
-    conversationHistory: [
-      ...conversationHistory,
-      {
-        id: `resolution-setup-${Date.now()}`,
-        role: 'assistant' as const,
-        content: setupText,
-        timestamp: new Date(),
-      },
-    ],
-    userPlan: userPlan || undefined,
-    turnCount,
-  });
+  // A silent turn resolved nothing for the player, so when the pass has no engine line at all
+  // (printed here or already on screen, `hadEngineLines`) the DM's words are the only account
+  // and the gate checks them. A pass with engine lines legitimately narrates hits and is not
+  // checked (#2373). The narration parks its memory writes until the gate has kept a reply.
+  const narrationGated = silentTurn && !hadEngineLines;
+  const narrate = (violation?: string): Promise<any> =>
+    AIService.chatWithDM({
+      message: JSON.stringify({
+        authoritativeCombatResults: resolvedActions.map((entry) =>
+          dmFacingResolvedAction(entry, roster),
+        ),
+        ...(resolvedActions.length ? { authoritativeCombatResultsNote: ENGINE_FACT_NOTE } : {}),
+        ...(encounterAlreadyConcluded ? { encounterAlreadyConcluded: true } : {}),
+        // Named as refusals, not as results, and carrying no outcome to narrate — because there
+        // is none. The engine rolled nothing for these.
+        ...(refusedActions.length
+          ? {
+              refusedActions,
+              refusedActionsNote:
+                'These were REJECTED by the engine. They did not happen: no roll was made, no ' +
+                'damage was dealt, no condition changed. Never narrate an outcome for them. ' +
+                (playerKeepsTurn
+                  ? "If a refused action was the player's, say plainly that it did not happen " +
+                    'and that it is still their turn.'
+                  : "If a refused action was the player's, say plainly that it is not their turn " +
+                    'yet and whose turn it is.'),
+            }
+          : {}),
+        ...(withheldPlayerActions.length
+          ? {
+              withheldPlayerActions,
+              withheldPlayerActionsNote:
+                'The player did NOT declare these; the engine did not resolve them. They did not ' +
+                'happen. Never narrate the player doing anything the player did not say.',
+            }
+          : {}),
+        ...(unresolvedPlayerAction ? { unresolvedPlayerAction } : {}),
+        ...(silentTurn && silentPlayerTurn
+          ? silentPlayerTurnPayload(silentPlayerTurn.playerMessage, hadEngineLines)
+          : {}),
+        ...(pendingPlayerAction ? { pendingPlayerAction } : {}),
+        // The gate's second ask: the reply it rejected, named (#2373).
+        ...(violation ? { narrationViolation: violation } : {}),
+        ...(turnHolder ? { currentTurn: turnHolder.name ?? turnHolder.id } : {}),
+        ...(playerTurn
+          ? {
+              turnHandoff: `End your response with: "${playerName}, what do you do?"`,
+            }
+          : {}),
+      }),
+      context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
+      conversationHistory: [
+        ...conversationHistory,
+        {
+          id: `resolution-setup-${Date.now()}`,
+          role: 'assistant' as const,
+          content: setupText,
+          timestamp: new Date(),
+        },
+      ],
+      userPlan: userPlan || undefined,
+      turnCount,
+      ...(narrationGated ? { holdSideEffects: true } : {}),
+    });
+  let narration = await narrate();
+  if (narrationGated) {
+    narration = (
+      await enforceNarrationGate({
+        narration,
+        sessionId,
+        branch: 'combat',
+        encounterId,
+        regenerate: narrate,
+      })
+    ).narration;
+  }
 
   const narratedText = prependCombatEngineTranscript(
     narration?.text ?? '',
@@ -999,16 +1017,6 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ? ensurePlayerTurnHandoff(narratedText, playerName)
       : narratedText;
   if (silentTurn) {
-    // No engine line describes this turn, so the turn is stated here rather than hoped for from
-    // the model, and the DM text is only checked, never blocked or retried (#2342). NPC engine
-    // lines in the same pass legitimately narrate hits, so only a turn with none is checked.
-    if (!hadEngineLines && suspectsFabricatedOutcome(narration?.text)) {
-      logger.info('DM_FABRICATION_SUSPECT', {
-        requestId: AIService.lastRequestId(),
-        reason: 'silent_player_turn',
-        encounterId,
-      });
-    }
     return {
       ...narration,
       combatEngineBlocks: orderedEngineBlocks,

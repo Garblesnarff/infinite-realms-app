@@ -47,16 +47,4 @@ export function silentPlayerTurnPayload(
   };
 }
 
-/**
- * A hit, damage, a wound, or "your spell" in DM text for a turn that resolved nothing. Log-only
- * (#2293 counts it); a false positive costs one info line, so the list stays short and literal.
- */
-const FABRICATED_OUTCOME = /\b(?:hits?|damage[ds]?|wound(?:s|ed)?)\b|\byour spell\b/i;
-
-/** "no damage was dealt", "without any hit, damage or wound": the DM honouring the note. */
-const NEGATED_OUTCOME =
-  /\b(?:no|nor|without(?:\s+any)?|not|never)\s+(?:(?:a|any)\s+)?(?:(?:hits?|damage[ds]?|wound(?:s|ed)?)(?:\s*,\s*(?:(?:or|nor|and)\s+)?|\s+(?:or|nor|and)\s+)?)+/gi;
-
-export function suspectsFabricatedOutcome(text: string | null | undefined): boolean {
-  return FABRICATED_OUTCOME.test((text ?? '').replace(NEGATED_OUTCOME, ' '));
-}
+export { fabricatedOutcomeClaims, suspectsFabricatedOutcome } from '../../../shared/narration-harm';

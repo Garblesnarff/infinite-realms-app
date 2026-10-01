@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { generateCampaignDescription, generateCampaignName } from '../ai/campaign-generator';
 import { ContextBuilder } from '../ai/context-builder';
-import { processDMResponse, runDeferredDMResponseWork } from '../ai/dm-response-processor';
+import {
+  processDMResponse,
+  processDMResponseSideEffects,
+  runDeferredDMResponseWork,
+} from '../ai/dm-response-processor';
 import { AIService } from '../ai-service';
 import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
@@ -36,6 +40,7 @@ vi.mock('../ai/context-builder', () => ({
 
 vi.mock('../ai/dm-response-processor', () => ({
   processDMResponse: vi.fn(),
+  processDMResponseSideEffects: vi.fn(),
   runDeferredDMResponseWork: vi.fn(),
 }));
 
@@ -270,6 +275,134 @@ describe('AIService', () => {
       expect(processDMResponse).toHaveBeenCalledWith(
         expect.objectContaining({ deferSideEffects: true }),
       );
+    });
+
+    // #2373: a reply the narration gate may reject must leave nothing in memory. The work is
+    // parked on the response and runs only when a caller keeps the reply.
+    describe('holdSideEffects', () => {
+      beforeEach(() => {
+        vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);
+        vi.mocked(ContextBuilder.build).mockResolvedValue('Build prompt');
+        vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+        vi.mocked(processDMResponse).mockResolvedValue({ text: 'Parsed response' } as any);
+        vi.mocked(runDeferredDMResponseWork).mockReset().mockResolvedValue(undefined);
+        vi.mocked(processDMResponseSideEffects)
+          .mockReset()
+          .mockResolvedValue(undefined as any);
+      });
+
+      it('runs no memory or world work until the caller releases the reply, and then once', async () => {
+        const onTextReady = vi.fn();
+        const reply = await AIService.chatWithDM({
+          message: 'Hold the deferred work (render boundary)',
+          context: { ...mockContext, sessionId: 'hold-session-1' },
+          conversationHistory: [],
+          onTextReady,
+          holdSideEffects: true,
+        } as any);
+        await Promise.resolve();
+
+        // The render boundary still fires; the bookkeeping does not.
+        expect(onTextReady).toHaveBeenCalledTimes(1);
+        expect(processDMResponse).toHaveBeenCalledWith(
+          expect.objectContaining({ deferSideEffects: true }),
+        );
+        expect(runDeferredDMResponseWork).not.toHaveBeenCalled();
+        expect(processDMResponseSideEffects).not.toHaveBeenCalled();
+
+        await reply.heldSideEffects?.();
+        await reply.heldSideEffects?.();
+        expect(runDeferredDMResponseWork).toHaveBeenCalledTimes(1);
+      });
+
+      it('parks the inline work too when no render callback was given (the combat narration)', async () => {
+        const reply = await AIService.chatWithDM({
+          message: 'Hold the inline work (no render boundary)',
+          context: { ...mockContext, sessionId: 'hold-session-2' },
+          conversationHistory: [],
+          holdSideEffects: true,
+        } as any);
+
+        expect(processDMResponse).toHaveBeenCalledWith(
+          expect.objectContaining({ deferSideEffects: true }),
+        );
+        expect(processDMResponseSideEffects).not.toHaveBeenCalled();
+        expect(runDeferredDMResponseWork).not.toHaveBeenCalled();
+
+        await reply.heldSideEffects?.();
+        expect(processDMResponseSideEffects).toHaveBeenCalledTimes(1);
+        expect(runDeferredDMResponseWork).not.toHaveBeenCalled();
+      });
+
+      it('leaves an ordinary call exactly as it was: deferred after the render boundary, nothing parked', async () => {
+        const reply = await AIService.chatWithDM({
+          message: 'No hold, ordinary call',
+          context: { ...mockContext, sessionId: 'hold-session-3' },
+          conversationHistory: [],
+          onTextReady: vi.fn(),
+        } as any);
+        await Promise.resolve();
+
+        expect(reply.heldSideEffects).toBeUndefined();
+        expect(runDeferredDMResponseWork).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not let a failing held task escape', async () => {
+        vi.mocked(processDMResponseSideEffects).mockRejectedValue(new Error('extractor down'));
+        const reply = await AIService.chatWithDM({
+          message: 'Held work that fails',
+          context: { ...mockContext, sessionId: 'hold-session-4' },
+          conversationHistory: [],
+          holdSideEffects: true,
+        } as any);
+
+        await expect(reply.heldSideEffects?.()).resolves.toBeUndefined();
+        expect(logger.error).toHaveBeenCalledWith(
+          '[AIService] Held response work failed:',
+          expect.any(Error),
+        );
+      });
+    });
+
+    describe('narrationViolation', () => {
+      beforeEach(() => {
+        vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue([]);
+        vi.mocked(ContextBuilder.build).mockResolvedValue('Build prompt');
+        vi.mocked(llmApiClient.generateText).mockResolvedValue('AI RAW Response');
+        vi.mocked(processDMResponse).mockResolvedValue({ text: 'Parsed response' } as any);
+      });
+
+      it('reaches the prompt without touching the player message the pipeline sees', async () => {
+        const VIOLATION = 'Your previous reply for this turn was rejected (violation-field case).';
+        await AIService.chatWithDM({
+          message: 'I try to talk it down.',
+          narrationViolation: VIOLATION,
+          context: { ...mockContext, sessionId: 'violation-session' },
+          conversationHistory: [],
+        } as any);
+
+        const prompt = vi.mocked(llmApiClient.generateText).mock.calls.at(-1)?.[0]
+          ?.prompt as string;
+        expect(prompt).toContain(VIOLATION);
+        expect(prompt).toContain('<player_input>\nI try to talk it down.\n</player_input>');
+        expect(processDMResponse).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'I try to talk it down.' }),
+        );
+      });
+
+      it('is not deduped against the first ask for the same words', async () => {
+        const base = {
+          message: 'Same words, asked twice',
+          context: { ...mockContext, sessionId: 'violation-dedupe' },
+          conversationHistory: [],
+        };
+        vi.mocked(llmApiClient.generateText).mockClear();
+
+        await AIService.chatWithDM(base as any);
+        await AIService.chatWithDM({ ...base, narrationViolation: 'rejected: a strike' } as any);
+
+        expect(llmApiClient.generateText).toHaveBeenCalledTimes(2);
+      });
     });
   });
 

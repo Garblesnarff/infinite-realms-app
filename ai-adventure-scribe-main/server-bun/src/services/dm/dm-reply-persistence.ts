@@ -19,6 +19,7 @@
  * the watchdog below reports on when no DM row follows.
  */
 
+import { suspectsFabricatedOutcome } from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
 
 // Database imports stay inside the functions, as in combat-intent-roster.ts: /v1/llm/generate
@@ -37,6 +38,7 @@ export type DmReplySkipReason =
   | 'combat_start'
   | 'combat_entry_pending'
   | 'combat_actions'
+  | 'unverified_harm_claim'
   | 'client_in_combat';
 
 const nonEmptyArray = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
@@ -55,6 +57,11 @@ export function dmReplySkipReason(
   if (envelope.combat_entry_pending) return 'combat_entry_pending';
   if (nonEmptyArray(envelope.combat_actions) || nonEmptyArray(envelope.combatants)) {
     return 'combat_actions';
+  }
+  // The client withholds a reply like this until its narration gate has ruled on it (#2373), so
+  // the provisional copy is not written either; the client saves the reply it keeps.
+  if (suspectsFabricatedOutcome(envelope.text, { playerMayHaveActed: true })) {
+    return 'unverified_harm_claim';
   }
   return null;
 }
