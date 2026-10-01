@@ -10,6 +10,7 @@ import {
 } from '../../services/ai-usage-service.js';
 
 const VOICE_TIMEOUT_MS = 120_000;
+const DEFAULT_ELEVENLABS_MODEL = 'eleven_flash_v2_5';
 
 type TtsFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -17,6 +18,7 @@ const ttsRequestSchema = t.Object({
   text: t.String({ minLength: 1, maxLength: 5000 }),
   // Absent for voices that are not tied to a game session (previews, tools).
   sessionId: t.Optional(t.String({ maxLength: 255 })),
+  // Accepted so existing clients keep validating; the server pins the model (#2158).
   model_id: t.Optional(t.String()),
   voice_settings: t.Optional(
     t.Object({
@@ -56,7 +58,8 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
         '/voice/:voiceId',
         async ({ params, body, set, user }) => {
           const characters = body.text.length;
-          const { sessionId, ...providerBody } = body;
+          const { sessionId, model_id: _clientModelId, ...providerBody } = body;
+          const modelId = process.env.ELEVENLABS_MODEL?.trim() || DEFAULT_ELEVENLABS_MODEL;
           const quota = await usageService.checkQuotaAndConsume({
             userId: user.userId,
             plan: user.plan || 'free',
@@ -86,7 +89,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
                   'xi-api-key': apiKey,
                 },
                 signal: AbortSignal.timeout(VOICE_TIMEOUT_MS),
-                body: JSON.stringify(providerBody),
+                body: JSON.stringify({ ...providerBody, model_id: modelId }),
               },
             );
           } catch {
@@ -107,7 +110,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
               plan: user.plan || 'free',
               type: 'voice',
               provider: 'elevenlabs',
-              model: body.model_id,
+              model: modelId,
               inputTokens: characters,
               outputTokens: 0,
               costUsd: elevenLabsCharacterCostUsd(characters),

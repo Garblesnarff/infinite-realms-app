@@ -8,7 +8,13 @@ import type { TtsRouteOptions } from '../tts.js';
 
 type TtsUsageService = NonNullable<TtsRouteOptions['usageService']>;
 
-const envKeys = ['DATABASE_URL', 'NODE_ENV', 'ELEVENLABS_API_KEY', 'ELEVEN_LABS_API_KEY'];
+const envKeys = [
+  'DATABASE_URL',
+  'NODE_ENV',
+  'ELEVENLABS_API_KEY',
+  'ELEVEN_LABS_API_KEY',
+  'ELEVENLABS_MODEL',
+];
 const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
 
 Object.assign(process.env, {
@@ -16,6 +22,7 @@ Object.assign(process.env, {
   NODE_ENV: 'test',
   ELEVENLABS_API_KEY: 'server-test-provider-key',
 });
+delete process.env.ELEVENLABS_MODEL;
 
 mock.module('../../../lib/db.js', () => ({ sql: async () => [] }));
 mock.module('../../../lib/env.js', () => ({ env: { WORKOS_CLIENT_ID: 'test-workos-client' } }));
@@ -117,7 +124,7 @@ function speak(token: string, text: string, sessionId?: string): Request {
     },
     body: JSON.stringify({
       text,
-      model_id: 'eleven_turbo_v2_5',
+      model_id: 'eleven_v3',
       ...(sessionId ? { sessionId } : {}),
     }),
   });
@@ -137,13 +144,34 @@ describe('POST /v1/ai-proxy/voice usage', () => {
         provider: 'elevenlabs',
         type: 'voice',
         plan: 'pro',
-        model: 'eleven_turbo_v2_5',
+        model: 'eleven_flash_v2_5',
         inputTokens: 101,
         outputTokens: 0,
         costUsd: (101 * 0.05) / 1000,
       }),
     ]);
     expect(providerUsage[0]?.sessionId).toBeUndefined();
+  });
+
+  it('#2158: pins the server model and ignores a client-supplied model_id', async () => {
+    const response = await app.handle(speak('tts-cost-user', 'The lantern flickers.'));
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(forwardedBody).model_id).toBe('eleven_flash_v2_5');
+    expect(providerUsage[0]?.model).toBe('eleven_flash_v2_5');
+  });
+
+  it('#2158: ELEVENLABS_MODEL overrides the default, still not the client', async () => {
+    process.env.ELEVENLABS_MODEL = ' eleven_turbo_v2_5 ';
+    try {
+      const response = await app.handle(speak('tts-cost-user', 'The lantern flickers.'));
+
+      expect(response.status).toBe(200);
+      expect(JSON.parse(forwardedBody).model_id).toBe('eleven_turbo_v2_5');
+      expect(providerUsage[0]?.model).toBe('eleven_turbo_v2_5');
+    } finally {
+      delete process.env.ELEVENLABS_MODEL;
+    }
   });
 
   it('writes session_id when the request includes a session', async () => {
