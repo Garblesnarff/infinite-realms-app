@@ -1,10 +1,8 @@
 /**
- * #2269: the two components that speak in a game session send `sessionId` with the voice request.
- *
- * `AudioPlayer` posts the fixture body exactly. `VoiceProvider` (mounted by `GameProviders` with
- * the session id) reaches the same route through the progressive-voice hooks; the voice id and
- * settings there come from the voice director, so its body is checked against the fixture's keys
- * and its `sessionId`, text and model. Only `fetch` and audio playback are stubbed.
+ * #2269: VoiceProvider, mounted by GameProviders with the session id, sends `sessionId` with the
+ * voice request. It reaches the route through the progressive-voice hooks; the voice id and
+ * settings come from the voice director, so its body is checked against the fixture's keys and
+ * its `sessionId`, text and model. Only `fetch` and audio playback are stubbed.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
@@ -15,7 +13,6 @@ import {
   COST_VOICE_TEXT,
   VOICE_IN_SESSION,
 } from '../../../../../../shared/test-fixtures/session-cost-wire-bodies';
-import { AudioPlayer } from '../AudioPlayer';
 
 vi.mock('@/lib/logger', () => ({
   default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -65,40 +62,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe('AudioPlayer (#2269)', () => {
-  it('posts the session with the synthesis request', async () => {
-    render(
-      <AudioPlayer
-        text={COST_VOICE_TEXT}
-        audioRef={{ current: null }}
-        volume={1}
-        isMuted={false}
-        setIsSpeaking={vi.fn()}
-        sessionId={COST_SESSION_ID}
-      />,
-    );
-
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]?.url).toContain(VOICE_IN_SESSION.path);
-    expect(posted[0]?.body).toEqual(VOICE_IN_SESSION.wireBody);
-  });
-
-  it('sends no sessionId when it is not given one', async () => {
-    render(
-      <AudioPlayer
-        text={COST_VOICE_TEXT}
-        audioRef={{ current: null }}
-        volume={1}
-        isMuted={false}
-        setIsSpeaking={vi.fn()}
-      />,
-    );
-
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]?.body).not.toHaveProperty('sessionId');
-  });
 });
 
 describe('VoiceProvider (#2269)', () => {

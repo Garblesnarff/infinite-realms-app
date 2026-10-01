@@ -17,15 +17,11 @@ export {
   ChatInput,
   ChatImage,
   TypingIndicator,
-  DMChatBubble,
   AudioControls,
-  AudioPlayer,
-  ProgressiveVoicePlayer,
   SpeakingIndicator,
   VoiceButton,
   VolumeButton,
   VolumeSlider,
-  VoiceHandler,
 } from './components';
 
 // Re-export message list components

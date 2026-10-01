@@ -9,7 +9,6 @@ export { MessageList } from './chat/MessageList';
 export { ChatInput } from './chat/ChatInput';
 export { ChatImage } from './chat/ChatImage';
 export { TypingIndicator } from './chat/TypingIndicator';
-export { DMChatBubble } from './chat/chat/DMChatBubble';
 export { ActionOptions } from '@/components/game/ActionOptions';
 export { DiceRollMessage } from '@/components/game/DiceRollMessage';
 export { DiceRollRequest } from '@/components/game/DiceRollRequest';
@@ -19,15 +18,10 @@ export * from './chat/message-list';
 
 // Audio components
 export { AudioControls } from './audio/AudioControls';
-export { AudioPlayer } from './audio/AudioPlayer';
-export { ProgressiveVoicePlayer } from './audio/ProgressiveVoicePlayer';
 export { SpeakingIndicator } from './audio/SpeakingIndicator';
 export { VoiceButton } from './audio/VoiceButton';
 export { VolumeButton } from './audio/VolumeButton';
 export { VolumeSlider } from './audio/VolumeSlider';
-
-// Voice components
-export { VoiceHandler } from './voice/VoiceHandler';
 
 // Dice components
 export { DiceRollEmbed } from './dice/DiceRollEmbed';
