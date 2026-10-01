@@ -64,15 +64,13 @@ export const ExploreGalleryPage: React.FC = () => {
 
           {/* Loading State */}
           {isLoading && (
-            <div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-              role="status"
-              aria-label="Loading campaigns"
-            >
-              <span className="sr-only">Loading campaigns…</span>
-              {[1, 2, 3].map((n) => (
-                <div key={n} className="h-[450px] rounded-2xl bg-gray-800/50 animate-pulse" />
-              ))}
+            <div role="status" aria-label="Loading campaigns">
+              <p className="text-center text-gray-400 text-lg mb-8">Loading campaigns…</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="h-[450px] rounded-2xl bg-gray-800/50 animate-pulse" />
+                ))}
+              </div>
             </div>
           )}
 

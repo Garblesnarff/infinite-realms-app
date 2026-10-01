@@ -615,6 +615,12 @@ export async function handleDmActionsAndTransitions(
     }
   }
 
+  // Area spells are cast inside `resolveDeclaredCombatActions`, in the same batch as every other
+  // declared action, so their engine line, turn boundary, and refusal are reported like any
+  // other. Proposing them here, on the side, is how a refused Burning Hands became a console
+  // warning and the DM narrated a spell that never happened (#2304).
+  const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
+
   // #1701 repairs the action the engine refused. This repairs the action that was never
   // declared: during an active fight the player plainly attacked, and the DM answered with
   // prose and `actions:0`, so nothing was refused because nothing was submitted. Same budget,
@@ -622,12 +628,7 @@ export async function handleDmActionsAndTransitions(
   //
   // Placed above the `combat_actions` pipeline rather than inside it so a repaired turn takes
   // the identical path a first-try turn takes, AoE proposals included.
-  // Area spells are cast inside `resolveDeclaredCombatActions`, in the same batch as every other
-  // declared action, so their engine line, turn boundary, and refusal are reported like any
-  // other. Proposing them here, on the side, is how a refused Burning Hands became a console
-  // warning and the DM narrated a spell that never happened (#2304).
-  const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
-
+  //
   // The guard stands down on a seated-entry turn (the design is "Declare your action", nothing
   // resolved) and on a sheet cast (the engine refuses an undeclared one itself, #2304). Both
   // carried `combat_transition: 'none'`, which used to stop the guard by accident (#2380).

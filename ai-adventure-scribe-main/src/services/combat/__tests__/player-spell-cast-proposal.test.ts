@@ -126,4 +126,21 @@ describe('askPlayerForSpellCast with an engine proposal (#2233)', () => {
       { actorId: 'the-apprentice', spellId: 'chill_touch', reason: 'network down' },
     );
   });
+
+  it('strips URLs and caps the reason length for a plain Error (#2442)', async () => {
+    vi.mocked(proposeAuthoritativeSpell).mockRejectedValue(
+      new Error(
+        `Failed to fetch https://api.example.test/v1/combat/enc-1/intent?token=abc: ${'{"body":"x"}'.repeat(40)}`,
+      ),
+    );
+
+    await castChillTouch();
+
+    const [, fields] = vi.mocked(logger.warn).mock.calls[0] as [string, { reason: string }];
+    expect(fields.reason).not.toContain('http');
+    expect(fields.reason).not.toContain('token=abc');
+    expect(fields.reason.startsWith('Failed to fetch [url]')).toBe(true);
+    expect(fields.reason).not.toContain('{');
+    expect(fields.reason.length).toBeLessThanOrEqual(120);
+  });
 });

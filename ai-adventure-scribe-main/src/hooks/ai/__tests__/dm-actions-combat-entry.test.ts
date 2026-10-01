@@ -241,6 +241,9 @@ const invoke = (
 describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps queued once-implementations; a test that queues one and never calls
+    // the guard (#2380) must not hand it to the next test.
+    vi.mocked(enforceCombatActionOnAttempt).mockReset().mockResolvedValue(null);
     vi.mocked(userDataApi.advanceNpcTurns).mockReset();
     vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 16 });
     vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
@@ -725,7 +728,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     const realGuard = (await vi.importActual('@/services/combat/combat-zero-action-guard')) as {
       enforceCombatActionOnAttempt: typeof enforceCombatActionOnAttempt;
     };
-    vi.mocked(enforceCombatActionOnAttempt).mockImplementation(
+    vi.mocked(enforceCombatActionOnAttempt).mockImplementationOnce(
       realGuard.enforceCombatActionOnAttempt,
     );
     const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);

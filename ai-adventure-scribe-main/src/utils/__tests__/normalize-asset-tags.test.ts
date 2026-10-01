@@ -103,6 +103,16 @@ describe('normalize-asset-tags', () => {
       expect(result).not.toContain('Flavor Elemental Corrupted');
     });
 
+    it('keeps the display name when only a lowercase word follows the tag (#2436)', () => {
+      const input = 'the [ASSET:location:dark-forest] forest lay quiet';
+      expect(normalizeAssetTagsInContent(input)).toContain('Dark Forest');
+    });
+
+    it('still skips the prepend when a capitalised one-word overlap follows the tag (#2436)', () => {
+      const input = 'the [ASSET:location:dark-forest] Forest lay quiet';
+      expect(normalizeAssetTagsInContent(input)).not.toContain('Dark Forest');
+    });
+
     it('does not prepend name if it is a standalone tag (no other content)', () => {
       const input = '[ASSET:npc:remy-the-manager]';
       const result = normalizeAssetTagKeysInContent(input);

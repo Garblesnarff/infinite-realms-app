@@ -26,6 +26,17 @@ const labelFor = (
   participants: Array<{ id: string; name?: string }> | undefined,
 ): string => participants?.find((participant) => participant.id === id)?.name ?? id;
 
+const LOGGED_REASON_MAX = 120;
+
+/** A refusal reason is engine text; a plain Error may carry a URL or a response body (#2442). */
+const reasonForLog = (error: unknown): string =>
+  (error instanceof Error ? error.message : String(error))
+    .replace(/[{[].*$/s, '')
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[url]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, LOGGED_REASON_MAX);
+
 /**
  * Opens the player-facing spell UI, then lets the engine resolve.
  *
@@ -104,7 +115,7 @@ export async function askPlayerForSpellCast(
       logger.warn('[SpellAttack] proposal refused or failed; the engine resolves the cast', {
         actorId: action.actor_id,
         spellId: action.spell_id,
-        reason: error instanceof Error ? error.message : String(error),
+        reason: reasonForLog(error),
       });
       return { autoRolled: true, movementOnly: false };
     }

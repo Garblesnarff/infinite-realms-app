@@ -34,9 +34,7 @@ function getComparableWords(value: string): string[] {
   // Strip diacritics before matching so "Möbius" compares as "mobius" against
   // slug-derived names (#2343 B5). [a-z] in the word pattern is ASCII-only, so
   // without this the ö splits the word and the prefix match fails.
-  const asciiFolded = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+  const asciiFolded = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return asciiFolded.match(ASSET_NAME_WORD_PATTERN)?.map((word) => word.toLowerCase()) ?? [];
 }
 
@@ -62,7 +60,10 @@ function startsWithVisibleNamePrefix(value: string, name: string): boolean {
   return matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS;
 }
 
-function startsWithVisibleNameSuffix(value: string, name: string): boolean {
+function startsWithVisibleNameSuffix(value: string, name: string, originalValue: string): boolean {
+  // A one-word overlap is only evidence of a spelled-out name when the narration capitalises it
+  // ("Corrupted Shard"); lowercase prose like "forest lay quiet" is just a word (#2436).
+  const firstWordCapitalised = /^[A-Z]/.test(originalValue);
   const valueWords = getComparableWords(value);
   const nameWords = getComparableWords(name);
   const maxMatchLength = Math.min(valueWords.length, nameWords.length);
@@ -74,6 +75,7 @@ function startsWithVisibleNameSuffix(value: string, name: string): boolean {
   ) {
     const valuePrefix = valueWords.slice(0, matchLength);
     const nameSuffix = nameWords.slice(-matchLength);
+    if (matchLength === 1 && !firstWordCapitalised) continue;
     if (valuePrefix.every((word, index) => word === nameSuffix[index])) {
       return true;
     }
@@ -119,14 +121,15 @@ export function isAssetNamePresentAroundTag(
   const beforeTag = content.slice(0, tagStart).replace(/[\s"'`*_]+$/, '');
   const afterTag = content.slice(tagStart + tagLength).replace(/^[^a-zA-Z]+/, '');
   const normalizedBeforeTag = normalizeLeadingArticle(beforeTag).toLowerCase();
-  const normalizedAfterTag = normalizeLeadingArticle(afterTag).toLowerCase();
+  const originalAfterTag = normalizeLeadingArticle(afterTag);
+  const normalizedAfterTag = originalAfterTag.toLowerCase();
 
   return (
     endsWithWholeName(normalizedBeforeTag, normalizedName) ||
     startsWithWholeName(normalizedAfterTag, normalizedName) ||
     endsWithVisibleNamePrefix(normalizedBeforeTag, normalizedName) ||
     startsWithVisibleNamePrefix(normalizedAfterTag, normalizedName) ||
-    startsWithVisibleNameSuffix(normalizedAfterTag, normalizedName)
+    startsWithVisibleNameSuffix(normalizedAfterTag, normalizedName, originalAfterTag)
   );
 }
 

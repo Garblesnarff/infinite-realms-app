@@ -30,6 +30,10 @@ describe('ExploreGalleryPage (#2343 item 16)', () => {
     );
 
     expect(screen.getByRole('status', { name: 'Loading campaigns' })).toBeInTheDocument();
+    // Sighted users see the text too (#2436): it is not the screen-reader-only kind.
+    const visibleText = screen.getByText('Loading campaigns…');
+    expect(visibleText).toBeVisible();
+    expect(visibleText).not.toHaveClass('sr-only');
     expect(screen.queryByText('More Adventures Coming Soon')).not.toBeInTheDocument();
 
     state.isLoading = false;

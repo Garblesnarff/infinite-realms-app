@@ -21,7 +21,7 @@ export interface VoicePool extends Record<string, VoiceConfig[]> {
 export const VOICE_POOLS: VoicePool = {
   dm: [
     {
-      id: 'T0GKiSwCb51L7pv1sshd', // Same voice ID as old AudioPlayer
+      id: 'T0GKiSwCb51L7pv1sshd', // Same voice ID the removed AudioPlayer used
       name: 'DM Voice',
       description: 'Main DM narrator voice (old compatible)',
       settings: {
