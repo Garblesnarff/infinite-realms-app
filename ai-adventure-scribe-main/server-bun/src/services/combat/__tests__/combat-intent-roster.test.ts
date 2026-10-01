@@ -61,8 +61,13 @@ describe('loadCombatIntentActorRoster', () => {
     expect(roster).toEqual([
       { name: 'Professor Emil Darkwater' },
       { name: 'Orc Brute', actorSlug: 'orc-brute' },
-      { name: 'Campaign NPC', actorSlug: 'npc-1' },
-      { name: 'Asset NPC', actorSlug: 'asset-npc', monsterId: 'srd:bandit' },
+      { name: 'Campaign NPC', actorSlug: 'npc-1', campaignOnly: true },
+      {
+        name: 'Asset NPC',
+        actorSlug: 'asset-npc',
+        monsterId: 'srd:bandit',
+        campaignOnly: true,
+      },
     ]);
   });
 });

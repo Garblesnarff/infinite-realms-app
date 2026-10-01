@@ -24,7 +24,7 @@ import type {
   CombatEntryPlayer,
   CombatEntryResponse,
 } from './combat/combat-entry-gate.js';
-import type { DeclaredAttack } from './combat/combat-intent-gate.js';
+import type { CombatIntentActor, DeclaredAttack } from './combat/combat-intent-gate.js';
 import type { LLMResponse } from './llm-provider-service.js';
 
 /** What the client must send for the server to be able to seat the player in an encounter. */
@@ -136,6 +136,23 @@ const isDeclaredCombatant = (
   );
 };
 
+/** The DM's reply with every field that could open or resolve a fight removed. */
+const withoutCombatEntryFields = (envelope: Record<string, unknown>): Record<string, unknown> => {
+  const rest = { ...envelope };
+  delete rest.combatants;
+  return {
+    ...rest,
+    combat_transition: 'none',
+    map_actions: [],
+    combat_actions: [],
+    roll_requests: (Array.isArray(envelope.roll_requests) ? envelope.roll_requests : []).filter(
+      (request) =>
+        !(request && typeof request === 'object') ||
+        !['attack', 'initiative'].includes((request as { type?: string }).type ?? ''),
+    ),
+  };
+};
+
 /**
  * Run the gate for this turn and return the response the client should receive.
  *
@@ -147,9 +164,15 @@ export async function applyCombatEntryGate(params: {
   userId: string;
   combatEntry?: CombatEntryContext | null;
   declaredAttack?: DeclaredAttack | null;
+  /**
+   * Set when the player's words were a spell cast with no creature named (the sheet's Cast
+   * button): the roster the turn was checked against. The player chose nobody, so a combatant
+   * the DM made up from its own description ("shadows that do not cast light") is not a target.
+   */
+  untargetedSpellRoster?: readonly CombatIntentActor[] | null;
   deps?: CombatEntryGateDeps;
 }): Promise<LLMResponse> {
-  const { combatEntry, declaredAttack } = params;
+  const { combatEntry, declaredAttack, untargetedSpellRoster } = params;
   const sanitizedResult = stripUntargetedInitiativeRollRequests(params.result, declaredAttack);
   if (sanitizedResult.error || !combatEntry?.sessionId || !combatEntry.player) {
     return sanitizedResult;
@@ -229,6 +252,28 @@ export async function applyCombatEntryGate(params: {
         verb: declaredAttack.verb,
       });
     }
+  }
+
+  if (pending && !declaredAttack && untargetedSpellRoster) {
+    const known = pending.combatants.filter((combatant) =>
+      untargetedSpellRoster.some((actor) =>
+        isDeclaredCombatant(combatant, {
+          verb: 'cast',
+          actorName: actor.name,
+          ...(actor.monsterId ? { monsterId: actor.monsterId } : {}),
+        }),
+      ),
+    );
+    if (known.length === 0) {
+      logger.info({
+        msg: 'COMBAT_ENTRY_INVENTED_TARGET_DROPPED',
+        sessionId: combatEntry.sessionId,
+        trigger: pending.trigger,
+        combatants: pending.combatants.map((combatant) => combatant.name),
+      });
+      return { ...sanitizedResult, text: JSON.stringify(withoutCombatEntryFields(envelope)) };
+    }
+    pending = { ...pending, combatants: known };
   }
 
   if (!pending) return sanitizedResult;

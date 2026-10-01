@@ -11,6 +11,8 @@ import {
   DECLARED_ATTACK_SESSION_ID,
   declaredAttackCheckBody,
   pickedTargetCheckBody,
+  sheetCastCheckBody,
+  sheetCastRoster,
   untargetedSpellCheckBody,
 } from '../../../../../../shared/test-fixtures/declared-attack-hold';
 
@@ -25,6 +27,8 @@ const { createRequestPipelineApp } = await import('../../../../http-pipeline.js'
 const { createDeclaredAttackRoutes } = await import('../entry.js');
 
 let authenticated = true;
+let roster: Array<{ name: string; campaignOnly?: boolean }> = [];
+const defaultRoster = [{ name: 'Valerius' }, { name: 'Professor Darkwater' }];
 const rosterCalls: Array<{ sessionId: string; userId: string }> = [];
 const authenticateRequest = async () =>
   authenticated
@@ -39,7 +43,7 @@ const app = createRequestPipelineApp().use(
     authenticateRequest: authenticateRequest as never,
     loadCombatIntentActorRoster: (async (sessionId: string, userId: string) => {
       rosterCalls.push({ sessionId, userId });
-      return [{ name: 'Valerius' }, { name: 'Professor Darkwater' }];
+      return roster;
     }) as never,
   }),
 );
@@ -56,6 +60,7 @@ const post = (body: unknown, sessionId = DECLARED_ATTACK_SESSION_ID) =>
 describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
   beforeEach(() => {
     authenticated = true;
+    roster = defaultRoster;
     rosterCalls.splice(0);
   });
 
@@ -169,5 +174,85 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
 
     const light = await post({ ...untargetedSpellCheckBody, playerInput: 'I cast Light on him.' });
     expect(await light.json()).toEqual({ pending: null });
+  });
+});
+
+type SheetCastBody = {
+  pending: Record<string, unknown> | null;
+  targetChoice?: { spellName: string; candidates: string[] };
+};
+
+/**
+ * #2415 (run 17): the sheet's Cast button names no creature. The check used to miss it (the
+ * tag's comma split the clause), so the DM was called first and invented the target.
+ */
+describe('declared-attack for a sheet cast with no target', () => {
+  beforeEach(() => {
+    authenticated = true;
+    roster = sheetCastRoster;
+    rosterCalls.splice(0);
+  });
+
+  it('offers Reeves as a choice, and does not pick her for the player', async () => {
+    const response = await post(sheetCastCheckBody);
+    const body = (await response.json()) as SheetCastBody;
+
+    expect(response.status).toBe(200);
+    expect(body.pending).toBeNull();
+    expect(body.targetChoice).toEqual({
+      spellName: 'Chill Touch',
+      candidates: ['Captain Sarah Reeves'],
+    });
+  });
+
+  it('offers the creatures this session has seen when the narration names none, never an unmet campaign NPC', async () => {
+    roster = [...sheetCastRoster, { name: 'Warden Ilsa Vane', campaignOnly: true }];
+    const response = await post({ ...sheetCastCheckBody, recentNarration: 'The wind rises.' });
+    const body = (await response.json()) as SheetCastBody;
+
+    expect(body.targetChoice?.candidates).toEqual([
+      'Captain Sarah Reeves',
+      'Professor Emil Darkwater',
+    ]);
+  });
+
+  it('starts nothing when no creature is present', async () => {
+    roster = [{ name: 'Warden Ilsa Vane', campaignOnly: true }];
+    const unmet = await post({ ...sheetCastCheckBody, recentNarration: 'The wind rises.' });
+    expect(await unmet.json()).toEqual({ pending: null });
+
+    roster = [];
+    const empty = await post(sheetCastCheckBody);
+    expect(await empty.json()).toEqual({ pending: null });
+  });
+
+  it('seats the creature the player picked, from the same tagged line', async () => {
+    const response = await post({ ...sheetCastCheckBody, targetName: 'Captain Sarah Reeves' });
+    const body = (await response.json()) as SheetCastBody;
+
+    expect(body.targetChoice).toBeUndefined();
+    expect(body.pending).toMatchObject({
+      trigger: 'player_intent',
+      combatants: [{ name: 'Captain Sarah Reeves', count: 1 }],
+      declaredAttack: { actorName: 'Captain Sarah Reeves', spellId: 'chill-touch' },
+    });
+  });
+
+  it('leaves a typed "I cast Chill Touch at Reeves" as it was: held on Reeves, no question', async () => {
+    const response = await post({
+      ...sheetCastCheckBody,
+      playerInput: 'I cast Chill Touch at Reeves',
+    });
+    const body = (await response.json()) as SheetCastBody;
+
+    expect(body.targetChoice).toBeUndefined();
+    expect(body.pending).toMatchObject({
+      combatants: [{ name: 'Captain Sarah Reeves', count: 1 }],
+      declaredAttack: {
+        actorName: 'Captain Sarah Reeves',
+        attackSource: 'spell',
+        spellName: 'Chill Touch',
+      },
+    });
   });
 });

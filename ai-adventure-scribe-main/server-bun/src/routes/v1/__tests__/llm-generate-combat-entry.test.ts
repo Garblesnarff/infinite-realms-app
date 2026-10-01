@@ -14,17 +14,20 @@ import {
   DECLARED_ATTACK_PLAYER_INPUT,
   declaredAttackCheckBody,
   declinedTurnBody,
+  SHEET_CAST_PLAYER_INPUT,
+  sheetCastRoster,
 } from '../../../../../shared/test-fixtures/declared-attack-hold';
 
 let generatedResult: Record<string, unknown> = { text: '{}', provider: 'openrouter', model: 'm' };
 let generatedInputs: Record<string, unknown>[] = [];
 const infoLogs: unknown[] = [];
 const warningLogs: unknown[] = [];
-const intentActors = [
+const defaultIntentActors = [
   { name: 'Professor Emil Darkwater' },
   { name: 'The Ghoul', monsterId: 'srd:ghoul' },
   { name: 'Valerius' },
 ];
+let intentActors: Array<{ name: string; monsterId?: string }> = defaultIntentActors;
 
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
@@ -114,6 +117,7 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
   beforeEach(() => {
     generatedResult = { text: '{}', provider: 'openrouter', model: 'm' };
     generatedInputs = [];
+    intentActors = defaultIntentActors;
     infoLogs.length = 0;
     warningLogs.length = 0;
   });
@@ -485,5 +489,112 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
       unknown
     >;
     expect(gated.combat_entry_pending).toMatchObject({ trigger: 'player_intent' });
+  });
+  describe('a sheet cast that names no creature (#2415, run 17)', () => {
+    const sheetCastTurn = {
+      prompt: 'Continue the scene.',
+      player_input: SHEET_CAST_PLAYER_INPUT,
+      combatEntry: { sessionId: SESSION_ID, player: declaredAttackCheckBody.player },
+    };
+    /** The DM's reply to run 17's cast: a fight, against a name taken from its own mood text. */
+    const unseenShadowReply = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+      text: 'Frost gathers on your fingertips. Shadows that do not cast light shift below.',
+      provider: 'openrouter',
+      model: 'test/model',
+      ...extra,
+    });
+    const shadowEnvelope = (combatants: Array<{ name: string; count: number }>): string =>
+      dmEnvelope({
+        combat_transition: 'start',
+        combatants,
+        roll_requests: [
+          { type: 'initiative', purpose: 'Roll initiative' },
+          { type: 'skill', skill: 'perception', purpose: 'Notice the shaft' },
+        ],
+      });
+    const envelopeOf = async (response: Response): Promise<Record<string, unknown>> =>
+      JSON.parse(((await response.json()) as { text: string }).text);
+
+    it('never seats a combatant the DM invented, and starts no fight', async () => {
+      intentActors = sheetCastRoster;
+      generatedResult = unseenShadowReply({
+        text: shadowEnvelope([{ name: 'The Unseen Shadow', count: 1 }]),
+      });
+
+      const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+      expect(envelope.combat_entry_pending).toBeUndefined();
+      expect(envelope.combat_transition).toBe('none');
+      expect(envelope.combatants).toBeUndefined();
+      // Only the combat dice go; an ordinary check the DM asked for stays.
+      expect(envelope.roll_requests).toEqual([
+        { type: 'skill', skill: 'perception', purpose: 'Notice the shaft' },
+      ]);
+      expect(infoLogs).toContainEqual(
+        expect.objectContaining({ msg: 'COMBAT_ENTRY_INVENTED_TARGET_DROPPED' }),
+      );
+    });
+
+    it('starts no fight when no creature is present at all', async () => {
+      intentActors = [];
+      generatedResult = unseenShadowReply({ text: shadowEnvelope([]) });
+
+      const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+      expect(envelope.combat_entry_pending).toBeUndefined();
+      expect(envelope.combat_transition).toBe('none');
+    });
+
+    it('keeps a combatant that is on the roster and drops the invented one beside it', async () => {
+      intentActors = sheetCastRoster;
+      generatedResult = unseenShadowReply({
+        text: shadowEnvelope([
+          { name: 'The Unseen Shadow', count: 1 },
+          { name: 'Captain Sarah Reeves', count: 1 },
+        ]),
+      });
+
+      const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+      expect(envelope.combat_entry_pending).toMatchObject({
+        combatants: [{ name: 'Captain Sarah Reeves', count: 1 }],
+      });
+    });
+
+    it('lets the DM seat a creature it just introduced when the player cast "at him"', async () => {
+      intentActors = sheetCastRoster;
+      generatedResult = unseenShadowReply({
+        text: shadowEnvelope([{ name: 'The Bandit', count: 1 }]),
+      });
+
+      const envelope = await envelopeOf(
+        await generate({ ...sheetCastTurn, player_input: 'I cast Chill Touch at him.' }),
+      );
+
+      expect(envelope.combat_entry_pending).toMatchObject({
+        combatants: [{ name: 'The Bandit', count: 1 }],
+      });
+    });
+
+    it('does not touch a player who named the creature, or a DM-started fight on a plain turn', async () => {
+      intentActors = sheetCastRoster;
+      generatedResult = unseenShadowReply({
+        text: shadowEnvelope([{ name: 'The Unseen Shadow', count: 1 }]),
+      });
+
+      const named = await envelopeOf(
+        await generate({ ...sheetCastTurn, player_input: 'I cast Chill Touch at Reeves' }),
+      );
+      expect(named.combat_entry_pending).toMatchObject({
+        declaredAttack: { actorName: 'Captain Sarah Reeves', spellName: 'Chill Touch' },
+      });
+
+      const ambush = await envelopeOf(
+        await generate({ ...sheetCastTurn, player_input: 'I open the door.' }),
+      );
+      expect(ambush.combat_entry_pending).toMatchObject({
+        combatants: [{ name: 'The Unseen Shadow', count: 1 }],
+      });
+    });
   });
 });

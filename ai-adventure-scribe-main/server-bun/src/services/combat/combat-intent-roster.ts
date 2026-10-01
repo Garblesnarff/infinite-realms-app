@@ -150,7 +150,7 @@ export async function loadCombatIntentActorRoster(
     ]);
 
     for (const npc of campaignNpcs) {
-      addActor(actors, { name: npc.name, actorSlug: npc.id });
+      addActor(actors, { name: npc.name, actorSlug: npc.id, campaignOnly: true });
     }
     for (const asset of campaignAssets) {
       if (!asset.entityName?.trim()) continue;
@@ -160,6 +160,7 @@ export async function loadCombatIntentActorRoster(
           : {};
       addActor(actors, {
         name: asset.entityName,
+        campaignOnly: true,
         ...(stringField(metadata, 'slug', 'actor_slug', 'actorSlug')
           ? { actorSlug: stringField(metadata, 'slug', 'actor_slug', 'actorSlug') }
           : {}),

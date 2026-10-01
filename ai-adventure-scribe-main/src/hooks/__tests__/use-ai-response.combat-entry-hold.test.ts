@@ -13,11 +13,17 @@ import {
   declaredAttackCharacter,
   declaredAttackCheckBody,
   pickedTargetCheckBody,
+  SHEET_CAST_PLAYER_INPUT,
+  sheetCastCheckBody,
   untargetedSpellCheckBody,
 } from '../../../shared/test-fixtures/declared-attack-hold';
 import { useAIResponse } from '../use-ai-response';
 
 import { useCombat } from '@/contexts/CombatContext';
+import {
+  buildSpellCastContext,
+  buildSpellCastMessage,
+} from '@/features/game-session/components/game/overhaul/spell-view-model';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { AIService } from '@/services/ai-service';
 import {
@@ -333,6 +339,60 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     expect(handleDmActionsAndTransitions).toHaveBeenCalledWith(
       expect.objectContaining({ entryConfirmed: true }),
     );
+  });
+
+  it("the sheet's Cast of Chill Touch names no creature: the picker opens before the DM, from the exact line the sheet sends (#2415)", async () => {
+    // The producer is the sheet's own: the fixture is not a hand-typed copy of its output.
+    const spell = { name: 'Chill Touch', id: 'chill-touch', level: 0 };
+    expect(buildSpellCastMessage(spell)).toBe(SHEET_CAST_PLAYER_INPUT);
+    vi.mocked(userDataApi.detectDeclaredAttack)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          pending: null,
+          targetChoice: { spellName: 'Chill Touch', candidates: ['Captain Sarah Reeves'] },
+        }),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ pending }),
+      } as any);
+    let pick: (answer: { confirmed: boolean; target?: string }) => void = () => {};
+    vi.mocked(requestCombatEntryAnswer).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          pick = resolve;
+        }),
+    );
+
+    const turn = play([
+      { text: sheetCastCheckBody.recentNarration, sender: 'dm', timestamp: 't0' },
+      {
+        text: buildSpellCastMessage(spell),
+        sender: 'player',
+        timestamp: 't1',
+        context: buildSpellCastContext({ id: spell.id, level: spell.level }),
+      },
+    ]);
+    await vi.waitFor(() => expect(requestCombatEntryAnswer).toHaveBeenCalledTimes(1));
+    expect(requestCombatEntryAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetChoices: ['Captain Sarah Reeves'],
+        spellLabel: 'Chill Touch',
+      }),
+    );
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+
+    pick({ confirmed: true, target: 'Captain Sarah Reeves' });
+    await turn;
+
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    expect(vi.mocked(userDataApi.detectDeclaredAttack).mock.calls.map(([, body]) => body)).toEqual([
+      sheetCastCheckBody,
+      { ...sheetCastCheckBody, targetName: 'Captain Sarah Reeves' },
+    ]);
   });
 
   it('asks the DM as usual when the message names no attack', async () => {

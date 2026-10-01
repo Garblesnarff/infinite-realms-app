@@ -54,11 +54,14 @@ const sameName = (left: string, right: string): boolean =>
 type SpellTarget = { attack: DeclaredAttack } | { choices: string[] } | null;
 
 /**
- * "I cast Fire Bolt at him": a known attack spell with no creature the roster can name. One
- * creature in the narration is the target; several, or none, are the player's to pick.
+ * An attack spell with no creature the roster can name: "I cast Fire Bolt at him", or the sheet's
+ * Cast button, which names none at all. The creatures it can mean are the ones the last DM
+ * message names; with none named, the ones this session has seen. A campaign NPC nobody has met
+ * is never offered (#2415). "Him" with one candidate is that candidate; no pronoun is the
+ * player's to pick, however few there are, so a creature is never chosen for them.
  */
 function resolveSpellTarget(
-  spell: { id: string; name: string },
+  spell: { id: string; name: string; pronoun?: string },
   actors: readonly CombatIntentActor[],
   body: { targetName?: string; recentNarration?: string },
 ): SpellTarget {
@@ -67,9 +70,13 @@ function resolveSpellTarget(
     return chosen ? { attack: declareSpellAttackOn(spell, chosen) } : null;
   }
   const mentioned = actorsMentionedIn(body.recentNarration ?? '', actors);
-  const candidates = mentioned.length ? mentioned : actors.slice(0, MAX_TARGET_CHOICES);
+  const candidates = mentioned.length
+    ? mentioned
+    : actors.filter((actor) => !actor.campaignOnly).slice(0, MAX_TARGET_CHOICES);
   if (candidates.length === 0) return null;
-  if (candidates.length === 1) return { attack: declareSpellAttackOn(spell, candidates[0]) };
+  if (candidates.length === 1 && spell.pronoun) {
+    return { attack: declareSpellAttackOn(spell, candidates[0]) };
+  }
   return { choices: candidates.map((actor) => actor.name) };
 }
 

@@ -80,6 +80,7 @@ describe('spell and missile phrasings, and the verb governing the actor (#2341)'
     expect(detectUntargetedAttackSpell('I cast Fire Bolt at him')).toEqual({
       id: 'fire-bolt',
       name: 'Fire Bolt',
+      pronoun: 'him',
     });
     expect(detectUntargetedAttackSpell('I hurl Acid Splash at it.')).toMatchObject({
       id: 'acid-splash',
@@ -106,5 +107,34 @@ describe('spell and missile phrasings, and the verb governing the actor (#2341)'
     expect(named.map((actor) => actor.name).join(' | ')).toBe(
       'Valerius the Upside Down | Professor Emil Darkwater',
     );
+  });
+});
+
+describe("the sheet Cast button's tag (#2415)", () => {
+  // `buildSpellCastMessage` writes this line; the shared fixture and a client test pin it.
+  const sheetCast = 'I cast Chill Touch [spell_id=chill-touch, spell_level=cantrip].';
+
+  it('reads a tagged cast with no creature as an untargeted attack spell with no pronoun', () => {
+    const spell = detectUntargetedAttackSpell(sheetCast);
+    expect(spell).toEqual({ id: 'chill-touch', name: 'Chill Touch' });
+    expect(spell).not.toHaveProperty('pronoun');
+    expect(detectUntargetedAttackSpell('I cast Chill Touch at him.')).toMatchObject({
+      pronoun: 'him',
+    });
+  });
+
+  it('declares no attack from the tagged line alone, and still resolves a typed target', () => {
+    const roster = [{ name: 'Captain Sarah Reeves' }];
+    expect(detectDeclaredAttack(sheetCast, roster)).toBeNull();
+    expect(detectDeclaredAttack('I cast Chill Touch at Reeves', roster)).toMatchObject({
+      actorName: 'Captain Sarah Reeves',
+      spellId: 'chill-touch',
+    });
+  });
+
+  it('does not read a tagged non-attack spell as an attack', () => {
+    expect(
+      detectUntargetedAttackSpell('I cast Light [spell_id=light, spell_level=cantrip].'),
+    ).toBeNull();
   });
 });

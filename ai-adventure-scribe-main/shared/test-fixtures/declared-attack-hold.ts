@@ -60,3 +60,27 @@ export const untargetedSpellCheckBody = {
 
 /** ...and, once the player picks one, asks again with that creature named. */
 export const pickedTargetCheckBody = { ...untargetedSpellCheckBody, targetName: 'Valerius' };
+
+/**
+ * Run 17 (#2415): the sheet's Cast button on Chill Touch, out of combat, near Captain Sarah
+ * Reeves. `buildSpellCastMessage` writes this exact line (a client test asserts it); it names no
+ * creature, and its comma used to split the clause so the pre-DM check never saw a spell.
+ */
+export const SHEET_CAST_PLAYER_INPUT =
+  'I cast Chill Touch [spell_id=chill-touch, spell_level=cantrip].';
+
+/** The last DM message of run 17: Reeves is named; "The Unseen Shadow" is only mood. */
+export const SHEET_CAST_RECENT_NARRATION =
+  'Captain Sarah Reeves approaches behind you, her lantern guttering. Below, shadows that do not cast light shift along the shaft.';
+
+/** What `loadCombatIntentActorRoster` returns for that session: ledger NPCs are titleized. */
+export const sheetCastRoster = [
+  { name: 'Captain Sarah Reeves' },
+  { name: 'Professor Emil Darkwater' },
+];
+
+export const sheetCastCheckBody = {
+  playerInput: SHEET_CAST_PLAYER_INPUT,
+  player: declaredAttackCheckBody.player,
+  recentNarration: SHEET_CAST_RECENT_NARRATION,
+};

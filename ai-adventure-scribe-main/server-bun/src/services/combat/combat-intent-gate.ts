@@ -13,6 +13,11 @@ export interface CombatIntentActor {
   /** `slug` is accepted for callers that use the tactical-map field name. */
   slug?: string;
   monsterId?: string;
+  /**
+   * Known only from the campaign's authored cast, never seen in this session's ledger or on its
+   * map. Such an actor can be named, but nothing says it is in the scene (#2415).
+   */
+  campaignOnly?: boolean;
 }
 
 export interface DeclaredAttack {
@@ -182,6 +187,14 @@ export const declareSpellAttackOn = (
   spellId: spell.id,
   spellName: spell.name,
 });
+
+/**
+ * The sheet's Cast button appends `[spell_id=chill-touch, spell_level=cantrip]`. Its comma would
+ * split the player's one clause in two, and neither half reads as a spell (#2415). The client
+ * drops the same tag from the bubble (`withoutSpellCastTag`).
+ */
+const withoutSheetSpellTag = (input: string): string =>
+  input.replace(/\s*\[spell_id=[^\]]*\]/g, '');
 
 const splitIntoClauses = (input: string): string[] => {
   const clauses: string[] = [];
@@ -424,7 +437,7 @@ export function detectDeclaredAttack(
 ): DeclaredAttack | null {
   if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
 
-  const clauses = splitIntoClauses(playerInput.trim().replace(/\s+/g, ' '));
+  const clauses = splitIntoClauses(withoutSheetSpellTag(playerInput).trim().replace(/\s+/g, ' '));
   let declaredAttack: DeclaredAttack | null = null;
   let previousApproachTarget: CombatIntentActor | null = null;
   for (const clause of clauses) {
@@ -439,6 +452,8 @@ export function detectDeclaredAttack(
 export interface UntargetedAttackSpell {
   id: string;
   name: string;
+  /** "him", "it"... when the player wrote one; absent when the spell named no target at all. */
+  pronoun?: string;
 }
 
 const UNTARGETED_SPELL_PATTERN = new RegExp(
@@ -454,7 +469,8 @@ const UNTARGETED_SPELL_PATTERN = new RegExp(
  */
 export function detectUntargetedAttackSpell(playerInput: string): UntargetedAttackSpell | null {
   if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
-  for (const rawClause of splitIntoClauses(playerInput.trim().replace(/\s+/g, ' '))) {
+  const input = withoutSheetSpellTag(playerInput).trim().replace(/\s+/g, ' ');
+  for (const rawClause of splitIntoClauses(input)) {
     if (isCombatDeescalationSpeech(rawClause)) continue;
     const clause = stripLeadingPlayerIntent(stripTrailingPunctuation(rawClause.trim()));
     if (!clause || isInsideQuote(clause, 0)) continue;
@@ -464,8 +480,9 @@ export function detectUntargetedAttackSpell(playerInput: string): UntargetedAtta
     const spell = getSpellByName(stripTrailingPunctuation(match[1]));
     if (!spell?.damage || !isPlayerCombatSpell(spell)) continue;
     const target = match[2];
-    if (target && !PRONOUN_TARGETS.has(actorWords(target)[0] ?? '')) continue;
-    return { id: spell.id, name: spell.name };
+    const pronoun = target ? actorWords(target)[0] : undefined;
+    if (target && !PRONOUN_TARGETS.has(pronoun ?? '')) continue;
+    return { id: spell.id, name: spell.name, ...(pronoun ? { pronoun } : {}) };
   }
   return null;
 }

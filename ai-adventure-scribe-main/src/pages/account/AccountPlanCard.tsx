@@ -61,8 +61,10 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
             <div className="flex items-start gap-3 p-4 rounded-lg bg-infinite-gold/10 border border-infinite-gold/30">
               <Zap className="h-5 w-5 text-infinite-gold mt-0.5" />
               <div>
-                <h4 className="font-medium text-infinite-gold">Unlimited AI Messages</h4>
-                <p className="text-sm text-muted-foreground">No daily limits on your adventures</p>
+                <h4 className="font-medium text-infinite-gold">Legend: Unlimited AI Messages</h4>
+                <p className="text-sm text-muted-foreground">
+                  No daily limits once you upgrade to Legend
+                </p>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-infinite-purple/10 border border-infinite-purple/30">

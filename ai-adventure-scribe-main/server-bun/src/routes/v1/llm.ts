@@ -18,6 +18,7 @@ import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
 import {
   detectDeclaredAttack,
+  detectUntargetedAttackSpell,
   looksLikeCombatIntent,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
@@ -236,6 +237,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       const combatIntentPrefilterMatched =
         typeof playerInput === 'string' && looksLikeCombatIntent(playerInput);
       let declaredAttack: Awaited<ReturnType<typeof detectDeclaredAttack>> = null;
+      let untargetedSpellRoster: Awaited<ReturnType<typeof loadCombatIntentActorRoster>> | null =
+        null;
       if (
         combatEntry?.sessionId &&
         typeof playerInput === 'string' &&
@@ -243,6 +246,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       ) {
         const actors = await loadCombatIntentActorRoster(combatEntry.sessionId, userId);
         declaredAttack = detectDeclaredAttack(playerInput, actors);
+        // "At him" points at a creature the DM may have just introduced; only a cast that names
+        // nothing (the sheet's) is checked against the roster.
+        const untargetedSpell = declaredAttack ? null : detectUntargetedAttackSpell(playerInput);
+        if (untargetedSpell && !untargetedSpell.pronoun) untargetedSpellRoster = actors;
       }
       if (combatEntry?.sessionId && !declaredAttack) {
         logger.info({
@@ -285,6 +292,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         userId,
         combatEntry: combatEntry as CombatEntryContext | undefined,
         declaredAttack,
+        untargetedSpellRoster,
       });
 
       if (result.error) {
