@@ -27,9 +27,13 @@ mock.module('drizzle-orm', () => ({
   inArray: (left: unknown, right: unknown) => [left, right],
   isNotNull: (value: unknown) => value,
 }));
+let sessionLoadFails = false;
 mock.module('../../session-service.js', () => ({
   SessionService: {
-    getSessionById: async () => ({ campaignId: 'campaign-1', starterCampaignId: 'starter-1' }),
+    getSessionById: async () =>
+      sessionLoadFails
+        ? Promise.reject(new Error('session store down'))
+        : { campaignId: 'campaign-1', starterCampaignId: 'starter-1' },
   },
 }));
 mock.module('../../narrative/narrative-ledger-service.js', () => ({
@@ -69,5 +73,14 @@ describe('loadCombatIntentActorRoster', () => {
         source: 'campaign',
       },
     ]);
+  });
+
+  it('returns an empty roster, not an error, when the session cannot be loaded (fail closed)', async () => {
+    sessionLoadFails = true;
+    try {
+      expect(await loadCombatIntentActorRoster('session-1', 'user-1')).toEqual([]);
+    } finally {
+      sessionLoadFails = false;
+    }
   });
 });

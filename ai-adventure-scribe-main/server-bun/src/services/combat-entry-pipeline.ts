@@ -154,6 +154,79 @@ const withoutCombatEntryFields = (envelope: Record<string, unknown>): Record<str
 };
 
 /**
+ * Drop every reference to a combatant the roster does not know. Map and combat actions name
+ * entities by id or slug, so a reference is invented when it equals the name, id or monster id of
+ * a combatant the roster rejected. References to anything else stay: a map entity's id need not
+ * match its roster slug.
+ */
+const withoutInventedCreatures = (
+  envelope: Record<string, unknown>,
+  roster: readonly CombatIntentActor[],
+): Record<string, unknown> => {
+  const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const field = (item: unknown, key: string): unknown =>
+    item && typeof item === 'object' ? (item as Record<string, unknown>)[key] : undefined;
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+  const isOnRoster = (combatant: unknown): boolean =>
+    roster.some((actor) =>
+      isDeclaredCombatant(
+        {
+          name: text(field(combatant, 'name')),
+          ...(text(field(combatant, 'monster_id'))
+            ? { monsterId: text(field(combatant, 'monster_id')) }
+            : {}),
+        },
+        {
+          verb: 'cast',
+          actorName: actor.name,
+          ...(actor.monsterId ? { monsterId: actor.monsterId } : {}),
+        },
+      ),
+    );
+  const invented = new Set<string>();
+  for (const combatant of list(envelope.combatants)) {
+    if (isOnRoster(combatant)) continue;
+    for (const key of ['name', 'monster_id']) {
+      const reference = normalizeCombatantName(text(field(combatant, key)));
+      if (reference) invented.add(reference);
+    }
+  }
+  const isInvented = (reference: unknown): boolean =>
+    invented.has(normalizeCombatantName(text(reference)));
+
+  const mapReferences = (action: unknown): unknown[] => [
+    mapActionTarget(action as Parameters<typeof mapActionTarget>[0]),
+    field(field(action, 'changes'), 'id'),
+    field(field(action, 'changes'), 'slug'),
+    field(field(action, 'changes'), 'name'),
+  ];
+
+  return {
+    ...envelope,
+    ...(Array.isArray(envelope.combatants)
+      ? { combatants: envelope.combatants.filter(isOnRoster) }
+      : {}),
+    ...(Array.isArray(envelope.map_actions)
+      ? {
+          map_actions: envelope.map_actions.filter(
+            (action) => !mapReferences(action).some(isInvented),
+          ),
+        }
+      : {}),
+    ...(Array.isArray(envelope.combat_actions)
+      ? {
+          combat_actions: envelope.combat_actions.filter(
+            (action) =>
+              !isInvented(field(action, 'actor_id')) &&
+              !list(field(action, 'target_ids')).some(isInvented),
+          ),
+        }
+      : {}),
+  };
+};
+
+/**
  * Run the gate for this turn and return the response the client should receive.
  *
  * A turn that does not trigger entry, cannot be parsed, or arrives without a session is
@@ -181,7 +254,7 @@ export async function applyCombatEntryGate(params: {
   // A declared attack is allowed to force the handoff even when the model answered with pure
   // prose or omitted every structured combat field. The original narration remains in `text`;
   // only the server-owned envelope is added around it.
-  const envelope =
+  let envelope =
     parseEnvelope(sanitizedResult.text) ?? (declaredAttack ? { text: sanitizedResult.text } : null);
   if (!envelope) return sanitizedResult;
 
@@ -274,6 +347,7 @@ export async function applyCombatEntryGate(params: {
       return { ...sanitizedResult, text: JSON.stringify(withoutCombatEntryFields(envelope)) };
     }
     pending = { ...pending, combatants: known };
+    envelope = withoutInventedCreatures(envelope, untargetedSpellRoster);
   }
 
   if (!pending) return sanitizedResult;

@@ -561,6 +561,83 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
       });
     });
 
+    it('also strips the invented creature from the envelope the client applies after the player confirms', async () => {
+      intentActors = sheetCastRoster;
+      const playerId = declaredAttackCheckBody.player.characterId;
+      // Shapes follow DMMapAction / DMTargetedCombatAction in dm-response-schema.ts.
+      const forcedMove = (target: string): Record<string, unknown> => ({
+        action: 'forced_move',
+        target,
+        mode: 'shove',
+        origin: null,
+        distance: 5,
+        destination: null,
+      });
+      const attack = (actorId: string, targetIds: string[]): Record<string, unknown> => ({
+        actor_id: actorId,
+        action_type: 'attack',
+        target_ids: targetIds,
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      });
+      generatedResult = unseenShadowReply({
+        text: dmEnvelope({
+          combat_transition: 'start',
+          combatants: [
+            { monster_id: 'unseen-shadow', name: 'The Unseen Shadow', count: 1 },
+            { monster_id: '', name: 'Captain Sarah Reeves', count: 1 },
+          ],
+          map_actions: [
+            forcedMove('unseen-shadow'),
+            forcedMove('captain-sarah-reeves'),
+            { action: 'move', entityId: 'goblin-1', x: 2, y: 2, changes: null },
+            {
+              action: 'place',
+              entityId: null,
+              x: 5,
+              y: 5,
+              changes: { id: 'unseen-shadow', name: 'The Unseen Shadow', type: 'monster' },
+            },
+          ],
+          combat_actions: [
+            attack('unseen-shadow', [playerId]),
+            attack(playerId, ['unseen-shadow']),
+            attack(playerId, ['captain-sarah-reeves']),
+          ],
+        }),
+      });
+
+      const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+      expect(envelope.combat_entry_pending).toMatchObject({
+        combatants: [{ name: 'Captain Sarah Reeves', count: 1 }],
+      });
+      expect(envelope.combatants).toEqual([
+        { monster_id: '', name: 'Captain Sarah Reeves', count: 1 },
+      ]);
+      // An id the roster cannot match to a name is not an invented creature: it stays.
+      expect(envelope.map_actions).toEqual([
+        forcedMove('captain-sarah-reeves'),
+        { action: 'move', entityId: 'goblin-1', x: 2, y: 2, changes: null },
+      ]);
+      expect(envelope.combat_actions).toEqual([attack(playerId, ['captain-sarah-reeves'])]);
+    });
+
+    it('fails closed when the roster cannot be loaded (empty roster): the invented fight is dropped', async () => {
+      intentActors = [];
+      generatedResult = unseenShadowReply({
+        text: shadowEnvelope([{ name: 'The Unseen Shadow', count: 1 }]),
+      });
+
+      const envelope = await envelopeOf(await generate(sheetCastTurn));
+
+      expect(envelope.combat_entry_pending).toBeUndefined();
+      expect(envelope.combat_transition).toBe('none');
+      expect(envelope.combatants).toBeUndefined();
+    });
+
     it('lets the DM seat a creature it just introduced when the player cast "at him"', async () => {
       intentActors = sheetCastRoster;
       generatedResult = unseenShadowReply({
