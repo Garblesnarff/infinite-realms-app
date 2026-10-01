@@ -604,8 +604,17 @@ export async function handleDmActionsAndTransitions(
   //
   // Placed above the `combat_actions` pipeline rather than inside it so a repaired turn takes
   // the identical path a first-try turn takes, AoE proposals included.
+  // Area spells are cast inside `resolveDeclaredCombatActions`, in the same batch as every other
+  // declared action, so their engine line, turn boundary, and refusal are reported like any
+  // other. Proposing them here, on the side, is how a refused Burning Hands became a console
+  // warning and the DM narrated a spell that never happened (#2304).
+  const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
+
+  // The guard stands down on a seated-entry turn (the design is "Declare your action", nothing
+  // resolved) and on a sheet cast (the engine refuses an undeclared one itself, #2304). Both
+  // carried `combat_transition: 'none'`, which used to stop the guard by accident (#2380).
   const forcedActions =
-    entryFirstActionPresent || droppedNpcCombatActions
+    entryWasSeated || entryFirstActionPresent || droppedNpcCombatActions || declaredPlayerSpell
       ? null
       : await enforceCombatActionOnAttempt({
           isInCombat,
@@ -623,12 +632,6 @@ export async function handleDmActionsAndTransitions(
     // The regenerated narration is what the corrected turn was written against.
     if (forcedActions.text) responseText = forcedActions.text;
   }
-
-  // Area spells are cast inside `resolveDeclaredCombatActions`, in the same batch as every other
-  // declared action, so their engine line, turn boundary, and refusal are reported like any
-  // other. Proposing them here, on the side, is how a refused Burning Hands became a console
-  // warning and the DM narrated a spell that never happened (#2304).
-  const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
 
   // A typed message that produced no combat action, no roll request and no transition: nothing
   // was declared or refused, so the engine has no line for it and the DM's first-pass prose is

@@ -10,7 +10,9 @@ import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
+import { AIService } from '@/services/ai-service';
 import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import { enforceCombatActionOnAttempt } from '@/services/combat/combat-zero-action-guard';
 import {
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
@@ -710,6 +712,36 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
 
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
     expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(outcome.localNotices).toContainEqual({
+      text: 'Combat has begun. Declare your action.',
+      persist: true,
+    });
+    expect(outcome.result.combat_actions).toEqual([]);
+  });
+
+  it('never runs the zero-action guard on a seated entry with no first_action (#2380)', async () => {
+    // The real guard, not the null mock: `combat_transition: 'none'` no longer stops it, so the
+    // handler has to. A typed attack on a seated entry owes "Declare your action", not a repair.
+    const realGuard = (await vi.importActual('@/services/combat/combat-zero-action-guard')) as {
+      enforceCombatActionOnAttempt: typeof enforceCombatActionOnAttempt;
+    };
+    vi.mocked(enforceCombatActionOnAttempt).mockImplementation(
+      realGuard.enforceCombatActionOnAttempt,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [],
+        roll_requests: [],
+      },
+      refresh,
+      { playerMessage: 'I attempt to punch Vance', playerInputOrigin: 'typed' },
+    );
+
+    expect(enforceCombatActionOnAttempt).not.toHaveBeenCalled();
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
     expect(outcome.localNotices).toContainEqual({
       text: 'Combat has begun. Declare your action.',
       persist: true,

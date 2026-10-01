@@ -111,6 +111,52 @@ describe('the zero-action combat guard', () => {
     });
   });
 
+  describe('on the envelope production sends (#2380)', () => {
+    // Mirrors the fields `processDMResponse` always sets on its result (dm-response-processor.ts):
+    // `combat_transition: transition || 'none'` and empty arrays for every action list.
+    const prodResult = (overrides: Record<string, unknown> = {}) => ({
+      text: 'Your claws rake across the glaze.',
+      roll_requests: [],
+      combat_transition: 'none',
+      combat_actions: [],
+      combatants: [],
+      map_actions: [],
+      handout_actions: [],
+      ...overrides,
+    });
+    const turn = (overrides: Record<string, unknown> = {}) => ({
+      isInCombat: true,
+      hasActiveEncounter: true,
+      result: prodResult(overrides),
+      playerMessage: 'I attack the Sentient Glaze with my claws',
+    });
+
+    it('fires on a typed attack the DM answered with prose and combat_transition "none"', () => {
+      expect(shouldForceCombatAction(turn())).toBe(true);
+    });
+
+    it('stays quiet when the DM declared an engine action', () => {
+      expect(
+        shouldForceCombatAction(
+          turn({ combat_actions: [{ actor_id: 'the-seeker', action_type: 'attack' }] }),
+        ),
+      ).toBe(false);
+    });
+
+    it('with "none", still stands down for a roll request, a question and a dice message', () => {
+      expect(shouldForceCombatAction(turn({ roll_requests: [{ type: 'attack' }] }))).toBe(false);
+      expect(
+        shouldForceCombatAction({ ...turn(), playerMessage: 'Can I attack the glaze from here?' }),
+      ).toBe(false);
+      expect(shouldForceCombatAction({ ...turn(), isDiceRollMessage: true })).toBe(false);
+    });
+
+    it('still stands down for a real transition', () => {
+      expect(shouldForceCombatAction(turn({ combat_transition: 'start' }))).toBe(false);
+      expect(shouldForceCombatAction(turn({ combat_transition: 'end' }))).toBe(false);
+    });
+  });
+
   describe('the roster read back off the board', () => {
     it('takes the turn order block and the current-turn slug verbatim', () => {
       const roster = extractBoardRoster(TACTICAL_CONTEXT);

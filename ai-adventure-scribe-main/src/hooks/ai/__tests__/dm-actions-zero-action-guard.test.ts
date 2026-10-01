@@ -142,6 +142,53 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     expect(repairCalls()).toHaveLength(0);
   });
 
+  describe('on the envelope production sends (combat_transition "none", #2380)', () => {
+    // `processDMResponse` always sets these fields; the guard used to read 'none' as a transition.
+    const prodResult = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+      text: 'Your claws rake across the glaze and skitter away.',
+      roll_requests: [],
+      combat_transition: 'none',
+      combat_actions: [],
+      combatants: [],
+      map_actions: [],
+      handout_actions: [],
+      ...overrides,
+    });
+
+    it('fires on a typed attack the DM answered with prose', async () => {
+      vi.mocked(AIService.chatWithDM).mockResolvedValueOnce({
+        text: 'You lash out at the glaze.',
+        combat_actions: [REPAIRED_ACTION],
+      } as any);
+
+      await invoke({ result: prodResult() });
+
+      expect(repairCalls()).toHaveLength(1);
+      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+        'encounter-1',
+        REPAIRED_ACTION,
+        undefined,
+      );
+    });
+
+    it('stays quiet when the DM declared an engine action', async () => {
+      await invoke({ result: prodResult({ combat_actions: [REPAIRED_ACTION] }) });
+
+      expect(repairCalls()).toHaveLength(0);
+      expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet for a sheet cast the DM did not declare; the engine refuses it itself (#2304)', async () => {
+      await invoke({
+        playerMessage: 'I cast Chill Touch [spell_id=chill-touch, target=sentient-glaze]',
+        playerInputOrigin: 'typed',
+        result: prodResult(),
+      });
+
+      expect(repairCalls()).toHaveLength(0);
+    });
+  });
+
   it('stands down when the player asked a question rather than attacking', async () => {
     await invoke({ playerMessage: 'Can I attack the glaze from here?' });
 

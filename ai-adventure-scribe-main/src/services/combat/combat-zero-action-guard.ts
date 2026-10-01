@@ -155,7 +155,8 @@ export function shouldForceCombatAction(input: ZeroActionGuardInput): boolean {
   const { isInCombat, hasActiveEncounter, result, playerMessage, isDiceRollMessage } = input;
   if (!isInCombat || !hasActiveEncounter) return false;
   if (result.combat_actions?.length) return false;
-  if (result.combat_transition) return false;
+  // `processDMResponse` writes 'none' on every reply, so "no transition" is 'none' or absent (#2380).
+  if (result.combat_transition && result.combat_transition !== 'none') return false;
   if (result.roll_requests?.length) return false;
   // The same exclusion `ensureActionOptions` makes, for the legacy text-block form.
   if (/```ROLL_REQUESTS_V1/.test(result.text ?? '')) return false;
