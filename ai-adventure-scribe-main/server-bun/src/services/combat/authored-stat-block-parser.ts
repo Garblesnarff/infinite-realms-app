@@ -56,6 +56,8 @@ export interface ParsedStatBlock {
   damageVulnerabilities?: string[];
   /** Fields whose label was present but whose value did not match the required shape. */
   unparsedLabels: string[];
+  /** Readable fields with unsupported text that was discarded. */
+  warnings: string[];
   /** Fields successfully read, in a stable order — the audit script's unit of coverage. */
   parsedFields: AuthoredStatField[];
 }
@@ -179,7 +181,7 @@ const stripEmbeddedTables = (content: string): string => {
  * each value is anchored to its own label rather than to its position on the line.
  */
 export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
-  const parsed: ParsedStatBlock = { unparsedLabels: [], parsedFields: [] };
+  const parsed: ParsedStatBlock = { unparsedLabels: [], warnings: [], parsedFields: [] };
   if (!rawContent || typeof rawContent !== 'string') return parsed;
 
   const content = stripEmbeddedTables(rawContent);
@@ -222,6 +224,35 @@ export function parseAuthoredStatBlock(rawContent: string): ParsedStatBlock {
     const n = Number(raw);
     return Number.isInteger(n) && n >= 0 && n <= 500 ? n : undefined;
   });
+
+  if (parsed.speed !== undefined) {
+    const speed = readLabelled(content, SPEED_LABELS, `${INTEGER}([^\n]*)`);
+    const trailing =
+      (speed?.groups[1] ?? '').split(
+        new RegExp(
+          labelPattern([
+            ...HP_LABELS,
+            ...AC_LABELS,
+            ...SPEED_LABELS,
+            ...SIZE_LABELS,
+            ...INITIATIVE_LABELS,
+            ...CR_LABELS,
+            ...ATTACK_LABELS,
+            ...DAMAGE_LABELS,
+            ...RESIST_LABELS,
+            ...IMMUNE_LABELS,
+            ...VULN_LABELS,
+          ]),
+          'i',
+        ),
+      )[0] ?? '';
+    const discarded = trailing.replace(/^\s*(?:ft\b\.?|feet\b)?\s*/i, '').trim();
+    if (discarded && !/^[*.,;\s]+$/.test(discarded)) {
+      parsed.warnings.push(
+        `Speed: discarded trailing text "${discarded}"; using ${parsed.speed} ft.`,
+      );
+    }
+  }
 
   attempt('size', SIZE_LABELS, `(?:${SIZES.join('|')})`, ([raw]) => raw.toLowerCase());
 

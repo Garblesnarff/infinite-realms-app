@@ -39,6 +39,7 @@ describe('markup dialects', () => {
   test('reads italic-label, comma-separated, bulleted blocks (abyssal-descent)', () => {
     const parsed = parseAuthoredStatBlock(CHIROPTERAN_HULK);
     expect(parsed).toMatchObject({ maxHp: 80, armorClass: 14, speed: 10 });
+    expect(parsed.warnings).toEqual(['Speed: discarded trailing text "/ 50ft Fly."; using 10 ft.']);
     expect(gradeCoverage(parsed)).toBe('full');
   });
 
@@ -239,5 +240,57 @@ describe('authored attack name and range', () => {
     const parsed = parseAuthoredStatBlock('**Attack:** Ink Lash, +5 to hit, 1d6 slashing');
     expect(parsed.attackBonus).toBeUndefined();
     expect(parsed.attackName).toBeUndefined();
+  });
+});
+
+describe('unsupported speed text', () => {
+  test('a plain 30ft speed has no warning', () => {
+    const parsed = parseAuthoredStatBlock('*Speed:* 30ft');
+    expect(parsed.speed).toBe(30);
+    expect(parsed.warnings).toEqual([]);
+  });
+
+  test('comma-separated movement modes retain the first speed and warn', () => {
+    const parsed = parseAuthoredStatBlock('*Speed:* 10 ft., fly 50 ft.');
+    expect(parsed.speed).toBe(10);
+    expect(parsed.warnings).toEqual([
+      'Speed: discarded trailing text ", fly 50 ft."; using 10 ft.',
+    ]);
+  });
+
+  test('emphasized trailing movement text is still reported', () => {
+    const parsed = parseAuthoredStatBlock('*Speed:* 10ft *fly 50ft*');
+    expect(parsed.speed).toBe(10);
+    expect(parsed.warnings).toEqual(['Speed: discarded trailing text "*fly 50ft*"; using 10 ft.']);
+  });
+
+  test('unsupported prose is reported rather than interpreted as movement', () => {
+    const parsed = parseAuthoredStatBlock('*Speed:* 30ft while rolling downhill');
+    expect(parsed.speed).toBe(30);
+    expect(parsed.warnings).toEqual([
+      'Speed: discarded trailing text "while rolling downhill"; using 30 ft.',
+    ]);
+  });
+
+  test('units, punctuation, and following stat labels do not raise warnings', () => {
+    for (const content of [
+      '*Speed:* 30ft.',
+      '**Speed: 30ft**',
+      '**Speed:** 30 feet',
+      'Speed: 30 ft., AC: 14',
+      '*Speed:* 30ft, *AC:* 14',
+      '**Speed:** 30ft **HP:** 40',
+    ]) {
+      const parsed = parseAuthoredStatBlock(content);
+      expect(parsed.speed).toBe(30);
+      expect(parsed.warnings).toEqual([]);
+    }
+  });
+
+  test('an unreadable speed stays unparsed', () => {
+    const parsed = parseAuthoredStatBlock('*Speed:* fly 50ft');
+    expect(parsed.speed).toBeUndefined();
+    expect(parsed.unparsedLabels).toEqual(['Speed']);
+    expect(parsed.warnings).toEqual([]);
   });
 });

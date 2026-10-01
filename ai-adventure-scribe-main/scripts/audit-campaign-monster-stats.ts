@@ -62,6 +62,7 @@ interface CreatureReport {
   coverage: ParseCoverage;
   parsedFields: AuthoredStatField[];
   unparsedLabels: string[];
+  warnings: string[];
   maxHp?: number;
   armorClass?: number;
 }
@@ -150,6 +151,7 @@ for (const row of chunkRows) {
     coverage,
     parsedFields: parsed.parsedFields,
     unparsedLabels: parsed.unparsedLabels,
+    warnings: parsed.warnings,
     maxHp: parsed.maxHp,
     armorClass: parsed.armorClass,
   });
@@ -218,6 +220,18 @@ if (failures.length > 0) {
       : 'no stat labels present';
     console.log(
       `  [${creature.coverage.padEnd(7)}] ${creature.campaignId} / ${creature.entityName} — missing ${missing} (${why})`,
+    );
+  }
+}
+
+const warnings = reports.flatMap((report) =>
+  report.creatures.filter((creature) => creature.warnings.length > 0),
+);
+if (warnings.length > 0) {
+  console.log(`\nParser warnings (${warnings.length} creatures):`);
+  for (const creature of warnings) {
+    console.log(
+      `  ${creature.campaignId} / ${creature.entityName} — ${creature.warnings.join('; ')}`,
     );
   }
 }
