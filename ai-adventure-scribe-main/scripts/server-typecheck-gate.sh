@@ -31,10 +31,25 @@ tsc_exit=$?
 # Per-file error counts from "path/to/file.ts(line,col): error TSXXXX" lines
 # (.ts, .tsx, .mts, .cts — a .tsx error must be attributed like any other).
 # Paths are relative to server-bun because we run from there.
-declare -A error_counts=()
+error_files=()
+error_counts=()
 while IFS= read -r line; do
   file="${line%%(*}"
-  error_counts["$file"]=$(( ${error_counts["$file"]:-0} + 1 ))
+  file_index=-1
+  i=0
+  while [ "$i" -lt "${#error_files[@]}" ]; do
+    if [ "${error_files[$i]}" = "$file" ]; then
+      file_index="$i"
+      break
+    fi
+    i=$((i + 1))
+  done
+  if [ "$file_index" -ge 0 ]; then
+    error_counts[$file_index]=$((error_counts[$file_index] + 1))
+  else
+    error_files[${#error_files[@]}]="$file"
+    error_counts[${#error_counts[@]}]=1
+  fi
 done < <(printf '%s\n' "$raw_output" | grep -oE '^[^ (]+\.[cm]?tsx?\([0-9]+,[0-9]+\): error TS[0-9]+')
 
 # Global (non-file) diagnostics, e.g. "error TS5083: Cannot read file ..."
@@ -42,7 +57,8 @@ done < <(printf '%s\n' "$raw_output" | grep -oE '^[^ (]+\.[cm]?tsx?\([0-9]+,[0-9
 global_errors="$(printf '%s\n' "$raw_output" | grep -E '^error TS[0-9]+' || true)"
 
 # Allowlist: "<path> : <count> # #issue ..." lines; comments and blanks ignored.
-declare -A allowed_counts=()
+allowed_files=()
+allowed_counts=()
 while IFS= read -r line; do
   entry="${line%%#*}"
   entry="$(printf '%s' "$entry" | awk '{$1=$1};1')"
@@ -53,14 +69,30 @@ while IFS= read -r line; do
     echo "FAIL: malformed allowlist entry (expected '<path> : <positive count>'): $line" >&2
     exit 1
   fi
-  allowed_counts["$file"]="$count"
+  file_index=-1
+  i=0
+  while [ "$i" -lt "${#allowed_files[@]}" ]; do
+    if [ "${allowed_files[$i]}" = "$file" ]; then
+      file_index="$i"
+      break
+    fi
+    i=$((i + 1))
+  done
+  if [ "$file_index" -ge 0 ]; then
+    allowed_counts[$file_index]="$count"
+  else
+    allowed_files[${#allowed_files[@]}]="$file"
+    allowed_counts[${#allowed_counts[@]}]="$count"
+  fi
 done < "$ALLOWLIST"
 
-echo "server-typecheck: tsc exit=$tsc_exit, files with errors: ${#error_counts[@]}, quarantined: ${#allowed_counts[@]}"
-if [ "${#allowed_counts[@]}" -gt 0 ]; then
+echo "server-typecheck: tsc exit=$tsc_exit, files with errors: ${#error_files[@]}, quarantined: ${#allowed_files[@]}"
+if [ "${#allowed_files[@]}" -gt 0 ]; then
   echo "  quarantined (acknowledged):"
-  for a in "${!allowed_counts[@]}"; do
-    echo "    $a : ${allowed_counts[$a]} error(s)"
+  i=0
+  while [ "$i" -lt "${#allowed_files[@]}" ]; do
+    echo "    ${allowed_files[$i]} : ${allowed_counts[$i]} error(s)"
+    i=$((i + 1))
   done
 fi
 
@@ -68,7 +100,7 @@ failed=0
 
 # A non-zero tsc exit with no per-file diagnostics means tsc crashed or the
 # config is bad — there is nothing to attribute, so never PASS.
-if [ "$tsc_exit" -ne 0 ] && [ "${#error_counts[@]}" -eq 0 ]; then
+if [ "$tsc_exit" -ne 0 ] && [ "${#error_files[@]}" -eq 0 ]; then
   failed=1
   echo "FAIL: tsc exited $tsc_exit with no per-file diagnostics (crash or bad config?)."
   echo "--- tsc output (first 30 lines) ---"
@@ -82,13 +114,33 @@ if [ -n "$global_errors" ]; then
 fi
 
 unexpected=()
-for f in "${!error_counts[@]}"; do
-  if [ -z "${allowed_counts[$f]+x}" ]; then unexpected+=("$f"); fi
+error_index=0
+while [ "$error_index" -lt "${#error_files[@]}" ]; do
+  f="${error_files[$error_index]}"
+  allowed_index=-1
+  i=0
+  while [ "$i" -lt "${#allowed_files[@]}" ]; do
+    if [ "${allowed_files[$i]}" = "$f" ]; then
+      allowed_index="$i"
+      break
+    fi
+    i=$((i + 1))
+  done
+  if [ "$allowed_index" -lt 0 ]; then
+    unexpected[${#unexpected[@]}]="$f"
+  fi
+  error_index=$((error_index + 1))
 done
 if [ "${#unexpected[@]}" -gt 0 ]; then
   failed=1
   echo "FAIL: tsc errors in non-quarantined files:"
-  for f in "${unexpected[@]}"; do echo "  - $f (${error_counts[$f]} error(s))"; done
+  for f in "${unexpected[@]}"; do
+    error_index=0
+    while [ "${error_files[$error_index]}" != "$f" ]; do
+      error_index=$((error_index + 1))
+    done
+    echo "  - $f (${error_counts[$error_index]} error(s))"
+  done
   echo "--- full tsc output (unexpected files) ---"
   for f in "${unexpected[@]}"; do
     printf '%s\n' "$raw_output" | grep -F "$f(" || true
@@ -96,11 +148,22 @@ if [ "${#unexpected[@]}" -gt 0 ]; then
 fi
 
 count_mismatch=()
-for a in "${!allowed_counts[@]}"; do
-  actual="${error_counts[$a]:-0}"
-  if [ "$actual" -ne "${allowed_counts[$a]}" ]; then
-    count_mismatch+=("$a (expected ${allowed_counts[$a]}, got $actual)")
+i=0
+while [ "$i" -lt "${#allowed_files[@]}" ]; do
+  a="${allowed_files[$i]}"
+  actual=0
+  error_index=0
+  while [ "$error_index" -lt "${#error_files[@]}" ]; do
+    if [ "${error_files[$error_index]}" = "$a" ]; then
+      actual="${error_counts[$error_index]}"
+      break
+    fi
+    error_index=$((error_index + 1))
+  done
+  if [ "$actual" -ne "${allowed_counts[$i]}" ]; then
+    count_mismatch[${#count_mismatch[@]}]="$a (expected ${allowed_counts[$i]}, got $actual)"
   fi
+  i=$((i + 1))
 done
 if [ "${#count_mismatch[@]}" -gt 0 ]; then
   failed=1

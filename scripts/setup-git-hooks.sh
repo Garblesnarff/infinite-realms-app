@@ -23,7 +23,8 @@
 #     directly is the whole job.
 #
 # core.hooksPath is local git config and can never be committed, so a fresh
-# clone must run something. `bun install` is that something.
+# clone must run something. `bun install` is that something. Worktrees need
+# this value in their worktree-specific config because .git/config is shared.
 # =============================================================================
 
 set -euo pipefail
@@ -42,10 +43,13 @@ if [ ! -d .husky ]; then
   exit 0
 fi
 
-# core.hooksPath is resolved relative to the current working directory for
-# git commands run in subdirectories, so it must be absolute to work from
-# ai-adventure-scribe-main/ as well as the root.
-git config core.hooksPath "$GIT_ROOT/.husky"
+# A linked worktree shares .git/config with the main checkout. Enable the
+# worktree config extension once, then keep this worktree's relative path out
+# of the shared config. Git resolves .husky relative to the directory where a
+# hook is run, so the value remains correct from the repository root and from
+# ai-adventure-scribe-main/.
+git config --local extensions.worktreeConfig true
+git config --worktree core.hooksPath .husky
 
 # Belt and braces for clones with core.fileMode=false, where a lost +x bit
 # would leave git silently skipping every hook.
@@ -55,4 +59,4 @@ for hook in .husky/*; do
   [ -x "$hook" ] || chmod +x "$hook"
 done
 
-echo "✓ Git hooks enabled (core.hooksPath -> $GIT_ROOT/.husky)"
+echo "✓ Git hooks enabled (worktree-local core.hooksPath -> .husky)"
