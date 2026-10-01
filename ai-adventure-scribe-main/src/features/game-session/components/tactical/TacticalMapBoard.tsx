@@ -8,6 +8,7 @@ import { useTacticalMapContext, type TacticalMapState } from './TacticalMapProvi
 import { useTacticalMap } from './useTacticalMap';
 
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 import { cn } from '@/lib/utils';
 
@@ -167,14 +168,27 @@ function TacticalMapBoardView({
               Confirm spell area
             </Button>
           )}
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={collapsed ? 'Expand tactical map' : 'Collapse tactical map'}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            {collapsed ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-          </Button>
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={collapsed ? 'Expand tactical map' : 'Collapse tactical map'}
+                  onClick={() => setCollapsed((value) => !value)}
+                >
+                  {collapsed ? (
+                    <Maximize2 className="h-4 w-4" />
+                  ) : (
+                    <Minimize2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {collapsed ? 'Expand tactical map' : 'Collapse tactical map'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       {!collapsed && (

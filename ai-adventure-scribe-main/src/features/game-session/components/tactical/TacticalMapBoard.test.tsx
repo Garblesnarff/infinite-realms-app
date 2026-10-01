@@ -185,4 +185,23 @@ describe('tactical map combat flow', () => {
     expect(screen.getByTestId('rail')).toBeEmptyDOMElement();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('labels and describes the collapse control (#2343 item 17)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: false, json: async () => null })),
+    );
+    render(<TacticalMapBoard sessionId="s" />);
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
+      ),
+    );
+
+    const collapseButton = await screen.findByRole('button', { name: 'Collapse tactical map' });
+    fireEvent.pointerMove(collapseButton);
+    expect(
+      await screen.findByRole('tooltip', { name: 'Collapse tactical map' }),
+    ).toBeInTheDocument();
+  });
 });

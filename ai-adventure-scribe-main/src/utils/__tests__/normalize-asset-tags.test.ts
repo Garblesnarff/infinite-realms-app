@@ -96,6 +96,13 @@ describe('normalize-asset-tags', () => {
       expect(result).not.toContain('The Mobius Shaft Inverted Halls');
     });
 
+    it('does not duplicate a visible trailing asset name (#2343 item 15)', () => {
+      const input = 'The [ASSET:monster:flavor-elemental-corrupted] Corrupted Shard lunges.';
+      const result = normalizeAssetTagsInContent(input);
+      expect(result).toBe(input);
+      expect(result).not.toContain('Flavor Elemental Corrupted');
+    });
+
     it('does not prepend name if it is a standalone tag (no other content)', () => {
       const input = '[ASSET:npc:remy-the-manager]';
       const result = normalizeAssetTagKeysInContent(input);

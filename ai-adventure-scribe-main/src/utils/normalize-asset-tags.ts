@@ -3,6 +3,7 @@ import { generateAssetKey } from './asset-key';
 const LEADING_ARTICLE_PATTERN = /^(?:the|an|a)\s+/i;
 const ASSET_NAME_WORD_PATTERN = /[a-z0-9]+(?:['’-][a-z0-9]+)*/gi;
 const MIN_VISIBLE_NAME_PREFIX_WORDS = 2;
+const MIN_VISIBLE_NAME_SUFFIX_WORDS = 1;
 
 export function deriveAssetDisplayName(normalizedKey: string): string {
   return normalizedKey
@@ -61,6 +62,26 @@ function startsWithVisibleNamePrefix(value: string, name: string): boolean {
   return matchedWords >= MIN_VISIBLE_NAME_PREFIX_WORDS;
 }
 
+function startsWithVisibleNameSuffix(value: string, name: string): boolean {
+  const valueWords = getComparableWords(value);
+  const nameWords = getComparableWords(name);
+  const maxMatchLength = Math.min(valueWords.length, nameWords.length);
+
+  for (
+    let matchLength = maxMatchLength;
+    matchLength >= MIN_VISIBLE_NAME_SUFFIX_WORDS;
+    matchLength--
+  ) {
+    const valuePrefix = valueWords.slice(0, matchLength);
+    const nameSuffix = nameWords.slice(-matchLength);
+    if (valuePrefix.every((word, index) => word === nameSuffix[index])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function endsWithVisibleNamePrefix(value: string, name: string): boolean {
   const valueWords = getComparableWords(value);
   const nameWords = getComparableWords(name);
@@ -104,7 +125,8 @@ export function isAssetNamePresentAroundTag(
     endsWithWholeName(normalizedBeforeTag, normalizedName) ||
     startsWithWholeName(normalizedAfterTag, normalizedName) ||
     endsWithVisibleNamePrefix(normalizedBeforeTag, normalizedName) ||
-    startsWithVisibleNamePrefix(normalizedAfterTag, normalizedName)
+    startsWithVisibleNamePrefix(normalizedAfterTag, normalizedName) ||
+    startsWithVisibleNameSuffix(normalizedAfterTag, normalizedName)
   );
 }
 

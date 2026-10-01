@@ -64,7 +64,12 @@ export const ExploreGalleryPage: React.FC = () => {
 
           {/* Loading State */}
           {isLoading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+              role="status"
+              aria-label="Loading campaigns"
+            >
+              <span className="sr-only">Loading campaigns…</span>
               {[1, 2, 3].map((n) => (
                 <div key={n} className="h-[450px] rounded-2xl bg-gray-800/50 animate-pulse" />
               ))}
@@ -98,6 +103,14 @@ export const ExploreGalleryPage: React.FC = () => {
                   Return Home
                 </Button>
               </Link>
+
+              <div className="mt-16 text-center border-t border-gray-800 pt-12">
+                <h2 className="text-2xl font-bold text-white mb-4">More Adventures Coming Soon</h2>
+                <p className="text-gray-400 max-w-2xl mx-auto">
+                  Our team is crafting new campaigns across different genres and themes. From epic
+                  fantasy quests to mysterious horror tales, there's an adventure for every player.
+                </p>
+              </div>
             </div>
           )}
 
@@ -109,15 +122,6 @@ export const ExploreGalleryPage: React.FC = () => {
               ))}
             </div>
           )}
-
-          {/* Coming Soon */}
-          <div className="mt-16 text-center border-t border-gray-800 pt-12">
-            <h2 className="text-2xl font-bold text-white mb-4">More Adventures Coming Soon</h2>
-            <p className="text-gray-400 max-w-2xl mx-auto">
-              Our team is crafting new campaigns across different genres and themes. From epic
-              fantasy quests to mysterious horror tales, there's an adventure for every player.
-            </p>
-          </div>
         </main>
 
         {/* Footer */}
