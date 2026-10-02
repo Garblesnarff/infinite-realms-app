@@ -45,7 +45,11 @@ describe('legal routes (#2258)', () => {
   });
 
   it('every legal link in the footer resolves to a registered route', () => {
-    render(<FooterSection />);
+    render(
+      <MemoryRouter>
+        <FooterSection />
+      </MemoryRouter>,
+    );
     const registered = new Set(LEGAL_ROUTES.map((r) => r.path));
     for (const path of Object.keys(HEADINGS)) {
       const link = document.querySelector(`footer a[href="${path}"]`);
@@ -55,7 +59,11 @@ describe('legal routes (#2258)', () => {
   });
 
   it('footer shows the 2026 Infinite Realms copyright', () => {
-    render(<FooterSection />);
+    render(
+      <MemoryRouter>
+        <FooterSection />
+      </MemoryRouter>,
+    );
     expect(screen.getByText(/© 2026 Infinite Realms/)).toBeInTheDocument();
   });
 });

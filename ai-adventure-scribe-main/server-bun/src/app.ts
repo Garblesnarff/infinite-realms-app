@@ -44,6 +44,7 @@ import { narrativeFactRoutes } from './routes/v1/narrative-facts.js';
 import { personalityRoutes } from './routes/v1/personality';
 import { adminRoutes } from './routes/v1/admin';
 import { spellsRoutes } from './routes/v1/spells';
+import { feedbackRoutes } from './routes/v1/feedback';
 import { waitlistRoutes } from './routes/v1/waitlist';
 import { internalRoutes } from './routes/v1/internal';
 import { telemetryRoutes } from './routes/v1/telemetry';
@@ -336,6 +337,9 @@ export function createApp() {
 
   // Waitlist routes (landing page signups)
   app.use(waitlistRoutes);
+
+  // Feedback routes (Send feedback modal)
+  app.use(feedbackRoutes);
 
   // Internal routes (CI/CD automation)
   app.use(internalRoutes);

@@ -6,6 +6,7 @@ import { AccountPlanCard } from './account/AccountPlanCard';
 import { AccountUsageCard } from './account/AccountUsageCard';
 import { planHasPaidFeatures } from '../../shared/plan-features';
 
+import { SendFeedbackButton } from '@/components/feedback/SendFeedbackButton';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { ACCOUNT_UPGRADE_PRICE, useAccountBilling } from '@/hooks/use-account-billing';
@@ -51,6 +52,10 @@ const AccountPage: React.FC = () => {
         {quota && <AccountUsageCard quota={quota} />}
 
         <AccountInfoCard email={user?.email} userPlan={userPlan} subscription={subscription} />
+
+        <div className="mt-6 flex justify-end">
+          <SendFeedbackButton />
+        </div>
       </div>
     </div>
   );

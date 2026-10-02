@@ -8,6 +8,7 @@
 import { ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import React, { useState } from 'react';
 
+import { SendFeedbackButton } from '@/components/feedback/SendFeedbackButton';
 import { launchPageContent } from '@/data/launchPageContent';
 
 interface FAQItemProps {
@@ -103,14 +104,11 @@ export const FAQSection: React.FC = () => {
             >
               Contact Us
             </a>
-            <a
-              href="https://discord.gg/ai-dungeon-master"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-600 hover:border-purple-400 text-gray-300 hover:text-purple-300 font-semibold rounded-lg transition-all duration-300"
-            >
-              Join Discord Community
-            </a>
+            <SendFeedbackButton
+              variant="outline"
+              size="lg"
+              className="gap-2 px-6 py-3 border border-gray-600 hover:border-purple-400 bg-transparent text-gray-300 hover:text-purple-300 hover:bg-transparent font-semibold rounded-lg transition-all duration-300"
+            />
           </div>
         </div>
       </div>

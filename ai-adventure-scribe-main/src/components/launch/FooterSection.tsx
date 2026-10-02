@@ -8,6 +8,7 @@
 import { MessageCircle, ExternalLink, Heart } from 'lucide-react';
 import React from 'react';
 
+import { SendFeedbackButton } from '@/components/feedback/SendFeedbackButton';
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const FooterSection: React.FC = () => {
@@ -46,15 +47,14 @@ export const FooterSection: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a
-                  href={footer.links.discord}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-purple-400 transition-colors duration-200 flex items-center gap-2"
+                <SendFeedbackButton
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 text-gray-400 hover:bg-transparent hover:text-purple-400 transition-colors duration-200 flex items-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  Discord Community
-                </a>
+                  Send feedback
+                </SendFeedbackButton>
               </li>
               <li>
                 <a
@@ -123,15 +123,14 @@ export const FooterSection: React.FC = () => {
                 </svg>
               </a>
 
-              <a
-                href="https://discord.gg/infinite-realms"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
-                aria-label="Join Discord"
+              <SendFeedbackButton
+                variant="ghost"
+                size="sm"
+                className="h-auto p-0 text-gray-400 hover:bg-transparent hover:text-purple-400 transition-colors duration-200"
+                aria-label="Send feedback"
               >
                 <MessageCircle className="w-5 h-5" />
-              </a>
+              </SendFeedbackButton>
             </div>
           </div>
 

@@ -1,5 +1,7 @@
 import React, { memo } from 'react';
 
+import { GameFeedbackButton } from './GameFeedbackButton';
+
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -80,6 +82,8 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
             <p>{showSceneBlurb ? 'Hide' : 'Show'} scene blurb</p>
           </TooltipContent>
         </Tooltip>
+
+        <GameFeedbackButton />
       </div>
     );
   },

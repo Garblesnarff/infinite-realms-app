@@ -70,3 +70,6 @@ export * from './journal';
 
 // Bi-temporal narrative fact ledger (server-authoritative narrative state).
 export * from './narrative-state';
+
+// Player feedback submitted from the Send feedback modal.
+export * from './feedback';

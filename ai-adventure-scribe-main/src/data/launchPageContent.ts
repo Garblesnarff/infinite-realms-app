@@ -306,7 +306,6 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
       privacy: '/privacy',
       terms: '/terms',
       contact: '/contact',
-      discord: 'https://discord.gg/infinite-realms',
     },
     legal: {
       ipDisclaimer:
