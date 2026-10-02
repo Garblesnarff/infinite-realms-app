@@ -106,7 +106,7 @@ export const FooterSection: React.FC = () => {
         <div className="border-t border-gray-800 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2 text-gray-400 text-sm">
-              <span>© 2025 {footer.legal.company}. All rights reserved.</span>
+              <span>© 2026 {footer.legal.company}. All rights reserved.</span>
             </div>
 
             <div className="flex items-center gap-4">

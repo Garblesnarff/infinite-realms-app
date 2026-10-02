@@ -311,7 +311,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
     legal: {
       ipDisclaimer:
         'Infinite Realms is not affiliated with Wizards of the Coast. D&D content uses SRD/OGL licensed material where applicable.',
-      company: 'AI Adventure Scribe',
+      company: 'Infinite Realms',
     },
   },
 };

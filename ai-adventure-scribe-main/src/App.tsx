@@ -8,6 +8,7 @@ import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
 import { useTelemetry } from './hooks/use-telemetry';
 import { TRPCProvider } from './lib/trpc/Provider';
+import { LEGAL_ROUTES } from './pages/legal/legal-routes';
 import { ProtectedAppRoutes } from './routes/ProtectedAppRoutes';
 import { withRouteSuspense } from './routes/route-suspense';
 import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
@@ -103,6 +104,15 @@ function App() {
                           element={withRouteSuspense(<BlogEditor />)}
                         />
                         <Route path="/admin/blog/new" element={withRouteSuspense(<BlogEditor />)} />
+
+                        {/* Public legal pages linked from the footer and waitlist form (#2258) */}
+                        {LEGAL_ROUTES.map(({ path, Component }) => (
+                          <Route
+                            key={path}
+                            path={path}
+                            element={withRouteSuspense(<Component />)}
+                          />
+                        ))}
 
                         {/* Protected app routes */}
                         <Route path="/app/*" element={<ProtectedAppRoutes />} />
