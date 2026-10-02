@@ -229,6 +229,125 @@ Nothing here is installed by merging. On Rob's install line:
 `smoke.sh` needs #2286 merged (it reads that fixture), and `GET /version` from
 #2293's first PR deployed; without them every smoke fails and holds.
 
+## Health watchdog: `server-watchdog.sh` (#2501)
+
+The host's old `/usr/local/bin/server-watchdog.sh` (root cron, every 2 min) ran
+`systemctl restart docker` whenever the 1-minute load stayed above 12 for 5
+minutes. Load on this box is CI on the self-hosted runners plus deploy builds,
+not a hung server, so it restarted every Supabase stack (prod DB down ~20 s) on
+2026-09-29 02:06Z, 2026-09-30 00:22Z and 2026-10-02 03:24Z, and the restart
+storm (load 38) re-armed it. It was paused on 2026-10-02.
+
+`ops/server-watchdog.sh` acts on **health**, never on load. Each run (every 2
+min) probes, each under a timeout (`WATCHDOG_CHECK_TIMEOUT`, default 10 s):
+
+| probe  | healthy when |
+|--------|--------------|
+| api    | `GET http://127.0.0.1:8888/version` is 200 with a `commit` |
+| docker | `docker info` answers |
+| db     | `docker exec supabase-db psql -U postgres -tAc 'select 1'` prints 1 |
+
+Each keeps a count of consecutive failures. At **2** it alerts; at **3** it
+restarts **only the failed unit**, at most one per run:
+
+1. **docker**: `systemctl restart docker`, only when the daemon does not answer
+   **and** postgres is down on `127.0.0.1:54321`. While postgres answers,
+   Docker is never restarted; it alerts instead.
+2. **db**: `docker restart supabase-db`, only when the daemon answers and
+   postgres is down on its port. SELECT 1 failing while postgres answers (a slow
+   `docker exec` under load, full connection slots) alerts and restarts nothing.
+
+"Down" is asked of `pg_isready` on the host port, which does not go through
+dockerd: **no response twice**, 5 s apart, each with a 30 s timeout. "Starting
+up / shutting down / in recovery" (exit 1, e.g. crash recovery after a cgroup
+OOM) and an attempt that does not finish (a box under heavy load) both count as
+answering, so slow or recovering never triggers a restart.
+3. **api**: `pm2 restart infiniterealms-bun`.
+
+**Cooldown:** at most one restart per 30 min across all units; a unit that is
+still failing inside it gets an alert and nothing else. A restart, failed or
+not, starts the cooldown and a fresh count of 3. **Lock:** a run that finds
+the previous one still running (`flock` on
+`/var/lib/infiniterealms-deploy/server-watchdog.lock`) logs `skipped` and
+exits; one held for 10+ min (a wedged run) alerts, at most hourly. Restart
+commands run with the lock's fd closed, so a daemon they spawn cannot inherit
+it. **Load and memory** are on every run's status line; load1 ≥ 12 for 10
+min and memory ≥ 90% each alert (at most hourly, then RECOVERED), and neither
+restarts or stops anything. The old 90%-memory branch that stopped GLP studio/
+analytics/vector/imgproxy/meta is gone (it never fired; 0 auto-stops since
+2026-03-12).
+
+Every run prints one line, and every action its reason:
+
+```
+[2026-10-02 04:04:32] watchdog: load 13.77/13.00/10.02 mem 46% swap 98% | api FAIL 3/3 (HTTP 502 from http://127.0.0.1:8888/version) | docker ok | db ok
+[2026-10-02 04:04:32] watchdog: alert: 🔴 WATCHDOG: restarting api: HTTP 502 from http://127.0.0.1:8888/version for 3 checks. Command: timeout -k 10 60 pm2 restart infiniterealms-bun
+[2026-10-02 04:04:32] watchdog: running: timeout -k 10 60 pm2 restart infiniterealms-bun
+```
+
+Alerts go to `alerts.log` + Slack through `ts`/`post_slack`/`emit` and the
+`DEPLOY_*` defaults read out of the sibling `auto-deploy.sh`, as `http-alarm.sh`
+does, so it must sit next to that file. It evaluates only that block's
+`VAR=${…}` lines and exits 2 if the block has changed shape. State (failure counts, last restart,
+alert times) is `/var/lib/infiniterealms-deploy/server-watchdog.state`.
+
+`--dry-run` runs every probe and prints `would run: …` / `would alert: …`
+without restarting anything, writing `alerts.log` or paging Slack. Its counts
+live in `server-watchdog.dry-run.state`, so it can run from cron for days as a
+shadow. Any other argument exits 2 before probing.
+
+Overrides: `WATCHDOG_API_URL`, `WATCHDOG_DB_CONTAINER`, `WATCHDOG_DB_HOST`,
+`WATCHDOG_DB_PORT`, `WATCHDOG_PM2_APP`, `WATCHDOG_CHECK_TIMEOUT`,
+`WATCHDOG_ALERT_AFTER`, `WATCHDOG_RESTART_AFTER`, `WATCHDOG_COOLDOWN_SECONDS`,
+`WATCHDOG_LOAD_ALERT`, `WATCHDOG_LOAD_ALERT_SECONDS`, `WATCHDOG_MEM_ALERT_PCT`,
+`WATCHDOG_DEPLOY_SCRIPT`, plus the `DEPLOY_*` alert/state ones. Cases:
+`bash ops/tests/server-watchdog.sh` (stub curl/docker/pm2/systemctl/pg_isready;
+replays the 2026-10-02 load, and simulates an API that 502s, refuses or hangs, a
+DB that is down or only fails SELECT 1, a hung daemon with postgres up and
+down, the cooldown, a failed restart, the lock, high memory and `--dry-run`).
+
+### Install (Hetzner, only on Rob's line)
+
+Nothing is installed by merging. The old watchdog's cron line stays commented
+out (`# PAUSED 2026-10-02 …`) and `/usr/local/bin/server-watchdog.sh` is left
+in place, unused.
+
+```bash
+cd /var/www/infiniterealms   # a checkout of the merged commit
+# 1. back up the crontab
+crontab -l > /root/crontab.bak-pre-2501-$(date -u +%Y%m%d%H%M%S)
+# 2. install next to the host auto-deploy.sh
+install -m 755 -o root -g root ops/server-watchdog.sh /var/www/infiniterealms/scripts/server-watchdog.sh
+# 3. check on the box, changing nothing
+bash ops/tests/server-watchdog.sh
+DEPLOY_STATE_DIR=$(mktemp -d) /var/www/infiniterealms/scripts/server-watchdog.sh --dry-run
+#    expect one line ending "| api ok | docker ok | db ok"
+```
+
+4. Add one line to root's crontab (`crontab -e`), below the paused one. The log
+   is under `/var/log/infiniterealms/`, so the existing logrotate rule covers it.
+   Optional shadow first, a day or two, then read the log for `would`:
+
+   ```
+   */2 * * * * /var/www/infiniterealms/scripts/server-watchdog.sh --dry-run >> /var/log/infiniterealms/server-watchdog.log 2>&1
+   ```
+
+   Live:
+
+   ```
+   */2 * * * * /var/www/infiniterealms/scripts/server-watchdog.sh >> /var/log/infiniterealms/server-watchdog.log 2>&1
+   ```
+
+5. After the first two ticks: `tail -3 /var/log/infiniterealms/server-watchdog.log`.
+
+### Rollback
+
+Comment out the new line (`crontab -e`): no watchdog runs, as in the paused
+state. Restoring `crontab /root/crontab.bak-pre-2501-<stamp>` does the same
+but also undoes any other crontab edit made since the backup; diff first. Do not un-comment the old `/usr/local/bin`
+line: that is the load-triggered Docker restart this replaces. To reset the
+counters and cooldown, `rm /var/lib/infiniterealms-deploy/server-watchdog.state`.
+
 ## Rollback of the publish step
 
 Before publishing, the live `dist/` is hardlink-snapshotted to
