@@ -48,6 +48,11 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
   .get('/:id/journal', async ({ access }) => {
     const session = access!.session!;
     if (!session.campaignId) return { entries: [] };
+    // A playthrough is one character in one campaign: every session of that character shares its
+    // journal, and another character's handouts in the same campaign are not part of this story.
+    const thisPlaythrough = session.characterId
+      ? eq(gameSessions.characterId, session.characterId)
+      : eq(campaignJournalEntries.sessionId, session.id);
     const rows = await db
       .select({
         entry: campaignJournalEntries,
@@ -60,6 +65,7 @@ export const handoutRoutes = new Elysia({ prefix: '/v1/sessions' })
       .where(
         and(
           eq(campaignJournalEntries.campaignId, session.campaignId),
+          thisPlaythrough,
           eq(campaignJournalEntries.entryType, 'handout'),
         ),
       )

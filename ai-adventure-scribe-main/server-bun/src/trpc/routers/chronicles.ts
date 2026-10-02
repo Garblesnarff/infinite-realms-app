@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../../../db/client';
@@ -40,6 +40,7 @@ export async function verifySessionOwnership(
 ): Promise<{
   sessionId: string;
   campaignId: string | null;
+  characterId: string | null;
   sessionNumber: number | null;
   campaignUserId: string | null;
   characterUserId: string | null;
@@ -49,6 +50,7 @@ export async function verifySessionOwnership(
     .select({
       sessionId: gameSessions.id,
       campaignId: gameSessions.campaignId,
+      characterId: gameSessions.characterId,
       sessionNumber: gameSessions.sessionNumber,
       campaignUserId: campaigns.userId,
       characterUserId: characters.userId,
@@ -351,6 +353,11 @@ export const chroniclesRouter = router({
         .where(
           and(
             eq(gameSessions.campaignId, campaignId),
+            // session_number counts per character, so "the session before this one" is the
+            // previous session of the same character, not of any character in the campaign.
+            session.characterId
+              ? eq(gameSessions.characterId, session.characterId)
+              : isNull(gameSessions.characterId),
             eq(gameSessions.sessionNumber, previousSessionNumber),
             eq(sessionChronicles.status, 'ready'),
             eq(sessionChronicles.userId, ctx.user.userId),
