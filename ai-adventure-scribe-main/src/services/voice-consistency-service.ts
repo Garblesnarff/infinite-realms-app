@@ -178,12 +178,15 @@ export class VoiceConsistencyService {
       character?: string;
       voice_category?: string;
     }>,
+    signal?: AbortSignal,
   ): Promise<VoiceAssignment[]> {
+    if (signal?.aborted) return [];
     const cleanSegments = stripEngineGeneratedLinesFromSegments(segments);
     logger.info('🎪 Processing voice assignments for', cleanSegments.length, 'segments');
 
     const assignments: VoiceAssignment[] = [];
     const existingMappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
+    if (signal?.aborted) return [];
     const mappingLookup = new Map(existingMappings.map((m) => [m.characterName, m]));
 
     // ⚡ Bolt: Track appearance counts for aggregation to avoid redundant sequential updates.
@@ -198,6 +201,7 @@ export class VoiceConsistencyService {
     >();
 
     for (const segment of cleanSegments) {
+      if (signal?.aborted) return assignments;
       if (!segment.character || isUnknownSpeaker(segment.character)) {
         assignments.push({
           character: 'narrator',
@@ -267,6 +271,7 @@ export class VoiceConsistencyService {
 
     // Aggregated updates
     for (const [id, increment] of updatesNeeded.entries()) {
+      if (signal?.aborted) return assignments;
       // ⚡ Bolt: Use the cached appearanceCount from existingMappings to calculate the new count,
       // avoiding a redundant SELECT query per unique character.
       const mapping = existingMappings.find((m) => m.id === id);
@@ -278,6 +283,7 @@ export class VoiceConsistencyService {
 
     // Aggregated inserts
     for (const data of insertsNeeded.values()) {
+      if (signal?.aborted) return assignments;
       tasks.push(
         VoiceConsistencyRepository.saveCharacterVoiceMapping(
           sessionId,
@@ -292,6 +298,8 @@ export class VoiceConsistencyService {
     if (tasks.length > 0) {
       await Promise.all(tasks);
     }
+
+    if (signal?.aborted) return assignments;
 
     logger.info(
       '🎯 Voice assignments completed:',

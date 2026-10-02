@@ -149,6 +149,8 @@ export interface CombatResolutionParams {
    * turn stays the player's.
    */
   silentPlayerTurn?: { playerMessage: string };
+  signal?: AbortSignal;
+  onPlayerWaitChange?: (waiting: boolean) => void;
 }
 
 type DeclaredCombatAction = StructuredCombatAction | DMAoESpellAction;
@@ -207,7 +209,34 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     playerMessage,
     declaredPlayerSpell,
     silentPlayerTurn,
+    signal,
+    onPlayerWaitChange,
   } = params;
+
+  const rejectWhenAborted = <T>(promise: Promise<T>): Promise<T> => {
+    if (!signal) return promise;
+    if (signal.aborted) {
+      return Promise.reject(new DOMException('The request was aborted.', 'AbortError'));
+    }
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => reject(new DOMException('The request was aborted.', 'AbortError')),
+          { once: true },
+        );
+      }),
+    ]);
+  };
+  const awaitPlayerInput = async <T>(promise: Promise<T>): Promise<T> => {
+    onPlayerWaitChange?.(true);
+    try {
+      return await rejectWhenAborted(promise);
+    } finally {
+      onPlayerWaitChange?.(false);
+    }
+  };
 
   /** The round the player is acting in: recovering a stale NPC holder can wrap the order first. */
   let playerRound = combatRound;
@@ -500,6 +529,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
 
   /** `null` when the action was withheld and nothing reached the engine; the batch goes on. */
   const runAction = async (declared: DeclaredCombatAction): Promise<BatchBoundary | null> => {
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
     const origin = originOf(declared);
     if (origin && isPlayerActor(declared.actor_id, participants) && !isPlayerInputOrigin(origin)) {
       const withheld = asTargeted(declared);
@@ -543,16 +573,18 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       if (entryRoll) {
         playerDie = entryRoll;
       } else if (asksPlayer) {
-        const asked = await trackPlayerRollDismissal(() =>
-          action.action_type === 'attack'
-            ? askPlayerForAttackDie({ encounterId, action, actorLabel })
-            : askPlayerForSpellCast({
-                encounterId,
-                action,
-                actorLabel,
-                participants,
-                fromSheetCast: origin === 'sheet_cast',
-              }),
+        const asked = await awaitPlayerInput(
+          trackPlayerRollDismissal(() =>
+            action.action_type === 'attack'
+              ? askPlayerForAttackDie({ encounterId, action, actorLabel })
+              : askPlayerForSpellCast({
+                  encounterId,
+                  action,
+                  actorLabel,
+                  participants,
+                  fromSheetCast: origin === 'sheet_cast',
+                }),
+          ),
         );
         const cancelledOnCard = (asked.value as { cancelled?: boolean } | null)?.cancelled === true;
         if (cancelledOnCard) withdrawnHow = 'cancelled';
@@ -578,12 +610,21 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (withdrawnBySheetCancel(action, origin, targetId ? labelFor(targetId) : undefined)) {
       return 'turn_ended';
     }
-    const execution = await executeStructuredCombatActionWithBoundary(
-      encounterId,
-      action,
-      playerDie?.d20,
-      ...(origin ? [origin] : []),
-    );
+    const execution = signal
+      ? await executeStructuredCombatActionWithBoundary(
+          encounterId,
+          action,
+          playerDie?.d20,
+          origin,
+          signal,
+        )
+      : await executeStructuredCombatActionWithBoundary(
+          encounterId,
+          action,
+          playerDie?.d20,
+          ...(origin ? [origin] : []),
+        );
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
     // A retry that arrived after victory is a clean server no-op, not an outcome to narrate.
     // The batch is over either way; do not submit the next action against the dissolved board.
     if (execution.boundary === 'encounter_already_concluded') {
@@ -611,7 +652,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     }
     let cast: Awaited<ReturnType<typeof executeAoECombatAction>>;
     try {
-      cast = await executeAoECombatAction(sessionId, action, origin);
+      cast = signal
+        ? await executeAoECombatAction(sessionId, action, origin, signal)
+        : await executeAoECombatAction(sessionId, action, origin);
     } catch (error) {
       // The sheet's Cast names no target, and a typed cast names it in words; either way the DM
       // wrote a single-target spell (Acid Splash) in the area shape. Anything else that reaches
@@ -711,11 +754,20 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
     // is told the boundary already happened. Both answers name whoever is up, which is what the
     // player has to be told when their own declaration was refused.
-    const turn = await executeAuthoritativeCombatIntent(
-      encounterId,
-      { type: 'end_turn', actorId: action.actor_id },
-      'dm',
-    );
+    const turn = signal
+      ? await executeAuthoritativeCombatIntent(
+          encounterId,
+          { type: 'end_turn', actorId: action.actor_id },
+          'dm',
+          undefined,
+          undefined,
+          signal,
+        )
+      : await executeAuthoritativeCombatIntent(
+          encounterId,
+          { type: 'end_turn', actorId: action.actor_id },
+          'dm',
+        );
     // Death saves settled by the explicit end_turn boundary get their own engine lines and
     // cards too (#2457) — they are not part of the action's result. Print BEFORE the
     // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
@@ -735,7 +787,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
     if (sessionId && isPlayerActor(action.actor_id, participants)) {
-      const advanced = await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
+      const advanced = signal
+        ? await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id, signal)
+        : await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
       return appendAutonomousNpcResults(advanced, true);
     }
     return 'turn_ended';
@@ -746,6 +800,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     preflightBoundary !== 'combat_ended' && actionIndex < targetedActions.length;
     actionIndex += 1
   ) {
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
     const action = targetedActions[actionIndex];
     try {
       const boundary = await runAction(action);
@@ -785,7 +840,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ) {
         npcTurnRecoverySpent = true;
         const refusalIndex = refusedActions.length - 1;
-        const advanced = await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId);
+        const advanced = signal
+          ? await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId, signal)
+          : await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId);
         const recoveryBoundary = appendAutonomousNpcResults(advanced, true);
         playerRound = advanced.round ?? playerRound;
         if (recoveryBoundary === 'combat_ended') break;
@@ -844,6 +901,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           conversationHistory,
           userPlan,
           turnCount,
+          signal,
         });
       }
       const corrected = repaired?.combat_actions?.filter(isDeclaredCombatAction);
@@ -1112,12 +1170,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ],
       turnCount,
       userPlan: userPlan || undefined,
+      ...(signal ? { signal } : {}),
       ...(narrationGated ? { holdSideEffects: true } : {}),
       // The gate's second ask: the reply it rejected, named (#2373). A param, not part of
       // `message`, so it reaches the prompt rules and never the memory-extraction input.
       ...(violation ? { narrationViolation: violation } : {}),
     });
   let narration = await narrate();
+  if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
   if (narrationGated) {
     narration = (
       await enforceNarrationGate({
@@ -1128,6 +1188,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         regenerate: narrate,
       })
     ).narration;
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
   }
 
   const narratedText = prependCombatEngineTranscript(

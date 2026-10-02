@@ -14,6 +14,7 @@ import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step'
 import {
   COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
   NPC_FIRST_ADVANCE_FAILED_NOTICE,
+  isAbortError,
   preflightErrorStatus,
   preflightNpcTurnsBeforePlayerDeclaration,
 } from '@/hooks/ai/combat-turn-preflight';
@@ -50,7 +51,7 @@ export interface HandleDmActionsParams {
   characterRecord?: Record<string, unknown>;
   activeEncounter: any;
   isInCombat: boolean;
-  refreshCombatState: () => Promise<any>;
+  refreshCombatState: (signal?: AbortSignal) => Promise<any>;
   aiContext: any;
   conversationHistory: any[];
   /** NPC turns drained before the player's declaration was sent to chatWithDM. */
@@ -78,6 +79,8 @@ export interface HandleDmActionsParams {
    * must not print them a second time.
    */
   npcLinesShown?: boolean;
+  signal?: AbortSignal;
+  onPlayerWaitChange?: (waiting: boolean) => void;
 }
 
 export interface HandleDmActionsResult {
@@ -221,7 +224,30 @@ export async function handleDmActionsAndTransitions(
     playerInputOrigin,
     preflightNpcTurns: initialPreflightNpcTurns,
     combatRound,
+    signal,
   } = params;
+
+  const awaitPlayerInput = async <T>(promise: Promise<T>): Promise<T> => {
+    params.onPlayerWaitChange?.(true);
+    try {
+      if (!signal) return await promise;
+      if (signal.aborted) {
+        throw new DOMException('The request was aborted.', 'AbortError');
+      }
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(new DOMException('The request was aborted.', 'AbortError')),
+            { once: true },
+          );
+        }),
+      ]);
+    } finally {
+      params.onPlayerWaitChange?.(false);
+    }
+  };
 
   let { result, activeEncounter, isInCombat } = params;
   let preflightNpcTurns = initialPreflightNpcTurns;
@@ -277,7 +303,8 @@ export async function handleDmActionsAndTransitions(
         // A held entry (#2341) was confirmed before the DM was called; asking again would open
         // the popup twice.
         const confirmed =
-          params.entryConfirmed === true || (await confirmCombatEntry(pendingEntry, player));
+          params.entryConfirmed === true ||
+          (await awaitPlayerInput(confirmCombatEntry(pendingEntry, player)));
         if (!confirmed) {
           // A decline is a real answer: do not call `/enter`, do not resolve the model's attack
           // batch, and do not let the pre-entry telegraph become a fabricated outcome.
@@ -298,18 +325,23 @@ export async function handleDmActionsAndTransitions(
         } else {
           // The confirmation is the intent gate. Only after the player chooses Strike do we
           // request the initiative die that the explicit seating endpoint will consume.
-          const initiative = await requestPlayerInitiativeRoll({
-            actorLabel: player.name,
-            initiativeModifier: player.initiativeModifier,
-          });
-          const enterResponse = await userDataApi.enterCombat(sessionId, {
+          const initiative = await awaitPlayerInput(
+            requestPlayerInitiativeRoll({
+              actorLabel: player.name,
+              initiativeModifier: player.initiativeModifier,
+            }),
+          );
+          const enterPayload = {
             combatants: pendingEntry.combatants,
             sceneSpec: pendingEntry.sceneSpec,
             player,
             ...(pendingEntry.declaredAttack ? { declaredAttack: pendingEntry.declaredAttack } : {}),
             ...(pendingEntry.seatingHint ? { seatingHint: pendingEntry.seatingHint } : {}),
             ...(initiative.d20 === null ? {} : { playerInitiativeRoll: initiative.d20 }),
-          });
+          };
+          const enterResponse = signal
+            ? await userDataApi.enterCombat(sessionId, enterPayload, signal)
+            : await userDataApi.enterCombat(sessionId, enterPayload);
           if (!enterResponse.ok) {
             const failurePayload = await responsePayload(enterResponse);
             logger.warn('[CombatEntry] server refused explicit entry', failurePayload);
@@ -381,6 +413,7 @@ export async function handleDmActionsAndTransitions(
       } catch (error) {
         logger.warn('[CombatEntry] explicit entry failed; no attack outcome was resolved', error);
         if (
+          isAbortError(error) ||
           error instanceof SessionExpiredError ||
           (typeof error === 'object' &&
             error !== null &&
@@ -418,7 +451,9 @@ export async function handleDmActionsAndTransitions(
   }
 
   if (sessionId && result.combat_transition === 'end') {
-    const endResponse = await userDataApi.endTacticalMap(sessionId);
+    const endResponse = signal
+      ? await userDataApi.endTacticalMap(sessionId, signal)
+      : await userDataApi.endTacticalMap(sessionId);
     if (!endResponse.ok) {
       logger.warn('Server refused tactical combat end', await endResponse.json());
     }
@@ -427,7 +462,8 @@ export async function handleDmActionsAndTransitions(
   // A seated entry (from the explicit endpoint) or an end transition moves the board. A pending
   // handoff and a raw model start do not: no encounter exists until `/enter` succeeds.
   if (sessionId && (result.combat_entry?.entered || result.combat_transition === 'end')) {
-    activeEncounter = await refreshCombatState();
+    activeEncounter = await refreshCombatState(signal);
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
     isInCombat = activeEncounter?.phase === 'active';
     aiContext.gameState.isInCombat = isInCombat;
     aiContext.gameState.encounterId = activeEncounter?.id;
@@ -446,6 +482,7 @@ export async function handleDmActionsAndTransitions(
         characterId:
           typeof params.characterRecord?.id === 'string' ? params.characterRecord.id : '',
         refreshCombatState,
+        signal,
       });
       activeEncounter = preflight.activeEncounter;
       isInCombat = preflight.isInCombat;
@@ -456,6 +493,7 @@ export async function handleDmActionsAndTransitions(
       aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
       aiContext.gameState.round = activeEncounter?.currentRound;
     } catch (error) {
+      if (isAbortError(error)) throw error;
       logger.warn(COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED, {
         sessionId,
         encounterId: activeEncounter?.id ?? null,
@@ -538,7 +576,7 @@ export async function handleDmActionsAndTransitions(
           // The server always supplies this for an attack; malformed payloads use engine rolling.
           const actualRollSpec = asEntryAttackRollSpec(entryFirstActionPayload);
           if (actualRollSpec) {
-            const roll = await requestPlayerAttackRoll(actualRollSpec);
+            const roll = await awaitPlayerInput(requestPlayerAttackRoll(actualRollSpec));
             entryPlayerAttackRoll = roll.cancelled
               ? { action: entryFirstAction, autoRolled: false, cancelled: true }
               : {
@@ -550,13 +588,15 @@ export async function handleDmActionsAndTransitions(
             entryPlayerAttackRoll = { action: entryFirstAction, autoRolled: true };
           }
         } else if (entryFirstAction.action_type === 'cast_spell') {
-          const { value: spellRoll, dismissed } = await trackPlayerRollDismissal(() =>
-            askPlayerForSpellCast({
-              encounterId: activeEncounter?.id,
-              action: entryFirstAction,
-              actorLabel: playerParticipant.name,
-              participants: activeEncounter.participants,
-            }),
+          const { value: spellRoll, dismissed } = await awaitPlayerInput(
+            trackPlayerRollDismissal(() =>
+              askPlayerForSpellCast({
+                encounterId: activeEncounter?.id,
+                action: entryFirstAction,
+                actorLabel: playerParticipant.name,
+                participants: activeEncounter.participants,
+              }),
+            ),
           );
           entryPlayerAttackRoll = dismissed
             ? { action: entryFirstAction, autoRolled: false, cancelled: true }
@@ -586,10 +626,10 @@ export async function handleDmActionsAndTransitions(
   // DM map intents are one authenticated server batch. The server owns
   // legality, the single corrective LLM retry, persistence, and broadcast.
   if (sessionId && result.map_actions?.length) {
-    const actionResponse = await userDataApi.applyDmTacticalActions(
-      sessionId,
-      result.map_actions as TacticalMapActionPayload[],
-    );
+    const mapActions = result.map_actions as TacticalMapActionPayload[];
+    const actionResponse = signal
+      ? await userDataApi.applyDmTacticalActions(sessionId, mapActions, signal)
+      : await userDataApi.applyDmTacticalActions(sessionId, mapActions);
     if (!actionResponse.ok) {
       logger.warn('Server refused DM tactical action batch', await actionResponse.json());
     }
@@ -605,7 +645,9 @@ export async function handleDmActionsAndTransitions(
       });
     }
     if (handoutActions.length > 0) {
-      const handoutResponse = await userDataApi.applyDmHandoutActions(sessionId, handoutActions);
+      const handoutResponse = signal
+        ? await userDataApi.applyDmHandoutActions(sessionId, handoutActions, signal)
+        : await userDataApi.applyDmHandoutActions(sessionId, handoutActions);
       if (handoutResponse.ok) {
         const payload = (await handoutResponse.json()) as { entries?: JournalHandoutEntry[] };
         deliveredHandouts = payload.entries;
@@ -645,6 +687,7 @@ export async function handleDmActionsAndTransitions(
           conversationHistory,
           userPlan,
           turnCount,
+          signal,
         });
   if (forcedActions) {
     result = { ...result, combat_actions: forcedActions.combat_actions };
@@ -708,6 +751,8 @@ export async function handleDmActionsAndTransitions(
       playerInputOrigin,
       playerMessage,
       declaredPlayerSpell,
+      signal,
+      onPlayerWaitChange: params.onPlayerWaitChange,
       ...(silentPlayerTurn ? { silentPlayerTurn: { playerMessage: playerMessage as string } } : {}),
     });
     result = narrationResult;

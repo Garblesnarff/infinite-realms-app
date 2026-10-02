@@ -102,6 +102,18 @@ describe('combat repair after an engine refusal', () => {
       expect(await repairRefusedCombatAction(params(outOfTurn()) as any)).toBeNull();
       expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
     });
+
+    it('propagates cancellation instead of converting it to a repair failure', async () => {
+      const abort = new DOMException('The request was aborted.', 'AbortError');
+      vi.mocked(AIService.chatWithDM).mockRejectedValue(abort);
+
+      await expect(
+        repairRefusedCombatAction({
+          ...params(outOfTurn()),
+          signal: new AbortController().signal,
+        } as any),
+      ).rejects.toBe(abort);
+    });
   });
 
   describe('the refusal error itself', () => {

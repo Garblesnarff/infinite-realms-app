@@ -135,7 +135,49 @@ export interface EnhancedChatMessage extends ChatMessage {
 
 const DEFERRED_TASK_TIMEOUT_MS = 20_000;
 
-function runDeferredTask(label: string, task: () => Promise<unknown>): void {
+type TurnAbortSignal = AbortSignal & {
+  onPlayerWaitChange?: (waiting: boolean) => void;
+};
+
+function combineAbortSignals(...signals: Array<AbortSignal | undefined>): AbortSignal | undefined {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
+  if (activeSignals.length === 0) return undefined;
+  if (activeSignals.length === 1) return activeSignals[0];
+
+  const controller = new AbortController();
+  const abort = (): void => controller.abort();
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      controller.abort();
+      break;
+    }
+    signal.addEventListener('abort', abort, { once: true });
+  }
+  return controller.signal;
+}
+
+function rejectWhenAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    return Promise.reject(new DOMException('The request was aborted.', 'AbortError'));
+  }
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      signal.addEventListener(
+        'abort',
+        () => reject(new DOMException('The request was aborted.', 'AbortError')),
+        { once: true },
+      );
+    }),
+  ]);
+}
+
+function runDeferredTask(
+  label: string,
+  task: (signal?: AbortSignal) => Promise<unknown>,
+  signal?: AbortSignal,
+): void {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(
@@ -144,7 +186,28 @@ function runDeferredTask(label: string, task: () => Promise<unknown>): void {
     );
   });
 
-  void Promise.race([Promise.resolve().then(task), timeout])
+  const abort = signal
+    ? new Promise<never>((_, reject) => {
+        if (signal.aborted) {
+          reject(new DOMException('The request was aborted.', 'AbortError'));
+          return;
+        }
+        signal.addEventListener(
+          'abort',
+          () => reject(new DOMException('The request was aborted.', 'AbortError')),
+          { once: true },
+        );
+      })
+    : null;
+
+  void Promise.race([
+    Promise.resolve().then(() => {
+      if (signal?.aborted) return;
+      return task(signal);
+    }),
+    timeout,
+    ...(abort ? [abort] : []),
+  ])
     .catch((error) => logger.error(`[useAIResponse] Deferred ${label} failed:`, error))
     .finally(() => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -174,6 +237,7 @@ export const useAIResponse = (): {
     onTextReady?: (message: EnhancedChatMessage, options: TextReadyOptions) => Promise<void> | void,
     dmMessageId?: string,
     onEngineNotice?: (notice: LocalNotice) => void,
+    signal?: AbortSignal,
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
@@ -254,12 +318,26 @@ export const useAIResponse = (): {
       ) => Promise<void> | void,
       dmMessageId?: string,
       onEngineNotice?: (notice: LocalNotice) => void,
+      signal?: AbortSignal,
     ): Promise<EnhancedChatMessage> => {
       try {
         let timingCheckpoint = performance.now();
         logger.info('Getting AI response for session:', sessionId);
 
         const latestMessage = messages[messages.length - 1];
+        const turnSignal = signal as TurnAbortSignal | undefined;
+        const awaitPlayerInput = async <T>(promise: Promise<T>): Promise<T> => {
+          turnSignal?.onPlayerWaitChange?.(true);
+          try {
+            return await rejectWhenAborted(promise, signal);
+          } finally {
+            turnSignal?.onPlayerWaitChange?.(false);
+          }
+        };
+        const throwIfAborted = (): void => {
+          if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+        };
+        throwIfAborted();
         lastCombatSessionIdRef.current = sessionId;
 
         // Guard against repeated message processing
@@ -274,6 +352,16 @@ export const useAIResponse = (): {
           };
         }
         lastSigRef.current = sig;
+        // An aborted turn must not poison the duplicate guard. Otherwise an explicit retry with
+        // the same text is mistaken for the late result of the timed-out turn and returns before
+        // combat resolution can run again.
+        signal?.addEventListener(
+          'abort',
+          () => {
+            if (lastSigRef.current === sig) lastSigRef.current = '';
+          },
+          { once: true },
+        );
 
         // Clear processed roll requests on new player ACTION (not dice roll)
         const isDiceRollMessage = latestMessage.context?.intent === 'dice_roll';
@@ -292,13 +380,13 @@ export const useAIResponse = (): {
         }
 
         // Log incoming dice roll results (delegated to session-logger)
-        await logIncomingRolls(sessionId, latestMessage);
+        await rejectWhenAborted(logIncomingRolls(sessionId, latestMessage), signal);
 
         // Combat truth for this turn is re-read from the server rather than taken from the last
         // render. Everything below — the tactical-context fetch, the combat flag the DM is told,
         // and structured action execution — reads these two locals, so a fight the server ended
         // on a killing blow (or started while this closure was already captured) is seen here.
-        let activeEncounter = await refreshCombatState();
+        let activeEncounter = await rejectWhenAborted(refreshCombatState(signal), signal);
         logger.info('TURN_PREFLIGHT_TIMING', {
           sessionId,
           stage: 'incoming-roll-log-and-combat-refresh',
@@ -312,32 +400,35 @@ export const useAIResponse = (): {
 
         // ⚡ Bolt: Parallelize fetching game context, voice context, and relevant memories to reduce latency.
         // This reduces total request time by executing all context retrieval concurrently.
-        const [gameContext, voiceContext, relevantMemories] = await Promise.all([
-          fetchGameContext(sessionId).then((value) => {
-            logger.info('TURN_PREFLIGHT_TIMING', {
-              sessionId,
-              stage: 'game-context',
-              ms: Math.round(performance.now() - timingCheckpoint),
-            });
-            return value;
-          }),
-          voiceConsistencyService.getSessionVoiceContext(sessionId).then((value) => {
-            logger.info('TURN_PREFLIGHT_TIMING', {
-              sessionId,
-              stage: 'voice-context',
-              ms: Math.round(performance.now() - timingCheckpoint),
-            });
-            return value;
-          }),
-          MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8).then((value) => {
-            logger.info('TURN_PREFLIGHT_TIMING', {
-              sessionId,
-              stage: 'relevant-memories',
-              ms: Math.round(performance.now() - timingCheckpoint),
-            });
-            return value;
-          }),
-        ]);
+        const [gameContext, voiceContext, relevantMemories] = await rejectWhenAborted(
+          Promise.all([
+            fetchGameContext(sessionId).then((value) => {
+              logger.info('TURN_PREFLIGHT_TIMING', {
+                sessionId,
+                stage: 'game-context',
+                ms: Math.round(performance.now() - timingCheckpoint),
+              });
+              return value;
+            }),
+            voiceConsistencyService.getSessionVoiceContext(sessionId).then((value) => {
+              logger.info('TURN_PREFLIGHT_TIMING', {
+                sessionId,
+                stage: 'voice-context',
+                ms: Math.round(performance.now() - timingCheckpoint),
+              });
+              return value;
+            }),
+            MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8).then((value) => {
+              logger.info('TURN_PREFLIGHT_TIMING', {
+                sessionId,
+                stage: 'relevant-memories',
+                ms: Math.round(performance.now() - timingCheckpoint),
+              });
+              return value;
+            }),
+          ]),
+          signal,
+        );
 
         logger.info('TURN_PREFLIGHT_TIMING', {
           sessionId,
@@ -365,12 +456,16 @@ export const useAIResponse = (): {
           // Read before the pre-flight: one that ends combat leaves no encounter to read after.
           const preflightParticipants = activeEncounter?.participants;
           try {
-            const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
-              sessionId,
-              activeEncounter,
-              characterId,
-              refreshCombatState,
-            });
+            const preflight = await rejectWhenAborted(
+              preflightNpcTurnsBeforePlayerDeclaration({
+                sessionId,
+                activeEncounter,
+                characterId,
+                refreshCombatState,
+                signal,
+              }),
+              signal,
+            );
             activeEncounter = preflight.activeEncounter as typeof activeEncounter;
             isInCombat = preflight.isInCombat;
             preflightNpcTurns = preflight.npcTurns;
@@ -432,11 +527,13 @@ export const useAIResponse = (): {
 
         // #2392: the sheet's Cast of a save spell asks the player before the DM is called; the
         // card needs no model output, and the DM's reply used to come first.
-        const heldSave = await holdSaveCardBeforeDm({
-          origin: playerInputOriginOf(latestMessage),
-          spellId: latestMessage.context?.spellId,
-          activeEncounter: isInCombat ? activeEncounter : null,
-        });
+        const heldSave = await awaitPlayerInput(
+          holdSaveCardBeforeDm({
+            origin: playerInputOriginOf(latestMessage),
+            spellId: latestMessage.context?.spellId,
+            activeEncounter: isInCombat ? activeEncounter : null,
+          }),
+        );
         // Cancel cast (#2418): the DM was never called and the engine spent nothing.
         if (heldSave === 'cancelled') return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
 
@@ -478,10 +575,17 @@ export const useAIResponse = (): {
         // ASCII/digest context and never derives distances or line of sight itself.
         if (isInCombat && sessionId && activeEncounter?.currentTurnParticipantId) {
           try {
-            const tacticalResponse = await userDataApi.getTacticalMapContext(
-              sessionId,
-              activeEncounter.currentTurnParticipantId,
-            );
+            const tacticalRequest = signal
+              ? userDataApi.getTacticalMapContext(
+                  sessionId,
+                  activeEncounter.currentTurnParticipantId,
+                  signal,
+                )
+              : userDataApi.getTacticalMapContext(
+                  sessionId,
+                  activeEncounter.currentTurnParticipantId,
+                );
+            const tacticalResponse = await rejectWhenAborted(tacticalRequest, signal);
             if (tacticalResponse.ok) {
               const payload = (await tacticalResponse.json()) as { tacticalContext?: string };
               if (payload.tacticalContext)
@@ -513,12 +617,14 @@ export const useAIResponse = (): {
         // DM text yet; "Do something else" calls the DM with a note that nothing happened.
         const heldEntry =
           !activeEncounter && !isDiceRollMessage
-            ? await holdCombatEntryBeforeDm({
-                sessionId,
-                message: latestMessage.text,
-                characterRecord,
-                recentNarration: recentNarrationFrom(messages.slice(0, -1)),
-              })
+            ? await awaitPlayerInput(
+                holdCombatEntryBeforeDm({
+                  sessionId,
+                  message: latestMessage.text,
+                  characterRecord,
+                  recentNarration: recentNarrationFrom(messages.slice(0, -1)),
+                }),
+              )
             : null;
         logger.info('TURN_PREFLIGHT_TIMING', {
           sessionId,
@@ -555,13 +661,17 @@ export const useAIResponse = (): {
         // the request is safe: the slot is spent only when the engine is handed the cast, after
         // this reply, and an in-combat turn's prose and side effects are not saved until then.
         const castSignal = playerInputOrigin === 'sheet_cast' ? sheetCastSignal() : null;
+        const requestSignal = combineAbortSignals(signal, castSignal ?? undefined);
         // Cancelled while queued behind another turn, or during the context fetch above.
         if (castSignal?.aborted) return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
         const askDmUnlessCancelled = async (
           params: Parameters<typeof AIService.chatWithDM>[0],
         ): Promise<AIResponse | null> => {
           try {
-            return await askDm({ ...params, ...(castSignal ? { signal: castSignal } : {}) });
+            return await askDm({
+              ...params,
+              ...(requestSignal ? { signal: requestSignal } : {}),
+            });
           } catch (error) {
             if (castSignal?.aborted) return null;
             throw error;
@@ -745,6 +855,7 @@ export const useAIResponse = (): {
                   userPlan: userPlan || undefined,
                   turnCount,
                   relevantMemories,
+                  ...(requestSignal ? { signal: requestSignal } : {}),
                 }),
             })
           ).narration;
@@ -778,7 +889,10 @@ export const useAIResponse = (): {
           entryConfirmed: heldEntry?.decision === 'confirmed',
           onEngineNotice,
           npcLinesShown,
+          signal,
+          onPlayerWaitChange: turnSignal?.onPlayerWaitChange,
         });
+        throwIfAborted();
 
         result = dmActionsResult.result;
         responseText = dmActionsResult.responseText;
@@ -801,6 +915,7 @@ export const useAIResponse = (): {
             activeEncounter,
             characterId,
             refreshCombatState,
+            signal,
           });
           activeEncounter = reconciliation.activeEncounter as typeof activeEncounter;
           isInCombat = reconciliation.isInCombat;
@@ -812,6 +927,7 @@ export const useAIResponse = (): {
             combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
           );
         }
+        throwIfAborted();
 
         // The engine may have ended combat during this turn. The roll drop reads this flag, and it
         // was set when the context was built, so a check the DM asks for after the killing blow
@@ -827,12 +943,19 @@ export const useAIResponse = (): {
           aiContext,
           sessionId,
           characterId: (characterRecord.id as string) || 'player',
+          signal,
         });
+        throwIfAborted();
 
         // Log outgoing roll requests off the critical path; the processed requests themselves
         // already gate the dice UI and composer state below.
-        runDeferredTask('roll request logging', () =>
-          logRollRequests(sessionId, processedRolls.playerRollRequests),
+        runDeferredTask(
+          'roll request logging',
+          (taskSignal) =>
+            taskSignal
+              ? logRollRequests(sessionId, processedRolls.playerRollRequests, taskSignal)
+              : logRollRequests(sessionId, processedRolls.playerRollRequests),
+          signal,
         );
 
         // Update game phase based on combat detection (delegated to game-phase-updater)
@@ -850,13 +973,23 @@ export const useAIResponse = (): {
             narrationSegments.length,
             'narration segments',
           );
-          runDeferredTask('voice assignment', async () => {
-            await voiceConsistencyService.processVoiceAssignments(
-              sessionId,
-              stripEngineGeneratedLinesFromSegments(narrationSegments),
-            );
-            logger.info('Processed voice assignments successfully');
-          });
+          runDeferredTask(
+            'voice assignment',
+            async (taskSignal) => {
+              const segments = stripEngineGeneratedLinesFromSegments(narrationSegments);
+              if (taskSignal) {
+                await voiceConsistencyService.processVoiceAssignments(
+                  sessionId,
+                  segments,
+                  taskSignal,
+                );
+              } else {
+                await voiceConsistencyService.processVoiceAssignments(sessionId, segments);
+              }
+              logger.info('Processed voice assignments successfully');
+            },
+            signal,
+          );
         } else {
           logger.info('Received text-only response');
         }
@@ -912,9 +1045,14 @@ export const useAIResponse = (): {
           if (result.options?.length) {
             finalResponseText = `${finalResponseText.trim()}\n\n${result.options.join('\n')}`;
           } else {
-            runDeferredTask('action options', async () => {
-              await ensureActionOptions(finalResponseText);
-            });
+            runDeferredTask(
+              'action options',
+              async (taskSignal) => {
+                if (taskSignal?.aborted) return;
+                await ensureActionOptions(finalResponseText);
+              },
+              signal,
+            );
           }
         }
 

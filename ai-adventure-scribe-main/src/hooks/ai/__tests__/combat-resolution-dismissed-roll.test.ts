@@ -77,7 +77,7 @@ function hostThatAnswers(outcome: PlayerRollOutcome): PlayerRollHost {
   };
 }
 
-const resolve = () =>
+const resolve = (overrides: Record<string, unknown> = {}) =>
   resolveDeclaredCombatActions({
     encounterId: 'encounter-1',
     sessionId: 'session-1',
@@ -87,6 +87,7 @@ const resolve = () =>
     conversationHistory: [],
     participants: PARTICIPANTS,
     combatRound: 2,
+    ...overrides,
   });
 
 describe('a dismissed engine attack prompt (#2234)', () => {
@@ -151,6 +152,34 @@ describe('a dismissed engine attack prompt (#2234)', () => {
       UNARMED_STRIKE,
       15,
     );
+  });
+
+  it('marks the attack popup as a player wait', async () => {
+    const waits: boolean[] = [];
+    setPlayerRollHost(hostThatAnswers({ d20: 15 }));
+
+    await resolve({ onPlayerWaitChange: (waiting: boolean) => waits.push(waiting) });
+
+    expect(waits).toEqual([true, false]);
+  });
+
+  it('aborting after the action stops end_turn and the NPC advance', async () => {
+    const controller = new AbortController();
+    setPlayerRollHost(hostThatAnswers({ d20: 15 }));
+    executeStructuredCombatActionWithBoundary.mockImplementationOnce(async () => {
+      controller.abort();
+      return {
+        boundary: null,
+        outcomes: [],
+        result: { hit: true },
+      };
+    });
+
+    await expect(resolve({ signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(advanceNpcTurns).not.toHaveBeenCalled();
   });
 
   it('withdraws an entry action whose prompt was dismissed upstream', async () => {

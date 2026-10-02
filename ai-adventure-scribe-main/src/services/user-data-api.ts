@@ -337,9 +337,14 @@ export const userDataApi = {
     request(`/v1/characters/${encodeURIComponent(characterId)}/quest-progress`),
   getSessionContext: (sessionId: string): Promise<SessionContextPayload> =>
     request(`/v1/sessions/${encodeURIComponent(sessionId)}/context`),
-  getTacticalMapContext: (sessionId: string, entityId: string): Promise<Response> =>
+  getTacticalMapContext: (
+    sessionId: string,
+    entityId: string,
+    signal?: AbortSignal,
+  ): Promise<Response> =>
     requestResponse(
       `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(entityId)}`,
+      signal ? { signal } : undefined,
     ),
   detectDeclaredAttack: (
     sessionId: string,
@@ -350,11 +355,16 @@ export const userDataApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
-  enterCombat: (sessionId: string, payload: CombatEntryPayload): Promise<Response> =>
+  enterCombat: (
+    sessionId: string,
+    payload: CombatEntryPayload,
+    signal?: AbortSignal,
+  ): Promise<Response> =>
     requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/enter`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      ...(signal ? { signal } : {}),
     }),
   setPendingCombatIntent: (
     encounterId: string,
@@ -365,9 +375,10 @@ export const userDataApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
-  clearPendingCombatIntent: (encounterId: string): Promise<Response> =>
+  clearPendingCombatIntent: (encounterId: string, signal?: AbortSignal): Promise<Response> =>
     requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent`, {
       method: 'DELETE',
+      ...(signal ? { signal } : {}),
     }),
   promotePendingCombatIntent: (encounterId: string): Promise<Response> =>
     requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent/promote`, {
@@ -400,6 +411,7 @@ export const userDataApi = {
   advanceNpcTurns: async (
     sessionId: string,
     expectedCurrentParticipantId?: string,
+    signal?: AbortSignal,
   ): Promise<AdvanceNpcTurnsResponse> => {
     try {
       return await request(
@@ -409,6 +421,7 @@ export const userDataApi = {
           body: JSON.stringify(
             expectedCurrentParticipantId ? { expectedCurrentParticipantId } : {},
           ),
+          ...(signal ? { signal } : {}),
         },
       );
     } catch (error) {
@@ -424,6 +437,7 @@ export const userDataApi = {
       // let the caller continue from the holder that won the race; never run a second loop.
       const snapshot = await request<ActiveCombatSnapshot>(
         `/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`,
+        signal ? { signal } : undefined,
       );
       const currentParticipant = snapshot.combat?.currentParticipant ?? null;
       return {
@@ -437,9 +451,10 @@ export const userDataApi = {
       };
     }
   },
-  endTacticalMap: (sessionId: string): Promise<Response> =>
+  endTacticalMap: (sessionId: string, signal?: AbortSignal): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
       method: 'POST',
+      ...(signal ? { signal } : {}),
     }),
   applyTacticalMapAction: (
     sessionId: string,
@@ -453,11 +468,13 @@ export const userDataApi = {
   applyDmTacticalActions: (
     sessionId: string,
     actions: TacticalMapActionPayload[],
+    signal?: AbortSignal,
   ): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/dm-actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actions }),
+      ...(signal ? { signal } : {}),
     }),
   applyDmHandoutActions: (
     sessionId: string,
@@ -468,19 +485,26 @@ export const userDataApi = {
       body: string | null;
       giver: string;
     }>,
+    signal?: AbortSignal,
   ): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/handout-actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actions }),
+      ...(signal ? { signal } : {}),
     }),
   getSessionJournal: (sessionId: string): Promise<{ entries: JournalHandoutEntry[] }> =>
     request(`/v1/sessions/${encodeURIComponent(sessionId)}/journal`),
-  resolveAoECast: (sessionId: string, payload: AoECastPayload): Promise<Response> =>
+  resolveAoECast: (
+    sessionId: string,
+    payload: AoECastPayload,
+    signal?: AbortSignal,
+  ): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/aoe-cast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      ...(signal ? { signal } : {}),
     }),
   listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
   getCampaign: (campaignId: string): Promise<any> =>

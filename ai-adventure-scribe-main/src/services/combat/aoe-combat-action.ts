@@ -56,6 +56,7 @@ export async function executeAoECombatAction(
   action: DMAoESpellAction,
   /** Who produced the action; the server refuses a player action no player input made (#2305). */
   origin?: CombatActionOrigin,
+  signal?: AbortSignal,
 ): Promise<{ execution: StructuredCombatActionExecution; resolvedAction: StructuredCombatAction }> {
   // `actionOrigin` rides beside the payload type rather than in it: `AoECastPayload` lives in
   // `user-data-api.ts`, which an unrelated open PR is editing (AGENTS.md §5).
@@ -68,7 +69,9 @@ export async function executeAoECombatAction(
     slotLevel: slotLevelOf(action.slot_level),
     ...(origin ? { actionOrigin: origin } : {}),
   };
-  const response = await userDataApi.resolveAoECast(sessionId, payload);
+  const response = signal
+    ? await userDataApi.resolveAoECast(sessionId, payload, signal)
+    : await userDataApi.resolveAoECast(sessionId, payload);
   const answer = ((await response.json().catch(() => ({}))) ?? {}) as AoECastResponse;
   if (!response.ok) {
     if (answer.issues?.length) {

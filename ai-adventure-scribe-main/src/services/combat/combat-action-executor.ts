@@ -156,6 +156,7 @@ export async function executeAuthoritativeCombatIntent(
   source: 'player' | 'dm' = 'player',
   dmStartedAt?: number,
   origin?: CombatActionOrigin,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   try {
     const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
@@ -169,7 +170,7 @@ export async function executeAuthoritativeCombatIntent(
     ) {
       const statusResponse = await fetch(
         `${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/status`,
-        { headers },
+        { headers, ...(signal ? { signal } : {}) },
       );
       logServerRequestId('/v1/combat', statusResponse);
       if (!statusResponse.ok)
@@ -190,6 +191,7 @@ export async function executeAuthoritativeCombatIntent(
           dmStartedAt,
           ...(origin ? { origin } : {}),
         }),
+        ...(signal ? { signal } : {}),
       },
     );
     logServerRequestId('/v1/combat', response);
@@ -254,6 +256,7 @@ export async function executeStructuredCombatActionWithBoundary(
   providedD20?: number,
   /** Who produced the action; the server refuses a player action that no player input made. */
   origin?: CombatActionOrigin,
+  signal?: AbortSignal,
 ): Promise<StructuredCombatActionExecution> {
   const dmStartedAt = Date.now();
   let result: unknown;
@@ -270,6 +273,7 @@ export async function executeStructuredCombatActionWithBoundary(
       'dm',
       dmStartedAt,
       origin,
+      signal,
     );
   } else if (action.action_type === 'cast_spell') {
     const spellName = playerCombatSpellLabel(action.spell_id, action.spell_id);
@@ -289,6 +293,7 @@ export async function executeStructuredCombatActionWithBoundary(
       'dm',
       dmStartedAt,
       origin,
+      signal,
     );
   } else if (['dash', 'dodge', 'disengage'].includes(action.action_type)) {
     result = await executeAuthoritativeCombatIntent(
@@ -300,6 +305,7 @@ export async function executeStructuredCombatActionWithBoundary(
       'dm',
       dmStartedAt,
       origin,
+      signal,
     );
   } else if (
     action.action_type === 'move' &&
@@ -312,6 +318,7 @@ export async function executeStructuredCombatActionWithBoundary(
       'dm',
       dmStartedAt,
       origin,
+      signal,
     );
   } else {
     return { outcomes: [], boundary: null };

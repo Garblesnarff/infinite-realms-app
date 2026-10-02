@@ -188,7 +188,7 @@ export interface CombatContextValue {
    * encounter that is live *right now* rather than whatever the last dispatch left behind.
    * Callers that must not act on a stale render (the DM turn pipeline) await this first.
    */
-  refreshCombatState: () => Promise<CombatEncounter | null>;
+  refreshCombatState: (signal?: AbortSignal) => Promise<CombatEncounter | null>;
 
   // Turn management
   nextTurn: () => Promise<void>;

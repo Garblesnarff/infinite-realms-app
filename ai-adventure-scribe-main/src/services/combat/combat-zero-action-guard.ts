@@ -81,7 +81,8 @@ const IMPERATIVE_ATTEMPT = new RegExp(`^\\s*(?:${VERB_ALTERNATION})\\b`, 'i');
  * Asking about an action is not attempting one. "Can I attack from here?" wants an answer, and
  * forcing a structured attack out of the DM would take the player's turn for them.
  */
-const HYPOTHETICAL = /\b(?:can|could|should|may|might|would)\s+(?:i|we)\b|\bwhat if\b|\bhow (?:do|would|can) (?:i|we)\b|\bdo (?:i|we) (?:need|have)\b/i;
+const HYPOTHETICAL =
+  /\b(?:can|could|should|may|might|would)\s+(?:i|we)\b|\bwhat if\b|\bhow (?:do|would|can) (?:i|we)\b|\bdo (?:i|we) (?:need|have)\b/i;
 
 /**
  * Whether the player plainly tried to act, in the only sense that matters here: the engine
@@ -118,9 +119,7 @@ export function extractBoardRoster(tacticalContext: string | undefined | null): 
   const turnOrder = /<turn_order\b[\s\S]*?<\/turn_order>/.exec(context)?.[0] ?? null;
   // The `→ 3. sentient-glaze | Sentient Glaze | 22/30 HP | action:available | CURRENT TURN` line.
   const fromTurnOrder = turnOrder
-    ? /^[^\n]*\|[^\n]*CURRENT TURN/m
-        .exec(turnOrder)?.[0]
-        ?.match(/^\s*→?\s*\d+\.\s*(\S+)\s*\|/)?.[1]
+    ? /^[^\n]*\|[^\n]*CURRENT TURN/m.exec(turnOrder)?.[0]?.match(/^\s*→?\s*\d+\.\s*(\S+)\s*\|/)?.[1]
     : undefined;
   // The digest's own `ACTIVE <slug>` line, for a board with no turn order block behind it.
   const fromActive = /^ACTIVE\s+(\S+)\s*$/m.exec(context)?.[1];
@@ -174,6 +173,7 @@ export interface ZeroActionRepairParams {
   conversationHistory: unknown[];
   userPlan?: string;
   turnCount?: number;
+  signal?: AbortSignal;
 }
 
 /**
@@ -211,8 +211,16 @@ export function buildZeroActionRepairPrompt(
 export async function repairZeroActionCombatTurn(
   params: ZeroActionRepairParams,
 ): Promise<{ text: string; combat_actions?: StructuredCombatAction[] } | null> {
-  const { playerMessage, narratedText, roster, aiContext, conversationHistory, userPlan, turnCount } =
-    params;
+  const {
+    playerMessage,
+    narratedText,
+    roster,
+    aiContext,
+    conversationHistory,
+    userPlan,
+    turnCount,
+    signal,
+  } = params;
   logger.warn(
     `[CombatRepair] trigger=zero_action attempt current=${roster.currentSlug ?? 'unknown'} ` +
       `input="${playerMessage.trim().slice(0, 120)}"`,
@@ -224,6 +232,7 @@ export async function repairZeroActionCombatTurn(
       conversationHistory: conversationHistory as never,
       userPlan,
       turnCount,
+      ...(signal ? { signal } : {}),
     });
     const actions = (regenerated as { combat_actions?: StructuredCombatAction[] })?.combat_actions;
     logger.info(
@@ -232,6 +241,13 @@ export async function repairZeroActionCombatTurn(
     );
     return regenerated as { text: string; combat_actions?: StructuredCombatAction[] };
   } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'AbortError'
+    ) {
+      throw error;
+    }
     logger.warn('[CombatRepair] trigger=zero_action outcome=regeneration_failed', error);
     return null;
   }
@@ -243,6 +259,7 @@ export type ZeroActionGuardStep = ZeroActionGuardInput & {
   conversationHistory: unknown[];
   userPlan?: string;
   turnCount?: number;
+  signal?: AbortSignal;
 };
 
 /**
@@ -265,6 +282,7 @@ export async function enforceCombatActionOnAttempt(
     conversationHistory: params.conversationHistory,
     userPlan: params.userPlan,
     turnCount: params.turnCount,
+    signal: params.signal,
   });
   if (!repaired?.combat_actions?.length) {
     // Asked once, still nothing. The narration stands rather than the turn being lost.

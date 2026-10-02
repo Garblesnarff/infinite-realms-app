@@ -345,6 +345,26 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.activeEncounter).toEqual(PLAYER_TURN_ENCOUNTER);
   });
 
+  it('marks entry confirmation and initiative prompts as player waits', async () => {
+    const waits: boolean[] = [];
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
+      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [NPC_ACTION],
+      },
+      refresh,
+      { onPlayerWaitChange: (waiting: boolean) => waits.push(waiting) },
+    );
+
+    expect(waits).toEqual([true, false, true, false]);
+  });
+
   it('keeps similarly named roster members in the other-combatants line', async () => {
     await invoke({
       combat_transition: 'none',

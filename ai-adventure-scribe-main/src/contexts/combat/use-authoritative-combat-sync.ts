@@ -37,18 +37,28 @@ export type AuthoritativeCombatRead =
   | { state: 'none' }
   | { state: 'unknown' };
 
-export async function readAuthoritativeCombat(sessionId: string): Promise<AuthoritativeCombatRead> {
+export async function readAuthoritativeCombat(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<AuthoritativeCombatRead> {
   try {
     const response = await fetch(
       `${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`,
-      { headers: getAuthHeaders() },
+      { headers: getAuthHeaders(), ...(signal ? { signal } : {}) },
     );
     logServerRequestId('/v1/combat', response);
     if (response.status === 404) return { state: 'none' };
     if (!response.ok) return { state: 'unknown' };
     const payload = (await response.json()) as { combat?: AuthoritativeCombatPayload };
     return payload.combat ? { state: 'combat', combat: payload.combat } : { state: 'none' };
-  } catch {
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'AbortError'
+    ) {
+      throw error;
+    }
     return { state: 'unknown' };
   }
 }
@@ -86,15 +96,18 @@ export function useAuthoritativeCombatSync(
   sessionId: string | undefined,
   dispatch: Dispatch<ReducerAction>,
   getEncounter: () => CombatEncounter | null,
-): () => Promise<CombatEncounter | null> {
-  const refreshCombatState = useCallback(async (): Promise<CombatEncounter | null> => {
-    if (!sessionId) return getEncounter();
-    return applyAuthoritativeCombat(
-      await readAuthoritativeCombat(sessionId),
-      dispatch,
-      getEncounter(),
-    );
-  }, [dispatch, getEncounter, sessionId]);
+): (signal?: AbortSignal) => Promise<CombatEncounter | null> {
+  const refreshCombatState = useCallback(
+    async (signal?: AbortSignal): Promise<CombatEncounter | null> => {
+      if (!sessionId) return getEncounter();
+      return applyAuthoritativeCombat(
+        await readAuthoritativeCombat(sessionId, signal),
+        dispatch,
+        getEncounter(),
+      );
+    },
+    [dispatch, getEncounter, sessionId],
+  );
 
   useEffect(() => {
     if (!sessionId) return;

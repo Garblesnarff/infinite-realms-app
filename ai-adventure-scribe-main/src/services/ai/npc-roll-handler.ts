@@ -27,6 +27,7 @@ export async function continueNarrativeWithNPCRolls(
   rolls: AutoRollResult[],
   aiContext: any,
   sessionId: string,
+  signal?: AbortSignal,
 ): Promise<NPCRollContinuationResult> {
   if (rolls.length === 0) {
     return {
@@ -114,6 +115,7 @@ Narrate the scene:`.trim();
         includeMemory: false, // Don't pull memories for roll continuation
         includeVoiceContext: false, // Voice not needed for continuation
       },
+      ...(signal ? { signal } : {}),
     });
 
     const narrative = result.text || result.response || '';

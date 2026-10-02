@@ -30,6 +30,15 @@ export interface CombatRepairParams {
   conversationHistory: unknown[];
   userPlan?: string;
   turnCount?: number;
+  signal?: AbortSignal;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
 }
 
 /**
@@ -73,7 +82,8 @@ export function buildRepairPrompt(
 export async function repairRefusedCombatAction(
   params: CombatRepairParams,
 ): Promise<{ text: string; combat_actions?: StructuredCombatAction[] } | null> {
-  const { refusal, refusedAction, aiContext, conversationHistory, userPlan, turnCount } = params;
+  const { refusal, refusedAction, aiContext, conversationHistory, userPlan, turnCount, signal } =
+    params;
   if (!refusal.isRepairable) {
     logger.warn(
       `[CombatRepair] outcome=not_repairable status=${refusal.status} reason=${refusal.message}`,
@@ -91,6 +101,7 @@ export async function repairRefusedCombatAction(
       conversationHistory: conversationHistory as never,
       userPlan,
       turnCount,
+      ...(signal ? { signal } : {}),
     });
     const actions = (regenerated as { combat_actions?: StructuredCombatAction[] })?.combat_actions;
     logger.info(
@@ -99,6 +110,7 @@ export async function repairRefusedCombatAction(
     );
     return regenerated as { text: string; combat_actions?: StructuredCombatAction[] };
   } catch (error) {
+    if (isAbortError(error)) throw error;
     logger.warn('[CombatRepair] outcome=regeneration_failed', error);
     return null;
   }

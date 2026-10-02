@@ -53,6 +53,8 @@ export interface SpellCastContext {
  */
 export interface ResumeUnansweredTurnContext {
   intent: 'resume_unanswered';
+  /** Replacement text supplied by the retry composer; the saved row remains untouched. */
+  retryInput?: string;
 }
 
 export type MessageSendContext = DiceRollContext | SpellCastContext | ResumeUnansweredTurnContext;

@@ -31,6 +31,62 @@ import { httpRequestCounter, httpRequestDuration } from './lib/metrics.js';
 const requestIds = new WeakMap<Request, string>();
 const startTimes = new WeakMap<Request, number>();
 const detachDisconnectListeners = new WeakMap<Request, () => void>();
+const dmTurnRequests = new WeakMap<
+  Request,
+  { sessionId: string | null; provider: string | null; model: string | null }
+>();
+const dmTurnTimingLogged = new WeakSet<Request>();
+const DM_GENERATE_ROUTE = '/v1/llm/generate';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function captureDmTurnRequest(request: Request): Promise<void> {
+  if (request.method !== 'POST' || new URL(request.url).pathname !== DM_GENERATE_ROUTE) return;
+
+  try {
+    const body = (await request.clone().json()) as unknown;
+    if (!isRecord(body) || !isRecord(body.dmReply)) return;
+    dmTurnRequests.set(request, {
+      sessionId: typeof body.sessionId === 'string' ? body.sessionId : null,
+      provider: typeof body.provider === 'string' ? body.provider : null,
+      model: typeof body.model === 'string' ? body.model : null,
+    });
+  } catch {
+    // The route's validation/error log owns malformed request details.
+  }
+}
+
+function dmTurnOutcome(status: number, response: unknown): string {
+  if (status === 402) return 'quota_exceeded';
+  if (status >= 400) return 'error';
+  return isRecord(response) && response.degraded === true ? 'degraded' : 'success';
+}
+
+function logDmTurnTiming(
+  request: Request,
+  status: number,
+  response: unknown,
+  durationMs: number,
+): void {
+  const requestDetails = dmTurnRequests.get(request);
+  if (!requestDetails || dmTurnTimingLogged.has(request)) return;
+
+  dmTurnTimingLogged.add(request);
+  const responseRecord = isRecord(response) ? response : {};
+  logger.info({
+    msg: 'DM_TURN_TIMING',
+    sessionId: requestDetails.sessionId,
+    durationMs: Math.round(durationMs),
+    provider:
+      typeof responseRecord.provider === 'string'
+        ? responseRecord.provider
+        : requestDetails.provider,
+    model: typeof responseRecord.model === 'string' ? responseRecord.model : requestDetails.model,
+    outcome: dmTurnOutcome(status, response),
+  });
+}
 
 /**
  * Log when the client goes away before the response is sent (#2148).
@@ -151,7 +207,7 @@ export function createRequestPipelineApp() {
     .derive(({ request }) => {
       return { requestId: resolveRequestId(request) };
     })
-    .onRequest(({ request }) => {
+    .onRequest(async ({ request }) => {
       startTimes.set(request, performance.now());
 
       const requestId = resolveRequestId(request);
@@ -162,6 +218,7 @@ export function createRequestPipelineApp() {
         msg: 'request.start',
       });
       watchForClientDisconnect(request);
+      await captureDmTurnRequest(request);
     })
     .onAfterResponse(({ request }) => {
       stopWatchingForClientDisconnect(request);
@@ -170,8 +227,14 @@ export function createRequestPipelineApp() {
       const start = startTimes.get(request) ?? performance.now();
       const durationMs = performance.now() - start;
       const url = new URL(request.url);
-      const status = set.status || (response instanceof Response ? response.status : 200);
+      const status =
+        typeof set.status === 'number'
+          ? set.status
+          : response instanceof Response
+            ? response.status
+            : 200;
       const requestId = resolveRequestId(request);
+      logDmTurnTiming(request, status, response, durationMs);
       // Hand the id back so a client-side failure can be joined to this log line
       // instead of matched by timestamp. (#2050 D)
       set.headers['x-request-id'] = requestId;
@@ -203,6 +266,13 @@ export function createRequestPipelineApp() {
     .onError(({ error, request, set, code }) => {
       const requestId = resolveRequestId(request);
       set.headers['x-request-id'] = requestId;
+      const status = code === 'VALIDATION' ? 422 : code === 'NOT_FOUND' ? 404 : 500;
+      logDmTurnTiming(
+        request,
+        status,
+        null,
+        performance.now() - (startTimes.get(request) ?? performance.now()),
+      );
 
       // Elysia's ValidationError.message is a JSON document that holds the submitted body
       // (`found`), and `stack` starts with that message. A validation failure logs the error kind

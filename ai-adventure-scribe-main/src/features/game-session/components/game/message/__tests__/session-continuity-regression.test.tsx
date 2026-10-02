@@ -254,6 +254,7 @@ describe('session-continuity regression', () => {
       expect.any(Function),
       expect.any(String), // #2218: the DM row id reserved for this turn
       expect.any(Function), // #2378: shows an engine line the moment it exists
+      expect.any(AbortSignal), // #2480: the turn deadline can abort the generate request
     );
   });
 
@@ -312,6 +313,7 @@ describe('session-continuity regression', () => {
       expect.any(Function),
       expect.any(String), // #2218: the DM row id reserved for this turn
       expect.any(Function), // #2378: shows an engine line the moment it exists
+      expect.any(AbortSignal), // #2480: the turn deadline can abort the generate request
     );
   });
 

@@ -119,8 +119,9 @@ export async function logIncomingRolls(
 export async function logRollRequests(
   sessionId: string,
   rollRequests: RollRequest[],
+  signal?: AbortSignal,
 ): Promise<void> {
-  if (rollRequests.length === 0) return;
+  if (rollRequests.length === 0 || signal?.aborted) return;
 
   logger.info(
     'Found',
@@ -133,6 +134,7 @@ export async function logRollRequests(
       kind: 'roll_requests',
       payload: rollRequests,
     });
+    if (signal?.aborted) return;
 
     const kindMap: Record<string, 'check' | 'save' | 'attack' | 'initiative' | 'damage'> = {
       check: 'check',
@@ -143,6 +145,7 @@ export async function logRollRequests(
     };
 
     for (const rr of rollRequests) {
+      if (signal?.aborted) return;
       const kind = kindMap[rr.type] || 'check';
       await RollManager.recordRollRequest({
         sessionId,

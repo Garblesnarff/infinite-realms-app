@@ -21,6 +21,9 @@ interface MessageHandlerProps {
     handleSendMessage: (message: string, context?: MessageSendContext) => Promise<void>;
     isProcessing: boolean;
     isReconnecting: boolean;
+    isStillThinking: boolean;
+    sendError: string | null;
+    onRetry: (input: string) => Promise<void>;
     combatTurnUiState: CombatTurnUiState;
     onResumeTurn: () => Promise<void>;
     /** #2456: handled terminal death state; when set, the UI renders the death screen. */
@@ -29,8 +32,17 @@ interface MessageHandlerProps {
 }
 
 export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
-  const { handleSendMessage, isProcessing, isReconnecting, combatTurnUiState, resumeCombatTurn, terminalDeathState } =
-    useMessageHandlerLogic(props);
+  const {
+    handleSendMessage,
+    isProcessing,
+    isReconnecting,
+    isStillThinking,
+    sendError,
+    retrySendMessage,
+    combatTurnUiState,
+    resumeCombatTurn,
+    terminalDeathState,
+  } = useMessageHandlerLogic(props);
 
   useEffect(() => {
     if (!props.spellCastHandlerRef) return;
@@ -47,6 +59,9 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     handleSendMessage,
     isProcessing,
     isReconnecting,
+    isStillThinking,
+    sendError,
+    onRetry: retrySendMessage,
     combatTurnUiState,
     onResumeTurn: resumeCombatTurn,
     terminalDeathState,

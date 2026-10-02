@@ -67,6 +67,13 @@ describe('fetchWithAuth', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(retryStates).toEqual([false, true, false]);
     expect(isNetworkError(new TypeError('Failed to fetch'))).toBe(true);
+    expect(
+      isNetworkError(
+        new Error('Failed to get DM response - AI service unavailable', {
+          cause: new TypeError('Failed to fetch'),
+        }),
+      ),
+    ).toBe(true);
     unsubscribe();
   });
 

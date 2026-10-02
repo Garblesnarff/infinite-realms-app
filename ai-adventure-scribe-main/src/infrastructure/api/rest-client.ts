@@ -90,7 +90,7 @@ function getRouteTimeoutMs(path: string): number | undefined {
   // Memory extraction has no timeout: the server answers 202 at once and finishes the job
   // itself (#2148). The 10 s timeout that used to sit here aborted every production extraction
   // and logged each one as LLM_API_REQUEST_ABORTED.
-  if (isGenerateRoute(path)) return 60_000;
+  if (isGenerateRoute(path)) return 90_000;
   return undefined;
 }
 
@@ -111,12 +111,24 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function isNetworkError(error: unknown): boolean {
-  const errorName = getErrorName(error);
-  const errorMessage = getErrorMessage(error);
-  return (
-    errorName === 'TypeError' &&
-    /failed to fetch|network(?:error| error)|load failed/i.test(errorMessage)
-  );
+  const seen = new Set<unknown>();
+  let candidate: unknown = error;
+  while (candidate && !seen.has(candidate)) {
+    seen.add(candidate);
+    const errorName = getErrorName(candidate);
+    const errorMessage = getErrorMessage(candidate);
+    if (
+      errorName === 'TypeError' &&
+      /failed to fetch|network(?:error| error)|load failed/i.test(errorMessage)
+    ) {
+      return true;
+    }
+    candidate =
+      typeof candidate === 'object' && candidate !== null && 'cause' in candidate
+        ? (candidate as { cause?: unknown }).cause
+        : undefined;
+  }
+  return false;
 }
 
 function waitForNetworkRetry(delayMs: number, signal?: AbortSignal): Promise<void> {

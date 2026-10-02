@@ -154,6 +154,30 @@ describe('ChatInput', () => {
     });
   });
 
+  it('keeps the timed-out turn visible until Retry succeeds', async () => {
+    const onSendMessage = vi.fn().mockRejectedValueOnce(new Error('The request was aborted'));
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<ChatInput onSendMessage={onSendMessage} isDisabled={false} />);
+    const textarea = screen.getByPlaceholderText(/describe what your character would like to do/i);
+
+    await user.type(textarea, 'Keep this turn for Retry');
+    await user.click(screen.getByRole('button', { name: /send message/i }));
+    rerender(
+      <ChatInput
+        onSendMessage={onSendMessage}
+        isDisabled={false}
+        sendError="The DM did not respond in time. Your message is still here."
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(textarea).toHaveValue('Keep this turn for Retry');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(textarea).toHaveValue('');
+  });
+
   it('does not send empty messages', async () => {
     render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
     const sendButton = screen.getByRole('button', { name: /send message/i });

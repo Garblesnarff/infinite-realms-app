@@ -39,6 +39,14 @@ export function preflightErrorStatus(error: unknown): number | string | null {
   return typeof status === 'number' || typeof status === 'string' ? status : null;
 }
 
+export function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 export type CombatTurnPreflightResult = {
   activeEncounter: ActiveEncounter | null | undefined;
   isInCombat: boolean;
@@ -155,9 +163,10 @@ export async function preflightNpcTurnsBeforePlayerDeclaration(params: {
   sessionId: string;
   activeEncounter: ActiveEncounter | null | undefined;
   characterId?: string;
-  refreshCombatState: () => Promise<ActiveEncounter | null | undefined>;
+  refreshCombatState: (signal?: AbortSignal) => Promise<ActiveEncounter | null | undefined>;
+  signal?: AbortSignal;
 }): Promise<CombatTurnPreflightResult> {
-  const { sessionId, activeEncounter, characterId, refreshCombatState } = params;
+  const { sessionId, activeEncounter, characterId, refreshCombatState, signal } = params;
   if (!sessionId || activeEncounter?.phase !== 'active') {
     return {
       activeEncounter,
@@ -173,8 +182,10 @@ export async function preflightNpcTurnsBeforePlayerDeclaration(params: {
   const expectedCurrentParticipantId = activeEncounter.currentTurnParticipantId;
   if (!expectedCurrentParticipantId) return { activeEncounter, isInCombat: true };
 
-  const npcTurns = await userDataApi.advanceNpcTurns(sessionId, expectedCurrentParticipantId);
-  const refreshedEncounter = await refreshCombatState();
+  const npcTurns = signal
+    ? await userDataApi.advanceNpcTurns(sessionId, expectedCurrentParticipantId, signal)
+    : await userDataApi.advanceNpcTurns(sessionId, expectedCurrentParticipantId);
+  const refreshedEncounter = await refreshCombatState(signal);
   if (refreshedEncounter?.phase === 'active') {
     const refreshedPlayer = playerParticipantForCharacter(refreshedEncounter, characterId);
     if (
@@ -197,7 +208,9 @@ export async function preflightNpcTurnsBeforePlayerDeclaration(params: {
   if (shouldDiscardPendingIntent) {
     const encounterId = refreshedEncounter?.id ?? activeEncounter.id;
     if (!encounterId) throw new Error('Cannot discard pending combat intent without an encounter');
-    const clearResponse = await userDataApi.clearPendingCombatIntent(encounterId);
+    const clearResponse = signal
+      ? await userDataApi.clearPendingCombatIntent(encounterId, signal)
+      : await userDataApi.clearPendingCombatIntent(encounterId);
     if (!clearResponse.ok) {
       const error = Object.assign(
         new Error(`Pending combat intent could not be discarded (${clearResponse.status})`),
@@ -233,18 +246,20 @@ export async function reconcileCombatTurnAfterAction<T extends ActiveEncounter>(
   sessionId: string;
   activeEncounter: T | null | undefined;
   characterId?: string;
-  refreshCombatState: () => Promise<T | null | undefined>;
+  refreshCombatState: (signal?: AbortSignal) => Promise<T | null | undefined>;
+  signal?: AbortSignal;
 }): Promise<{
   activeEncounter: T | null | undefined;
   isInCombat: boolean;
   uiState: CombatTurnUiState;
 }> {
-  const { sessionId, activeEncounter, characterId, refreshCombatState } = params;
+  const { sessionId, activeEncounter, characterId, refreshCombatState, signal } = params;
 
   let refreshedEncounter: T | null | undefined;
   try {
-    refreshedEncounter = await refreshCombatState();
+    refreshedEncounter = await refreshCombatState(signal);
   } catch (error) {
+    if (isAbortError(error)) throw error;
     logger.warn('COMBAT_TURN_POST_ACTION_REFRESH_FAILED', {
       sessionId,
       encounterId: activeEncounter?.id ?? null,
@@ -271,6 +286,7 @@ export async function reconcileCombatTurnAfterAction<T extends ActiveEncounter>(
       activeEncounter: refreshedEncounter,
       characterId,
       refreshCombatState,
+      signal,
     });
     return {
       activeEncounter: preflight.activeEncounter as T | null | undefined,
@@ -282,6 +298,7 @@ export async function reconcileCombatTurnAfterAction<T extends ActiveEncounter>(
       ),
     };
   } catch (error) {
+    if (isAbortError(error)) throw error;
     logger.warn('COMBAT_TURN_POST_ACTION_PREFLIGHT_FAILED', {
       sessionId,
       encounterId: refreshedEncounter.id ?? null,

@@ -156,7 +156,10 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
       boundary: null,
     });
 
-    const result = await resolve([APPRENTICE, SHARD], [dmCantripAoEAction]);
+    const waits: boolean[] = [];
+    const result = await resolve([APPRENTICE, SHARD], [dmCantripAoEAction], {
+      onPlayerWaitChange: (waiting: boolean) => waits.push(waiting),
+    });
 
     expect(presented).toEqual([
       {
@@ -167,6 +170,7 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
       },
     ]);
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
+    expect(waits).toEqual([true, false]);
     expect(executeStructuredCombatActionWithBoundary.mock.calls[0].slice(0, 2)).toEqual([
       'enc-m9',
       expect.objectContaining({

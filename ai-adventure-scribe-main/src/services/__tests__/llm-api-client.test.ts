@@ -636,7 +636,7 @@ describe('LlmApiClient', () => {
       expect(mockFetch).toHaveBeenCalled();
     });
 
-    it('aborts generate after 60 seconds and logs AbortError distinctly', async () => {
+    it('aborts generate after 90 seconds and logs AbortError distinctly', async () => {
       mockFetch.mockImplementationOnce(
         (_url: string, options: RequestInit) =>
           new Promise((_resolve, reject) => {
@@ -650,7 +650,7 @@ describe('LlmApiClient', () => {
 
       const request = llmApiClient.generateText({ prompt: 'test' });
       const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(90_000);
 
       await rejection;
       expect(logger.warn).toHaveBeenCalledWith(

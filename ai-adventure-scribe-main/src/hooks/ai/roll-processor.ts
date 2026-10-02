@@ -185,6 +185,7 @@ export async function processRollRequests(params: {
   aiContext: Record<string, unknown>;
   sessionId: string;
   characterId: string;
+  signal?: AbortSignal;
 }): Promise<ProcessedRolls> {
   const {
     responseText,
@@ -194,7 +195,14 @@ export async function processRollRequests(params: {
     aiContext,
     sessionId,
     characterId,
+    signal,
   } = params;
+
+  const throwIfAborted = (): void => {
+    if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+  };
+
+  throwIfAborted();
 
   // Step 1: Parse and augment
   let rollRequests = parseAndAugmentRollRequests(responseText, existingRequests);
@@ -218,6 +226,7 @@ export async function processRollRequests(params: {
   let npcRollContinuationText = '';
 
   if (rollRequests.length > 0) {
+    throwIfAborted();
     const { npcRolls, playerRolls } = await executeAllNPCRolls(
       rollRequests,
       encounterParticipantsFromContext(aiContext),
@@ -226,12 +235,19 @@ export async function processRollRequests(params: {
     rollRequests = playerRolls;
 
     if (npcRolls.length > 0) {
+      throwIfAborted();
       logger.info(`Auto-executed ${npcRolls.length} NPC rolls behind the screen`);
       const npcRollsMessage = formatNPCRollsSystemMessage(npcRolls);
       logger.info(`NPC Rolls Summary:\n${npcRollsMessage}`);
 
       try {
-        const continuation = await continueNarrativeWithNPCRolls(npcRolls, aiContext, sessionId);
+        const continuation = await continueNarrativeWithNPCRolls(
+          npcRolls,
+          aiContext,
+          sessionId,
+          signal,
+        );
+        throwIfAborted();
         if (continuation.success && continuation.narrative) {
           npcRollContinuationText = continuation.narrative;
           logger.info(
@@ -247,6 +263,7 @@ export async function processRollRequests(params: {
   }
 
   // Step 5: Track attack rolls in rollStateManager
+  throwIfAborted();
   rollRequests.forEach((request) => {
     if (request.type === 'attack') {
       const rollId = rollStateManager.addPendingRoll({

@@ -18,6 +18,9 @@ interface ChatInputProps {
   onSendMessage: (message: string) => void | Promise<void>;
   isDisabled: boolean;
   isReconnecting?: boolean;
+  isStillThinking?: boolean;
+  sendError?: string;
+  onRetry?: (input: string) => void | Promise<void>;
   /**
    * Why the input is disabled, when it is not because a message is sending. A roll lock used to
    * read "Sending message..." here, which a stranger took for a hung send (#2280).
@@ -36,12 +39,21 @@ interface ChatInputProps {
  * @param isDisabled - Boolean to disable input during message processing
  */
 export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
-  const { onSendMessage, isDisabled, isReconnecting = false, disabledReason } = props;
+  const {
+    onSendMessage,
+    isDisabled,
+    isReconnecting = false,
+    isStillThinking = false,
+    sendError,
+    onRetry,
+    disabledReason,
+  } = props;
   const [input, setInput] = useState(loadPendingInput);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const baseId = useId();
   const suggestionsHeaderId = `${baseId}-header`;
@@ -94,6 +106,22 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
       setInput('');
     } catch {
       // Keep the pending input available for retry after a failed request.
+    }
+  };
+
+  const handleRetry = async (): Promise<void> => {
+    if (!onRetry || isRetrying) return;
+
+    setIsRetrying(true);
+    try {
+      await onRetry(input);
+      if (isSessionEnded()) return;
+      clearPendingInput();
+      setInput('');
+    } catch {
+      // Keep the pending input available for another explicit retry.
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -320,6 +348,36 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
               </TooltipContent>
             </Tooltip>
           </div>
+
+          {isStillThinking && (
+            <div
+              className="px-3 pb-2 text-sm text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              The DM is still thinking…
+            </div>
+          )}
+
+          {sendError && (
+            <div
+              className="flex items-center justify-between gap-3 px-3 pb-2 text-sm text-destructive"
+              role="alert"
+            >
+              <span>{sendError}</span>
+              {onRetry && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetry}
+                  disabled={isRetrying}
+                >
+                  {isRetrying ? 'Retrying…' : 'Retry'}
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Helper text */}
           <div className="flex justify-between items-center mt-3 text-xs text-gray-400">

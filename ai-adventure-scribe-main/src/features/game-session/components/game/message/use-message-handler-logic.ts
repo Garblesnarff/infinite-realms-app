@@ -33,6 +33,9 @@ import {
 } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
+import { settlePendingCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
+import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
@@ -54,8 +57,36 @@ interface UseMessageHandlerLogicProps {
  */
 const headerMode = String(import.meta.env.VITE_SCENE_SUMMARY_HEADER ?? 'short').toLowerCase();
 const DEFERRED_TASK_TIMEOUT_MS = 20_000;
+export const DM_STILL_THINKING_TIMEOUT_MS = 30_000;
+export const DM_TURN_TIMEOUT_MS = 90_000;
+export const DM_TIMEOUT_MESSAGE = 'The DM did not respond in time. Your message is still here.';
+export const DM_NETWORK_ERROR_MESSAGE = 'The connection was lost. Your message is still here.';
 
-function runDeferredTask(label: string, task: () => Promise<unknown>): void {
+type TurnAbortSignal = AbortSignal & {
+  onPlayerWaitChange?: (waiting: boolean) => void;
+};
+
+function rejectWhenAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException('The request was aborted.', 'AbortError'));
+  }
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      signal.addEventListener(
+        'abort',
+        () => reject(new DOMException('The request was aborted.', 'AbortError')),
+        { once: true },
+      );
+    }),
+  ]);
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+}
+
+function runDeferredTask(label: string, task: () => Promise<unknown>, signal?: AbortSignal): void {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(
@@ -64,7 +95,13 @@ function runDeferredTask(label: string, task: () => Promise<unknown>): void {
     );
   });
 
-  void Promise.race([Promise.resolve().then(task), timeout])
+  void Promise.race([
+    Promise.resolve().then(() => {
+      if (signal?.aborted) return;
+      return task();
+    }),
+    timeout,
+  ])
     .catch((error) => logger.error(`[MessageHandler] Deferred ${label} failed:`, error))
     .finally(() => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -121,6 +158,9 @@ export const useMessageHandlerLogic = ({
   handleSendMessage: (playerInput: string, context?: MessageSendContext) => Promise<void>;
   isProcessing: boolean;
   isReconnecting: boolean;
+  isStillThinking: boolean;
+  sendError: string | null;
+  retrySendMessage: () => Promise<void>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
   /** #2456: handled terminal death state; when set, the UI renders the death screen. */
@@ -156,6 +196,10 @@ export const useMessageHandlerLogic = ({
   const [composerBlocked, setComposerBlockedState] = React.useState(false);
   const composerBlockedRef = React.useRef(false);
   const [isReconnecting, setIsReconnecting] = React.useState(false);
+  const [isStillThinking, setIsStillThinking] = React.useState(false);
+  const [sendError, setSendError] = React.useState<string | null>(null);
+  const retryInputRef = React.useRef<string | null>(null);
+  const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
 
   React.useEffect(() => subscribeToNetworkRetry(setIsReconnecting), []);
 
@@ -223,6 +267,61 @@ export const useMessageHandlerLogic = ({
     playerInput: string,
     providedContext?: MessageSendContext,
   ): Promise<void> => {
+    const abortController = new AbortController();
+    const turnSignal = abortController.signal as TurnAbortSignal;
+    let timedOut = false;
+    let playerMessagePersisted = providedContext?.intent === 'resume_unanswered';
+    let stillThinkingRemaining = DM_STILL_THINKING_TIMEOUT_MS;
+    let turnTimeoutRemaining = DM_TURN_TIMEOUT_MS;
+    let activeSegmentStartedAt = performance.now();
+    let pausedForPlayerInput = false;
+    let stillThinkingTimer: ReturnType<typeof setTimeout> | undefined;
+    let turnTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
+    const settlePendingPlayerInput = (): void => {
+      settlePendingCombatEntryConfirmation(false);
+      settlePendingSpellTargetSave('cancel');
+      settlePendingPlayerRoll({ d20: null });
+    };
+    const clearTurnTimers = (): void => {
+      if (stillThinkingTimer) clearTimeout(stillThinkingTimer);
+      if (turnTimeoutTimer) clearTimeout(turnTimeoutTimer);
+      stillThinkingTimer = undefined;
+      turnTimeoutTimer = undefined;
+    };
+    const scheduleTurnTimers = (): void => {
+      clearTurnTimers();
+      activeSegmentStartedAt = performance.now();
+      stillThinkingTimer = setTimeout(() => setIsStillThinking(true), stillThinkingRemaining);
+      turnTimeoutTimer = setTimeout(() => {
+        timedOut = true;
+        // Abort the whole turn and close whichever player-facing combat prompt owns the wait.
+        // The signal rejects the pipeline; settling the bridge prevents a stale card/popup from
+        // surviving into the explicit retry.
+        settlePendingPlayerInput();
+        abortController.abort();
+      }, turnTimeoutRemaining);
+    };
+    const pauseTurnTimers = (): void => {
+      if (pausedForPlayerInput) return;
+      const elapsed = performance.now() - activeSegmentStartedAt;
+      stillThinkingRemaining = Math.max(0, stillThinkingRemaining - elapsed);
+      turnTimeoutRemaining = Math.max(0, turnTimeoutRemaining - elapsed);
+      pausedForPlayerInput = true;
+      clearTurnTimers();
+    };
+    const resumeTurnTimers = (): void => {
+      if (!pausedForPlayerInput || timedOut) return;
+      pausedForPlayerInput = false;
+      scheduleTurnTimers();
+    };
+    turnSignal.onPlayerWaitChange = (waiting) => {
+      if (waiting) pauseTurnTimers();
+      else resumeTurnTimers();
+    };
+    scheduleTurnTimers();
+
+    setSendError(null);
+    setIsStillThinking(false);
     const turnPhase = createTurnPhaseReporter();
     turnPhaseRef.current = turnPhase;
     setComposerBlocked(true);
@@ -236,11 +335,14 @@ export const useMessageHandlerLogic = ({
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
 
       // Validate session before proceeding (if still needed)
-      const isValid = await validateSession();
+      const isValid = await rejectWhenAborted(validateSession(), turnSignal);
       if (!isValid) return;
 
       // Check if this is a manual safety command
-      const manualSafetyResult = await handleSafetyCommand(playerInput);
+      const manualSafetyResult = await rejectWhenAborted(
+        handleSafetyCommand(playerInput),
+        turnSignal,
+      );
       if (manualSafetyResult.isSafetyCommand) {
         return;
       }
@@ -248,21 +350,29 @@ export const useMessageHandlerLogic = ({
       // Check if this is a dice roll command
       let diceRollPending = false;
       let combatPreflightPending = false;
-      const diceCommandResult = await handleDiceCommand(playerInput, async (earlyResponse) => {
-        diceRollPending = Boolean(earlyResponse.rollRequests?.length);
-        combatPreflightPending = Boolean(
-          diceRollPending ||
-          earlyResponse.combatDetection?.shouldStartCombat ||
-          earlyResponse.context?.combat_transition === 'start',
-        );
-        turnPhase('text shown');
-        runDeferredTask('dice DM message persistence', async () => {
-          await sendMessage(earlyResponse);
-          turnPhase('persist');
-        });
-        setComposerBlocked(combatPreflightPending);
-        if (!combatPreflightPending) setComposerBlocked(false);
-      });
+      const diceCommandResult = await rejectWhenAborted(
+        handleDiceCommand(playerInput, async (earlyResponse) => {
+          if (abortController.signal.aborted) return;
+          diceRollPending = Boolean(earlyResponse.rollRequests?.length);
+          combatPreflightPending = Boolean(
+            diceRollPending ||
+            earlyResponse.combatDetection?.shouldStartCombat ||
+            earlyResponse.context?.combat_transition === 'start',
+          );
+          turnPhase('text shown');
+          runDeferredTask(
+            'dice DM message persistence',
+            async () => {
+              await sendMessage(earlyResponse);
+              turnPhase('persist');
+            },
+            turnSignal,
+          );
+          setComposerBlocked(combatPreflightPending);
+          if (!combatPreflightPending) setComposerBlocked(false);
+        }),
+        turnSignal,
+      );
       if (diceCommandResult.isDiceCommand) {
         if (!combatPreflightPending) setComposerBlocked(false);
         return;
@@ -275,7 +385,10 @@ export const useMessageHandlerLogic = ({
       const isFirstMessage = currentMessages.length === 0;
       // #2341: a resumed turn answers a message that is already saved and already counted.
       const resumingSavedMessage = providedContext?.intent === 'resume_unanswered';
-      const savedMessage = currentMessages[currentMessages.length - 1];
+      const savedMessageIndex = resumingSavedMessage
+        ? currentMessages.findLastIndex((message) => message.sender === 'player')
+        : -1;
+      const savedMessage = savedMessageIndex >= 0 ? currentMessages[savedMessageIndex] : undefined;
 
       // Add player message
       // CRITICAL FIX: Use provided context if available (for dice roll results)
@@ -283,7 +396,9 @@ export const useMessageHandlerLogic = ({
       // enabling the roll suppression logic in use-ai-response.ts
       const playerMessage: ChatMessage =
         resumingSavedMessage && savedMessage
-          ? savedMessage
+          ? providedContext?.retryInput !== undefined
+            ? { ...savedMessage, text: providedContext.retryInput }
+            : savedMessage
           : {
               text: playerInput,
               sender: 'player',
@@ -295,13 +410,17 @@ export const useMessageHandlerLogic = ({
               },
             };
       if (!resumingSavedMessage) {
-        await sendMessage(playerMessage); // This adds to UI and saves to dialogue_history
+        await rejectWhenAborted(sendMessage(playerMessage), turnSignal); // This adds to UI and saves to dialogue_history
+        playerMessagePersisted = true;
 
         // Update turn count immediately after player message is sent using functional form
-        await updateGameSessionState((prev: ExtendedGameSession) => ({
-          ...prev,
-          turn_count: (prev.turn_count || 0) + 1,
-        }));
+        await rejectWhenAborted(
+          updateGameSessionState((prev: ExtendedGameSession) => ({
+            ...prev,
+            turn_count: (prev.turn_count || 0) + 1,
+          })),
+          turnSignal,
+        );
         turnCountAdvanced = true;
 
         // Update the ref to reflect the new turn count
@@ -318,115 +437,134 @@ export const useMessageHandlerLogic = ({
       // so the turn is one row whichever side writes it and a dead tab cannot lose the reply.
       const dmMessageId = crypto.randomUUID();
       const showEngineNotice = (notice: LocalNotice): void => {
-        runDeferredTask('local notice persistence', () =>
-          sendMessage({
-            text: notice.text,
-            sender: 'system',
-            timestamp: new Date().toISOString(),
-            persist: notice.persist,
-            context: {
-              intent: 'combat_pending_intent',
-              ...(notice.cards ? { engineCards: notice.cards } : {}),
-            },
-          }),
+        runDeferredTask(
+          'local notice persistence',
+          () =>
+            sendMessage({
+              text: notice.text,
+              sender: 'system',
+              timestamp: new Date().toISOString(),
+              persist: notice.persist,
+              context: {
+                intent: 'combat_pending_intent',
+                ...(notice.cards ? { engineCards: notice.cards } : {}),
+              },
+            }),
+          abortController.signal,
         );
       };
       // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
       // Use ref to get current messages to avoid stale closure
-      const aiResponseMessage = await getAIResponse(
-        [
-          ...(resumingSavedMessage ? messagesRef.current.slice(0, -1) : messagesRef.current),
-          playerMessage,
-        ],
-        sessionId,
-        undefined,
-        turnPhase,
-        async (earlyResponse, textReadyOptions) => {
-          const hasEarlyRollRequests = Boolean(earlyResponse.rollRequests?.length);
-          const combatGatePending = Boolean(
-            hasEarlyRollRequests ||
-            earlyResponse.combatDetection?.shouldStartCombat ||
-            earlyResponse.context?.combat_transition === 'start',
-          );
+      const aiResponseMessage = await rejectWhenAborted(
+        getAIResponse(
+          [
+            ...(resumingSavedMessage && savedMessageIndex >= 0
+              ? messagesRef.current.filter((_message, index) => index !== savedMessageIndex)
+              : messagesRef.current),
+            playerMessage,
+          ],
+          sessionId,
+          undefined,
+          turnPhase,
+          async (earlyResponse, textReadyOptions) => {
+            if (abortController.signal.aborted) return;
+            const hasEarlyRollRequests = Boolean(earlyResponse.rollRequests?.length);
+            const combatGatePending = Boolean(
+              hasEarlyRollRequests ||
+              earlyResponse.combatDetection?.shouldStartCombat ||
+              earlyResponse.context?.combat_transition === 'start',
+            );
 
-          // `use-ai-response` always supplies this. The fallback keeps a structured roll
-          // request suppressed even for a caller that does not pass render guidance.
-          const suppressRender = textReadyOptions?.suppressRender ?? hasEarlyRollRequests;
+            // `use-ai-response` always supplies this. The fallback keeps a structured roll
+            // request suppressed even for a caller that does not pass render guidance.
+            const suppressRender = textReadyOptions?.suppressRender ?? hasEarlyRollRequests;
 
-          if (suppressRender) {
-            // The engine may resolve this turn before the final narration exists — a roll
-            // request, combat entry, or any in-combat turn (`requestPlayerAttackRoll` runs
-            // inside `handleDmActionsAndTransitions`, after this callback). Declaration-turn
-            // prose can describe a hit or miss the dice have not decided yet, so nothing is
-            // rendered here; the composer stays blocked until resolution.
-            // A narrative roll turn outside combat may show its prompt immediately — the
-            // structured request is the authoritative UI boundary there. A combat-start or
-            // in-combat turn may not: those `roll_requests` are the DM's engine declaration
-            // channel, `dm-actions-handler` strips `attack`/`initiative` once the encounter is
-            // seated, and prompting with the raw list steals the single visible dice slot from
-            // the engine's own initiative prompt (#2190). Those turns wait for the final,
-            // filtered list. The type filter is defence in depth: no engine-channel request is
-            // ever forwarded from here, whatever the flag says.
-            const earlyPromptRollRequests = textReadyOptions?.earlyRollPromptAllowed
-              ? (earlyResponse.rollRequests ?? []).filter(isNarrativeRollRequest)
-              : [];
-            if (earlyPromptRollRequests.length > 0) {
-              rollTurnStarted = true;
+            if (suppressRender) {
+              // The engine may resolve this turn before the final narration exists — a roll
+              // request, combat entry, or any in-combat turn (`requestPlayerAttackRoll` runs
+              // inside `handleDmActionsAndTransitions`, after this callback). Declaration-turn
+              // prose can describe a hit or miss the dice have not decided yet, so nothing is
+              // rendered here; the composer stays blocked until resolution.
+              // A narrative roll turn outside combat may show its prompt immediately — the
+              // structured request is the authoritative UI boundary there. A combat-start or
+              // in-combat turn may not: those `roll_requests` are the DM's engine declaration
+              // channel, `dm-actions-handler` strips `attack`/`initiative` once the encounter is
+              // seated, and prompting with the raw list steals the single visible dice slot from
+              // the engine's own initiative prompt (#2190). Those turns wait for the final,
+              // filtered list. The type filter is defence in depth: no engine-channel request is
+              // ever forwarded from here, whatever the flag says.
+              const earlyPromptRollRequests = textReadyOptions?.earlyRollPromptAllowed
+                ? (earlyResponse.rollRequests ?? []).filter(isNarrativeRollRequest)
+                : [];
+              if (earlyPromptRollRequests.length > 0) {
+                rollTurnStarted = true;
+                turnPhase('text shown');
+                textPhaseEmitted = true;
+                processAiResponse(earlyPromptRollRequests);
+              } else if (hasEarlyRollRequests) {
+                logger.info('[RollPrompt] early roll prompt withheld for an engine-resolved turn', {
+                  requestTypes: (earlyResponse.rollRequests ?? []).map((request) => request.type),
+                  inCombatTurn: !textReadyOptions?.earlyRollPromptAllowed,
+                });
+              }
+              return;
+            }
+
+            const earlyText = sanitizeDMText(earlyResponse.text);
+
+            earlyMessage = {
+              ...earlyResponse,
+              id: dmMessageId,
+              text: earlyText,
+            };
+            textShown = Boolean(earlyText || earlyResponse.narrationSegments?.length);
+            if (textShown) {
+              // Render-only: the row enters the message cache but is NOT persisted here. The
+              // final authoritative text is saved once below, so dialogue_history never keeps an
+              // early draft that the UI has already replaced (#2139).
               turnPhase('text shown');
               textPhaseEmitted = true;
-              processAiResponse(earlyPromptRollRequests);
-            } else if (hasEarlyRollRequests) {
-              logger.info('[RollPrompt] early roll prompt withheld for an engine-resolved turn', {
-                requestTypes: (earlyResponse.rollRequests ?? []).map((request) => request.type),
-                inCombatTurn: !textReadyOptions?.earlyRollPromptAllowed,
-              });
+              setComposerBlocked(combatGatePending);
+              updateMessage(earlyMessage);
+
+              if (providedContext?.intent !== 'dice_roll') {
+                runDeferredTask(
+                  'player memory extraction',
+                  () => extractMemories(playerInput),
+                  abortController.signal,
+                );
+              }
+
+              const narrativeOnly = parseMessageOptions(earlyText).content;
+              if (narrativeOnly) {
+                runDeferredTask(
+                  'AI response memory extraction',
+                  () => extractMemories(narrativeOnly),
+                  abortController.signal,
+                );
+              }
+
+              if (earlyText) {
+                const blurb = headerMode === 'off' ? '' : toHeaderExcerpt(earlyText);
+                runDeferredTask(
+                  'scene-state persistence',
+                  () =>
+                    updateGameSessionState((prev: ExtendedGameSession) => ({
+                      ...prev,
+                      // An engine-only reply leaves no scene text: keep the previous description.
+                      current_scene_description:
+                        blurb || headerMode === 'off' ? blurb : prev.current_scene_description,
+                    })),
+                  abortController.signal,
+                );
+              }
             }
-            return;
-          }
-
-          const earlyText = sanitizeDMText(earlyResponse.text);
-
-          earlyMessage = {
-            ...earlyResponse,
-            id: dmMessageId,
-            text: earlyText,
-          };
-          textShown = Boolean(earlyText || earlyResponse.narrationSegments?.length);
-          if (textShown) {
-            // Render-only: the row enters the message cache but is NOT persisted here. The
-            // final authoritative text is saved once below, so dialogue_history never keeps an
-            // early draft that the UI has already replaced (#2139).
-            turnPhase('text shown');
-            textPhaseEmitted = true;
-            setComposerBlocked(combatGatePending);
-            updateMessage(earlyMessage);
-
-            if (providedContext?.intent !== 'dice_roll') {
-              runDeferredTask('player memory extraction', () => extractMemories(playerInput));
-            }
-
-            const narrativeOnly = parseMessageOptions(earlyText).content;
-            if (narrativeOnly) {
-              runDeferredTask('AI response memory extraction', () =>
-                extractMemories(narrativeOnly),
-              );
-            }
-
-            if (earlyText) {
-              const blurb = headerMode === 'off' ? '' : toHeaderExcerpt(earlyText);
-              runDeferredTask('scene-state persistence', () =>
-                updateGameSessionState((prev: ExtendedGameSession) => ({
-                  ...prev,
-                  // An engine-only reply leaves no scene text: keep the previous description.
-                  current_scene_description:
-                    blurb || headerMode === 'off' ? blurb : prev.current_scene_description,
-                })),
-              );
-            }
-          }
-        },
-        dmMessageId,
-        showEngineNotice,
+          },
+          dmMessageId,
+          showEngineNotice,
+          abortController.signal,
+        ),
+        turnSignal,
       );
       // #2456: the party was defeated. The hook has already surfaced the death
       // screen state and settled the combat preflight. Skip ordinary DM-reply
@@ -444,10 +582,11 @@ export const useMessageHandlerLogic = ({
       };
 
       // Check for auto-triggered safety commands in AI response
-      const autoSafetyResult = await handleSafetyCommand(
-        playerInput,
-        sanitizedAiResponseMessage.text,
+      const autoSafetyResult = await rejectWhenAborted(
+        handleSafetyCommand(playerInput, sanitizedAiResponseMessage.text),
+        turnSignal,
       );
+      throwIfAborted(abortController.signal);
       if (autoSafetyResult.isSafetyCommand) {
         return;
       }
@@ -511,8 +650,10 @@ export const useMessageHandlerLogic = ({
 
         // The single persistence point for DM narration on this turn. The early render is
         // cache-only, so dialogue_history receives the authoritative text exactly once.
-        runDeferredTask('DM continuation persistence', () =>
-          persistDmReply(finalMessage, () => turnPhase('persist')),
+        runDeferredTask(
+          'DM continuation persistence',
+          () => persistDmReply(finalMessage, () => turnPhase('persist')),
+          abortController.signal,
         );
       }
 
@@ -535,11 +676,14 @@ export const useMessageHandlerLogic = ({
         // (`withheldDmRollReplies`), so neither a live tab nor a reload shows an outcome the player
         // has not rolled. The old separate textless row under this id failed the route's
         // `minLength: 1` on every narrative roll (422) and poisoned the save queue.
-        runDeferredTask('DM roll reply persistence', () =>
-          persistDmReply(
-            rollReplyMessage(sanitizedAiResponseMessage, dmMessageId, narrativeRollRequests),
-            () => turnPhase('persist'),
-          ),
+        runDeferredTask(
+          'DM roll reply persistence',
+          () =>
+            persistDmReply(
+              rollReplyMessage(sanitizedAiResponseMessage, dmMessageId, narrativeRollRequests),
+              () => turnPhase('persist'),
+            ),
+          abortController.signal,
         );
       }
 
@@ -550,10 +694,13 @@ export const useMessageHandlerLogic = ({
         if (onAIResponse) {
           try {
             logger.info('[Combat Flow] Processing AI response for combat detection');
-            await onAIResponse({
-              ...sanitizedAiResponseMessage,
-              text: stripEngineGeneratedLines(sanitizedAiResponseMessage.text),
-            });
+            await rejectWhenAborted(
+              onAIResponse({
+                ...sanitizedAiResponseMessage,
+                text: stripEngineGeneratedLines(sanitizedAiResponseMessage.text),
+              }),
+              turnSignal,
+            );
           } catch (combatError) {
             handleAsyncError(combatError, {
               userMessage: 'Failed to process combat response',
@@ -563,6 +710,7 @@ export const useMessageHandlerLogic = ({
             });
             // Don't throw here - combat processing should not break the message flow
           }
+          throwIfAborted(abortController.signal);
         }
 
         // Check if we have narration segments for voice synthesis
@@ -585,22 +733,31 @@ export const useMessageHandlerLogic = ({
           // extraction. Keep the fallback for callers/tests that do not provide onTextReady.
           if (!textShown) {
             if (providedContext?.intent !== 'dice_roll') {
-              runDeferredTask('player memory extraction', () => extractMemories(playerInput));
+              runDeferredTask(
+                'player memory extraction',
+                () => extractMemories(playerInput),
+                abortController.signal,
+              );
             }
             const blurb =
               headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
-            runDeferredTask('scene-state persistence', () =>
-              updateGameSessionState((prev: ExtendedGameSession) => ({
-                ...prev,
-                // An engine-only reply leaves no scene text: keep the previous description.
-                current_scene_description:
-                  blurb || headerMode === 'off' ? blurb : prev.current_scene_description,
-              })),
+            runDeferredTask(
+              'scene-state persistence',
+              () =>
+                updateGameSessionState((prev: ExtendedGameSession) => ({
+                  ...prev,
+                  // An engine-only reply leaves no scene text: keep the previous description.
+                  current_scene_description:
+                    blurb || headerMode === 'off' ? blurb : prev.current_scene_description,
+                })),
+              abortController.signal,
             );
             const narrativeOnly = parseMessageOptions(sanitizedAiResponseMessage.text).content;
             if (narrativeOnly) {
-              runDeferredTask('AI response memory extraction', () =>
-                extractMemories(narrativeOnly),
+              runDeferredTask(
+                'AI response memory extraction',
+                () => extractMemories(narrativeOnly),
+                abortController.signal,
               );
             }
           }
@@ -614,6 +771,7 @@ export const useMessageHandlerLogic = ({
           (error as { status?: unknown }).status === 401);
       const networkError = isNetworkError(error);
       const quotaExceeded = error instanceof QuotaExceededError;
+      if (networkError) abortController.abort();
       handleAsyncError(error, {
         userMessage: sessionExpired ? SESSION_EXPIRED_MESSAGE : 'Failed to process your message',
         showToast: false,
@@ -634,7 +792,7 @@ export const useMessageHandlerLogic = ({
           : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
 
       // Add a system error message to the conversation
-      if (!sessionExpired && !networkError) {
+      if (!sessionExpired && !networkError && !timedOut) {
         try {
           const systemErrorMessage: ChatMessage = {
             text: recoveryMessage,
@@ -674,6 +832,15 @@ export const useMessageHandlerLogic = ({
         }
       }
 
+      if (timedOut || networkError) {
+        setComposerBlocked(false);
+        retryInputRef.current = playerInput;
+        retryContextRef.current = playerMessagePersisted
+          ? { intent: 'resume_unanswered', retryInput: playerInput }
+          : providedContext;
+        setSendError(timedOut ? DM_TIMEOUT_MESSAGE : DM_NETWORK_ERROR_MESSAGE);
+      }
+
       toast({
         title: sessionExpired
           ? 'Session expired'
@@ -693,12 +860,32 @@ export const useMessageHandlerLogic = ({
       // Let ChatInput retain the pending text for retry, while the send queue's
       // finally block clears its sending state and unlocks the composer.
       throw error;
+    } finally {
+      clearTurnTimers();
+      delete turnSignal.onPlayerWaitChange;
+      setIsStillThinking(false);
     }
   };
 
   // Keep the ref current so processSendQueue always dispatches to the latest closure.
   // Synchronous assignment (not useEffect) ensures it's updated before any render-triggered call.
   actualSendMessageRef.current = actualSendMessage;
+
+  const retrySendMessage = React.useCallback(
+    async (editedInput: string): Promise<void> => {
+      const retryInput = editedInput.trim() || retryInputRef.current;
+      if (!retryInput) return;
+      retryInputRef.current = retryInput;
+      const retryContext =
+        retryContextRef.current?.intent === 'resume_unanswered'
+          ? { ...retryContextRef.current, retryInput }
+          : retryContextRef.current;
+      retryContextRef.current = retryContext;
+      setSendError(null);
+      await handleSendMessage(retryInput, retryContext);
+    },
+    [handleSendMessage],
+  );
 
   useHeldEntryRecovery({
     sessionId,
@@ -718,6 +905,9 @@ export const useMessageHandlerLogic = ({
     handleSendMessage,
     isProcessing,
     isReconnecting: isProcessing && isReconnecting,
+    isStillThinking,
+    sendError,
+    retrySendMessage,
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,
