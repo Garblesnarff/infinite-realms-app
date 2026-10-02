@@ -324,15 +324,20 @@ export const RightSheet: React.FC<{
     <CoreStats c={c} />
     <AbilityScores c={c} />
 
-    <SpellsSection
-      c={c}
-      isInCombat={isInCombat}
-      pendingSpellId={pendingSpellId}
-      castingSpellId={castingSpellId}
-      spellActionError={spellActionError}
-      onCastSpell={onCastSpell}
-      onTogglePrepared={onTogglePrepared}
-    />
+    {(c.spellcasting ||
+      c.spells.cantrips.length > 0 ||
+      c.spells.known.length > 0 ||
+      c.spells.prepared.length > 0) && (
+      <SpellsSection
+        c={c}
+        isInCombat={isInCombat}
+        pendingSpellId={pendingSpellId}
+        castingSpellId={castingSpellId}
+        spellActionError={spellActionError}
+        onCastSpell={onCastSpell}
+        onTogglePrepared={onTogglePrepared}
+      />
+    )}
 
     <TwoCol>
       <IRPanel>

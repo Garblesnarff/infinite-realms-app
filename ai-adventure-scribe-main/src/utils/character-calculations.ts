@@ -8,10 +8,12 @@ import {
   type SkillModifiers,
   type SavingThrowModifiers,
 } from './character-proficiency-calculations';
+import { findSrdClass } from '../../shared/srd-class-data';
 
 import type { Character, CharacterClass } from '@/types/character';
 
 import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
+import { getSpellSlotsByLevel } from '@/data/spellcastingFeatures';
 import {
   SKILLS_MAP,
   calculateProficiencyBonus,
@@ -115,7 +117,7 @@ export const calculateSpellSaveDC = (
   const ability =
     spellcastingAbility !== undefined
       ? spellcastingAbility
-      : getSpellcastingAbility(character.class);
+      : getSpellcastingAbility(character.class, character.level || 1);
   if (!ability) {
     return undefined;
   }
@@ -138,7 +140,7 @@ export const calculateSpellAttackBonus = (
   const ability =
     spellcastingAbility !== undefined
       ? spellcastingAbility
-      : getSpellcastingAbility(character.class);
+      : getSpellcastingAbility(character.class, character.level || 1);
   if (!ability) {
     return undefined;
   }
@@ -150,39 +152,51 @@ export const calculateSpellAttackBonus = (
 };
 
 /**
- * Get spellcasting ability for a class
+ * Get spellcasting ability for a class. With `level`, a class that has not reached its first
+ * spellcasting level yet (2014 Ranger and Paladin cast from level 2) has none.
  */
 export const getSpellcastingAbility = (
   characterClass: CharacterClass | null,
+  level?: number,
 ): keyof Character['abilityScores'] | null => {
   if (!characterClass) {
+    return null;
+  }
+
+  const firstSpellcastingLevel =
+    findSrdClass(characterClass.name)?.spellcasting?.firstSpellcastingLevel ?? 1;
+  if (level !== undefined && level < firstSpellcastingLevel) {
     return null;
   }
 
   return SPELLCASTING_ABILITY_MAP[characterClass.name] || null;
 };
 
+const HALF_CASTER_CLASS_NAMES = new Set(['Paladin', 'Ranger']);
+
 /**
- * Calculate spell slots for a character (simplified, full casters only)
+ * Calculate spell slots for a character (full-caster table, except the half-casters)
  */
 export const calculateSpellSlots = (
   character: Character,
 ): { [level: number]: number } | undefined => {
-  const spellcastingAbility = getSpellcastingAbility(character.class);
+  const level = character.level || 1;
+  const spellcastingAbility = getSpellcastingAbility(character.class, level);
   if (!spellcastingAbility) {
     return undefined;
   }
 
-  const level = character.level || 1;
-
-  const slots = FULL_CASTER_SLOTS_MAP[level];
+  const className = character.class?.name ?? '';
+  const slots = HALF_CASTER_CLASS_NAMES.has(className)
+    ? getSpellSlotsByLevel(className, level)
+    : FULL_CASTER_SLOTS_MAP[level];
   if (!slots) {
     return undefined;
   }
 
   const spellSlots: { [level: number]: number } = {};
   slots.forEach((count: number, index: number) => {
-    spellSlots[index + 1] = count;
+    if (count > 0) spellSlots[index + 1] = count;
   });
 
   return spellSlots;
@@ -270,7 +284,7 @@ export const calculateEncumbrance = (
 export const calculateAllCharacterStats = (character: Character): CharacterStats => {
   const level = character.level || 1;
   const pb = calculateProficiencyBonus(level);
-  const spellcastingAbility = getSpellcastingAbility(character.class);
+  const spellcastingAbility = getSpellcastingAbility(character.class, level);
 
   // Combined traits from race and subrace
   const allTraits = [...(character.race?.traits || []), ...(character.subrace?.traits || [])];

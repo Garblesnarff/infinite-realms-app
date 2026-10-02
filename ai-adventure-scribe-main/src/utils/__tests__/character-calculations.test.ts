@@ -276,6 +276,40 @@ describe('character-calculations', () => {
       const slots = calculateSpellSlots({ ...wizard, level: 5 } as Character);
       expect(slots).toEqual({ 1: 4, 2: 3, 3: 2 });
     });
+
+    describe('half-casters (2014: Ranger and Paladin cast from level 2, #2483)', () => {
+      const halfCaster = (name: string, level: number): Character =>
+        ({
+          level,
+          class: { name } as any,
+          abilityScores: {
+            wisdom: { score: 14, modifier: 2, savingThrow: false },
+            charisma: { score: 14, modifier: 2, savingThrow: false },
+          } as any,
+        }) as Character;
+
+      it.each(['Ranger', 'Paladin'])('%s has no spellcasting at level 1', (name) => {
+        const character = halfCaster(name, 1);
+
+        expect(getSpellcastingAbility(character.class, 1)).toBeNull();
+        expect(calculateSpellSaveDC(character)).toBeUndefined();
+        expect(calculateSpellAttackBonus(character)).toBeUndefined();
+        expect(calculateSpellSlots(character)).toBeUndefined();
+      });
+
+      it('gives a level 2 Ranger two first-level slots, not the full-caster three', () => {
+        const ranger = halfCaster('Ranger', 2);
+
+        expect(getSpellcastingAbility(ranger.class, 2)).toBe('wisdom');
+        expect(calculateSpellSaveDC(ranger)).toBe(12);
+        expect(calculateSpellAttackBonus(ranger)).toBe(4);
+        expect(calculateSpellSlots(ranger)).toEqual({ 1: 2 });
+      });
+
+      it('uses the half-caster table past level 2', () => {
+        expect(calculateSpellSlots(halfCaster('Paladin', 5))).toEqual({ 1: 4, 2: 2 });
+      });
+    });
   });
 
   describe('calculateSkillModifiers', () => {

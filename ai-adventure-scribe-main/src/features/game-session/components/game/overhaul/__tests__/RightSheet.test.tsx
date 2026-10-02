@@ -183,6 +183,14 @@ describe('RightSheet attacks list', () => {
     }
   });
 
+  it('shows no Spells panel for a character with no spellcasting and no spells (#2483)', () => {
+    render(<RightSheet c={sheet} />);
+
+    expect(screen.queryByText('Spells')).not.toBeInTheDocument();
+    expect(screen.queryByText('Spell Slots')).not.toBeInTheDocument();
+    expect(screen.queryByText('No spellcasting data recorded.')).not.toBeInTheDocument();
+  });
+
   it('does not offer a cast action during combat or a preparation toggle to non-casters', () => {
     render(<RightSheet c={casterSheet} isInCombat />);
     expect(screen.queryByRole('button', { name: 'Cast Magic Missile' })).not.toBeInTheDocument();
