@@ -1,0 +1,6 @@
+-- 0016_ai_usage_image_output_tokens -- NO-OP MIGRATION. Deliberately contains no DDL.
+--
+-- The authoritative DDL is db/migrations/20260930_ai_usage_image_output_tokens.sql (MANUAL APPLY
+-- AFTER MERGE). ai_usage itself is created by a dated migration that sorts after the numbered
+-- ones, so DDL here would run before the table exists in the migration replay. This file and its
+-- snapshot only advance the Drizzle snapshot chain so schema drift stays visible (#2182).

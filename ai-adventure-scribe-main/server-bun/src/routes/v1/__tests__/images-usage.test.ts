@@ -23,6 +23,7 @@ const recorded: Array<{
   model?: string;
   inputTokens: number;
   outputTokens: number;
+  imageOutputTokens?: number;
   userId: string;
   plan: string;
   sessionId?: string;
@@ -122,6 +123,31 @@ describe('POST /v1/images/generate usage', () => {
       }),
     ]);
     expect(recorded[0]?.sessionId).toBeUndefined();
+    expect(recorded[0]?.imageOutputTokens).toBeUndefined();
+  });
+
+  it('passes the provider image-token count to usage recording (#2182)', async () => {
+    providerBody = {
+      choices: [
+        {
+          message: {
+            images: [{ image_url: { url: 'data:image/png;base64,aGVsbG8=' } }],
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 11,
+        completion_tokens: 1290,
+        completion_tokens_details: { image_tokens: 1290 },
+      },
+    };
+
+    const response = await app.handle(generateRequest());
+
+    expect(response.status).toBe(200);
+    expect(recorded[0]).toEqual(
+      expect.objectContaining({ outputTokens: 1290, imageOutputTokens: 1290 }),
+    );
   });
 
   it('writes session_id when the request includes a session', async () => {

@@ -1,5 +1,5 @@
 /**
- * Model-health must keep image_output as the output rate (#2160).
+ * Model-health keeps `completion` and `image_output` as separate rates (#2160, #2182).
  * The text-modality listing includes image models, and `completion` on those
  * models is the cheap text rate, not the image rate.
  */
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('OpenRouter image output pricing', () => {
-  it('stores image_output, not text completion, as the output rate', async () => {
+  it('stores completion as the output rate and image_output as the image-output rate', async () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     delete process.env.GOOGLE_GEMINI_API_KEY;
     delete process.env.GOOGLE_API_KEY;
@@ -40,6 +40,7 @@ describe('OpenRouter image output pricing', () => {
     await validateConfiguredModels();
 
     expect(getModelPricing(configured[0])?.input).toBeCloseTo(0.5);
-    expect(getModelPricing(configured[0])?.output).toBeCloseTo(60);
+    expect(getModelPricing(configured[0])?.output).toBeCloseTo(3);
+    expect(getModelPricing(configured[0])?.imageOutput).toBeCloseTo(60);
   });
 });

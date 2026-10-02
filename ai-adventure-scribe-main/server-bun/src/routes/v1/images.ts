@@ -214,6 +214,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       let image: string;
       let inputTokens = 0;
       let outputTokens = 0;
+      let imageOutputTokens: number | undefined;
       try {
         const breaker = getCircuitBreaker('images:openrouter');
         try {
@@ -280,13 +281,18 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         // OpenRouter image-capable chat completion response (robust extraction)
         type ORImageResp = {
           choices?: { message?: any }[];
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            completion_tokens_details?: { image_tokens?: number };
+          };
           [k: string]: any;
         };
         const data = (await response.json()) as ORImageResp;
 
         inputTokens = data.usage?.prompt_tokens ?? 0;
         outputTokens = data.usage?.completion_tokens ?? 0;
+        imageOutputTokens = data.usage?.completion_tokens_details?.image_tokens;
 
         const choice = data.choices?.[0];
         const imageRef = extractFromMessage(choice?.message) || extractFromMessage(data);
@@ -350,6 +356,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           model: imageModel,
           inputTokens,
           outputTokens,
+          imageOutputTokens,
           sessionId,
         });
       } catch (error) {

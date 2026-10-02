@@ -1,5 +1,9 @@
 import { getConfiguredGeminiModels, getConfiguredOpenRouterModels } from './llm-model-config.js';
-import { perMillionRatesFromOpenRouterPricing, setFetchedModelPricing } from './model-pricing.js';
+import {
+  perMillionRatesFromOpenRouterPricing,
+  setFetchedModelPricing,
+  type ModelPricing,
+} from './model-pricing.js';
 import { alert } from '../lib/alerting.js';
 import { logger } from '../lib/logger.js';
 
@@ -64,7 +68,7 @@ const parseOpenRouterModels = (
       ),
     ]),
   );
-  const pricing = new Map<string, { input: number; output: number }>();
+  const pricing = new Map<string, ModelPricing>();
   for (const model of models) {
     const rates = perMillionRatesFromOpenRouterPricing(model.pricing);
     if (rates) pricing.set(model.id, rates);

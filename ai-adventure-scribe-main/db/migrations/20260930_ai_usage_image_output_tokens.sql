@@ -1,0 +1,15 @@
+-- #2182: ai_usage.image_output_tokens, so image tokens and text completion are priced apart.
+-- ADDITIVE AND BACKWARD COMPATIBLE: one nullable column, no default, no rewrite, no change to
+-- existing columns or rows. Old code ignores it; new code writes it.
+-- MANUAL APPLY AFTER MERGE: apply by hand on prod when Rob types the line, and record the
+-- apply (#1703). It is not applied from the issue worktree.
+--
+-- output_tokens keeps its meaning (all completion tokens). image_output_tokens is the part of
+-- that count the provider reported as image output (OpenRouter
+-- usage.completion_tokens_details.image_tokens). Text completion = output_tokens -
+-- image_output_tokens. NULL means no breakdown was reported: every row written before this
+-- column, and image calls whose response carried no usage details.
+--
+-- Idempotent on purpose: AIUsageService.ensureTable() also adds the column at first write, so
+-- on prod the column may already exist by the time this is applied.
+ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS image_output_tokens INTEGER;

@@ -51,6 +51,14 @@ export class AIUsageService {
     inputTokens: number;
     outputTokens: number;
     /**
+     * The part of `outputTokens` that is image output, when the provider reports
+     * it (OpenRouter: usage.completion_tokens_details.image_tokens). Priced at the
+     * model's image-output rate; the rest of `outputTokens` is priced as text.
+     * Leave undefined when the provider gives no breakdown: an image call is then
+     * priced entirely at the image rate (the higher one) and the column stays NULL.
+     */
+    imageOutputTokens?: number;
+    /**
      * Dollar amount already computed by the caller. Voice uses a per-character
      * price, which the per-million token table cannot express. When omitted,
      * cost is derived from model-pricing.
@@ -70,9 +78,20 @@ export class AIUsageService {
     }
     const inputTokens = Math.max(0, Math.floor(opts.inputTokens));
     const outputTokens = Math.max(0, Math.floor(opts.outputTokens));
+    const reportedImageOutputTokens =
+      opts.imageOutputTokens == null || !Number.isFinite(opts.imageOutputTokens)
+        ? null
+        : Math.min(outputTokens, Math.max(0, Math.floor(opts.imageOutputTokens)));
+    const pricedImageOutputTokens =
+      reportedImageOutputTokens ??
+      (opts.type === 'image' && pricing?.imageOutput != null ? outputTokens : 0);
+    const textOutputTokens = outputTokens - pricedImageOutputTokens;
     const costUsd =
       explicitCost ??
-      (inputTokens * (pricing?.input ?? 0) + outputTokens * (pricing?.output ?? 0)) / 1_000_000;
+      (inputTokens * (pricing?.input ?? 0) +
+        textOutputTokens * (pricing?.output ?? 0) +
+        pricedImageOutputTokens * (pricing?.imageOutput ?? pricing?.output ?? 0)) /
+        1_000_000;
     const period = AIUsageService.periodKey();
 
     try {
@@ -81,11 +100,12 @@ export class AIUsageService {
       await sql`
         INSERT INTO ai_usage (
           org_id, user_id, plan, type, units, period_start,
-          provider, model, input_tokens, output_tokens, total_tokens, cost_usd, session_id
+          provider, model, input_tokens, output_tokens, total_tokens, cost_usd,
+          image_output_tokens, session_id
         ) VALUES (
           ${opts.orgId || null}, ${opts.userId}, ${opts.plan}, ${opts.type}, 0, ${period},
           ${opts.provider}, ${model}, ${inputTokens}, ${outputTokens}, ${inputTokens + outputTokens}, ${costUsd},
-          ${opts.sessionId || null}
+          ${reportedImageOutputTokens}, ${opts.sessionId || null}
         )
       `;
       const totals = await sql`
@@ -192,6 +212,7 @@ export class AIUsageService {
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS total_tokens INTEGER`;
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS cost_usd NUMERIC`;
     await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS session_id TEXT`;
+    await sql`ALTER TABLE ai_usage ADD COLUMN IF NOT EXISTS image_output_tokens INTEGER`;
 
     AIUsageService.dbInitialized = true;
   }

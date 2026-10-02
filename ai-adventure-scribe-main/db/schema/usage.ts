@@ -26,6 +26,9 @@ export const aiUsage = pgTable(
     // TEXT, not a uuid FK: the route receives the id as a client string, and a cast failure
     // would drop the usage row it is meant to explain.
     sessionId: text('session_id'),
+    // #2182: the part of output_tokens that is image output. NULL = the provider gave no
+    // breakdown (every row before this column, and image calls without usage details).
+    imageOutputTokens: integer('image_output_tokens'),
   },
   (table) => ({
     userDailyCostIdx: index('idx_ai_usage_user_daily_cost').on(table.userId, table.periodStart),
