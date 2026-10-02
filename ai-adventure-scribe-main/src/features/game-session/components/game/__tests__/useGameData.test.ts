@@ -30,6 +30,8 @@ vi.mock('@/contexts/CharacterContext', () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getCampaign: vi.fn(),
+    listCharacters: vi.fn(),
+    listSessions: vi.fn(),
   },
 }));
 
@@ -127,10 +129,101 @@ describe('useGameData', () => {
   it('should handle missing IDs', async () => {
     const { result } = renderHook(() => useGameData(null, undefined));
 
-    expect(result.current.error).toBe(
-      'Character ID or Campaign ID is missing from URL parameters.',
-    );
+    expect(result.current.missingTarget).toBe('no-adventure');
+    expect(result.current.error).toBe(null);
     expect(result.current.isLoading).toBe(false);
+  });
+
+  describe('without a character id', () => {
+    const characters = [
+      { id: 'char-1', name: 'Aldric' },
+      { id: 'char-2', name: 'Mira' },
+    ];
+
+    beforeEach(() => {
+      (userDataApi.getCampaign as any).mockResolvedValue({ id: 'camp-1' });
+      (userDataApi.listSessions as any).mockResolvedValue([]);
+    });
+
+    it('resolves the only character of the campaign', async () => {
+      (userDataApi.listCharacters as any).mockResolvedValue([characters[0]]);
+
+      const { result } = renderHook(() => useGameData(null, 'camp-1'));
+
+      await waitFor(() => expect(result.current.resolvedCharacterId).toBe('char-1'));
+      expect(userDataApi.listCharacters).toHaveBeenCalledWith('camp-1');
+      expect(userDataApi.listSessions).not.toHaveBeenCalled();
+      expect(result.current.error).toBe(null);
+      expect(result.current.missingTarget).toBe(null);
+    });
+
+    it('resolves the character of the newest session when there are several', async () => {
+      (userDataApi.listCharacters as any).mockResolvedValue(characters);
+      (userDataApi.listSessions as any).mockResolvedValue([
+        { id: 's-2', character_id: 'char-2' },
+        { id: 's-1', character_id: 'char-1' },
+      ]);
+
+      const { result } = renderHook(() => useGameData(null, 'camp-1'));
+
+      await waitFor(() => expect(result.current.resolvedCharacterId).toBe('char-2'));
+      expect(userDataApi.listSessions).toHaveBeenCalledWith({ campaignId: 'camp-1', limit: 20 });
+    });
+
+    it('falls back to the newest character when no session matches', async () => {
+      (userDataApi.listCharacters as any).mockResolvedValue(characters);
+
+      const { result } = renderHook(() => useGameData(null, 'camp-1'));
+
+      await waitFor(() => expect(result.current.resolvedCharacterId).toBe('char-1'));
+    });
+
+    it('reports no hero when the campaign has no character', async () => {
+      (userDataApi.listCharacters as any).mockResolvedValue([]);
+
+      const { result } = renderHook(() => useGameData(null, 'camp-1'));
+
+      await waitFor(() => expect(result.current.missingTarget).toBe('no-hero'));
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBe(null);
+    });
+
+    it('reports no adventure when the campaign is not found', async () => {
+      (userDataApi.getCampaign as any).mockRejectedValue(
+        Object.assign(new Error('Not found (404)'), { status: 404 }),
+      );
+
+      const { result } = renderHook(() => useGameData(null, 'camp-1'));
+
+      await waitFor(() => expect(result.current.missingTarget).toBe('no-adventure'));
+      expect(userDataApi.listCharacters).not.toHaveBeenCalled();
+    });
+
+    it('clears the missing-hero state once a character id is in the URL', async () => {
+      (userDataApi.listCharacters as any).mockResolvedValue([]);
+      (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue({ id: 'char-1' });
+
+      const { result, rerender } = renderHook(
+        ({ characterId }: { characterId: string | null }) => useGameData(characterId, 'camp-1'),
+        { initialProps: { characterId: null as string | null } },
+      );
+      await waitFor(() => expect(result.current.missingTarget).toBe('no-hero'));
+
+      rerender({ characterId: 'char-1' });
+
+      await waitFor(() => expect(result.current.missingTarget).toBe(null));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+    });
+
+    it('shows a plain message, not developer text, when the lookup fails', async () => {
+      (userDataApi.listCharacters as any).mockRejectedValue(new Error('boom'));
+
+      const { result } = renderHook(() => useGameData(null, 'camp-1'));
+
+      await waitFor(() => expect(result.current.error).not.toBe(null));
+      expect(result.current.error).toBe('We could not load your hero. Please try again.');
+      expect(result.current.missingTarget).toBe(null);
+    });
   });
 
   it('should handle character load failure', async () => {

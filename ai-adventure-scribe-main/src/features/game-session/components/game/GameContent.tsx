@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { GameLoadingOverlay, GameLayout } from './game-content';
 import { useGameRails } from './game-content/use-game-rails';
 import GameProviders from './GameProviders';
+import { MissingGameTargetPanel } from './MissingGameTargetPanel';
 import { useGameData } from './useGameData';
 
 import type { SpellCastHandlerRef } from './spell-cast-handler';
@@ -74,10 +75,23 @@ const GameContent: React.FC = () => {
   );
 
   // Load character and campaign data
-  const { isLoading, loadingPhase, error, isDM } = useGameData(
+  const { isLoading, loadingPhase, error, isDM, resolvedCharacterId, missingTarget } = useGameData(
     characterIdFromParams,
     campaignIdFromParams,
   );
+
+  // A link without ?character: put the hero we found into the URL, then load as usual.
+  useEffect(() => {
+    if (!resolvedCharacterId) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('character', resolvedCharacterId);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [resolvedCharacterId, setSearchParams]);
 
   const isStarterPlaythrough =
     Boolean(starterCampaignIdFromParams) ||
@@ -115,6 +129,10 @@ const GameContent: React.FC = () => {
   const handleSceneBlurbToggle = useCallback(() => {
     setShowSceneBlurb((v) => !v);
   }, [setShowSceneBlurb]);
+
+  if (missingTarget) {
+    return <MissingGameTargetPanel target={missingTarget} campaignId={campaignIdFromParams} />;
+  }
 
   // Combine loading states
   const combinedIsLoading = isLoading || sessionState === 'loading';

@@ -13,11 +13,22 @@ import { handleAsyncError } from '@/utils/error-handler';
 
 export type LoadingPhase = 'initial' | 'data' | 'session' | 'greeting';
 
+/** Why the game cannot open from this URL: no hero on the account, or no such adventure. */
+export type MissingGameTarget = 'no-hero' | 'no-adventure';
+
 interface UseGameDataResult {
   isLoading: boolean;
   loadingPhase: LoadingPhase;
   error: string | null;
   isDM: boolean;
+  /** Set when the URL had no ?character and the campaign's hero was found. */
+  resolvedCharacterId: string | null;
+  missingTarget: MissingGameTarget | null;
+}
+
+function isNotFoundError(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status;
+  return status === 404 || status === 403;
 }
 
 /**
@@ -36,12 +47,82 @@ export function useGameData(
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('initial');
   const [error, setError] = useState<string | null>(null);
   const [isDM, setIsDM] = useState(false);
+  const [resolvedCharacterId, setResolvedCharacterId] = useState<string | null>(null);
+  const [missingTarget, setMissingTarget] = useState<MissingGameTarget | null>(null);
+
+  // A link without ?character (bookmark, shared, trimmed): find the player's hero for the
+  // campaign. One hero is used as is; with several, the hero of the newest session wins.
+  useEffect(() => {
+    setResolvedCharacterId(null);
+    if (characterId) {
+      setMissingTarget(null);
+      return;
+    }
+    if (!campaignId) {
+      setMissingTarget('no-adventure');
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setMissingTarget(null);
+    setError(null);
+
+    const findCharacter = async (): Promise<void> => {
+      try {
+        await userDataApi.getCampaign(campaignId);
+      } catch (err) {
+        if (cancelled) return;
+        if (isNotFoundError(err)) {
+          setMissingTarget('no-adventure');
+        } else {
+          setError('We could not load this adventure. Please try again.');
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const characters = await userDataApi.listCharacters(campaignId);
+        if (cancelled) return;
+        if (characters.length === 0) {
+          setMissingTarget('no-hero');
+          setIsLoading(false);
+          return;
+        }
+        let chosen = characters[0];
+        if (characters.length > 1) {
+          const sessions = await userDataApi
+            .listSessions({ campaignId, limit: 20 })
+            .catch(() => []);
+          const lastPlayed = sessions.find((session) =>
+            characters.some((character) => character.id === session.character_id),
+          );
+          if (lastPlayed) chosen = characters.find((c) => c.id === lastPlayed.character_id);
+        }
+        if (cancelled) return;
+        setResolvedCharacterId(chosen.id);
+      } catch (err) {
+        if (cancelled) return;
+        logger.error('[GameContent] Could not look up the hero for this adventure', {
+          campaignId,
+          err,
+        });
+        setError('We could not load your hero. Please try again.');
+        setIsLoading(false);
+      }
+    };
+
+    findCharacter();
+    return () => {
+      cancelled = true;
+    };
+  }, [characterId, campaignId]);
 
   useEffect(() => {
     const loadGameData = async (): Promise<void> => {
+      // Without a character the lookup effect above decides what the player sees.
       if (!characterId || !campaignId) {
-        setError('Character ID or Campaign ID is missing from URL parameters.');
-        setIsLoading(false);
         setLoadingPhase('initial');
         return;
       }
@@ -156,5 +237,5 @@ export function useGameData(
     };
   }, [characterId, characterDispatch, user?.id]);
 
-  return { isLoading, loadingPhase, error, isDM };
+  return { isLoading, loadingPhase, error, isDM, resolvedCharacterId, missingTarget };
 }
