@@ -1,8 +1,8 @@
 /**
  * Starter Campaign Card Component
  *
- * Displays a starter campaign as a visually rich card with cover image,
- * genre badges, difficulty indicator, and call to action.
+ * Displays a starter campaign as one link: cover art (with a gradient and
+ * letter fallback), genre and difficulty chips, hook, meta line and call to action.
  */
 
 import React from 'react';
@@ -10,35 +10,31 @@ import { Link } from 'react-router-dom';
 
 import type { StarterCampaign } from '@/hooks/use-starter-campaigns';
 
-import { CAMPAIGN_ARTWORK_PLACEHOLDER } from '@/components/campaigns/campaign-artwork';
-import { CampaignTitleOverlay } from '@/components/campaigns/CampaignTitleOverlay';
 import { Badge } from '@/components/ui/badge';
-import { Z_INDEX } from '@/constants/z-index';
 import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 
 interface StarterCampaignCardProps {
   campaign: StarterCampaign;
+  /** First card in the grid: load its art eagerly (it is the likely LCP image). */
+  isFirst?: boolean;
 }
 
 /**
- * Get difficulty badge styling
+ * Get difficulty chip styling: text color plus a matching 45% border.
  */
 function getDifficultyStyle(difficulty: string): string {
   switch (difficulty) {
     case 'easy':
-      return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
     case 'low-medium':
-      return 'bg-lime-500/20 text-lime-300 border-lime-500/30';
+      return 'text-ir-hp-good border-[color:color-mix(in_srgb,var(--ir-hp-good)_45%,transparent)]';
     case 'medium':
-      return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
     case 'medium-hard':
-      return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
+      return 'text-infinite-gold border-infinite-gold/45';
     case 'hard':
-      return 'bg-red-500/20 text-red-300 border-red-500/30';
     case 'deadly':
-      return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+      return 'text-ir-hp-bad border-[color:color-mix(in_srgb,var(--ir-hp-bad)_45%,transparent)]';
     default:
-      return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+      return 'text-foreground border-white/10';
   }
 }
 
@@ -52,157 +48,96 @@ function formatDifficulty(difficulty: string): string {
     .join(' ');
 }
 
-/**
- * Get genre badge styling
- */
-function getGenreStyle(genre: string): string {
-  const genreStyles: Record<string, string> = {
-    horror: 'bg-red-900/30 text-red-200 border-red-700/30',
-    intrigue: 'bg-purple-900/30 text-purple-200 border-purple-700/30',
-    mystery: 'bg-indigo-900/30 text-indigo-200 border-indigo-700/30',
-    adventure: 'bg-amber-900/30 text-amber-200 border-amber-700/30',
-    fantasy: 'bg-blue-900/30 text-blue-200 border-blue-700/30',
-    dark: 'bg-slate-900/30 text-slate-200 border-slate-700/30',
-    political: 'bg-violet-900/30 text-violet-200 border-violet-700/30',
-    social: 'bg-pink-900/30 text-pink-200 border-pink-700/30',
-  };
-
-  return genreStyles[genre.toLowerCase()] || 'bg-gray-900/30 text-gray-200 border-gray-700/30';
-}
-
-export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campaign }) => {
-  const [coverImage, setCoverImage] = React.useState(
-    campaign.coverImageUrl || CAMPAIGN_ARTWORK_PLACEHOLDER,
+export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({
+  campaign,
+  isFirst = false,
+}) => {
+  const [imageState, setImageState] = React.useState<'loading' | 'loaded' | 'failed'>(
+    campaign.coverImageUrl ? 'loading' : 'failed',
   );
-  const [artworkUnavailable, setArtworkUnavailable] = React.useState(!campaign.coverImageUrl);
 
   React.useEffect(() => {
-    setCoverImage(campaign.coverImageUrl || CAMPAIGN_ARTWORK_PLACEHOLDER);
-    setArtworkUnavailable(!campaign.coverImageUrl);
+    setImageState(campaign.coverImageUrl ? 'loading' : 'failed');
   }, [campaign.coverImageUrl]);
 
-  const handleImageError = (): void => {
-    if (coverImage === CAMPAIGN_ARTWORK_PLACEHOLDER) return;
-    setCoverImage(CAMPAIGN_ARTWORK_PLACEHOLDER);
-    setArtworkUnavailable(true);
-  };
+  const artworkUnavailable = imageState === 'failed';
+  const level = formatStarterLevelRange(campaign.levelRange)?.split('-')[0];
+  const initial = campaign.title.trim().charAt(0).toUpperCase();
 
   return (
     <Link
       to={`/explore/${campaign.slug}`}
-      className="block group"
+      className="grid h-full grid-rows-[auto_1fr] rounded-[13px] border border-white/10 bg-[color:var(--infinite-surface)] overflow-hidden transition-[border-color,box-shadow] duration-200 hover:border-infinite-gold/55 hover:shadow-glow-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-infinite-gold"
       aria-label={`Explore ${campaign.title} campaign`}
     >
-      <div className="relative h-[450px] rounded-2xl overflow-hidden transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20 border border-gray-800/50 hover:border-purple-500/30">
-        {/* Background Image */}
-        <div className="absolute inset-0">
-          <img
-            src={coverImage}
-            alt={
-              artworkUnavailable
-                ? `${campaign.title} artwork coming soon`
-                : `${campaign.title} cover art`
-            }
-            className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${artworkUnavailable ? 'opacity-80' : ''}`}
-            loading="lazy"
-            onError={handleImageError}
-          />
-        </div>
-
-        {artworkUnavailable && (
-          <div
-            className="absolute top-16 right-4 rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-medium text-gray-200/90 backdrop-blur-sm"
-            role="status"
-            style={{ zIndex: Z_INDEX.DROPDOWN }}
-          >
-            Artwork coming soon
-          </div>
-        )}
-
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent"></div>
-
-        {/* Genre Badges - Top Left */}
-        <div
-          className="absolute top-4 left-4 flex flex-wrap gap-2"
-          style={{ zIndex: Z_INDEX.DROPDOWN }}
+      {/* Art: gradient + first letter shows while the image loads or if it fails */}
+      <div
+        role={artworkUnavailable ? 'img' : undefined}
+        aria-label={artworkUnavailable ? `${campaign.title} artwork coming soon` : undefined}
+        className="relative aspect-video overflow-hidden bg-[radial-gradient(ellipse_at_50%_35%,var(--infinite-surface),var(--infinite-dark)_60%)]"
+      >
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-center font-heading text-5xl text-infinite-gold/60"
         >
+          {initial}
+        </span>
+        {campaign.coverImageUrl && !artworkUnavailable && (
+          <img
+            src={campaign.coverImageUrl}
+            alt={`${campaign.title} cover art`}
+            width={640}
+            height={360}
+            className={`relative h-full w-full object-cover transition-opacity duration-300 ${imageState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+            loading={isFirst ? 'eager' : 'lazy'}
+            {...(isFirst ? { fetchpriority: 'high' } : {})}
+            onLoad={() => setImageState('loaded')}
+            onError={() => setImageState('failed')}
+          />
+        )}
+        {/* Genre chips - top left, one line, never under the difficulty chip */}
+        <div className="absolute left-3 top-3 flex max-w-[calc(100%-96px)] gap-2 overflow-hidden">
           {campaign.genre.slice(0, 2).map((g) => (
-            <Badge key={g} className={`${getGenreStyle(g)} border backdrop-blur-sm capitalize`}>
+            <Badge
+              key={g}
+              variant="outline"
+              className="whitespace-nowrap border-white/10 bg-infinite-dark/90 text-[11px] font-normal capitalize text-foreground backdrop-blur-sm"
+            >
               {g}
             </Badge>
           ))}
         </div>
 
-        {/* Difficulty Badge - Top Right */}
-        <div className="absolute top-4 right-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
-          <Badge className={`${getDifficultyStyle(campaign.difficulty)} border backdrop-blur-sm`}>
+        {/* Difficulty chip - top right */}
+        <div className="absolute right-3 top-3">
+          <Badge
+            variant="outline"
+            className={`bg-infinite-dark/90 text-[11px] font-semibold backdrop-blur-sm ${getDifficultyStyle(campaign.difficulty)}`}
+          >
             {formatDifficulty(campaign.difficulty)}
           </Badge>
         </div>
+      </div>
 
-        {/* Content - Bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-6" style={{ zIndex: Z_INDEX.DROPDOWN }}>
-          <CampaignTitleOverlay title={campaign.title} className="mb-3" />
-
-          {/* Tagline */}
-          {campaign.tagline && (
-            <p className="text-gray-300 text-sm italic mb-3">{campaign.tagline}</p>
+      {/* Body */}
+      <div className="grid content-start gap-2 p-4">
+        <h3 className="font-heading text-[19px] font-bold leading-tight">{campaign.title}</h3>
+        <p className="text-sm text-muted-foreground line-clamp-2">{campaign.premise}</p>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {level && <strong className="font-semibold text-foreground">Level {level}</strong>}
+          {level && campaign.estimatedSessions && ' · '}
+          {campaign.estimatedSessions && (
+            <>
+              <strong className="font-semibold text-foreground">
+                {campaign.estimatedSessions}
+              </strong>{' '}
+              sessions
+            </>
           )}
-
-          {/* Premise */}
-          <p className="text-gray-200 text-sm leading-relaxed line-clamp-2 mb-4">
-            {campaign.premise}
-          </p>
-
-          {/* Meta Info */}
-          <div className="flex items-center gap-4 text-xs text-gray-400">
-            {campaign.levelRange && (
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-                Level {formatStarterLevelRange(campaign.levelRange)}
-              </span>
-            )}
-            {campaign.estimatedSessions && (
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {campaign.estimatedSessions} sessions
-              </span>
-            )}
-          </div>
-
-          {/* CTA */}
-          <div className="mt-4 flex items-center text-purple-400 group-hover:text-purple-300 transition-colors text-sm font-medium">
-            <span>Begin Your Journey</span>
-            <svg
-              className="w-4 h-4 ml-2 transform transition-transform group-hover:translate-x-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M14 5l7 7m0 0l-7 7m7-7H3"
-              />
-            </svg>
-          </div>
-        </div>
+        </p>
+        <span className="text-sm font-semibold text-infinite-gold">
+          See the heroes <span aria-hidden="true">→</span>
+        </span>
       </div>
     </Link>
   );

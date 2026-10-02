@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
@@ -25,31 +25,76 @@ const campaign = {
 };
 
 describe('StarterCampaignCard artwork fallback', () => {
-  it('uses the local placeholder and labels missing artwork honestly', () => {
+  it('shows the gradient and first letter, labeled honestly, when there is no cover', () => {
     render(
       <MemoryRouter>
         <StarterCampaignCard campaign={campaign} />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('img')).toHaveAttribute('src', '/card-placeholder.svg');
+    // The old fallback was an <img src="/card-placeholder.svg"> plus an "Artwork coming soon"
+    // chip. #2259 replaces it with a gradient and the campaign's first letter, so there is
+    // no <img> to assert on; the accessible name is unchanged.
+    expect(screen.queryByRole('img', { hidden: true, name: /cover art/ })).not.toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAccessibleName(
       'Academy of Arcane Gastronomy artwork coming soon',
     );
-    expect(screen.getByRole('status')).toHaveTextContent('Artwork coming soon');
+    expect(screen.getByText('A')).toBeInTheDocument();
   });
 
-  it('renders the shared title overlay for the campaign title', () => {
+  it('falls back to the gradient and letter when the cover image fails to load', () => {
+    render(
+      <MemoryRouter>
+        <StarterCampaignCard campaign={{ ...campaign, coverImageUrl: 'https://x.test/a.jpg' }} />
+      </MemoryRouter>,
+    );
+
+    const cover = screen.getByAltText('Academy of Arcane Gastronomy cover art');
+    expect(cover).toHaveAttribute('width');
+    expect(cover).toHaveAttribute('height');
+    fireEvent.error(cover);
+
+    expect(screen.queryByAltText('Academy of Arcane Gastronomy cover art')).not.toBeInTheDocument();
+    expect(screen.getByRole('img')).toHaveAccessibleName(
+      'Academy of Arcane Gastronomy artwork coming soon',
+    );
+    expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  it('loads the first card eagerly and the others lazily', () => {
+    const withCover = { ...campaign, coverImageUrl: 'https://x.test/a.jpg' };
+    const { rerender } = render(
+      <MemoryRouter>
+        <StarterCampaignCard campaign={withCover} isFirst />
+      </MemoryRouter>,
+    );
+    expect(screen.getByAltText(/cover art/)).toHaveAttribute('loading', 'eager');
+    expect(screen.getByAltText(/cover art/)).toHaveAttribute('fetchpriority', 'high');
+
+    rerender(
+      <MemoryRouter>
+        <StarterCampaignCard campaign={withCover} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByAltText(/cover art/)).toHaveAttribute('loading', 'lazy');
+  });
+
+  it('is one link and prints the title once', () => {
     render(
       <MemoryRouter>
         <StarterCampaignCard campaign={campaign} />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Campaign')).toBeInTheDocument();
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByRole('link')).toHaveAttribute('href', `/explore/${campaign.slug}`);
     expect(
       screen.getByRole('heading', { name: 'Academy of Arcane Gastronomy' }),
     ).toBeInTheDocument();
+    expect(screen.getAllByText('Academy of Arcane Gastronomy')).toHaveLength(1);
+    // The italic tagline line is gone, so a tagline never repeats the title.
+    expect(screen.queryByText('A culinary mystery')).not.toBeInTheDocument();
+    expect(screen.getByText(/See the heroes/)).toBeInTheDocument();
   });
 
   it('shows level 1 when the stored span is the glued 7-10-11 range', () => {
