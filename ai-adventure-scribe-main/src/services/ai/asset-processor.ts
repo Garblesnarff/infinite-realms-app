@@ -210,6 +210,7 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
           else if (chunkType === 'location') assetType = 'location';
           else if (chunkType === 'item') assetType = 'item';
           else if (chunkType === 'monster' || chunkType === 'encounter') assetType = 'monster';
+          else if (chunkType === 'faction') assetType = 'faction';
           else if (chunkType === 'scene') assetType = 'scene';
           else if (chunkType.startsWith('character')) assetType = 'character';
 

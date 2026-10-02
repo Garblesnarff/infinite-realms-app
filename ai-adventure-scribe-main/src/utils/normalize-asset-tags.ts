@@ -139,7 +139,8 @@ export function isAssetNamePresentAroundTag(
  * and restores a visible display name when the model emits only a tag.
  */
 export function normalizeAssetTagKeysInContent(content: string): string {
-  const loosePattern = /\[ASSET:(character|npc|location|monster|item|scene|entity):([^\]]+)\]/gi;
+  const loosePattern =
+    /\[ASSET:(character|npc|location|monster|item|faction|scene|entity):([^\]]+)\]/gi;
 
   return content.replace(loosePattern, (fullMatch, type, rawKey, offset, wholeString) => {
     const normalized = generateAssetKey(rawKey);

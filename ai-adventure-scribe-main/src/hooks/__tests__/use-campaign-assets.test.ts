@@ -76,7 +76,7 @@ describe('useCampaignAssets', () => {
         template_key: null, // Test fallback to generateKey (line 108)
         name: 'No Key Hero',
         portrait_url: 'http://example.com/nokey.jpg',
-      }
+      },
     ];
 
     const mockChunks = [
@@ -131,7 +131,9 @@ describe('useCampaignAssets', () => {
       banner_image_url: 'http://example.com/banner.jpg',
     };
 
-    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockCharacters as any);
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(
+      mockCharacters as any,
+    );
 
     const mockFromSpy = vi.spyOn(supabase, 'from');
 
@@ -204,15 +206,15 @@ describe('useCampaignAssets', () => {
   });
 
   it('should generate correctly formatted and grouped asset list for AI prompt', async () => {
-    const mockCharacters = [
-      { template_key: 'hero', name: 'Test Hero', portrait_url: 'url' },
-    ];
+    const mockCharacters = [{ template_key: 'hero', name: 'Test Hero', portrait_url: 'url' }];
     const mockChunks = [
       { entity_name: 'Shop', chunk_type: 'location', metadata: { image_url: 'url' } },
       { entity_name: 'Orc', chunk_type: 'monster', metadata: { image_url: 'url' } },
     ];
 
-    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockCharacters as any);
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(
+      mockCharacters as any,
+    );
 
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'campaign_chunks') {
@@ -298,7 +300,9 @@ describe('useCampaignAssets', () => {
       },
     ];
 
-    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockCharacters as any);
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(
+      mockCharacters as any,
+    );
 
     (supabase.from as any).mockImplementation(() => createMockChain(null));
 
@@ -312,5 +316,52 @@ describe('useCampaignAssets', () => {
 
     const nullUrl = result.current.getAssetImageUrl('character', 'non-existent');
     expect(nullUrl).toBeNull();
+  });
+
+  // Rows follow what scripts/upload-campaign-assets.ts writes: metadataWithImageUrl() spreads the
+  // row's existing metadata and adds image_url, and the hook selects entity_name, chunk_type, metadata.
+  // chunk_type values are the real ones: 'faction' (CHUNK_TYPES_BY_ASSET_TYPE.faction) and 'scene'.
+  it('returns faction and scene chunk images instead of dropping them (#2198)', async () => {
+    const mockChunks = [
+      {
+        entity_name: 'Eternal Feast',
+        chunk_type: 'faction',
+        metadata: { source: 'bible', image_url: 'https://example.test/eternal-feast.webp' },
+      },
+      {
+        entity_name: 'The Fairy Court Revel',
+        chunk_type: 'scene',
+        metadata: { source: 'bible', image_url: 'https://example.test/revel.webp' },
+      },
+      {
+        entity_name: 'Unlinked Faction',
+        chunk_type: 'faction',
+        metadata: { source: 'bible' },
+      },
+    ];
+
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce([]);
+    (supabase.from as any).mockImplementation((table: string) =>
+      table === 'campaign_chunks' ? createMockChain(mockChunks) : createMockChain(null),
+    );
+
+    const { result } = renderHook(() => useCampaignAssets(mockCampaignId));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.getAsset('faction', 'eternal-feast')).toEqual({
+      type: 'faction',
+      key: 'eternal-feast',
+      name: 'Eternal Feast',
+      imageUrl: 'https://example.test/eternal-feast.webp',
+      description: undefined,
+    });
+    expect(result.current.getAssetImageUrl('scene', 'the-fairy-court-revel')).toBe(
+      'https://example.test/revel.webp',
+    );
+    expect(result.current.assetListForPrompt).toContain(
+      '- Eternal Feast [ASSET:faction:eternal-feast]',
+    );
+    // A faction row without metadata.image_url yields no asset.
+    expect(result.current.getAsset('faction', 'unlinked-faction')).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
  *
  * Loads entity images and metadata from:
  * - starter_character_templates (character portraits)
- * - campaign_chunks (NPC, location, item images from metadata)
+ * - campaign_chunks (NPC, location, item, faction, scene images from metadata)
  * - starter_campaigns (cover/banner images)
  *
  * Provides a lookup function to get asset URLs by type and key.
@@ -17,7 +17,7 @@ import { userDataApi } from '@/services/user-data-api';
 import { generateAssetKey } from '@/utils/asset-key';
 
 export interface CampaignAsset {
-  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene';
+  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'faction' | 'scene';
   key: string;
   name: string;
   imageUrl: string | null;
@@ -118,6 +118,10 @@ export function useCampaignAssets(
                 assetType = 'location';
               } else if (chunkType === 'item') {
                 assetType = 'item';
+              } else if (chunkType === 'faction') {
+                assetType = 'faction';
+              } else if (chunkType === 'scene') {
+                assetType = 'scene';
               } else if (chunkType === 'monster' || chunkType === 'encounter') {
                 assetType = 'monster';
               } else {
@@ -230,12 +234,15 @@ export function useCampaignAssets(
     return lines.join('\n');
   }, [assets]);
 
-  return useMemo(() => ({
-    getAsset,
-    getAssetImageUrl,
-    assets,
-    assetListForPrompt,
-    isLoading,
-    error,
-  }), [getAsset, getAssetImageUrl, assets, assetListForPrompt, isLoading, error]);
+  return useMemo(
+    () => ({
+      getAsset,
+      getAssetImageUrl,
+      assets,
+      assetListForPrompt,
+      isLoading,
+      error,
+    }),
+    [getAsset, getAssetImageUrl, assets, assetListForPrompt, isLoading, error],
+  );
 }

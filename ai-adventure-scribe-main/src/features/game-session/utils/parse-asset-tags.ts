@@ -19,7 +19,7 @@ import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 export { normalizeAssetTagKeysInContent } from '@/utils/normalize-asset-tags';
 
 export interface AssetTag {
-  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene' | 'entity';
+  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'faction' | 'scene' | 'entity';
   key: string;
   fullMatch: string;
 }
@@ -33,7 +33,7 @@ export interface ParsedAssets {
 
 /** Regex pattern to match [ASSET:type:key] tags */
 export const ASSET_TAG_PATTERN =
-  /\[ASSET:(character|npc|location|monster|item|scene|entity):([a-z0-9-]+)\]/gi;
+  /\[ASSET:(character|npc|location|monster|item|faction|scene|entity):([a-z0-9-]+)\]/gi;
 
 /**
  * Parse asset tags from message content

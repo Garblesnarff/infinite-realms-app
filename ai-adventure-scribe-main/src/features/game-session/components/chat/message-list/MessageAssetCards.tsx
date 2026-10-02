@@ -3,6 +3,7 @@ import {
   MapPin,
   Sword,
   Package,
+  Flag,
   Image as ImageIcon,
   Sparkles,
   Loader2,
@@ -24,6 +25,8 @@ export function getAssetIcon(type: string): React.ReactNode {
       return <Sword className="h-4 w-4" />;
     case 'item':
       return <Package className="h-4 w-4" />;
+    case 'faction':
+      return <Flag className="h-4 w-4" />;
     case 'scene':
       return <ImageIcon className="h-4 w-4" />;
     case 'generated':
@@ -45,6 +48,8 @@ export function getAssetGradient(type: string): string {
       return 'from-red-600/20 to-rose-600/20 border-red-500/30';
     case 'item':
       return 'from-cyan-600/20 to-blue-600/20 border-cyan-500/30';
+    case 'faction':
+      return 'from-yellow-600/20 to-amber-600/20 border-yellow-500/30';
     case 'scene':
       return 'from-violet-600/20 to-purple-600/20 border-violet-500/30';
     case 'generated':
@@ -179,7 +184,9 @@ export const GenerateButtonCard: React.FC<{
       className={cn(
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm transition-all duration-200',
-        isGenerating ? 'opacity-70' : 'hover:scale-105 hover:shadow-xl focus-visible:scale-105 focus-visible:shadow-xl',
+        isGenerating
+          ? 'opacity-70'
+          : 'hover:scale-105 hover:shadow-xl focus-visible:scale-105 focus-visible:shadow-xl',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50',
         'cursor-pointer',
         getAssetGradient('generated'),
