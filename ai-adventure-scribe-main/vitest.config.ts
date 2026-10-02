@@ -94,7 +94,10 @@ export default defineConfig({
       'tests/character-creation-atomic.test.ts',
     ],
     coverage: {
-      enabled: true,
+      // Off by default so PR CI does not instrument the whole app for a report
+      // nobody gates on (#2467). The block stays so `vitest --coverage` works;
+      // .github/workflows/coverage.yml runs it nightly and uploads the report.
+      enabled: false,
       provider: 'v8',
       reporter: ['text', 'html'],
       reportsDirectory: 'coverage',

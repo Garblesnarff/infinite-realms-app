@@ -15,30 +15,28 @@ name: CI
 # `ubuntu-latest`: it takes about 10 seconds and every heavy job waits for it,
 # so it must not queue behind self-hosted jobs.
 
+# One run per commit: `pull_request` for branches, `push` for main only. A
+# branch with an open PR used to fire both events on every commit; concurrency
+# cancelled one, but the runner slots and the hosted `changes` job were still
+# spent (#2467). A branch with no PR gets no CI until its PR is opened, and a
+# PR with merge conflicts gets none either (`pull_request` needs a merge ref).
 on:
-  push:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 # One in-flight run per branch. Pushing three times in a minute used to start
 # three full matrices that all raced to finish; now the older ones are
-# cancelled the moment a newer commit arrives. On a single self-hosted runner
-# this matters more than it did on GitHub's fleet, because runs queue rather
-# than run in parallel.
+# cancelled the moment a newer commit arrives. Runs queue on the self-hosted
+# runners rather than running in parallel, so this matters more here than it
+# did on GitHub's fleet.
 #
-# Keyed on the BRANCH NAME, not the ref. A branch with an open PR fires both
-# `push` and `pull_request`; keyed on `github.ref` those are different groups
-# (`refs/heads/<branch>` vs `refs/pull/<n>/merge`), so the whole matrix ran
-# twice per commit and the second copy queued behind the first on the single
-# runner.
-#
-# The fallback must be `ref_name`, not `ref`: `head_ref` is the bare branch name
-# ("my-branch") while `ref` is fully qualified ("refs/heads/my-branch"), so
-# `head_ref || ref` still yields two different strings for the same branch and
-# does not deduplicate. `ref_name` is the bare name on push, so the two events
-# collapse to one group.
+# Keyed on the BRANCH NAME: `head_ref` is the PR's branch on `pull_request`, and
+# `ref_name` is the branch on `push` (always `main` now).
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
@@ -53,11 +51,9 @@ jobs:
   # concludes `success`, so the merge gate that reads the run conclusion is
   # unaffected. `checks` does not depend on this job and always runs.
   #
-  # `base: main` makes a push to a feature branch diff against main (the whole
-  # branch, like the pull_request run of the same commit) instead of against the
-  # previous push, so whichever of the two runs concurrency keeps sees the same
-  # files. On a push to main itself the action falls back to the previous
-  # commit, which is the squash commit's own diff.
+  # On `pull_request` the action diffs against the PR's base and ignores
+  # `base:`. On a push to main it falls back to the previous commit, which is
+  # the squash commit's own diff.
   #
   # Every filter lists `.github/workflows/**`, so editing a workflow runs
   # everything. Globs are relative to the repository root.
@@ -172,14 +168,6 @@ jobs:
           GITLEAKS_CONFIG: .gitleaks.toml
       - if: ${{ !cancelled() }}
         uses: oven-sh/setup-bun@v2
-      - name: Cache bun install
-        if: ${{ !cancelled() }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
-          restore-keys: |
-            bun-server-${{ runner.os }}-
       - id: install
         if: ${{ !cancelled() }}
         run: bun install --frozen-lockfile
@@ -217,13 +205,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Cache bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
       # The runner is deliberately CPU-capped (4 of 8 cores, CPUWeight 20) so a
@@ -241,13 +222,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Cache bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
-          restore-keys: |
-            bun-server-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: ai-adventure-scribe-main/server-bun
@@ -343,13 +317,6 @@ jobs:
             echo "See docs/ci-self-hosted-runner.md."
             exit 1
           fi
-      - name: Cache bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-server-${{ runner.os }}-${{ hashFiles('ai-adventure-scribe-main/bun.lock', 'ai-adventure-scribe-main/server-bun/bun.lock') }}
-          restore-keys: |
-            bun-server-${{ runner.os }}-
       # Three installs, matching server-vitest plus the app workspace: the
       # suites import db/schema/*.ts, whose drizzle-orm resolves out of
       # ai-adventure-scribe-main/node_modules.

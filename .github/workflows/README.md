@@ -12,7 +12,7 @@ workflow level, or per-step) to run commands against it from a repo-root checkou
 ## Workflows
 
 ### ci.yml — Main CI
-Triggers: every `push` and `pull_request` (no path filter — runs repo-wide).
+Triggers: `pull_request` (`opened`, `synchronize`, `reopened`, `ready_for_review`) and `push` to `main` only (#2467).
 
 Jobs:
 - **frontend** — `bun install`, `bun run lint` (ESLint), `bunx tsc --noEmit`,
@@ -35,6 +35,14 @@ Jobs:
   successfully. **These are not yet configured as repo secrets**, so this job
   is marked `continue-on-error: true` and will not block merges until they are
   added. See "Secrets required" below.
+
+### coverage.yml — Nightly frontend coverage
+Triggers: `schedule` (08:00 UTC daily) and `workflow_dispatch`.
+
+PR CI runs Vitest with coverage off (`coverage.enabled: false` in
+`ai-adventure-scribe-main/vitest.config.ts`). This workflow runs
+`bunx vitest run --coverage` on the self-hosted runner and uploads the HTML
+report as the `frontend-coverage` artifact (30-day retention). No thresholds.
 
 ### backups-guard.yml — Tracked Backups Guard
 Triggers: every `push` and `pull_request`.
