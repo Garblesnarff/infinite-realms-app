@@ -15,8 +15,9 @@ You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-soun
   static async buildGameContextSection(
     context: GameContext,
     relevantMemories: Memory[],
+    loreSection?: string,
   ): Promise<string> {
-    return GameContextPrompts.buildGameContextSection(context, relevantMemories);
+    return GameContextPrompts.buildGameContextSection(context, relevantMemories, loreSection);
   }
 
   static buildCharacterSection(char: Record<string, any>): Promise<string> {

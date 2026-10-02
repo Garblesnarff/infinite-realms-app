@@ -16,11 +16,25 @@ export class ContextBuilder {
     combatDetection?: CombatDetectionResult;
     voiceContext?: SessionVoiceContext | null;
     isFirstMessage?: boolean;
+    /**
+     * #2450: pre-rendered starter-campaign lore section (see
+     * GameContextPrompts.buildGameContextSection). When undefined, the legacy
+     * internal lore fetch runs.
+     */
+    loreSection?: string;
   }): Promise<string> {
     const { context, combatDetection, voiceContext, isFirstMessage, relevantMemories } = params;
 
     let contextPrompt = ContextBuilderPrompts.buildPersonaSection();
-    contextPrompt += await ContextBuilderPrompts.buildGameContextSection(context, relevantMemories);
+    // #2450: pass loreSection only when pre-rendered; the legacy 2-arg call
+    // shape must be preserved for existing callers/tests.
+    contextPrompt += params.loreSection !== undefined
+      ? await ContextBuilderPrompts.buildGameContextSection(
+          context,
+          relevantMemories,
+          params.loreSection,
+        )
+      : await ContextBuilderPrompts.buildGameContextSection(context, relevantMemories);
 
     if (isFirstMessage) {
       if (context.previousSessionRecap) {

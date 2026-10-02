@@ -51,6 +51,8 @@ export async function fetchGameContext(sessionId: string): Promise<{
   campaign: Partial<Campaign>;
   character: Partial<Character>;
   starterCampaignId?: string;
+  /** #2450: game_sessions.current_scene_description — the session's current scene. */
+  currentSceneDescription?: string;
 } | null> {
   try {
     const sessionData = await userDataApi.getSessionContext(sessionId);
@@ -64,6 +66,10 @@ export async function fetchGameContext(sessionId: string): Promise<{
       campaign: (sessionData.campaign || {}) as Partial<Campaign>,
       character: (sessionData.character || {}) as Partial<Character>,
       starterCampaignId: sessionData.starter_campaign_id as string,
+      currentSceneDescription:
+        typeof sessionData.current_scene_description === 'string'
+          ? sessionData.current_scene_description
+          : undefined,
     };
   } catch (error) {
     logger.error('Error in fetchGameContext:', error);
@@ -86,6 +92,8 @@ export function buildAIContext(params: {
   character: Record<string, unknown> | Partial<Character>;
   currentPhase: string;
   isInCombat: boolean;
+  /** #2450: the session's current scene description, rendered as a <current_scene> block. */
+  currentSceneDescription?: string;
   /** Identifies the encounter to the server, which teaches the combat dialect once per fight. */
   encounterId?: string | null;
   currentTurnParticipantId?: string | null;
@@ -113,6 +121,7 @@ export function buildAIContext(params: {
     sessionId: params.sessionId,
     userId: params.userId,
     starterCampaignId: params.starterCampaignId,
+    currentSceneDescription: params.currentSceneDescription,
     campaignDetails: params.campaign,
     characterDetails: params.character,
     gameState: {

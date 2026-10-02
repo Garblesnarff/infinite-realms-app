@@ -13,10 +13,28 @@ import { hasStarterPlaythroughSignal } from '@/utils/starter-playthrough';
  * GameContextPrompts - Handles building the game context sections of the prompt
  * Extracted from ContextBuilderPrompts.ts
  */
+/**
+ * Resolve the starter campaign id for a game context, using the same
+ * precedence `buildGameContextSection` uses internally.
+ */
+export function resolveStarterCampaignId(context: GameContext): string | undefined {
+  const rawCampaignDetails = context.campaignDetails || {};
+  return (
+    context.starterCampaignId || (rawCampaignDetails.starter_campaign_id as string | undefined)
+  );
+}
+
 export class GameContextPrompts {
   static async buildGameContextSection(
     context: GameContext,
     relevantMemories: Memory[],
+    /**
+     * #2450: pre-rendered starter-campaign lore section. When provided (even as
+     * ''), it is used verbatim and no lore fetch happens — the caller owns the
+     * fetch/render/budget lifecycle. When undefined, the legacy internal fetch
+     * path runs unchanged.
+     */
+    loreSection?: string,
   ): Promise<string> {
     let section = `<game_context>`;
     const rawCampaignDetails = context.campaignDetails || {};
@@ -44,17 +62,21 @@ DESCRIPTION: ${campaignDescription}
       context.isStarterPlaythrough ??
       (Boolean(starterCampaignId) || hasStarterPlaythroughSignal(rawCampaignDetails));
 
-    if (isStarterPlaythrough && !starterCampaignId) {
-      const message = 'Missing required starter_campaign_id for AI game context';
-      logger.error('[ContextBuilder] Missing required starter_campaign_id', {
-        sessionId: context.sessionId,
-        campaignId: context.campaignId,
-      });
-      userDataApi.reportClientFailure('missing_starter_campaign_id', context.sessionId, message);
-    }
+    if (loreSection !== undefined) {
+      section += loreSection;
+    } else {
+      if (isStarterPlaythrough && !starterCampaignId) {
+        const message = 'Missing required starter_campaign_id for AI game context';
+        logger.error('[ContextBuilder] Missing required starter_campaign_id', {
+          sessionId: context.sessionId,
+          campaignId: context.campaignId,
+        });
+        userDataApi.reportClientFailure('missing_starter_campaign_id', context.sessionId, message);
+      }
 
-    if (starterCampaignId) {
-      section += await CampaignContextPrompts.buildStarterCampaignLoreSection(starterCampaignId);
+      if (starterCampaignId) {
+        section += await CampaignContextPrompts.buildStarterCampaignLoreSection(starterCampaignId);
+      }
     }
 
     if (context.characterDetails) {

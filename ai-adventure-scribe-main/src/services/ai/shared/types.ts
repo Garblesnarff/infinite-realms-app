@@ -51,6 +51,12 @@ export interface GameContext {
    * block so the DM opens with continuity instead of starting blind.
    */
   previousSessionRecap?: string;
+  /**
+   * #2450: the session's current scene description (game_sessions.current_scene_description).
+   * Rendered as a short <current_scene> block in the DM prompt so the model
+   * knows where the party is even when canon is capped and history is short.
+   */
+  currentSceneDescription?: string;
 }
 
 /**

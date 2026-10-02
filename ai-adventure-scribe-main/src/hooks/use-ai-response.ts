@@ -446,6 +446,7 @@ export const useAIResponse = (): {
           sessionId,
           userId: user?.id,
           starterCampaignId: gameContext.starterCampaignId,
+          currentSceneDescription: gameContext.currentSceneDescription,
           campaign: gameContext.campaign,
           character: gameContext.character,
           currentPhase: gameState.currentPhase,

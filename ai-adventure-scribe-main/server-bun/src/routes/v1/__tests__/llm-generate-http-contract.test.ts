@@ -531,5 +531,89 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       expect(loggedInfoLines.some((entry) => entry.startsWith('[PromptMetrics]'))).toBe(false);
       expect(loggedWarnLines.some((entry) => entry.startsWith('[PromptMetrics]'))).toBe(false);
     });
+
+    it('#2450: warns with session id and counts (never prompt text) when canon was cut', async () => {
+      loggedInfoLines = [];
+      loggedWarnLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer <redacted>', 'content-type': 'application/json' },
+          // No `total`: the fallback sum must exclude the 0/1 guard flags.
+          body: JSON.stringify({
+            prompt: 'hello with a cut canon',
+            sessionId: 'cut-session-1',
+            metrics: {
+              campaign_and_canon: 13_000,
+              scene: 60,
+              scene_state: 33,
+              system: 263,
+              history: 4_100,
+              player_input: 37,
+              canon_cut: 1,
+              history_below_floor: 0,
+            },
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const line = loggedWarnLines.find((entry) =>
+        entry.startsWith('[PromptMetrics] canon cut to fit prompt budget '),
+      );
+      expect(line).toBeDefined();
+      const parsed = JSON.parse(
+        line!.slice('[PromptMetrics] canon cut to fit prompt budget '.length),
+      );
+      expect(parsed.sessionId).toBe('cut-session-1');
+      // #2427: only allowlisted keys go into the log; the WARN carries session id + flag.
+      expect(parsed.canon_cut).toBe(1);
+      // The guard flags are counts, not section estimates: they must not inflate the total.
+      const infoLine = loggedInfoLines.find((entry) => entry.startsWith('[PromptMetrics] '));
+      expect(infoLine).toBeDefined();
+      const infoParsed = JSON.parse(infoLine!.slice('[PromptMetrics] '.length));
+      expect(infoParsed.total).toBe(17_493);
+      // The filtered log includes the allowlisted #2450 keys.
+      expect(infoParsed.canon_cut).toBe(1);
+      expect(infoParsed.scene).toBe(60);
+    });
+
+    it('#2450: warns when history fell below its floor', async () => {
+      loggedInfoLines = [];
+      loggedWarnLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer <redacted>', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            prompt: 'hello with starved history',
+            sessionId: 'floor-session-1',
+            metrics: {
+              campaign_and_canon: 20_000,
+              history: 500,
+              total: 20_500,
+              canon_cut: 0,
+              history_below_floor: 1,
+            },
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const line = loggedWarnLines.find((entry) =>
+        entry.startsWith('[PromptMetrics] history below floor '),
+      );
+      expect(line).toBeDefined();
+      const parsed = JSON.parse(line!.slice('[PromptMetrics] history below floor '.length));
+      expect(parsed.sessionId).toBe('floor-session-1');
+      // #2427: the WARN carries session id + flag (counts only).
+      expect(parsed.history_below_floor).toBe(1);
+      // No canon-cut alarm when canon_cut is 0.
+      expect(
+        loggedWarnLines.some((entry) =>
+          entry.startsWith('[PromptMetrics] canon cut to fit prompt budget '),
+        ),
+      ).toBe(false);
+    });
   });
 });

@@ -113,8 +113,14 @@ const degradedGenerateEnvelope = (): {
 const MAX_GENERATE_TOKENS = 8192;
 const MAX_EXTRACT_TOKENS = 1500;
 
+const clampMaxTokens = (value: unknown, fallback: number, max: number): number => {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
+  return Math.min(Math.max(1, n), max);
+};
+
 // #2427: the section names measurePromptSections (src/services/ai/shared/prompt-metrics.ts) emits.
 // The client sends this record, so only these keys, with numeric values, go into the log.
+// #2450: adds `scene` (current-scene block), `canon_cut` and `history_below_floor` guard flags.
 const PROMPT_METRIC_KEYS = [
   'campaign_and_canon',
   'tactical',
@@ -122,12 +128,10 @@ const PROMPT_METRIC_KEYS = [
   'system',
   'history',
   'player_input',
+  'scene',
+  'canon_cut',
+  'history_below_floor',
 ] as const;
-
-const clampMaxTokens = (value: unknown, fallback: number, max: number): number => {
-  const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
-  return Math.min(Math.max(1, n), max);
-};
 
 // #2425: say when the server replaced what the client sent. Route, user and two flags only: the
 // client's model string and prompt never go into the log.
@@ -241,26 +245,47 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // one structured log line per turn, WARN instead of INFO when the total estimate
       // is large enough to matter for the Phase 4 bounded-prompt work. Absent `metrics`
       // (old clients, or client-side computation failure) is a no-op, by design.
+      // #2450: the record also carries `canon_cut` / `history_below_floor` 0/1 guard
+      // flags; they log as counts only (never prompt text or player text) and get
+      // their own WARN lines when set.
       if (metrics && typeof metrics === 'object') {
         try {
           const metricsRecord = metrics as Record<string, unknown>;
-          const total =
-            typeof metricsRecord.total === 'number'
-              ? metricsRecord.total
-              : Object.values(metricsRecord).reduce<number>(
-                  (sum: number, value: unknown) => sum + (typeof value === 'number' ? value : 0),
-                  0,
-                );
+          // #2427: only the allowlisted keys go into the log, with numeric values.
           const loggedMetrics: Record<string, number> = {};
           for (const key of PROMPT_METRIC_KEYS) {
             const value = metricsRecord[key];
             if (typeof value === 'number' && Number.isFinite(value)) loggedMetrics[key] = value;
           }
+          // The #2450 guard flags are counts, not section token estimates, so they
+          // must not be summed into the total.
+          const total =
+            typeof metricsRecord.total === 'number'
+              ? metricsRecord.total
+              : (Object.entries(loggedMetrics) as [string, number][])
+                  .filter(([key]) => key !== 'canon_cut' && key !== 'history_below_floor')
+                  .reduce<number>((sum, [, value]) => sum + value, 0);
           const line = `[PromptMetrics] ${JSON.stringify({ ...loggedMetrics, total })}`;
           if (total > 30_000) {
             logger.warn(line);
           } else {
             logger.info(line);
+          }
+          if (loggedMetrics.canon_cut === 1) {
+            logger.warn(
+              `[PromptMetrics] canon cut to fit prompt budget ${JSON.stringify({
+                sessionId,
+                canon_cut: loggedMetrics.canon_cut,
+              })}`,
+            );
+          }
+          if (loggedMetrics.history_below_floor === 1) {
+            logger.warn(
+              `[PromptMetrics] history below floor ${JSON.stringify({
+                sessionId,
+                history_below_floor: loggedMetrics.history_below_floor,
+              })}`,
+            );
           }
         } catch (metricsError) {
           logger.warn({ msg: 'PROMPT_METRICS_LOG_FAILED', error: metricsError });
@@ -606,7 +631,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         { maxTokens: safeMaxTokens },
       );
 
-      const result = await LLMProviderService.extract({ prompt, maxTokens: safeMaxTokens });
+      const result = await LLMProviderService.extract({
+        prompt,
+        maxTokens: safeMaxTokens,
+      });
 
       if (result.error) {
         alert('llm_extraction_degraded', { error: result.error });

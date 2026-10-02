@@ -140,6 +140,10 @@ export class HeadlessGameClient {
     const aiContext = buildAIContext({
       sessionId: this.sessionId,
       starterCampaignId: game.starter_campaign_id || undefined,
+      currentSceneDescription:
+        typeof game.current_scene_description === 'string'
+          ? game.current_scene_description
+          : undefined,
       campaign: game.campaign,
       character: game.character,
       currentPhase: 'exploration',
