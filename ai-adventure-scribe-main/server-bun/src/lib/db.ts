@@ -18,28 +18,33 @@ import { env } from './env.js';
  * - max: Maximum number of connections in the pool
  * - ssl: SSL configuration (disabled for local development)
  */
-const config: postgres.Options<Record<string, never>> = {
-  max: Number(env.PGPOOL_MAX || 25),
-  idle_timeout: 20,
-  connect_timeout: 10,
-  max_lifetime: 60 * 30,
-};
+function createClient() {
+  const config: postgres.Options<Record<string, never>> = {
+    max: Number(env.PGPOOL_MAX || 25),
+    idle_timeout: 20,
+    connect_timeout: 10,
+    max_lifetime: 60 * 30,
+  };
 
-// Add SSL configuration if enabled
-// Note: rejectUnauthorized is false because Supabase runs locally in Docker
-// with a self-signed certificate. In a cloud Supabase deployment, the SSL
-// would use a proper certificate and rejectUnauthorized should be true.
-// This is acceptable because traffic is localhost (same server).
-if (env.PGSSL === 'true') {
-  // For local Docker: self-signed cert, can't validate
-  // For cloud Supabase: cert is trusted, should validate
-  const isLocalSupabase =
-    env.DATABASE_URL?.includes('localhost') || env.DATABASE_URL?.includes('127.0.0.1');
-  config.ssl = { rejectUnauthorized: !isLocalSupabase };
+  // Add SSL configuration if enabled
+  // Note: rejectUnauthorized is false because Supabase runs locally in Docker
+  // with a self-signed certificate. In a cloud Supabase deployment, the SSL
+  // would use a proper certificate and rejectUnauthorized should be true.
+  // This is acceptable because traffic is localhost (same server).
+  if (env.PGSSL === 'true') {
+    // For local Docker: self-signed cert, can't validate
+    // For cloud Supabase: cert is trusted, should validate
+    const isLocalSupabase =
+      env.DATABASE_URL?.includes('localhost') || env.DATABASE_URL?.includes('127.0.0.1');
+    config.ssl = { rejectUnauthorized: !isLocalSupabase };
+  }
+
+  return postgres(env.DATABASE_URL, config);
 }
 
 /**
- * Singleton postgres.js SQL client
+ * Singleton postgres.js SQL client, created on first use. Importing this module
+ * does not read the environment; the first query validates it (see lib/env.ts).
  *
  * Usage:
  * ```typescript
@@ -55,7 +60,22 @@ if (env.PGSSL === 'true') {
  * });
  * ```
  */
-export const sql = postgres(env.DATABASE_URL, config);
+let client: ReturnType<typeof createClient> | undefined;
+
+export const sql: ReturnType<typeof createClient> = new Proxy(
+  (() => undefined) as unknown as ReturnType<typeof createClient>,
+  {
+    apply: (_target, _thisArg, args) => {
+      client ??= createClient();
+      return Reflect.apply(client as unknown as (...a: unknown[]) => unknown, undefined, args);
+    },
+    get: (_target, prop) => {
+      client ??= createClient();
+      const value = Reflect.get(client, prop);
+      return typeof value === 'function' ? value.bind(client) : value;
+    },
+  },
+);
 
 /**
  * Type helper for postgres.js client

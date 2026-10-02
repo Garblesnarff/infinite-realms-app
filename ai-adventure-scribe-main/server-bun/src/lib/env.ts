@@ -2,7 +2,9 @@
  * Environment Variable Validation
  *
  * Validates and exports typed environment variables for the Bun server.
- * Throws error on startup if required variables are missing.
+ * Validation runs on the first read of `env` (or a call to `getEnv()`), not on
+ * import, so a module that only imports this file can load without a full
+ * environment. Throws if required variables are missing.
  */
 
 interface Env {
@@ -56,7 +58,7 @@ function validateEnv(): Env {
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing required environment variables:\n${missing.map((v) => `  - ${v}`).join('\n')}`
+      `Missing required environment variables:\n${missing.map((v) => `  - ${v}`).join('\n')}`,
     );
   }
 
@@ -79,8 +81,18 @@ function validateEnv(): Env {
   };
 }
 
+let cached: Env | undefined;
+
+/** Validate once and return the typed environment. Throws on missing variables. */
+export function getEnv(): Env {
+  cached ??= validateEnv();
+  return cached;
+}
+
 /**
- * Validated environment variables
+ * Validated environment variables, checked on first property read.
  * Access via: env.DATABASE_URL, env.PORT, etc.
  */
-export const env = validateEnv();
+export const env: Env = new Proxy({} as Env, {
+  get: (_target, prop) => getEnv()[prop as keyof Env],
+});

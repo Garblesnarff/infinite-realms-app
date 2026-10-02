@@ -1,11 +1,13 @@
 import { createApp } from './app';
 import { logAlertingConfiguration } from './lib/alerting.js';
+import { getEnv } from './lib/env.js';
 import { logger } from './lib/logger';
 import { logAbandonedMemoryExtractionJobs } from './services/memory-extraction-job.js';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
-// Note: Environment validation is done in lib/env.ts
-// For development without full env setup, comment out the env import in app.ts
+// Validate the environment at startup. lib/env.ts validates lazily, so the server
+// calls this itself to fail before listening rather than on the first request.
+getEnv();
 const app = createApp();
 
 const PORT = Number(process.env.PORT || 8888);
