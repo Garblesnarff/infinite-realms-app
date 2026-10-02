@@ -23,7 +23,10 @@ let subscriptionPriceId = 'price_pro';
 let disputeStatus = 'needs_response';
 let userStatus = 'active';
 // users rows as production has them (users.stripe_customer_id / stripe_subscription_id).
-const usersByCustomer: Record<string, { id: string; stripe_subscription_id: string | null }> = {
+const usersByCustomer: Record<
+  string,
+  { id: string; stripe_subscription_id: string | null; plan?: string }
+> = {
   cus_1: { id: 'user_1', stripe_subscription_id: 'sub_1' },
 };
 // invoice id -> subscription id, as Stripe returns on invoices.retrieve (null for one-off invoices).
@@ -50,7 +53,10 @@ const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
       (query.includes("IS DISTINCT FROM 'refunded'") && userStatus === 'refunded') ||
       (query.includes("AND subscription_status = 'disputed'") && userStatus !== 'disputed') ||
       (query.includes('AND stripe_subscription_id = ') &&
-        !values.includes(usersByCustomer.cus_1?.stripe_subscription_id));
+        !values.includes(usersByCustomer.cus_1?.stripe_subscription_id)) ||
+      (query.includes("plan IS DISTINCT FROM 'tester' OR stripe_subscription_id IS NOT NULL") &&
+        usersByCustomer.cus_1?.plan === 'tester' &&
+        !usersByCustomer.cus_1.stripe_subscription_id);
     if (blocked) {
       blockedUpdates.push(query);
       return new MockRowList();
@@ -659,6 +665,79 @@ describe('billing webhook API boundary', () => {
 
       expect(retrievedCharges).toEqual([]);
       expect(userUpdates()).toHaveLength(0);
+    });
+  });
+
+  // #2474: a tester row is set by hand. It has no subscription on file, but it can carry a
+  // stripe_customer_id if the account ever opened checkout. Events and users.* follow the
+  // shapes above (Stripe objects as delivered, users row as production has it).
+  describe('tester plan (#2474)', () => {
+    const subscriptionDeletedEvent = {
+      id: 'evt_sub_deleted_tester',
+      object: 'event',
+      type: 'customer.subscription.deleted',
+      data: {
+        object: { id: 'sub_1', object: 'subscription', customer: 'cus_1', status: 'canceled' },
+      },
+    };
+    const testerEvents: [string, () => unknown][] = [
+      ['customer.subscription.updated', () => subscriptionUpdatedEvent],
+      ['customer.subscription.deleted', () => subscriptionDeletedEvent],
+      ['charge.refunded', () => refundEvent()],
+      ['charge.dispute.created', () => disputeEvent('charge.dispute.created', 'needs_response')],
+      ['charge.dispute.closed won', () => disputeEvent('charge.dispute.closed', 'won')],
+      ['charge.dispute.closed lost', () => disputeEvent('charge.dispute.closed', 'lost')],
+    ];
+
+    beforeEach(() => {
+      usersByCustomer.cus_1 = { id: 'user_1', plan: 'tester', stripe_subscription_id: null };
+      UserPlanCache.set('user_1', 'tester');
+    });
+
+    it.each(testerEvents)(
+      '%s leaves a tester row with no subscription on file untouched',
+      async (_name, event) => {
+        constructEventAsync = async () => event();
+
+        const response = await billingRoutes.handle(webhookRequest());
+
+        expect(response.status).toBe(200);
+        expect(appliedUpdates).toHaveLength(0);
+        expect(canceledSubscriptions).toEqual([]);
+        expect(UserPlanCache.get('user_1')).toBe('tester');
+      },
+    );
+
+    it('customer.subscription.updated still changes a tester who has a subscription on file', async () => {
+      usersByCustomer.cus_1 = { id: 'user_1', plan: 'tester', stripe_subscription_id: 'sub_1' };
+      userStatus = 'active';
+      constructEventAsync = async () => subscriptionUpdatedEvent;
+
+      await billingRoutes.handle(webhookRequest());
+
+      expect(appliedUpdates).toHaveLength(1);
+      expect(UserPlanCache.get('user_1')).toBeNull();
+    });
+
+    it('customer.subscription.deleted still downgrades a tester who has a subscription on file', async () => {
+      usersByCustomer.cus_1 = { id: 'user_1', plan: 'tester', stripe_subscription_id: 'sub_1' };
+      userStatus = 'active';
+      constructEventAsync = async () => subscriptionDeletedEvent;
+
+      await billingRoutes.handle(webhookRequest());
+
+      expect(appliedUpdates).toHaveLength(1);
+      expect(UserPlanCache.get('user_1')).toBeNull();
+    });
+
+    it('a free user with a customer id is still updated by customer.subscription.updated', async () => {
+      usersByCustomer.cus_1 = { id: 'user_1', plan: 'free', stripe_subscription_id: null };
+      userStatus = 'active';
+      constructEventAsync = async () => subscriptionUpdatedEvent;
+
+      await billingRoutes.handle(webhookRequest());
+
+      expect(appliedUpdates).toHaveLength(1);
     });
   });
 });

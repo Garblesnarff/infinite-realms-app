@@ -2,6 +2,8 @@ import { Sword, Users, Home, LogOut, FileText, Crown, Settings } from 'lucide-re
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { planHasPaidFeatures } from '../../../../shared/plan-features';
+
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
@@ -16,7 +18,7 @@ const Navigation: React.FC = () => {
   const { user, signOut, isBlogAdmin, userPlan } = useAuth();
   // Same rule and source as the account page (AccountPage `isPro`). While the
   // plan is unknown (loading, or just signed out) show neither badge.
-  const isPaidPlan = userPlan === 'pro' || userPlan === 'enterprise';
+  const isPaidPlan = planHasPaidFeatures(userPlan);
 
   /**
    * Helper function to determine if a path is active
@@ -96,7 +98,7 @@ const Navigation: React.FC = () => {
               ) : isPaidPlan ? (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 text-amber-400 text-sm font-medium">
                   <Crown className="h-4 w-4" />
-                  <span>Legend</span>
+                  <span>{userPlan === 'tester' ? 'Tester' : 'Legend'}</span>
                 </span>
               ) : null}
             </div>

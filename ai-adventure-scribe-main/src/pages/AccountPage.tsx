@@ -4,6 +4,7 @@ import React from 'react';
 import { AccountInfoCard } from './account/AccountInfoCard';
 import { AccountPlanCard } from './account/AccountPlanCard';
 import { AccountUsageCard } from './account/AccountUsageCard';
+import { planHasPaidFeatures } from '../../shared/plan-features';
 
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,7 +18,8 @@ const AccountPage: React.FC = () => {
   const { subscription, quota, loading, handleUpgrade, handleManageSubscription } =
     useAccountBilling(userPlan, refreshUserPlan);
 
-  const isPro = userPlan === 'pro' || userPlan === 'enterprise';
+  const isPro = planHasPaidFeatures(userPlan);
+  const isTester = userPlan === 'tester';
 
   return (
     <div className="min-h-screen bg-[image:var(--gradient-cosmic)]">
@@ -38,6 +40,7 @@ const AccountPage: React.FC = () => {
       >
         <AccountPlanCard
           isPro={isPro}
+          isTester={isTester}
           subscription={subscription}
           loading={loading}
           upgradePriceLabel={ACCOUNT_UPGRADE_PRICE.label}

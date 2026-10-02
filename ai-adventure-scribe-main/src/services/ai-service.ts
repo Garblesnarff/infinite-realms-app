@@ -98,7 +98,7 @@ export class AIService {
     context: GameContext;
     conversationHistory?: ChatMessage[];
     onStream?: (chunk: string) => void;
-    userPlan?: 'free' | 'pro' | 'enterprise';
+    userPlan?: 'free' | 'pro' | 'enterprise' | 'tester';
     turnCount?: number;
     relevantMemories?: Memory[];
     onProviderResponse?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;

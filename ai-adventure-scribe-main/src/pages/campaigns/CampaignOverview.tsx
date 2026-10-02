@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { CampaignOverviewSidebar } from './CampaignOverviewSidebar';
 import { CampaignOverviewSkeleton } from './CampaignOverviewSkeleton';
+import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +35,9 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
   const navigate = useNavigate();
   const { userPlan } = useAuth();
 
-  const sessionExpiryMs =
-    userPlan && userPlan !== 'free' ? PAID_SESSION_EXPIRY_MS : FREE_SESSION_EXPIRY_MS;
+  const sessionExpiryMs = planHasPaidFeatures(userPlan)
+    ? PAID_SESSION_EXPIRY_MS
+    : FREE_SESSION_EXPIRY_MS;
 
   // Only use this query to decide whether the campaign has anything resumable.
   // The button opens the session picker so the user chooses the exact session.

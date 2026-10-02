@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 interface AccountPlanCardProps {
   isPro: boolean;
+  isTester?: boolean;
   subscription: SubscriptionStatus | null;
   loading: boolean;
   upgradePriceLabel: string;
@@ -17,6 +18,7 @@ interface AccountPlanCardProps {
 
 export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
   isPro,
+  isTester = false,
   subscription,
   loading,
   upgradePriceLabel,
@@ -28,7 +30,12 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <CardTitle className="text-2xl flex items-center gap-2">
-            {isPro ? (
+            {isTester ? (
+              <>
+                <Crown className="h-6 w-6 text-amber-500" />
+                Tester
+              </>
+            ) : isPro ? (
               <>
                 <Crown className="h-6 w-6 text-amber-500" />
                 Legend Tier
@@ -41,12 +48,14 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
             )}
           </CardTitle>
           <CardDescription>
-            {isPro
-              ? 'You have unlimited access to all features'
-              : 'Upgrade to unlock unlimited adventures'}
+            {isTester
+              ? 'Playtest account with raised daily limits'
+              : isPro
+                ? 'You have unlimited access to all features'
+                : 'Upgrade to unlock unlimited adventures'}
           </CardDescription>
         </div>
-        {isPro && subscription?.status && (
+        {isPro && !isTester && subscription?.status && (
           <span className="px-3 py-1 text-sm rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium">
             {subscription.status === 'active' ? 'Active' : subscription.status}
           </span>
@@ -54,7 +63,11 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
       </div>
     </CardHeader>
     <CardContent>
-      {!isPro ? (
+      {isTester ? (
+        <p className="text-muted-foreground">
+          This account is billed internally. There is no subscription to manage.
+        </p>
+      ) : !isPro ? (
         <div className="space-y-6">
           {/* Benefits List */}
           <div className="grid gap-4 sm:grid-cols-2">

@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { CampaignSessionsContent } from './CampaignSessionsContent';
 import { continueOrResumeSession } from './continue-or-resume-session';
+import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import type { SessionListItem } from './SessionCard';
 
@@ -30,8 +31,9 @@ const CampaignSessions: React.FC = () => {
   const { toast } = useToast();
   const { userPlan } = useAuth();
 
-  const sessionExpiryMs =
-    userPlan && userPlan !== 'free' ? PAID_SESSION_EXPIRY_MS : FREE_SESSION_EXPIRY_MS;
+  const sessionExpiryMs = planHasPaidFeatures(userPlan)
+    ? PAID_SESSION_EXPIRY_MS
+    : FREE_SESSION_EXPIRY_MS;
 
   const isSessionExpired = React.useCallback(
     (session: SessionListItem) => {

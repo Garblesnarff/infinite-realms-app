@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 
+import type { UserPlan } from '../../../shared/plan-features';
+
 import logger from '@/lib/logger';
 import { getAccessToken } from '@/services/auth/TokenService';
 import { isOffline } from '@/utils/network';
 
-export type UserPlan = 'free' | 'pro' | 'enterprise';
+export type { UserPlan };
 
 interface UseUserPlanProps {
   user: { id: string; email: string } | null;

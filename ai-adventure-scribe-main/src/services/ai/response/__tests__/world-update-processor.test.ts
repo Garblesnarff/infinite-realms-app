@@ -346,6 +346,14 @@ describe('processWorldAndMemories', () => {
       expect(MemoryManager.extractMemories).toHaveBeenCalled();
     });
 
+    it('should extract memories for a tester on any turn (#2474)', async () => {
+      const params = { ...defaultParams, userPlan: 'tester', turnCount: 1 };
+
+      await processWorldAndMemories(params);
+
+      expect(MemoryManager.extractMemories).toHaveBeenCalled();
+    });
+
     it('should extract memories when userPlan is undefined', async () => {
       const params = { ...defaultParams, userPlan: undefined, turnCount: 1 };
       await processWorldAndMemories(params);

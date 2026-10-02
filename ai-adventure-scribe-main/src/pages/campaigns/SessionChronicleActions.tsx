@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { type SessionListItem } from './SessionCard';
+import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import { Button } from '@/components/ui/button';
 
@@ -18,7 +19,7 @@ export const SessionChronicleActions: React.FC<SessionChronicleActionsProps> = (
   onGenerateChronicle,
 }) => {
   const chronicle = session.session_chronicles?.[0];
-  const isPro = userPlan && userPlan !== 'free';
+  const isPro = planHasPaidFeatures(userPlan);
 
   return (
     <div className="mt-3 pt-3 border-t border-border">

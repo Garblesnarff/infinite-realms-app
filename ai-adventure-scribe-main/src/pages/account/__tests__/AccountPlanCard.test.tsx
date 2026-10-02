@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AccountPlanCard } from '../AccountPlanCard';
 
-const renderCard = (isPro: boolean): ReturnType<typeof render> =>
+const renderCard = (isPro: boolean, isTester = false): ReturnType<typeof render> =>
   render(
     <AccountPlanCard
       isPro={isPro}
+      isTester={isTester}
       subscription={null}
       loading={false}
       upgradePriceLabel="$9.99/month"
@@ -30,5 +31,16 @@ describe('AccountPlanCard (#2415)', () => {
 
     expect(screen.getByText('Legend Tier')).toBeInTheDocument();
     expect(screen.queryByText(/Unlimited AI Messages/)).not.toBeInTheDocument();
+  });
+
+  it('labels a tester account Tester and offers neither Upgrade nor Manage Subscription (#2474)', () => {
+    // AccountPage passes isPro = planHasPaidFeatures('tester') = true, isTester = true.
+    renderCard(true, true);
+
+    expect(screen.getByText('Tester')).toBeInTheDocument();
+    expect(screen.queryByText('Legend Tier')).not.toBeInTheDocument();
+    expect(screen.queryByText('Free Tier')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Upgrade/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Manage Subscription/ })).not.toBeInTheDocument();
   });
 });

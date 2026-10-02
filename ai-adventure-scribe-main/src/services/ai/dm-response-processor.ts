@@ -20,7 +20,7 @@ interface ProcessDMResponseParams {
   context: GameContext;
   message: string;
   conversationHistory: ChatMessage[];
-  userPlan?: 'free' | 'pro' | 'enterprise';
+  userPlan?: 'free' | 'pro' | 'enterprise' | 'tester';
   turnCount?: number;
   voiceContext: SessionVoiceContext | null;
   isFirstMessage: boolean;

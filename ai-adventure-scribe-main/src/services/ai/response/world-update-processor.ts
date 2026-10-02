@@ -1,3 +1,4 @@
+import { planHasPaidFeatures } from '../../../../shared/plan-features';
 import { MemoryManager } from '../../memory-manager';
 import { WorldBuilderService, WorldBuilderRepository } from '../../world-builders';
 import { parseXMLTagsFromResponse } from '../xml-parser';
@@ -211,10 +212,7 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
   logger.debug('No XML tags in DM response, using fallback extraction');
 
   const shouldExtractMemory =
-    userPlan === 'pro' ||
-    userPlan === 'enterprise' ||
-    !userPlan ||
-    (turnCount !== undefined && turnCount % 3 === 0);
+    planHasPaidFeatures(userPlan) || !userPlan || (turnCount !== undefined && turnCount % 3 === 0);
 
   if (shouldExtractMemory) {
     try {

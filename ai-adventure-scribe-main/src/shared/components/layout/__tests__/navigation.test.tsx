@@ -55,6 +55,14 @@ describe('Navigation (#2292)', () => {
     expect(screen.getByText('Legend')).toBeInTheDocument();
   });
 
+  it('shows Tester, not Upgrade or Legend, on a tester account (#2474)', () => {
+    authState.value.userPlan = 'tester';
+    renderNav();
+    expect(screen.getByText('Tester')).toBeInTheDocument();
+    expect(screen.queryByText('Upgrade')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legend')).not.toBeInTheDocument();
+  });
+
   it('labels the settings icon "Account" and shows the signed-in email', async () => {
     renderNav();
     const link = screen.getByRole('link', { name: 'Account' });

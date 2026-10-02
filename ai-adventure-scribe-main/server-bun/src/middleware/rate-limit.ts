@@ -19,6 +19,7 @@
 
 import { Elysia } from 'elysia';
 
+import { planHasPaidFeatures } from '../../../shared/plan-features.js';
 import { logger } from '../lib/logger.js';
 
 export type PlanName = 'free' | 'pro' | 'enterprise' | string;
@@ -216,6 +217,7 @@ function getUserPlan(user: RateLimitUser | undefined, headers: Headers): PlanNam
  */
 function computeMax(config: { maxByPlan: Record<PlanName, number> }, plan: PlanName): number {
   if (config.maxByPlan[plan] != null) return config.maxByPlan[plan];
+  if (planHasPaidFeatures(plan) && config.maxByPlan['pro'] != null) return config.maxByPlan['pro'];
   if (plan !== 'free' && config.maxByPlan['free'] != null) return config.maxByPlan['free'];
   const first = Object.values(config.maxByPlan)[0];
   return typeof first === 'number' ? first : 60;

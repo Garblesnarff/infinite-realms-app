@@ -21,6 +21,7 @@ import {
   campaigns,
   characters,
 } from '../../../../db/schema/index';
+import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { chronicleGenerator } from '../../services/chronicle-generator.js';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 
@@ -211,7 +212,7 @@ export const chroniclesRouter = router({
       // Fire-and-forget background generation
       (async () => {
         try {
-          if (userPlan === 'pro' || userPlan === 'enterprise') {
+          if (planHasPaidFeatures(userPlan)) {
             const content = await chronicleGenerator.generateProChronicle(
               capturedSessionId,
               capturedUserId,

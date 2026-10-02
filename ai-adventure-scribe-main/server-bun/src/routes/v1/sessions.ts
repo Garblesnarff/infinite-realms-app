@@ -15,6 +15,7 @@
 import { Elysia, t } from 'elysia';
 import { eq } from 'drizzle-orm';
 
+import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { logger } from '../../lib/logger.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -268,7 +269,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
 
         // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
         const userPlan = (user as { userId: string; plan?: string }).plan;
-        if (userPlan === 'pro' || userPlan === 'enterprise') {
+        if (planHasPaidFeatures(userPlan)) {
           const sessionUserId = (user as { userId: string }).userId;
           const sessionIdForChronicle = id;
           (async () => {

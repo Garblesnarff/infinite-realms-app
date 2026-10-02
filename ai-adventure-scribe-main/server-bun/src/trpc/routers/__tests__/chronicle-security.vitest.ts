@@ -14,6 +14,7 @@ vi.hoisted(() => {
 });
 
 import { verifySessionOwnership, chroniclesRouter } from '../chronicles.js';
+import { chronicleGenerator } from '../../../services/chronicle-generator.js';
 
 // Mock the db client
 vi.mock('../../../../../db/client', () => {
@@ -257,6 +258,41 @@ describe('Chronicles Security', () => {
           ]),
         }),
       );
+    });
+
+    it.each([
+      ['pro', 'generateProChronicle'],
+      ['enterprise', 'generateProChronicle'],
+      ['tester', 'generateProChronicle'],
+      ['free', 'generateFreeChronicle'],
+    ] as const)('generate gives a %s account the %s tier (#2474)', async (plan, generator) => {
+      mockCtx.user.plan = plan;
+      const proSpy = vi
+        .spyOn(chronicleGenerator, 'generateProChronicle')
+        .mockRejectedValue(new Error('stop after the tier is chosen'));
+      const freeSpy = vi
+        .spyOn(chronicleGenerator, 'generateFreeChronicle')
+        .mockRejectedValue(new Error('stop after the tier is chosen'));
+      const caller = chroniclesRouter.createCaller(mockCtx);
+
+      const qb = mockCtx.db.select();
+      mockCtx.db.select.mockReturnValue(qb);
+      let queryCount = 0;
+      qb.then = vi.fn(function (this: any, resolve: any) {
+        queryCount++;
+        const rows = queryCount === 1 ? [{ sessionId: mockSessionId }] : [];
+        return Promise.resolve(rows).then(resolve);
+      });
+      const insertQB = mockCtx.db.insert();
+      mockCtx.db.insert.mockReturnValue(insertQB);
+      insertQB._results = [{ id: 'new-chronicle' }];
+
+      await caller.generate({ sessionId: mockSessionId });
+
+      const chosen = generator === 'generateProChronicle' ? proSpy : freeSpy;
+      const other = generator === 'generateProChronicle' ? freeSpy : proSpy;
+      await vi.waitFor(() => expect(chosen).toHaveBeenCalledTimes(1));
+      expect(other).not.toHaveBeenCalled();
     });
 
     it('getStatus should filter by userId', async () => {

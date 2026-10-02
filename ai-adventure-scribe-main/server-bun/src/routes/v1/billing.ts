@@ -471,6 +471,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
               updated_at = NOW()
             WHERE stripe_customer_id = ${customerId}
               AND subscription_status IS DISTINCT FROM 'disputed'
+              AND (plan IS DISTINCT FROM 'tester' OR stripe_subscription_id IS NOT NULL)
             RETURNING id
           `;
           invalidatePlanCache(updated);
@@ -511,6 +512,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
               END,
               updated_at = NOW()
             WHERE stripe_customer_id = ${customerId}
+              AND (plan IS DISTINCT FROM 'tester' OR stripe_subscription_id IS NOT NULL)
             RETURNING id
           `;
           invalidatePlanCache(updated);

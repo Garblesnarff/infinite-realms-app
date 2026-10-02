@@ -138,6 +138,15 @@ export class AIUsageService {
         voice: VOICE_CALL_DAILY_LIMITS.enterprise * VOICE_CHARS_PER_UNIT,
       },
     },
+    // Playtest accounts (#2474). Own plan so their spend stays out of the plan='pro' rows.
+    tester: {
+      daily: {
+        llm: 500,
+        llm_system: 5000,
+        image: 50,
+        voice: VOICE_CALL_DAILY_LIMITS.pro * VOICE_CHARS_PER_UNIT,
+      },
+    },
   };
 
   // In-memory fallback store for development/tests

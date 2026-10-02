@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { planHasPaidFeatures } from '../../../shared/plan-features';
+
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,7 +28,7 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
     },
   );
 
-  const isPro = userPlan && userPlan !== 'free';
+  const isPro = planHasPaidFeatures(userPlan);
 
   const handleCopyShareLink = () => {
     if (!chronicle?.share_token) return;
