@@ -23,11 +23,13 @@ interface MessageHandlerProps {
     isReconnecting: boolean;
     combatTurnUiState: CombatTurnUiState;
     onResumeTurn: () => Promise<void>;
+    /** #2456: handled terminal death state; when set, the UI renders the death screen. */
+    terminalDeathState: { state: 'party_defeated'; encounterId: string | null; receivedAt: number } | null;
   }) => React.ReactNode;
 }
 
 export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
-  const { handleSendMessage, isProcessing, isReconnecting, combatTurnUiState, resumeCombatTurn } =
+  const { handleSendMessage, isProcessing, isReconnecting, combatTurnUiState, resumeCombatTurn, terminalDeathState } =
     useMessageHandlerLogic(props);
 
   useEffect(() => {
@@ -47,5 +49,6 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     isReconnecting,
     combatTurnUiState,
     onResumeTurn: resumeCombatTurn,
+    terminalDeathState,
   });
 };

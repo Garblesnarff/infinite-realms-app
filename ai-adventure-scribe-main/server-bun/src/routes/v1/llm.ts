@@ -299,6 +299,61 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       const userId = user.userId;
       const plan = user.plan;
 
+      // #2456: a message sent after the party was defeated must not run
+      // ordinary generation. The encounter is concluded, so it no longer
+      // appears as active — check the latest concluded encounter and return a
+      // handled terminal state (before quota is consumed) so the client can
+      // render the death screen instead of erroring and wedging on the
+      // "Checking whose turn it is… / Resuming…" loop.
+      // The check is wrapped in try/catch: if the encounter lookup fails
+      // (e.g. database unavailable), fall through to ordinary generation
+      // rather than breaking the chat route.
+      const terminalCheckSessionId =
+        typeof sessionId === 'string' && sessionId.length > 0
+          ? sessionId
+          : typeof combatEntry?.sessionId === 'string'
+            ? combatEntry.sessionId
+            : null;
+      if (terminalCheckSessionId) {
+        try {
+          // Dynamic import: CombatEncounterService pulls in the database
+          // client at import time. Loading it lazily keeps the route
+          // importable in tests that don't mock the database.
+          const { CombatEncounterService } = await import(
+            '../../services/combat/combat-encounter-service.js'
+          );
+          const latestConcluded = await CombatEncounterService.getLatestConcludedEncounter(
+            terminalCheckSessionId,
+            userId,
+          );
+          if (latestConcluded?.endedReason === 'party_defeated') {
+            const stillActive = await CombatEncounterService.getActiveEncounter(
+              terminalCheckSessionId,
+              userId,
+            );
+            if (!stillActive) {
+              logger.info({
+                msg: 'LLM_GENERATE_PARTY_DEFEATED_TERMINAL',
+                sessionId: terminalCheckSessionId,
+                encounterId: latestConcluded.id,
+              });
+              set.status = 200;
+              return {
+                terminalState: 'party_defeated',
+                encounterId: latestConcluded.id,
+                text: '',
+              };
+            }
+          }
+        } catch (terminalCheckError) {
+          logger.warn({
+            msg: 'LLM_GENERATE_TERMINAL_CHECK_FAILED',
+            sessionId: terminalCheckSessionId,
+            error: terminalCheckError instanceof Error ? terminalCheckError.message : String(terminalCheckError),
+          });
+        }
+      }
+
       // Quota check
       const quotaType: UsageType = requestType === 'system' ? 'llm_system' : 'llm';
       const quota = await AIUsageService.checkQuotaAndConsume({

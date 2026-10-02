@@ -120,6 +120,13 @@ vi.mock('../../chat/MessageList', () => ({
 vi.mock('../../tactical/TacticalMapProvider', () => ({
   useTacticalMapContext: () => (state.tacticalMap ? { map: state.tacticalMap } : null),
 }));
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: () => ({
+    state: {
+      character: { id: 'test-char-id', name: 'Test Character' },
+    },
+  }),
+}));
 vi.mock('../../chat/ChatInput', () => ({
   ChatInput: ({
     onSendMessage,
@@ -146,11 +153,17 @@ vi.mock('@/components/combat/CombatStatus', () => ({
   CombatStatus: () => <div>Combat status</div>,
 }));
 vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => <div>Safety</div> }));
+// #2456: DeathScreen uses useNavigate; mock it for terminal-state tests.
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
 vi.mock('../game-content/GamePanelControls', () => ({
   GamePanelControls: () => <div>Panel controls</div>,
 }));
 
 const sendMessage = vi.fn();
+// #2456: configurable terminal state for death-screen tests.
+let mockTerminalDeathState: { state: string; encounterId: string | null; receivedAt: number } | null = null;
 vi.mock('../message/MessageHandler', () => ({
   MessageHandler: ({
     children,
@@ -160,6 +173,7 @@ vi.mock('../message/MessageHandler', () => ({
       isProcessing: boolean;
       combatTurnUiState: typeof state.combatTurnUiState;
       onResumeTurn: typeof state.resumeCombatTurn;
+      terminalDeathState: typeof mockTerminalDeathState;
     }) => React.ReactNode;
   }) =>
     children({
@@ -167,6 +181,7 @@ vi.mock('../message/MessageHandler', () => ({
       isProcessing: false,
       combatTurnUiState: state.combatTurnUiState,
       onResumeTurn: state.resumeCombatTurn,
+      terminalDeathState: mockTerminalDeathState,
     }),
 }));
 
@@ -215,6 +230,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.resumeCombatTurn.mockClear();
     state.tacticalMap = null;
     sendMessage.mockClear();
+    mockTerminalDeathState = null;
   });
 
   it('keeps the live message, dice, quick-action, timeline, and input surfaces in the navy center stage', () => {
@@ -574,5 +590,15 @@ describe('GameMainContent overhaul behavior contract', () => {
       render(<GameMainContent {...baseProps} isLeftCollapsed />);
       expect(screen.queryByRole('button', { name: 'Map' })).not.toBeInTheDocument();
     });
+  });
+
+  it('#2456: renders the death screen when terminalDeathState is set', () => {
+    mockTerminalDeathState = {
+      state: 'party_defeated',
+      encounterId: 'encounter-789',
+      receivedAt: Date.now(),
+    };
+    render(<GameMainContent {...baseProps} />);
+    expect(screen.getByTestId('death-screen')).toBeInTheDocument();
   });
 });

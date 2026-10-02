@@ -177,6 +177,11 @@ export const useAIResponse = (): {
   ) => Promise<EnhancedChatMessage>;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
+  terminalDeathState: {
+    state: 'party_defeated';
+    encounterId: string | null;
+    receivedAt: number;
+  } | null;
 } => {
   const { setGamePhase, state: gameState } = useGame();
   const { refreshCombatState } = useCombat();
@@ -184,6 +189,17 @@ export const useAIResponse = (): {
   const [combatTurnUiState, setCombatTurnUiState] = useState<CombatTurnUiState>(
     INITIAL_COMBAT_TURN_UI_STATE,
   );
+  /**
+   * #2456: the server reported a handled terminal game state (the party was
+   * defeated) instead of a DM reply. While set, the UI renders the death
+   * screen with the player's choices instead of the chat input.
+   */
+  const [terminalDeathState, setTerminalDeathState] = useState<{
+    state: 'party_defeated';
+    encounterId: string | null;
+    /** When this terminal response arrived; distinguishes repeat arrivals. */
+    receivedAt: number;
+  } | null>(null);
   const lastSigRef = useRef<string>('');
   const lastCombatSessionIdRef = useRef<string>('');
   const lastCombatCharacterIdRef = useRef<string>('');
@@ -667,6 +683,31 @@ export const useAIResponse = (): {
           return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
         let result = answered;
 
+        // #2456: the party was defeated. Settle the preflight state (it was
+        // set to 'running' above and must not wedge the UI on "Checking whose
+        // turn it is… / Resuming…"), surface the death screen, and return a
+        // terminal message so the caller skips ordinary DM-reply processing.
+        if (result.terminalState === 'party_defeated') {
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(null, false, lastCombatCharacterIdRef.current),
+          );
+          setTerminalDeathState({
+            state: 'party_defeated',
+            encounterId: result.terminalEncounterId ?? null,
+            receivedAt: Date.now(),
+          });
+          const terminalMessage: EnhancedChatMessage = {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: {
+              intent: 'terminal',
+              terminalState: 'party_defeated',
+            },
+          };
+          return terminalMessage;
+        }
+
         if (entryDeclined) {
           // The prompt already says nothing happened; this is the half that does not depend on the
           // model complying, the same blanking the handler's own decline branch does.
@@ -912,6 +953,12 @@ export const useAIResponse = (): {
         };
       } catch (error) {
         logger.error('Error in getAIResponse:', error);
+        // #2456: the preflight was set to 'running' at the top of getAIResponse.
+        // If the turn fails, settle it back to idle so the UI cannot wedge on
+        // "Checking whose turn it is… / Resuming…".
+        setCombatTurnUiState(
+          combatTurnUiStateForEncounter(null, false, lastCombatCharacterIdRef.current),
+        );
         throw error;
       }
     },
@@ -925,5 +972,5 @@ export const useAIResponse = (): {
     ],
   );
 
-  return { getAIResponse, combatTurnUiState, resumeCombatTurn };
+  return { getAIResponse, combatTurnUiState, resumeCombatTurn, terminalDeathState };
 };

@@ -1,6 +1,7 @@
 import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
+import { DismissibleDeathScreen } from './DeathScreen';
 import { GamePanelControls } from './GamePanelControls';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
 import { RollTraySlotProvider } from './roll-tray-slot';
@@ -26,12 +27,30 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
+import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { stripAssetTags } from '@/lib/utils';
 import { useDmWaiting } from '@/services/ai/dm-wait';
 import { useSheetCastProgress } from '@/services/combat/sheet-cast-progress';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
+
+/**
+ * #2456: reads the fallen character's name for the death screen. Kept as a
+ * separate component so GameMainContent itself never calls useCharacter() —
+ * the CharacterProvider is only required on the terminal path, not for every
+ * render (some test harnesses render GameMainContent without the provider).
+ */
+function DeathScreenWithCharacter({ receivedAt }: { receivedAt: number }) {
+  const { state: characterState } = useCharacter();
+  const characterName = characterState.character?.name ?? null;
+  return (
+    <DismissibleDeathScreen
+      characterName={characterName}
+      receivedAt={receivedAt}
+    />
+  );
+}
 
 /** Pixels from the top of `card` to the top of `dock`, tracked while `active`. */
 function useHeightAboveDock(
@@ -303,8 +322,16 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 isReconnecting,
                 combatTurnUiState,
                 onResumeTurn,
+                terminalDeathState,
               }) => (
                 <RollTraySlotProvider value={rollTraySlot}>
+                  {/* #2456: the party was defeated. Render the death screen with
+                      clear choices instead of the chat input and the resume loop. */}
+                  {terminalDeathState && (
+                    <DeathScreenWithCharacter
+                      receivedAt={terminalDeathState.receivedAt}
+                    />
+                  )}
                   {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
                       story's length out of this column's minimum height. */}
                   <div

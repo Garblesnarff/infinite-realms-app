@@ -170,6 +170,40 @@ describe('useAIResponse', () => {
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });
 
+  it('#2456: sets terminalDeathState when the AI service returns party_defeated', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    const mockSessionData = {
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
+    };
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue(mockSessionData as any);
+
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: '',
+      terminalState: 'party_defeated',
+      terminalEncounterId: 'encounter-456',
+    });
+
+    const { result } = renderHook(() => useAIResponse());
+    let response: EnhancedChatMessage | null = null;
+    await act(async () => {
+      response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+    });
+
+    expect(response!.context?.terminalState).toBe('party_defeated');
+    await waitFor(() => {
+      expect(result.current.terminalDeathState).toMatchObject({
+        state: 'party_defeated',
+        encounterId: 'encounter-456',
+      });
+    });
+  });
+
   describe('#2218: the reserved DM row id reaches the server', () => {
     const DM_ID = '0b7e4f5a-2c9d-4e1b-8a3f-6d5c4b3a2e1f';
     const sessionContext = {

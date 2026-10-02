@@ -7,7 +7,7 @@
  * Extracted from CombatInitiativeService.
  */
 
-import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
+import { desc, eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 
 import { findBibleNameInProse } from './campaign-monster-index.js';
 import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
@@ -809,6 +809,46 @@ export class CombatEncounterService {
             : sql`true`,
         ),
       )
+      .limit(1);
+
+    return result?.encounter;
+  }
+
+  /**
+   * #2456: Get the most recently concluded encounter for a session.
+   *
+   * A concluded encounter no longer appears in `getActiveEncounter`, so the
+   * terminal `endedReason` (e.g. `party_defeated`) would otherwise be invisible
+   * to the chat route. This lets `/v1/llm/generate` detect that the party was
+   * defeated and return a handled terminal state instead of running ordinary
+   * generation for a dead character.
+   */
+  static async getLatestConcludedEncounter(
+    sessionId: string,
+    userId?: string,
+  ): Promise<CombatEncounter | undefined> {
+    // 🛡️ Sentinel: ownership verification is part of the query, matching
+    // getActiveEncounter, so a user cannot probe another user's sessions.
+    const [result] = await db
+      .select({ encounter: combatEncounters })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(
+        and(
+          eq(combatEncounters.sessionId, sessionId),
+          eq(combatEncounters.status, 'completed'),
+          userId
+            ? or(
+                eq(campaigns.userId, userId),
+                eq(characters.userId, userId),
+                eq(characters.ownerId, userId),
+              )
+            : sql`true`,
+        ),
+      )
+      .orderBy(desc(combatEncounters.endedAt))
       .limit(1);
 
     return result?.encounter;

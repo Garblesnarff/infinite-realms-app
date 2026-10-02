@@ -75,6 +75,14 @@ export interface CampaignParams {
 export interface AIResponse {
   text: string;
   /**
+   * #2456: the server reported a handled terminal game state instead of a DM
+   * reply (e.g. `party_defeated` after the encounter concluded with the party
+   * defeated). Callers must render the end screen, not ordinary message flow.
+   */
+  terminalState?: 'party_defeated';
+  /** Encounter that produced the terminal state, when the server provided one. */
+  terminalEncounterId?: string | null;
+  /**
    * #2373: memory, world-update and voice work parked by `holdSideEffects`, to run only for the
    * reply a caller keeps. Runs once however often it is called; see `releaseHeldSideEffects`.
    */

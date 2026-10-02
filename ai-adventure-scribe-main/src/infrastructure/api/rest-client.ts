@@ -221,6 +221,22 @@ export class SessionExpiredError extends ApiClientError {
   }
 }
 
+/**
+ * #2456: the server reports that the party was defeated in a concluded
+ * encounter. This is a handled terminal game state, not a transport or
+ * provider failure — callers must surface the death screen instead of the
+ * generic error path.
+ */
+export class PartyDefeatedError extends Error {
+  readonly encounterId: string | null;
+
+  constructor(encounterId?: string | null) {
+    super('Party defeated — terminal game state');
+    this.name = 'PartyDefeatedError';
+    this.encounterId = encounterId ?? null;
+  }
+}
+
 function isV1Route(path: string): boolean {
   return path.startsWith('/v1/');
 }
@@ -566,7 +582,17 @@ class LlmApiClient {
         text?: string;
         provider?: 'openrouter' | 'gemini';
         model?: string;
+        terminalState?: string;
+        encounterId?: string;
       };
+      // #2456: the party was defeated. This is a handled terminal state, not a
+      // DM reply — throw so callers can render the death screen instead of
+      // treating it as ordinary text or an error.
+      if (data?.terminalState === 'party_defeated') {
+        throw new PartyDefeatedError(
+          typeof data.encounterId === 'string' ? data.encounterId : null,
+        );
+      }
       params.onResponseMetadata?.({ provider: data.provider, model: data.model });
       this.lastGenerateRequestId = this.lastRequestId;
       return data?.text ?? '';

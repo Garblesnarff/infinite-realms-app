@@ -123,6 +123,8 @@ export const useMessageHandlerLogic = ({
   isReconnecting: boolean;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
+  /** #2456: handled terminal death state; when set, the UI renders the death screen. */
+  terminalDeathState: { state: 'party_defeated'; encounterId: string | null; receivedAt: number } | null;
 } => {
   const { messages, messagesReady, sendMessage, updateMessage } = useMessageContext();
   const { extractMemories } = useMemoryContext();
@@ -130,6 +132,7 @@ export const useMessageHandlerLogic = ({
     getAIResponse,
     combatTurnUiState = INITIAL_COMBAT_TURN_UI_STATE,
     resumeCombatTurn = async () => {},
+    terminalDeathState = null,
   } = useAIResponse();
   const { processAiResponse } = useGame();
   const { toast } = useToast();
@@ -425,6 +428,13 @@ export const useMessageHandlerLogic = ({
         dmMessageId,
         showEngineNotice,
       );
+      // #2456: the party was defeated. The hook has already surfaced the death
+      // screen state and settled the combat preflight. Skip ordinary DM-reply
+      // processing — no sanitizing, no persistence, no generic error text.
+      if (aiResponseMessage.context?.terminalState === 'party_defeated') {
+        setComposerBlocked(false);
+        return;
+      }
       // Sanitize the AI response text first
       const processedText = sanitizeDMText(aiResponseMessage.text);
 
@@ -710,5 +720,6 @@ export const useMessageHandlerLogic = ({
     isReconnecting: isProcessing && isReconnecting,
     combatTurnUiState,
     resumeCombatTurn,
+    terminalDeathState,
   };
 };

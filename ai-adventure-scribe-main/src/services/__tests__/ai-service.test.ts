@@ -9,6 +9,8 @@ import {
   processDMResponseSideEffects,
   runDeferredDMResponseWork,
 } from '../ai/dm-response-processor';
+import { CampaignContextPrompts } from '../ai/prompts/campaign-context-prompts';
+import { resolveStarterCampaignId } from '../ai/prompts/game-context-prompts';
 import { AIService } from '../ai-service';
 import { MemoryManager } from '../memory-manager';
 import { fetchSceneState } from '../narrative/scene-state-client';
@@ -16,7 +18,7 @@ import { SessionStateService } from '../session-state-service';
 
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { llmApiClient } from '@/infrastructure/api';
-import { QuotaExceededError } from '@/infrastructure/api/rest-client';
+import { PartyDefeatedError, QuotaExceededError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 
 // Mock dependencies
@@ -51,6 +53,18 @@ vi.mock('../ai/campaign-generator', () => ({
   generateCampaignName: vi.fn(),
 }));
 
+vi.mock('../ai/prompts/campaign-context-prompts', () => ({
+  CampaignContextPrompts: {
+    fetchStarterCampaignLore: vi.fn(),
+    extractSceneEntityNames: vi.fn(),
+    renderStarterCampaignLore: vi.fn(),
+  },
+}));
+
+vi.mock('../ai/prompts/game-context-prompts', () => ({
+  resolveStarterCampaignId: vi.fn(),
+}));
+
 vi.mock('../narrative/scene-state-client', () => ({
   fetchSceneState: vi.fn(),
 }));
@@ -75,6 +89,11 @@ describe('AIService', () => {
     vi.clearAllMocks();
     vi.mocked(fetchSceneState).mockResolvedValue(null);
     vi.mocked(SessionStateService.getLatestRollOutcome).mockResolvedValue(null);
+    // #2463: starter-campaign lore fetch (mocked to avoid network)
+    vi.mocked(CampaignContextPrompts.fetchStarterCampaignLore).mockResolvedValue(null);
+    vi.mocked(CampaignContextPrompts.extractSceneEntityNames).mockReturnValue([]);
+    vi.mocked(CampaignContextPrompts.renderStarterCampaignLore).mockReturnValue('');
+    vi.mocked(resolveStarterCampaignId).mockReturnValue(null);
   });
 
   describe('generateCampaignDescription', () => {
@@ -249,6 +268,25 @@ describe('AIService', () => {
       ).rejects.toBe(quota);
       // One request, no second provider and no regeneration behind the refusal.
       expect(llmApiClient.generateText).toHaveBeenCalledTimes(1);
+    });
+
+    it('#2456: returns terminal state when the party is defeated (not a generic error)', async () => {
+      const mockParams: any = {
+        message: 'Attack the dragon',
+        context: mockContext,
+        conversationHistory: [],
+      };
+      vi.mocked(llmApiClient.generateText).mockRejectedValue(
+        new PartyDefeatedError('encounter-123'),
+      );
+
+      const result = await AIService.chatWithDM(mockParams);
+
+      expect(result).toMatchObject({
+        text: '',
+        terminalState: 'party_defeated',
+        terminalEncounterId: 'encounter-123',
+      });
     });
 
     it('labels response post-processing failures separately from provider failures', async () => {
