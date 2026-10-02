@@ -280,6 +280,163 @@ describe('CombatAttackService', () => {
       expect(result.transcriptLines).toEqual(['⚙️ Engine: The Professor turns hostile.']);
     });
 
+    it('propagates death-save failures added by damage at 0 HP (#2457)', async () => {
+      // Producer: HPMechanics.calculateDamageResult sets deathSaveFailuresAdded and
+      // newDeathSavesFailures when a hit lands on a target at 0 HP.
+      vi.mocked(CombatHPService.applyDamage).mockResolvedValue({
+        damageDealt: 6,
+        newCurrentHp: 0,
+        isConscious: false,
+        isDead: false,
+        deathSaveFailuresAdded: 2,
+        newDeathSavesFailures: 2,
+      } as any);
+
+      const mockEncounterId = 'enc-123';
+      const mockTargetId = 'target-123';
+      const mockAttackerId = 'attacker-123';
+
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: {
+                id: mockTargetId,
+                name: 'The Professor',
+                armorClass: 15,
+                participantType: 'npc',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
+              stats: { armorClass: 15 },
+              status: {
+                currentHp: 0,
+                maxHp: 10,
+                tempHp: 0,
+                isConscious: false,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
+            },
+            {
+              participant: { id: mockAttackerId, armorClass: 10, participantType: 'player' },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        });
+
+      const result = await service.resolveAttack(
+        mockEncounterId,
+        {
+          attackerId: mockAttackerId,
+          expectedVersion: 1,
+          targetId: mockTargetId,
+          attackType: 'melee',
+        },
+        mockUserId,
+      );
+
+      expect(result.hit).toBe(true);
+      expect(result.deathSaveFailuresAdded).toBe(2);
+      expect(result.deathSavesFailures).toBe(2);
+    });
+
+    it('omits the death-save failure fields when no failures were added (#2457)', async () => {
+      // The beforeEach applyDamage mock returns no death-save failure fields, so the
+      // result must not carry the keys at all rather than zero-valued placeholders.
+      const mockEncounterId = 'enc-123';
+      const mockTargetId = 'target-123';
+      const mockAttackerId = 'attacker-123';
+
+      (db.select as any)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              participant: {
+                id: mockTargetId,
+                name: 'The Professor',
+                armorClass: 15,
+                participantType: 'npc',
+                damageImmunities: [],
+                damageResistances: [],
+                damageVulnerabilities: [],
+              },
+              stats: { armorClass: 15 },
+              status: {
+                currentHp: 10,
+                maxHp: 10,
+                tempHp: 0,
+                isConscious: true,
+                deathSavesFailures: 0,
+              },
+              encounter: { currentRound: 1, sessionId: 'session-123' },
+            },
+            {
+              participant: { id: mockAttackerId, armorClass: 10, participantType: 'player' },
+              stats: null,
+              status: null,
+              encounter: {},
+            },
+          ]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        });
+
+      const result = await service.resolveAttack(
+        mockEncounterId,
+        {
+          attackerId: mockAttackerId,
+          expectedVersion: 1,
+          targetId: mockTargetId,
+          attackType: 'melee',
+        },
+        mockUserId,
+      );
+
+      expect(result.hit).toBe(true);
+      expect(result).not.toHaveProperty('deathSaveFailuresAdded');
+      expect(result).not.toHaveProperty('deathSavesFailures');
+    });
+
     it('should throw NotFoundError if attacker is not owned', async () => {
       const mockEncounterId = 'enc-123';
       const mockTargetId = 'target-123';

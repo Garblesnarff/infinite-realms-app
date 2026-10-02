@@ -34,6 +34,7 @@
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
+import { describeDeathSave } from '../../../../shared/death-save-lines';
 import { logger } from '../../lib/logger.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
@@ -80,43 +81,14 @@ export function vitalStateOf(participant: VitalsInput): VitalState {
   return 'dying';
 }
 
-/** The sentence the DM reads. Written as a completed event, never as a prompt to invent one. */
-export function describeDeathSave(name: string, result: DeathSaveResult): string {
-  const tally = `${result.successes} success${result.successes === 1 ? '' : 'es'}, ${
-    result.failures
-  } failure${result.failures === 1 ? '' : 's'}`;
-  if (result.wasRevived) {
-    return (
-      `${name} rolled a NATURAL 20 on their death saving throw and is back on their feet at ` +
-      `1 HP, conscious and able to act. Narrate this; it already happened.`
-    );
-  }
-  if (result.isDead) {
-    return (
-      `${name} rolled ${result.roll} on their death saving throw — their third failure. ` +
-      `${name} is DEAD. Narrate the death; it already happened.`
-    );
-  }
-  if (result.isStabilized) {
-    return (
-      `${name} rolled ${result.roll} on their death saving throw — their third success. ` +
-      `${name} is STABILISED: unconscious at 0 HP, no longer dying, and will make no further ` +
-      `death saving throws. Narrate this; it already happened.`
-    );
-  }
-  const outcome = result.isSuccess ? 'SUCCESS' : 'FAILURE';
-  return (
-    `${name} rolled ${result.roll} on their death saving throw — ${outcome} (${tally}). ` +
-    `${name} is still unconscious at 0 HP and still dying. Narrate this; it already happened.`
-  );
-}
+/** The shared death-save formatter, re-exported for the server's turn runner. */
+export { describeDeathSave };
 
 /** The line the DM gets when a character is put down, so the transition itself is narratable. */
 export function describeGoingDown(name: string): string {
   return (
-    `${name} has dropped to 0 HP and is UNCONSCIOUS and DYING — not dead. They will make a ` +
-    `death saving throw at the start of each of their turns. Narrate them going down; it ` +
-    `already happened.`
+    `${name} has dropped to 0 HP and is UNCONSCIOUS and still dying — not dead. They will make ` +
+    `a death saving throw at the start of each of their turns.`
   );
 }
 

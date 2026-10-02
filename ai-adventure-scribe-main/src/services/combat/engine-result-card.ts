@@ -8,6 +8,7 @@
  * Colour rule (Rob, 2026-10-01): gold helps you, red hurts you, grey changes nothing. The word and
  * the icon always carry the same meaning as the colour.
  */
+import { describeDamageAtZeroHp } from '../../../shared/death-save-lines';
 import {
   facingName,
   formatVersusArmorClass,
@@ -15,7 +16,11 @@ import {
   type EngineRosterEntry,
 } from '../../../shared/engine-display-name';
 
-import type { CombatEngineResult, EngineOutcomeOptions } from './combat-outcome-transcript';
+import type {
+  CombatEngineResult,
+  EngineOutcomeOptions,
+  EngineTranscriptPart,
+} from './combat-outcome-transcript';
 
 export type EngineBadgeWord =
   | 'HIT'
@@ -100,8 +105,8 @@ export interface EngineResultCard {
   status?: string;
   /** The one line of a light card (move, weapon swap, death save, initiative). */
   detail?: string;
-  /** Death save pips. */
-  deathSave?: { successes: number; failures: number };
+  /** Death save pips. `successes` is absent when only the failure tally is known. */
+  deathSave?: { successes?: number; failures: number };
   initiative?: { order: EngineCardInitiativeEntry[] };
 }
 
@@ -299,5 +304,35 @@ export function initiativeCard(
     title: 'Initiative',
     detail: `${order[0].name} acts first.`,
     initiative: { order },
+  };
+}
+
+/**
+ * The player-visible engine line and card for damage taken at 0 HP (#2457): 5e
+ * adds one death-save failure per hit, two on a critical. Returns null when the
+ * result carries no such failures. The line is the same sentence the server
+ * records as a DM fact, so the DM narrates exactly what the player read.
+ */
+export function damageAtZeroHpPart(
+  result: Pick<CombatEngineResult, 'deathSaveFailuresAdded' | 'deathSavesFailures'>,
+  target: string,
+): EngineTranscriptPart | null {
+  const added = result.deathSaveFailuresAdded ?? 0;
+  if (!Number.isFinite(added) || added <= 0) return null;
+  const failures = result.deathSavesFailures ?? 0;
+  // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
+  const description = describeDamageAtZeroHp(target, added, failures);
+  const line = `⚙️ Engine: ${description}`;
+  return {
+    line,
+    card: {
+      kind: 'death_save',
+      side: 'party',
+      line,
+      title: `${target} takes damage at 0 HP`,
+      badge: engineBadge('death-save-failed', 'party'),
+      detail: description,
+      deathSave: { failures },
+    },
   };
 }

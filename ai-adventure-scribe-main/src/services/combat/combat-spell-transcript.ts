@@ -1,4 +1,5 @@
 import {
+  damageAtZeroHpPart,
   damageEffectText,
   engineBadge,
   engineCardSide,
@@ -188,11 +189,18 @@ export function formatSpellEngineParts(
 ): EngineTranscriptPart[] {
   const outcomes = Array.isArray(result.results) ? result.results : [result];
   // Each result of an area spell belongs to its own target, in `target_ids` order.
-  return outcomes
-    .map((outcome, index) =>
-      formatSpellPart(action, outcome, roster, action.target_ids?.[index] ?? '', options),
-    )
-    .filter((part): part is EngineTranscriptPart => Boolean(part));
+  // Damage at 0 HP adds death-save failures: the failure is its own engine line and card (#2457).
+  return outcomes.flatMap((outcome, index) => {
+    const targetId = action.target_ids?.[index] ?? '';
+    const spellPart = formatSpellPart(action, outcome, roster, targetId, options);
+    const parts = spellPart ? [spellPart] : [];
+    const damageAtZero = damageAtZeroHpPart(
+      outcome,
+      facingName(outcome.targetName, targetId, roster),
+    );
+    if (damageAtZero) parts.push(damageAtZero);
+    return parts;
+  });
 }
 
 /** A refused player spell: the line and its card. `actorId` is resolved once, against the roster. */

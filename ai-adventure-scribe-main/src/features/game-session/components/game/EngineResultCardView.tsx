@@ -62,7 +62,7 @@ const HpLine: React.FC<{ hp: NonNullable<EngineResultCard['hp']> }> = ({ hp }) =
   );
 };
 
-const DeathSavePips: React.FC<{ successes: number; failures: number }> = ({
+const DeathSavePips: React.FC<{ successes?: number; failures: number }> = ({
   successes,
   failures,
 }) => (
@@ -72,7 +72,7 @@ const DeathSavePips: React.FC<{ successes: number; failures: number }> = ({
         key={`s${index}`}
         className={cn(
           'h-2.5 w-2.5 rounded-full border border-[#e8c36a]',
-          index < successes && 'bg-[#e8c36a]',
+          index < (successes ?? 0) && 'bg-[#e8c36a]',
         )}
       />
     ))}
@@ -137,7 +137,10 @@ export const EngineResultCardView: React.FC<{
           <p className="mt-1 flex items-center gap-2 text-sm text-white/85">
             <DeathSavePips {...card.deathSave} />
             <span>
-              {card.deathSave.failures} of 3 failures · {card.deathSave.successes} of 3 successes
+              {card.deathSave.failures} of 3 failures
+              {card.deathSave.successes !== undefined
+                ? ` · ${card.deathSave.successes} of 3 successes`
+                : ''}
             </span>
           </p>
         )}

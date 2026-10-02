@@ -1,3 +1,4 @@
+import { describeDeathSave } from '../../../../shared/death-save-lines';
 import { combatLogger } from '../../lib/logger.js';
 
 import type { SubmittedCombatIntent } from './combat-intent-service.js';
@@ -218,33 +219,19 @@ function deathSaveLines(value: unknown, state: CombatState): string[] {
     if (!isRecord(save) || typeof save.participantId !== 'string') return [];
     const participant = state.participants.find((candidate) => candidate.id === save.participantId);
     if (!participant) return [];
-    return [describeDeathSaveForTranscript(participant.name, save as unknown as DeathSaveResult)];
+    // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
+    return [`⚙️ Engine: ${describeDeathSave(participant.name, save as unknown as DeathSaveResult)}`];
   });
-}
-
-function describeDeathSaveForTranscript(name: string, result: DeathSaveResult): string {
-  const tally = `${result.successes} success${result.successes === 1 ? '' : 'es'}, ${
-    result.failures
-  } failure${result.failures === 1 ? '' : 's'}`;
-  if (result.wasRevived) {
-    return `${name} rolled a NATURAL 20 on their death saving throw and is back on their feet at 1 HP, conscious and able to act. Narrate this; it already happened.`;
-  }
-  if (result.isDead) {
-    return `${name} rolled ${result.roll} on their death saving throw — their third failure. ${name} is DEAD. Narrate the death; it already happened.`;
-  }
-  if (result.isStabilized) {
-    return `${name} rolled ${result.roll} on their death saving throw — their third success. ${name} is STABILISED: unconscious at 0 HP, no longer dying, and will make no further death saving throws. Narrate this; it already happened.`;
-  }
-  const outcome = result.isSuccess ? 'SUCCESS' : 'FAILURE';
-  return `${name} rolled ${result.roll} on their death saving throw — ${outcome} (${tally}). ${name} is still unconscious at 0 HP and still dying. Narrate this; it already happened.`;
 }
 
 function mergeBoundaryDeathSaves(resolution: unknown, boundary: unknown): unknown {
   if (!isRecord(boundary) || !Array.isArray(boundary.deathSaves) || !boundary.deathSaves.length) {
     return resolution;
   }
-  if (!isRecord(resolution)) return { result: resolution, deathSaves: boundary.deathSaves };
-  return { ...resolution, deathSaves: boundary.deathSaves };
+  const boundarySaves = boundary.deathSaves;
+  if (!isRecord(resolution)) return { result: resolution, deathSaves: boundarySaves };
+  const existingSaves = Array.isArray(resolution.deathSaves) ? resolution.deathSaves : [];
+  return { ...resolution, deathSaves: [...existingSaves, ...boundarySaves] };
 }
 
 /**

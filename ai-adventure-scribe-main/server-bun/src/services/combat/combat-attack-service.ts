@@ -64,6 +64,7 @@ import type {
   SpellAttackResult,
   CreateWeaponAttackInput,
   DamageType,
+  DamageResult,
 } from '../../types/combat.js';
 
 /**
@@ -73,6 +74,19 @@ import type {
  */
 function isProvidedD20(value: number | undefined): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 20;
+}
+
+/**
+ * The death-save failure fields the damage layer computed for a strike at 0 HP
+ * (#2457). Spread onto the attack result only when a failure was actually added,
+ * so the client can print the engine line and card for it.
+ */
+function deathSaveFailureFields(hpResult: DamageResult): Pick<AttackResult, 'deathSaveFailuresAdded' | 'deathSavesFailures'> {
+  if ((hpResult.deathSaveFailuresAdded ?? 0) <= 0) return {};
+  return {
+    deathSaveFailuresAdded: hpResult.deathSaveFailuresAdded,
+    deathSavesFailures: hpResult.newDeathSavesFailures,
+  };
 }
 
 type SpellDamageProfile = { damageDice: string; damageBonus: number };
@@ -547,6 +561,7 @@ export class CombatAttackService {
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
+          ...deathSaveFailureFields(hpResult),
           targetCondition: healthConditionForCombat(
             hpResult.newCurrentHp,
             targetParticipant.maxHp,
@@ -892,6 +907,7 @@ export class CombatAttackService {
               targetNewHp: hpResult.newCurrentHp,
               targetIsConscious: hpResult.isConscious,
               targetIsDead: hpResult.isDead,
+              ...deathSaveFailureFields(hpResult),
               targetCondition: healthConditionForCombat(
                 hpResult.newCurrentHp,
                 targetParticipant.maxHp,
@@ -1004,6 +1020,7 @@ export class CombatAttackService {
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
+                ...deathSaveFailureFields(hpResult),
                 targetCondition: healthConditionForCombat(
                   hpResult.newCurrentHp,
                   targetParticipant.maxHp,
@@ -1110,6 +1127,7 @@ export class CombatAttackService {
                 targetNewHp: hpResult.newCurrentHp,
                 targetIsConscious: hpResult.isConscious,
                 targetIsDead: hpResult.isDead,
+                ...deathSaveFailureFields(hpResult),
                 targetCondition: healthConditionForCombat(
                   hpResult.newCurrentHp,
                   targetParticipant.maxHp,

@@ -608,6 +608,10 @@ export interface AttackResult {
   targetNewHp?: number;
   targetIsConscious?: boolean;
   targetIsDead?: boolean;
+  /** Death-save failures added because the target was struck at 0 HP (5e: one, two on a crit). */
+  deathSaveFailuresAdded?: number;
+  /** The target's death-save failure tally after those failures were added. */
+  deathSavesFailures?: number;
   /** Authoritative condition tier after damage; numeric HP stays private to engine/UI state. */
   targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   isCritical: boolean;

@@ -42,6 +42,7 @@ import {
 import {
   engineRosterOf,
   formatCombatEngineParts,
+  formatDeathSaveParts,
   formatNpcTurnOutcome,
   npcTurnOptions,
   formatRefusedSpellPart,
@@ -680,7 +681,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     autoRolled: boolean,
   ): Promise<BatchBoundary> => {
     notePlayerSpell(action);
-    const engineParts = formatCombatEngineParts(action, execution.result, roster);
+    // Death saves on a single executed action get their own engine lines and cards (#2457).
+    const engineParts = [
+      ...formatCombatEngineParts(action, execution.result, roster),
+      ...formatDeathSaveParts(execution.result, roster),
+    ];
     if (isPlayerActor(action.actor_id, participants)) {
       for (const part of engineParts) {
         if (part.card.kind === 'spell') reportSheetCastResult(part.card);
@@ -711,6 +716,21 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       { type: 'end_turn', actorId: action.actor_id },
       'dm',
     );
+    // Death saves settled by the explicit end_turn boundary get their own engine lines and
+    // cards too (#2457) — they are not part of the action's result. Print BEFORE the
+    // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
+    // must still be visible.
+    const turnDeathSaveParts = formatDeathSaveParts(turn, roster);
+    if (turnDeathSaveParts.length) {
+      appendEngineBlock({
+        source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
+        actorId: action.actor_id,
+        lines: [turnDeathSaveParts.map((part) => part.line).join('\n\n')],
+        cards: turnDeathSaveParts.map((part) => part.card),
+        round: combatRoundFrom(turn, playerRound ?? 1),
+        serverSequence: combatSequenceFrom(turn),
+      });
+    }
     if (combatBoundaryFromResult(turn)) return 'combat_ended';
     const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
@@ -1090,8 +1110,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           timestamp: new Date(),
         },
       ],
-      userPlan: userPlan || undefined,
       turnCount,
+      userPlan: userPlan || undefined,
       ...(narrationGated ? { holdSideEffects: true } : {}),
       // The gate's second ask: the reply it rejected, named (#2373). A param, not part of
       // `message`, so it reaches the prompt rules and never the memory-extraction input.

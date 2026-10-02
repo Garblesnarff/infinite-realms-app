@@ -300,9 +300,61 @@ describe('advanceNpcTurns', () => {
 
     const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
 
-    expect(result.transcriptLines.join('\n')).toContain('death saving throw');
+    const transcript = result.transcriptLines.join('\n');
+    // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
+    expect(transcript).toContain('⚙️ Engine:');
+    expect(transcript).toContain('death saving throw');
+    // #2457: the transcript is player-visible, so no DM-facing instruction may leak into it,
+    // and the natural 1's two failures must be explicit.
+    expect(transcript).not.toContain('Narrate');
+    expect(transcript).not.toContain('already happened');
+    expect(transcript).toContain('two failures');
     expect(result.results[0].engineResult).toMatchObject({
       deathSaves: [{ participantId: 'p1', failures: 2 }],
+    });
+  });
+
+  it('concatenates death saves from the attack and the end_turn boundary instead of dropping the first', async () => {
+    const player = participant('p1', 'player');
+    const npc = participant('npc1', 'monster');
+    const attackSave = {
+      participantId: 'p1',
+      roll: 12,
+      isSuccess: true,
+      isCritical: false,
+      successes: 1,
+      failures: 0,
+      isStabilized: false,
+      isDead: false,
+      wasRevived: false,
+      newCurrentHp: 0,
+    };
+    const boundarySave = {
+      participantId: 'p1',
+      roll: 8,
+      isSuccess: false,
+      isCritical: false,
+      successes: 1,
+      failures: 1,
+      isStabilized: false,
+      isDead: false,
+      wasRevived: false,
+      newCurrentHp: 0,
+    };
+    const { dependencies } = harness([npc, player], 'npc1', (intent) => {
+      if (intent.type === 'attack') {
+        return { actorName: 'npc1', targetName: 'The Seeker', hit: true, deathSaves: [attackSave] };
+      }
+      if (intent.type === 'end_turn') {
+        return { deathSaves: [boundarySave] };
+      }
+      return { currentParticipant: player };
+    });
+
+    const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+    expect(result.results[0].engineResult).toMatchObject({
+      deathSaves: [attackSave, boundarySave],
     });
   });
 

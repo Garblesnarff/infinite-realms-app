@@ -7,6 +7,7 @@
  */
 import { formatSpellEngineParts } from './combat-spell-transcript';
 import {
+  damageAtZeroHpPart,
   damageEffectText,
   engineBadge,
   engineCardSide,
@@ -14,6 +15,7 @@ import {
   type EngineResultCard,
 } from './engine-result-card';
 import { isPlayerActor } from './player-attack-roll';
+import { describeDeathSave } from '../../../shared/death-save-lines';
 import {
   facingName,
   formatVersusArmorClass,
@@ -83,6 +85,10 @@ export interface CombatEngineResult {
   };
   /** One entry per death saving throw rolled at the turn boundary. */
   deathSaves?: EngineDeathSave[];
+  /** Death-save failures added because the target was struck at 0 HP (#2457). */
+  deathSaveFailuresAdded?: number;
+  /** The target's death-save failure tally after those failures were added. */
+  deathSavesFailures?: number;
 }
 
 export interface EngineDeathSave {
@@ -287,6 +293,9 @@ export function formatCombatEngineParts(
       ...(status ? { status } : {}),
     },
   });
+  // Damage at 0 HP adds death-save failures: the failure is its own engine line and card (#2457).
+  const damageAtZero = damageAtZeroHpPart(result, target);
+  if (damageAtZero) parts.push(damageAtZero);
   return parts;
 }
 
@@ -304,6 +313,35 @@ export function formatCombatEngineOutcome(
   return joinedLines(formatCombatEngineParts(action, value, roster, options));
 }
 
+/**
+ * One death-save card. The NPC-turn card covers the line the server already printed;
+ * the single-action card carries the line itself.
+ */
+function deathSaveCard(
+  name: string,
+  save: EngineDeathSave,
+  line: string,
+  covers?: string[],
+): EngineResultCard {
+  const detail = save.wasRevived
+    ? `Rolled a natural 20: ${name} is back on their feet at 1 HP.`
+    : save.isDead
+      ? `Rolled ${save.roll}: the third failure. ${name} is dead.`
+      : save.isStabilized
+        ? `Rolled ${save.roll}: the third success. ${name} is stable.`
+        : `Rolled ${save.roll}.`;
+  return {
+    kind: 'death_save',
+    side: 'party',
+    line,
+    ...(covers ? { covers } : {}),
+    title: `${name} makes a death saving throw`,
+    badge: engineBadge(save.isSuccess ? 'death-save-passed' : 'death-save-failed', 'party'),
+    detail,
+    deathSave: { successes: save.successes ?? 0, failures: save.failures ?? 0 },
+  };
+}
+
 function deathSaveCards(
   result: unknown,
   roster: readonly EngineRosterEntry[],
@@ -316,25 +354,36 @@ function deathSaveCards(
   return saves.flatMap((save, index) => {
     if (!save || !isFiniteNumber(save.roll)) return [];
     const name = facingName(undefined, save.participantId, roster);
-    const detail = save.wasRevived
-      ? `Rolled a natural 20: ${name} is back on their feet at 1 HP.`
-      : save.isDead
-        ? `Rolled ${save.roll}: the third failure. ${name} is dead.`
-        : save.isStabilized
-          ? `Rolled ${save.roll}: the third success. ${name} is stable.`
-          : `Rolled ${save.roll}.`;
     return [
-      {
-        kind: 'death_save' as const,
-        side: 'party' as const,
-        line: `⚙️ Engine: ${name} rolled ${save.roll} on a death saving throw — ${save.isSuccess ? 'PASSED' : 'FAILED'}.`,
-        ...(paired ? { covers: [printedLines[index]] } : {}),
-        title: `${name} makes a death saving throw`,
-        badge: engineBadge(save.isSuccess ? 'death-save-passed' : 'death-save-failed', 'party'),
-        detail,
-        deathSave: { successes: save.successes ?? 0, failures: save.failures ?? 0 },
-      },
+      deathSaveCard(
+        name,
+        save,
+        `⚙️ Engine: ${name} rolled ${save.roll} on a death saving throw — ${save.isSuccess ? 'PASSED' : 'FAILED'}.`,
+        paired ? [printedLines[index]] : undefined,
+      ),
     ];
+  });
+}
+
+/**
+ * The player-visible engine lines and cards for death saves on a single executed
+ * action (#2457). The NPC-turn path keeps pairing its cards against the server's
+ * printed lines; a single action was never given server lines, so the card carries
+ * the line itself.
+ */
+export function formatDeathSaveParts(
+  value: unknown,
+  roster: readonly EngineRosterEntry[] = [],
+): EngineTranscriptPart[] {
+  const saves = (
+    isRecord(value) && Array.isArray(value.deathSaves) ? value.deathSaves : []
+  ) as EngineDeathSave[];
+  return saves.flatMap((save) => {
+    if (!save || !isFiniteNumber(save.roll)) return [];
+    const name = facingName(undefined, save.participantId, roster);
+    // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
+    const line = `⚙️ Engine: ${describeDeathSave(name, save)}`;
+    return [{ line, card: deathSaveCard(name, save, line) }];
   });
 }
 

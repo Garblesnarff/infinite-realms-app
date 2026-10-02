@@ -32,6 +32,7 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { describeDamageAtZeroHp } from '../../../../shared/death-save-lines';
 import {
   facingName,
   rosterEntryForParticipant,
@@ -241,6 +242,8 @@ type SpellResolutionVisibility = Parameters<typeof describeResolvedSpell>[3] & {
   spellName?: string;
   targetNewHp?: number;
   targetIsDead?: boolean;
+  deathSaveFailuresAdded?: number;
+  deathSavesFailures?: number;
 };
 
 /** Keep the engine's descriptive attack facts attached to the mutation response. */
@@ -438,6 +441,7 @@ async function resolveActorTurn(
 ): Promise<{
   actor: NonNullable<CombatState['currentParticipant']>;
   encounter: CombatState['encounter'];
+  deathSaves: unknown[];
 }> {
   const current = initial.currentParticipant as TurnResourceView | null;
   const known = initial.participants.some((participant) => participant.id === actorId);
@@ -450,16 +454,16 @@ async function resolveActorTurn(
     source === 'dm' && known && intentType !== 'end_turn' && !!current && current.id !== actorId;
   // The refusal that must survive this wave, unchanged: a creature being made to act twice.
   if (!absorbable || (vitalStateOf(current!) === 'standing' && !current!.actionUsed)) {
-    return assertActorTurn(initial, actorId, index);
+    return { ...assertActorTurn(initial, actorId, index), deathSaves: [] };
   }
 
-  await advanceOneTurn(encounterId, initial.encounter.sessionId, userId);
+  const settled = await advanceOneTurn(encounterId, initial.encounter.sessionId, userId);
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   if (state.currentParticipant?.id !== actorId) {
     // One position was not enough to reach the addressed creature. The advance itself was
     // legitimate — the previous participant really had finished — so the board is left where
     // it now honestly stands rather than rolled back to a position that was already wrong.
-    return assertActorTurn(state, actorId, index);
+    return { ...assertActorTurn(state, actorId, index), deathSaves: settled.deathSaves };
   }
   logger.warn({
     msg: 'DM_IMPLICIT_TURN_ADVANCE',
@@ -473,7 +477,7 @@ async function resolveActorTurn(
     positionsAdvanced: 1,
     skipped: [{ id: current!.id, slug: index.slugFor(current!.id) ?? null }],
   });
-  return { actor: state.currentParticipant, encounter: state.encounter };
+  return { actor: state.currentParticipant, encounter: state.encounter, deathSaves: settled.deathSaves };
 }
 
 /**
@@ -826,7 +830,7 @@ export async function executeCombatIntent(
       });
       return stale;
     }
-    const { actor, encounter } = await resolveActorTurn(
+    const { actor, encounter, deathSaves: boundaryDeathSaves } = await resolveActorTurn(
       encounterId,
       state,
       resolved.actorId,
@@ -956,12 +960,30 @@ export async function executeCombatIntent(
         // about. The attack line above says "is UNCONSCIOUS"; this says what unconscious means
         // in the rules the engine is now enforcing, so the DM narrates a character dying on
         // the floor rather than a character killed.
-        const outcome = result as { targetNewHp?: number; targetIsDead?: boolean };
+        const outcome = result as {
+          targetNewHp?: number;
+          targetIsDead?: boolean;
+          deathSaveFailuresAdded?: number;
+          deathSavesFailures?: number;
+        };
         const targetIsPlayer =
           state.participants.find((participant) => participant.id === intent.targetId)
             ?.participantType === 'player';
         if (targetIsPlayer && outcome.targetNewHp === 0 && outcome.targetIsDead !== true) {
           await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+        }
+        // Damage at 0 HP adds death-save failures: its own engine fact, in the same
+        // sentence the player reads, so the DM narrates the failure it caused (#2457).
+        const deathSaveFailuresAdded = outcome.deathSaveFailuresAdded ?? 0;
+        if (deathSaveFailuresAdded > 0) {
+          await recordDmTacticalFact(
+            encounter.sessionId,
+            describeDamageAtZeroHp(
+              targetLabel,
+              deathSaveFailuresAdded,
+              outcome.deathSavesFailures ?? 0,
+            ),
+          );
         }
       }
     } else if (intent.type === 'spell') {
@@ -1033,6 +1055,19 @@ export async function executeCombatIntent(
           'player';
         if (targetIsPlayer && outcome.targetNewHp === 0 && outcome.targetIsDead !== true) {
           await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+        }
+        // Damage at 0 HP adds death-save failures: its own engine fact, in the same
+        // sentence the player reads, so the DM narrates the failure it caused (#2457).
+        const spellDeathSaveFailuresAdded = outcome.deathSaveFailuresAdded ?? 0;
+        if (spellDeathSaveFailuresAdded > 0) {
+          await recordDmTacticalFact(
+            encounter.sessionId,
+            describeDamageAtZeroHp(
+              targetLabel,
+              spellDeathSaveFailuresAdded,
+              outcome.deathSavesFailures ?? 0,
+            ),
+          );
         }
       }
     } else if (intent.type === 'dash') {
@@ -1117,6 +1152,17 @@ export async function executeCombatIntent(
       }
       combatBoundary = endedOnAdvance;
       if (!endedOnAdvance) await publishCombatState(encounterId, userId, intent.type);
+    }
+    // Death saves settled by the implicit turn advance in resolveActorTurn (#2457) — the
+    // previous participant was down and the advance rolled their save before this action.
+    // Attach ALWAYS, even when combat ended: a lethal third failure ends the fight, and the
+    // DEAD line must still reach the client.
+    if (boundaryDeathSaves.length && result && typeof result === 'object') {
+      const existing = (result as { deathSaves?: unknown[] }).deathSaves;
+      result = {
+        ...(result as Record<string, unknown>),
+        deathSaves: [...boundaryDeathSaves, ...(Array.isArray(existing) ? existing : [])],
+      };
     }
     return combatBoundary ? markCombatEnded(result) : result;
   } catch (error) {
