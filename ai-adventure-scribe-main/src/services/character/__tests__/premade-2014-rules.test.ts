@@ -28,6 +28,7 @@ import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 const MIGRATIONS = join(__dirname, '../../../../supabase/migrations');
 const SKILL_FIX_MIGRATION = '20261001_fix_premade_skill_proficiencies_2014.sql';
+const EXILE_MIGRATION = '20261002_reset_the_exile_template_to_ranger.sql';
 const JSON_COLUMNS = new Set(['ability_scores', 'personality', 'skills', 'languages', 'equipment']);
 
 type TemplateRow = StarterCharacterTemplateLike & {
@@ -78,12 +79,9 @@ function decodeSqlValue(value: string, column: string): unknown {
   return JSON_COLUMNS.has(column) ? JSON.parse(text) : text;
 }
 
-/** Every row the seed migrations insert, in file order (VALUES and INSERT ... SELECT forms). */
-function readSeededTemplates(): TemplateRow[] {
+/** Every row the given migrations insert, in file order (VALUES and INSERT ... SELECT forms). */
+function readTemplateInserts(files: string[]): TemplateRow[] {
   const rows: TemplateRow[] = [];
-  const files = readdirSync(MIGRATIONS)
-    .filter((name) => /seed.*character_templates.*\.sql$/.test(name))
-    .sort();
   for (const file of files) {
     const sql = readFileSync(join(MIGRATIONS, file), 'utf8');
     const insert =
@@ -126,6 +124,13 @@ function applySkillFixMigration(rows: TemplateRow[]): { rows: TemplateRow[]; fix
   });
   return { rows: result, fixed };
 }
+
+const readSeededTemplates = (): TemplateRow[] =>
+  readTemplateInserts(
+    readdirSync(MIGRATIONS)
+      .filter((name) => /seed.*character_templates.*\.sql$/.test(name))
+      .sort(),
+  );
 
 const seeded = readSeededTemplates();
 const { rows: premades, fixed: fixedKeys } = applySkillFixMigration(seeded);
@@ -303,5 +308,70 @@ describe('premade starter templates follow 2014 rules (#2483)', () => {
         expect(classSkills).toEqual(expect.arrayContaining(picks));
       }
     });
+  });
+});
+
+describe('The Exile template is reset to the seed Ranger (#2483)', () => {
+  const [reset] = readTemplateInserts([EXILE_MIGRATION]);
+  const seedRow = seeded.find((row) => row.template_key === 'the-exile') as TemplateRow;
+
+  it('reads one row, for the-exile in abyssal-descent', () => {
+    expect(readTemplateInserts([EXILE_MIGRATION])).toHaveLength(1);
+    expect(reset.starter_campaign_id).toBe('abyssal-descent');
+    expect(reset.template_key).toBe('the-exile');
+  });
+
+  it('is the seed row, with only the 2014 skill fix on top', () => {
+    // display_order is left as production has it, so the migration does not carry it.
+    const { display_order: _displayOrder, ...seedColumns } = seedRow as TemplateRow & {
+      display_order: number;
+    };
+    expect({ ...reset, skills: null }).toEqual({ ...seedColumns, skills: null });
+    expect(reset.class).toBe('Ranger');
+    expect(reset.subrace).toBe('Drow');
+    expect(reset.level).toBe(1);
+    expect(Object.keys(reset.ability_scores as object).sort()).toEqual([
+      'charisma',
+      'constitution',
+      'dexterity',
+      'intelligence',
+      'strength',
+      'wisdom',
+    ]);
+    // The same skills 20261001 gives it, so the two migrations agree.
+    expect(reset.skills).toEqual(premade('the-exile').skills);
+  });
+
+  it('overwrites every column it inserts, so a Druid row keeps nothing of its own', () => {
+    const sql = readFileSync(join(MIGRATIONS, EXILE_MIGRATION), 'utf8')
+      .split('\n')
+      .filter((line) => !line.startsWith('--'))
+      .join('\n');
+    const inserted = /INSERT\s+INTO\s+public\.starter_character_templates\s*\(([^)]*)\)/
+      .exec(sql)![1]
+      .split(',')
+      .map((column) => column.trim())
+      .filter((column) => column !== 'starter_campaign_id' && column !== 'template_key');
+    const overwritten = [...sql.matchAll(/^\s+(\w+) = EXCLUDED\.\1[,;]$/gm)].map(
+      ([, column]) => column,
+    );
+
+    expect(overwritten.sort()).toEqual([...inserted].sort());
+    expect(sql).not.toMatch(/portrait_url|card_image_url|display_order/);
+  });
+
+  it('seeds a level 1 Ranger with no slots and no spells, and the sheet shows none', () => {
+    const { seed, character, sheet } = sheetFor(reset);
+    const stats = calculateAllCharacterStats(character);
+
+    expect(seed.class).toBe('Ranger');
+    expect(seed).not.toHaveProperty('spell_slots');
+    expect([seed.cantrips, seed.known_spells, seed.prepared_spells]).toEqual(['', '', '']);
+    expect(stats.spellcastingAbility).toBeUndefined();
+    expect(stats.spellSlots).toBeUndefined();
+    expect(sheet.spellcasting).toBeNull();
+    expect(sheet.spells).toEqual({ cantrips: [], known: [], prepared: [] });
+    expect((seed.stats as { max_hit_points: number }).max_hit_points).toBe(11);
+    expect((seed.stats as { armor_class: number }).armor_class).toBe(15);
   });
 });
