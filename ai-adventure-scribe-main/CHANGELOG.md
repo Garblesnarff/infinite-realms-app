@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.24.1...v0.25.0) (2026-10-03)
+
+
+### Features
+
+* **billing:** plan limits v1 — Free 15 msg / 1 image, Legend 40 / 2 ([#2510](https://github.com/Garblesnarff/infinite-realms-production/issues/2510)) ([#2521](https://github.com/Garblesnarff/infinite-realms-production/issues/2521)) ([07b75fd](https://github.com/Garblesnarff/infinite-realms-production/commit/07b75fd11f13d6d6758dbdc30ce1f9dc64b41071))
+* **combat:** bottom sheet, casting dock, Cancel cast, save card in the roll tray ([#2418](https://github.com/Garblesnarff/infinite-realms-production/issues/2418)) ([#2461](https://github.com/Garblesnarff/infinite-realms-production/issues/2461)) ([2cd558a](https://github.com/Garblesnarff/infinite-realms-production/commit/2cd558a4edc4bc8496e8ed165d070e0964cd89bb))
+* **legal:** add /privacy, /terms, /cookies, /contact pages ([#2258](https://github.com/Garblesnarff/infinite-realms-production/issues/2258)) ([#2476](https://github.com/Garblesnarff/infinite-realms-production/issues/2476)) ([dc82dd3](https://github.com/Garblesnarff/infinite-realms-production/commit/dc82dd3a1e70eadd7e44b6721eee64f42328b389))
+* **usage:** price image output tokens apart from text completion ([#2182](https://github.com/Garblesnarff/infinite-realms-production/issues/2182)) ([#2472](https://github.com/Garblesnarff/infinite-realms-production/issues/2472)) ([cf312a1](https://github.com/Garblesnarff/infinite-realms-production/commit/cf312a1a27a668404a6b08789270445886c948f7))
+
+
+### Bug Fixes
+
+* 2456 party_defeated terminal state with death screen ([#2465](https://github.com/Garblesnarff/infinite-realms-production/issues/2465)) ([0a30f4b](https://github.com/Garblesnarff/infinite-realms-production/commit/0a30f4b5de5c831cd1a2159e47042190a470e531))
+* 2457 — every death save gets a player-visible engine line and card ([#2466](https://github.com/Garblesnarff/infinite-realms-production/issues/2466)) ([f8849c8](https://github.com/Garblesnarff/infinite-realms-production/commit/f8849c864515c249bfdd6b9820377c51709ec233))
+* **assets:** show linked faction images; stop dropping scene chunk images ([#2198](https://github.com/Garblesnarff/infinite-realms-production/issues/2198)) ([#2471](https://github.com/Garblesnarff/infinite-realms-production/issues/2471)) ([18b533e](https://github.com/Garblesnarff/infinite-realms-production/commit/18b533e8c7379b6850088b189b6fc9161dd8fc04))
+* **billing:** downgrade plan on full refund and dispute; clear plan cache ([#2173](https://github.com/Garblesnarff/infinite-realms-production/issues/2173)) ([#2175](https://github.com/Garblesnarff/infinite-realms-production/issues/2175)) ([6ecb80f](https://github.com/Garblesnarff/infinite-realms-production/commit/6ecb80f5bad83373c763b1b94056aa4650e74655))
+* **combat:** one common word does not name an actor ([#2458](https://github.com/Garblesnarff/infinite-realms-production/issues/2458)) ([#2460](https://github.com/Garblesnarff/infinite-realms-production/issues/2460)) ([51ef28c](https://github.com/Garblesnarff/infinite-realms-production/commit/51ef28c061017783d3e5cb166e3d4ea8b47595ae))
+* **game:** a game link without ?character opens the game ([#2266](https://github.com/Garblesnarff/infinite-realms-production/issues/2266)) ([#2470](https://github.com/Garblesnarff/infinite-realms-production/issues/2470)) ([c3815c5](https://github.com/Garblesnarff/infinite-realms-production/commit/c3815c54681e42aeb4538dbfc5662d32f72e36c7))
+* **server:** validate env and create db client on first use, not on import ([#2183](https://github.com/Garblesnarff/infinite-realms-production/issues/2183)) ([#2469](https://github.com/Garblesnarff/infinite-realms-production/issues/2469)) ([0bed801](https://github.com/Garblesnarff/infinite-realms-production/commit/0bed80186c6dd9858a566cc247466c594de5d043))
+
+
+### CI/CD
+
+* coverage off in PR CI, drop bun cache step, trigger on PR + main only ([#2467](https://github.com/Garblesnarff/infinite-realms-production/issues/2467)) ([#2491](https://github.com/Garblesnarff/infinite-realms-production/issues/2491)) ([628ed1d](https://github.com/Garblesnarff/infinite-realms-production/commit/628ed1dd799a08402fbbe3e32a3487165d10a290))
+
 ## [0.24.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.24.0...v0.24.1) (2026-10-01)
 
 
