@@ -27,6 +27,7 @@ import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
+import { getWeaponAttackBonus } from '@/utils/character/weapon-attack-bonus';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 import {
   getSessionCompanions,
@@ -279,8 +280,12 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     .filter((it) => WEAPON_HINTS.some((w) => it.itemId?.toLowerCase().includes(w)))
     .slice(0, 6)
     .map((it) => {
+      // Proficiency only when the character is proficient with this weapon — the
+      // engine's rule, and the number the attack dialog shows (#2519). A weapon the
+      // catalog does not know gets no proficiency, matching the engine's fallback.
+      const attack = getWeaponAttackBonus(character, it.itemId, profBonus, it.magicBonus ?? 0);
       const ranged = /bow|crossbow|sling|dart|javelin/.test(it.itemId?.toLowerCase() ?? '');
-      const mod = (ranged ? dexMod : strMod) + profBonus + (it.magicBonus ?? 0);
+      const mod = attack ? attack.bonus : (ranged ? dexMod : strMod) + (it.magicBonus ?? 0);
       return {
         id: it.itemId,
         name: prettify(it.itemId),

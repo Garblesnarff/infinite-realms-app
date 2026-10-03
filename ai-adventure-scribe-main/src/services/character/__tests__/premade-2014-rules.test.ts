@@ -375,3 +375,65 @@ describe('The Exile template is reset to the seed Ranger (#2483)', () => {
     expect((seed.stats as { armor_class: number }).armor_class).toBe(15);
   });
 });
+
+describe('sheet weapon attack bonuses add proficiency only when proficient (#2519)', () => {
+  // The sheet identifies a weapon by its inventory itemId slug, the contract
+  // buildCharacterSheet already uses (and character creation writes: SRD equipment ids).
+  const attacksFor = (key: string, weaponIds: string[]) => {
+    const { character } = sheetFor(premade(key));
+    const withWeapons: Character = {
+      ...character,
+      inventory: weaponIds.map((itemId) => ({ itemId, quantity: 1, equipped: true })),
+    };
+    return buildCharacterSheet(withWeapons).attacks;
+  };
+
+  it('The Scholar quarterstaff is +1 (STR −1 + proficiency +2)', () => {
+    expect(attacksFor('the-scholar', ['quarterstaff'])).toEqual([
+      expect.objectContaining({ name: 'Quarterstaff', bonus: '+1' }),
+    ]);
+  });
+
+  it('The Scholar mace is +1: the engine grants every simple weapon to every class', () => {
+    // SRD 5.1 gives Wizards a short weapon list without the mace, but the engine
+    // (characterCanUseWeapon) makes every simple weapon proficient for every class.
+    // The sheet mirrors the engine so its number cannot disagree with the dialog's.
+    expect(attacksFor('the-scholar', ['mace'])).toEqual([
+      expect.objectContaining({ name: 'Mace', bonus: '+1' }),
+    ]);
+  });
+
+  it('The Scholar dagger is +3, not +1: finesse lets the engine use DEX (+1) + proficiency (+2)', () => {
+    // Issue #2519 lists dagger +1, which is STR-only arithmetic. A dagger is finesse, the
+    // Scholar's DEX (12, +1) beats STR (8, −1), and the engine chooses DEX — so the sheet
+    // number that equals the engine's is +3.
+    expect(attacksFor('the-scholar', ['dagger'])).toEqual([
+      expect.objectContaining({ name: 'Dagger', bonus: '+3' }),
+    ]);
+  });
+
+  it('The Veteran longsword is +5 (STR +3 + proficiency +2)', () => {
+    expect(attacksFor('the-veteran', ['longsword'])).toEqual([
+      expect.objectContaining({ name: 'Longsword', bonus: '+5' }),
+    ]);
+  });
+
+  it('The Veteran rapier is +5: finesse takes the better ability, and STR (+3) beats DEX (+1)', () => {
+    expect(attacksFor('the-veteran', ['rapier'])).toEqual([
+      expect.objectContaining({ name: 'Rapier', bonus: '+5' }),
+    ]);
+  });
+
+  it('The Scholar light crossbow is +3: a ranged weapon uses DEX (+1) + proficiency (+2)', () => {
+    expect(attacksFor('the-scholar', ['crossbow-light'])).toEqual([
+      expect.objectContaining({ bonus: '+3' }),
+    ]);
+  });
+
+  it('a weapon the character is not proficient with shows the ability modifier only', () => {
+    // The Scholar (Wizard) is not proficient with a longsword: STR −1, no proficiency.
+    expect(attacksFor('the-scholar', ['longsword'])).toEqual([
+      expect.objectContaining({ name: 'Longsword', bonus: '-1' }),
+    ]);
+  });
+});

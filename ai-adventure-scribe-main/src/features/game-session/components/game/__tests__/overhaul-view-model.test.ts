@@ -222,9 +222,7 @@ describe('game-session party view model', () => {
     }
     // A level-5 Barbarian is proficient in STR and CON saves (PB +3), so the
     // missing modifiers are derived from the scores and the bonus is added.
-    expect(
-      Object.fromEntries(sheet.savingThrows.map((s) => [s.label, s.modifier])),
-    ).toEqual({
+    expect(Object.fromEntries(sheet.savingThrows.map((s) => [s.label, s.modifier]))).toEqual({
       STR: '+3',
       DEX: '+2',
       CON: '+6',
@@ -261,5 +259,55 @@ describe('game-session party view model', () => {
     expect(saves['DEX']).toBe('+2');
     expect(saves['INT']).toBe('+5');
     expect(saves['WIS']).toBe('+2');
+  });
+});
+
+describe('sheet weapon attack bonuses with a name-only class (#2519)', () => {
+  // The game-session loader gives the sheet a class that is only { name } — no
+  // weaponProficiencies list — so proficiency must still resolve from the SRD class.
+  const scholar = {
+    id: 'scholar-name-only-class',
+    name: 'The Scholar',
+    level: 1,
+    race: { name: 'Human', speed: 30, traits: [], languages: [] },
+    class: { name: 'Wizard', hitDie: 6 },
+    abilityScores: {
+      strength: { score: 8, modifier: -1, savingThrow: false },
+      dexterity: { score: 12, modifier: 1, savingThrow: false },
+      constitution: { score: 12, modifier: 1, savingThrow: false },
+      intelligence: { score: 18, modifier: 4, savingThrow: false },
+      wisdom: { score: 14, modifier: 2, savingThrow: false },
+      charisma: { score: 10, modifier: 0, savingThrow: false },
+    },
+    inventory: [
+      { itemId: 'quarterstaff', quantity: 1, equipped: true },
+      { itemId: 'longsword', quantity: 1, equipped: true },
+    ],
+    character_stats: { current_hit_points: 7, max_hit_points: 7 },
+  } as unknown as Character;
+
+  it('adds proficiency for a Wizard quarterstaff and withholds it for a longsword', () => {
+    const sheet = buildCharacterSheet(scholar);
+
+    expect(sheet.attacks).toEqual([
+      expect.objectContaining({ name: 'Quarterstaff', bonus: '+1' }),
+      expect.objectContaining({ name: 'Longsword', bonus: '-1' }),
+    ]);
+  });
+
+  it('adds proficiency for a weapon the subrace data carries (High Elf longsword)', () => {
+    // The character data can carry weapon training the class list lacks; the sheet
+    // honors it. The engine does not read subrace proficiencies yet — the follow-up
+    // filed from #2519 covers teaching it the same data.
+    const elfScholar = {
+      ...scholar,
+      subrace: { name: 'High Elf', weaponProficiencies: ['Longswords'] },
+    } as unknown as Character;
+    const sheet = buildCharacterSheet(elfScholar);
+
+    expect(sheet.attacks).toEqual([
+      expect.objectContaining({ name: 'Quarterstaff', bonus: '+1' }),
+      expect.objectContaining({ name: 'Longsword', bonus: '+1' }),
+    ]);
   });
 });
