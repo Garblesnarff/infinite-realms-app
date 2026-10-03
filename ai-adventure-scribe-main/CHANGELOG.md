@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.0...v0.25.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* 2517 death screen from the death event, persisted across reload ([#2522](https://github.com/Garblesnarff/infinite-realms-production/issues/2522)) ([43ec5dd](https://github.com/Garblesnarff/infinite-realms-production/commit/43ec5dd25fc253bcc3a3a01393a6b7a8d2726f4d))
+
+
+### Tests
+
+* reduce client setup and timer overhead ([#2506](https://github.com/Garblesnarff/infinite-realms-production/issues/2506) Phase 2) ([#2528](https://github.com/Garblesnarff/infinite-realms-production/issues/2528)) ([f654191](https://github.com/Garblesnarff/infinite-realms-production/commit/f654191dedaed18a0137db9cdaeacceecc315721))
+
 ## [0.25.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.24.1...v0.25.0) (2026-10-03)
 
 
