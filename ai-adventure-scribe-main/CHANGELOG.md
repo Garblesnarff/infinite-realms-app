@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.4...v0.25.5) (2026-10-03)
+
+
+### Bug Fixes
+
+* **combat:** resolve player option attacks and keep refusal controls usable ([#2547](https://github.com/Garblesnarff/infinite-realms-production/issues/2547)) ([#2549](https://github.com/Garblesnarff/infinite-realms-production/issues/2549)) ([14d8fc6](https://github.com/Garblesnarff/infinite-realms-production/commit/14d8fc6c9e78916362758aa1417296bc4a4fee48))
+
 ## [0.25.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.3...v0.25.4) (2026-10-03)
 
 
