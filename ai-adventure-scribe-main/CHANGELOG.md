@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.2...v0.25.3) (2026-10-03)
+
+
+### Bug Fixes
+
+* **sheet:** load the character's equipment into the game sheet ([#2531](https://github.com/Garblesnarff/infinite-realms-production/issues/2531)) ([#2537](https://github.com/Garblesnarff/infinite-realms-production/issues/2537)) ([66a22fe](https://github.com/Garblesnarff/infinite-realms-production/commit/66a22fe7ba312042711283fed79cae95201c955a))
+
 ## [0.25.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.1...v0.25.2) (2026-10-03)
 
 
