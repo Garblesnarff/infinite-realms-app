@@ -41,6 +41,7 @@ import {
   getConfiguredOpenRouterModels,
 } from '../../services/llm-model-config.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
+import { countPromptSections } from '../../services/prompt-section-counter.js';
 
 /**
  * Log the SHAPE of the model envelope on /v1/llm/generate — never its content.
@@ -130,6 +131,33 @@ const degradedGenerateEnvelope = (): {
   reason: LLM_GENERATE_DEGRADED_REASON,
   text: LLM_GENERATE_DEGRADED_TEXT,
 });
+
+// #2533: one structured, numbers-only log line per generate with the token
+// count of each prompt section, counted server-side from the prompt the
+// server actually received (see services/prompt-section-counter.ts). This
+// is independent of the client-sent `metrics` record logged above as
+// [PromptMetrics]: that record lumps memory/rules/character into
+// campaign_and_canon, so it cannot price the canon cut. Log-only; a
+// counting failure must never block a turn.
+// `dm` is true only for the turn's main DM generate (the request carrying
+// `dmReply`): /generate also serves non-DM calls and the narration-contract
+// regeneration, which carry no dmReply, so the flag lets readers filter the
+// per-turn table down to DM turns.
+function logPromptSections(
+  prompt: string,
+  history: Array<{ content?: unknown }> | undefined,
+  sessionId: string | undefined,
+  dm: boolean,
+): void {
+  try {
+    const sections = countPromptSections(prompt, history);
+    logger.info(
+      `[PromptSections] ${JSON.stringify({ sessionId: sessionId ?? null, dm, ...sections })}`,
+    );
+  } catch (sectionsError) {
+    logger.warn({ msg: 'PROMPT_SECTIONS_LOG_FAILED', error: sectionsError });
+  }
+}
 
 // #2158: the browser must not choose the model or the output size. The DM turn asks for 8192
 // (src/services/ai-service.ts), so that is the generate ceiling; extraction asks for 1000-1200.
@@ -399,6 +427,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
 
+      // #2533: server-counted prompt sections, one line per generate. Below
+      // the quota consume (and the party-defeated terminal return above it)
+      // so requests that never reach a provider call are not logged as turns.
+      logPromptSections(prompt, history, sessionId ?? combatEntry?.sessionId, Boolean(dmReply));
+
       const playerInput =
         typeof requestedPlayerInput === 'string'
           ? requestedPlayerInput
@@ -617,6 +650,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         history,
         provider = 'openrouter',
         responseSchema,
+        sessionId,
+        dmReply,
       } = body || {};
       const safeModel = allowlistedModel(model);
       const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
@@ -636,6 +671,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         set.status = 402;
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
+      // #2533: streamed generates get the same one-line section count,
+      // only once quota has been consumed for an actual provider call.
+      logPromptSections(prompt, history, sessionId, Boolean(dmReply));
       try {
         const stream = await LLMProviderService.stream({
           prompt,
@@ -658,6 +696,22 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
     {
       body: t.Object({
         prompt: t.String(),
+        // #2533: correlates the stream route's [PromptSections] line to a
+        // session, as /generate already does (#2050 C). Sent by
+        // LlmApiClient.generateText on every call.
+        sessionId: t.Optional(t.String({ maxLength: 255 })),
+        // #2533: present only on the main DM turn (same shape as
+        // /generate), so the [PromptSections] line can label it dm:true.
+        dmReply: t.Optional(
+          t.Object({
+            messageId: t.String({
+              pattern:
+                '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+            }),
+            inCombat: t.Optional(t.Boolean()),
+            narrationGated: t.Optional(t.Boolean()),
+          }),
+        ),
         player_input: t.Optional(t.String({ maxLength: 20_000 })),
         model: t.Optional(t.String()),
         maxTokens: t.Optional(t.Number()),

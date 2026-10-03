@@ -12,6 +12,7 @@ let generatedResult: Record<string, unknown> = {
 };
 let streamedInputs: Record<string, unknown>[] = [];
 let streamError: unknown = new Error('upstream stream failed');
+let quotaAllowed = true;
 
 // Captures for the #1688 prompt-metrics log lines. Unlike the other logger
 // methods (still no-ops -- their content isn't under test elsewhere in this
@@ -59,8 +60,8 @@ mock.module('../../../middleware/rate-limit.js', () => ({
 mock.module('../../../services/ai-usage-service.js', () => ({
   AIUsageService: {
     checkQuotaAndConsume: async () => ({
-      allowed: true,
-      remaining: 99,
+      allowed: quotaAllowed,
+      remaining: quotaAllowed ? 99 : 0,
       resetAt: new Date(Date.now() + 60_000),
     }),
     recordProviderUsage: async () => {},
@@ -614,6 +615,133 @@ describe('POST /v1/llm/generate HTTP contract', () => {
           entry.startsWith('[PromptMetrics] canon cut to fit prompt budget '),
         ),
       ).toBe(false);
+    });
+  });
+
+  describe('#2533 server-counted prompt sections (log-only)', () => {
+    // Prompt shape follows the real producer: the fullPrompt assembly in
+    // src/services/ai-service.ts (ContextBuilder contextPrompt, then
+    // <current_scene>, <tactical_context>, the system block,
+    // <conversation_history>, <scene_state>, <player_input>). Sentinel
+    // words in every section prove none of the text reaches the log line.
+    const sectionedPrompt = [
+      '<persona>SENTINEL_PERSONA</persona>',
+      '<game_context><campaign_details>SENTINEL_CAMPAIGN</campaign_details>',
+      '<starter_campaign_lore><canonical_setting>SENTINEL_LORE</canonical_setting></starter_campaign_lore>',
+      '<story_memories><memory index="1" type="EVENT">SENTINEL_MEMORY</memory></story_memories></game_context>',
+      '<rules_of_play>SENTINEL_RULES</rules_of_play>',
+      '<current_scene>SENTINEL_SCENE</current_scene>',
+      '<tactical_context>SENTINEL_ENGINE</tactical_context>',
+      '<immutable_game_state>{}</immutable_game_state><security_rules>SENTINEL_SYSTEM</security_rules>',
+      '<conversation_history>SENTINEL_HISTORY</conversation_history>',
+      '<scene_state>SENTINEL_LEDGER</scene_state>',
+      '<player_input>SENTINEL_INPUT</player_input>',
+    ].join('\n');
+
+    it('logs exactly one [PromptSections] line per generate, numbers only', async () => {
+      loggedInfoLines = [];
+      loggedWarnLines = [];
+      const response = await app.handle(
+        new Request('http://localhost/v1/llm/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+          body: JSON.stringify({ prompt: sectionedPrompt, sessionId: 'sections-session-1' }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const lines = loggedInfoLines.filter((entry) => entry.startsWith('[PromptSections] '));
+      expect(lines).toHaveLength(1);
+      const parsed = JSON.parse(lines[0].slice('[PromptSections] '.length));
+      expect(parsed.sessionId).toBe('sections-session-1');
+      // No dmReply on this request, so the line labels it a non-DM generate.
+      expect(parsed.dm).toBe(false);
+      for (const key of [
+        'system_rules',
+        'campaign_and_canon',
+        'scene_state',
+        'memory_recall',
+        'history',
+        'engine_lines',
+        'player_input',
+        'total',
+      ]) {
+        expect(typeof parsed[key]).toBe('number');
+        expect(parsed[key]).toBeGreaterThan(0);
+      }
+      expect(parsed.total).toBe(
+        parsed.system_rules +
+          parsed.campaign_and_canon +
+          parsed.scene_state +
+          parsed.memory_recall +
+          parsed.history +
+          parsed.engine_lines +
+          parsed.player_input,
+      );
+      expect(lines[0]).not.toContain('SENTINEL');
+    });
+
+    it('labels the /generate line dm:true when the request carries dmReply', async () => {
+      loggedInfoLines = [];
+      const response = await postLlm(
+        'generate',
+        clientBody({
+          prompt: sectionedPrompt,
+          dmReply: { messageId: '123e4567-e89b-12d3-a456-426614174001', inCombat: false },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const lines = loggedInfoLines.filter((entry) => entry.startsWith('[PromptSections] '));
+      expect(lines).toHaveLength(1);
+      const parsed = JSON.parse(lines[0].slice('[PromptSections] '.length));
+      expect(parsed.dm).toBe(true);
+    });
+
+    it('still logs [PromptSections] when the client sent no metrics field', async () => {
+      loggedInfoLines = [];
+      const response = await postLlm('generate', clientBody({}));
+
+      expect(response.status).toBe(200);
+      const lines = loggedInfoLines.filter((entry) => entry.startsWith('[PromptSections] '));
+      expect(lines).toHaveLength(1);
+      const parsed = JSON.parse(lines[0].slice('[PromptSections] '.length));
+      // clientBody's prompt is untagged prose, so it lands in system_rules.
+      expect(parsed.system_rules).toBeGreaterThan(0);
+      expect(parsed.campaign_and_canon).toBe(0);
+    });
+
+    it('logs no [PromptSections] line when quota rejects the generate', async () => {
+      loggedInfoLines = [];
+      quotaAllowed = false;
+      try {
+        const response = await postLlm('generate', clientBody({}));
+        expect(response.status).toBe(402);
+        expect(loggedInfoLines.some((entry) => entry.startsWith('[PromptSections] '))).toBe(false);
+      } finally {
+        quotaAllowed = true;
+      }
+    });
+
+    it('logs the stream route [PromptSections] line with its session id', async () => {
+      loggedInfoLines = [];
+      const response = await postLlm(
+        'generate/stream',
+        clientBody({
+          prompt: sectionedPrompt,
+          sessionId: 'stream-session-1',
+          dmReply: { messageId: '123e4567-e89b-12d3-a456-426614174000', inCombat: false },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const lines = loggedInfoLines.filter((entry) => entry.startsWith('[PromptSections] '));
+      expect(lines).toHaveLength(1);
+      const parsed = JSON.parse(lines[0].slice('[PromptSections] '.length));
+      expect(parsed.sessionId).toBe('stream-session-1');
+      expect(parsed.dm).toBe(true);
+      expect(parsed.campaign_and_canon).toBeGreaterThan(0);
+      expect(lines[0]).not.toContain('SENTINEL');
     });
   });
 });
