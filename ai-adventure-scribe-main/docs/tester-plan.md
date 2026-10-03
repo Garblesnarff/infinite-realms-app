@@ -4,7 +4,7 @@
 
 ## What it does
 
-- Quotas (`DEFAULT_QUOTAS.tester` in `server-bun/src/services/ai-usage-service.ts`): `llm` 500, `llm_system` 5000, `image` 50, `voice` 200 calls' worth (same as pro) per day.
+- Quotas (`DEFAULT_QUOTAS.tester` in `server-bun/src/services/ai-usage-service.ts`): `llm` 500, `llm_system` 5000, `image` 50, `voice` 200 units (20,000 characters; pro is 20 units / 2,000) per day.
 - Feature gates: every plan gate calls `planHasPaidFeatures(plan)` from `shared/plan-features.ts`, which is true for `pro`, `enterprise` and `tester`. Do not compare against `'pro'` or `!== 'free'` directly.
 - Rate limits: a plan with no bucket of its own in `maxByPlan` uses the `pro` bucket when `planHasPaidFeatures` is true, else the `free` bucket.
 - Account page and nav badge show "Tester". There is no Upgrade or Manage Subscription button.

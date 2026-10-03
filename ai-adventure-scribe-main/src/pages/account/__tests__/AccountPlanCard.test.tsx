@@ -17,20 +17,21 @@ const renderCard = (isPro: boolean, isTester = false): ReturnType<typeof render>
   );
 
 describe('AccountPlanCard (#2415)', () => {
-  it('labels the unlimited-messages card on Free as the Legend upgrade, not a current promise', () => {
+  it('labels the messages card on Free as the Legend upgrade, not a current promise', () => {
     renderCard(false);
 
     expect(screen.getByText('Free Tier')).toBeInTheDocument();
-    expect(screen.getByText('Legend: Unlimited AI Messages')).toBeInTheDocument();
-    expect(screen.getByText('No daily limits once you upgrade to Legend')).toBeInTheDocument();
-    expect(screen.queryByText('Unlimited AI Messages')).not.toBeInTheDocument();
+    expect(screen.getByText('Legend: More AI Messages')).toBeInTheDocument();
+    expect(screen.getByText('More DM messages every day on Legend')).toBeInTheDocument();
+    expect(screen.queryByText(/Unlimited/)).not.toBeInTheDocument();
   });
 
   it('shows no upgrade benefits to a Legend subscriber', () => {
     renderCard(true);
 
     expect(screen.getByText('Legend Tier')).toBeInTheDocument();
-    expect(screen.queryByText(/Unlimited AI Messages/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unlimited/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/More AI Messages/)).not.toBeInTheDocument();
   });
 
   it('labels a tester account Tester and offers neither Upgrade nor Manage Subscription (#2474)', () => {

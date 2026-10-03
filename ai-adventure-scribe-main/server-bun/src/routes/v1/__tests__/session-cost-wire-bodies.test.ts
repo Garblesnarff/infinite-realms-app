@@ -79,7 +79,10 @@ mock.module('../../../lib/logger.js', () => ({
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) =>
     request.headers.get('authorization') === 'Bearer cost-user'
-      ? { user: { userId: 'cost-user', email: 'cost@example.test', plan: 'pro' }, error: null }
+      ? {
+          user: { userId: 'cost-user', email: 'cost@example.test', plan: 'enterprise' },
+          error: null,
+        }
       : { user: null, error: 'Unauthorized' },
 }));
 
@@ -87,11 +90,14 @@ const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { imageRoutes } = await import('../images.js');
 const { createTtsRoutes } = await import('../tts.js');
 
+// The fixture user sits on enterprise so the cases stay about the wire body:
+// several image posts as one user in a day would hit the Legend image cap
+// (2/day, #2510), which is enforced in the ai-usage-service tests, not here.
 const testAuth = new Elysia({ name: 'test-cost-auth' }).resolve({ as: 'scoped' }, ({ request }) => {
   if (request.headers.get('authorization') !== 'Bearer cost-user') {
     return status(401, { error: 'Unauthorized' });
   }
-  return { user: { userId: 'cost-user', email: 'cost@example.test', plan: 'pro' } };
+  return { user: { userId: 'cost-user', email: 'cost@example.test', plan: 'enterprise' } };
 });
 
 // The production composition: the request pipeline, then the routes. Only the voice route's auth

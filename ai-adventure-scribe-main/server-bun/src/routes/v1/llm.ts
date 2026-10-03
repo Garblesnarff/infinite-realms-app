@@ -190,7 +190,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         plan: user.plan,
         type: 'llm',
       });
-      return quotaStatus;
+      // Account page display: every quota (messages, images, voice in
+      // characters) from the same quota config, in one response (#2510).
+      const all = await AIUsageService.getAllQuotaStatuses({
+        userId: user.userId,
+        plan: user.plan,
+      });
+      return { ...quotaStatus, quotas: all.quotas };
     } catch (err) {
       logger.error({ msg: 'LLM_QUOTA_ERROR', error: err });
       set.status = 500;

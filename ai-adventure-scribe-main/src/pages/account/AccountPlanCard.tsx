@@ -51,8 +51,8 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
             {isTester
               ? 'Playtest account with raised daily limits'
               : isPro
-                ? 'You have unlimited access to all features'
-                : 'Upgrade to unlock unlimited adventures'}
+                ? 'You have full access to all features'
+                : 'Upgrade for higher daily limits and premium voices'}
           </CardDescription>
         </div>
         {isPro && !isTester && subscription?.status && (
@@ -74,16 +74,16 @@ export const AccountPlanCard: React.FC<AccountPlanCardProps> = ({
             <div className="flex items-start gap-3 p-4 rounded-lg bg-infinite-gold/10 border border-infinite-gold/30">
               <Zap className="h-5 w-5 text-infinite-gold mt-0.5" />
               <div>
-                <h4 className="font-medium text-infinite-gold">Legend: Unlimited AI Messages</h4>
+                <h4 className="font-medium text-infinite-gold">Legend: More AI Messages</h4>
                 <p className="text-sm text-muted-foreground">
-                  No daily limits once you upgrade to Legend
+                  More DM messages every day on Legend
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 rounded-lg bg-infinite-purple/10 border border-infinite-purple/30">
               <Sparkles className="h-5 w-5 text-infinite-purple mt-0.5" />
               <div>
-                <h4 className="font-medium text-infinite-purple">Unlimited Image Generation</h4>
+                <h4 className="font-medium text-infinite-purple">More AI Images</h4>
                 <p className="text-sm text-muted-foreground">Bring your world to life visually</p>
               </div>
             </div>

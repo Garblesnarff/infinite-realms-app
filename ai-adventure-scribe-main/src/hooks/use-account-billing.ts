@@ -15,6 +15,12 @@ export interface SubscriptionStatus {
   status: string;
 }
 
+export interface QuotaEntry {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 export interface QuotaStatus {
   plan: UserPlan;
   type: string;
@@ -22,6 +28,13 @@ export interface QuotaStatus {
   limit: number;
   remaining: number;
   resetAt: string;
+  /** Every displayable quota from the server quota config (#2510).
+   * `voice` is in characters; `llm` and `image` are counts. */
+  quotas: {
+    llm: QuotaEntry;
+    image: QuotaEntry;
+    voice: QuotaEntry;
+  };
 }
 
 export const ACCOUNT_UPGRADE_PRICE = {
@@ -93,16 +106,39 @@ export function useAccountBilling(
 
         if (quotaRes.ok) {
           const data = await quotaRes.json();
-          // The quota endpoint returns { plan, limits: { daily: { llm } }, usage,
-          // remaining, resetAt }; map it onto the client QuotaStatus shape so the
-          // usage card shows numbers instead of "/" (#2343 C6).
+          // The quota endpoint returns { plan, limits: { daily: {...} }, usage,
+          // remaining, resetAt, quotas: { llm, image, voice } }; map it onto
+          // the client QuotaStatus shape so the usage card shows numbers
+          // instead of "/" (#2343 C6). All numbers come from the server
+          // quota config; the client keeps no copy of them (#2510). The
+          // limits fallback only covers an older server during deploy skew.
+          const daily = data.limits?.daily ?? {};
+          const entry = (
+            serverEntry: { limit?: number; usage?: number; remaining?: number } | undefined,
+            limitFallback: number,
+          ): QuotaEntry => ({
+            used: serverEntry?.usage ?? 0,
+            limit: serverEntry?.limit ?? limitFallback,
+            remaining:
+              serverEntry?.remaining ??
+              Math.max(0, (serverEntry?.limit ?? limitFallback) - (serverEntry?.usage ?? 0)),
+          });
+          const llmEntry = entry(data.quotas?.llm, daily.llm ?? -1);
           setQuota({
             plan: data.plan ?? 'free',
             type: 'llm',
-            used: data.usage ?? 0,
-            limit: data.limits?.daily?.llm ?? -1,
-            remaining: data.remaining ?? 0,
+            used: data.usage ?? llmEntry.used,
+            limit: data.limits?.daily?.llm ?? llmEntry.limit,
+            remaining: data.remaining ?? llmEntry.remaining,
             resetAt: data.resetAt ?? '',
+            quotas: {
+              llm: llmEntry,
+              image: entry(data.quotas?.image, daily.image ?? -1),
+              // limits.daily.voice is in quota units, not characters, so it
+              // cannot stand in for the character limit an older server
+              // does not report; -1 renders as unknown instead.
+              voice: entry(data.quotas?.voice, -1),
+            },
           });
         }
       } catch (error) {

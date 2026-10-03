@@ -82,14 +82,21 @@ describe('useAccountBilling', () => {
     window.localStorage.setItem('workos_access_token', 'test-token');
 
     const mockSubscription = { plan: 'legend', status: 'active' };
-    // The quota endpoint returns { plan, limits: { daily: { llm } }, usage,
-    // remaining, resetAt }; the hook normalizes it for the usage card (#2343 C6).
+    // Fixture copies the real GET /v1/llm/quota producer shape
+    // (AIUsageService.getQuotaStatus for llm + getAllQuotaStatuses.quotas):
+    // { plan, limits: { daily }, usage, remaining, resetAt, quotas } where
+    // quotas.voice is in characters and llm/image are counts (#2510).
     const mockQuota = {
       plan: 'pro',
-      limits: { daily: { llm: 100, image: 10, audio: 5 } },
+      limits: { daily: { llm: 40, llm_system: 1000, image: 2, voice: 20 } },
       usage: 5,
-      remaining: 95,
+      remaining: 35,
       resetAt: '2026-09-29T00:00:00.000Z',
+      quotas: {
+        llm: { limit: 40, usage: 5, remaining: 35 },
+        image: { limit: 2, usage: 1, remaining: 1 },
+        voice: { limit: 2000, usage: 0, remaining: 2000 },
+      },
     };
 
     (global.fetch as any).mockImplementation((url: string) => {
@@ -116,9 +123,14 @@ describe('useAccountBilling', () => {
         plan: 'pro',
         type: 'llm',
         used: 5,
-        limit: 100,
-        remaining: 95,
+        limit: 40,
+        remaining: 35,
         resetAt: '2026-09-29T00:00:00.000Z',
+        quotas: {
+          llm: { used: 5, limit: 40, remaining: 35 },
+          image: { used: 1, limit: 2, remaining: 1 },
+          voice: { used: 0, limit: 2000, remaining: 2000 },
+        },
       });
     });
   });

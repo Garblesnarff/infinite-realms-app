@@ -16,10 +16,11 @@ export type UsageType = 'llm' | 'llm_system' | 'image' | 'voice';
 /** One voice quota unit is this many characters. A 100-character line costs 1. */
 export const VOICE_CHARS_PER_UNIT = 100;
 
-/** Previous per-call daily caps for paid plans. Multiplied by VOICE_CHARS_PER_UNIT.
- * Free voice stays 0 (#2178) and is not scaled.
+/** Daily voice caps for paid plans, in quota units (not characters, not calls).
+ * pro 20 units = 2,000 characters/day; tester 200 units = 20,000; enterprise
+ * 2,000 units = 200,000. Free voice stays 0 (#2178).
  */
-const VOICE_CALL_DAILY_LIMITS = { pro: 200, enterprise: 2000 } as const;
+const VOICE_DAILY_UNIT_LIMITS = { pro: 20, tester: 200, enterprise: 2000 } as const;
 
 /** ElevenLabs Flash/Turbo list price. cost_usd = characters * this / 1000. */
 export const ELEVENLABS_USD_PER_1K_CHARS = 0.05;
@@ -135,19 +136,20 @@ export class AIUsageService {
 
   private static readonly DEFAULT_QUOTAS: Record<string, QuotaConfig> = {
     free: {
-      // llm: User-initiated chat messages (30/day)
+      // llm: User-initiated chat messages (15/day, #2510)
       // llm_system: Background tasks like memory extraction, world building (500/day - generous for side effects)
-      // image 3: character avatar + design sheet + campaign cover still fit
-      // on a free onboarding. voice 0: ElevenLabs is off; browser/Kokoro only (#2178).
-      // Pro and enterprise count voice in characters (ceil(chars / 100)), not calls.
-      daily: { llm: 30, llm_system: 500, image: 3, voice: 0 },
+      // image 1/day (#2510). voice 0: ElevenLabs is off; browser/Kokoro only (#2178).
+      // Voice limits are in units of VOICE_CHARS_PER_UNIT characters (ceil(chars / 100) per call).
+      daily: { llm: 15, llm_system: 500, image: 1, voice: 0 },
     },
     pro: {
+      // Legend (#2510): 40 messages, 2 images and 20 voice units
+      // (2,000 premium-voice characters) a day.
       daily: {
-        llm: 100,
+        llm: 40,
         llm_system: 1000,
-        image: 50,
-        voice: VOICE_CALL_DAILY_LIMITS.pro * VOICE_CHARS_PER_UNIT,
+        image: 2,
+        voice: VOICE_DAILY_UNIT_LIMITS.pro,
       },
     },
     enterprise: {
@@ -155,7 +157,7 @@ export class AIUsageService {
         llm: 1000,
         llm_system: 5000,
         image: 500,
-        voice: VOICE_CALL_DAILY_LIMITS.enterprise * VOICE_CHARS_PER_UNIT,
+        voice: VOICE_DAILY_UNIT_LIMITS.enterprise,
       },
     },
     // Playtest accounts (#2474). Own plan so their spend stays out of the plan='pro' rows.
@@ -164,7 +166,7 @@ export class AIUsageService {
         llm: 500,
         llm_system: 5000,
         image: 50,
-        voice: VOICE_CALL_DAILY_LIMITS.pro * VOICE_CHARS_PER_UNIT,
+        voice: VOICE_DAILY_UNIT_LIMITS.tester,
       },
     },
   };
@@ -351,6 +353,8 @@ export class AIUsageService {
     limits: { daily: Record<UsageType, number> };
     usage: number;
     remaining: number;
+    /** Voice only: remaining quota in characters (remaining units × VOICE_CHARS_PER_UNIT). */
+    remainingCharacters?: number;
     resetAt: string;
   }> {
     const { userId, orgId, plan, type } = opts;
@@ -386,7 +390,53 @@ export class AIUsageService {
       limits: quota,
       usage: used,
       remaining,
+      ...(type === 'voice' ? { remainingCharacters: remaining * VOICE_CHARS_PER_UNIT } : {}),
       resetAt,
+    };
+  }
+
+  /**
+   * Quota status for every displayable type at once, for the account page.
+   * Voice is reported in characters (stored quota units × VOICE_CHARS_PER_UNIT)
+   * so clients never convert units themselves; llm and image stay in counts.
+   * Limits come from the same DEFAULT_QUOTAS the quota checks enforce, so the
+   * displayed character cap always matches the value enforcement refuses at.
+   */
+  static async getAllQuotaStatuses(opts: {
+    orgId?: string | null;
+    userId: string;
+    plan: string;
+  }): Promise<{
+    plan: string;
+    resetAt: string;
+    quotas: Record<'llm' | 'image' | 'voice', { limit: number; usage: number; remaining: number }>;
+  }> {
+    const { userId, orgId, plan } = opts;
+    const [llm, image, voice] = await Promise.all([
+      AIUsageService.getQuotaStatus({ userId, orgId, plan, type: 'llm' }),
+      AIUsageService.getQuotaStatus({ userId, orgId, plan, type: 'image' }),
+      AIUsageService.getQuotaStatus({ userId, orgId, plan, type: 'voice' }),
+    ]);
+    const entry = (
+      status: { limits: { daily: Record<UsageType, number> }; usage: number; remaining: number },
+      type: UsageType,
+    ) => ({
+      limit: status.limits.daily[type],
+      usage: status.usage,
+      remaining: status.remaining,
+    });
+    return {
+      plan,
+      resetAt: llm.resetAt,
+      quotas: {
+        llm: entry(llm, 'llm'),
+        image: entry(image, 'image'),
+        voice: {
+          limit: voice.limits.daily.voice * VOICE_CHARS_PER_UNIT,
+          usage: voice.usage * VOICE_CHARS_PER_UNIT,
+          remaining: voice.remaining * VOICE_CHARS_PER_UNIT,
+        },
+      },
     };
   }
 }
