@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * loadCharacterWithSpells implementation, split out of character-loader.ts.
  */
@@ -15,7 +16,9 @@ import type {
 } from '@/types/character';
 
 import logger from '@/lib/logger';
+import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
+import { equipmentRowsToInventory } from '@/utils/character/equipment-rows-to-inventory';
 import {
   parseOptionalProficiencyList,
   parseSavingThrowProficiencies,
@@ -36,7 +39,19 @@ export async function loadCharacterWithSpells(
     logger.info(`🔄 [CharacterLoader] Loading character ${characterId} with spells`);
 
     void userId;
-    const characterData = await userDataApi.getCharacter(characterId);
+    // Equipment is what the sheet's attacks, equipment and inventory sections are built from
+    // (#2531). It is supplementary to the character record, so a failed request leaves
+    // `inventory` unset rather than failing the game load.
+    const [characterData, equipmentRows] = await Promise.all([
+      userDataApi.getCharacter(characterId),
+      issue1784Api.getCharacterEquipment(characterId).catch((error: unknown) => {
+        logger.warn('[CharacterLoader] Character equipment request failed', {
+          characterId,
+          error,
+        });
+        return null;
+      }),
+    ]);
 
     if (!characterData) {
       logger.error('[CharacterLoader] Character not found or access denied');
@@ -230,6 +245,7 @@ export async function loadCharacterWithSpells(
       bonds: [],
       flaws: [],
       equipment: [],
+      ...(equipmentRows ? { inventory: equipmentRowsToInventory(equipmentRows) } : {}),
       // Character images
       avatar_url: characterData.avatar_url,
       image_url: characterData.image_url,

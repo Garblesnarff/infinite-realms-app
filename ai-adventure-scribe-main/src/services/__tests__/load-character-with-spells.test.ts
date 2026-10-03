@@ -1,16 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadCharacterWithSpells } from '../load-character-with-spells';
 
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
-const { getCharacter, getCharacterSpells, convertSpellIdsToFrontend } = vi.hoisted(() => ({
-  getCharacter: vi.fn(),
-  getCharacterSpells: vi.fn(),
-  convertSpellIdsToFrontend: vi.fn((ids: string[]) => ids.map((id) => `frontend-${id}`)),
-}));
+const { getCharacter, getCharacterEquipment, getCharacterSpells, convertSpellIdsToFrontend } =
+  vi.hoisted(() => ({
+    getCharacter: vi.fn(),
+    getCharacterEquipment: vi.fn(),
+    getCharacterSpells: vi.fn(),
+    convertSpellIdsToFrontend: vi.fn((ids: string[]) => ids.map((id) => `frontend-${id}`)),
+  }));
 
 vi.mock('@/services/user-data-api', () => ({ userDataApi: { getCharacter } }));
+vi.mock('@/services/issue-1784-api', () => ({ issue1784Api: { getCharacterEquipment } }));
 vi.mock('../characterSpellApi', () => ({ characterSpellService: { getCharacterSpells } }));
 vi.mock('@/utils/spell-id-mapping', () => ({ convertSpellIdsToFrontend }));
 vi.mock('@/lib/logger', () => ({
@@ -18,6 +21,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('loadCharacterWithSpells API spell shape', () => {
+  beforeEach(() => {
+    getCharacterEquipment.mockResolvedValue([]);
+  });
+
   it('reads the canonical spell identifier from the API record id field', async () => {
     getCharacter.mockResolvedValue({
       id: 'character-id',

@@ -28,6 +28,7 @@ import { getExperienceForLevel } from '@/data/levelProgression';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { getWeaponAttackBonus } from '@/utils/character/weapon-attack-bonus';
+import { getWeaponDamageText } from '@/utils/character/weapon-damage-text';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
 import {
   getSessionCompanions,
@@ -76,6 +77,8 @@ const WEAPON_HINTS = [
   'dart',
 ];
 
+const GENERIC_ITEM_TYPES = new Set(['equipment', 'custom']);
+
 const ARMOR_HINTS = [
   'mail',
   'armor',
@@ -93,7 +96,7 @@ const fmt = (n: number): string => (n >= 0 ? `+${n}` : `${n}`);
 const prettify = (id: string): string =>
   (id || '')
     .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/(^|\s)\w/g, (c) => c.toUpperCase())
     .trim() || 'Item';
 
 const abilityMod = (score?: number): number => Math.floor(((score ?? 10) - 10) / 2);
@@ -277,7 +280,14 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
   const dexMod = abilityMod(character.abilityScores?.dexterity?.score);
 
   const attacks: AttackVM[] = inv
-    .filter((it) => WEAPON_HINTS.some((w) => it.itemId?.toLowerCase().includes(w)))
+    // A specific stored item type decides: the name hints alone listed "Crossbow Bolt" and
+    // "Waxed Map Case" ("axe") as attacks (#2531). The generic types the character wizard and the
+    // server default to carry no information, so those fall back to the hints.
+    .filter((it) =>
+      it.itemType && !GENERIC_ITEM_TYPES.has(it.itemType)
+        ? it.itemType === 'weapon'
+        : WEAPON_HINTS.some((w) => it.itemId?.toLowerCase().includes(w)),
+    )
     .slice(0, 6)
     .map((it) => {
       // Proficiency only when the character is proficient with this weapon — the
@@ -290,7 +300,9 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
         id: it.itemId,
         name: prettify(it.itemId),
         bonus: fmt(mod),
-        damage: it.isMagic && it.magicBonus ? `+${it.magicBonus}` : '',
+        damage:
+          getWeaponDamageText(character, it.itemId, it.magicBonus ?? 0) ??
+          (it.isMagic && it.magicBonus ? `+${it.magicBonus}` : ''),
       };
     });
 
@@ -339,6 +351,8 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     conditions,
     equipment,
     inventory,
+    // Equipment never loaded (its request failed): say so, rather than "No weapons".
+    gearUnavailable: character.inventory === undefined,
     spells,
     spellcasting,
   };

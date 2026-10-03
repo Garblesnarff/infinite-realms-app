@@ -117,6 +117,8 @@ export interface CharacterSheetVM {
   conditions: ConditionVM[];
   equipment: EquipmentVM[];
   inventory: InventoryItemVM[];
+  /** True when the character's equipment did not load; the gear sections say so. */
+  gearUnavailable?: boolean;
   spells: SpellsVM;
   spellcasting: SpellcastingVM | null;
   gold?: number;

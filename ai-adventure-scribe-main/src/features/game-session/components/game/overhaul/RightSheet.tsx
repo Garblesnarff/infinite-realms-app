@@ -74,6 +74,10 @@ const TwoCol: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="grid grid-cols-2 gap-3">{children}</div>
 );
 
+const EmptyNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="text-[10px] italic text-muted-foreground">{children}</p>
+);
+
 const spellLevelLabel = (level: number | null): string => {
   if (level === 0) return 'Cantrip';
   return level == null ? 'Level unknown' : `Level ${level}`;
@@ -362,6 +366,9 @@ export const RightSheet: React.FC<{
       <IRPanel>
         <IRPanelHeader title="Attacks" />
         <div className="space-y-1.5 p-2.5">
+          {c.attacks.length === 0 && (
+            <EmptyNote>{c.gearUnavailable ? 'Equipment unavailable' : 'No weapons'}</EmptyNote>
+          )}
           {c.attacks.map((a) => (
             <div key={a.id} className="flex items-center gap-2">
               <IRThumb size={26} />
@@ -381,6 +388,7 @@ export const RightSheet: React.FC<{
       <IRPanel>
         <IRPanelHeader title="Conditions" />
         <div className="space-y-1.5 p-2.5">
+          {c.conditions.length === 0 && <EmptyNote>None</EmptyNote>}
           {c.conditions.map((cd) => (
             <div key={cd.id} className="flex items-center gap-2">
               <IRThumb src={cd.iconUrl} size={26} />
@@ -398,6 +406,11 @@ export const RightSheet: React.FC<{
       <IRPanel>
         <IRPanelHeader title="Equipment" />
         <div className="space-y-1.5 p-2.5">
+          {c.equipment.length === 0 && (
+            <EmptyNote>
+              {c.gearUnavailable ? 'Equipment unavailable' : 'Nothing equipped'}
+            </EmptyNote>
+          )}
           {c.equipment.map((e) => (
             <div key={e.id} className="flex items-center gap-2">
               <IRThumb size={26} />
@@ -427,6 +440,11 @@ export const RightSheet: React.FC<{
             </div>
           )}
           <div className="space-y-1.5">
+            {c.inventory.length === 0 && (
+              <EmptyNote>
+                {c.gearUnavailable ? 'Equipment unavailable' : 'Nothing carried'}
+              </EmptyNote>
+            )}
             {c.inventory.map((it) => (
               <div key={it.id} className="flex items-center gap-2">
                 <IRThumb size={26} />
