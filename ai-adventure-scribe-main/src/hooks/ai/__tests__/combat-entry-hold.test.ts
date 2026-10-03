@@ -13,7 +13,9 @@ import {
   pickedTargetCheckBody,
   untargetedSpellCheckBody,
 } from '../../../../shared/test-fixtures/declared-attack-hold';
+import { namedHostilePending } from '../../../../shared/test-fixtures/unnamed-hostile-entry';
 import {
+  confirmCombatEntry,
   declinedAttackLabel,
   heldEntryResult,
   holdCombatEntryBeforeDm,
@@ -323,5 +325,51 @@ describe('an attack spell with no creature named ("I cast Fire Bolt at him")', (
     ]);
 
     expect(narration).toBe('Captain Sarah Reeves grips the rail.');
+  });
+});
+
+describe('the card for a fight the DM asked for without naming anyone (#2532)', () => {
+  const player = { name: 'The Storyteller', initiativeModifier: 2 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+  });
+
+  it('shows the creature the server named, from the exact entry the server sends', async () => {
+    await confirmCombatEntry(namedHostilePending, player);
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ combatantLabels: ['Chitinous Hunter'] }),
+    );
+  });
+
+  it('never puts a placeholder label on the card', async () => {
+    await confirmCombatEntry(
+      {
+        ...namedHostilePending,
+        combatants: [
+          { name: 'Hostile Creature', count: 1 },
+          { name: 'Unknown creature 2', count: 1 },
+          { name: 'Chitinous Hunter', count: 1 },
+        ],
+      },
+      player,
+    );
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ combatantLabels: ['Chitinous Hunter'] }),
+    );
+  });
+
+  it('asks about "the opposing side" rather than a placeholder when nothing is named', async () => {
+    await confirmCombatEntry(
+      { ...namedHostilePending, combatants: [{ name: 'Hostile Creature', count: 1 }] },
+      player,
+    );
+
+    expect(requestCombatEntryConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ combatantLabels: [] }),
+    );
   });
 });

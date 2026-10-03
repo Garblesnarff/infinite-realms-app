@@ -11,14 +11,18 @@
  * here: the player must confirm the entry and may provide their own initiative d20 through the
  * separate `/v1/combat/sessions/:sessionId/enter` endpoint.
  */
+import { loadSessionCampaignMonsterIndex } from './combat/combat-entry-campaign-index.js';
 import {
   detectCombatEntry,
   mapActionTarget,
   synthesizeSceneSpec,
 } from './combat/combat-entry-gate.js';
+import { nameUnresolvedCombatants } from './combat/combat-entry-unnamed-hostile.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './combat/scene-spec-sanitizer.js';
+import { isUnresolvedNpcName } from '../../../shared/unresolved-creature-name';
 import { logger } from '../lib/logger.js';
 
+import type { CampaignMonsterIndex } from './combat/campaign-monster-index.js';
 import type {
   CombatEntryGateDeps,
   CombatEntryPlayer,
@@ -253,6 +257,8 @@ export async function applyCombatEntryGate(params: {
    * the DM made up from its own description ("shadows that do not cast light") is not a target.
    */
   untargetedSpellRoster?: readonly CombatIntentActor[] | null;
+  /** The session's authored creatures, read only to name a hostile the DM left unnamed. */
+  campaignMonsterIndex?: (sessionId: string, userId: string) => Promise<CampaignMonsterIndex>;
   deps?: CombatEntryGateDeps;
 }): Promise<LLMResponse> {
   const { combatEntry, declaredAttack, untargetedSpellRoster } = params;
@@ -307,19 +313,22 @@ export async function applyCombatEntryGate(params: {
         sceneSpecSynthesized: declaredDetection?.sceneSpecSynthesized ?? true,
         ...(declaredDetection?.seatingHint ? { seatingHint: declaredDetection.seatingHint } : {}),
       };
-    } else if (
-      !pending.combatants.some((combatant) => isDeclaredCombatant(combatant, declaredAttack))
-    ) {
+    } else {
+      // The declared target is the named creature. The gate's "Hostile Creature" stand-in beside
+      // it would show in the popup and be seated as a second creature (#2532).
+      const named = pending.combatants.filter((combatant) => !isUnresolvedNpcName(combatant.name));
       pending = {
         ...pending,
-        combatants: [
-          ...pending.combatants,
-          {
-            name: declaredAttack.actorName,
-            ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
-            count: 1,
-          },
-        ],
+        combatants: named.some((combatant) => isDeclaredCombatant(combatant, declaredAttack))
+          ? named
+          : [
+              ...named,
+              {
+                name: declaredAttack.actorName,
+                ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
+                count: 1,
+              },
+            ],
       };
     }
 
@@ -367,6 +376,37 @@ export async function applyCombatEntryGate(params: {
       ),
     );
     pending = { ...pending, combatants: known };
+  }
+
+  // A fight the DM asked for without naming anyone (#2532): name it from the campaign's creatures
+  // or this turn's prose. With no name anywhere there is no encounter and no popup; the DM's
+  // narration stands and the creature is introduced by it.
+  if (pending && !declaredAttack) {
+    const text = typeof envelope.text === 'string' ? envelope.text : '';
+    const named = await nameUnresolvedCombatants({
+      combatants: pending.combatants,
+      prose: [...new Set([text, pending.sceneSpec.sceneDescription ?? ''])]
+        .filter(Boolean)
+        .join('\n'),
+      playerName: combatEntry.player.name,
+      loadIndex: () =>
+        (params.campaignMonsterIndex ?? loadSessionCampaignMonsterIndex)(
+          combatEntry.sessionId,
+          params.userId,
+        ),
+    });
+    if (named.length === 0) {
+      logger.info({
+        msg: 'COMBAT_ENTRY_UNNAMED_HOSTILE_DEFERRED',
+        event: 'engine_notice',
+        sessionId: combatEntry.sessionId,
+        trigger: pending.trigger,
+        detail: pending.detail,
+        combatants: pending.combatants.map((combatant) => combatant.name),
+      });
+      return { ...sanitizedResult, text: JSON.stringify(withoutCombatEntryFields(envelope)) };
+    }
+    pending = { ...pending, combatants: named };
   }
 
   if (!pending) return sanitizedResult;

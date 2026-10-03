@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { namedHostilePending } from '../../../../shared/test-fixtures/unnamed-hostile-entry';
 import { CombatEntryConfirmation } from '../CombatEntryConfirmation';
 
 import logger from '@/lib/logger';
@@ -98,6 +99,27 @@ describe('CombatEntryConfirmation', () => {
         otherCombatants: ['Captain Sarah Reeves'],
       }),
     );
+  });
+
+  it.each([
+    [namedHostilePending.combatants.map((combatant) => combatant.name), 'Chitinous Hunter'],
+    [[], 'the opposing side'],
+  ])('for a fight the DM left unnamed (#2532), labels %j read "Strike at %s?"', (labels, shown) => {
+    const spec = { actorLabel: 'The Storyteller', initiativeRoll: null, initiativeModifier: 2 };
+    render(
+      <CombatEntryConfirmation
+        confirmation={{
+          spec: { ...spec, combatantLabels: labels },
+          confirm: vi.fn(),
+          decline: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(`Strike at ${shown}? Your initiative is rolled after you confirm.`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/hostile creature|unknown creature/i)).not.toBeInTheDocument();
   });
 
   it('falls back to the roster when no target was declared and omits the second line', () => {

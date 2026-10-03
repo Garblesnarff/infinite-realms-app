@@ -9,6 +9,7 @@
 import { afterAll, describe, expect, it, spyOn } from 'bun:test';
 
 import { logger } from '../../lib/logger.js';
+import { emptyCampaignMonsterIndex } from '../combat/campaign-monster-index.js';
 import { applyCombatEntryGate } from '../combat-entry-pipeline.js';
 
 import type { CombatEntryGateDeps } from '../combat/combat-entry-gate.js';
@@ -85,6 +86,8 @@ describe('applyCombatEntryGate', () => {
     const returned = await applyCombatEntryGate({
       result: {
         text: dmEnvelope({
+          // The prose names the creature (#2532): with nobody named anywhere there is no handoff.
+          text: 'Your fist arcs toward the Ifrit Guard.',
           options,
           roll_requests: [
             {
@@ -112,10 +115,10 @@ describe('applyCombatEntryGate', () => {
     expect(envelope.options).toEqual(options);
     expect(envelope.combat_entry_pending).toMatchObject({
       trigger: 'attack_roll_request',
-      combatants: [{ name: 'Hostile Creature', count: 1 }],
+      combatants: [{ name: 'Ifrit Guard', count: 1 }],
     });
     // Narration is never touched: the gate adds authority, it does not rewrite the fiction.
-    expect(envelope.text).toBe('Your fist arcs toward the Ifrit.');
+    expect(envelope.text).toBe('Your fist arcs toward the Ifrit Guard.');
   });
 
   it('leaves a peaceful turn byte-identical', async () => {
@@ -172,7 +175,13 @@ describe('applyCombatEntryGate', () => {
     const { deps } = stubDeps();
     const returned = await applyCombatEntryGate({
       result: {
-        text: '```json\n' + dmEnvelope({ combat_transition: 'start' }) + '\n```',
+        text:
+          '```json\n' +
+          dmEnvelope({
+            combat_transition: 'start',
+            text: 'The Ifrit Guard lunges at you.',
+          }) +
+          '\n```',
       } as never,
       userId: USER_ID,
       combatEntry: COMBAT_ENTRY,
@@ -216,6 +225,70 @@ describe('applyCombatEntryGate', () => {
         actorName: 'Professor Emil Darkwater',
       },
     });
+  });
+
+  it('declared attack + a reply that lists nobody → the declared target only, no placeholder beside it (#2532)', async () => {
+    const { deps } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({ combat_transition: 'start', text: 'Professor Darkwater stammers.' }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: COMBAT_ENTRY,
+      declaredAttack: { verb: 'punch', actorName: 'Professor Emil Darkwater' },
+      deps,
+    });
+
+    const pending = (JSON.parse(returned.text) as { combat_entry_pending: { combatants: unknown } })
+      .combat_entry_pending;
+    expect(pending.combatants).toEqual([{ name: 'Professor Emil Darkwater', count: 1 }]);
+  });
+
+  it.each([
+    [
+      'an attack roll_request',
+      {
+        roll_requests: [
+          { type: 'attack', formula: '1d20+4', purpose: 'Strike', dc: null, ac: null },
+          { type: 'skill', formula: '1d20+3', purpose: 'Perception', dc: 12, ac: null },
+        ],
+      },
+    ],
+    [
+      'a combat_action',
+      {
+        combat_actions: [
+          {
+            actor_id: 'the-storyteller',
+            action_type: 'attack',
+            target_ids: ['the-storyteller'],
+            weapon_id: null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+        ],
+      },
+    ],
+  ])('opens no fight for %s when nothing names the creature (#2532)', async (_trigger, fields) => {
+    const { deps, startedAt } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: { text: dmEnvelope({ text: 'Something moves in the dark.', ...fields }) } as never,
+      userId: USER_ID,
+      combatEntry: COMBAT_ENTRY,
+      campaignMonsterIndex: async () => emptyCampaignMonsterIndex(''),
+      deps,
+    });
+
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toBeUndefined();
+    expect(envelope.combat_transition).toBe('none');
+    expect(envelope.combat_actions).toEqual([]);
+    expect(envelope.text).toBe('Something moves in the dark.');
+    expect(
+      (envelope.roll_requests as Array<{ type: string }>).map((request) => request.type),
+    ).not.toContain('attack');
+    expect(startedAt).toHaveLength(0);
   });
 
   it('emits COMBAT_INTENT_DIRECTIVE_CONTRACT_VIOLATION when the model resolves the declared attack', async () => {

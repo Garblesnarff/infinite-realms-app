@@ -1,4 +1,5 @@
 import { canOccupy, findPath, getDistance } from './engine.js';
+import { isUnresolvedNpcName, UNKNOWN_CREATURE } from '../../../shared/unresolved-creature-name';
 import { findCatalogWeapon } from '../services/combat/weapon-catalog.js';
 
 import type { MapEntity, TacticalMap } from './types.js';
@@ -16,29 +17,7 @@ export interface CombatSeatingHint {
   reason: CombatSeatingReason;
 }
 
-export const UNKNOWN_CREATURE = 'Unknown creature';
-
-const GENERIC_NPC_NAMES = new Set([
-  'creature',
-  'enemy',
-  'hostile creature',
-  'monster',
-  'npc',
-  'player',
-  'unknown creature',
-]);
-
-/** Model-generated seat labels are not NPC identities. */
-export function isUnresolvedNpcName(value: string | null | undefined): boolean {
-  const normalized = value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
-  return (
-    !normalized ||
-    GENERIC_NPC_NAMES.has(normalized) ||
-    /^(?:player|npc|enemy|monster|creature|hostile creature|unknown creature)(?:\s+\d+)+$/.test(
-      normalized,
-    )
-  );
-}
+export { UNKNOWN_CREATURE, isUnresolvedNpcName };
 
 function withoutLeadingArticle(value: string): string {
   return value
@@ -133,6 +112,58 @@ function firstNameMatch(
   return undefined;
 }
 
+/** Nouns that name a kind of creature, so a bare "the dragon" is a creature. */
+const CREATURE_KIND_NOUNS = [
+  'hulk',
+  'creature',
+  'monster',
+  'beast',
+  'golem',
+  'dragon',
+  'ogre',
+  'troll',
+];
+
+/**
+ * Nouns that name a role or a size as readily as a creature: "the guard rail", "a giant crack",
+ * "the captain folds her arms". Alone they say nothing about who is hostile; with a modifier
+ * ("a chitinous hunter") they describe one.
+ */
+export const ROLE_NOUNS: ReadonlySet<string> = new Set([
+  'giant',
+  'guard',
+  'captain',
+  'soldier',
+  'mercenary',
+  'ranger',
+  'hunter',
+  'mage',
+  'professor',
+  'scholar',
+]);
+
+const CREATURE_BY_KIND = new RegExp(
+  `\\b(?:a|an|the)\\s+((?:[A-Za-z][A-Za-z'-]*\\s+){0,3}(?:${[...CREATURE_KIND_NOUNS, ...ROLE_NOUNS].join('|')}))\\b`,
+  'i',
+);
+
+/**
+ * The creature a piece of prose describes by kind ("a chitinous hunter"): the article, up to three
+ * words and a creature noun. Unlike the other readers it never takes a capitalised phrase for a
+ * name, so scenery ("the Iron Door") and places are not mistaken for a creature.
+ */
+export function creatureNameFromProse(
+  description: string,
+  isPlayer: (name: string) => boolean = () => false,
+): string | undefined {
+  return firstNameMatch(
+    description,
+    CREATURE_BY_KIND,
+    (match) => (match[1] ? titleizeCreatureType(match[1]) : undefined),
+    isPlayer,
+  );
+}
+
 function nameFromSceneDescription(
   description: string,
   isPlayer: (name: string) => boolean = () => false,
@@ -165,12 +196,7 @@ function nameFromSceneDescription(
   );
   if (articleName) return articleName;
 
-  return firstNameMatch(
-    description,
-    /\b(?:a|an|the)\s+((?:[A-Za-z][A-Za-z'-]*\s+){0,3}(?:hulk|creature|monster|beast|golem|dragon|ogre|troll|giant|guard|captain|soldier|mercenary|ranger|mage|professor|scholar))\b/i,
-    (match) => (match[1] ? titleizeCreatureType(match[1]) : undefined),
-    isPlayer,
-  );
+  return creatureNameFromProse(description, isPlayer);
 }
 
 export interface SceneCombatantResolution {

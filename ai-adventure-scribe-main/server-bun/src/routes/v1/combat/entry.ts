@@ -1,8 +1,10 @@
 import { Elysia, t } from 'elysia';
 
+import { isUnresolvedNpcName } from '../../../../../shared/unresolved-creature-name';
 import { authenticateRequest as defaultAuthenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
+import { loadSessionCampaignMonsterIndex as defaultLoadSessionCampaignMonsterIndex } from '../../../services/combat/combat-entry-campaign-index.js';
 import { combatEntryGateDeps as defaultCombatEntryGateDeps } from '../../../services/combat/combat-entry-gate-deps.js';
 import {
   seatCombatEntry as defaultSeatCombatEntry,
@@ -11,6 +13,7 @@ import {
   type DerivedCombatant,
   type SeatedCombatEntryOutcome,
 } from '../../../services/combat/combat-entry-gate.js';
+import { nameUnresolvedCombatants } from '../../../services/combat/combat-entry-unnamed-hostile.js';
 import {
   actorsMentionedIn,
   declareSpellAttackOn,
@@ -167,6 +170,7 @@ export interface CombatEntryRouteOptions {
   seatCombatEntry?: typeof defaultSeatCombatEntry;
   sanitizeSceneSpec?: typeof defaultSanitizeSceneSpec;
   buildInitiativeOrder?: typeof defaultBuildInitiativeOrder;
+  loadSessionCampaignMonsterIndex?: typeof defaultLoadSessionCampaignMonsterIndex;
 }
 
 export function createCombatEntryRoutes({
@@ -175,6 +179,7 @@ export function createCombatEntryRoutes({
   seatCombatEntry = defaultSeatCombatEntry,
   sanitizeSceneSpec = defaultSanitizeSceneSpec,
   buildInitiativeOrder = defaultBuildInitiativeOrder,
+  loadSessionCampaignMonsterIndex = defaultLoadSessionCampaignMonsterIndex,
 }: CombatEntryRouteOptions = {}) {
   return new Elysia().post(
     '/sessions/:sessionId/enter',
@@ -196,11 +201,6 @@ export function createCombatEntryRoutes({
         return { error: 'Invalid combat entry payload', detail: sanitized.detail };
       }
 
-      const combatants: DerivedCombatant[] = body.combatants.map((combatant) => ({
-        name: combatant.name.trim(),
-        ...(combatant.monsterId ? { monsterId: combatant.monsterId } : {}),
-        count: combatant.count ?? 1,
-      }));
       const player: CombatEntryPlayer = {
         characterId: body.player.characterId ?? null,
         name: body.player.name.trim(),
@@ -208,6 +208,32 @@ export function createCombatEntryRoutes({
         ...(body.player.hpCurrent != null ? { hpCurrent: body.player.hpCurrent } : {}),
         ...(body.player.hpMax != null ? { hpMax: body.player.hpMax } : {}),
       };
+
+      // No participant is seated as a placeholder (#2532). The pending entry the server hands out
+      // is already named; this stops a body that is not (an older client's, a forged one). With a
+      // declared attack the declared target is the creature: a placeholder beside it is dropped,
+      // never named from prose (the gate skips naming for a declared attack as well).
+      const posted: DerivedCombatant[] = body.combatants.map((combatant) => ({
+        name: combatant.name.trim(),
+        ...(combatant.monsterId ? { monsterId: combatant.monsterId } : {}),
+        count: combatant.count ?? 1,
+      }));
+      const combatants: DerivedCombatant[] = body.declaredAttack
+        ? posted.filter((combatant) => !isUnresolvedNpcName(combatant.name))
+        : await nameUnresolvedCombatants({
+            combatants: posted,
+            prose: sanitized.sceneSpec.sceneDescription ?? '',
+            playerName: player.name,
+            loadIndex: () => loadSessionCampaignMonsterIndex(params.sessionId, user.userId),
+          });
+      if (combatants.length === 0) {
+        logger.info({ msg: 'COMBAT_ENTRY_UNNAMED_HOSTILE_REFUSED', sessionId: params.sessionId });
+        set.status = 422;
+        return {
+          error: 'Invalid combat entry payload',
+          detail: 'combatants must name at least one creature',
+        };
+      }
 
       try {
         const outcome = await seatCombatEntry(

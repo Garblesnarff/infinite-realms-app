@@ -1,4 +1,5 @@
 import { looksLikeCombatIntent } from '../../../shared/combat-intent-prefilter';
+import { isUnresolvedNpcName } from '../../../shared/unresolved-creature-name';
 
 import type { AIResponse } from '@/services/ai/shared/types';
 
@@ -19,7 +20,12 @@ export function confirmCombatEntry(
   pendingEntry: PendingCombatEntry,
   player: { name: string; initiativeModifier: number },
 ): Promise<boolean> {
-  const combatantLabels = pendingEntry.combatants.map((combatant) => combatant.name);
+  // The card never names a placeholder: "Strike at Hostile Creature?" told the player nothing
+  // (#2532). The server names the creature before it sends the entry; this covers a server that has
+  // not restarted under a client that has.
+  const combatantLabels = pendingEntry.combatants
+    .map((combatant) => combatant.name)
+    .filter((label) => !isUnresolvedNpcName(label));
   const declaredTarget = pendingEntry.declaredAttack?.actorName?.trim();
   const declaredTargets = declaredTarget ? [declaredTarget] : [];
   const normalizeLabel = (value: string): string =>
