@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.3...v0.25.4) (2026-10-03)
+
+
+### Bug Fixes
+
+* **combat:** DM roll requests dropped in combat, silent next turn, roll countdown ([#2530](https://github.com/Garblesnarff/infinite-realms-production/issues/2530)) ([#2538](https://github.com/Garblesnarff/infinite-realms-production/issues/2538)) ([b7c0572](https://github.com/Garblesnarff/infinite-realms-production/commit/b7c0572e0708f8b3ee1cf6cc3265dc3f5e5172f4))
+
 ## [0.25.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.2...v0.25.3) (2026-10-03)
 
 
