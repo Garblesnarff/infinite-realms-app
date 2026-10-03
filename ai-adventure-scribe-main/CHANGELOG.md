@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.1...v0.25.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **sheet:** weapon attack bonus adds proficiency only when proficient ([#2519](https://github.com/Garblesnarff/infinite-realms-production/issues/2519)) ([#2529](https://github.com/Garblesnarff/infinite-realms-production/issues/2529)) ([3061850](https://github.com/Garblesnarff/infinite-realms-production/commit/3061850f080754ed96f9595821a61443304c0297))
+
 ## [0.25.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.0...v0.25.1) (2026-10-03)
 
 
