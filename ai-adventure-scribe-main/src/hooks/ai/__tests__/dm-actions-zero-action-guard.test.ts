@@ -123,11 +123,55 @@ describe('the zero-action guard inside the DM action pipeline', () => {
     expect(outcome.responseText).toBe('Your claws rake across the glaze and skitter away.');
   });
 
-  it('stands down when the DM asked the player for a roll', async () => {
-    // The turn is paused on the dice UI on purpose; forcing an action would steal the roll.
-    await invoke({ result: { text: 'Roll to hit.', roll_requests: [{ type: 'attack' }] } });
+  // This used to read "stands down when the DM asked the player for a roll": the turn was taken
+  // to be paused on the dice popup, and forcing an action would steal the roll. In combat there
+  // is no popup. `processRollRequests` drops every DM roll request while an encounter is open
+  // (#1807, #2378), so the stand-down left a typed attack with no engine action and no prompt: the
+  // request vanished and the saved row kept prose alone (#2530). The request is dropped first.
+  it('fires when the DM answered a typed attack with a roll request instead of an action', async () => {
+    vi.mocked(AIService.chatWithDM).mockResolvedValueOnce({
+      text: 'You lash out at the glaze.',
+      combat_actions: [REPAIRED_ACTION],
+    } as any);
 
-    expect(repairCalls()).toHaveLength(0);
+    const outcome = await invoke({
+      result: {
+        text: 'Roll to hit.',
+        roll_requests: [{ type: 'attack', formula: '1d20+5', purpose: 'Claw attack' }],
+      },
+    });
+
+    expect(repairCalls()).toHaveLength(1);
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      'encounter-1',
+      REPAIRED_ACTION,
+      undefined,
+    );
+    expect(outcome.result.roll_requests ?? []).toEqual([]);
+    // An attack request is the DM's declaration channel, dropped every combat turn: no notice.
+    expect(outcome.localNotices).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_DROPPED', {
+      encounterId: 'encounter-1',
+      type: 'attack',
+      purpose: 'Claw attack',
+    });
+  });
+
+  it('tells the player a dropped saving throw was not rolled', async () => {
+    const outcome = await invoke({
+      playerMessage: 'I try to talk the glaze down',
+      result: {
+        text: 'The glaze quivers.',
+        roll_requests: [{ type: 'save', formula: '1d20+2', purpose: 'Wisdom save', dc: 13 }],
+      },
+    });
+
+    expect(outcome.localNotices).toEqual([
+      {
+        text: 'The DM asked for a saving throw roll, but dice in combat belong to the engine, so no roll was made.',
+        persist: true,
+      },
+    ]);
   });
 
   it('stands down for a legacy ROLL_REQUESTS_V1 block in the narration', async () => {

@@ -227,4 +227,31 @@ describe('attack roll commit (#2200)', () => {
     expect(onSendFullMessage).not.toHaveBeenCalled();
     expect(onSendMessage).not.toHaveBeenCalled();
   });
+
+  /** #2530: a prompt on a timer shows the timer, and stops showing it once the click commits. */
+  it('shows the auto-roll countdown on the attack prompt until the player clicks Roll', async () => {
+    render(<Harness />);
+
+    await act(async () => {
+      void requestPlayerAttackRoll(ATTACK_SPEC);
+    });
+    expect(screen.getByTestId('roll-auto-countdown').textContent).toBe(
+      "Rolls for you in 45s if you don't.",
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(screen.getByTestId('roll-auto-countdown').textContent).toBe(
+      "Rolls for you in 25s if you don't.",
+    );
+
+    await act(async () => {
+      screen.getByLabelText(/^Roll 1d20\+5 for/).click();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(screen.queryByTestId('roll-auto-countdown')).toBeNull();
+  });
 });

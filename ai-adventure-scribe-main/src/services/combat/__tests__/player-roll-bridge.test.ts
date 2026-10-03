@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   hasPendingPlayerRoll,
   markPlayerRollCommitted,
+  pendingPlayerRollDeadline,
+  pendingPlayerRollLabel,
   requestPlayerAttackRoll,
   requestPlayerInitiativeRoll,
   PLAYER_ATTACK_ROLL_TIMEOUT_MS,
@@ -339,5 +341,52 @@ describe('the player roll bridge', () => {
     expect(hasPendingPlayerRoll()).toBe(true);
     settleNew?.({ d20: 9 });
     await expect(pending).resolves.toEqual({ d20: 9 });
+  });
+});
+
+describe('what the prompt tells the player about its own timer (#2530)', () => {
+  beforeEach(() => {
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-02T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+    vi.useRealTimers();
+  });
+
+  it('exposes the moment the engine will roll the attack, and what it is asking for', () => {
+    setPlayerRollHost({ present: () => hostHandle('attack-roll-1') });
+    void requestPlayerAttackRoll(SPEC);
+
+    expect(pendingPlayerRollDeadline('attack-roll-1')).toBe(
+      Date.parse('2026-10-02T12:00:00.000Z') + PLAYER_ATTACK_ROLL_TIMEOUT_MS,
+    );
+    expect(pendingPlayerRollLabel()).toBe('attack claws');
+    expect(pendingPlayerRollDeadline('some-other-roll')).toBeNull();
+  });
+
+  it('uses the shorter initiative window for an initiative prompt', () => {
+    setPlayerRollHost({ present: () => hostHandle('initiative-roll-1') });
+    void requestPlayerInitiativeRoll({ actorLabel: 'The Seeker', initiativeModifier: 2 });
+
+    expect(pendingPlayerRollDeadline('initiative-roll-1')).toBe(
+      Date.parse('2026-10-02T12:00:00.000Z') + PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
+    );
+    expect(pendingPlayerRollLabel()).toBe('initiative');
+  });
+
+  it('has no deadline once the player has committed to the die, and none once it settles', () => {
+    setPlayerRollHost({ present: () => hostHandle('attack-roll-1') });
+    void requestPlayerAttackRoll(SPEC);
+
+    expect(markPlayerRollCommitted('attack-roll-1')).toBe(true);
+    expect(pendingPlayerRollDeadline('attack-roll-1')).toBeNull();
+
+    settlePendingPlayerRoll({ d20: 11 });
+    expect(pendingPlayerRollLabel()).toBeNull();
   });
 });

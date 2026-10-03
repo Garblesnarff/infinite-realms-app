@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
+import { RollAutoCountdown } from './RollAutoCountdown';
 import { useMessageDiceRolls } from './use-message-dice-rolls';
 import { usePendingDmRollRecovery } from './use-pending-dm-roll-recovery';
 import { isPlayerChatBubble } from './utils/player-chat-bubble';
@@ -21,7 +22,10 @@ import { SpellTargetSaveCard } from '@/features/game-session/components/game/Spe
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 import { useSpellTargetSaveHost } from '@/hooks/combat/use-spell-target-save-host';
-import { markPlayerRollCommitted } from '@/services/combat/player-roll-bridge';
+import {
+  markNarrativeRollCommitted,
+  markPlayerRollCommitted,
+} from '@/services/combat/player-roll-bridge';
 import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
 import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
@@ -249,6 +253,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
             story and the chat box (#2252) rather than floating inside the scroll area. */}
         {currentRoll && rollRequest && (
           <RollTray>
+            {(currentRoll.combatInitiativeRoll || currentRoll.combatAttackRoll) && (
+              <RollAutoCountdown rollId={currentRoll.id} />
+            )}
             <DiceRollRequest
               key={currentRoll.id}
               request={rollRequest}
@@ -261,10 +268,11 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                 // result. Committing on the click rather than on the settle is what stops a die
                 // rolled near the end of the window from losing the race to the timeout — the
                 // engine would roll its own d20 and the player's number would be dropped, so the
-                // player sees one number and the narration uses another (#2200).
+                // player sees one number and the narration uses another (#2200). A narrative
+                // roll has no timer, but the next turn must still not set it aside mid-throw.
                 currentRoll.combatInitiativeRoll || currentRoll.combatAttackRoll
                   ? () => markPlayerRollCommitted(currentRoll.id)
-                  : undefined
+                  : () => markNarrativeRollCommitted(currentRoll.id)
               }
               onCancel={handleCancelRoll}
             />

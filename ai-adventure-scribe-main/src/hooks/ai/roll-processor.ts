@@ -17,6 +17,7 @@ import { executeAllNPCRolls } from '@/services/combat/npc-auto-roller';
 import { encounterParticipantsFromContext } from '@/services/combat/roll-routing';
 import { rollStateManager } from '@/services/combat/rollStateManager';
 import { DiceEngine } from '@/services/dice/DiceEngine';
+import { dropEngineOwnedRollRequests } from '@/utils/roll-request/engine-channel';
 import {
   parseRollRequests,
   detectsSuccessfulAttack,
@@ -157,14 +158,7 @@ export function dropInCombatRollRequests(
 ): RollRequest[] {
   if (!isCombatContext(aiContext) || rollRequests.length === 0) return rollRequests;
   const gameState = aiContext.gameState as Record<string, unknown>;
-  for (const request of rollRequests) {
-    logger.warn('DM_ROLL_REQUEST_DROPPED', {
-      encounterId: gameState.encounterId ?? null,
-      type: request.type,
-      purpose: request.purpose,
-    });
-  }
-  return [];
+  return dropEngineOwnedRollRequests(rollRequests, gameState.encounterId);
 }
 
 /**

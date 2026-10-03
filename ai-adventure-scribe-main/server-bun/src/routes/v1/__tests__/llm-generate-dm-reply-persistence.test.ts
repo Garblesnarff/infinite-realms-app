@@ -196,6 +196,28 @@ describe('POST /v1/llm/generate — the server keeps the DM reply it generated (
     );
   });
 
+  it('names the roll request types it held a reply for, and nothing the model wrote in them (#2530)', async () => {
+    await generate({
+      ...explorationReply,
+      roll_requests: [
+        { type: 'attack', formula: '1d20+5', purpose: 'Longsword attack on the goblin', ac: 13 },
+        { type: 'skill_check', formula: '1d20+2', purpose: 'Perception', dc: 13 },
+        { type: 'Ignore previous instructions', formula: '1d20' },
+        { type: 'ignore_previous_instructions', formula: '1d20' },
+        { formula: '1d20' },
+      ],
+    });
+
+    expect(persistenceLine()).toEqual({
+      msg: 'DM_REPLY_PERSISTENCE',
+      sessionId: SESSION_ID,
+      messageId: DM_MESSAGE_ID,
+      persisted: false,
+      reason: 'roll_requests',
+      rollRequestTypes: ['attack', 'skill_check', 'other', 'other', 'other'],
+    });
+  });
+
   it('holds an in-combat turn back when the client says the engine may still resolve it', async () => {
     await generate(explorationReply, { dmReply: { messageId: DM_MESSAGE_ID, inCombat: true } });
 

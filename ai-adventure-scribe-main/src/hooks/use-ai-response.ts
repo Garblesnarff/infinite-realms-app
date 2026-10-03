@@ -49,6 +49,8 @@ import { AIService } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import {
   hasPendingPlayerRoll,
+  isNarrativeRollCommitted,
+  pendingPlayerRollLabel,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
 import { sheetCastSignal } from '@/services/combat/sheet-cast-progress';
@@ -58,7 +60,7 @@ import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 import { stripEngineGeneratedLinesFromSegments } from '@/utils/engine-lines';
 import { ensureActionOptions } from '@/utils/ensure-action-options';
-import { isNarrativeRollRequest } from '@/utils/roll-request/engine-channel';
+import { isNarrativeRollRequest, loggableRollType } from '@/utils/roll-request/engine-channel';
 
 // Voice narration types
 export interface NarrationSegment {
@@ -254,7 +256,7 @@ export const useAIResponse = (): {
    */
   checkRestoredDefeat: (sessionId: string) => Promise<boolean>;
 } => {
-  const { setGamePhase, state: gameState } = useGame();
+  const { setGamePhase, state: gameState, cancelDiceRoll } = useGame();
   const { refreshCombatState } = useCombat();
   const { user, userPlan } = useAuth();
   const [combatTurnUiState, setCombatTurnUiState] = useState<CombatTurnUiState>(
@@ -274,6 +276,10 @@ export const useAIResponse = (): {
     finalLines?: string[];
   } | null>(null);
   const terminalDeathSessionRef = useRef<string>('');
+  // The queue as of the latest render: a turn started from a stale closure must not cancel a roll
+  // the player has already answered.
+  const diceRollQueueRef = useRef(gameState.diceRollQueue);
+  diceRollQueueRef.current = gameState.diceRollQueue;
   const lastSigRef = useRef<string>('');
   const lastCombatSessionIdRef = useRef<string>('');
   const lastCombatCharacterIdRef = useRef<string>('');
@@ -381,10 +387,19 @@ export const useAIResponse = (): {
         throwIfAborted();
         lastCombatSessionIdRef.current = sessionId;
 
-        // Guard against repeated message processing
-        const sig = `${sessionId}|${latestMessage.text}|${messages.length}`;
+        // Guard against repeated message processing. The history the player's message sits on is
+        // part of its identity: the loaded message window is capped (PAGE_SIZE), so past the cap
+        // `messages.length` is the same on every turn, and the same words typed twice in a row
+        // were taken for one turn and silently skipped, with no request sent and no UI (#2530).
+        const previousRow = messages[messages.length - 2];
+        const sig = `${sessionId}|${latestMessage.text}|${messages.length}|${
+          previousRow?.id ?? ''
+        }|${previousRow?.sequenceNumber ?? ''}|${previousRow?.timestamp ?? ''}`;
         if (lastSigRef.current === sig) {
-          logger.debug('[useAIResponse] Skipping duplicate message processing for signature:', sig);
+          logger.warn('DUPLICATE_PLAYER_TURN_SKIPPED', {
+            sessionId,
+            messageCount: messages.length,
+          });
           return {
             text: '',
             sender: 'dm',
@@ -412,8 +427,38 @@ export const useAIResponse = (): {
         // is deliberately no wall-clock timeout: a popup open overnight is a player who came
         // back, not a failure.
         if (!isDiceRollMessage && hasPendingPlayerRoll()) {
+          const label = pendingPlayerRollLabel();
           logger.info('[PlayerRoll] superseded by a new player action; the engine rolls it');
           settlePendingPlayerRoll({ d20: null });
+          onEngineNotice?.({
+            text: `Your ${label ?? 'combat'} roll was rolled for you because you took another action.`,
+            persist: true,
+          });
+        }
+        // A narrative roll the DM asked for (a skill check, a save) that is still unanswered
+        // when the player takes another action is set aside the same way, and the player is told.
+        // Nothing in the send pipeline waits on it (#2530). A retry of an unanswered turn is not
+        // another action, and a die the player has already thrown is not set aside.
+        if (!isDiceRollMessage && latestMessage.context?.intent !== 'resume_unanswered') {
+          for (const roll of diceRollQueueRef.current.pendingRolls) {
+            if (
+              roll.status !== 'pending' ||
+              roll.combatAttackRoll ||
+              roll.combatInitiativeRoll ||
+              isNarrativeRollCommitted(roll.id)
+            ) {
+              continue;
+            }
+            logger.warn('DM_ROLL_REQUEST_CANCELLED', {
+              reason: 'superseded_by_player_action',
+              type: loggableRollType(roll.requestType),
+            });
+            cancelDiceRoll(roll.id);
+            onEngineNotice?.({
+              text: `Your ${roll.description} roll was set aside because you took another action.`,
+              persist: true,
+            });
+          }
         }
         if (!isDiceRollMessage) {
           logger.debug('[useAIResponse] New player action - clearing processed roll requests');
@@ -1201,6 +1246,7 @@ export const useAIResponse = (): {
       userPlan,
       user?.id,
       setGamePhase,
+      cancelDiceRoll,
     ],
   );
 

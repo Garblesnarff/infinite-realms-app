@@ -824,6 +824,66 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     ]);
   });
 
+  // #2530: a roll request that never reaches the player is logged with its type, never its text.
+  it('logs the type of each roll request a declined entry discards', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+
+    await invoke({
+      combat_transition: 'none',
+      combat_entry_pending: PENDING_ENTRY,
+      combat_actions: [PLAYER_ACTION],
+      roll_requests: [
+        { type: 'initiative', formula: '1d20+2', purpose: 'Initiative' },
+        { type: 'attack', formula: '1d20+5', purpose: 'Punch Vance' },
+      ],
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_CLEARED', {
+      reason: 'entry_declined',
+      type: 'initiative',
+    });
+    expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_CLEARED', {
+      reason: 'entry_declined',
+      type: 'attack',
+    });
+  });
+
+  it('logs the attack and initiative requests a seated entry hands to the engine, not the check', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
+      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        roll_requests: [
+          { type: 'initiative', formula: '1d20+2', purpose: 'Initiative' },
+          { type: 'attack', formula: '1d20+5', purpose: 'Punch Vance' },
+          { type: 'skill_check', formula: '1d20+3', purpose: 'Perception' },
+        ],
+      },
+      refresh,
+    );
+
+    expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_CLEARED', {
+      reason: 'entry_seated',
+      type: 'initiative',
+    });
+    expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_CLEARED', {
+      reason: 'entry_seated',
+      type: 'attack',
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'DM_ROLL_REQUEST_CLEARED',
+      expect.objectContaining({ type: 'skill_check' }),
+    );
+  });
+
   it('does not seat or refresh when the pending handoff has no usable player character', async () => {
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
     const outcome = await invoke(

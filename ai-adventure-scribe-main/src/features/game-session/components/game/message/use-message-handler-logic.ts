@@ -296,7 +296,6 @@ export const useMessageHandlerLogic = ({
     const turnSignal = abortController.signal as TurnAbortSignal;
     let timedOut = false;
     let playerMessagePersisted = providedContext?.intent === 'resume_unanswered';
-    let stillThinkingRemaining = DM_STILL_THINKING_TIMEOUT_MS;
     let turnTimeoutRemaining = DM_TURN_TIMEOUT_MS;
     let activeSegmentStartedAt = performance.now();
     let pausedForPlayerInput = false;
@@ -313,10 +312,12 @@ export const useMessageHandlerLogic = ({
       stillThinkingTimer = undefined;
       turnTimeoutTimer = undefined;
     };
-    const scheduleTurnTimers = (): void => {
-      clearTurnTimers();
+    // The 30 s label is not paused while a prompt waits on the player: a prompt the player cannot
+    // see would otherwise leave the screen with no sign of life at all (#2530). Only the 90 s
+    // abort stops, because that wait is the player's.
+    const scheduleTurnTimeout = (): void => {
+      if (turnTimeoutTimer) clearTimeout(turnTimeoutTimer);
       activeSegmentStartedAt = performance.now();
-      stillThinkingTimer = setTimeout(() => setIsStillThinking(true), stillThinkingRemaining);
       turnTimeoutTimer = setTimeout(() => {
         timedOut = true;
         // Abort the whole turn and close whichever player-facing combat prompt owns the wait.
@@ -329,21 +330,22 @@ export const useMessageHandlerLogic = ({
     const pauseTurnTimers = (): void => {
       if (pausedForPlayerInput) return;
       const elapsed = performance.now() - activeSegmentStartedAt;
-      stillThinkingRemaining = Math.max(0, stillThinkingRemaining - elapsed);
       turnTimeoutRemaining = Math.max(0, turnTimeoutRemaining - elapsed);
       pausedForPlayerInput = true;
-      clearTurnTimers();
+      if (turnTimeoutTimer) clearTimeout(turnTimeoutTimer);
+      turnTimeoutTimer = undefined;
     };
     const resumeTurnTimers = (): void => {
       if (!pausedForPlayerInput || timedOut) return;
       pausedForPlayerInput = false;
-      scheduleTurnTimers();
+      scheduleTurnTimeout();
     };
     turnSignal.onPlayerWaitChange = (waiting) => {
       if (waiting) pauseTurnTimers();
       else resumeTurnTimers();
     };
-    scheduleTurnTimers();
+    stillThinkingTimer = setTimeout(() => setIsStillThinking(true), DM_STILL_THINKING_TIMEOUT_MS);
+    scheduleTurnTimeout();
 
     setSendError(null);
     setIsStillThinking(false);

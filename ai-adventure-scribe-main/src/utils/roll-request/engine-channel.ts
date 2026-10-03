@@ -1,3 +1,7 @@
+import type { RollRequest } from '@/types/roll-request';
+
+import logger from '@/lib/logger';
+
 /**
  * Which DM roll requests belong to the combat engine rather than to the dice popup.
  *
@@ -21,4 +25,37 @@ export function isEngineChannelRollType(type: string | undefined): boolean {
 /** True for a roll request that is an ordinary narrative check the dice popup may own. */
 export function isNarrativeRollRequest(request: { type?: string }): boolean {
   return !isEngineChannelRollType(request.type);
+}
+
+const LOGGABLE_ROLL_TYPES: ReadonlySet<string> = new Set([
+  'attack',
+  'save',
+  'check',
+  'damage',
+  'damage_taken',
+  'initiative',
+  'skill_check',
+]);
+
+/** A roll type safe to log: the model writes the field, so anything off the list is `other`. */
+export function loggableRollType(type: unknown): string {
+  return typeof type === 'string' && LOGGABLE_ROLL_TYPES.has(type) ? type : 'other';
+}
+
+/**
+ * Logs and drops every request in the list. Callers have already established that the engine
+ * owns the dice, so the list never reaches the dice popup (#2530).
+ */
+export function dropEngineOwnedRollRequests(
+  rollRequests: RollRequest[],
+  encounterId: unknown,
+): RollRequest[] {
+  for (const request of rollRequests) {
+    logger.warn('DM_ROLL_REQUEST_DROPPED', {
+      encounterId: encounterId ?? null,
+      type: loggableRollType(request.type),
+      purpose: request.purpose,
+    });
+  }
+  return [];
 }

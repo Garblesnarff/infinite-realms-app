@@ -42,6 +42,7 @@ import {
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
+import { dropEngineOwnedRollRequests, loggableRollType } from '@/utils/roll-request/engine-channel';
 import { slugify } from '@/utils/slug';
 
 export interface HandleDmActionsParams {
@@ -277,6 +278,16 @@ export async function handleDmActionsAndTransitions(
     localNotices.push({ text, persist });
   };
 
+  /**
+   * Every place this handler blanks the DM's roll list goes through here first, so a request
+   * that never reaches the player is always logged by type (#2530). Type only, never content.
+   */
+  const logClearedRollRequests = (reason: string): void => {
+    for (const request of (result.roll_requests ?? []) as Array<{ type?: string }>) {
+      logger.warn('DM_ROLL_REQUEST_CLEARED', { reason, type: loggableRollType(request.type) });
+    }
+  };
+
   /** Puts the NPCs' opening turns on screen now, so they precede the player's dice prompt. */
   const showNpcTurns = (
     advanced: AdvanceNpcTurnsResponse,
@@ -297,6 +308,7 @@ export async function handleDmActionsAndTransitions(
       responseText = '';
       narrationSegments = undefined;
       appendLocalNotice(COMBAT_ENTRY_NO_PLAYER_NOTICE);
+      logClearedRollRequests('entry_no_player');
       result = { ...result, combat_actions: [], roll_requests: [] };
     } else {
       try {
@@ -313,6 +325,7 @@ export async function handleDmActionsAndTransitions(
           appendLocalNotice(
             'Combat entry declined. No encounter was seated; your action was not resolved.',
           );
+          logClearedRollRequests('entry_declined');
           result = {
             ...result,
             text: '',
@@ -349,6 +362,7 @@ export async function handleDmActionsAndTransitions(
             responseText = '';
             narrationSegments = undefined;
             appendLocalNotice(COMBAT_ENTRY_FAILURE_NOTICE);
+            logClearedRollRequests('entry_refused');
             result = { ...result, combat_actions: [], roll_requests: [] };
           } else {
             const entryPayload = await enterResponse.json().catch(() => null);
@@ -400,10 +414,17 @@ export async function handleDmActionsAndTransitions(
                 sceneSpecSynthesized: pendingEntry.sceneSpecSynthesized,
               },
               // Combat roll requests belong to the engine resolution after seating, not to the
-              // ordinary narrative dice queue. Keep non-combat checks intact.
-              roll_requests: (result.roll_requests || []).filter(
-                (request: any) => request.type !== 'attack' && request.type !== 'initiative',
-              ),
+              // ordinary narrative dice queue. Checks are left for the in-combat drop below.
+              roll_requests: (result.roll_requests || []).filter((request: any) => {
+                const engineOwned = request.type === 'attack' || request.type === 'initiative';
+                if (engineOwned) {
+                  logger.warn('DM_ROLL_REQUEST_CLEARED', {
+                    reason: 'entry_seated',
+                    type: loggableRollType(request.type),
+                  });
+                }
+                return !engineOwned;
+              }),
               // The model batch is never consulted when `/enter` returned an engine-derived
               // first action. It is restored below only when first_action is absent.
               ...(entryFirstActionPresent ? { combat_actions: [] } : {}),
@@ -428,6 +449,7 @@ export async function handleDmActionsAndTransitions(
             ? COMBAT_ENTRY_NO_HOST_NOTICE
             : COMBAT_ENTRY_FAILURE_NOTICE,
         );
+        logClearedRollRequests('entry_failed');
         result = { ...result, combat_actions: [], roll_requests: [] };
       }
     }
@@ -501,6 +523,7 @@ export async function handleDmActionsAndTransitions(
       });
       responseText = '';
       narrationSegments = undefined;
+      logClearedRollRequests('entry_npc_advance_failed');
       result = {
         ...result,
         text: '',
@@ -549,6 +572,33 @@ export async function handleDmActionsAndTransitions(
   // Filter model-authored NPC actions before the zero-action repair and engine boundary. The
   // engine runner is the only NPC driver now; a stray model action is telemetry, never input.
   filterNpcCombatActions();
+
+  // Once an encounter is open the engine owns every die: `processRollRequests` drops any DM
+  // roll_request after this handler returns (#1807, #2378), so none of them ever reaches the
+  // dice popup. The two guards below read the list to decide whether the turn is paused on that
+  // popup, so an in-combat request has to go first. Left in, a typed attack answered with a
+  // roll_request and no combat_action stood both guards down and then lost the request: nothing
+  // resolved, nothing was shown, and the turn ended on prose alone (#2530).
+  if (isInCombat && activeEncounter && result.roll_requests?.length) {
+    // Attack and initiative requests are the DM's declaration channel and are dropped every
+    // combat turn; a skill check or save is a die the player would expect to throw, so say so.
+    const droppedRolls = new Set<string>();
+    for (const request of result.roll_requests as Array<{ type?: string }>) {
+      if (request.type === 'save') droppedRolls.add('saving throw');
+      else if (request.type === 'check' || request.type === 'skill_check') {
+        droppedRolls.add('skill check');
+      }
+    }
+    for (const label of droppedRolls) {
+      appendLocalNotice(
+        `The DM asked for a ${label} roll, but dice in combat belong to the engine, so no roll was made.`,
+      );
+    }
+    result = {
+      ...result,
+      roll_requests: dropEngineOwnedRollRequests(result.roll_requests, activeEncounter.id),
+    };
+  }
 
   // `/enter` is the source of truth for the player's declaration. Ask for the die from its
   // engine-generated modifier, then send the same structured action through the normal resolver.

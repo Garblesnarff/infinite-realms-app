@@ -76,6 +76,10 @@ let pending: {
   dismiss: () => void;
   rollId?: string;
   timeoutId?: ReturnType<typeof setTimeout>;
+  /** Epoch ms at which the timer auto-rolls this prompt; shown to the player as a countdown. */
+  deadline?: number;
+  /** What the prompt asks for, for the notice when the player moves on without rolling. */
+  label: string;
   /** Opens this same prompt on a replacement host after the one showing it unmounted. */
   represent: (next: PlayerRollHost) => void;
   /** The host showing this prompt unmounted and no replacement has registered yet. */
@@ -156,6 +160,20 @@ export function hasPendingPlayerRoll(): boolean {
   return pending !== null;
 }
 
+/** What the waiting prompt asks for ("initiative", "attack Longsword"), or null. */
+export function pendingPlayerRollLabel(): string | null {
+  return pending?.label ?? null;
+}
+
+/**
+ * When the timer will auto-roll the prompt for `rollId`, or null when nothing will: a different
+ * prompt, or one the player has already committed to (`markPlayerRollCommitted`).
+ */
+export function pendingPlayerRollDeadline(rollId: string): number | null {
+  if (!pending || pending.rollId !== rollId || pending.timeoutId === undefined) return null;
+  return pending.deadline ?? null;
+}
+
 /**
  * Commits a player-initiated initiative roll while its animation is still running.
  *
@@ -167,6 +185,25 @@ export function markPlayerRollCommitted(rollId: string): boolean {
   clearTimeout(pending.timeoutId);
   pending.timeoutId = undefined;
   return true;
+}
+
+/** Narrative rolls whose Roll button the player has pressed; the popup is still animating them. */
+const committedNarrativeRolls = new Set<string>();
+
+/**
+ * A narrative roll has no bridge slot, but the next turn must not set aside a die the player has
+ * already thrown (#2530). The popup takes ~3.5 s to hand its result over, and the queue entry
+ * stays pending until then.
+ */
+export function markNarrativeRollCommitted(rollId: string): void {
+  committedNarrativeRolls.add(rollId);
+  if (committedNarrativeRolls.size > 50) {
+    committedNarrativeRolls.delete(committedNarrativeRolls.values().next().value as string);
+  }
+}
+
+export function isNarrativeRollCommitted(rollId: string): boolean {
+  return committedNarrativeRolls.has(rollId);
 }
 
 /**
@@ -246,6 +283,7 @@ function requestPlayerRoll(
     // synchronously; assigning it afterwards would leave a ghost pending roll behind.
     pending = {
       settle,
+      label: rollLabel,
       dismiss: () => dismissPopup(),
       // Drop the old host's queue entry, then ask the new host. The timer keeps running.
       represent: (next) => {
@@ -265,8 +303,10 @@ function requestPlayerRoll(
         );
         settlePendingPlayerRoll({ d20: null });
       }, timeoutMs);
-      if (pending?.settle === settle) pending.timeoutId = timeoutId;
-      else clearTimeout(timeoutId);
+      if (pending?.settle === settle) {
+        pending.timeoutId = timeoutId;
+        pending.deadline = Date.now() + timeoutMs;
+      } else clearTimeout(timeoutId);
     }
   });
 }

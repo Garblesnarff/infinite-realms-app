@@ -91,6 +91,29 @@ function logEnvelopeShape(
   });
 }
 
+const LOGGABLE_ROLL_TYPES = new Set([
+  'attack',
+  'save',
+  'check',
+  'damage',
+  'damage_taken',
+  'initiative',
+  'skill_check',
+]);
+
+/**
+ * The `type` of each roll request in the envelope (at most 10), for the log line that says why a
+ * reply was held. The model writes this field, so only a known type is copied into the log;
+ * anything else is reported as `other`.
+ */
+function rollRequestTypesOf(envelope: Record<string, unknown> | null): string[] {
+  const requests = Array.isArray(envelope?.roll_requests) ? envelope.roll_requests : [];
+  return requests.slice(0, 10).map((request) => {
+    const type = (request as { type?: unknown } | null)?.type;
+    return typeof type === 'string' && LOGGABLE_ROLL_TYPES.has(type) ? type : 'other';
+  });
+}
+
 const MEMORY_EXTRACTION_DEGRADED_REASON = 'memory_extraction_unavailable';
 const LLM_GENERATE_DEGRADED_REASON = 'llm_generate_unavailable';
 const LLM_GENERATE_DEGRADED_TEXT =
@@ -499,6 +522,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           messageId: dmReply.messageId,
           persisted: persistence.persisted,
           reason: persistence.reason ?? null,
+          // #2530: D1's two held replies could not be told apart afterwards; the request's type
+          // says whether the player was owed an attack, a check or a save. Types only.
+          ...(persistence.reason === 'roll_requests'
+            ? { rollRequestTypes: rollRequestTypesOf(envelope) }
+            : {}),
         });
         if (!persistence.persisted) {
           void scheduleDmReplyWatchdog({

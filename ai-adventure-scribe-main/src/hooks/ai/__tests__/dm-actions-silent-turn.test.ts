@@ -429,7 +429,6 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       ['a dice result', { isDiceRollMessage: true, playerInputOrigin: 'dice_roll' }],
       ['an action-bar click', { playerInputOrigin: 'action_bar' }],
       ['a turn no player message started', { playerInputOrigin: null }],
-      ['a turn the DM paused on a roll', { result: { text: FABRICATED, roll_requests: [{}] } }],
       [
         'the legacy roll block',
         {
@@ -443,6 +442,34 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       expect(AIService.chatWithDM).not.toHaveBeenCalled();
       expect(outcome.responseText).toContain('Your spell connects');
       expect(outcome.responseText).not.toContain('still your turn');
+    });
+
+    // A roll request used to stand this turn down as "paused on the dice popup". In combat the
+    // popup never opens: `processRollRequests` drops every DM roll request while an encounter
+    // is open, so the stand-down left a turn with no engine line, no prompt and prose that
+    // described a wound nobody took (#2530). The request is dropped first, and the turn is silent.
+    it('for a DM roll request in combat: it is dropped, so the turn is silent and the DM is asked again', async () => {
+      const outcome = await invoke({
+        result: {
+          text: FABRICATED,
+          roll_requests: [{ type: 'skill_check', formula: '1d20+3', purpose: 'Persuasion' }],
+        },
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith('DM_ROLL_REQUEST_DROPPED', {
+        encounterId: ENCOUNTER.id,
+        type: 'skill_check',
+        purpose: 'Persuasion',
+      });
+      expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
+      expect(outcome.responseText).toContain(NOTICE);
+      expect(outcome.result.roll_requests ?? []).toEqual([]);
+      expect(outcome.localNotices).toEqual([
+        {
+          text: 'The DM asked for a skill check roll, but dice in combat belong to the engine, so no roll was made.',
+          persist: true,
+        },
+      ]);
     });
 
     it('for a combat transition: the board is re-read and no note is sent', async () => {

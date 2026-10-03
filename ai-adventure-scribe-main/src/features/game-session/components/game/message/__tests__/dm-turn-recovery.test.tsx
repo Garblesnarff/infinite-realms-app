@@ -177,6 +177,32 @@ describe('DM turn recovery (#2480)', () => {
     expect(state.sendError).toBe(DM_TIMEOUT_MESSAGE);
   });
 
+  // #2530: the 90 s abort stops while the player holds the die, but the 30 s label does not. A
+  // prompt the player cannot see used to leave the screen with no sign of life at all.
+  it('keeps the still-thinking label running while a player-roll prompt is waiting', async () => {
+    mockGetAIResponse.mockImplementationOnce((...args: unknown[]) => {
+      (args[7] as { onPlayerWaitChange?: (waiting: boolean) => void }).onPlayerWaitChange?.(true);
+      return new Promise(() => {});
+    });
+    renderHandler();
+
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = send('Wait for my die');
+      await Promise.resolve();
+    });
+    void pending.catch(() => {});
+    expect(state.isStillThinking).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DM_STILL_THINKING_TIMEOUT_MS);
+    });
+
+    expect(state.isStillThinking).toBe(true);
+    expect(state.sendError).toBe(null);
+    expect(state.isProcessing).toBe(true);
+  });
+
   it('ignores a late completion from the timed-out turn', async () => {
     let resolveLate!: (value: { text: string; rollRequests: never[] }) => void;
     mockGetAIResponse.mockImplementationOnce(
