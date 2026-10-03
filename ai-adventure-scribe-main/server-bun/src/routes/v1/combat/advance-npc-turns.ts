@@ -34,10 +34,25 @@ export const advanceNpcTurnRoutes = new Elysia().post(
       user.userId,
     );
     if (!encounter) {
+      // #2517: no active encounter may mean the last one ended in defeat. Say
+      // why it ended so the client can show the death screen from the combat
+      // resolution itself instead of waiting for a refused DM generate. The
+      // lookup is best-effort: failing it must not break this response.
+      let endedReason: string | null = null;
+      try {
+        const concluded = await CombatEncounterService.getLatestConcludedEncounter(
+          params.sessionId,
+          user.userId,
+        );
+        endedReason = concluded?.endedReason ?? null;
+      } catch {
+        endedReason = null;
+      }
       return {
         results: [],
         currentParticipant: null,
         combatEnded: true,
+        endedReason,
         iterationCount: 0,
         iterationCap: 0,
         capReached: false,
@@ -58,7 +73,21 @@ export const advanceNpcTurnRoutes = new Elysia().post(
     }
 
     try {
-      return await advanceNpcTurns(encounter.id, user.userId);
+      const advanced = await advanceNpcTurns(encounter.id, user.userId);
+      if (!advanced.combatEnded) return advanced;
+      // #2517: name the ending on the wire. `combatEnded` alone cannot tell a
+      // victory from a party defeat, and only the defeat is terminal.
+      let endedReason: string | null = null;
+      try {
+        const concluded = await CombatEncounterService.getLatestConcludedEncounter(
+          params.sessionId,
+          user.userId,
+        );
+        endedReason = concluded?.endedReason ?? null;
+      } catch {
+        endedReason = null;
+      }
+      return { ...advanced, endedReason };
     } catch (cause) {
       if (cause instanceof AppError) {
         set.status = cause.statusCode;

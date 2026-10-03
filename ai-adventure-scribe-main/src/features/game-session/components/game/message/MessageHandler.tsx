@@ -17,6 +17,19 @@ interface MessageHandlerProps {
   updateGameSessionState: (newState: Partial<any>) => Promise<void>;
   onAIResponse?: (message: ChatMessage) => Promise<void>; // Callback for processing AI responses (e.g., combat detection)
   spellCastHandlerRef?: SpellCastHandlerRef;
+  /**
+   * #2517: reports the terminal death state upward so the game screen can
+   * swap to the fallen end state as a page state (not an overlay inside the
+   * chat column).
+   */
+  onTerminalDeathStateChange?: (
+    state: {
+      state: 'party_defeated';
+      encounterId: string | null;
+      receivedAt: number;
+      finalLines?: string[];
+    } | null,
+  ) => void;
   children: (props: {
     handleSendMessage: (message: string, context?: MessageSendContext) => Promise<void>;
     isProcessing: boolean;
@@ -27,7 +40,12 @@ interface MessageHandlerProps {
     combatTurnUiState: CombatTurnUiState;
     onResumeTurn: () => Promise<void>;
     /** #2456: handled terminal death state; when set, the UI renders the death screen. */
-    terminalDeathState: { state: 'party_defeated'; encounterId: string | null; receivedAt: number } | null;
+    terminalDeathState: {
+      state: 'party_defeated';
+      encounterId: string | null;
+      receivedAt: number;
+      finalLines?: string[];
+    } | null;
   }) => React.ReactNode;
 }
 
@@ -54,6 +72,19 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
       }
     };
   }, [handleSendMessage, props.spellCastHandlerRef]);
+
+  const onTerminalDeathStateChange = props.onTerminalDeathStateChange;
+  useEffect(() => {
+    // #2517: report the terminal state only once no send is in flight. The
+    // death state can be set while the killing turn is still finishing —
+    // the DM reply and engine-row persistence run after the combat check
+    // inside the turn — and swapping the tree mid-send would unmount this
+    // handler before those saves settle. Holding the report lets the turn
+    // land in history first; the end state then replaces a completed turn
+    // and "Read the story so far" holds the killing blow.
+    if (terminalDeathState && isProcessing) return;
+    onTerminalDeathStateChange?.(terminalDeathState);
+  }, [onTerminalDeathStateChange, terminalDeathState, isProcessing]);
 
   return props.children({
     handleSendMessage,

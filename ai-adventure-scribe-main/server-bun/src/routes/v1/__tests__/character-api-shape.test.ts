@@ -38,6 +38,41 @@ const monk = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any;
 
+describe('mapCharacterToApi vital state (#2517)', () => {
+  it('returns vital_state and died_at from the stats row', () => {
+    const diedAt = new Date('2026-10-02T14:51:00.000Z');
+    const api = mapCharacterToApi({
+      ...monk,
+      stats: {
+        id: 'stats-1',
+        characterId: monk.id,
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+        armorClass: 11,
+        maxHitPoints: 7,
+        currentHitPoints: 0,
+        temporaryHitPoints: 0,
+        initiativeBonus: 0,
+        speed: 30,
+        vitalState: 'dead',
+        diedAt,
+        createdAt: diedAt,
+        updatedAt: diedAt,
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)!;
+
+    expect(
+      (api.stats as { vital_state?: string; died_at?: Date }).vital_state,
+    ).toBe('dead');
+    expect((api.stats as { died_at?: Date }).died_at).toEqual(diedAt);
+  });
+});
+
 describe('mapCharacterToApi proficiency round-trip (#1827)', () => {
   it('returns every proficiency column the write path accepts', () => {
     const api = mapCharacterToApi(monk)!;

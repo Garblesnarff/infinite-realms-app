@@ -27,6 +27,7 @@ import { useCharacterImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import { isFallenCharacter } from '@/utils/character/vital-state';
 
 /**
  * Props interface for CharacterCard component
@@ -83,6 +84,10 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
     hasImage,
     error: imageError,
   } = useCharacterImageHotLoading(character.id, character.created_at);
+
+  // #2517: a fallen character is listed read-only; opening it shows the end
+  // state (the sheet swaps), and it can neither be played nor deleted here.
+  const fallen = isFallenCharacter(character);
 
   /**
    * Handles character deletion confirmation
@@ -188,6 +193,16 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
           </div>
         )}
 
+        {fallen && (
+          <div
+            data-testid="character-fallen-badge"
+            className="absolute top-4 left-4 rounded-full border border-white/15 bg-slate-950/60 px-3 py-1 text-xs font-medium text-gray-200 backdrop-blur-sm"
+            role="status"
+            style={{ zIndex: Z_INDEX.DROPDOWN }}
+          >
+            Fallen
+          </div>
+        )}
         {artwork.artworkUnavailable && (
           <div
             className="absolute top-4 right-4 rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-medium text-gray-200/90 backdrop-blur-sm"
@@ -215,6 +230,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
           character={character}
           isHovered={isHovered}
           imageLoading={imageLoading}
+          fallen={fallen}
           onPlay={(e) => {
             e.stopPropagation();
             setShowCampaignModal(true);

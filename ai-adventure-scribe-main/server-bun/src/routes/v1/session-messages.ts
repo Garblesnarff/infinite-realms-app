@@ -84,8 +84,42 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
   }))
   .post(
     '/:id/messages',
-    async ({ params, body, user }) => {
+    async ({ params, body, user, set }) => {
       const payload = Array.isArray(body) ? body : [body];
+      // #2517: a dead character's session is terminal. The single truth is
+      // `character_stats.vital_state` (written by the vitals mirror during
+      // the killing resolution); #2465 refused the next DM generate, but the
+      // player's own message was still accepted and stored here first (run
+      // D2's "Hello?" at 0 HP). Refuse player messages for a session whose
+      // character has fallen; DM/system persistence is unaffected.
+      if (payload.some((message) => message.speaker_type === 'player')) {
+        try {
+          // Dynamic import on purpose (same pattern as llm.ts): a static
+          // import pulls the vitals service's db client into every route-test
+          // module load, which the isolated harness cannot load.
+          const { CharacterVitalsService } = await import(
+            '../../services/character-vitals-service.js'
+          );
+          const session = await SessionService.getSessionById(params.id, user!.userId);
+          if (session.characterId) {
+            const vitals = await CharacterVitalsService.getVitals(
+              session.characterId,
+              user!.userId,
+            );
+            if (vitals.vitalState === 'dead') {
+              set.status = 409;
+              return {
+                error:
+                  'This character has fallen and the tale has ended. No further messages can be sent in this session.',
+                terminalState: 'party_defeated',
+              };
+            }
+          }
+        } catch {
+          // Terminal-state lookup is best-effort here, matching /v1/llm/generate:
+          // a lookup failure must not block ordinary message persistence.
+        }
+      }
       const messages = await SessionMessageService.addMessages(
         payload.map((message) => ({
           id: message.id,

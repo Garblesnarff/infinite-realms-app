@@ -30,6 +30,9 @@ export interface CharacterStatsRow {
   armor_class?: number | null;
   max_hit_points?: number | null;
   current_hit_points?: number | null;
+  /** #2517: the single truth for "dead", read by the sheet's end state. */
+  vital_state?: string | null;
+  died_at?: string | null;
 }
 
 export interface CharacterEquipmentRow {
@@ -332,6 +335,9 @@ export const transformCharacterData = (
           armor_class: statsData.armor_class,
           max_hit_points: statsData.max_hit_points,
           current_hit_points: statsData.current_hit_points,
+          // #2517: carried through so the sheet can show the end state.
+          vital_state: statsData.vital_state ?? undefined,
+          died_at: statsData.died_at ?? undefined,
         }
       : undefined,
     abilityScores: transformAbilityScores(statsData) || {

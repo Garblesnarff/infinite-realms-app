@@ -18,6 +18,7 @@ vi.mock('@/services/user-data-api', () => ({
     getSession: vi.fn(),
     listSessions: vi.fn(),
     createSession: vi.fn(),
+    fetchSessionFallenState: vi.fn(),
   },
 }));
 
@@ -76,6 +77,8 @@ describe('useSessionInitialization', () => {
     vi.mocked(userDataApi.listSessions).mockResolvedValue([]);
     vi.mocked(userDataApi.getSession).mockResolvedValue(null);
     vi.mocked(userDataApi.createSession).mockResolvedValue({});
+    // #2517: nobody has fallen unless a test says so.
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
   });
 
   it('should set state to idle if campaignId or characterId is missing', () => {
@@ -133,18 +136,26 @@ describe('useSessionInitialization', () => {
     });
   });
 
-  it('should cleanup and not resume if active session is expired', async () => {
+  it('should cleanup an expired session and continue from it, not resume it', async () => {
     const mockSession = { id: 'expired-session', status: 'active' };
     vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([mockSession]);
     vi.mocked(isSessionExpired).mockReturnValue(true);
-    mockCreateGameSession.mockResolvedValue('new-session-id');
+    // The cleanup completes the expired session, so it becomes the
+    // continuation source (#2517: the in-memory row still says active).
+    const mockContinuation = { id: 'next-session', status: 'active' };
+    vi.mocked(userDataApi.createSession).mockResolvedValueOnce(mockContinuation);
 
     renderHook(() => useSessionInitialization(defaultProps));
 
     await waitFor(() => {
       expect(mockCleanupSession).toHaveBeenCalledWith('expired-session');
-      expect(mockCreateGameSession).toHaveBeenCalled();
+      expect(mockSetSessionData).toHaveBeenCalledWith(mockContinuation);
+      expect(mockSetSessionState).toHaveBeenCalledWith('active');
     });
+    // The dead character itself is never resumed as-is.
+    expect(mockSetSessionData).not.toHaveBeenCalledWith(mockSession);
+    expect(vi.mocked(userDataApi.fetchSessionFallenState)).toHaveBeenCalledWith('expired-session');
+    expect(mockCreateGameSession).not.toHaveBeenCalled();
   });
 
   it('should create continuation from last completed session', async () => {

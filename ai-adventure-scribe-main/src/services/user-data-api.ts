@@ -69,7 +69,23 @@ export type SessionContextPayload = Record<string, unknown> & {
   character_id: string | null;
   starter_campaign_id?: string | null;
   campaign: Record<string, unknown>;
-  character: Record<string, unknown> & { character_stats?: Record<string, number>[] };
+  character: Record<string, unknown> & {
+    character_stats?: Array<Record<string, number> & { vital_state?: string; died_at?: string | null }>;
+  };
+};
+
+/**
+ * #2517: the fallen state of a session's character, from the session load
+ * payload. `character_stats.vital_state` is the single truth for "dead";
+ * everything else here is what the end state needs to render and route.
+ */
+export type SessionFallenState = {
+  characterId: string | null;
+  characterName: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+  starterCampaignId: string | null;
+  diedAt: string | null;
 };
 
 export type TacticalMapActionPayload = {
@@ -136,6 +152,8 @@ export type AdvanceNpcTurnsResponse = {
   round?: number;
   sequence?: number;
   combatEnded: boolean;
+  /** #2517: why the encounter ended (e.g. 'party_defeated'), when combatEnded. */
+  endedReason?: string | null;
   iterationCount: number;
   iterationCap: number;
   capReached: boolean;
@@ -213,6 +231,20 @@ class UserDataApiRequestError extends Error {
     super(message);
     this.name = 'UserDataApiRequestError';
   }
+}
+
+/**
+ * #2517: the session-messages refusal for a fallen character (409 +
+ * `terminalState: 'party_defeated'`). Every layer that sees a save fail —
+ * the persistence queue and the send handler — recognizes it here so the
+ * fallen end state replaces the game with no generic error on top.
+ */
+export function isTerminalDefeatError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const candidate = error as { status?: unknown; payload?: unknown };
+  if (candidate.status !== 409) return false;
+  const payload = candidate.payload as { terminalState?: unknown } | undefined;
+  return payload?.terminalState === 'party_defeated';
 }
 
 /**
@@ -408,6 +440,35 @@ export const userDataApi = {
     request(`/v1/combat/characters/${encodeURIComponent(characterId)}/combat-status`),
   getActiveCombat: (sessionId: string): Promise<Response> =>
     requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`),
+  /**
+   * #2517: whether the session's character has fallen, from the session
+   * load payload (`GET /v1/sessions/:id/context`). `vital_state` on
+   * `character_stats` is the single truth for "dead" — written by the
+   * server's vitals mirror during the killing resolution — so load,
+   * reload and reconnect all gate on the same flag. Returns null while
+   * the character lives (including "no stats row yet").
+   */
+  fetchSessionFallenState: async (sessionId: string): Promise<SessionFallenState | null> => {
+    const context = await request<SessionContextPayload>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/context`,
+    );
+    const stats = context.character?.character_stats?.[0];
+    if (!stats || stats.vital_state !== 'dead') return null;
+    const campaignRecord = context.campaign ?? {};
+    const characterRecord = context.character ?? {};
+    return {
+      characterId:
+        context.character_id ??
+        (typeof characterRecord.id === 'string' ? characterRecord.id : null),
+      characterName: typeof characterRecord.name === 'string' ? characterRecord.name : null,
+      campaignId:
+        context.campaign_id ??
+        (typeof campaignRecord.id === 'string' ? campaignRecord.id : null),
+      campaignName: typeof campaignRecord.name === 'string' ? campaignRecord.name : null,
+      starterCampaignId: context.starter_campaign_id ?? null,
+      diedAt: stats.died_at ?? null,
+    };
+  },
   advanceNpcTurns: async (
     sessionId: string,
     expectedCurrentParticipantId?: string,
@@ -444,6 +505,7 @@ export const userDataApi = {
         results: [],
         currentParticipant,
         combatEnded: snapshot.combat?.encounter?.status !== 'active',
+        endedReason: null,
         iterationCount: 0,
         iterationCap: 0,
         capReached: false,

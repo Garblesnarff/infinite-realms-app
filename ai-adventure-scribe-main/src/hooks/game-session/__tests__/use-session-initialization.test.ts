@@ -20,6 +20,7 @@ vi.mock('@/services/user-data-api', () => ({
     getSession: vi.fn(),
     listSessions: vi.fn(),
     createSession: vi.fn(),
+    fetchSessionFallenState: vi.fn(),
   },
 }));
 
@@ -68,6 +69,8 @@ describe('useSessionInitialization', () => {
 
     // Default userDataApi mock behavior: no existing sessions found.
     vi.mocked(userDataApi.listSessions).mockResolvedValue([]);
+    // #2517: nobody has fallen unless a test says so.
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
   });
 
   it('should set state to idle if campaignId or characterId is missing', () => {
@@ -220,20 +223,31 @@ describe('useSessionInitialization', () => {
     });
   });
 
-  it('should cleanup and create new if session is expired', async () => {
+  it('should cleanup an expired session and continue from it', async () => {
     const mockSessions = [
       { id: 'sess-expired', status: 'active', start_time: '2020-01-01' },
     ];
     vi.mocked(userDataApi.listSessions).mockResolvedValue(mockSessions);
     vi.mocked(sessionUtils.isSessionExpired).mockReturnValue(true);
-    mockCreateGameSession.mockResolvedValue('new-id');
+    // The cleanup completes the expired session, making it the
+    // continuation source — the stale in-memory row must not be missed.
+    const continuation = { id: 'sess-next', status: 'active', session_number: 2 };
+    vi.mocked(userDataApi.createSession).mockResolvedValue(continuation);
 
     renderHook(() => useSessionInitialization(defaultProps));
 
     await waitFor(() => {
       expect(mockCleanupSession).toHaveBeenCalledWith('sess-expired');
-      expect(mockCreateGameSession).toHaveBeenCalled();
+      expect(mockSetSessionData).toHaveBeenCalledWith(continuation);
+      expect(mockSetSessionState).toHaveBeenCalledWith('active');
     });
+    // The fallen check ran against the just-cleaned-up session (the
+    // in-memory row still says active, so a stale scan would miss it).
+    expect(vi.mocked(userDataApi.fetchSessionFallenState)).toHaveBeenCalledWith('sess-expired');
+    expect(vi.mocked(userDataApi.createSession)).toHaveBeenCalledWith(
+      expect.objectContaining({ session_number: 2, campaign_id: 'camp-123' }),
+    );
+    expect(mockCreateGameSession).not.toHaveBeenCalled();
   });
 
   it('should continue from last completed session', async () => {
@@ -253,6 +267,37 @@ describe('useSessionInitialization', () => {
       expect(mockSetSessionData).toHaveBeenCalledWith(newSession);
       expect(mockSetSessionState).toHaveBeenCalledWith('active');
     });
+  });
+
+  // #2517: since the death fix, the session a character dies in is completed
+  // server-side. Reloading the game URL without ?session= must resume THAT
+  // session — creating a continuation would leave the end state reading an
+  // empty session and "Read the story so far" blank (run D2's reload repro).
+  it('#2517: resumes the session the character fell in instead of creating a new one', async () => {
+    const mockSessions = [
+      { id: 'sess-dead', status: 'completed', session_number: 1, current_scene_description: 'Scene' },
+    ];
+    vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
+    // Follows the real producer: fetchSessionFallenState reads the session's
+    // character_stats.vital_state from the session load payload.
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue({
+      characterId: 'char-456',
+      characterName: 'The Scholar',
+      campaignId: 'camp-123',
+      campaignName: 'Abyssal Descent',
+      starterCampaignId: null,
+      diedAt: '2026-10-02T14:51:00.000Z',
+    });
+
+    renderHook(() => useSessionInitialization(defaultProps));
+
+    await waitFor(() => {
+      expect(mockSetSessionData).toHaveBeenCalledWith(mockSessions[0]);
+      expect(mockSetSessionState).toHaveBeenCalledWith('active');
+    });
+    expect(vi.mocked(userDataApi.fetchSessionFallenState)).toHaveBeenCalledWith('sess-dead');
+    expect(userDataApi.createSession).not.toHaveBeenCalled();
+    expect(mockCreateGameSession).not.toHaveBeenCalled();
   });
 
   it('should handle error when fetching existing sessions', async () => {

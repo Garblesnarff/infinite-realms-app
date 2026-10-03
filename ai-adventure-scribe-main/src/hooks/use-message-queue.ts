@@ -9,7 +9,7 @@ import type { ChatMessage } from '@/types/game';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
 import { isNetworkError, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
+import { isTerminalDefeatError, userDataApi } from '@/services/user-data-api';
 import { persistableNarrationSegments } from '@/utils/narration-segments';
 
 const MAX_RETRIES = 3;
@@ -251,6 +251,14 @@ export const useMessageQueue = (sessionId: string | null) => {
         context.previousData.forEach((item) => {
           queryClient.setQueryData(item.queryKey, item.data);
         });
+      }
+
+      // #2517: the fallen-character refusal is not an error to report —
+      // the death screen replaces the game, and the send handler restores
+      // it. A "server refused" toast on top of the end state would be the
+      // generic error the round-1 fix review forbade.
+      if (isTerminalDefeatError(error)) {
+        return;
       }
 
       toast({

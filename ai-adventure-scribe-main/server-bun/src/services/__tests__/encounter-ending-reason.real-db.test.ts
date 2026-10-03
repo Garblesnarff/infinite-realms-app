@@ -324,4 +324,67 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       describeCombatEnd('last_hostile_defeated'),
     ]);
   });
+
+  test('#2517: a won fight leaves the session active', async () => {
+    const sessionRow = async (): Promise<{ status: string | null; endTime: Date | null }> => {
+      const [row] = await db
+        .select({ status: gameSessions.status, endTime: gameSessions.endTime })
+        .from(gameSessions)
+        .where(eq(gameSessions.id, sessionId));
+      return row;
+    };
+
+    expect((await sessionRow()).status).toBe('active');
+
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+    // A won fight leaves the session open for the next scene.
+    expect((await sessionRow()).status).toBe('active');
+  });
+
+  test('#2517: a party defeat completes the session when the hero is dead', async () => {
+    // The single truth, written by the vitals mirror during the killing
+    // resolution: the hero is dead, not merely down.
+    await db
+      .update(characterStats)
+      .set({ vitalState: 'dead', currentHitPoints: 0 })
+      .where(eq(characterStats.characterId, characterId));
+
+    const [row] = await db
+      .select({ status: gameSessions.status, endTime: gameSessions.endTime })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId));
+    expect(row.status).toBe('active');
+    expect(row.endTime).toBeNull();
+
+    await concludeEncounter(encounterId, sessionId, userId, 'party_defeated');
+
+    const [after] = await db
+      .select({ status: gameSessions.status, endTime: gameSessions.endTime })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId));
+    // Completed, so the chronicle can be written for a dead run; the
+    // encounter claim and this write commit together.
+    expect(after.status).toBe('completed');
+    expect(after.endTime).not.toBeNull();
+  });
+
+  test('#2517: a party defeat leaves the session active while the hero is only stabilised', async () => {
+    // `party_defeated` also concludes a fight nobody can advance (a
+    // stabilised hero cannot be roused by the engine), but a stabilised
+    // hero is not dead: the run continues in this session and neither the
+    // completion nor the end state may fire.
+    await db
+      .update(characterStats)
+      .set({ vitalState: 'stabilized', currentHitPoints: 0 })
+      .where(eq(characterStats.characterId, characterId));
+
+    await concludeEncounter(encounterId, sessionId, userId, 'party_defeated');
+
+    const [after] = await db
+      .select({ status: gameSessions.status, endTime: gameSessions.endTime })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId));
+    expect(after.status).toBe('active');
+    expect(after.endTime).toBeNull();
+  });
 });

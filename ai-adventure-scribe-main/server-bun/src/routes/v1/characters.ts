@@ -274,6 +274,10 @@ export function mapCharacterToApi(
           max_hit_points: character.stats.maxHitPoints,
           current_hit_points: character.stats.currentHitPoints,
           temporary_hit_points: character.stats.temporaryHitPoints,
+          // #2517: the single truth for "dead" — /app/characters lists a
+          // fallen character read-only and the sheet opens on the end state.
+          vital_state: character.stats.vitalState,
+          died_at: character.stats.diedAt,
           initiative_bonus: character.stats.initiativeBonus,
           speed: character.stats.speed,
           created_at: character.stats.createdAt,

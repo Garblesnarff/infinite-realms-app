@@ -226,6 +226,11 @@ export const useSessionInitialization = ({
         let sessionToResume = existingSessions?.find((s) => s.status === 'active') as
           | ExtendedGameSession
           | undefined;
+        // An expired active session is completed by the cleanup below, so
+        // it becomes the most recent completed session — the in-memory list
+        // still shows it as active, and the completed-scan would otherwise
+        // miss it and pick an older run.
+        let cleanedUpSession: ExtendedGameSession | undefined;
 
         if (sessionToResume) {
           if (isSessionExpired(sessionToResume)) {
@@ -238,6 +243,7 @@ export const useSessionInitialization = ({
               logger.info('[Session Init] Aborted after session cleanup');
               return;
             }
+            cleanedUpSession = sessionToResume;
             sessionToResume = undefined;
           } else {
             logger.info('[Session Init] Resuming active session:', sessionToResume.id);
@@ -251,9 +257,40 @@ export const useSessionInitialization = ({
         }
 
         // Create continuation from last completed session
-        const lastCompletedSession = existingSessions?.find((s) => s.status === 'completed');
+        const lastCompletedSession =
+          cleanedUpSession ?? existingSessions?.find((s) => s.status === 'completed');
 
         if (lastCompletedSession) {
+          // #2517: a fallen character resumes the session it died in — never a
+          // fresh one. The session is completed at death (so the chronicle can
+          // be written), and creating a continuation here would put the end
+          // state on an empty session: "Read the story so far" would read the
+          // new session's blank log instead of the dead run's (run D2's exact
+          // reload repro). The check reads the completed session's character
+          // vitals, the same single truth as the game-screen gate.
+          let fallenState = null;
+          try {
+            fallenState = await userDataApi.fetchSessionFallenState(lastCompletedSession.id);
+          } catch (error) {
+            logger.warn('[Session Init] Fallen-state check failed, continuing normally:', error);
+          }
+          if (abortSignal.aborted || !mountedRef.current) {
+            logger.info('[Session Init] Aborted after fallen-state check');
+            return;
+          }
+          if (fallenState) {
+            logger.info(
+              '[Session Init] Resuming the session the character fell in:',
+              lastCompletedSession.id,
+            );
+            if (mountedRef.current && !abortSignal.aborted) {
+              setSessionData(lastCompletedSession);
+              setSessionState('active');
+              sessionInitializedRef.current = true;
+            }
+            return;
+          }
+
           logger.info(
             '[Session Init] Creating continuation from previous:',
             lastCompletedSession.id,

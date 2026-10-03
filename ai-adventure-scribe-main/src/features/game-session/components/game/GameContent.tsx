@@ -3,7 +3,9 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { GameLoadingOverlay, GameLayout } from './game-content';
+import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './game-content/DeathScreen';
 import { useGameRails } from './game-content/use-game-rails';
+import { useSessionVitalGate } from './game-content/use-session-vital-gate';
 import GameProviders from './GameProviders';
 import { MissingGameTargetPanel } from './MissingGameTargetPanel';
 import { useGameData } from './useGameData';
@@ -14,6 +16,7 @@ import type { ChatMessage } from '@/types/game';
 
 import { Button } from '@/components/ui/button';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
@@ -23,6 +26,7 @@ import { useGameSession } from '@/hooks/use-game-session';
 import { useInitialGreeting } from '@/hooks/use-initial-greeting';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useStaleClientCheck } from '@/hooks/use-stale-client-check';
+import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { handleAsyncError } from '@/utils/error-handler';
@@ -79,6 +83,13 @@ const GameContent: React.FC = () => {
     characterIdFromParams,
     campaignIdFromParams,
   );
+
+  // #2517: gate the game screen on the character's vital state, read in the
+  // session load payload. Until it is known, nothing of the game renders.
+  const vitalGate = useSessionVitalGate(sessionId);
+  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } =
+    useStarterCampaigns();
+  const { state: characterState } = useCharacter();
 
   // A link without ?character: put the hero we found into the URL, then load as usual.
   useEffect(() => {
@@ -181,6 +192,44 @@ const GameContent: React.FC = () => {
   }
 
   const effectiveStarterCampaignId = sessionData.starter_campaign_id || null;
+
+  if (vitalGate.status === 'unknown') {
+    // #2517: while the vital state is unknown, a name-only loading state —
+    // the composer, sheet and tracker must never render first (run D2's
+    // reload showed a live game over a dead character).
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-lg text-muted-foreground">{characterState.character?.name ?? ''}</p>
+      </div>
+    );
+  }
+
+  if (vitalGate.status === 'dead') {
+    const fallen = vitalGate.fallen;
+    const starterSlug = fallen.starterCampaignId
+      ? (starterCampaigns.find((c) => c.id === fallen.starterCampaignId)?.slug ?? null)
+      : null;
+    return (
+      <GameProviders
+        sessionId={sessionId}
+        starterCampaignId={effectiveStarterCampaignId}
+        characterId={characterIdFromParams}
+      >
+        <div className="h-[100dvh]">
+          <FallenEndState
+            characterName={fallen.characterName}
+            campaignName={fallen.campaignName}
+            chooseHeroHref={buildChooseHeroHref({
+              starterSlug,
+              campaignId: fallen.campaignId,
+            })}
+            chooseHeroPending={Boolean(fallen.starterCampaignId) && starterCampaignsLoading}
+            storyContent={<FallenStoryLog />}
+          />
+        </div>
+      </GameProviders>
+    );
+  }
 
   return (
     <GameProviders

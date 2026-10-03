@@ -19,11 +19,17 @@ const { mockInsert, mockSaveSessionMessages } = vi.hoisted(() => {
 });
 
 // Mock dependencies BEFORE importing module under test
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: {
-    saveSessionMessages: mockSaveSessionMessages,
-  },
-}));
+vi.mock('@/services/user-data-api', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    // The real refusal predicate, so this suite pins the queue layer
+    // against the same check the send handler uses (#2517).
+    isTerminalDefeatError: actual.isTerminalDefeatError,
+    userDataApi: {
+      saveSessionMessages: mockSaveSessionMessages,
+    },
+  };
+});
 
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -604,5 +610,51 @@ describe('useMessageQueue', () => {
     });
 
     expect(mockSaveSessionMessages).toHaveBeenCalledWith(sessionId, DECLINED_ROLL_BODY);
+  });
+
+  describe('#2517 fallen-character refusal', () => {
+    // The exact error shape the REST client throws for the session-messages
+    // 409 (UserDataApiRequestError: status + JSON payload).
+    const fallenRefusal = (): Error & { status: number; payload: Record<string, unknown> } =>
+      Object.assign(new Error('This character has fallen and the tale has ended. (409)'), {
+        status: 409,
+        payload: {
+          error:
+            'This character has fallen and the tale has ended. No further messages can be sent in this session.',
+          terminalState: 'party_defeated',
+        },
+      });
+
+    it('shows no error toast when the save is refused because the character has fallen', async () => {
+      mockSaveSessionMessages.mockRejectedValue(fallenRefusal());
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({ text: 'Hello?', sender: 'player' } as any),
+        ).rejects.toMatchObject({ status: 409 });
+      });
+
+      // The end state replaces the game; a "server refused" toast on top of
+      // it is the generic error the round-1 FIX review forbade.
+      expect(mockToast).not.toHaveBeenCalled();
+      // A refusal is never parked for a later flush either.
+      expect(result.current.queueLength).toBe(0);
+    });
+
+    it('still toasts for a refusal that is not the fallen-character one', async () => {
+      mockSaveSessionMessages.mockRejectedValue(
+        Object.assign(new Error('Conflict (409)'), { status: 409, payload: { error: 'conflict' } }),
+      );
+      const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+
+      await act(async () => {
+        await expect(
+          result.current.messageMutation.mutateAsync({ text: 'Hello?', sender: 'player' } as any),
+        ).rejects.toMatchObject({ status: 409 });
+      });
+
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+    });
   });
 });

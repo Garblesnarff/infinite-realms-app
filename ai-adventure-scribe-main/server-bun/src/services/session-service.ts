@@ -131,6 +131,11 @@ export class SessionService {
           charisma: characterStats.charisma,
           max_hit_points: characterStats.maxHitPoints,
           current_hit_points: characterStats.currentHitPoints,
+          // #2517: the single truth for "dead". The client gates the game
+          // screen on this in the session load payload, so a fallen
+          // character's end state renders instead of the composer.
+          vital_state: characterStats.vitalState,
+          died_at: characterStats.diedAt,
         },
       })
       .from(gameSessions)

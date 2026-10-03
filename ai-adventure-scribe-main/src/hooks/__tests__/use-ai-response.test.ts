@@ -48,6 +48,7 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn(),
     advanceNpcTurns: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
+    fetchSessionFallenState: vi.fn(),
   },
 }));
 
@@ -139,6 +140,8 @@ describe('useAIResponse', () => {
       refreshCombatState: vi.fn(async () => null),
     } as any);
     vi.mocked(userDataApi.advanceNpcTurns).mockReset();
+    vi.mocked(userDataApi.fetchSessionFallenState).mockReset();
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
   });
 
   it('should generate an AI response successfully', async () => {
@@ -202,6 +205,132 @@ describe('useAIResponse', () => {
         encounterId: 'encounter-456',
       });
     });
+  });
+
+  it('#2517: NPC preflight that defeats the party sets the death state without a DM send', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    const mockSessionData = {
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
+    };
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue(mockSessionData as any);
+
+    // Combat truth as refreshCombatState returns it: an active encounter held
+    // by the NPC. After the advance the encounter is gone (combat concluded).
+    const activeEncounter = {
+      id: 'encounter-789',
+      phase: 'active',
+      currentRound: 4,
+      currentTurnParticipantId: 'npc-spider',
+      participants: [
+        { id: 'player-1', characterId: 'char-1', name: 'Char', participantType: 'player' },
+        { id: 'npc-spider', name: 'Vitruvian Spider', participantType: 'monster' },
+      ],
+    };
+    const refreshCombatState = vi
+      .fn()
+      .mockResolvedValueOnce(activeEncounter)
+      .mockResolvedValue(null);
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter },
+      refreshCombatState,
+    } as any);
+
+    // Fixture follows the real producer: POST /v1/combat/sessions/:id/advance-npc-turns
+    // returning the npc-turn-runner's AdvanceNpcTurnsResult plus the route's
+    // #2517 endedReason. Lines are the engine's own, as in run D2 (#2516).
+    const deathLines = [
+      '⚙️ Engine: Vitruvian Spider rolled 11 + 3 = 14 vs AC 11 against Char with strike — HIT. 3 piercing damage. Char is now at 0 HP and is unconscious.',
+      '⚙️ Engine: Rolled 2: the third failure. Char is dead.',
+    ];
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+      results: [
+        {
+          action: {
+            actor_id: 'npc-spider',
+            action_type: 'attack',
+            target_ids: ['player-1'],
+            weapon_id: null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+          round: 4,
+          outcomes: [],
+          actorIsPlayer: false,
+          transcriptLines: deathLines,
+        },
+      ],
+      currentParticipant: null,
+      round: 4,
+      combatEnded: true,
+      endedReason: 'party_defeated',
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: deathLines,
+    } as any);
+
+    const { result } = renderHook(() => useAIResponse());
+    let response: EnhancedChatMessage | null = null;
+    await act(async () => {
+      response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+    });
+
+    // The death screen state came from the combat resolution: no DM call ran.
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    expect(response!.context?.terminalState).toBe('party_defeated');
+    await waitFor(() => {
+      expect(result.current.terminalDeathState).toMatchObject({
+        state: 'party_defeated',
+        encounterId: 'encounter-789',
+        finalLines: deathLines,
+      });
+    });
+  });
+
+  it('#2517: checkRestoredDefeat restores the death state for an already-defeated session', async () => {
+    // Follows the real producer: userDataApi.fetchSessionFallenState reads
+    // character_stats.vital_state from the session load payload.
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue({
+      characterId: 'char-1',
+      characterName: 'The Scholar',
+      campaignId: 'camp-1',
+      campaignName: 'Abyssal Descent',
+      starterCampaignId: null,
+      diedAt: '2026-10-02T14:51:00.000Z',
+    });
+
+    const { result } = renderHook(() => useAIResponse());
+    let restored = false;
+    await act(async () => {
+      restored = await result.current.checkRestoredDefeat(mockSessionId);
+    });
+
+    expect(restored).toBe(true);
+    await waitFor(() => {
+      expect(result.current.terminalDeathState).toMatchObject({
+        state: 'party_defeated',
+        encounterId: null,
+      });
+    });
+  });
+
+  it('#2517: checkRestoredDefeat leaves a live session without a death state', async () => {
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
+
+    const { result } = renderHook(() => useAIResponse());
+    let restored = true;
+    await act(async () => {
+      restored = await result.current.checkRestoredDefeat(mockSessionId);
+    });
+
+    expect(restored).toBe(false);
+    expect(result.current.terminalDeathState).toBeNull();
   });
 
   describe('#2218: the reserved DM row id reaches the server', () => {

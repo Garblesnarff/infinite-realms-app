@@ -36,6 +36,7 @@ import { CombatIntentRefusedError } from '@/services/combat/combat-action-execut
 import { settlePendingCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
+import { isTerminalDefeatError } from '@/services/user-data-api';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
@@ -164,7 +165,12 @@ export const useMessageHandlerLogic = ({
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
   /** #2456: handled terminal death state; when set, the UI renders the death screen. */
-  terminalDeathState: { state: 'party_defeated'; encounterId: string | null; receivedAt: number } | null;
+  terminalDeathState: {
+    state: 'party_defeated';
+    encounterId: string | null;
+    receivedAt: number;
+    finalLines?: string[];
+  } | null;
 } => {
   const { messages, messagesReady, sendMessage, updateMessage } = useMessageContext();
   const { extractMemories } = useMemoryContext();
@@ -173,6 +179,7 @@ export const useMessageHandlerLogic = ({
     combatTurnUiState = INITIAL_COMBAT_TURN_UI_STATE,
     resumeCombatTurn = async () => {},
     terminalDeathState = null,
+    checkRestoredDefeat = async () => false,
   } = useAIResponse();
   const { processAiResponse } = useGame();
   const { toast } = useToast();
@@ -202,6 +209,24 @@ export const useMessageHandlerLogic = ({
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
 
   React.useEffect(() => subscribeToNetworkRetry(setIsReconnecting), []);
+
+  // #2517: restore the death screen when a session that already ended in
+  // defeat is loaded (or remounted after a reconnect). Without this, a reload
+  // dropped the screen and re-enabled the composer for a dead character.
+  React.useEffect(() => {
+    void checkRestoredDefeat(sessionId);
+  }, [sessionId, checkRestoredDefeat]);
+
+  // #2517: a reconnect can straddle the death (the killing turn landed while
+  // this tab was offline). When the connection comes back, re-check the
+  // terminal state instead of leaving a live composer for a dead character.
+  const wasReconnectingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (wasReconnectingRef.current && !isReconnecting) {
+      void checkRestoredDefeat(sessionId);
+    }
+    wasReconnectingRef.current = isReconnecting;
+  }, [isReconnecting, sessionId, checkRestoredDefeat]);
 
   const setComposerBlocked = React.useCallback((blocked: boolean) => {
     composerBlockedRef.current = blocked;
@@ -764,6 +789,14 @@ export const useMessageHandlerLogic = ({
         }
       }
     } catch (error) {
+      // #2517: the server refused the send because this character has
+      // already fallen. Restore the death screen; a generic processing
+      // error would tell the player to retry a message that can never send.
+      if (isTerminalDefeatError(error)) {
+        await checkRestoredDefeat(sessionId);
+        setComposerBlocked(false);
+        return;
+      }
       const sessionExpired =
         error instanceof SessionExpiredError ||
         (typeof error === 'object' &&

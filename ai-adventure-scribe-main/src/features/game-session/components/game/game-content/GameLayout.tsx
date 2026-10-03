@@ -108,6 +108,9 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
       else setIsRightCollapsed(true);
     }, [isLeftCollapsed, setIsLeftCollapsed, setIsRightCollapsed]);
     const mapInRail = useMapInRail(isLeftCollapsed, isRightCollapsed);
+    // #2517: when the character falls, the end state is the whole page — the
+    // panels, tracker and floating controls are not rendered at all.
+    const [isFallen, setIsFallen] = useState(false);
     // Below md an open rail has no column. It opens over the story box instead, which ends
     // where the dock (roll tray + chat box) begins, so no panel can cover the composer (#2281).
     // The floating buttons move into the story box too, off the chat box.
@@ -194,7 +197,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
             <div
               key={sessionId}
               className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${
-                overStory || (isLeftCollapsed && isRightCollapsed)
+                isFallen || overStory || (isLeftCollapsed && isRightCollapsed)
                   ? 'grid-cols-1'
                   : isLeftCollapsed
                     ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
@@ -204,7 +207,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               }`}
             >
               {/* Left Campaign Panel */}
-              {!overStory && leftPanel}
+              {!overStory && !isFallen && leftPanel}
 
               {/* Main Content Area */}
               <GameMainContent
@@ -231,12 +234,13 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 contentWarnings={contentWarnings}
                 comfortLevel={comfortLevel}
                 showSafetyInfo={showSafetyInfo}
+                onFallenChange={setIsFallen}
               />
 
               {/* Right Character/Memory Panel. Closed, it is only a fixed floating toggle, so its
                   wrapper is `contents`: an empty grid item made a second row that took half the
                   height and lifted the chat box off the bottom of a narrow screen (#2281). */}
-              {(!overStory || isRightCollapsed) && (
+              {!isFallen && (!overStory || isRightCollapsed) && (
                 <div
                   className={
                     isRightCollapsed ? 'contents' : isLeftCollapsed ? 'order-2' : 'order-3'
@@ -247,12 +251,14 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               )}
 
               {/* Floating Action Panel for Quick RPG Actions */}
-              {portalToStory
-                ? createPortal(floatingPanel(true), portalToStory)
-                : floatingPanel(false)}
+              {!isFallen &&
+                (portalToStory
+                  ? createPortal(floatingPanel(true), portalToStory)
+                  : floatingPanel(false))}
 
               {/* A rail opened on a narrow screen: over the story, above the dock. */}
-              {portalToStory &&
+              {!isFallen &&
+                portalToStory &&
                 (!isLeftCollapsed || !isRightCollapsed) &&
                 createPortal(
                   <RailOverStoryLayer
@@ -266,12 +272,14 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 )}
 
               {/* Combat Tracker Sheet */}
-              <GameCombatSheet
-                showTracker={showTracker}
-                setShowTracker={setShowTracker}
-                isDM={isDM}
-                spellCastHandlerRef={spellCastHandlerRef}
-              />
+              {!isFallen && (
+                <GameCombatSheet
+                  showTracker={showTracker}
+                  setShowTracker={setShowTracker}
+                  isDM={isDM}
+                  spellCastHandlerRef={spellCastHandlerRef}
+                />
+              )}
             </div>
           </TacticalMapProvider>
         </div>

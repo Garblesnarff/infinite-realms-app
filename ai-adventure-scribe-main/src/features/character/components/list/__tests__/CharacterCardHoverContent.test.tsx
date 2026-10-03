@@ -58,4 +58,31 @@ describe('CharacterCardHoverContent', () => {
 
     expect(screen.getByText('HP:').parentElement).toHaveTextContent('0/10');
   });
+
+  it('#2517: a fallen character is read-only — Fallen shown, no Play, no Delete', () => {
+    render(
+      <CharacterCardHoverContent
+        character={{
+          id: 'character-123',
+          name: 'The Scholar',
+          level: 1,
+          character_stats: [
+            { strength: 8, max_hit_points: 7, current_hit_points: 0, vital_state: 'dead' },
+          ],
+        }}
+        isHovered={true}
+        imageLoading={false}
+        fallen
+        onPlay={vi.fn()}
+        onViewDetails={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Fallen')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Play as this character' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete character' })).not.toBeInTheDocument();
+    // Opening the character remains: it shows the end state.
+    expect(screen.getByRole('button', { name: 'View character details' })).toBeInTheDocument();
+  });
 });

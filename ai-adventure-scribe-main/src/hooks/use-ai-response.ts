@@ -245,7 +245,14 @@ export const useAIResponse = (): {
     state: 'party_defeated';
     encounterId: string | null;
     receivedAt: number;
+    /** The engine's final lines for the fallen character, when this turn produced them. */
+    finalLines?: string[];
   } | null;
+  /**
+   * #2517: restore the death screen for a session that already ended in
+   * defeat (page load / reconnect). Resolves true when the screen is shown.
+   */
+  checkRestoredDefeat: (sessionId: string) => Promise<boolean>;
 } => {
   const { setGamePhase, state: gameState } = useGame();
   const { refreshCombatState } = useCombat();
@@ -263,7 +270,10 @@ export const useAIResponse = (): {
     encounterId: string | null;
     /** When this terminal response arrived; distinguishes repeat arrivals. */
     receivedAt: number;
+    /** The engine's final lines for the fallen character, when this turn produced them. */
+    finalLines?: string[];
   } | null>(null);
+  const terminalDeathSessionRef = useRef<string>('');
   const lastSigRef = useRef<string>('');
   const lastCombatSessionIdRef = useRef<string>('');
   const lastCombatCharacterIdRef = useRef<string>('');
@@ -298,6 +308,37 @@ export const useAIResponse = (): {
       }));
     }
   }, [refreshCombatState]);
+
+  /**
+   * #2517: on session load (and reconnect), ask the server whether this
+   * session's character has fallen and restore the end state. The truth is
+   * `character_stats.vital_state` in the session load payload, not the
+   * encounter row. Switching to a different session clears a previous
+   * session's screen first.
+   */
+  const checkRestoredDefeat = useCallback(async (sessionId: string): Promise<boolean> => {
+    if (!sessionId) return false;
+    if (terminalDeathSessionRef.current !== sessionId) {
+      terminalDeathSessionRef.current = sessionId;
+      setTerminalDeathState(null);
+    }
+    try {
+      const fallen = await userDataApi.fetchSessionFallenState(sessionId);
+      if (!fallen) return false;
+      setTerminalDeathState({
+        state: 'party_defeated',
+        encounterId: null,
+        receivedAt: Date.now(),
+      });
+      return true;
+    } catch (error) {
+      logger.warn('TERMINAL_STATE_RESTORE_FAILED', {
+        sessionId,
+        status: preflightErrorStatus(error),
+      });
+      return false;
+    }
+  }, []);
 
   /**
    * Calls the DM Agent to generate a response based on chat history and game context.
@@ -455,6 +496,7 @@ export const useAIResponse = (): {
         if (isInCombat && !isDiceRollMessage) {
           // Read before the pre-flight: one that ends combat leaves no encounter to read after.
           const preflightParticipants = activeEncounter?.participants;
+          const preflightEncounterId = activeEncounter?.id;
           try {
             const preflight = await rejectWhenAborted(
               preflightNpcTurnsBeforePlayerDeclaration({
@@ -500,6 +542,33 @@ export const useAIResponse = (): {
           if (preflightNpcTurns && onEngineNotice) {
             showNpcTurnLines(preflightNpcTurns, preflightParticipants, onEngineNotice);
             npcLinesShown = true;
+          }
+          // #2517: the NPCs' own turns just defeated the party. Show the death
+          // screen from the combat resolution itself — the player's pending
+          // declaration must not be sent to the DM first (run D2: the screen
+          // only appeared after the dead character's next message).
+          if (
+            preflightNpcTurns?.combatEnded &&
+            preflightNpcTurns.endedReason === 'party_defeated'
+          ) {
+            setCombatTurnUiState(
+              combatTurnUiStateForEncounter(null, false, characterId),
+            );
+            setTerminalDeathState({
+              state: 'party_defeated',
+              encounterId: preflightEncounterId ?? null,
+              receivedAt: Date.now(),
+              finalLines: preflightNpcTurns.transcriptLines,
+            });
+            return {
+              text: '',
+              sender: 'dm',
+              timestamp: new Date().toISOString(),
+              context: {
+                intent: 'terminal',
+                terminalState: 'party_defeated',
+              },
+            };
           }
         }
 
@@ -927,6 +996,31 @@ export const useAIResponse = (): {
             combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
           );
         }
+        // #2517: combat ended during this turn's resolution (the player's own
+        // action, then the NPC loop inside it). If the ending was the party's
+        // defeat, the death screen comes from this resolution — not from the
+        // dead character's next message. The turn's own narration (if any)
+        // still processes normally below; the end state then replaces the
+        // game column, and the engine's final lines ride along for it.
+        if (combatWasActiveAtRequestStart && !isInCombat) {
+          try {
+            const fallen = await userDataApi.fetchSessionFallenState(sessionId);
+            if (fallen) {
+              const finalBlock = combatEngineBlocks?.[combatEngineBlocks.length - 1];
+              setTerminalDeathState({
+                state: 'party_defeated',
+                encounterId: null,
+                receivedAt: Date.now(),
+                ...(finalBlock?.lines?.length ? { finalLines: finalBlock.lines } : {}),
+              });
+            }
+          } catch (error) {
+            logger.warn('TERMINAL_STATE_POST_COMBAT_CHECK_FAILED', {
+              sessionId,
+              status: preflightErrorStatus(error),
+            });
+          }
+        }
         throwIfAborted();
 
         // The engine may have ended combat during this turn. The roll drop reads this flag, and it
@@ -1110,5 +1204,5 @@ export const useAIResponse = (): {
     ],
   );
 
-  return { getAIResponse, combatTurnUiState, resumeCombatTurn, terminalDeathState };
+  return { getAIResponse, combatTurnUiState, resumeCombatTurn, terminalDeathState, checkRestoredDefeat };
 };

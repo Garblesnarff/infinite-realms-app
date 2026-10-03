@@ -12,7 +12,7 @@
  * `use-ai-response.entry-gate-engine-lines.test.ts`); only the HTTP edges and the DM model are
  * stubbed.
  */
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -51,6 +51,7 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
+    fetchSessionFallenState: vi.fn(),
   },
 }));
 vi.mock('@/services/ai-service', () => ({
@@ -502,5 +503,120 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     expect(response.text).not.toContain(EMIL_LINE);
     expect(response.text).toContain('The professor lowers his staff.');
     expect(response.context?.combatEnded).toBe(true);
+  });
+
+  it('#2517 D2 path: the NPC loop killing inside the player’s own turn sets the fallen state from the resolution', async () => {
+    // Run D2's shape: the player holds the turn and acts; the enemy survives
+    // the swing and the NPC loop inside the same resolution kills the player.
+    held = 'scholar-1';
+    commitResult = { ...killingBlow, combatEnded: false, targetNewHp: 1, targetIsDead: false };
+    const emilKillingSwing = {
+      ...emilSwing,
+      results: [
+        {
+          ...emilSwing.results[0],
+          engineResult: {
+            ...emilSwing.results[0].engineResult,
+            d20: 18,
+            totalAttackRoll: 21,
+            finalDamage: 9,
+            targetNewHp: 0,
+            targetIsConscious: false,
+            targetIsDead: true,
+            targetCondition: 'near death',
+          },
+        },
+      ],
+      currentParticipant: null,
+      combatEnded: true,
+      endedReason: 'party_defeated',
+    };
+    vi.mocked(userDataApi.advanceNpcTurns)
+      .mockImplementationOnce((async () => {
+        // The board is gone after the killing resolution.
+        held = '';
+        return emilKillingSwing;
+      }) as any)
+      .mockResolvedValue(noNpcTurns as any);
+    // Follows the real producer: fetchSessionFallenState reads
+    // character_stats.vital_state from the session load payload.
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue({
+      characterId: declaredAttackCharacter.id,
+      characterName: 'The Scholar',
+      campaignId: 'camp-1',
+      campaignName: 'Abyssal Descent',
+      starterCampaignId: null,
+      diedAt: '2026-10-02T14:51:00.000Z',
+    } as any);
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce({
+        text: 'You swing your staff.',
+        roll_requests: [],
+        combat_actions: [declaredSwing],
+      } as any)
+      .mockResolvedValueOnce({ text: 'Emil strikes back.', roll_requests: [] } as any);
+
+    const { result } = renderHook(() => useAIResponse());
+    const response = await result.current.getAIResponse(
+      [{ text: PLAYER_INPUT, sender: 'player', timestamp: new Date().toISOString() }] as any,
+      DECLARED_ATTACK_SESSION_ID,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {},
+    );
+
+    // The DM path ran (this is not the NPC-preflight path)…
+    expect(AIService.chatWithDM).toHaveBeenCalled();
+    expect(userDataApi.advanceNpcTurns).toHaveBeenCalled();
+    expect(userDataApi.fetchSessionFallenState).toHaveBeenCalledWith(DECLARED_ATTACK_SESSION_ID);
+    // …and the fallen state came out of the resolution itself: no further
+    // message send was needed to surface it.
+    await waitFor(() => {
+      expect(result.current.terminalDeathState).toMatchObject({ state: 'party_defeated' });
+    });
+    expect(result.current.terminalDeathState?.finalLines?.join('\n')).toMatch(
+      /Professor Emil Darkwater rolled 18 \+ 3 = 21/,
+    );
+    expect(result.current.terminalDeathState?.finalLines?.join('\n')).toMatch(
+      /The Scholar is (dead|now at 0 HP)/,
+    );
+    // The turn still completes whole (round 3): the DM narration comes back
+    // for the handler to save, and the killing engine row is carried into
+    // the end state via finalLines — the swap replaces a finished turn,
+    // it does not truncate it.
+    expect(response?.text).toContain('Emil strikes back.');
+  });
+
+  it('#2517: a victory ending the same way leaves the fallen state unset', async () => {
+    held = 'scholar-1';
+    commitResult = killingBlow;
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce({
+        text: 'You swing your staff.',
+        roll_requests: [],
+        combat_actions: [declaredSwing],
+      } as any)
+      .mockResolvedValueOnce({
+        text: 'The professor crumples. The study falls quiet.',
+        roll_requests: [POST_COMBAT_CHECK],
+      } as any);
+
+    const { result } = renderHook(() => useAIResponse());
+    await result.current.getAIResponse(
+      [{ text: PLAYER_INPUT, sender: 'player', timestamp: new Date().toISOString() }] as any,
+      DECLARED_ATTACK_SESSION_ID,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {},
+    );
+
+    // The post-combat check ran and the character lives: no end state.
+    expect(userDataApi.fetchSessionFallenState).toHaveBeenCalledWith(DECLARED_ATTACK_SESSION_ID);
+    expect(result.current.terminalDeathState).toBeNull();
   });
 });

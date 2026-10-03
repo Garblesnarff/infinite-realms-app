@@ -21,12 +21,16 @@
  *
  * @module server/services/combat/combat-ending
  */
+import { and, eq } from 'drizzle-orm';
+
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { vitalStateOf, type VitalsInput } from './death-saves-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
+import { db } from '../../../../db/client';
+import { characterStats, gameSessions } from '../../../../db/schema/index';
 import { alert } from '../../lib/alerting.js';
 import { logger } from '../../lib/logger.js';
 import { NarrativeLedgerService } from '../narrative/narrative-ledger-service.js';
@@ -166,7 +170,33 @@ export async function concludeEncounter(
   // Claim the terminal transition before writing any side effects. The conditional update is
   // the idempotency boundary: a post-conclusion retry returns here without another ledger fact,
   // tactical instruction, telemetry event, teardown, or publish.
-  const concluded = await CombatEncounterService.endCombat(encounterId, userId, reason);
+  // #2517: a party defeat completes the session in the same transaction as the claim, so
+  // the chronicle can be written for a dead run — but only when the hero actually died.
+  // A party defeat can also mean a stabilised party (nobody standing or dying); that
+  // hero's run continues in this session. The completion, the load gate and the message
+  // refusal all read the same single truth: `vital_state === 'dead'`.
+  const concluded = await db.transaction(async (tx) => {
+    const claimed = await CombatEncounterService.endCombat(encounterId, userId, reason, tx);
+    if (claimed && reason === 'party_defeated') {
+      const [session] = await tx
+        .select({ characterId: gameSessions.characterId })
+        .from(gameSessions)
+        .where(eq(gameSessions.id, sessionId));
+      const [stats] = session?.characterId
+        ? await tx
+            .select({ vitalState: characterStats.vitalState })
+            .from(characterStats)
+            .where(eq(characterStats.characterId, session.characterId))
+        : [];
+      if (stats?.vitalState === 'dead') {
+        await tx
+          .update(gameSessions)
+          .set({ status: 'completed', endTime: new Date(), updatedAt: new Date() })
+          .where(and(eq(gameSessions.id, sessionId), eq(gameSessions.status, 'active')));
+      }
+    }
+    return claimed;
+  });
   if (!concluded) {
     logger.info({
       msg: 'COMBAT_END_ALREADY_CONCLUDED',

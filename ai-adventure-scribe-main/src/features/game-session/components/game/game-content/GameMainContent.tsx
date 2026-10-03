@@ -1,7 +1,7 @@
 import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
-import { DismissibleDeathScreen } from './DeathScreen';
+import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './DeathScreen';
 import { GamePanelControls } from './GamePanelControls';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
 import { RollTraySlotProvider } from './roll-tray-slot';
@@ -27,27 +27,52 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
+import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageContext } from '@/contexts/MessageContext';
+import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 import { stripAssetTags } from '@/lib/utils';
 import { useDmWaiting } from '@/services/ai/dm-wait';
 import { useSheetCastProgress } from '@/services/combat/sheet-cast-progress';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 
 /**
- * #2456: reads the fallen character's name for the death screen. Kept as a
- * separate component so GameMainContent itself never calls useCharacter() —
- * the CharacterProvider is only required on the terminal path, not for every
- * render (some test harnesses render GameMainContent without the provider).
+ * #2517: the fallen end state for the live game screen. Kept as a separate
+ * component so GameMainContent itself never calls the character/campaign
+ * hooks — the providers are only required on the terminal path, not for
+ * every render (some test harnesses render GameMainContent without them).
+ * The hero pick routes back into THIS campaign: a starter campaign through
+ * its choose-character page, a custom campaign through creation carrying
+ * the campaign.
  */
-function DeathScreenWithCharacter({ receivedAt }: { receivedAt: number }) {
+function FallenEndStateWithCharacter({
+  finalLines,
+  sessionData,
+  campaignIdForHandler,
+}: {
+  finalLines?: string[];
+  sessionData: ExtendedGameSession;
+  campaignIdForHandler: string | null;
+}) {
   const { state: characterState } = useCharacter();
-  const characterName = characterState.character?.name ?? null;
+  const { state: campaignState } = useCampaign();
+  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } =
+    useStarterCampaigns();
+  const starterSlug = sessionData.starter_campaign_id
+    ? (starterCampaigns.find((c) => c.id === sessionData.starter_campaign_id)?.slug ?? null)
+    : null;
   return (
-    <DismissibleDeathScreen
-      characterName={characterName}
-      receivedAt={receivedAt}
+    <FallenEndState
+      characterName={characterState.character?.name ?? null}
+      finalLines={finalLines}
+      campaignName={campaignState.campaign?.name ?? null}
+      chooseHeroHref={buildChooseHeroHref({
+        starterSlug,
+        campaignId: sessionData.campaign_id ?? campaignIdForHandler,
+      })}
+      chooseHeroPending={Boolean(sessionData.starter_campaign_id) && starterCampaignsLoading}
+      storyContent={<FallenStoryLog />}
     />
   );
 }
@@ -116,6 +141,12 @@ interface GameMainContentProps {
   contentWarnings: string[];
   comfortLevel: 'pg' | 'pg13' | 'r' | 'custom';
   showSafetyInfo: boolean;
+  /**
+   * #2517: tells the layout the fallen end state has replaced this column,
+   * so the panels, tracker and floating controls leave the page too — the
+   * end state is a page state, not an overlay over a live game.
+   */
+  onFallenChange?: (fallen: boolean) => void;
 }
 
 /**
@@ -149,6 +180,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     contentWarnings,
     comfortLevel,
     showSafetyInfo,
+    onFallenChange,
   }) => {
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
     // The roll tray's element: in flow between the stream and the chat box (#2252).
@@ -173,6 +205,21 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
       if (castPhase === 'done' && feed) feed.scrollTop = feed.scrollHeight;
     }, [castPhase]);
     const { state: gameState } = useGame();
+    // #2517: when the terminal state arrives (death event, 409 restore,
+    // reconnect re-check), this column is replaced by the fallen end state
+    // and the layout is told so the rest of the game UI leaves the page.
+    const [terminalUiState, setTerminalUiState] = React.useState<{ finalLines?: string[] } | null>(
+      null,
+    );
+    const handleTerminalDeathStateChange = React.useCallback(
+      (state: { finalLines?: string[] } | null) => {
+        setTerminalUiState(state ? { finalLines: state.finalLines } : null);
+      },
+      [],
+    );
+    React.useEffect(() => {
+      onFallenChange?.(terminalUiState !== null);
+    }, [onFallenChange, terminalUiState]);
     // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
     // The queue's current roll is the only request with a visible control (the dice popup in
     // MessageListContainer), so it alone may raise the pill, the banner, and the input lock.
@@ -192,6 +239,20 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
       chapterLabel: resolveCampaignChapterLabel(sessionData.turn_count),
       sceneBlurb,
     });
+
+    if (terminalUiState) {
+      return (
+        <div
+          className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
+        >
+          <FallenEndStateWithCharacter
+            finalLines={terminalUiState.finalLines}
+            sessionData={sessionData}
+            campaignIdForHandler={campaignIdForHandler}
+          />
+        </div>
+      );
+    }
 
     return (
       <div
@@ -315,6 +376,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               updateGameSessionState={updateGameSessionState}
               onAIResponse={innerHandleAIResponse}
               spellCastHandlerRef={spellCastHandlerRef}
+              onTerminalDeathStateChange={handleTerminalDeathStateChange}
             >
               {({
                 handleSendMessage,
@@ -325,16 +387,8 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 onRetry,
                 combatTurnUiState,
                 onResumeTurn,
-                terminalDeathState,
               }) => (
                 <RollTraySlotProvider value={rollTraySlot}>
-                  {/* #2456: the party was defeated. Render the death screen with
-                      clear choices instead of the chat input and the resume loop. */}
-                  {terminalDeathState && (
-                    <DeathScreenWithCharacter
-                      receivedAt={terminalDeathState.receivedAt}
-                    />
-                  )}
                   {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
                       story's length out of this column's minimum height. */}
                   <div
@@ -468,7 +522,9 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     )}
 
                     {/* Input Area at bottom. In flow, not sticky: a sticky chat box sat on top of the
-                      tray's buttons whenever the column ran out of room. */}
+                      tray's buttons whenever the column ran out of room. #2517: when the character
+                      has fallen this whole column is replaced by the end state above, so the
+                      composer is never left live under a death screen. */}
                     <div
                       className="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
                       style={{ zIndex: Z_INDEX.STICKY }}

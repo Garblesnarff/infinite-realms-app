@@ -51,8 +51,19 @@ const state = vi.hoisted(() => ({
   tacticalMap: null as null | { id: string },
 }));
 
+// #2517: the fallen story log reads MessageContext; the rows are
+// configurable so a test can prove the killing turn survives the swap.
+let mockStoryMessages: Array<Record<string, unknown>> = [];
 vi.mock('@/contexts/MessageContext', () => ({
-  useMessageContext: () => ({ queueStatus: state.queueStatus }),
+  useMessageContext: () => ({ queueStatus: state.queueStatus, messages: mockStoryMessages }),
+}));
+// #2517: the fallen end state reads the campaign name and the starter slug.
+vi.mock('@/contexts/CampaignContext', () => ({
+  useCampaign: () => ({ state: { campaign: { id: 'campaign-1', name: 'Abyssal Descent' } } }),
+  useOptionalCampaign: () => null,
+}));
+vi.mock('@/hooks/use-starter-campaigns', () => ({
+  useStarterCampaigns: () => ({ campaigns: [], featuredCampaigns: [], isLoading: false, error: null }),
 }));
 vi.mock('@/contexts/GameContext', () => ({
   useGame: () => ({
@@ -167,6 +178,7 @@ let mockTerminalDeathState: { state: string; encounterId: string | null; receive
 vi.mock('../message/MessageHandler', () => ({
   MessageHandler: ({
     children,
+    onTerminalDeathStateChange,
   }: {
     children: (args: {
       handleSendMessage: typeof sendMessage;
@@ -175,14 +187,21 @@ vi.mock('../message/MessageHandler', () => ({
       onResumeTurn: typeof state.resumeCombatTurn;
       terminalDeathState: typeof mockTerminalDeathState;
     }) => React.ReactNode;
-  }) =>
-    children({
+    onTerminalDeathStateChange?: (state: typeof mockTerminalDeathState) => void;
+  }) => {
+    // The real handler reports the terminal state up from the hook; the
+    // mock does the same so GameMainContent can swap to the end state.
+    React.useEffect(() => {
+      onTerminalDeathStateChange?.(mockTerminalDeathState);
+    }, [onTerminalDeathStateChange]);
+    return children({
       handleSendMessage: sendMessage,
       isProcessing: false,
       combatTurnUiState: state.combatTurnUiState,
       onResumeTurn: state.resumeCombatTurn,
       terminalDeathState: mockTerminalDeathState,
-    }),
+    });
+  },
 }));
 
 const baseProps = {
@@ -215,6 +234,7 @@ const handlerRef = { spellCastHandlerRef: { current: null } };
 
 describe('GameMainContent overhaul behavior contract', () => {
   beforeEach(() => {
+    mockStoryMessages = [];
     state.queueStatus = 'idle';
     state.hasPendingRolls = false;
     state.pendingRequests = [];
@@ -600,5 +620,48 @@ describe('GameMainContent overhaul behavior contract', () => {
     };
     render(<GameMainContent {...baseProps} />);
     expect(screen.getByTestId('death-screen')).toBeInTheDocument();
+  });
+
+  it('#2517: a defeated session renders no composer under the death screen', () => {
+    mockTerminalDeathState = {
+      state: 'party_defeated',
+      encounterId: 'encounter-789',
+      receivedAt: Date.now(),
+    };
+    render(<GameMainContent {...baseProps} />);
+    expect(screen.getByTestId('death-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-input')).not.toBeInTheDocument();
+  });
+
+  it('#2517: the killing turn’s rows survive the swap into the end state', () => {
+    mockTerminalDeathState = {
+      state: 'party_defeated',
+      encounterId: 'encounter-789',
+      receivedAt: Date.now(),
+    };
+    // The killing turn as history holds it: the player's last action, the
+    // engine rows, and the DM reply. MessageContext lives above the game
+    // column, so the swap to the end state must not lose any of them.
+    mockStoryMessages = [
+      { id: 'm1', text: 'I stay in melee and attack again. I will not retreat.', sender: 'player' },
+      {
+        id: 'm2',
+        text: 'Vitruvian Spider rolled 11 + 3 = 14 vs AC 11 — HIT. The Scholar is dead.',
+        sender: 'system',
+      },
+      { id: 'm3', text: 'The spider’s fangs find the gap in your guard.', sender: 'dm' },
+    ];
+    render(<GameMainContent {...baseProps} />);
+    expect(screen.getByTestId('death-screen')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('death-screen-read-story'));
+    expect(screen.getByTestId('death-screen-story-log')).toBeInTheDocument();
+    expect(screen.getByText('I stay in melee and attack again. I will not retreat.'))
+      .toBeInTheDocument();
+    expect(screen.getByText(/The Scholar is dead/)).toBeInTheDocument();
+    expect(screen.getByText('The spider’s fangs find the gap in your guard.'))
+      .toBeInTheDocument();
+    // And the end state still owns the page: no composer comes back.
+    expect(screen.queryByTestId('chat-input')).not.toBeInTheDocument();
   });
 });

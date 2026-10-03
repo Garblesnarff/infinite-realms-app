@@ -12,6 +12,8 @@ interface CharacterCardHoverContentProps {
   character: Partial<Character> & Required<Pick<Character, 'id' | 'name'>>;
   isHovered: boolean;
   imageLoading: boolean;
+  /** #2517: a fallen character is read-only — no Play, no Delete. */
+  fallen?: boolean;
   onPlay: (e: React.MouseEvent) => void;
   onViewDetails: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
@@ -25,6 +27,7 @@ const CharacterCardHoverContent = ({
   character,
   isHovered,
   imageLoading,
+  fallen = false,
   onPlay,
   onViewDetails,
   onDelete,
@@ -164,16 +167,20 @@ const CharacterCardHoverContent = ({
         )}
 
         <div className="flex items-center gap-2 justify-end">
-          <Button
-            size="sm"
-            className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
-            aria-label="Play as this character"
-            title="Play as this character"
-            onClick={onPlay}
-          >
-            <Play className="w-4 h-4" aria-hidden="true" />
-            Play
-          </Button>
+          {fallen ? (
+            <span className="text-sm font-medium text-muted-foreground">Fallen</span>
+          ) : (
+            <Button
+              size="sm"
+              className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
+              aria-label="Play as this character"
+              title="Play as this character"
+              onClick={onPlay}
+            >
+              <Play className="w-4 h-4" aria-hidden="true" />
+              Play
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -184,16 +191,18 @@ const CharacterCardHoverContent = ({
           >
             View Details
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
-            onClick={onDelete}
-            aria-label="Delete character"
-            title="Delete character"
-          >
-            <Trash2 className="w-4 h-4" aria-hidden="true" />
-          </Button>
+          {!fallen && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
+              onClick={onDelete}
+              aria-label="Delete character"
+              title="Delete character"
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

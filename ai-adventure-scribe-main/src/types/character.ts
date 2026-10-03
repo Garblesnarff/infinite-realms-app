@@ -402,6 +402,9 @@ export interface Character {
         max_hit_points?: number;
         current_hit_points?: number;
         armor_class?: number;
+        /** #2517: the single truth for "dead". */
+        vital_state?: string;
+        died_at?: string | null;
       }
     | Array<{
         strength?: number;
@@ -413,6 +416,9 @@ export interface Character {
         max_hit_points?: number;
         current_hit_points?: number;
         armor_class?: number;
+        /** #2517: the single truth for "dead". */
+        vital_state?: string;
+        died_at?: string | null;
       }>;
 }
 

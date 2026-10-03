@@ -4,6 +4,11 @@ import { Elysia } from 'elysia';
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const ENCOUNTER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 let currentParticipantId = 'npc-holder';
+let activeEncounter: { id: string; sessionId: string } | undefined = {
+  id: ENCOUNTER_ID,
+  sessionId: SESSION_ID,
+};
+let concludedEncounter: { id: string; endedReason: string | null } | undefined;
 const advanceNpcTurns = mock((_encounterId: string, _userId: string) =>
   Promise.resolve({
     results: [],
@@ -30,7 +35,8 @@ mock.module(import.meta.resolve('../helpers.js'), () => ({
 }));
 mock.module('../../../../services/combat/combat-encounter-service.js', () => ({
   CombatEncounterService: {
-    getActiveEncounter: async () => ({ id: ENCOUNTER_ID, sessionId: SESSION_ID }),
+    getActiveEncounter: async () => activeEncounter,
+    getLatestConcludedEncounter: async () => concludedEncounter,
     getCombatState: async () => ({ currentParticipant: { id: currentParticipantId } }),
   },
 }));
@@ -53,6 +59,8 @@ const request = (
 
 describe('POST /v1/combat/sessions/:sessionId/advance-npc-turns', () => {
   beforeEach(() => {
+    activeEncounter = { id: ENCOUNTER_ID, sessionId: SESSION_ID };
+    concludedEncounter = undefined;
     currentParticipantId = 'npc-holder';
     advanceNpcTurns.mockClear();
   });
@@ -86,5 +94,51 @@ describe('POST /v1/combat/sessions/:sessionId/advance-npc-turns', () => {
 
     expect(response.status).toBe(401);
     expect(advanceNpcTurns).not.toHaveBeenCalled();
+  });
+});
+
+describe('#2517 endedReason on the advance response', () => {
+  beforeEach(() => {
+    advanceNpcTurns.mockClear();
+    activeEncounter = { id: ENCOUNTER_ID, sessionId: SESSION_ID };
+    concludedEncounter = undefined;
+  });
+
+  it('names party_defeated when the advance concludes the encounter in defeat', async () => {
+    // Runner fixture mirrors the real AdvanceNpcTurnsResult (npc-turn-runner
+    // .ts): the loop reports only combatEnded, not why it ended.
+    advanceNpcTurns.mockResolvedValue({
+      results: [],
+      currentParticipant: null,
+      round: 4,
+      combatEnded: true,
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: ['⚙️ Engine: Char is dead.'],
+    } as any);
+    concludedEncounter = { id: ENCOUNTER_ID, endedReason: 'party_defeated' };
+
+    const response = await app.handle(request('npc-holder'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(advanceNpcTurns).toHaveBeenCalledWith(ENCOUNTER_ID, 'user-owner');
+    expect(body.combatEnded).toBe(true);
+    expect(body.endedReason).toBe('party_defeated');
+  });
+
+  it('reports the concluded defeat when no encounter is active anymore', async () => {
+    activeEncounter = undefined;
+    concludedEncounter = { id: ENCOUNTER_ID, endedReason: 'party_defeated' };
+
+    const response = await app.handle(request('npc-holder'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(advanceNpcTurns).not.toHaveBeenCalled();
+    expect(body.combatEnded).toBe(true);
+    expect(body.endedReason).toBe('party_defeated');
+    expect(body.results).toEqual([]);
   });
 });

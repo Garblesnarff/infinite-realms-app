@@ -62,6 +62,7 @@ import type {
   CreateParticipantInput,
   TurnOrderEntry,
 } from '../../types/combat.js';
+import type { VitalsTx } from '../character-vitals-service.js';
 
 function authoredDisposition(stats: unknown): string | undefined {
   if (!stats || typeof stats !== 'object' || Array.isArray(stats)) return undefined;
@@ -618,12 +619,15 @@ export class CombatEncounterService {
     encounterId: string,
     userId: string | undefined,
     reason: CombatEndReason,
+    executor: Pick<VitalsTx, 'update' | 'select'> = db,
   ): Promise<CombatEncounter | null> {
     // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
     // This ensures that combat encounters can only be ended by authorized users in a single round-trip.
     // The active-status predicate is also the idempotency claim: exactly one caller can own the
     // terminal transition, so the ending facts and broadcasts cannot be duplicated by a retry.
-    const [updated] = await db
+    // The executor is `db` outside a transaction; concludeEncounter passes its transaction so
+    // the claim and the party_defeated session completion commit together (#2517).
+    const [updated] = await executor
       .update(combatEncounters)
       .set({
         status: 'completed',
@@ -637,7 +641,7 @@ export class CombatEncounterService {
           eq(combatEncounters.status, 'active'),
           userId
             ? exists(
-                db
+                executor
                   .select()
                   .from(gameSessions)
                   .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
