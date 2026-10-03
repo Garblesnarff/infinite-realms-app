@@ -332,7 +332,7 @@ export async function executeStructuredCombatActionWithBoundary(
     ? []
     : action.action_type === 'attack'
       ? [result as RawCombatOutcome]
-      : ((result as { results?: RawCombatOutcome[] }).results ?? []);
+      : ((result as { results?: RawCombatOutcome[] } | null)?.results ?? []);
   return {
     outcomes: outcomes.map((outcome, index) => ({
       participantId: action.target_ids[index] || action.target_ids[0],

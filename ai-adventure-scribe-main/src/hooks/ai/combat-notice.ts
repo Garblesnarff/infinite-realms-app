@@ -72,8 +72,9 @@ export function turnNotice(
  * The player's own action was refused for a reason other than turn order — a spell area that
  * caught nobody, a spell the DM never declared. Nothing resolved, so nothing ended the turn.
  */
-export function stillYourTurnNotice(): string {
-  return '*(Your declared action was not resolved — it is still your turn.)*';
+export function stillYourTurnNotice(reason?: string): string {
+  const explanation = reason?.trim() || 'the game could not resolve that action';
+  return `*(Your declared action was not resolved: ${explanation} — it is still your turn. You can choose another action or End turn.)*`;
 }
 
 /**

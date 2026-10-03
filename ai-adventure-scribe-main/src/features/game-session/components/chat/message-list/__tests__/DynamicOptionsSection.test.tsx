@@ -12,7 +12,7 @@ vi.mock('@/services/combat/combat-action-executor', () => ({
 
 // Mock the dependent component
 vi.mock('@/components/game/ActionOptions', () => ({
-  ActionOptions: ({ options, onOptionSelect }: { options: any[], onOptionSelect: any }) => (
+  ActionOptions: ({ options, onOptionSelect }: { options: any[]; onOptionSelect: any }) => (
     <div data-testid="action-options">
       {options.map((opt, i) => (
         <button key={i} onClick={() => onOptionSelect(opt)}>
@@ -118,13 +118,21 @@ describe('DynamicOptionsSection', () => {
 
   it('replaces narration exploration options with server legal actions during combat', async () => {
     combat.isInCombat = true;
-    combat.activeEncounter = { id: 'enc-1', currentTurnParticipantId: 'pc-1' };
+    combat.activeEncounter = {
+      id: 'enc-1',
+      currentTurnParticipantId: 'pc-1',
+      participants: [{ id: 'pc-1', participantType: 'player' }],
+    };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ actorId: 'pc-1', actions: [{ type: 'dodge', label: 'Dodge' }] }),
     } as Response);
     const { queryByText, getByText } = render(
-      <DynamicOptionsSection options={mockOptions as any} onOptionSelect={mockOnOptionSelect} hasDynamicOverlay={false} />,
+      <DynamicOptionsSection
+        options={mockOptions as any}
+        onOptionSelect={mockOnOptionSelect}
+        hasDynamicOverlay={false}
+      />,
     );
     await waitFor(() => expect(getByText('Dodge')).toBeDefined());
     expect(queryByText('Option 1')).toBeNull();

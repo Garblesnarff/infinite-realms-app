@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 
 interface ActionOptionsProps {
   options: ActionOption[];
-  onOptionSelect: (option: ActionOption) => void;
+  onOptionSelect: (option: ActionOption) => void | Promise<void>;
+  resetSelectionAfterCompletion?: boolean;
   delay?: number; // Delay in milliseconds before showing options
   disabled?: boolean;
   className?: string;
@@ -82,6 +83,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     onOptionSelect,
     delay = 10000, // 10 seconds default
     disabled = false,
+    resetSelectionAfterCompletion = false,
     className = '',
   }) => {
     const [visible, setVisible] = useState(false);
@@ -110,7 +112,13 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
       if (disabled || selectedOption) return;
       logger.info('[ActionOptions] Option clicked:', option.text);
       setSelectedOption(option.id);
-      onOptionSelect(option);
+      const completion = onOptionSelect(option);
+      if (resetSelectionAfterCompletion) {
+        void Promise.resolve(completion).then(
+          () => setSelectedOption(null),
+          () => setSelectedOption(null),
+        );
+      }
     };
 
     // Don't render if no options

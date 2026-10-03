@@ -392,6 +392,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       targets: action.target_ids?.map(labelFor) ?? [],
       engineRefusal: refusal.message,
       refusalReason: reason,
+      playerFacingReason: playerFacingRefusal(refusal, {
+        actorIsPlayer,
+        actor: labelFor(action.actor_id),
+        turnHolder: refusal.details?.currentParticipantId
+          ? labelFor(refusal.details.currentParticipantId)
+          : null,
+      }),
       // The engine names the turn holder on every out-of-turn refusal (#1700). It is the one
       // thing the player actually needs to be told, and it was being discarded.
       currentTurn: refusal.details?.currentParticipantId
@@ -1003,6 +1010,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       spell: declaredPlayerSpell.spellName,
       targets: [],
       engineRefusal: reason,
+      playerFacingReason: reason,
       refusalReason: 'PLAYER_SPELL_NOT_DECLARED',
       currentTurn: null,
     });
@@ -1248,7 +1256,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         resolvedActions.length > 0,
       )
     : playerKeepsTurn
-      ? stillYourTurnNotice()
+      ? stillYourTurnNotice(
+          String(
+            refusedPlayerActions[0].playerFacingReason ??
+              refusedPlayerActions[0].engineRefusal ??
+              '',
+          ),
+        )
       : turnNotice(
           turnHolder,
           isPlayerActor(turnHolder?.id ?? '', participants),

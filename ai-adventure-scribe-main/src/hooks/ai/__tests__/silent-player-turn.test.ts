@@ -50,6 +50,13 @@ describe('silent player turn prompt', () => {
     expect(noMechanicalActionNotice()).not.toBe(stillYourTurnNotice());
   });
 
+  it.each([undefined, '', '   '])('gives a plain refusal reason when its text is %s', (reason) => {
+    const notice = stillYourTurnNotice(reason);
+    expect(notice).toContain('the game could not resolve that action');
+    expect(notice).toContain('End turn');
+    expect(notice).not.toContain('undefined');
+  });
+
   it('never claims nothing was rolled when engine lines share the reply', () => {
     expect(noMechanicalActionNotice(true)).toContain('still your turn');
     expect(noMechanicalActionNotice(true)).not.toContain('nothing was rolled');

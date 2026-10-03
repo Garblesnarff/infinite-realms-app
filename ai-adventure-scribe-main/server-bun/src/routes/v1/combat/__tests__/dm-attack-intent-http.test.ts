@@ -476,6 +476,36 @@ describe('the run-10 body, verbatim', () => {
   });
 });
 
+describe('typed dialog roll wire body (#2547)', () => {
+  it('accepts the real client commit and forwards the kept d20', async () => {
+    activeParticipantId = 'the-seeker';
+    const { executeStructuredCombatActionWithBoundary } = await import(bridgeModule);
+    await executeStructuredCombatActionWithBoundary(
+      ENCOUNTER_ID,
+      {
+        actor_id: 'the-seeker',
+        action_type: 'attack',
+        target_ids: ['the-void-maw'],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      },
+      8,
+      'typed',
+    );
+    expect(sentRequests).toHaveLength(1);
+    expect(sentRequests[0].body).toEqual({
+      intent: { type: 'attack', actorId: 'the-seeker', targetId: 'the-void-maw', d20: 8 },
+      source: 'dm',
+      origin: 'typed',
+      dmStartedAt: expect.any(Number),
+    });
+    expect(attackInputs).toHaveLength(1);
+    expect(attackInputs[0]).toMatchObject({ providedD20: 8 });
+  });
+});
+
 /**
  * The DM narrates in prose, and prose names weapons the character sheet has never heard of.
  * `weapon_id` was consumed as a hard identity claim, so "with her elven greatbow" reached
