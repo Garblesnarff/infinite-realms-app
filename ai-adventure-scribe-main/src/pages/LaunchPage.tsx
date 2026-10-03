@@ -1,8 +1,8 @@
 /**
  * Launch Page - Beta Launch Landing Page
  *
- * PURPOSE: Convert visitors into beta waitlist signups through visionary messaging
- * Structure: Hero → Vision → Features → How It Works → Team → Roadmap → Early Access → FAQ → Final CTA → Footer
+ * PURPOSE: Send visitors to play free at /explore; the waitlist form sits below the Play CTA
+ * Structure: Hero → Vision → Features → Pricing → Campaigns → Roadmap → Early Access → FAQ → Final CTA → Footer
  *
  * Key Principles:
  * - Future-oriented messaging (beta, planned features, roadmap)
@@ -22,6 +22,7 @@ import { FooterSection } from '@/components/launch/FooterSection';
 import { FounderStorySection } from '@/components/launch/FounderStorySection';
 import { HeroSection } from '@/components/launch/HeroSection';
 import { LaunchHeader } from '@/components/launch/LaunchHeader';
+import { PricingSection } from '@/components/launch/PricingSection';
 import { RoadmapSection } from '@/components/launch/RoadmapSection';
 import { StarterCampaignsSection } from '@/components/launch/StarterCampaignsSection';
 import { VisionSection } from '@/components/launch/VisionSection';
@@ -114,6 +115,12 @@ const LaunchPage: React.FC = () => {
 
           {/* Gradient Transition */}
           <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+
+          {/* Pricing Section - Free vs Legend */}
+          <PricingSection />
+
+          {/* Gradient Transition */}
+          <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
           {/* Starter Campaigns Section - Ready-to-Play Adventures */}
           <StarterCampaignsSection />

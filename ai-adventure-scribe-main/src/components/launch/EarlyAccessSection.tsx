@@ -1,16 +1,16 @@
 /**
  * Early Access Section - Founding Adventurer Perks
  *
- * PURPOSE: Replace pricing with beta incentives and early adopter value proposition
+ * PURPOSE: Founding-adventurer perks, with the Play free CTA above the waitlist form
  * Features: Founding member perks, clear beta limitations, urgency messaging
  */
 
 import { Crown, Star, Zap, MessageCircle } from 'lucide-react';
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 import { WaitlistForm } from './WaitlistForm';
 
-import { Button } from '@/components/ui/button';
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const EarlyAccessSection: React.FC = () => {
@@ -55,6 +55,17 @@ export const EarlyAccessSection: React.FC = () => {
           })}
         </div>
 
+        {/* Play CTA - above the waitlist form */}
+        <div className="text-center mb-10">
+          <Link
+            to="/explore"
+            data-track-cta="play_free_early_access"
+            className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-900 font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+          >
+            {earlyAccess.cta}
+          </Link>
+        </div>
+
         {/* Waitlist CTA */}
         <div className="max-w-2xl mx-auto mb-16">
           <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-2xl p-8 backdrop-blur-sm">
@@ -77,19 +88,6 @@ export const EarlyAccessSection: React.FC = () => {
               <span className="text-amber-400 font-semibold">Note:</span> {earlyAccess.disclaimer}
             </p>
           </div>
-        </div>
-
-        {/* Bottom CTA */}
-        <div className="mt-16 text-center">
-          <p className="text-gray-400 text-lg mb-6">
-            Don't miss your chance to be part of the founding team
-          </p>
-          <Button
-            size="lg"
-            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-900 font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-          >
-            {earlyAccess.cta}
-          </Button>
         </div>
       </div>
     </section>

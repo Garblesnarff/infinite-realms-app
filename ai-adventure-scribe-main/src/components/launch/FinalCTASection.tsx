@@ -6,17 +6,16 @@
  */
 
 import { ArrowRight } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { WaitlistForm } from './WaitlistForm';
 
-import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const FinalCTASection: React.FC = () => {
   const { finalCTA } = launchPageContent;
-  const [showForm, setShowForm] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -37,16 +36,13 @@ export const FinalCTASection: React.FC = () => {
   }, []);
 
   /**
-   * Handle CTA click
+   * Track CTA click
    */
-  const handleGetAccess = () => {
-    setShowForm(true);
-
-    // Track analytics
+  const handlePlayFree = () => {
     if (window.gtag) {
       window.gtag('event', 'final_cta_click', {
         event_category: 'conversion',
-        event_label: 'Final CTA - Request Early Access',
+        event_label: 'Final CTA - Play free',
       });
     }
   };
@@ -78,40 +74,33 @@ export const FinalCTASection: React.FC = () => {
           </p>
         </div>
 
-        {/* Massive CTA Button - Centered */}
+        {/* Play CTA first, waitlist below it */}
         <div className="text-center mb-20">
-          {!showForm ? (
-            <div className="space-y-8">
-              <Button
-                size="lg"
-                onClick={handleGetAccess}
-                className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white px-16 py-8 rounded-xl shadow-[0_0_40px_rgba(251,191,36,0.4)] hover:shadow-[0_0_60px_rgba(251,191,36,0.6)] transition-all duration-300 flex items-center gap-4 text-2xl font-bold mx-auto hover:scale-105"
-              >
-                <span>{finalCTA.cta}</span>
-                <ArrowRight className="w-8 h-8" />
-              </Button>
+          <Link
+            to="/explore"
+            onClick={handlePlayFree}
+            data-track-cta="play_free_footer"
+            className="inline-flex items-center gap-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white px-16 py-6 rounded-xl shadow-[0_0_40px_rgba(251,191,36,0.4)] hover:shadow-[0_0_60px_rgba(251,191,36,0.6)] transition-all duration-300 text-2xl font-bold hover:scale-105"
+          >
+            <span>{finalCTA.cta}</span>
+            <ArrowRight className="w-8 h-8" />
+          </Link>
 
-              <p className="text-gray-300 text-xl font-medium">
-                Join the adventure. Shape the future.
+          <div className="max-w-2xl mx-auto mt-16">
+            <div className="mb-8 text-center">
+              <h3 className="text-3xl font-bold text-white mb-3">Get news and updates</h3>
+              <p className="text-gray-300 text-lg">
+                Join the waitlist for launch news. You do not need it to play.
               </p>
             </div>
-          ) : (
-            <div className="max-w-2xl mx-auto">
-              <div className="mb-8 text-center">
-                <h3 className="text-3xl font-bold text-white mb-3">Join the Beta Waitlist</h3>
-                <p className="text-gray-300 text-lg">
-                  Secure your early access to the AI Dungeon Master
-                </p>
-              </div>
-              <WaitlistForm variant="section" />
-            </div>
-          )}
+            <WaitlistForm variant="section" />
+          </div>
         </div>
 
         {/* What Happens Next - Simplified */}
         <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 border border-purple-500/30 rounded-2xl p-10 backdrop-blur-md">
           <h3 className="text-3xl font-bold text-white mb-10 text-center">
-            What Happens After You Join?
+            What Happens After You Join the Waitlist?
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
@@ -145,17 +134,6 @@ export const FinalCTASection: React.FC = () => {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Final Urgency Message */}
-        <div className="mt-16 text-center p-10 bg-gradient-to-r from-amber-900/30 to-purple-900/30 border border-amber-500/30 rounded-xl backdrop-blur-sm">
-          <p className="text-amber-400 text-2xl font-semibold mb-4">
-            ⏰ Limited Beta Spots Available
-          </p>
-          <p className="text-gray-200 text-lg leading-relaxed max-w-3xl mx-auto">
-            The earlier you join our waitlist, the sooner you'll get access to the AI Dungeon Master
-            and secure your founding member perks.
-          </p>
         </div>
       </div>
     </section>

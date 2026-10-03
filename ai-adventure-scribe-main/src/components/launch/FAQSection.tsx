@@ -15,6 +15,7 @@ interface FAQItemProps {
   item: {
     question: string;
     answer: string;
+    link?: { href: string; label: string };
   };
   isOpen: boolean;
   onToggle: () => void;
@@ -42,7 +43,18 @@ const FAQItem: React.FC<FAQItemProps> = ({ item, isOpen, onToggle }) => {
           isOpen ? 'max-h-96 pb-6' : 'max-h-0'
         }`}
       >
-        <p className="text-gray-300 leading-relaxed pl-0">{item.answer}</p>
+        <p className="text-gray-300 leading-relaxed pl-0">
+          {item.answer}
+          {item.link && (
+            <>
+              {' '}
+              <a href={item.link.href} className="text-purple-400 hover:text-purple-300 underline">
+                {item.link.label}
+              </a>
+              .
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

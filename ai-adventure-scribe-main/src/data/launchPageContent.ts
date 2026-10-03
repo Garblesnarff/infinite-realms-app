@@ -5,6 +5,8 @@
  * This ensures consistent messaging and makes updates easy across all components
  */
 
+import { ACCOUNT_UPGRADE_PRICE } from '@/hooks/use-account-billing';
+
 export interface TeamMember {
   name: string;
   role: string;
@@ -29,8 +31,17 @@ export interface RoadmapPhase {
 export interface PlannedFeature {
   title: string;
   description: string;
-  status: 'in_development' | 'planned' | 'beta' | 'coming_soon';
+  status: 'live' | 'in_development' | 'planned' | 'beta' | 'coming_soon';
   icon: string;
+}
+
+export interface PricingPlan {
+  name: string;
+  price: string;
+  cadence: string;
+  description: string;
+  features: string[];
+  highlighted?: boolean;
 }
 
 export interface EarlyAccessPerk {
@@ -42,6 +53,7 @@ export interface EarlyAccessPerk {
 export interface FAQItem {
   question: string;
   answer: string;
+  link?: { href: string; label: string };
 }
 
 export const launchPageContent = {
@@ -72,41 +84,41 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
   // Features Section
   features: {
     headline: "What We're Building",
-    subtitle: 'These features are in active development for our beta launch',
+    subtitle: 'What is live today, and what is still on the way',
     features: [
       {
         title: 'Stories That Remember You',
         description:
           "Every choice creates ripples that last forever. Save a village and they'll erect statues in your honor. Betray an ally and face the consequences sessions later.",
-        status: 'in_development' as const,
+        status: 'live' as const,
         icon: 'Brain',
       },
       {
         title: 'Living Fantasy Worlds',
         description:
-          'Watch your adventures come alive with cinematic visuals. Every shadowy tavern, ancient ruin, and mythical creature rendered in stunning detail.',
-        status: 'planned' as const,
+          'Generate AI character portraits and campaign cover art, so your adventures come alive with cinematic visuals.',
+        status: 'live' as const,
         icon: 'Image',
       },
       {
         title: 'NPCs With Real Memory',
         description:
           'Build relationships that evolve like real friendships. NPCs remember your heroic sacrifices, your betrayals, and your moments of kindness - creating emotional depth that surprises you.',
-        status: 'beta' as const,
+        status: 'live' as const,
         icon: 'Users',
       },
       {
         title: 'Seamless D&D Rules',
         description:
-          'Never worry about complex rules again. Focus on the story and roleplay while the AI handles mechanics, spell interactions, and combat calculations perfectly.',
-        status: 'in_development' as const,
+          'Focus on the story and roleplay while the game engine handles dice, spell slots, and combat. A built-in combat tracker follows initiative and hit points turn by turn.',
+        status: 'live' as const,
         icon: 'BookOpen',
       },
       {
         title: 'Immersive Voice Acting',
         description:
-          'Hear your adventures come alive with professional narration. Distinct character voices bring NPCs to life, making every tavern tale and epic battle feel cinematic.',
-        status: 'planned' as const,
+          'Hear your adventures read aloud. Every plan includes standard narration voices; Legend adds premium ElevenLabs voices for NPCs and the narrator.',
+        status: 'live' as const,
         icon: 'Mic',
       },
       {
@@ -117,6 +129,44 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
         icon: 'Download',
       },
     ] as PlannedFeature[],
+  },
+
+  // Pricing Section
+  // Limits mirror AIUsageService.DEFAULT_QUOTAS (server-bun/src/services/ai-usage-service.ts):
+  // free.daily { llm, image, voice }, pro.daily { llm, image, voice }. Update both together.
+  pricing: {
+    headline: 'Play free. Upgrade when you want more.',
+    subtitle: 'No credit card to start. Cancel Legend any time.',
+    plans: [
+      {
+        name: 'Free',
+        price: '$0',
+        cadence: 'forever',
+        description: 'Everything you need to start your first campaign.',
+        features: [
+          'Up to 15 DM messages a day',
+          '1 AI image a day',
+          'Standard narration voices',
+          'Persistent NPC and story memory',
+          'D&D 5E rules and combat tracker',
+        ],
+      },
+      {
+        name: 'Legend',
+        price: ACCOUNT_UPGRADE_PRICE.label,
+        cadence: '',
+        description: 'More turns, more art, and premium voices for regular players.',
+        features: [
+          'Up to 40 DM messages a day',
+          'Up to 2 AI images a day',
+          'Premium ElevenLabs narration — 2,000 characters a day',
+          'Everything in Free',
+          'Cancel any time',
+        ],
+        highlighted: true,
+      },
+    ] as PricingPlan[],
+    note: 'Daily limits reset at 00:00 UTC.',
   },
 
   // How It Works Section
@@ -216,8 +266,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
   earlyAccess: {
     headline: 'Be a Founding Adventurer – Shape the Living World',
     subtitle: 'Get exclusive perks for helping build the AI DM that ends scheduling hell.',
-    description:
-      'Join our closed beta and secure your place in AI Dungeon Master history with these exclusive founding member benefits. Cancel anytime during beta - no hard feelings.',
+    description: 'Play now, then join the waitlist to hear about new features first.',
     perks: [
       {
         title: 'Personalized NPC in Launch',
@@ -243,7 +292,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
       },
     ] as EarlyAccessPerk[],
     disclaimer: 'Beta focuses on core persistence – bugs mean you influence fixes directly.',
-    cta: 'Secure First Access',
+    cta: 'Play free',
   },
 
   // FAQ Section
@@ -278,12 +327,13 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
       {
         question: 'Is my data private and secure?',
         answer:
-          'Absolutely. We take privacy seriously and will never share your personal data or campaign content. All AI processing is handled securely, and you maintain full ownership of your campaigns.',
+          'We take privacy seriously. What we collect, how we use it and who we share it with is set out in our',
+        link: { href: '/privacy', label: 'Privacy Policy' },
       },
       {
         question: "What if I don't like it?",
-        answer:
-          "No hard feelings! You can cancel anytime during beta, and we'll apply any refund policies according to our terms of service.",
+        answer: 'You can start free and cancel Legend at any time. Refunds are covered in our',
+        link: { href: '/terms', label: 'Terms of Service' },
       },
     ] as FAQItem[],
   },
@@ -293,9 +343,8 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
     headline: 'Your Adventure Awaits',
     subtitle: "Don't Miss Out",
     description:
-      'Spots for the closed beta are extremely limited. Join our waitlist now to secure your chance to be among the first to experience the AI Dungeon Master.',
-    cta: 'Request Early Access',
-    urgency: 'Join 500+ adventurers already on the waitlist',
+      'Pick an adventure and start playing free in minutes, or join the waitlist for news and updates.',
+    cta: 'Play free',
   },
 
   // Footer

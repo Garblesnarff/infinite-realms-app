@@ -7,6 +7,7 @@
 
 import { MessageCircle, ExternalLink, Heart } from 'lucide-react';
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 import { SendFeedbackButton } from '@/components/feedback/SendFeedbackButton';
 import { launchPageContent } from '@/data/launchPageContent';
@@ -17,6 +18,24 @@ export const FooterSection: React.FC = () => {
   return (
     <footer className="relative py-16 bg-gray-900 border-t border-gray-800">
       <div className="max-w-7xl mx-auto px-6">
+        {/* Play CTA */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+          <Link
+            to="/explore"
+            data-track-cta="play_free_footer_bar"
+            className="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 rounded-lg text-white font-bold hover:from-amber-400 hover:to-orange-500 transition-colors"
+          >
+            Play free
+          </Link>
+          <Link
+            to="/app"
+            data-track-cta="sign_in_footer"
+            className="px-8 py-3 border border-amber-300/70 rounded-lg text-amber-100 font-semibold hover:bg-amber-300/10 transition-colors"
+          >
+            Sign in
+          </Link>
+        </div>
+
         {/* Main Footer Content */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
           {/* Company Info */}

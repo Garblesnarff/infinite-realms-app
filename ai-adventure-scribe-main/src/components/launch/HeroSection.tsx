@@ -1,23 +1,18 @@
 import { ArrowRight, Sparkles } from 'lucide-react';
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 import { Z_INDEX } from '@/constants/z-index';
 
 export const HeroSection: React.FC = () => {
   /**
-   * Handle primary CTA click - scroll to waitlist form
+   * Track primary CTA click
    */
-  const handleGetStarted = () => {
-    const formSection = document.querySelector('[data-waitlist-form]');
-    if (formSection) {
-      formSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    // Track analytics
+  const handlePlayFree = () => {
     if (window.gtag) {
       window.gtag('event', 'hero_cta_click', {
         event_category: 'engagement',
-        event_label: 'Roll for Initiative',
+        event_label: 'Play free',
       });
     }
   };
@@ -61,7 +56,7 @@ export const HeroSection: React.FC = () => {
         {/* Beta Pill */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/30 backdrop-blur-md mb-8 animate-fade-in-up">
           <Sparkles className="w-4 h-4 text-purple-400" />
-          <span className="text-sm font-medium text-purple-200">Closed Beta: Coming Soon</span>
+          <span className="text-sm font-medium text-purple-200">Free to play. No waitlist.</span>
         </div>
 
         {/* Main Headline */}
@@ -85,15 +80,17 @@ export const HeroSection: React.FC = () => {
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <button
-            onClick={handleGetStarted}
+          <Link
+            to="/explore"
+            onClick={handlePlayFree}
+            data-track-cta="play_free"
             className="group relative px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-lg text-white font-bold text-lg shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] transition-all transform hover:-translate-y-1"
           >
             <span className="flex items-center gap-2">
-              Roll for Initiative (Join Beta)
+              Play free
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </span>
-          </button>
+          </Link>
 
           <button
             onClick={handleLearnMore}
@@ -105,7 +102,10 @@ export const HeroSection: React.FC = () => {
 
         {/* Social Proof / Trust Indicator */}
         <p className="mt-8 text-sm text-gray-400">
-          Limited spots available for the Founder's Alpha.
+          Start playing free.{' '}
+          <a href="#pricing" className="underline hover:text-gray-200">
+            See pricing
+          </a>
         </p>
       </div>
     </section>

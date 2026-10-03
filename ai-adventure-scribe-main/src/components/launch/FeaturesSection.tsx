@@ -36,6 +36,10 @@ export const FeaturesSection: React.FC = () => {
    */
   const getStatusStyling = (status: string) => {
     switch (status) {
+      case 'live':
+        return {
+          badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 backdrop-blur-md',
+        };
       case 'in_development':
         return {
           badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30 backdrop-blur-md',
@@ -64,6 +68,8 @@ export const FeaturesSection: React.FC = () => {
    */
   const getStatusLabel = (status: string) => {
     switch (status) {
+      case 'live':
+        return 'Live now';
       case 'in_development':
         return 'In Development';
       case 'beta':
@@ -119,7 +125,10 @@ export const FeaturesSection: React.FC = () => {
                 </div>
 
                 {/* Content - Positioned at Bottom */}
-                <div className="absolute bottom-0 left-0 right-0 p-8" style={{ zIndex: Z_INDEX.DROPDOWN }}>
+                <div
+                  className="absolute bottom-0 left-0 right-0 p-8"
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
+                >
                   <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-amber-400 transition-colors">
                     {feature.title}
                   </h3>
