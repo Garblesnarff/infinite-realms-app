@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   useImageHotLoading,
@@ -44,6 +44,10 @@ describe('useImageHotLoading', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should initialize with loading state and fetch initial image', async () => {
@@ -96,6 +100,7 @@ describe('useImageHotLoading', () => {
 
   describe('polling', () => {
     it('should start polling for newly created records without an image', async () => {
+      vi.useFakeTimers();
       const createdAt = new Date().toISOString();
 
       (userDataApi.getCharacter as any).mockResolvedValue({ background_image: null });
@@ -109,22 +114,18 @@ describe('useImageHotLoading', () => {
         }),
       );
 
-      await waitFor(
-        () => {
-          expect(result.current.pollingActive).toBe(true);
-        },
-        { timeout: 2000 },
-      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.pollingActive).toBe(true);
 
       (userDataApi.getCharacter as any).mockResolvedValue({ background_image: mockImageUrl });
 
-      await waitFor(
-        () => {
-          expect(result.current.imageUrl).toBe(mockImageUrl);
-          expect(result.current.pollingActive).toBe(false);
-        },
-        { timeout: 4000 },
-      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current.imageUrl).toBe(mockImageUrl);
+      expect(result.current.pollingActive).toBe(false);
     });
 
     it('should timeout polling after 30 seconds', async () => {
@@ -208,6 +209,7 @@ describe('useImageHotLoading', () => {
     });
 
     it('should handle polling fetch errors', async () => {
+      vi.useFakeTimers();
       const createdAt = new Date().toISOString();
 
       (userDataApi.getCharacter as any)
@@ -223,21 +225,17 @@ describe('useImageHotLoading', () => {
         }),
       );
 
-      await waitFor(
-        () => {
-          expect(result.current.pollingActive).toBe(true);
-        },
-        { timeout: 2000 },
-      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.pollingActive).toBe(true);
 
       // First poll fails, second poll succeeds
-      await waitFor(
-        () => {
-          expect(result.current.imageUrl).toBe(mockImageUrl);
-          expect(result.current.pollingActive).toBe(false);
-        },
-        { timeout: 6000 },
-      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current.imageUrl).toBe(mockImageUrl);
+      expect(result.current.pollingActive).toBe(false);
     });
 
     it('should NOT poll if already has image', async () => {

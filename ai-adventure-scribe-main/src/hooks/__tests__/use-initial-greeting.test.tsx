@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
-import { renderHook, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
   PREVIOUSLY_ON_TEXT,
@@ -151,6 +151,10 @@ describe('useInitialGreeting', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should generate initial greeting for a new session', async () => {
     const greetingText =
       'Welcome to the adventure! The air is fresh, and distant bells echo beyond the forest road.';
@@ -229,6 +233,7 @@ describe('useInitialGreeting', () => {
   });
 
   it('should skip generation if messages already exist', async () => {
+    vi.useFakeTimers();
     (userDataApi.listSessionMessages as any).mockResolvedValue({
       total: 5,
       messages: [{ speaker_type: 'dm', context: {} }],
@@ -249,8 +254,9 @@ describe('useInitialGreeting', () => {
 
     renderHook(() => useInitialGreeting(defaultProps));
 
-    // Wait a bit to ensure it doesn't trigger
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
     expect(onGreetingGenerated).not.toHaveBeenCalled();
     expect(AIService.generateOpeningMessage).not.toHaveBeenCalled();
   });
@@ -559,6 +565,7 @@ describe('useInitialGreeting', () => {
   });
 
   it('should not trigger if turn_count is not 0', async () => {
+    vi.useFakeTimers();
     const props = {
       ...defaultProps,
       sessionData: { turn_count: 1 },
@@ -566,11 +573,14 @@ describe('useInitialGreeting', () => {
 
     renderHook(() => useInitialGreeting(props));
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
     expect(onGreetingGenerated).not.toHaveBeenCalled();
   });
 
   it('should not trigger if messages are already present in props', async () => {
+    vi.useFakeTimers();
     const props = {
       ...defaultProps,
       messages: [
@@ -585,7 +595,9 @@ describe('useInitialGreeting', () => {
 
     renderHook(() => useInitialGreeting(props));
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
     expect(onGreetingGenerated).not.toHaveBeenCalled();
   });
 });

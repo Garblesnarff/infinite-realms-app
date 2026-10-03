@@ -1,6 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 import DiceRoller from '../dice-roller';
 
@@ -13,6 +13,15 @@ vi.mock('@/components/ui/tooltip', () => ({
 }));
 
 describe('DiceRoller Accessibility', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it('renders a roll button with an aria-label and no title', () => {
     render(<DiceRoller dice="1d20" label="Attack" />);
 
@@ -38,8 +47,12 @@ describe('DiceRoller Accessibility', () => {
     const button = screen.getByRole('button', { name: /roll 1d6/i });
     fireEvent.click(button);
 
-    // The roll result badge should appear after a short delay (mocked timeout in component)
-    const resultBadge = await screen.findByLabelText(/last roll total: \d+\. Formula: 1d6\. Individual rolls: \d+\./i);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    const resultBadge = screen.getByLabelText(
+      /last roll total: \d+\. Formula: 1d6\. Individual rolls: \d+\./i,
+    );
     expect(resultBadge).toBeInTheDocument();
     expect(resultBadge).toHaveAttribute('tabIndex', '0');
     expect(resultBadge).not.toHaveAttribute('title');
@@ -58,18 +71,31 @@ describe('DiceRoller Accessibility', () => {
   });
 
   it('handles advantage and disadvantage rolls', async () => {
-    const { rerender } = render(<DiceRoller dice="1d20" advantage />);
+    const onRoll = vi.fn();
+    const random = vi.spyOn(Math, 'random').mockReturnValueOnce(0.1).mockReturnValueOnce(0.8);
+    const { rerender } = render(<DiceRoller dice="1d20" advantage onRoll={onRoll} />);
     let button = screen.getByRole('button', { name: /roll 1d20/i });
     fireEvent.click(button);
-    await screen.findByLabelText(/last roll total:/i);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(screen.getByLabelText(/last roll total: 17\./i)).toBeInTheDocument();
+    expect(onRoll).toHaveBeenCalledTimes(1);
+    expect(onRoll).toHaveBeenLastCalledWith(expect.objectContaining({ total: 17, rolls: [17] }));
 
-    rerender(<DiceRoller dice="1d20" disadvantage />);
+    random.mockReturnValueOnce(0.1).mockReturnValueOnce(0.8);
+    rerender(<DiceRoller dice="1d20" disadvantage onRoll={onRoll} />);
     button = screen.getByRole('button', { name: /roll 1d20/i });
     fireEvent.click(button);
-    await screen.findByLabelText(/last roll total:/i);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(screen.getByLabelText(/last roll total: 3\./i)).toBeInTheDocument();
+    expect(onRoll).toHaveBeenCalledTimes(2);
+    expect(onRoll).toHaveBeenLastCalledWith(expect.objectContaining({ total: 3, rolls: [3] }));
   });
 
-  it('handles malformed dice strings', () => {
+  it('handles malformed dice strings', async () => {
     // Should default to 1d20 if malformed
     render(<DiceRoller dice="invalid" />);
     const button = screen.getByRole('button', { name: /roll invalid/i });
@@ -77,5 +103,9 @@ describe('DiceRoller Accessibility', () => {
 
     fireEvent.click(button);
     // Even if dice is "invalid", it uses 1d20 default internally in parseDiceString
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(screen.getByLabelText(/last roll total:/i)).toBeInTheDocument();
   });
 });

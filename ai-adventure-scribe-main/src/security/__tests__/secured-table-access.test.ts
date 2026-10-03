@@ -27,24 +27,27 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
+const sources = Object.freeze(
+  sourceFiles(SRC_ROOT).map((file) => Object.freeze({ file, source: readFileSync(file, 'utf8') })),
+);
+
 describe('secured frontend table access', () => {
   it.each(SECURED_TABLES)('has no direct Supabase .from(%s) calls in src', (table) => {
     const pattern = new RegExp(`\\.from\\(\\s*['"]${table}['"]\\s*\\)`);
-    const offenders = sourceFiles(SRC_ROOT)
-      .filter((file) => pattern.test(readFileSync(file, 'utf8')))
-      .map((file) => relative(process.cwd(), file));
+    const offenders = sources
+      .filter(({ source }) => pattern.test(source))
+      .map(({ file }) => relative(process.cwd(), file));
 
     expect(offenders).toEqual([]);
   });
 
   it.each(SECURED_TABLES)('has no embedded Supabase relation select for %s in src', (table) => {
-    const offenders = sourceFiles(SRC_ROOT)
-      .filter((file) => {
-        const source = readFileSync(file, 'utf8');
+    const offenders = sources
+      .filter(({ source }) => {
         const selects = source.matchAll(/\.select\(\s*([`'"])([\s\S]*?)\1\s*\)/g);
         return Array.from(selects).some((match) => new RegExp(`\\b${table}\\s*\\(`).test(match[2]));
       })
-      .map((file) => relative(process.cwd(), file));
+      .map(({ file }) => relative(process.cwd(), file));
 
     expect(offenders).toEqual([]);
   });
