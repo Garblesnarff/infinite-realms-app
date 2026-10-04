@@ -197,6 +197,12 @@ describe('D3: combat options use the real response hook (#2547)', () => {
   let advances: number;
   let round: number;
   let extraAction: { type: string; label: string } | undefined;
+  let hintedAttack = false;
+  let movementOnlyAttack = false;
+  let moveDistanceFeet = 50;
+  let moveRemainingFeet = 30;
+  let moveDestination = { x: 6, y: 0 };
+  let combatState: { isInCombat: boolean; activeEncounter: any };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -208,12 +214,17 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     advances = 0;
     round = 1;
     extraAction = undefined;
-    const state = { isInCombat: true, activeEncounter: encounterHeldBy(held, round, spent) };
+    hintedAttack = false;
+    movementOnlyAttack = false;
+    moveDistanceFeet = 50;
+    moveRemainingFeet = 30;
+    moveDestination = { x: 6, y: 0 };
+    combatState = { isInCombat: true, activeEncounter: encounterHeldBy(held, round, spent) };
     vi.mocked(useCombat).mockReturnValue({
-      state,
+      state: combatState,
       refreshCombatState: vi.fn(async () => {
-        state.activeEncounter = encounterHeldBy(held, round, spent);
-        return state.activeEncounter;
+        combatState.activeEncounter = encounterHeldBy(held, round, spent);
+        return combatState.activeEncounter;
       }),
     } as any);
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
@@ -256,14 +267,25 @@ describe('D3: combat options use the real response hook (#2547)', () => {
                 ? [
                     {
                       type: 'attack',
-                      label: 'Attack with Quarterstaff',
+                      label: hintedAttack
+                        ? 'Attack with Quarterstaff (move closer first)'
+                        : 'Attack with Quarterstaff',
                       weaponId: 'quarterstaff',
                       targetIds: ['emil-1'],
                     },
                   ]
                 : []),
               ...(extraAction ? [extraAction] : []),
-              { type: 'move', label: 'Move (30 ft remaining)' },
+              ...(moveRemainingFeet > 0
+                ? [
+                    {
+                      type: 'move',
+                      label: `Move (${moveRemainingFeet} ft remaining)`,
+                      x: moveDestination.x,
+                      y: moveDestination.y,
+                    },
+                  ]
+                : []),
               { type: 'end_turn', label: 'End turn' },
             ],
           });
@@ -282,10 +304,34 @@ describe('D3: combat options use the real response hook (#2547)', () => {
             },
           });
         requests.push(body);
+        if (body.intent?.type === 'move') {
+          moveDistanceFeet = Math.max(0, moveDistanceFeet - 30);
+          moveRemainingFeet = 0;
+          return reply({
+            result: {
+              applied: true,
+              path: [{ x: 0, y: 0 }, moveDestination],
+              movementRemaining: moveRemainingFeet,
+              distanceFeet: moveDistanceFeet,
+            },
+          });
+        }
         if (body.intent?.type === 'attack') {
           if (spent || (refuse && body.source === 'dm')) {
             spent = true;
             return reply({ error: 'Action already used this turn' }, 422);
+          }
+          if (movementOnlyAttack) {
+            return reply({
+              result: {
+                resolvedAs: 'movement_only',
+                movedFeet: 0,
+                distanceFeet: moveDistanceFeet,
+                reachFeet: 5,
+                actorName: 'The Scholar',
+                targetName: 'The Faceless Stalker',
+              },
+            });
           }
           spent = true;
           return reply({
@@ -364,6 +410,77 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     expect(round).toBe(2);
   });
 
+  it('strips the move hint before the declared attack reaches the DM and engine', async () => {
+    hintedAttack = true;
+    render(<Game />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
+    );
+    await waitFor(() => expect(response?.text).toContain('8 + 1 = 9 vs AC 13'));
+    expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).not.toContain(
+      'move closer first',
+    );
+    expect(response.text).not.toContain('move closer first');
+    expect(requests.filter((request) => request.intent?.type === 'attack')).toHaveLength(1);
+    expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(true);
+  });
+
+  it('moves through the real hook, keeps Action unused, and re-renders the gated attack', async () => {
+    hintedAttack = true;
+    const view = render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Move \(30 ft remaining\)/ }));
+    await waitFor(() =>
+      expect(requests.some((request) => request.intent?.type === 'move')).toBe(true),
+    );
+    expect(requests.find((request) => request.intent?.type === 'move')).toMatchObject({
+      intent: { type: 'move', actorId: 'scholar-1', x: 6, y: 0 },
+    });
+    expect(moveDistanceFeet).toBe(20);
+    expect(moveRemainingFeet).toBe(0);
+    expect(spent).toBe(false);
+    expect(
+      await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
+    ).toBeInTheDocument();
+    expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(false);
+
+    // A new turn resets movement; the second engine Move reaches melee and the same legal-action
+    // refresh makes the attack live. Action remains unused because movement is separate.
+    moveRemainingFeet = 30;
+    moveDistanceFeet = 20;
+    moveDestination = { x: 3, y: 0 };
+    hintedAttack = false;
+    round = 2;
+    combatState.activeEncounter = encounterHeldBy(held, round, spent);
+    view.rerender(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Move \(30 ft remaining\)/ }));
+    await waitFor(() => expect(moveDistanceFeet).toBe(0));
+    expect(requests.filter((request) => request.intent?.type === 'move').at(-1)).toMatchObject({
+      intent: { type: 'move', actorId: 'scholar-1', x: 3, y: 0 },
+    });
+    expect(
+      await screen.findByRole('button', { name: /Attack with Quarterstaff$/ }),
+    ).toBeInTheDocument();
+    expect(spent).toBe(false);
+  });
+
+  it('keeps Action unused and the menu live after a movement-only hinted attack', async () => {
+    hintedAttack = true;
+    movementOnlyAttack = true;
+    render(<Game />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
+    );
+    await waitFor(() => expect(response?.text).toContain('no attack was rolled'));
+    expect(response.text).not.toContain('move closer first');
+    expect(spent).toBe(false);
+    expect(advances).toBe(0);
+    expect(round).toBe(1);
+    expect(
+      await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
+    ).toBeInTheDocument();
+    expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(false);
+  });
+
   it('explains a refused rolled attack and leaves End turn usable', async () => {
     refuse = true;
     render(<Game />);
@@ -406,18 +523,22 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     ['dash', 'Dash'],
     ['dodge', 'Dodge'],
     ['disengage', 'Disengage'],
-  ])('submits %s through the real response hook and completes the turn', async (type, label) => {
+  ])('submits %s through the authoritative intent path', async (type, label) => {
     extraAction = { type, label };
     vi.mocked(AIService.chatWithDM)
       .mockReset()
-      .mockResolvedValueOnce(
-        envelope([{ ...declaredSwing, action_type: type, target_ids: [] }]) as any,
-      )
-      .mockResolvedValue(envelope() as any);
+      .mockImplementation(async () =>
+        type === 'dash'
+          ? (envelope() as any)
+          : (envelope([{ ...declaredSwing, action_type: type, target_ids: [] }]) as any),
+      );
     render(<Game />);
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(label) }));
-    await waitFor(() => expect(response).toBeDefined());
-    expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).toBe(label);
+    await waitFor(() =>
+      expect(requests.some((request) => request.intent?.type === type)).toBe(true),
+    );
+    if (type === 'dash') expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    else expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).toBe(label);
     expect(requests.filter((request) => request.intent?.type === type)).toEqual([
       expect.objectContaining({
         source: 'dm',
@@ -425,9 +546,13 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         intent: expect.objectContaining({ type, actorId: 'scholar-1' }),
       }),
     ]);
-    expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(true);
-    expect(advances).toBe(1);
-    expect(round).toBe(2);
-    expect(response.text).not.toContain('undefined');
+    if (type === 'dash')
+      expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(false);
+    else {
+      expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(true);
+      expect(response.text).not.toContain('undefined');
+      expect(advances).toBe(1);
+      expect(round).toBe(2);
+    }
   });
 });

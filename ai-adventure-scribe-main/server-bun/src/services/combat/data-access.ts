@@ -13,6 +13,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { and, asc, desc, eq, exists, inArray, or, isNotNull, sql } from 'drizzle-orm';
 
+import { isEquippedWeaponCandidate } from './combat-weapon-options.js';
 import {
   findCatalogWeapon,
   isUnarmedWeaponClaim,
@@ -50,6 +51,7 @@ import type { CreateWeaponAttackInput } from '../../types/combat.js';
 type EquippedWeaponCandidate = {
   id: string;
   name: string;
+  itemType: string | null | undefined;
   magicBonus: number;
   properties: Record<string, unknown>;
 };
@@ -71,6 +73,15 @@ function characterCanUseWeapon(
 }
 
 function parseInventoryProperties(properties: string | null): Record<string, unknown> {
+  if (!properties) return {};
+  try {
+    return JSON.parse(properties) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function parseEquipmentProperties(properties: string | null): Record<string, unknown> {
   if (!properties) return {};
   try {
     return JSON.parse(properties) as Record<string, unknown>;
@@ -120,7 +131,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
           and(
             eq(inventoryItems.characterId, participant.characterId),
             eq(inventoryItems.isEquipped, true),
-            eq(inventoryItems.itemType, 'weapon'),
+            inArray(inventoryItems.itemType, ['weapon', 'equipment', 'custom']),
           ),
         )
         .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id)),
@@ -131,7 +142,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
           and(
             eq(characterEquipment.characterId, participant.characterId),
             eq(characterEquipment.equipped, true),
-            eq(characterEquipment.itemType, 'weapon'),
+            inArray(characterEquipment.itemType, ['weapon', 'equipment', 'custom']),
           ),
         )
         .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
@@ -144,17 +155,21 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
       ...inventory.map((item) => ({
         id: item.id,
         name: item.name,
+        itemType: item.itemType,
         magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
         properties: parseInventoryProperties(item.properties),
       })),
       ...legacy.map((item) => ({
         id: item.id,
         name: item.itemName,
+        itemType: item.itemType,
         magicBonus: item.magicBonus ?? 0,
-        properties: {} as Record<string, unknown>,
+        properties: parseEquipmentProperties(item.magicProperties),
       })),
     ];
-    return candidates.map((candidate) => candidateToProfile(candidate, character?.class));
+    return candidates
+      .filter(isEquippedWeaponCandidate)
+      .map((candidate) => candidateToProfile(candidate, character?.class));
   }
 
   // Scene-grounded attacks are resolved once at seating and stored on the participant. They
@@ -202,9 +217,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
  */
 function monsterAttackProfiles(participant: any): WeaponRuleProfile[] {
   const profile = participant?.monsterAttack as
-    | { source?: string; attacks?: MonsterAttack[] }
-    | null
-    | undefined;
+    { source?: string; attacks?: MonsterAttack[] } | null | undefined;
   const attacks = Array.isArray(profile?.attacks) ? profile.attacks : [];
   return attacks
     .filter((attack) => attack && typeof attack.damageDice === 'string' && attack.damageDice)

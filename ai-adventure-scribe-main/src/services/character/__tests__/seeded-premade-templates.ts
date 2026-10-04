@@ -9,13 +9,34 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { StarterCharacterTemplateLike } from '../starter-character-seeding';
-
 const MIGRATIONS = join(__dirname, '../../../../supabase/migrations');
 const EQUIPMENT_UPDATE_MIGRATION = '20260117_update_eternal_feast_characters.sql';
 const JSON_COLUMNS = new Set(['ability_scores', 'personality', 'skills', 'languages', 'equipment']);
 
-export type SeededPremadeTemplate = StarterCharacterTemplateLike & {
+export type SeededPremadeTemplate = {
+  name: string;
+  race: string;
+  subrace?: string | null;
+  class: string;
+  background?: string | null;
+  level?: number;
+  tagline?: string | null;
+  description?: string | null;
+  adaptedBackstory?: string | null;
+  adapted_backstory?: string | null;
+  languages?: string[];
+  abilityScores?: Record<string, number>;
+  ability_scores?: Record<string, number>;
+  cantrips?: string[] | null;
+  knownSpells?: string[] | null;
+  preparedSpells?: string[] | null;
+  known_spells?: string[] | null;
+  prepared_spells?: string[] | null;
+  spells?: {
+    cantrips?: string[];
+    knownSpells?: string[];
+    preparedSpells?: string[];
+  };
   starter_campaign_id: string;
   template_key: string;
   skills: string[];

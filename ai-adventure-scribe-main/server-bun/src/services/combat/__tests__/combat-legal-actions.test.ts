@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 
+import type { WeaponRuleProfile } from '../combat-rules.js';
+
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 
 const player = {
@@ -104,22 +106,25 @@ const APPRENTICE_PROFILE = {
 };
 const NO_SPELLS = { ...APPRENTICE_PROFILE, spellIds: [] };
 let profile: typeof APPRENTICE_PROFILE = NO_SPELLS;
+let equippedWeapons: WeaponRuleProfile[] = [
+  {
+    id: 'quarterstaff',
+    name: 'Quarterstaff',
+    damageDice: '1d6',
+    damageType: 'bludgeoning',
+    normalRange: 5,
+    magicBonus: 1,
+    finesse: false,
+    ranged: false,
+    proficient: true,
+  },
+];
 
 mock.module('../data-access.js', () => ({
   claimEncounterVersion: async () => 1,
   createWeaponAttack: async () => null,
   getActiveConditionNames: async () => [],
-  getEquippedWeaponProfile: async () => ({
-    id: 'longsword',
-    name: 'Longsword',
-    damageDice: '1d8',
-    damageType: 'slashing',
-    normalRange: 5,
-    magicBonus: 0,
-    finesse: false,
-    ranged: false,
-    proficient: true,
-  }),
+  getEquippedWeaponProfile: async () => equippedWeapons[0],
   getParticipantAbilityProfile: async () => profile,
   getParticipantInEncounter: async () => null,
   getParticipantWithStats: async () => null,
@@ -128,7 +133,7 @@ mock.module('../data-access.js', () => ({
   getCreatureStatsBatch: async () => new Map(),
   getWeaponAttack: async () => null,
   getCharacterWeapons: async () => [],
-  listEquippedWeaponProfiles: async () => [],
+  listEquippedWeaponProfiles: async () => equippedWeapons,
   monsterAttackSource: () => 'derived',
   verifyCharacterOwnership: async () => {},
   verifyEncounterAccess: async () => {},
@@ -140,6 +145,117 @@ describe('getLegalCombatActions', () => {
   afterEach(() => {
     profile = NO_SPELLS;
     player.actionUsed = false;
+    monster.isActive = true;
+    equippedWeapons = [
+      {
+        id: 'quarterstaff',
+        name: 'Quarterstaff',
+        damageDice: '1d6',
+        damageType: 'bludgeoning',
+        normalRange: 5,
+        magicBonus: 1,
+        finesse: false,
+        ranged: false,
+        proficient: true,
+      },
+    ];
+    map.entities[0].x = 6;
+    map.entities[0].y = 6;
+    map.entities[0].movementRemaining = 0;
+    map.entities[1].x = 8;
+    map.entities[1].y = 8;
+  });
+
+  test('offers the carried melee weapon at range with a move-closer hint', async () => {
+    map.entities[0].x = 0;
+    map.entities[0].y = 0;
+    map.entities[1].x = 6;
+    map.entities[1].y = 0;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions).toContainEqual(
+      expect.objectContaining({
+        type: 'attack',
+        label: 'Attack with Quarterstaff (move closer first)',
+        targetIds: ['monster-1'],
+      }),
+    );
+  });
+
+  test('plans Move toward the nearest hostile without spending the Action', async () => {
+    map.entities[0].x = 0;
+    map.entities[0].y = 0;
+    map.entities[0].movementRemaining = 30;
+    map.entities[1].x = 8;
+    map.entities[1].y = 0;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(result.actions).toContainEqual(expect.objectContaining({ type: 'move', x: 6, y: 0 }));
+    expect(player.actionUsed).toBe(false);
+  });
+
+  test('does not offer a no-op Move when the nearest hostile is already in reach', async () => {
+    map.entities[0].x = 0;
+    map.entities[0].y = 0;
+    map.entities[0].movementRemaining = 30;
+    map.entities[1].x = 1;
+    map.entities[1].y = 0;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.some((action) => action.type === 'move')).toBe(false);
+  });
+
+  test('does not offer Move when there is no hostile on the map', async () => {
+    monster.isActive = false;
+    map.entities[0].movementRemaining = 30;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.some((action) => action.type === 'move')).toBe(false);
+  });
+
+  test('offers every carried weapon, including a custom and a ranged profile', async () => {
+    equippedWeapons = [
+      equippedWeapons[0],
+      {
+        id: 'custom-moonblade',
+        name: 'Moonblade',
+        damageDice: '1d8',
+        damageType: 'radiant',
+        normalRange: 5,
+        magicBonus: 0,
+        finesse: true,
+        ranged: false,
+        proficient: true,
+      },
+      {
+        id: 'longbow',
+        name: 'Longbow',
+        damageDice: '1d8',
+        damageType: 'piercing',
+        normalRange: 150,
+        longRange: 600,
+        magicBonus: 0,
+        finesse: false,
+        ranged: true,
+        proficient: true,
+      },
+    ];
+    map.entities[0].x = 0;
+    map.entities[0].y = 0;
+    map.entities[1].x = 6;
+    map.entities[1].y = 0;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+    const attacks = result.actions.filter((action) => action.type === 'attack');
+
+    expect(attacks.map((action) => action.label)).toEqual([
+      'Attack with Quarterstaff (move closer first)',
+      'Attack with Moonblade (move closer first)',
+      'Attack with Longbow',
+    ]);
   });
 
   test('does not offer Move after a full-speed entry approach reaches zero', async () => {

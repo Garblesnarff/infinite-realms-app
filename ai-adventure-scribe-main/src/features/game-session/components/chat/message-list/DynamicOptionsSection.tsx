@@ -17,6 +17,8 @@ type LegalAction = {
   label: string;
   weaponId?: string;
   targetIds?: string[];
+  x?: number;
+  y?: number;
 };
 
 interface DynamicOptionsSectionProps {
@@ -112,11 +114,34 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         if (action.type === 'end_turn') {
           await executeAuthoritativeCombatIntent(encounter.id, { type: 'end_turn', actorId });
           await refreshCombatState();
+        } else if (
+          action.type === 'move' &&
+          typeof action.x === 'number' &&
+          typeof action.y === 'number'
+        ) {
+          await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: 'move', actorId, x: action.x, y: action.y },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          await refreshCombatState();
+        } else if (action.type === 'dash') {
+          await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: 'dash', actorId },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          await refreshCombatState();
         } else if (action.type === 'attack' && action.targetIds?.[0]) {
           const targetId = action.targetIds[0];
           const target = encounter.participants.find((participant) => participant.id === targetId);
+          const label = action.label.replace(/\s+\(move closer first\)$/i, '');
           await onOptionSelect(
-            `I ${action.label.replace(/^Attack/, 'attack')} against ${target?.name ?? targetId}.`,
+            `I ${label.replace(/^Attack/, 'attack')} against ${target?.name ?? targetId}.`,
           );
         } else {
           await onOptionSelect(action.label);

@@ -61,6 +61,7 @@ export interface InventoryItemVM {
   id: string;
   name: string; // "Potion of Healing"
   quantity?: number; // 3
+  properties?: Record<string, unknown>;
 }
 
 export interface SpellVM {

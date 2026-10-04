@@ -7,7 +7,7 @@ import {
   dispatchWithOneCorrectiveRetry,
   validateCombatTransitionContract,
 } from '../dispatch.js';
-import { getAoETargets } from '../engine.js';
+import { getAoETargets, getDistance } from '../engine.js';
 import { tacticalSizeForParticipant } from '../participant-size.js';
 import { buildTacticalPrompt } from '../prompt.js';
 
@@ -16,12 +16,12 @@ import type { TacticalMap } from '../types.js';
 const map = (): TacticalMap => ({
   id: 'map',
   sessionId: 'session',
-  width: 6,
-  height: 6,
+  width: 12,
+  height: 12,
   round: 1,
   sceneDescription: 'test',
-  cells: Array.from({ length: 6 }, () =>
-    Array.from({ length: 6 }, () => ({
+  cells: Array.from({ length: 12 }, () =>
+    Array.from({ length: 12 }, () => ({
       terrain: 'floor',
       blocksMovement: false,
       blocksSight: false,
@@ -63,6 +63,27 @@ describe('CM-2 tactical dispatch', () => {
     });
     expect(result.applied).toBe(true);
     expect(state.entities[0].x).toBe(2);
+  });
+  test('moves a 50ft encounter 30ft through the engine and persists 20ft range', () => {
+    const state = map();
+    state.entities[0].x = 0;
+    state.entities[0].y = 0;
+    state.entities[0].movementRemaining = 30;
+    state.entities[1].x = 10;
+    state.entities[1].y = 0;
+    const before = getDistance(state.entities[0], state.entities[1]);
+    const result = dispatchMapAction(state, {
+      action: 'move',
+      entityId: 'pc-participant',
+      x: 6,
+      y: 0,
+      changes: null,
+    });
+
+    expect(before).toBe(50);
+    expect(result).toMatchObject({ applied: true, path: expect.any(Array) });
+    expect(getDistance(state.entities[0], state.entities[1])).toBe(20);
+    expect(state.entities[0].movementRemaining).toBe(0);
   });
   test('returns a structured refusal with valid move summary', () => {
     const state = map();

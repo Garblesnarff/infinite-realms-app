@@ -8,8 +8,9 @@ import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { publishCombatState } from './combat-sync-service.js';
+import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
+import { buildCombatWeaponOptions } from './combat-weapon-options.js';
 import {
-  getEquippedWeaponProfile,
   getParticipantAbilityProfile,
   getActiveConditionNames,
   listEquippedWeaponProfiles,
@@ -27,7 +28,6 @@ import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
-import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
@@ -41,6 +41,7 @@ import {
 } from '../../../../shared/engine-display-name';
 import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
@@ -477,7 +478,11 @@ async function resolveActorTurn(
     positionsAdvanced: 1,
     skipped: [{ id: current!.id, slug: index.slugFor(current!.id) ?? null }],
   });
-  return { actor: state.currentParticipant, encounter: state.encounter, deathSaves: settled.deathSaves };
+  return {
+    actor: state.currentParticipant,
+    encounter: state.encounter,
+    deathSaves: settled.deathSaves,
+  };
 }
 
 /**
@@ -830,7 +835,11 @@ export async function executeCombatIntent(
       });
       return stale;
     }
-    const { actor, encounter, deathSaves: boundaryDeathSaves } = await resolveActorTurn(
+    const {
+      actor,
+      encounter,
+      deathSaves: boundaryDeathSaves,
+    } = await resolveActorTurn(
       encounterId,
       state,
       resolved.actorId,
@@ -853,6 +862,14 @@ export async function executeCombatIntent(
         throw new BusinessLogicError(
           'Movement refused',
           (result as { refusal?: Record<string, unknown> }).refusal,
+        );
+      }
+      const movement = result as { path?: Array<{ x: number; y: number }> };
+      const destination = movement.path?.at(-1);
+      if (destination) {
+        await recordDmTacticalFact(
+          encounter.sessionId,
+          `${actor.name ?? 'The player'} moved to (${destination.x}, ${destination.y}) by the engine. Describe the movement and keep the action unused.`,
         );
       }
     } else if (intent.type === 'attack') {
@@ -1244,52 +1261,84 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
   const map = await loadActiveTacticalMap(state.encounter.sessionId);
   const mapActor = map?.entities.find((entity) => entity.id === actor.id);
   const actions: Array<Record<string, unknown>> = [];
-  if (mapActor && mapActor.movementRemaining > 0) {
-    actions.push({ type: 'move', label: `Move (${mapActor.movementRemaining} ft remaining)` });
+  if (map && mapActor && mapActor.movementRemaining > 0) {
+    const nearestHostile = state.participants
+      .filter(
+        (participant) =>
+          participant.id !== actor.id &&
+          participant.isActive &&
+          participant.participantType !== actor.participantType &&
+          map.entities.some((entity) => entity.id === participant.id),
+      )
+      .map((participant) => ({
+        participant,
+        distance: getDistance(
+          mapActor,
+          map.entities.find((entity) => entity.id === participant.id)!,
+        ),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0];
+    const approach = nearestHostile
+      ? planApproach(map, actor.id, nearestHostile.participant.id, 5)
+      : null;
+    const destination = approach?.destination;
+    if (destination && (destination.x !== mapActor.x || destination.y !== mapActor.y)) {
+      actions.push({
+        type: 'move',
+        label: `Move (${mapActor.movementRemaining} ft remaining)`,
+        x: destination.x,
+        y: destination.y,
+      });
+    }
   }
   const profile = await getParticipantAbilityProfile(actor);
   if (!actor.actionUsed) {
-    const [weapon, attackerConditions] = await Promise.all([
-      getEquippedWeaponProfile(actor),
+    const [equippedWeapons, attackerConditions] = await Promise.all([
+      listEquippedWeaponProfiles(actor),
       getActiveConditionNames(actor.id),
     ]);
-    const targets: string[] = [];
-    for (const target of state.participants.filter(
+    const weapons = equippedWeapons.length ? equippedWeapons : [UNARMED_STRIKE];
+    const opposingTargets = state.participants.filter(
       (participant) =>
         participant.id !== actor.id &&
         participant.isActive &&
         participant.participantType !== actor.participantType,
-    )) {
-      const targetEntity = map?.entities.find((entity) => entity.id === target.id);
-      const rules = resolveAttackRules({
-        strength: profile.scores.str ?? 10,
-        dexterity: profile.scores.dex ?? 10,
-        level: profile.level,
-        baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
-          participantId: target.id,
-          encounterId,
+    );
+    const targetConditions = new Map(
+      await Promise.all(
+        opposingTargets.map(
+          async (target) => [target.id, await getActiveConditionNames(target.id)] as const,
+        ),
+      ),
+    );
+    actions.push(
+      ...buildCombatWeaponOptions(weapons, (weapon) =>
+        opposingTargets.map((target) => {
+          const targetEntity = map?.entities.find((entity) => entity.id === target.id);
+          const rules = resolveAttackRules({
+            strength: profile.scores.str ?? 10,
+            dexterity: profile.scores.dex ?? 10,
+            level: profile.level,
+            baseTargetAc: resolveParticipantArmorClass(target.armorClass, {
+              participantId: target.id,
+              encounterId,
+            }),
+            weapon,
+            attackerConditions,
+            targetConditions: targetConditions.get(target.id) ?? [],
+            geometry:
+              map && mapActor && targetEntity
+                ? {
+                    distanceFeet: getDistance(mapActor, targetEntity),
+                    hasLineOfSight: checkLineOfSight(map, actor.id, target.id),
+                    cover: getCover(map, actor.id, target.id),
+                  }
+                : undefined,
+          });
+          return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
         }),
-        weapon,
-        attackerConditions,
-        targetConditions: await getActiveConditionNames(target.id),
-        geometry:
-          map && mapActor && targetEntity
-            ? {
-                distanceFeet: getDistance(mapActor, targetEntity),
-                hasLineOfSight: checkLineOfSight(map, actor.id, target.id),
-                cover: getCover(map, actor.id, target.id),
-              }
-            : undefined,
-      });
-      if (rules.legal) targets.push(target.id);
-    }
-    if (targets.length)
-      actions.push({
-        type: 'attack',
-        label: `Attack with ${weapon.name}`,
-        weaponId: weapon.id,
-        targetIds: targets,
-      });
+      ),
+    );
     actions.push(
       { type: 'dash', label: 'Dash' },
       { type: 'dodge', label: 'Dodge' },

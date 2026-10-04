@@ -1,8 +1,9 @@
-import { render, fireEvent, waitFor } from '@testing-library/react';
-import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, fireEvent, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 import { DynamicOptionsSection } from '../DynamicOptionsSection';
+
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 
 const combat = vi.hoisted(() => ({ isInCombat: false, activeEncounter: null as any }));
 vi.mock('@/contexts/CombatContext', () => ({ useCombat: () => ({ state: combat }) }));
@@ -136,5 +137,40 @@ describe('DynamicOptionsSection', () => {
     );
     await waitFor(() => expect(getByText('Dodge')).toBeDefined());
     expect(queryByText('Option 1')).toBeNull();
+  });
+
+  it('posts a planned Move to the engine and leaves DM text out of the action path', async () => {
+    combat.isInCombat = true;
+    combat.activeEncounter = {
+      id: 'enc-1',
+      currentTurnParticipantId: 'pc-1',
+      participants: [{ id: 'pc-1', participantType: 'player' }],
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: 'pc-1',
+        actions: [{ type: 'move', label: 'Move (30 ft remaining)', x: 6, y: 0 }],
+      }),
+    } as Response);
+    const onOptionSelect = vi.fn().mockResolvedValue(undefined);
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        hasDynamicOverlay={false}
+      />,
+    );
+    fireEvent.click(await screen.findByText('Move (30 ft remaining)'));
+    await waitFor(() =>
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'move', actorId: 'pc-1', x: 6, y: 0 },
+        'dm',
+        expect.any(Number),
+        'typed',
+      ),
+    );
+    expect(onOptionSelect).not.toHaveBeenCalled();
   });
 });

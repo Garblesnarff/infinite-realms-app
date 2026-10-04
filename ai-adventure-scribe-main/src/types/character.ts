@@ -305,6 +305,7 @@ export interface Character {
   inventory?: Array<{
     itemId: string;
     itemType?: string;
+    properties?: Record<string, unknown>;
     description?: string;
     quantity: number;
     weight?: number;

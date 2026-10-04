@@ -5,6 +5,7 @@ import { FROZEN_CAMPAIGN_CHAPTER_LABEL } from './campaign-chapter';
 import { summarizeCombatTurn } from './combat-turn-order';
 import { buildSpellsViewModel } from './spell-view-model';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
+import { isCatalogWeaponName } from '../../../../../../shared/equipment-weapon-resolver';
 
 import type {
   AttackVM,
@@ -48,36 +49,16 @@ const ABILITY_ORDER: { key: string; label: string }[] = [
   { key: 'charisma', label: 'CHA' },
 ];
 
-const WEAPON_HINTS = [
-  'sword',
-  'axe',
-  'bow',
-  'crossbow',
-  'dagger',
-  'mace',
-  'hammer',
-  'spear',
-  'club',
-  'flail',
-  'glaive',
-  'halberd',
-  'javelin',
-  'lance',
-  'maul',
-  'pike',
-  'quarterstaff',
-  'rapier',
-  'scimitar',
-  'sickle',
-  'staff',
-  'trident',
-  'whip',
-  'morningstar',
-  'sling',
-  'dart',
-];
+type CharacterInventoryRow = NonNullable<Character['inventory']>[number];
 
-const GENERIC_ITEM_TYPES = new Set(['equipment', 'custom']);
+const isWeaponInventoryRow = (item: CharacterInventoryRow): boolean => {
+  const customDamage = item.properties?.damage;
+  return (
+    item.itemType === 'weapon' ||
+    isCatalogWeaponName(item.itemId) ||
+    (item.itemType === 'custom' && Boolean(customDamage && typeof customDamage === 'object'))
+  );
+};
 
 const ARMOR_HINTS = [
   'mail',
@@ -280,14 +261,9 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
   const dexMod = abilityMod(character.abilityScores?.dexterity?.score);
 
   const attacks: AttackVM[] = inv
-    // A specific stored item type decides: the name hints alone listed "Crossbow Bolt" and
-    // "Waxed Map Case" ("axe") as attacks (#2531). The generic types the character wizard and the
-    // server default to carry no information, so those fall back to the hints.
-    .filter((it) =>
-      it.itemType && !GENERIC_ITEM_TYPES.has(it.itemType)
-        ? it.itemType === 'weapon'
-        : WEAPON_HINTS.some((w) => it.itemId?.toLowerCase().includes(w)),
-    )
+    // Use the same catalog/name resolver as combat grounding. Generic custom rows only count when
+    // their stored properties contain a damage shape; a lantern or map case is never an attack.
+    .filter(isWeaponInventoryRow)
     .slice(0, 6)
     .map((it) => {
       // Proficiency only when the character is proficient with this weapon — the
@@ -314,7 +290,7 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
       name: prettify(it.itemId),
       detail: ARMOR_HINTS.some((a) => it.itemId?.toLowerCase().includes(a))
         ? 'Armor'
-        : WEAPON_HINTS.some((w) => it.itemId?.toLowerCase().includes(w))
+        : isCatalogWeaponName(it.itemId)
           ? 'Weapon'
           : it.isMagic
             ? 'Magic item'

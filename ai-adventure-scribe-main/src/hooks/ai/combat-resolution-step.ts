@@ -758,6 +758,16 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ...(autoRolled ? { autoRolled: true } : {}),
     });
     if (execution.boundary === 'combat_ended') return 'combat_ended';
+    // A melee declaration can spend movement without resolving an attack. The engine leaves
+    // Action unused in this movement-only result, so keep the player on the same turn and let
+    // the refreshed legal-action menu offer the strike again instead of advancing NPC turns.
+    if (
+      execution.result &&
+      typeof execution.result === 'object' &&
+      (execution.result as { resolvedAs?: string }).resolvedAs === 'movement_only' &&
+      isPlayerActor(action.actor_id, participants)
+    )
+      return null;
     // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
     // is told the boundary already happened. Both answers name whoever is up, which is what the
     // player has to be told when their own declaration was refused.

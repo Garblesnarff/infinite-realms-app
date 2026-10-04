@@ -218,6 +218,17 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               >
                 {group.messages.map((message, msgIndex) => {
                   const messageId = message.id || message.timestamp || `${groupIndex}-${msgIndex}`;
+                  const isLastMessage =
+                    groupIndex === groupedMessages.length - 1 &&
+                    msgIndex === group.messages.length - 1;
+                  const combatOptionsVisible =
+                    isLastMessage &&
+                    combatState.isInCombat &&
+                    combatState.activeEncounter?.participants.some(
+                      (participant) =>
+                        participant.id === combatState.activeEncounter?.currentTurnParticipantId &&
+                        participant.participantType === 'player',
+                    );
                   return (
                     <MessageRenderer
                       key={messageId}
@@ -237,6 +248,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       genErrorByMessage={genErrorByMessage}
                       onGenerateScene={onGenerateScene}
                       onOptionSelect={onOptionSelect}
+                      combatOptionsVisible={combatOptionsVisible}
                       characterName={group.messages[0].characterName}
                       previousEngineKey={previousEngineKeys.get(message)}
                     />

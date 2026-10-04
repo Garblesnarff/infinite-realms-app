@@ -8,6 +8,10 @@
  *
  * @module server/services/combat/weapon-catalog
  */
+import {
+  normalizeEquipmentName,
+  resolveWeaponName,
+} from '../../../../shared/equipment-weapon-resolver';
 import weaponCatalog from '../../../../src/data/srd/weapons.json';
 
 export type CatalogWeapon = {
@@ -22,13 +26,16 @@ export type CatalogWeapon = {
 const catalogWeapons = weaponCatalog as CatalogWeapon[];
 
 /** Collapses "Shortsword", "short-sword", and "SHORT SWORD" onto one key. */
-export const normalizeWeaponName = (value: string): string =>
-  value.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const normalizeWeaponName = (value: string): string => normalizeEquipmentName(value);
 
 export const findCatalogWeapon = (value: string): CatalogWeapon | undefined => {
   const key = normalizeWeaponName(value);
+  const resolved = resolveWeaponName(value);
   return catalogWeapons.find(
-    (weapon) => normalizeWeaponName(weapon.id) === key || normalizeWeaponName(weapon.name) === key,
+    (weapon) =>
+      normalizeWeaponName(weapon.id) === key ||
+      normalizeWeaponName(weapon.name) === key ||
+      (resolved !== undefined && weapon.id === resolved),
   );
 };
 
