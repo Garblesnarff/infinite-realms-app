@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.26.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.6...v0.26.0) (2026-10-04)
+
+
+### Features
+
+* **content:** seed Academy premade equipment ([#2543](https://github.com/Garblesnarff/infinite-realms-production/issues/2543)) ([#2578](https://github.com/Garblesnarff/infinite-realms-production/issues/2578)) ([f7578c4](https://github.com/Garblesnarff/infinite-realms-production/commit/f7578c4d1dade82bd6d4477f9fbf3fd03503ca10))
+* **telemetry:** log client failures server-side; guard fixture encounter ids ([#2515](https://github.com/Garblesnarff/infinite-realms-production/issues/2515), [#2525](https://github.com/Garblesnarff/infinite-realms-production/issues/2525)) ([#2577](https://github.com/Garblesnarff/infinite-realms-production/issues/2577)) ([45b660e](https://github.com/Garblesnarff/infinite-realms-production/commit/45b660e21407ddde6abfbe809b1b6823d33ef1d0))
+
+
+### Bug Fixes
+
+* **combat:** one SRD weapon-proficiency rule for the sheet and the engine ([#2540](https://github.com/Garblesnarff/infinite-realms-production/issues/2540), [#2541](https://github.com/Garblesnarff/infinite-realms-production/issues/2541)) ([#2562](https://github.com/Garblesnarff/infinite-realms-production/issues/2562)) ([f622f85](https://github.com/Garblesnarff/infinite-realms-production/commit/f622f85e9a0d4253ecc36af6feacead23c85e0d5))
+* **combat:** resolve declared actions before end, refuse ends over live hostiles, route attack chips through declare ([#2563](https://github.com/Garblesnarff/infinite-realms-production/issues/2563)) ([#2579](https://github.com/Garblesnarff/infinite-realms-production/issues/2579)) ([f13b1e4](https://github.com/Garblesnarff/infinite-realms-production/commit/f13b1e465a782a53dd2a8fa1117d55ce92309de4))
+
 ## [0.25.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.5...v0.25.6) (2026-10-04)
 
 
