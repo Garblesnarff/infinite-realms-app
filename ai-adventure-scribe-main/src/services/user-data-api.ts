@@ -16,6 +16,7 @@ export type {
 import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { waitForAuth } from '@/lib/auth-gate';
+import { APP_BUILD_VERSION } from '@/services/app-version';
 import {
   normalizeCharacter,
   prepareCampaignPayload,
@@ -209,7 +210,19 @@ export type ClientFailureKind =
   | 'stale_client_detected'
   | 'malformed_ws_frame'
   | 'missing_starter_campaign_id'
-  | 'invalid_ability_score_key';
+  | 'invalid_ability_score_key'
+  | 'unhandled_promise_rejection'
+  | 'react_error_boundary';
+
+/** Optional context the server logs alongside a client failure (#2515). */
+export type ClientFailureDetails = {
+  /** Human-readable failure message; the server truncates it to 500 chars in the log. */
+  message?: string;
+  /** Component the failure came from (e.g. the error-boundary's caught component). */
+  component?: string;
+  /** Client route (path) active when the failure happened. */
+  route?: string;
+};
 
 export type NarrativeSceneStateResponse = {
   scene_state: string | null;
@@ -299,6 +312,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   return payload;
 }
+
+/** Client-side caps mirroring the client-failure payload the server accepts (#2515). */
+const CLIENT_FAILURE_MESSAGE_MAX_CHARS = 500;
+const CLIENT_FAILURE_ERROR_MAX_CHARS = 2_000;
 
 export const userDataApi = {
   createSession: (payload: Record<string, unknown>): Promise<any> =>
@@ -700,13 +717,37 @@ export const userDataApi = {
    * scene-state fetch that came back null) so it pages through the same `alert()` path as
    * server-side continuity failures (#1680).
    *
+   * Every report also carries the fields the server logs at info level (#2515): the
+   * running bundle (`APP_BUILD_VERSION`), the client timestamp, and the active route
+   * unless the caller overrides it, so a failure line in the server log says what
+   * failed, where, and on which build.
+   *
    * Deliberately fire-and-forget: this must never throw into, delay, or otherwise affect the
    * turn that triggered it. Callers should `void` this call rather than await it.
    */
-  reportClientFailure: (kind: ClientFailureKind, sessionId?: string, error?: string): void => {
+  reportClientFailure: (
+    kind: ClientFailureKind,
+    sessionId?: string,
+    error?: string,
+    details?: ClientFailureDetails,
+  ): void => {
     request('/v1/telemetry/client-failure', {
       method: 'POST',
-      body: JSON.stringify({ kind, sessionId, error }),
+      body: JSON.stringify({
+        kind,
+        sessionId,
+        // Capped here (and truncated, never rejected, by the server schema) so a
+        // failure with a very long message — an HTML error page, a serialized
+        // response — still posts instead of being dropped whole (#2515).
+        error: error?.slice(0, CLIENT_FAILURE_ERROR_MAX_CHARS),
+        message: (details?.message ?? error)?.slice(0, CLIENT_FAILURE_MESSAGE_MAX_CHARS),
+        component: details?.component,
+        route:
+          details?.route ??
+          (typeof window !== 'undefined' ? window.location.pathname : undefined),
+        bundle: APP_BUILD_VERSION,
+        clientTimestamp: new Date().toISOString(),
+      }),
     }).catch(() => {
       // Swallow: a failed failure-report must never itself fail anything.
     });

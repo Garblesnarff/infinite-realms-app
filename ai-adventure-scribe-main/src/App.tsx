@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
@@ -11,6 +11,7 @@ import { TRPCProvider } from './lib/trpc/Provider';
 import { LEGAL_ROUTES } from './pages/legal/legal-routes';
 import { ProtectedAppRoutes } from './routes/ProtectedAppRoutes';
 import { withRouteSuspense } from './routes/route-suspense';
+import { installGlobalClientFailureReporting } from './services/client-failure-reporting';
 import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -36,6 +37,10 @@ function App() {
   useTelemetry({
     enableCrashDetection: true,
   });
+
+  // Report unhandled promise rejections to the server (#2515); React error
+  // boundaries report themselves from `componentDidCatch`.
+  useEffect(() => installGlobalClientFailureReporting(), []);
 
   return (
     <ErrorBoundary level="app">

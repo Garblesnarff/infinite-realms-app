@@ -53,7 +53,9 @@ import { countPromptSections } from '../../services/prompt-section-counter.js';
  * the next occurrence answerable from the log alone.
  *
  * Keys and array lengths only. No narration, no player input, no option text —
- * nothing that could put player prose or model prose into the log.
+ * nothing that could put player prose or model prose into the log. The one
+ * exception is `roll_requests[].type`/`.dc` (#2525): the type is reduced to a
+ * known enum name and the dc to a number before either is logged.
  *
  * Note on interpretation: this reflects the envelope AFTER
  * stripUntargetedInitiativeRollRequests and applyCombatEntryGate have run, so
@@ -89,6 +91,12 @@ function logEnvelopeShape(
     keys: Object.keys(envelope).sort(),
     combatActions: len(envelope.combat_actions),
     rollRequests: len(envelope.roll_requests),
+    // #2525: counts alone could not answer "what kind of roll was requested, at
+    // what DC" during a hidden-roll investigation. Enum names and numbers only —
+    // `type` passes through the known-type allowlist in rollRequestTypesOf and
+    // `dc` is copied only when it is a finite number, never model prose.
+    rollRequestTypes: rollRequestTypesOf(envelope),
+    rollRequestDcs: rollRequestDcsOf(envelope),
   });
 }
 
@@ -112,6 +120,20 @@ function rollRequestTypesOf(envelope: Record<string, unknown> | null): string[] 
   return requests.slice(0, 10).map((request) => {
     const type = (request as { type?: unknown } | null)?.type;
     return typeof type === 'string' && LOGGABLE_ROLL_TYPES.has(type) ? type : 'other';
+  });
+}
+
+/**
+ * The `dc` of each roll request in the envelope (at most 10, aligned with
+ * `rollRequestTypesOf`), for `LLM_GENERATE_ENVELOPE_SHAPE` (#2525). Numbers
+ * only: anything that is not a finite number logs as `null`, never raw model
+ * output.
+ */
+function rollRequestDcsOf(envelope: Record<string, unknown> | null): Array<number | null> {
+  const requests = Array.isArray(envelope?.roll_requests) ? envelope.roll_requests : [];
+  return requests.slice(0, 10).map((request) => {
+    const dc = (request as { dc?: unknown } | null)?.dc;
+    return typeof dc === 'number' && Number.isFinite(dc) ? dc : null;
   });
 }
 

@@ -97,6 +97,34 @@ describe('LLM_GENERATE_ENVELOPE_SHAPE', () => {
     expect(line?.rollRequests).toBe(1);
   });
 
+  it('records roll request types and DCs so a hidden roll is identifiable (#2525)', async () => {
+    // roll_requests entries in the shape the real producer emits: entries of the
+    // DMResponse envelope (dm-response-schema.ts) carry `type` from its enum and
+    // `dc: number | null`. The last two entries are adversarial: an unknown type
+    // and a non-numeric dc must be reduced to enum/number-only log values.
+    const line = await generate(
+      JSON.stringify({
+        text: NARRATION,
+        roll_requests: [
+          { type: 'attack', formula: '1d20+5', purpose: 'attack roll', dc: 15, ac: null },
+          { type: 'save', formula: '1d20+2', purpose: 'dexterity save', dc: null, ac: null },
+          { type: 'damage', formula: '2d6', purpose: 'damage', dc: 12, ac: null },
+          { type: 'made_up_type', formula: '1d20', purpose: '???', dc: null, ac: null },
+          { type: 'check', formula: '1d20', purpose: 'check', dc: 'very high', ac: null },
+        ],
+      }),
+    );
+    expect(line?.rollRequests).toBe(5);
+    expect(line?.rollRequestTypes).toEqual(['attack', 'save', 'damage', 'other', 'check']);
+    expect(line?.rollRequestDcs).toEqual([15, null, 12, null, null]);
+  });
+
+  it('records empty roll request type/dc lists when there are no roll requests', async () => {
+    const line = await generate(JSON.stringify({ text: NARRATION, combat_actions: [] }));
+    expect(line?.rollRequestTypes).toEqual([]);
+    expect(line?.rollRequestDcs).toEqual([]);
+  });
+
   it('distinguishes an absent array from an empty one', async () => {
     const line = await generate(JSON.stringify({ text: NARRATION, combat_actions: [] }));
     expect(line?.combatActions).toBe(0);

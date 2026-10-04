@@ -5,6 +5,7 @@ import type { ErrorInfo, ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import logger from '@/lib/logger';
+import { reportReactErrorBoundaryFailure } from '@/services/client-failure-reporting';
 
 /**
  * Props for the ErrorBoundary component
@@ -74,6 +75,10 @@ export class ErrorBoundary extends Component<Props, State> {
       message: error.message,
       stack: error.stack,
     });
+
+    // Report it to the server too (#2515): a boundary catch is exactly the
+    // silent dead-end that otherwise only exists in this console log.
+    reportReactErrorBoundaryFailure(error, errorInfo.componentStack);
 
     // Call custom error handler if provided
     onError?.(error, errorInfo);

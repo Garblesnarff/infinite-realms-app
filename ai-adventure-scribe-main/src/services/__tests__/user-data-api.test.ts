@@ -7,6 +7,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 }));
 
 import { waitForAuth } from '@/lib/auth-gate';
+import { APP_BUILD_VERSION } from '@/services/app-version';
 import { loadCachedSession } from '@/services/auth/TokenService';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -160,5 +161,56 @@ describe('userDataApi request errors (#2280)', () => {
       .catch((error: unknown) => error);
 
     expect(failure).toMatchObject({ status: 502, message: 'Request failed (502)' });
+  });
+});
+
+describe('userDataApi.reportClientFailure (#2515)', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(waitForAuth).mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  });
+
+  it('posts the failure with bundle, route and client timestamp for the server log', async () => {
+    userDataApi.reportClientFailure(
+      'react_error_boundary',
+      'sess-9',
+      'render blew up',
+      { component: 'GameContent' },
+    );
+    // reportClientFailure is fire-and-forget; let the request flush.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v1/telemetry/client-failure');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.kind).toBe('react_error_boundary');
+    expect(body.sessionId).toBe('sess-9');
+    expect(body.error).toBe('render blew up');
+    expect(body.message).toBe('render blew up');
+    expect(body.component).toBe('GameContent');
+    expect(body.route).toBe(window.location.pathname);
+    expect(body.bundle).toBe(APP_BUILD_VERSION);
+    expect(typeof body.clientTimestamp).toBe('string');
+    expect(Number.isNaN(Date.parse(body.clientTimestamp as string))).toBe(false);
+  });
+
+  it('truncates a very long failure message instead of dropping the report (#2515)', async () => {
+    userDataApi.reportClientFailure(
+      'unhandled_promise_rejection',
+      'sess-9',
+      'e'.repeat(5_000),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect((body.error as string).length).toBe(2_000);
+    expect((body.message as string).length).toBe(500);
   });
 });
