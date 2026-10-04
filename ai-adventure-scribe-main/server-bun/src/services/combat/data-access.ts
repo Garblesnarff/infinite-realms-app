@@ -39,6 +39,7 @@ import {
   inventoryItems,
   characterEquipment,
 } from '../../../../db/schema/index';
+import { isWeaponProficient } from '../../../../shared/weapon-proficiency';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
@@ -56,20 +57,30 @@ type EquippedWeaponCandidate = {
   properties: Record<string, unknown>;
 };
 
+/** The stored character columns that decide weapon proficiency. */
+type EquippedWeaponOwner = {
+  class: string | null;
+  race: string | null;
+  subrace: string | null;
+};
+
+/**
+ * Whether this character is proficient with this weapon.
+ *
+ * The rule itself lives in `shared/weapon-proficiency.ts`, which the character sheet reads too,
+ * so a proficiency decision cannot be one number on the sheet and another in the attack dialog
+ * (#2540, #2541). The engine has only the stored class/race/subrace names to give it; any
+ * proficiency list the character record carries is the sheet's extra input, not the engine's.
+ */
 function characterCanUseWeapon(
-  className: string | null | undefined,
+  character: EquippedWeaponOwner | undefined,
   weapon: CatalogWeapon,
 ): boolean {
-  if (weapon.subcategory?.startsWith('simple')) return true;
-  const normalized = className?.toLowerCase() ?? '';
-  if (['barbarian', 'fighter', 'paladin', 'ranger'].some((name) => normalized.includes(name)))
-    return true;
-  const weaponId = weapon.id.toLowerCase();
-  if (normalized.includes('bard') || normalized.includes('rogue')) {
-    return ['hand-crossbow', 'longsword', 'rapier', 'shortsword'].includes(weaponId);
-  }
-  if (normalized.includes('druid') && weaponId === 'scimitar') return true;
-  return normalized.includes('monk') && weaponId === 'shortsword';
+  return isWeaponProficient(weapon.id, {
+    className: character?.class,
+    raceName: character?.race,
+    subraceName: character?.subrace,
+  });
 }
 
 function parseInventoryProperties(properties: string | null): Record<string, unknown> {
@@ -92,7 +103,7 @@ function parseEquipmentProperties(properties: string | null): Record<string, unk
 
 function candidateToProfile(
   candidate: EquippedWeaponCandidate,
-  className: string | null | undefined,
+  owner: EquippedWeaponOwner | undefined,
 ): WeaponRuleProfile {
   const catalog = findCatalogWeapon(candidate.name);
   const damage = (candidate.properties.damage ?? {}) as Record<string, unknown>;
@@ -108,7 +119,7 @@ function candidateToProfile(
     magicBonus: candidate.magicBonus,
     finesse: Boolean(candidate.properties.finesse ?? catalog?.weaponProperties?.finesse),
     ranged: normalRange > 5,
-    proficient: catalog ? characterCanUseWeapon(className, catalog) : false,
+    proficient: catalog ? characterCanUseWeapon(owner, catalog) : false,
   };
 }
 
@@ -148,7 +159,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
         .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
       db.query.characters.findFirst({
         where: eq(characters.id, participant.characterId),
-        columns: { class: true },
+        columns: { class: true, race: true, subrace: true },
       }),
     ]);
     const candidates: EquippedWeaponCandidate[] = [
@@ -169,7 +180,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
     ];
     return candidates
       .filter(isEquippedWeaponCandidate)
-      .map((candidate) => candidateToProfile(candidate, character?.class));
+      .map((candidate) => candidateToProfile(candidate, character ?? undefined));
   }
 
   // Scene-grounded attacks are resolved once at seating and stored on the participant. They

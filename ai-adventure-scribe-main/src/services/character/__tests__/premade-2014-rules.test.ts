@@ -394,12 +394,12 @@ describe('sheet weapon attack bonuses add proficiency only when proficient (#251
     ]);
   });
 
-  it('The Scholar mace is +1: the engine grants every simple weapon to every class', () => {
-    // SRD 5.1 gives Wizards a short weapon list without the mace, but the engine
-    // (characterCanUseWeapon) makes every simple weapon proficient for every class.
-    // The sheet mirrors the engine so its number cannot disagree with the dialog's.
+  it('The Scholar mace is -1: the SRD gives Wizards a named list without the mace (#2541)', () => {
+    // SRD 5.1 lists daggers, darts, slings, quarterstaffs and light crossbows for Wizard and no
+    // category grant, so a mace is a plain STR attack. The engine used to grant every simple
+    // weapon to every class (#2541); both sides now read shared/weapon-proficiency.ts.
     expect(attacksFor('the-scholar', ['mace'])).toEqual([
-      expect.objectContaining({ name: 'Mace', bonus: '+1' }),
+      expect.objectContaining({ name: 'Mace', bonus: '-1' }),
     ]);
   });
 

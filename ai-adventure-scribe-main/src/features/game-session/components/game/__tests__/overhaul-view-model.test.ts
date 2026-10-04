@@ -296,9 +296,9 @@ describe('sheet weapon attack bonuses with a name-only class (#2519)', () => {
   });
 
   it('adds proficiency for a weapon the subrace data carries (High Elf longsword)', () => {
-    // The character data can carry weapon training the class list lacks; the sheet
-    // honors it. The engine does not read subrace proficiencies yet — the follow-up
-    // filed from #2519 covers teaching it the same data.
+    // The character data can carry weapon training the class list lacks. The engine reads the
+    // subrace too now (#2540): both sides read shared/weapon-proficiency.ts, which adds the SRD
+    // High Elf training (longswords, shortbows, longbows, shortswords) on top of the class list.
     const elfScholar = {
       ...scholar,
       subrace: { name: 'High Elf', weaponProficiencies: ['Longswords'] },
