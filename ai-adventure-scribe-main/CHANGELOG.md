@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.25.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.5...v0.25.6) (2026-10-04)
+
+
+### Bug Fixes
+
+* **combat:** surface why a declared entry first_action was not queued ([#2551](https://github.com/Garblesnarff/infinite-realms-production/issues/2551)) ([#2558](https://github.com/Garblesnarff/infinite-realms-production/issues/2558)) ([606d751](https://github.com/Garblesnarff/infinite-realms-production/commit/606d751564178153b28a2b53cd8ebc765eeb5f72))
+
 ## [0.25.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.4...v0.25.5) (2026-10-03)
 
 
