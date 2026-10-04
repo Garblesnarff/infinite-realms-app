@@ -29,6 +29,7 @@ import type { StarterCharacterCreatePayload } from '../starter-character-seeding
 import type { Issue1784EquipmentRow } from '@/services/issue-1784-api';
 import type { Character } from '@/types/character';
 
+import { resolveEquipmentByName } from '@/data/equipment/resolver';
 import { RightSheet } from '@/features/game-session/components/game/overhaul/RightSheet';
 import { buildCharacterSheet } from '@/features/game-session/components/game/overhaul/useOverhaulViewModel';
 import { loadCharacterWithSpells } from '@/services/load-character-with-spells';
@@ -205,6 +206,109 @@ describe('every seeded premade shows what the seeder gave it', () => {
       );
       // Every weapon row carries a real damage line, not a blank.
       expect(sheet.attacks.every((attack) => /^\d+d\d+/.test(attack.damage))).toBe(true);
+    },
+  );
+});
+
+describe('Academy of Arcane Gastronomy premades have real weapon rows', () => {
+  const expectations: Record<
+    string,
+    {
+      weaponIds: string[];
+      ac: number;
+      attacks: Array<{ name: string; bonus: string }>;
+    }
+  > = {
+    'the-apprentice': {
+      weaponIds: ['quarterstaff', 'dagger'],
+      ac: 11,
+      attacks: [
+        { name: 'Quarterstaff', bonus: '+1' },
+        { name: 'Dagger', bonus: '+3' },
+      ],
+    },
+    'the-kitchen-hand': {
+      weaponIds: ['dagger', 'shortbow', 'shortsword'],
+      ac: 14,
+      attacks: [
+        { name: 'Dagger', bonus: '+5' },
+        { name: 'Shortbow', bonus: '+5' },
+        { name: 'Shortsword', bonus: '+5' },
+      ],
+    },
+    'the-gourmand': {
+      weaponIds: ['handaxe', 'longsword', 'crossbow-light'],
+      ac: 18,
+      attacks: [
+        { name: 'Handaxe', bonus: '+5' },
+        { name: 'Longsword', bonus: '+5' },
+        { name: 'Crossbow, Light', bonus: '+3' },
+      ],
+    },
+    'the-herbalist': {
+      weaponIds: ['scimitar', 'dagger'],
+      ac: 14,
+      attacks: [
+        { name: 'Scimitar', bonus: '+3' },
+        { name: 'Dagger', bonus: '+3' },
+      ],
+    },
+    'the-sous-chef': {
+      weaponIds: ['dagger', 'crossbow-light'],
+      ac: 11,
+      attacks: [
+        { name: 'Dagger', bonus: '+3' },
+        { name: 'Crossbow, Light', bonus: '+3' },
+      ],
+    },
+  };
+
+  const academyTemplates = templates.filter(
+    (template) => template.starter_campaign_id === 'academy-of-arcane-gastronomy',
+  );
+
+  it('includes all five production Academy templates with catalog-resolvable weapons', () => {
+    expect(academyTemplates).toHaveLength(5);
+    expect(
+      academyTemplates.map(({ template_key, class: className, background }) => ({
+        template_key,
+        class: className,
+        background,
+      })),
+    ).toEqual([
+      { template_key: 'the-apprentice', class: 'Wizard', background: 'Sage' },
+      { template_key: 'the-kitchen-hand', class: 'Rogue', background: 'Urchin' },
+      { template_key: 'the-gourmand', class: 'Fighter', background: 'Folk Hero' },
+      { template_key: 'the-herbalist', class: 'Druid', background: 'Hermit' },
+      { template_key: 'the-sous-chef', class: 'Sorcerer', background: 'Entertainer' },
+    ]);
+    for (const template of academyTemplates) {
+      const expected = expectations[template.template_key];
+      const weapons = template.equipment
+        .map((name) => resolveEquipmentByName(name))
+        .filter((equipment) => equipment?.category === 'weapon');
+      expect([...new Set(weapons.map((weapon) => weapon?.id))], template.template_key).toEqual(
+        expected.weaponIds,
+      );
+    }
+  });
+
+  it.each(academyTemplates.map((template) => [template.template_key, template] as const))(
+    '%s renders its resolved weapon attack rows on the sheet',
+    async (_key, template) => {
+      const { sheet } = await loadSeeded(template);
+      const expected = expectations[template.template_key];
+
+      expect(sheet.ac, template.template_key).toBe(expected.ac);
+      expect(
+        sheet.attacks.map(({ name, bonus }) => ({ name, bonus })),
+        template.template_key,
+      ).toEqual(expected.attacks);
+      expect(sheet.attacks.every((attack) => /^\d+d\d+/.test(attack.damage))).toBe(true);
+      render(<RightSheet c={sheet} />);
+      for (const attack of expected.attacks) {
+        expect(screen.getAllByText(attack.name).length).toBeGreaterThan(0);
+      }
     },
   );
 });

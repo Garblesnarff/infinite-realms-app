@@ -248,6 +248,46 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
       { name: 'Dagger', ranged: false, reachFeet: 5 },
     ],
   },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    templateKey: 'the-apprentice',
+    weapons: [
+      { name: 'Quarterstaff', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: false, reachFeet: 5 },
+    ],
+  },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    templateKey: 'the-kitchen-hand',
+    weapons: [
+      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Shortbow', ranged: true, normalRange: 80, longRange: 320 },
+    ],
+  },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    templateKey: 'the-gourmand',
+    weapons: [
+      { name: 'Handaxe', ranged: false, reachFeet: 5 },
+      { name: 'Longsword', ranged: false, reachFeet: 5 },
+    ],
+  },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    templateKey: 'the-herbalist',
+    weapons: [
+      { name: 'Scimitar', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: false, reachFeet: 5 },
+    ],
+  },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    templateKey: 'the-sous-chef',
+    weapons: [
+      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Crossbow, light', ranged: true, normalRange: 80, longRange: 320 },
+    ],
+  },
 ];
 
 const expectedFor = (template: { starter_campaign_id: string; template_key: string }) => {
@@ -267,20 +307,21 @@ const actualProfilesFor = (equipment: string[]): WeaponRuleProfile[] => {
   const profiles = new Map<string, WeaponRuleProfile>();
   for (const name of equipment) {
     const catalog = findCatalogWeapon(name);
-    if (catalog && !profiles.has(catalog.id)) profiles.set(catalog.id, profileFor(name));
+    if (!catalog || profiles.has(catalog.id) || profiles.size >= 2) continue;
+    profiles.set(catalog.id, profileFor(name));
   }
   return [...profiles.values()];
 };
 
 describe('combat weapon option builder', () => {
-  test('offers one correctly gated attack per weapon for all 30 seeded premades', () => {
+  test('offers one correctly gated attack per weapon for all 35 seeded premades', () => {
     const templates = readSeededPremadeTemplates();
-    expect(templates).toHaveLength(30);
+    expect(templates).toHaveLength(35);
 
     for (const template of templates) {
       const expectedWeapons = expectedFor(template);
-      // The literal kit above is the independent expectation. Resolve the seed's raw equipment
-      // only to construct the actual profiles that the menu producer would receive.
+      // The literal kit above is the independent expectation. The seed equips only its first two
+      // distinct weapons; mirror that production payload boundary before building menu profiles.
       const weapons = actualProfilesFor(template.equipment);
       const options = buildCombatWeaponOptions(weapons, (weapon) => {
         const rules = resolveAttackRules({

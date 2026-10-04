@@ -3,15 +3,87 @@
  *
  * The seed inserts are parsed from the SQL (VALUES and INSERT ... SELECT forms), then the
  * 20260117 Eternal Feast equipment updates are applied, because those two rows (The Reveler,
- * The Seeker) are not what the January seed inserted. The Academy of Arcane Gastronomy
- * premades are not in any migration; their rows exist only in the production database.
+ * The Seeker) are not what the January seed inserted. The Academy of Arcane Gastronomy rows
+ * are copied from the production template shape because that campaign was seeded outside this
+ * repository; its new equipment update is then applied like the other migration updates.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const MIGRATIONS = join(__dirname, '../../../../supabase/migrations');
-const EQUIPMENT_UPDATE_MIGRATION = '20260117_update_eternal_feast_characters.sql';
+const EQUIPMENT_UPDATE_MIGRATIONS = [
+  '20260117_update_eternal_feast_characters.sql',
+  '20261003_update_academy_starter_character_templates_equipment.sql',
+];
 const JSON_COLUMNS = new Set(['ability_scores', 'personality', 'skills', 'languages', 'equipment']);
+
+const ACADEMY_TEMPLATES: SeededPremadeTemplate[] = [
+  {
+    starter_campaign_id: 'academy-of-arcane-gastronomy',
+    template_key: 'the-apprentice',
+    name: 'The Apprentice',
+    race: 'Human',
+    class: 'Wizard',
+    background: 'Sage',
+    level: 1,
+    ability_scores: { STR: 8, DEX: 12, CON: 12, INT: 16, WIS: 12, CHA: 10 },
+    skills: ['Arcana', 'History', 'Investigation', 'Insight'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    starter_campaign_id: 'academy-of-arcane-gastronomy',
+    template_key: 'the-kitchen-hand',
+    name: 'The Kitchen Hand',
+    race: 'Halfling',
+    class: 'Rogue',
+    background: 'Urchin',
+    level: 1,
+    ability_scores: { STR: 8, DEX: 16, CON: 12, INT: 12, WIS: 10, CHA: 14 },
+    skills: ['Stealth', 'Sleight of Hand', 'Acrobatics', 'Perception'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    starter_campaign_id: 'academy-of-arcane-gastronomy',
+    template_key: 'the-gourmand',
+    name: 'The Gourmand',
+    race: 'Dwarf',
+    class: 'Fighter',
+    background: 'Folk Hero',
+    level: 1,
+    ability_scores: { STR: 16, DEX: 12, CON: 16, INT: 8, WIS: 10, CHA: 10 },
+    skills: ['Athletics', 'Survival', 'Intimidation', 'Perception'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    starter_campaign_id: 'academy-of-arcane-gastronomy',
+    template_key: 'the-herbalist',
+    name: 'The Herbalist',
+    race: 'Half-Elf',
+    class: 'Druid',
+    background: 'Hermit',
+    level: 1,
+    ability_scores: { STR: 10, DEX: 12, CON: 12, INT: 12, WIS: 16, CHA: 12 },
+    skills: ['Nature', 'Medicine', 'Survival', 'Perception'],
+    languages: [],
+    equipment: [],
+  },
+  {
+    starter_campaign_id: 'academy-of-arcane-gastronomy',
+    template_key: 'the-sous-chef',
+    name: 'The Sous Chef',
+    race: 'Tiefling',
+    class: 'Sorcerer',
+    background: 'Entertainer',
+    level: 1,
+    ability_scores: { STR: 8, DEX: 12, CON: 14, INT: 10, WIS: 10, CHA: 16 },
+    skills: ['Arcana', 'Persuasion', 'Deception', 'Performance'],
+    languages: [],
+    equipment: [],
+  },
+];
 
 export type SeededPremadeTemplate = {
   name: string;
@@ -113,24 +185,26 @@ function readTemplateInserts(files: string[]): SeededPremadeTemplate[] {
 
 /** `SET ... equipment = '[...]' ... WHERE starter_campaign_id = 'x' AND template_key = 'y'`. */
 function applyEquipmentUpdates(rows: SeededPremadeTemplate[]): SeededPremadeTemplate[] {
-  const sql = readFileSync(join(MIGRATIONS, EQUIPMENT_UPDATE_MIGRATION), 'utf8');
-  const update =
-    /equipment = '((?:[^']|'')*)',[\s\S]*?WHERE starter_campaign_id = '([^']*)'\s+AND template_key = '([^']*)'/g;
-  const updates = [...sql.matchAll(update)];
-  return rows.map((row) => {
-    const found = updates.find(
-      ([, , campaign, key]) => campaign === row.starter_campaign_id && key === row.template_key,
-    );
-    return found
-      ? { ...row, equipment: JSON.parse(found[1].replace(/''/g, "'")) as string[] }
-      : row;
-  });
+  return EQUIPMENT_UPDATE_MIGRATIONS.reduce((currentRows, migration) => {
+    const sql = readFileSync(join(MIGRATIONS, migration), 'utf8');
+    const update =
+      /equipment = '((?:[^']|'')*)'\s*(?:,|(?=WHERE))[\s\S]*?WHERE starter_campaign_id = '([^']*)'\s+AND template_key = '([^']*)'/g;
+    const updates = [...sql.matchAll(update)];
+    return currentRows.map((row) => {
+      const found = updates.find(
+        ([, , campaign, key]) => campaign === row.starter_campaign_id && key === row.template_key,
+      );
+      return found
+        ? { ...row, equipment: JSON.parse(found[1].replace(/''/g, "'")) as string[] }
+        : row;
+    });
+  }, rows);
 }
 
-/** Every seeded premade, in migration order, with the January equipment updates applied. */
+/** Every seeded premade, in migration order, with the equipment updates applied. */
 export function readSeededPremadeTemplates(): SeededPremadeTemplate[] {
   const files = readdirSync(MIGRATIONS)
     .filter((name) => /seed.*character_templates.*\.sql$/.test(name))
     .sort();
-  return applyEquipmentUpdates(readTemplateInserts(files));
+  return applyEquipmentUpdates([...readTemplateInserts(files), ...ACADEMY_TEMPLATES]);
 }
