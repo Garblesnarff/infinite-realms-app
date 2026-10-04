@@ -636,6 +636,42 @@ describe('seatCombatEntry', () => {
     });
   });
 
+  it('surfaces a first-action refusal as the entry notice, with no first action (#2551)', async () => {
+    const refusal = {
+      reason: 'declared_weapon_not_equipped' as const,
+      notice:
+        'You declared an attack with the quarterstaff, but it is not on your character sheet, so your opening attack was not queued.',
+      requestedWeapon: 'quarterstaff',
+      actor: 'participant-0',
+      target: 'participant-1',
+    };
+    const { deps } = stubDeps({ deriveFirstAction: async () => refusal });
+    const outcome = await seatCombatEntry(
+      {
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        player: PLAYER,
+        combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+        sceneSpec: synthesizeSceneSpec(SESSION_ID),
+        trigger: 'player_intent',
+        detail: 'player declared an attack on Professor Emil Darkwater',
+        declaredAttack: {
+          verb: 'attack',
+          actorName: 'Professor Emil Darkwater',
+          attackSource: 'weapon',
+          weaponName: 'quarterstaff',
+          weaponStated: true,
+        },
+      },
+      deps,
+    );
+
+    expect(outcome?.entered).toBe(true);
+    expect(outcome?.firstAction).toBeUndefined();
+    expect(outcome?.firstActionRefusal).toEqual(refusal);
+    expect(outcome?.notice).toBe(refusal.notice);
+  });
+
   it('replays M4 entry through Chill Touch and resolves the immediate cast against the encounter roster', async () => {
     const order: string[] = [];
     const player = {

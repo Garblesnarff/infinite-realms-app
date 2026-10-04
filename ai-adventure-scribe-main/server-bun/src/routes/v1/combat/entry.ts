@@ -277,6 +277,9 @@ function enterResponse(
     seatingTranscript: outcome.seatingTranscript,
     ...(outcome.notice ? { notice: outcome.notice } : {}),
     ...(outcome.firstAction ? { first_action: outcome.firstAction } : {}),
+    ...(outcome.firstActionRefusal
+      ? { first_action_refusal: { reason: outcome.firstActionRefusal.reason } }
+      : {}),
   };
 }
 

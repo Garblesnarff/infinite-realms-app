@@ -395,6 +395,21 @@ export async function handleDmActionsAndTransitions(
             );
             entryFirstActionPayload = (entryPayload as any)?.first_action;
             entryFirstAction = asEntryAction(entryFirstActionPayload);
+            if (!entryFirstAction) {
+              // One structured line saying why the entry first_action is unusable, so the
+              // generic declare-action notice below is never the only evidence (#2551).
+              // Reason only — never the payload.
+              const refusalReason = (entryPayload as any)?.first_action_refusal?.reason;
+              logger.warn('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
+                reason:
+                  typeof refusalReason === 'string'
+                    ? refusalReason
+                    : entryFirstActionPresent
+                      ? 'malformed_first_action'
+                      : 'absent_first_action',
+                encounterId: enteredEncounterId,
+              });
+            }
             responseText = '';
             narrationSegments = undefined;
             result = {

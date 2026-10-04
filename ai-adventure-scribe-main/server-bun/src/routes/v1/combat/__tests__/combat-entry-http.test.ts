@@ -17,6 +17,7 @@ const seatCalls: unknown[] = [];
 let authenticated = true;
 let encounterActive = false;
 let seatError: { code: string } | null = null;
+let seatRefusal: { reason: 'declared_weapon_not_equipped'; notice: string } | null = null;
 const authenticateRequest = async () =>
   authenticated
     ? {
@@ -64,6 +65,18 @@ const seatCombatEntry = async (params: unknown) => {
     participantCount: combatState.participants.length,
     seatingTranscript: '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled).',
     combatState,
+    ...(seatRefusal
+      ? {
+          notice: seatRefusal.notice,
+          firstActionRefusal: {
+            reason: seatRefusal.reason,
+            notice: seatRefusal.notice,
+            requestedWeapon: 'quarterstaff',
+            actor: 'participant-player',
+            target: 'participant-geometrist',
+          },
+        }
+      : {}),
   } as never;
 };
 
@@ -102,6 +115,7 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     authenticated = true;
     encounterActive = false;
     seatError = null;
+    seatRefusal = null;
     seatCalls.splice(0);
   });
 
@@ -132,6 +146,27 @@ describe('POST /v1/combat/sessions/:sessionId/enter', () => {
     await request({ ...validBody(), declaredAttack });
 
     expect(seatCalls[0]).toMatchObject({ declaredAttack });
+  });
+
+  it('returns first_action_refusal and its notice when the declared weapon is not on the sheet (#2551)', async () => {
+    seatRefusal = {
+      reason: 'declared_weapon_not_equipped',
+      notice:
+        'You declared an attack with the quarterstaff, but it is not on your character sheet, so your opening attack was not queued.',
+    };
+    const declaredAttack = {
+      verb: 'attack',
+      actorName: 'Geometrist',
+      attackSource: 'weapon',
+      weaponName: 'quarterstaff',
+    };
+    const response = await request({ ...validBody(), declaredAttack });
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(201);
+    expect(body.first_action).toBeUndefined();
+    expect(body.first_action_refusal).toEqual({ reason: 'declared_weapon_not_equipped' });
+    expect(body.notice).toBe(seatRefusal.notice);
   });
 
   it('allows the server to auto-roll when the player roll is omitted', async () => {

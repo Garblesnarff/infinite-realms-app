@@ -313,6 +313,45 @@ describe('deriveCombatEntryFirstAction', () => {
     ]);
   });
 
+  it('refuses a stated weapon that is not on the sheet, with the reason in player language (#2551)', async () => {
+    const warnings: unknown[] = [];
+    const refusal = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: {
+          verb: 'attack',
+          actorName: 'Professor Emil Darkwater',
+          attackSource: 'weapon',
+          weaponName: 'quarterstaff',
+          weaponStated: true,
+        },
+      },
+      {
+        ...deps,
+        listEquippedWeaponProfiles: async () => [],
+        logger: { warn: (data: unknown) => warnings.push(data) },
+      },
+    );
+
+    expect(refusal).toEqual({
+      reason: 'declared_weapon_not_equipped',
+      notice:
+        'You declared an attack with the quarterstaff, but it is not on your character sheet, so your opening attack was not queued.',
+      requestedWeapon: 'quarterstaff',
+      actor: 'participant-player',
+      target: 'participant-professor',
+    });
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        msg: 'DECLARED_WEAPON_NOT_EQUIPPED',
+        requested: 'quarterstaff',
+        weaponStated: true,
+      }),
+    ]);
+  });
+
   it('routes a damaging cantrip through the spell action path', async () => {
     const firstAction = await deriveCombatEntryFirstAction(
       {

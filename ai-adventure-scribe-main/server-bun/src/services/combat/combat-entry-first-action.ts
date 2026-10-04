@@ -75,6 +75,25 @@ export interface CombatEntryFirstAction {
   roll_request?: CombatEntryRollRequest;
 }
 
+/**
+ * A declared opening attack the engine refused to queue, with the reason in player language.
+ * Returned instead of a bare `null` when the player named a weapon the sheet does not back:
+ * combat still seats, but the caller surfaces `notice` so the player learns why there is no
+ * opening attack instead of a generic "declare your action" (#2551).
+ */
+export interface CombatEntryFirstActionRefusal {
+  reason: 'declared_weapon_not_equipped';
+  notice: string;
+  requestedWeapon: string | null;
+  actor: string;
+  target: string;
+  /** A refusal queues no action: these stay absent so union readers can narrow on them. */
+  type?: undefined;
+  combat_action?: undefined;
+  roll_request?: undefined;
+  reach?: undefined;
+}
+
 export interface CombatEntryFirstActionState {
   encounter: { id: string };
   participants: Array<{
@@ -244,7 +263,7 @@ export async function deriveCombatEntryFirstAction(
     declaredAttack: DeclaredAttack;
   },
   injected: Partial<CombatEntryFirstActionDeps> = {},
-): Promise<CombatEntryFirstAction | null> {
+): Promise<CombatEntryFirstAction | CombatEntryFirstActionRefusal | null> {
   const deps = { ...defaultDeps, ...injected };
   const participants = params.combatState.participants as EntryParticipant[];
   const playerParticipant = findPlayer(participants, params.player);
@@ -327,6 +346,18 @@ export async function deriveCombatEntryFirstAction(
         requested: grounded.requested,
         weaponStated,
       });
+      // The player named this weapon: say so, so the entry notice can explain why the
+      // declared opening attack was not queued (#2551). An inferred name stays silent —
+      // the player never claimed it, so there is nothing to correct.
+      if (weaponStated) {
+        return {
+          reason: 'declared_weapon_not_equipped',
+          notice: `You declared an attack with the ${grounded.requested ?? params.declaredAttack.weaponName ?? 'weapon'}, but it is not on your character sheet, so your opening attack was not queued.`,
+          requestedWeapon: grounded.requested,
+          actor: playerParticipant.id,
+          target: targetParticipant.id,
+        };
+      }
       return null;
     }
   }

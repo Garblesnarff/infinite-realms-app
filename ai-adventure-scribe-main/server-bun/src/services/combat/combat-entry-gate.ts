@@ -31,7 +31,10 @@ import {
 import { ValidationError } from '../../lib/errors.js';
 import { isPlayerCharacterName } from '../../tactical/seating.js';
 
-import type { CombatEntryFirstAction } from './combat-entry-first-action.js';
+import type {
+  CombatEntryFirstAction,
+  CombatEntryFirstActionRefusal,
+} from './combat-entry-first-action.js';
 import type { DeclaredAttack } from './combat-intent-gate.js';
 import type { CombatSeatingHint, CombatSeatingReason } from '../../tactical/seating.js';
 import type { SceneSpec } from '../../tactical/types.js';
@@ -434,6 +437,7 @@ export interface SeatedCombatEntryOutcome extends CombatEntryOutcome {
   /** Kept for `/enter`; the LLM pipeline only serializes the audit fields above. */
   combatState: CombatEntryStartResult;
   firstAction?: CombatEntryFirstAction;
+  firstActionRefusal?: CombatEntryFirstActionRefusal;
 }
 
 /**
@@ -476,7 +480,7 @@ export interface CombatEntryGateDeps {
     combatState: CombatEntryStartResult;
     player: CombatEntryPlayer;
     declaredAttack: DeclaredAttack;
-  }) => Promise<CombatEntryFirstAction | null>;
+  }) => Promise<CombatEntryFirstAction | CombatEntryFirstActionRefusal | null>;
   logger: {
     info: (data: unknown) => void;
     warn: (data: unknown) => void;
@@ -632,11 +636,20 @@ export async function seatCombatEntry(
     );
 
     let firstAction: CombatEntryFirstAction | undefined;
+    let firstActionRefusal: CombatEntryFirstActionRefusal | undefined;
     if (declaredAttack && deps.deriveFirstAction) {
       try {
-        firstAction =
-          (await deps.deriveFirstAction({ sessionId, combatState, player, declaredAttack })) ??
-          undefined;
+        const derived = await deps.deriveFirstAction({
+          sessionId,
+          combatState,
+          player,
+          declaredAttack,
+        });
+        if (derived && 'reason' in derived) {
+          firstActionRefusal = derived;
+        } else {
+          firstAction = derived ?? undefined;
+        }
       } catch (error) {
         // Seating must remain available even if a malformed declaration cannot be grounded. The
         // client will show the explicit declare-action notice rather than silently ending the turn.
@@ -686,9 +699,14 @@ export async function seatCombatEntry(
       sceneSpec,
       participantCount: combatState.participants.length,
       seatingTranscript,
-      ...(firstAction?.notice ? { notice: firstAction.notice } : {}),
+      ...(firstAction?.notice
+        ? { notice: firstAction.notice }
+        : firstActionRefusal
+          ? { notice: firstActionRefusal.notice }
+          : {}),
       combatState,
       ...(firstAction ? { firstAction } : {}),
+      ...(firstActionRefusal ? { firstActionRefusal } : {}),
     };
   } catch (error) {
     deps.logger.error({

@@ -742,6 +742,180 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.result.combat_actions).toEqual([]);
   });
 
+  it('keeps the declared first_action when the player wins initiative: explicit roll, no NPC drain (#2551)', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          ...PENDING_ENTRY,
+          declaredAttack: {
+            verb: 'attack',
+            actorName: 'Vance',
+            attackSource: 'weapon',
+            weaponName: 'quarterstaff',
+          },
+        },
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    expect(requestPlayerAttackRoll).toHaveBeenCalledWith(
+      expect.objectContaining({ weaponName: 'Unarmed Strike', attackBonus: 5 }),
+    );
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [FIRST_ACTION_COMBAT_ACTION],
+        playerAttackRoll: { action: FIRST_ACTION_COMBAT_ACTION, d20: 17, autoRolled: false },
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'COMBAT_ENTRY_FIRST_ACTION_UNUSABLE',
+      expect.anything(),
+    );
+  });
+
+  it('keeps the declared first_action when the monster acts first: NPC drains, then the explicit roll (#2551)', async () => {
+    const order: string[] = [];
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+    );
+    vi.mocked(userDataApi.advanceNpcTurns).mockImplementation(async () => {
+      order.push('npc-drain');
+      return {
+        results: [],
+        currentParticipant: {
+          id: 'storyteller-1',
+          name: 'The Storyteller',
+          participantType: 'player',
+        },
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: ['⚙️ Engine: Vance misses.'],
+      } as any;
+    });
+    vi.mocked(requestPlayerAttackRoll).mockImplementation(async () => {
+      order.push('attack-roll');
+      return { d20: 17 } as any;
+    });
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
+      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+
+    await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          ...PENDING_ENTRY,
+          declaredAttack: {
+            verb: 'attack',
+            actorName: 'Vance',
+            attackSource: 'weapon',
+            weaponName: 'quarterstaff',
+          },
+        },
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    expect(order).toEqual(['npc-drain', 'attack-roll']);
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [FIRST_ACTION_COMBAT_ACTION],
+        playerAttackRoll: { action: FIRST_ACTION_COMBAT_ACTION, d20: 17, autoRolled: false },
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'COMBAT_ENTRY_FIRST_ACTION_UNUSABLE',
+      expect.anything(),
+    );
+  });
+
+  it('says why when the declared weapon is not on the sheet: server notice, generic fallback, WHY logged (#2551)', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({
+        encounter: { id: 'encounter-1' },
+        notice:
+          'You declared an attack with the quarterstaff, but it is not on your character sheet, so your opening attack was not queued.',
+        first_action_refusal: { reason: 'declared_weapon_not_equipped' },
+      }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          ...PENDING_ENTRY,
+          declaredAttack: {
+            verb: 'attack',
+            actorName: 'Vance',
+            attackSource: 'weapon',
+            weaponName: 'quarterstaff',
+          },
+        },
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    expect(outcome.localNotices).toContainEqual({
+      text: 'You declared an attack with the quarterstaff, but it is not on your character sheet, so your opening attack was not queued.',
+      persist: true,
+    });
+    expect(outcome.localNotices).toContainEqual({
+      text: 'Combat has begun. Declare your action.',
+      persist: true,
+    });
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
+      reason: 'declared_weapon_not_equipped',
+      encounterId: 'encounter-1',
+    });
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(outcome.result.combat_actions).toEqual([]);
+  });
+
+  it('logs malformed_first_action when /enter returns a first_action the client cannot use (#2551)', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({
+        encounter: { id: 'encounter-1' },
+        first_action: { type: 'attack' },
+      }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
+      reason: 'malformed_first_action',
+      encounterId: 'encounter-1',
+    });
+    expect(outcome.localNotices).toContainEqual({
+      text: 'Combat has begun. Declare your action.',
+      persist: true,
+    });
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+  });
+
   it('never runs the zero-action guard on a seated entry with no first_action (#2380)', async () => {
     // The real guard, not the null mock: `combat_transition: 'none'` no longer stops it, so the
     // handler has to. A typed attack on a seated entry owes "Declare your action", not a repair.
