@@ -513,9 +513,15 @@ export const userDataApi = {
       };
     }
   },
-  endTacticalMap: (sessionId: string, signal?: AbortSignal): Promise<Response> =>
+  endTacticalMap: (
+    sessionId: string,
+    signal?: AbortSignal,
+    combatExits?: Array<{ participant_id: string; exit: 'fled' | 'surrendered' | 'withdrew' }>,
+  ): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ combat_exits: combatExits ?? [] }),
       ...(signal ? { signal } : {}),
     }),
   applyTacticalMapAction: (

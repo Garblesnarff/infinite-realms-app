@@ -24,15 +24,24 @@
 import { and, eq } from 'drizzle-orm';
 
 import { CombatEncounterService } from './combat-encounter-service.js';
+import {
+  combatExitsOf,
+  describeCombatExit,
+  describeSceneEndRefusal,
+  evaluateSceneEnd,
+  type CombatExitDeclaration,
+} from './combat-end-guard.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { vitalStateOf, type VitalsInput } from './death-saves-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
+import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { db } from '../../../../db/client';
 import { characterStats, gameSessions } from '../../../../db/schema/index';
 import { alert } from '../../lib/alerting.js';
 import { logger } from '../../lib/logger.js';
+import { slugify, entitySlug, resolveEntityRef } from '../../tactical/identity.js';
 import { NarrativeLedgerService } from '../narrative/narrative-ledger-service.js';
 
 import type { CombatEndReason } from '../../types/combat.js';
@@ -166,7 +175,52 @@ export async function concludeEncounter(
   sessionId: string,
   userId: string,
   reason: CombatEndReason,
-): Promise<void> {
+  options: { exits?: CombatExitDeclaration[] } = {},
+): Promise<boolean> {
+  // The live-hostile guard (#2524) sits at this one choke point: every path that sets
+  // `dm_ended_scene` funnels through here, so a DM scene end can never close a fight
+  // while a hostile stands conscious and active. Only an explicit fled / surrendered /
+  // withdrew declaration accounts for a standing hostile, and it is marked as that
+  // state — never as dead. The guard itself is read-only; exits are applied only
+  // after the terminal claim below, so a concurrent conclusion leaves nothing behind.
+  let exitDecision: ReturnType<typeof evaluateSceneEnd> | null = null;
+  let exitState: Awaited<ReturnType<typeof CombatEncounterService.getCombatState>> | null = null;
+  let boardSlugOf: (participant: { id: string; name?: string | null }) => string = (participant) =>
+    slugify(participant.name ?? participant.id);
+  if (reason === 'dm_ended_scene') {
+    exitState = await CombatEncounterService.getCombatState(encounterId, userId);
+    if (exitState.encounter.status !== 'active') return true;
+    // The DM addresses participants by the board's slugs — numbered for duplicates
+    // (`goblin-2`) — never by database id, so exits resolve through the tactical map
+    // exactly as the turn-order block derives them.
+    const map = await loadActiveTacticalMap(sessionId).catch(() => null);
+    boardSlugOf = (participant: { id: string; name?: string | null }): string => {
+      const entity = map ? resolveEntityRef(map.entities, participant.id) : null;
+      return entity ? entitySlug(entity) : slugify(participant.name ?? participant.id);
+    };
+    exitDecision = evaluateSceneEnd(
+      exitState.participants as unknown as Parameters<typeof evaluateSceneEnd>[0],
+      combatExitsOf(options.exits),
+      boardSlugOf,
+    );
+    if (!exitDecision.allowed) {
+      logger.warn({
+        msg: 'COMBAT_END_REFUSED_LIVE_HOSTILES',
+        alert: true,
+        encounterId,
+        sessionId,
+        liveHostiles: exitDecision.unaccounted.map((participant) => ({
+          participantId: participant.id,
+          name: participant.name ?? null,
+          currentHp: participant.status?.currentHp ?? null,
+        })),
+      });
+      alert('combat_end_refused_live_hostiles', { sessionId, error: `encounter=${encounterId}` });
+      await recordDmTacticalFact(sessionId, describeSceneEndRefusal(exitDecision.unaccounted));
+      return false;
+    }
+  }
+
   // Claim the terminal transition before writing any side effects. The conditional update is
   // the idempotency boundary: a post-conclusion retry returns here without another ledger fact,
   // tactical instruction, telemetry event, teardown, or publish.
@@ -204,7 +258,44 @@ export async function concludeEncounter(
       sessionId,
       reason,
     });
-    return;
+    return true;
+  }
+
+  if (exitDecision?.allowed && exitState) {
+    for (const declaration of exitDecision.exits) {
+      const participant = exitState.participants.find(
+        (candidate) =>
+          candidate.id === declaration.participant_id ||
+          boardSlugOf(candidate) === declaration.participant_id,
+      );
+      if (!participant) continue;
+      await CombatEncounterService.markParticipantExited(encounterId, participant.id);
+      await recordDmTacticalFact(
+        sessionId,
+        describeCombatExit(participant.name || participant.id, declaration.exit),
+      );
+      try {
+        await NarrativeLedgerService.assertFact(
+          {
+            sessionId,
+            subjectType: 'npc',
+            subjectName: participant.name || participant.id,
+            predicate: 'status',
+            value: { state: declaration.exit, encounterId },
+            knownBy: ['dm'],
+            source: 'engine',
+          },
+          userId,
+        );
+      } catch (error) {
+        logger.warn({
+          msg: 'NARRATIVE_FACT_WRITE_FAILED',
+          encounterId,
+          sessionId,
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    }
   }
 
   await recordCombatNarrativeFacts(encounterId, sessionId, userId, reason);
@@ -231,4 +322,5 @@ export async function concludeEncounter(
     trackCombatEvent('abandonment', { encounterId, sessionId, reason });
   }
   await publishCombatState(encounterId, userId, 'combat_ended');
+  return true;
 }

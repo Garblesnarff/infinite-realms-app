@@ -681,6 +681,23 @@ export class CombatEncounterService {
   }
 
   /**
+   * Mark a participant as having left the fight without dying (#2524): the row leaves
+   * the turn order (`isActive` false) while HP and consciousness stay exactly as the
+   * engine last wrote them, so an exit can never read back as a kill.
+   */
+  static async markParticipantExited(encounterId: string, participantId: string): Promise<void> {
+    await db
+      .update(combatParticipants)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(combatParticipants.encounterId, encounterId),
+          eq(combatParticipants.id, participantId),
+        ),
+      );
+  }
+
+  /**
    * Get complete combat state
    * @param encounterId - Combat encounter ID
    * @returns Complete combat state with participants and turn order

@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
+import { combatLogger } from '../../lib/logger.js';
 import { assignEntitySlugs } from '../identity.js';
 import {
   buildLegacyAttackHintPrompt,
@@ -260,5 +261,115 @@ describe('a spell attack is the spell it names, never a weapon attack (#2233)', 
       true,
     );
     expect(result).toBeNull();
+  });
+});
+
+describe('an attack that produced no engine action says why (#2563, run D5)', () => {
+  // Run D5 round 2: the DM declared the Scholar's quarterstaff attack on
+  // Light-Eater Swarm 1 in `combat_actions` AND repeated it as an attack roll
+  // request. The log read `translations: [], untranslated: []` — indistinguishable
+  // from a translation that failed outright. Every skip now carries its reason.
+  const d5Board = (): TacticalMap => {
+    const entities = [
+      entity('the-scholar', 'The Scholar', 4, 2, 'pc'),
+      entity('light-eater-swarm-1', 'Light-Eater Swarm', 3, 3, 'monster'),
+      entity('light-eater-swarm-2', 'Light-Eater Swarm', 5, 3, 'monster'),
+    ];
+    assignEntitySlugs(entities);
+    return { ...board(), entities, round: 2 };
+  };
+
+  const d5Prompt = (): string =>
+    `<tactical_context>\n${buildTacticalPrompt(d5Board(), 'the-scholar')}\n</tactical_context>\n` +
+    `<immutable_game_state>{"isInCombat":true,"encounterId":"enc-d5"}</immutable_game_state>`;
+
+  test('an attack already declared in combat_actions is skipped as already_declared, never duplicated', () => {
+    const declared = {
+      actor_id: 'the-scholar',
+      action_type: 'attack' as const,
+      target_ids: ['light-eater-swarm-1'],
+      weapon_id: 'quarterstaff',
+      spell_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    };
+    const result = translateLegacyAttackRolls(
+      response({
+        combat_actions: [declared],
+        roll_requests: [
+          attackRequest('Attack roll with quarterstaff against Light-Eater Swarm 1'),
+        ],
+      }),
+      d5Prompt(),
+      true,
+    )!;
+    expect(result.translations).toEqual([]);
+    expect(result.skipped).toEqual([
+      { reason: 'already_declared', actorId: 'the-scholar', targetId: 'light-eater-swarm-1' },
+    ]);
+    // The declared attack stands exactly once, and the duplicate request is consumed.
+    expect(result.response.combat_actions).toEqual([declared]);
+    expect(result.response.roll_requests).toEqual([]);
+  });
+
+  test('a purpose naming nobody on the board is skipped as pair_unresolved beside a translated attack', () => {
+    const result = translateLegacyAttackRolls(
+      response({
+        roll_requests: [
+          attackRequest('Attack roll with quarterstaff against Light-Eater Swarm 1'),
+          attackRequest('Attack roll against the Unseen Phantom'),
+        ],
+      }),
+      d5Prompt(),
+      true,
+    )!;
+    expect(result.translations).toHaveLength(1);
+    expect(result.skipped).toEqual([{ reason: 'pair_unresolved' }]);
+  });
+});
+
+describe('the not-translated lines carry the encounter id (#2563 review)', () => {
+  const warnings: Array<Record<string, unknown>> = [];
+  const warnSpy = spyOn(combatLogger, 'warn').mockImplementation(((
+    entry: Record<string, unknown>,
+  ) => {
+    warnings.push(entry);
+  }) as typeof combatLogger.warn);
+  afterAll(() => warnSpy.mockRestore());
+
+  test('a skipped attack logs DM_ATTACK_NOT_TRANSLATED with reason, ids and encounterId', () => {
+    warnings.length = 0;
+    translateLegacyAttackRolls(
+      response({
+        roll_requests: [attackRequest('Attack roll against the Unseen Phantom')],
+      }),
+      promptFor('the-seeker', 'enc-log-skip'),
+      true,
+    );
+    const line = warnings.find((entry) => entry.msg === 'DM_ATTACK_NOT_TRANSLATED');
+    expect(line).toMatchObject({
+      reason: 'pair_unresolved',
+      encounterId: 'enc-log-skip',
+    });
+  });
+
+  test('the no-digest line carries the encounter id too', () => {
+    warnings.length = 0;
+    const prompt =
+      `<immutable_game_state>{"isInCombat":true,"encounterId":"enc-log-nodigest"}</immutable_game_state>`;
+    const result = translateLegacyAttackRolls(
+      response({
+        roll_requests: [attackRequest('Attack roll with quarterstaff against Light-Eater Swarm 1')],
+      }),
+      prompt,
+      true,
+    );
+    expect(result).toBeNull();
+    const line = warnings.find((entry) => entry.msg === 'DM_ATTACK_NOT_TRANSLATED');
+    expect(line).toMatchObject({
+      reason: 'no_digest',
+      encounterId: 'enc-log-nodigest',
+      requestCount: 1,
+    });
   });
 });

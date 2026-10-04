@@ -427,6 +427,9 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     map_actions: structuredResponse?.map_actions || [],
     handout_actions: structuredResponse?.handout_actions || [],
     combat_actions: structuredResponse?.combat_actions || [],
+    combat_exits: Array.isArray(structuredResponse?.combat_exits)
+      ? structuredResponse.combat_exits
+      : undefined,
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
       isCombat:

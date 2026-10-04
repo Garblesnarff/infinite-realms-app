@@ -125,6 +125,8 @@ export interface AIResponse {
   map_actions?: DMMapAction[];
   handout_actions?: DMHandoutAction[];
   combat_actions?: DMCombatAction[];
+  /** #2563: DM-declared non-lethal combat exits, forwarded to the tactical-map end route. */
+  combat_exits?: Array<{ participant_id: string; exit: 'fled' | 'surrendered' | 'withdrew' }>;
   combatants?: unknown[];
   combatDetection?: {
     isCombat: boolean;

@@ -161,6 +161,15 @@ export type DMResponse = {
   handout_actions: DMHandoutAction[];
   combatants: Array<{ monster_id: string; name: string; count: number }>;
   combat_actions: DMCombatAction[];
+  /**
+   * Non-lethal exits declared alongside `combat_transition: 'end'` (#2524): a hostile
+   * still standing may leave the fight only as fled, surrendered or withdrew — never
+   * as dead. Absent on envelopes that do not end combat.
+   */
+  combat_exits?: Array<{
+    participant_id: string;
+    exit: 'fled' | 'surrendered' | 'withdrew';
+  }>;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -393,7 +402,22 @@ export function createDmResponseSchema(
   };
 }
 
-export const dmResponseSchema = createDmResponseSchema();
+/** #2524: non-lethal exits the DM may declare with `combat_transition: 'end'`. Optional —
+ *  a legal field in structured output, never a required one. */
+const combatExitsProperty = {
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      participant_id: { type: 'string' },
+      exit: { type: 'string', enum: ['fled', 'surrendered', 'withdrew'] },
+    },
+    required: ['participant_id', 'exit'],
+  },
+} as const;
+
+export const dmResponseSchema = createDmResponseSchema({ combat_exits: combatExitsProperty });
 
 const isPoint = (value: unknown): value is Point =>
   !!value &&

@@ -61,6 +61,19 @@ export type LegacyAttackTranslationResult = {
   translations: LegacyAttackTranslation[];
   /** Attack roll requests the digest could not resolve into a pair; left where they were. */
   untranslated: string[];
+  /**
+   * Why each attack-shaped request was not turned into an engine action (#2563): a
+   * reason code and ids only, never the purpose prose, so a `translations: []` log line
+   * can say which rung of the ladder let go.
+   */
+  skipped: LegacyAttackSkip[];
+};
+
+/** Why an attack-shaped roll request produced no engine action. */
+export type LegacyAttackSkip = {
+  reason: 'pair_unresolved' | 'purpose_not_an_attack' | 'already_declared';
+  actorId?: string;
+  targetId?: string;
 };
 
 const isAttackRequest = (request: RollRequest): boolean => request.type === 'attack';
@@ -127,13 +140,40 @@ export function translateLegacyAttackRolls(
   if (!combatActive) return null;
   const attacks = (response.roll_requests ?? []).filter(isAttackRequest);
   if (!attacks.length) return null;
+  // The encounter id rides on every not-translated line so a grep lands on the fight
+  // (#2563); ids only, no bodies — the same discipline as the skip reasons.
+  const encounterField = ((): { encounterId?: string } => {
+    const block = /<immutable_game_state>([\s\S]*?)<\/immutable_game_state>/.exec(prompt)?.[1];
+    if (!block) return {};
+    try {
+      const state: unknown = JSON.parse(block);
+      const encounterId = (state as { encounterId?: unknown } | null)?.encounterId;
+      return typeof encounterId === 'string' && encounterId ? { encounterId } : {};
+    } catch {
+      return {};
+    }
+  })();
   const digest: TacticalDigest | null = parseTacticalDigest(prompt);
   // Without geometry there is no actor, no target, and nothing to synthesize. The response is
   // returned untouched so the existing contracts still see the request they were built for.
-  if (!digest) return null;
+  if (!digest) {
+    // The silence here is what #2563 removes: an attack-shaped request arrived during
+    // active combat and produced no engine action, and the log said nothing at all.
+    combatLogger.warn(
+      {
+        msg: 'DM_ATTACK_NOT_TRANSLATED',
+        reason: 'no_digest',
+        ...encounterField,
+        requestCount: attacks.length,
+      },
+      '[tactical] attack-shaped roll requests arrived with no tactical digest',
+    );
+    return null;
+  }
 
   const translations: LegacyAttackTranslation[] = [];
   const untranslated: string[] = [];
+  const skipped: LegacyAttackSkip[] = [];
   const translated: DMTargetedCombatAction[] = [];
   const consumed = new Set<RollRequest>();
 
@@ -141,18 +181,44 @@ export function translateLegacyAttackRolls(
     const pair = resolvePairFromText(digest, request.purpose);
     if (!pair || pair.actor.id === pair.target.id) {
       untranslated.push(request.purpose);
+      skipped.push({ reason: 'pair_unresolved' });
       continue;
     }
     const action = actionFromPurpose(request.purpose, pair.actor.id, pair.target.id);
     if (!action) {
       untranslated.push(request.purpose);
+      skipped.push({
+        reason: 'purpose_not_an_attack',
+        actorId: pair.actor.id,
+        targetId: pair.target.id,
+      });
       continue;
     }
     consumed.add(request);
-    if (alreadyDeclared(response, pair.actor.id, pair.target.id)) continue;
+    if (alreadyDeclared(response, pair.actor.id, pair.target.id)) {
+      // The model declared this attack in `combat_actions` AND repeated it as a roll
+      // request. The action stands; the duplicate is dropped — and said so, because
+      // run D5's log read `translations: []` with no way to tell this apart from a
+      // translation that failed outright.
+      skipped.push({
+        reason: 'already_declared',
+        actorId: pair.actor.id,
+        targetId: pair.target.id,
+      });
+      continue;
+    }
     translated.push(action);
     translations.push({ purpose: request.purpose, action, fallbacks: pair.fallbacks });
   }
+
+  // One structured line per skipped request: reason code and ids, no bodies (#2563).
+  // Logged before the nothing-consumed return so a response whose every attack fell
+  // through still says why.
+  for (const skip of skipped)
+    combatLogger.warn(
+      { msg: 'DM_ATTACK_NOT_TRANSLATED', ...skip, ...encounterField, activeId: digest.activeId },
+      '[tactical] an attack-shaped roll_request produced no engine action',
+    );
 
   if (!consumed.size) return null;
 
@@ -175,6 +241,7 @@ export function translateLegacyAttackRolls(
     },
     translations,
     untranslated,
+    skipped,
   };
 }
 

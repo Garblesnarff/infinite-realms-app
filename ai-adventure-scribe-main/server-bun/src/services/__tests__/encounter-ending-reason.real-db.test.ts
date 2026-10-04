@@ -260,23 +260,65 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     }
   });
 
-  test('a DM scene transition ends the fight with a reason and a narratable fact', async () => {
-    // The exact run-18 path: `combat_transition: "end"` while a hostile is still standing.
-    await concludeEncounter(encounterId, sessionId, userId, 'dm_ended_scene');
+  test('a DM scene transition is refused while a hostile still stands (#2524)', async () => {
+    // Run D1's shape: `combat_transition: "end"` while the monster is conscious at 2/11.
+    // The engine owns death, so the scene cannot end and the DM is told why.
+    const concluded = await concludeEncounter(encounterId, sessionId, userId, 'dm_ended_scene');
 
+    expect(concluded).toBe(false);
+    const row = await encounterRow();
+    expect(row.status).toBe('active');
+    expect(row.endedReason).toBeNull();
+
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toContain('COMBAT HAS NOT ENDED');
+    expect(facts[0]).toContain('Ending Golem');
+  });
+
+  test('a fled exit addressed by board slug marks goblin-2 inactive, not dead (#2524)', async () => {
+    // The DM declares exits by the slug the board shows, never the database id.
+    const concluded = await concludeEncounter(encounterId, sessionId, userId, 'dm_ended_scene', {
+      exits: [{ participant_id: 'ending-golem', exit: 'fled' }],
+    });
+    expect(concluded).toBe(true);
+    const [monster] = await db
+      .select({ isActive: combatParticipants.isActive })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, monsterId));
+    expect(monster.isActive).toBe(false);
+    const [status] = await db
+      .select({ currentHp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, monsterId));
+    expect(status.currentHp).toBe(2);
+  });
+
+  test('a declared fled exit ends the scene and marks the hostile fled, never dead (#2524)', async () => {
+    const concluded = await concludeEncounter(encounterId, sessionId, userId, 'dm_ended_scene', {
+      exits: [{ participant_id: monsterId, exit: 'fled' }],
+    });
+
+    expect(concluded).toBe(true);
     const row = await encounterRow();
     expect(row.status).toBe('completed');
     expect(row.endedReason).toBe('dm_ended_scene');
-    expect(row.endedAt).not.toBeNull();
 
-    // The fact survives the board teardown that happened inside the same call. That ordering
-    // is the whole trick: `recordDmTacticalFact` writes onto the session's latest map row, and
-    // the teardown is what stops that row being the active one.
+    const [monster] = await db
+      .select({ isActive: combatParticipants.isActive })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, monsterId));
+    expect(monster.isActive).toBe(false);
+    const [status] = await db
+      .select({ currentHp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, monsterId));
+    // Still on the 2 HP the engine last wrote: an exit is not a kill.
+    expect(status.currentHp).toBe(2);
+
     const facts = await consumeDmTacticalFacts(sessionId);
-    expect(facts).toHaveLength(1);
-    expect(facts[0]).toBe(describeCombatEnd('dm_ended_scene'));
-    // It must not claim a victory: nobody was defeated, and the monster is still on 2 HP.
-    expect(facts[0]).toContain('Nobody was defeated');
+    expect(facts.some((fact) => fact.includes('has fled the fight'))).toBe(true);
+    expect(facts.some((fact) => fact.includes('NOT dead'))).toBe(true);
   });
 
   test('a victory ends the fight with its own reason and its own sentence', async () => {

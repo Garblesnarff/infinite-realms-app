@@ -162,6 +162,25 @@ describe('the turn order block', () => {
     map = null;
     expect(await buildTurnOrderBlock(SESSION_ID, 'user_owner')).toBe('');
   });
+
+  it('marks roles from engine truth so the end guard can tell friend from foe (#2563)', async () => {
+    afterSeekersTurn();
+    (state.participants as Array<Record<string, unknown>>).push(
+      participant('99999999-8888-4777-8666-555555555555', 'Mira Thane', 2, {
+        participantType: 'npc',
+        disposition: 'ally',
+      }),
+    );
+    (map as { entities: unknown[] }).entities.push(
+      entity('99999999-8888-4777-8666-555555555555', 'Mira Thane', 5),
+    );
+    assignEntitySlugs((map as { entities: MapEntity[] }).entities);
+    const lines = (await buildTurnOrderBlock(SESSION_ID, 'user_owner')).split('\n');
+
+    expect(lines.find((line) => line.includes('the-seeker'))).toContain('role:player');
+    expect(lines.find((line) => line.includes('sentient-glaze'))).toContain('role:hostile');
+    expect(lines.find((line) => line.includes('mira-thane'))).toContain('role:ally');
+  });
 });
 
 describe('current-turn label (#2306)', () => {

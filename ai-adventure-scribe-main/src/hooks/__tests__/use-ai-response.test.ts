@@ -856,7 +856,8 @@ describe('useAIResponse', () => {
       mockSessionId,
     );
 
-    expect(userDataApi.endTacticalMap).toHaveBeenCalledWith(mockSessionId);
+    // #2563: the call now also carries the abort signal and declared exits slots.
+    expect(userDataApi.endTacticalMap).toHaveBeenCalledWith(mockSessionId, undefined, undefined);
   });
 
   it('sends DM map actions as one server batch and never retries client-side', async () => {

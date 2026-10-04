@@ -464,23 +464,49 @@ export function createTacticalMapRoutes({
        * through `concludeEncounter` like every other ending, and the reason it names says
        * truthfully that combatants were still up.
        */
-      .post('/:id/tactical-map/end', async ({ params, user, set }) => {
-        const access = await sessionOwnership(params.id, user.userId);
-        if (!access.success) {
-          set.status = access.error!.status;
-          return { error: access.error!.message };
-        }
-        const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
-        // No encounter to conclude means the map is the only thing left to remove. With one, the
-        // teardown belongs to `concludeEncounter` — which must write the DM's fact onto the board
-        // before destroying it.
-        if (!encounter) {
-          await destroyTacticalCombatMap(params.id);
-          return { ok: true, encounterEnded: false };
-        }
-        await concludeEncounter(encounter.id, params.id, user.userId, 'dm_ended_scene');
-        return { ok: true, encounterEnded: true };
-      })
+      .post(
+        '/:id/tactical-map/end',
+        async ({ params, user, set, body }) => {
+          const access = await sessionOwnership(params.id, user.userId);
+          if (!access.success) {
+            set.status = access.error!.status;
+            return { error: access.error!.message };
+          }
+          const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
+          // No encounter to conclude means the map is the only thing left to remove. With one, the
+          // teardown belongs to `concludeEncounter` — which must write the DM's fact onto the board
+          // before destroying it.
+          if (!encounter) {
+            await destroyTacticalCombatMap(params.id);
+            return { ok: true, encounterEnded: false };
+          }
+          const concluded = await concludeEncounter(encounter.id, params.id, user.userId, 'dm_ended_scene', {
+            exits: body?.combat_exits,
+          });
+          if (!concluded) {
+            // #2524: a hostile is still standing and no fled/surrendered/withdrew exit
+            // accounts for it. Combat stays active; the engine notice is already on
+            // the DM's next context saying why.
+            set.status = 409;
+            return { error: 'combat_end_refused_live_hostiles', encounterEnded: false };
+          }
+          return { ok: true, encounterEnded: true };
+        },
+        {
+          body: t.Optional(
+            t.Object({
+              combat_exits: t.Optional(
+                t.Array(
+                  t.Object({
+                    participant_id: t.String(),
+                    exit: t.Union([t.Literal('fled'), t.Literal('surrendered'), t.Literal('withdrew')]),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        },
+      )
   );
 }
 

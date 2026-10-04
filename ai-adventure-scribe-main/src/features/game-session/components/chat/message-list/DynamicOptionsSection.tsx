@@ -7,8 +7,12 @@ import { useCombat } from '@/contexts/CombatContext';
 import { getAuthHeaders } from '@/services/auth/TokenService';
 import {
   executeAuthoritativeCombatIntent,
+  executeStructuredCombatActionWithBoundary,
   type ClientCombatIntent,
+  type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
+import { userDataApi } from '@/services/user-data-api';
 import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
@@ -137,12 +141,53 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           );
           await refreshCombatState();
         } else if (action.type === 'attack' && action.targetIds?.[0]) {
-          const targetId = action.targetIds[0];
-          const target = encounter.participants.find((participant) => participant.id === targetId);
-          const label = action.label.replace(/\s+\(move closer first\)$/i, '');
-          await onOptionSelect(
-            `I ${label.replace(/^Attack/, 'attack')} against ${target?.name ?? targetId}.`,
+          // #2563: an attack option runs the declare → dialog → commit pipeline
+          // itself. It used to send "I attack with … against …" as chat text, which
+          // made the DM the first to see the attack: in run D5 round 2 the DM's
+          // envelope carried the swing but nothing ever rolled it — no dialog, no
+          // intent — and the fight closed on narration. The engine legal-action chip
+          // already knows the actor, weapon and target, so it declares directly.
+          const structuredAction: StructuredCombatAction = {
+            actor_id: actorId,
+            action_type: 'attack',
+            target_ids: [action.targetIds[0]],
+            weapon_id: action.weaponId ?? null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          };
+          const actor = encounter.participants.find((participant) => participant.id === actorId);
+          const die = await askPlayerForAttackDie({
+            encounterId: encounter.id,
+            action: structuredAction,
+            actorLabel: actor?.name ?? 'You',
+          });
+          const execution = await executeStructuredCombatActionWithBoundary(
+            encounter.id,
+            structuredAction,
+            die.d20,
+            'action_bar',
           );
+          const movementOnly =
+            die.movementOnly ||
+            (execution.result as { resolvedAs?: string } | null)?.resolvedAs ===
+              'movement_only';
+          // A resolved attack settles the turn, the same settlement the DM pipeline
+          // performs. A movement-only approach spent no Action, so the turn stays
+          // open and the refreshed menu offers the attack again — now in reach.
+          if (!movementOnly && execution.boundary === null) {
+            const turn = (await executeAuthoritativeCombatIntent(encounter.id, {
+              type: 'end_turn',
+              actorId,
+            })) as { currentParticipant?: { id?: string } | null } | null;
+            if (encounter.sessionId) {
+              await userDataApi.advanceNpcTurns(
+                encounter.sessionId,
+                turn?.currentParticipant?.id ?? undefined,
+              );
+            }
+          }
+          await refreshCombatState();
         } else {
           await onOptionSelect(action.label);
         }

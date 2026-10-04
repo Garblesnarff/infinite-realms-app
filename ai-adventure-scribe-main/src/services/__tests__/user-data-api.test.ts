@@ -69,7 +69,11 @@ describe('userDataApi tactical transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       'http://localhost:8888/v1/sessions/session%20id/tactical-map/end',
-      { method: 'POST', headers: { Authorization: 'Bearer access-token' } },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
+        body: JSON.stringify({ combat_exits: [] }),
+      },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,

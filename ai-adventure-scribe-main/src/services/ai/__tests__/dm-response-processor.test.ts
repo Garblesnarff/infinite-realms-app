@@ -611,6 +611,34 @@ describe('processDMResponse', () => {
       expect(result.text).toBe('The goblin reaches for its blade.');
     });
 
+    it('carries DM-declared combat_exits through to the response (#2563)', async () => {
+      const rawResponse = JSON.stringify({
+        text: 'The goblin turns and runs.',
+        narration_segments: [],
+        roll_requests: [],
+        combat_transition: 'end',
+        combatants: [],
+        combat_actions: [],
+        combat_exits: [{ participant_id: 'goblin-1', exit: 'fled' }],
+      });
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+      expect(result.combat_exits).toEqual([{ participant_id: 'goblin-1', exit: 'fled' }]);
+    });
+
+    it('drops a malformed combat_exits value instead of forwarding it (#2563)', async () => {
+      const rawResponse = JSON.stringify({
+        text: 'The goblin turns and runs.',
+        narration_segments: [],
+        roll_requests: [],
+        combat_transition: 'end',
+        combatants: [],
+        combat_actions: [],
+        combat_exits: 'fled',
+      });
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+      expect(result.combat_exits).toBeUndefined();
+    });
+
     it('resolves SRD enemy stats before the deferred combat response returns', async () => {
       const result = await processDMResponse({
         ...defaultParams,

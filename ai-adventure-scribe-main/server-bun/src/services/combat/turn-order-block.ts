@@ -51,6 +51,8 @@ export async function buildTurnOrderBlock(sessionId: string, userId: string): Pr
     const lines = ordered.map((participant, index) => {
       const hydrated = participant as unknown as VitalsInput & {
         name: string;
+        participantType?: string;
+        disposition?: string | null;
         actionUsed?: boolean | null;
         bonusActionUsed?: boolean | null;
       };
@@ -72,10 +74,20 @@ export async function buildTurnOrderBlock(sessionId: string, userId: string): Pr
       const isCurrent = currentId !== null && participant.id === currentId;
       const action = hydrated.actionUsed ? 'action:SPENT' : 'action:available';
       const bonus = hydrated.bonusActionUsed ? ' bonus:SPENT' : '';
+      // The end-of-combat guard reads this block at generation time (#2563): without a
+      // role marker it cannot tell the player or an ally from a hostile, and a standing
+      // ally would block every DM scene end. The role is engine truth (participant type
+      // and authored disposition), stated here rather than inferred from prose.
+      const role =
+        hydrated.participantType === 'player'
+          ? 'role:player'
+          : /ally|friend/i.test(hydrated.disposition ?? '')
+            ? 'role:ally'
+            : 'role:hostile';
       return (
         `${isCurrent ? '→' : ' '} ${index + 1}. ${slug} | ${participant.name} | ` +
         `${currentHp}/${participant.maxHp} HP | ${action}${bonus}` +
-        `${isCurrent ? ' | CURRENT TURN' : ''}${detail}`
+        `${isCurrent ? ' | CURRENT TURN' : ''}${detail} | ${role}`
       );
     });
     if (!lines.length) return '';

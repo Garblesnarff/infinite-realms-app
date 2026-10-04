@@ -475,6 +475,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         responseSchema,
       });
       result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
+      const factSessionId = sessionId ?? combatEntry?.sessionId;
       result = await enforceCombatTransitionContract({
         result,
         prompt: llmPrompt,
@@ -484,6 +485,18 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         history,
         provider,
         responseSchema,
+        // #2563: a scene end deferred at generation time writes the refusal fact the
+        // end route writes on a 409, so the DM's next read knows the fight is not over.
+        // Loaded lazily: the tactical-action graph reaches the db client, and this
+        // route's module graph must stay loadable without DATABASE_URL.
+        recordTacticalFact: factSessionId
+          ? async (fact) => {
+              const { recordDmTacticalFact } = await import(
+                '../../services/combat/tactical-action-service.js'
+              );
+              await recordDmTacticalFact(factSessionId, fact);
+            }
+          : undefined,
       });
       result = stripUntargetedInitiativeRollRequests(result, declaredAttack);
       // #1907 PR1: deterministic entry detection. It runs after contract enforcement so it

@@ -477,7 +477,8 @@ describe('a combat turn the engine had no line for (#2342)', () => {
         result: { text: FABRICATED, combat_actions: [], combat_transition: 'end' },
       });
 
-      expect(userDataApi.endTacticalMap).toHaveBeenCalledWith('session-m8');
+      // #2524: the end call now carries the abort signal and any declared exits.
+      expect(userDataApi.endTacticalMap).toHaveBeenCalledWith('session-m8', undefined, undefined);
       expect(noteCalls()).toEqual([]);
       expect(outcome.responseText).toContain('Your spell connects');
     });

@@ -194,6 +194,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
   let response: any;
   let refuse: boolean;
   let requests: any[];
+  let proposals: any[];
   let advances: number;
   let round: number;
   let extraAction: { type: string; label: string } | undefined;
@@ -211,6 +212,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     refuse = false;
     response = undefined;
     requests = [];
+    proposals = [];
     advances = 0;
     round = 1;
     extraAction = undefined;
@@ -290,7 +292,8 @@ describe('D3: combat options use the real response hook (#2547)', () => {
             ],
           });
         if (url.endsWith('/status')) return reply({ encounter: { version: 3 } });
-        if (body.phase === 'propose')
+        if (body.phase === 'propose') {
+          proposals.push(body);
           return reply({
             proposal: {
               legal: true,
@@ -303,6 +306,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
               disadvantage: false,
             },
           });
+        }
         requests.push(body);
         if (body.intent?.type === 'move') {
           moveDistanceFeet = Math.max(0, moveDistanceFeet - 30);
@@ -392,35 +396,52 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     );
   }
 
-  it('rolls the selected quarterstaff attack, prints the miss and advances the turn', async () => {
+  it('rolls the selected quarterstaff attack through declare → dialog → commit and advances the turn', async () => {
+    // #2563 changed expectation: the chip used to send "I attack with Quarterstaff …"
+    // as chat text and let the DM roll it. It now declares the attack itself (propose,
+    // d20 dialog, commit) and settles the turn — the DM is never asked, so there is no
+    // DM response carrying the miss line; the engine result is the board's refresh.
     render(<Game />);
     fireEvent.click(await screen.findByRole('button', { name: /Attack with Quarterstaff/ }));
-    await waitFor(() => expect(response?.text).toContain('8 + 1 = 9 vs AC 13'));
-    expect(response.text).toContain('MISS');
-    expect(response.text).not.toContain('undefined');
+    await waitFor(() => expect(advances).toBe(1));
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(response).toBeUndefined();
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        source: 'dm',
+        phase: 'propose',
+        intent: expect.objectContaining({
+          type: 'attack',
+          actorId: 'scholar-1',
+          targetId: 'emil-1',
+          weaponId: 'quarterstaff',
+        }),
+      }),
+    ]);
     expect(requests.filter((r) => r.intent?.type === 'attack')).toEqual([
       expect.objectContaining({
         source: 'dm',
-        origin: 'typed',
+        origin: 'action_bar',
         intent: expect.objectContaining({ d20: 8 }),
       }),
     ]);
     expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true);
-    expect(advances).toBe(1);
     expect(round).toBe(2);
   });
 
-  it('strips the move hint before the declared attack reaches the DM and engine', async () => {
+  it('declares a hinted attack directly — the move hint never reaches the DM or the engine', async () => {
+    // #2563 changed expectation: the hinted label used to travel as chat text (with the
+    // hint stripped) for the DM to declare. The chip now declares the same attack
+    // itself, so the hint cannot leak anywhere: no DM call is made at all.
     hintedAttack = true;
     render(<Game />);
     fireEvent.click(
       await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
     );
-    await waitFor(() => expect(response?.text).toContain('8 + 1 = 9 vs AC 13'));
-    expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).not.toContain(
-      'move closer first',
-    );
-    expect(response.text).not.toContain('move closer first');
+    await waitFor(() => expect(advances).toBe(1));
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(response).toBeUndefined();
+    expect(JSON.stringify([...proposals, ...requests])).not.toContain('move closer first');
     expect(requests.filter((request) => request.intent?.type === 'attack')).toHaveLength(1);
     expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(true);
   });
@@ -464,29 +485,41 @@ describe('D3: combat options use the real response hook (#2547)', () => {
   });
 
   it('keeps Action unused and the menu live after a movement-only hinted attack', async () => {
+    // #2563 changed expectation: no DM turn narrates "no attack was rolled" any more;
+    // the engine's movement-only answer simply leaves the turn open, and the refreshed
+    // menu offers the attack again — now in reach.
     hintedAttack = true;
     movementOnlyAttack = true;
     render(<Game />);
     fireEvent.click(
       await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
     );
-    await waitFor(() => expect(response?.text).toContain('no attack was rolled'));
-    expect(response.text).not.toContain('move closer first');
+    await waitFor(() =>
+      expect(requests.filter((request) => request.intent?.type === 'attack')).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(response).toBeUndefined();
     expect(spent).toBe(false);
     expect(advances).toBe(0);
     expect(round).toBe(1);
-    expect(
-      await screen.findByRole('button', { name: /Attack with Quarterstaff \(move closer first\)/ }),
-    ).toBeInTheDocument();
     expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(false);
   });
 
   it('explains a refused rolled attack and leaves End turn usable', async () => {
+    // #2563 changed expectation: the refusal used to come back as DM prose. The commit
+    // refusal now surfaces in the menu's own alert, and the turn is still the player's.
     refuse = true;
     render(<Game />);
     fireEvent.click(await screen.findByRole('button', { name: /Attack with Quarterstaff/ }));
-    await waitFor(() => expect(response?.text).toContain('Action already used this turn'));
-    expect(response.text).not.toContain('undefined');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Action already used this turn');
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(response).toBeUndefined();
     const end = screen.getByRole('button', { name: /End turn/ });
     expect(end).toBeEnabled();
     fireEvent.click(end);

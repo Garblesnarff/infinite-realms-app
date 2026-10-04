@@ -487,18 +487,14 @@ export async function handleDmActionsAndTransitions(
     });
   }
 
-  if (sessionId && result.combat_transition === 'end') {
-    const endResponse = signal
-      ? await userDataApi.endTacticalMap(sessionId, signal)
-      : await userDataApi.endTacticalMap(sessionId);
-    if (!endResponse.ok) {
-      logger.warn('Server refused tactical combat end', await endResponse.json());
-    }
-  }
+  // #2524: the end transition is evaluated only AFTER declared actions resolve (below).
+  // This block used to call `endTacticalMap` here — before `enforceCombatActionOnAttempt`
+  // and `resolveDeclaredCombatActions` — and the refresh flipped `isInCombat` false, so
+  // both were skipped and the player's declared attack was never rolled (run D1).
 
-  // A seated entry (from the explicit endpoint) or an end transition moves the board. A pending
-  // handoff and a raw model start do not: no encounter exists until `/enter` succeeds.
-  if (sessionId && (result.combat_entry?.entered || result.combat_transition === 'end')) {
+  // A seated entry (from the explicit endpoint) moves the board. A pending handoff and a
+  // raw model start do not: no encounter exists until `/enter` succeeds.
+  if (sessionId && result.combat_entry?.entered) {
     activeEncounter = await refreshCombatState(signal);
     if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
     isInCombat = activeEncounter?.phase === 'active';
@@ -784,6 +780,18 @@ export async function handleDmActionsAndTransitions(
   const hasPreflightEngineLines = Boolean(
     preflightNpcTurns?.results?.length || preflightNpcTurns?.transcriptLines?.length,
   );
+  // #2524: capture the declared exits before resolution — the resolution narration is
+  // a fresh envelope and may not repeat them, but the end call below still needs them.
+  // #2563: the DM's end request is also captured here, before resolution. The narration
+  // pass that rewrites the turn is not required to repeat `combat_transition`, so reading
+  // the transition only after resolution could silently drop an end the DM asked for;
+  // the end is evaluated below, against the post-action board.
+  const endRequested = result.combat_transition === 'end';
+  const declaredExits = (
+    result as {
+      combat_exits?: Array<{ participant_id: string; exit: 'fled' | 'surrendered' | 'withdrew' }>;
+    }
+  ).combat_exits;
   const preflightCombatEnded = preflightNpcTurns?.combatEnded === true;
   if (
     !preflightCombatEnded &&
@@ -823,6 +831,37 @@ export async function handleDmActionsAndTransitions(
     result = narrationResult;
     responseText = narrationResult.text;
     narrationSegments = narrationResult.narrationSegments;
+  }
+
+  // #2524: declared actions have now resolved, so the end transition is evaluated last.
+  // Only a 409 is a scene-end refusal — a hostile is still standing with no declared
+  // exit — and only a refusal overrides the transition: combat stays active (so the
+  // zero-action guard stays armed for the player's next declaration) and the player is
+  // told why. Any other failure keeps the old warning behavior; a network or server
+  // error is not evidence the fight continues (#2563).
+  if (sessionId && (endRequested || result.combat_transition === 'end')) {
+    const endResponse = await userDataApi.endTacticalMap(sessionId, signal, declaredExits);
+    const refused = endResponse.status === 409;
+    if (!refused) {
+      if (!endResponse.ok)
+        logger.warn('Tactical combat end request failed', { status: endResponse.status });
+      activeEncounter = await refreshCombatState(signal);
+      if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError');
+      isInCombat = activeEncounter?.phase === 'active';
+      aiContext.gameState.isInCombat = isInCombat;
+      aiContext.gameState.encounterId = activeEncounter?.id;
+      aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
+      aiContext.gameState.round = activeEncounter?.currentRound;
+    } else {
+      logger.warn(
+        'Server refused tactical combat end',
+        await endResponse.json().catch(() => null),
+      );
+      result = { ...result, combat_transition: 'none' };
+      isInCombat = true;
+      aiContext.gameState.isInCombat = true;
+      appendLocalNotice('The fight is not over — your opponent is still standing.');
+    }
   }
 
   return {
