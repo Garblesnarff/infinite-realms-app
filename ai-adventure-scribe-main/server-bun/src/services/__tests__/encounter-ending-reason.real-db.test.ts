@@ -75,6 +75,7 @@ const ALL_REASONS: CombatEndReason[] = [
   'dm_ended_scene',
   'ended_by_request',
   'abandoned',
+  'ended_idle',
 ];
 
 describeWithDb('an encounter cannot reach a terminal state without a reason and a DM fact', () => {

@@ -89,6 +89,14 @@ export function describeCombatEnd(reason: CombatEndReason): string {
         'narrate a victory that did not happen, and do not start a new encounter in the same ' +
         'breath.'
       );
+    case 'ended_idle':
+      return (
+        'THE FIGHT IS OVER: this encounter sat unfinished and untouched for so long that it was ' +
+        'closed automatically. Nobody acted in it — not the party, not you. Narrate the fight ' +
+        'breaking off and what became of everyone still standing when it did, without inventing ' +
+        'a blow that was never struck. Do not narrate a victory that did not happen, and do not ' +
+        'start a new encounter in the same breath.'
+      );
   }
 }
 

@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { logAlertingConfiguration } from './lib/alerting.js';
 import { getEnv } from './lib/env.js';
 import { logger } from './lib/logger';
+import { startIdleEncounterSweep } from './services/combat/idle-encounter-sweeper.js';
 import { logAbandonedMemoryExtractionJobs } from './services/memory-extraction-job.js';
 import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
@@ -82,6 +83,9 @@ app.listen(PORT, () => {
   });
   logAlertingConfiguration();
   startModelHealthChecks();
+  // The server's existing scheduled path, same as the model health checks above: hourly in
+  // this process rather than a crontab entry, so it needs no host change (#2556).
+  startIdleEncounterSweep();
 });
 
 // Handle uncaught errors

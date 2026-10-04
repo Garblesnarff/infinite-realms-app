@@ -356,6 +356,7 @@ jobs:
             src/services/__tests__/combat-hp-write-through.real-db.test.ts \
             src/services/__tests__/encounter-ending-reason.real-db.test.ts \
             src/services/__tests__/encounter-lifecycle.real-db.test.ts \
+            src/services/__tests__/idle-encounter-sweeper.real-db.test.ts \
             src/services/__tests__/npc-turn-auto-advance.real-db.test.ts \
             src/services/__tests__/turn-cycle-tolerance.real-db.test.ts \
             src/services/__tests__/insert-select-writes-land.test.ts \

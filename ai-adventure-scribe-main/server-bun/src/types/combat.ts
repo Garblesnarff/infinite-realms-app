@@ -289,7 +289,12 @@ export type CombatEndReason =
   /** A client asked for this encounter to end outright. */
   | 'ended_by_request'
   /** A client abandoned this encounter. */
-  | 'abandoned';
+  | 'abandoned'
+  /**
+   * Nobody came back. The session saw no player or DM event for `IDLE_ENCOUNTER_HOURS`, so the
+   * hourly sweep (#2556) closed the fight rather than leaving it `active` forever.
+   */
+  | 'ended_idle';
 
 /**
  * Participant type discriminator
