@@ -74,6 +74,18 @@ describe('parseContractEnvelope', () => {
   it('returns null for a malformed envelope rather than throwing', () => {
     expect(parseContractEnvelope('<contract_json>not json</contract_json>')).toBeNull();
   });
+
+  it('keeps a known damageScale and drops an unknown value (#2534)', () => {
+    const tacticalContext = [
+      '<contract_json>{"currentTurn":{"slug":"rook","isPlayer":true,"round":4},"actions":[',
+      '{"kind":"attack","count":1,"actors":["rook"],"hit":true,"mixed":false,"damageScale":"scratch"},',
+      '{"kind":"attack","count":1,"actors":["rook"],"hit":true,"mixed":false,"damageScale":"mangled"}',
+      '],"sceneDescription":null}</contract_json>',
+    ].join('');
+    const parsed = parseContractEnvelope(tacticalContext);
+    expect(parsed?.actions[0].damageScale).toBe('scratch');
+    expect(parsed?.actions[1].damageScale).toBeUndefined();
+  });
 });
 
 describe('unresolved_action (run M4 invented Dash)', () => {
@@ -193,6 +205,23 @@ describe('damage_scale (#2534)', () => {
     );
     expect(violations).toEqual([
       expect.objectContaining({ rule: 'damage_scale', matched: 'massive' }),
+    ]);
+  });
+
+  it('flags "a devastating blow" from a parsed contract_json envelope (#2534)', () => {
+    const tacticalContext = [
+      '<contract_json>{"currentTurn":{"slug":"rook","isPlayer":true,"round":4},"actions":[',
+      '{"kind":"attack","count":1,"actors":["rook"],"hit":true,"mixed":false,"damageScale":"scratch"}',
+      '],"sceneDescription":null}</contract_json>',
+    ].join('');
+    const contract = parseContractEnvelope(tacticalContext);
+    expect(contract).not.toBeNull();
+    const violations = checkNarrationAgainstContract(
+      'The strike lands, a devastating blow that cracks the stone.',
+      contract!,
+    );
+    expect(violations).toEqual([
+      expect.objectContaining({ rule: 'damage_scale', matched: 'devastating' }),
     ]);
   });
 });
