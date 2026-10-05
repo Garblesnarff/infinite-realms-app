@@ -52,3 +52,70 @@ describe('dice roll outcome', () => {
     expect(getDiceRollOutcome(untargeted)).toBeUndefined();
   });
 });
+
+describe('critical copy only on attack rolls (#2513)', () => {
+  // Same DiceRollRequest shape as `check` above, which follows the queue's
+  // producer: id, requestType, description, rollConfig, timestamp, status,
+  // the dc/ac it carries, and the settled result in its full DiceRoll shape.
+  const rollOf = (
+    requestType: DiceRollRequest['requestType'],
+    naturalRoll: number,
+    modifier: number,
+    target: { dc?: number; ac?: number },
+  ): DiceRollRequest => ({
+    id: 'roll-2513',
+    requestType,
+    description:
+      requestType === 'attack'
+        ? 'Longsword attack'
+        : requestType === 'saving_throw'
+          ? 'Wisdom saving throw'
+          : 'Perception check',
+    rollConfig: { dieType: 20, count: 1, modifier },
+    timestamp: new Date('2026-08-15T00:00:00Z'),
+    status: 'completed',
+    ...target,
+    // The settled result copies the DiceRoll producer's full output
+    // (src/types/combat-participants.ts): every field it always sets.
+    result: {
+      dieType: 20,
+      count: 1,
+      modifier,
+      results: [naturalRoll],
+      keptResults: [naturalRoll],
+      total: naturalRoll + modifier,
+      naturalRoll,
+      critical: naturalRoll === 20,
+    },
+  });
+
+  it('keeps "Critical Miss" and the auto-miss word on a natural 1 attack', () => {
+    const formatted = formatDiceRoll(rollOf('attack', 1, 3, { ac: 15 }));
+
+    expect(formatted).toContain('miss');
+    expect(formatted).toContain('Critical Miss');
+  });
+
+  it('shows no critical or hit/miss word on a natural 20 check', () => {
+    const formatted = formatDiceRoll(rollOf('skill_check', 20, 3, { dc: 15 }));
+
+    expect(formatted).toContain('success');
+    expect(formatted).not.toContain('Critical');
+    expect(formatted).not.toMatch(/\bhit\b|\bmiss\b/i);
+  });
+
+  it('shows no critical or hit/miss word on a natural 1 saving throw', () => {
+    const formatted = formatDiceRoll(rollOf('saving_throw', 1, 2, { dc: 14 }));
+
+    expect(formatted).toContain('fail');
+    expect(formatted).not.toContain('Critical');
+    expect(formatted).not.toMatch(/\bhit\b|\bmiss\b/i);
+  });
+
+  it('shows no critical word on a natural 20 saving throw', () => {
+    const formatted = formatDiceRoll(rollOf('saving_throw', 20, 2, { dc: 14 }));
+
+    expect(formatted).not.toContain('Critical');
+    expect(formatted).not.toMatch(/\bhit\b|\bmiss\b/i);
+  });
+});

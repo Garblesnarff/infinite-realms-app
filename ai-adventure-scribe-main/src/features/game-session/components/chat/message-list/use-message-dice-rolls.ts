@@ -135,6 +135,8 @@ export function useMessageDiceRolls({
       purpose: currentRoll.description,
       advantage: currentRoll.rollConfig.advantage,
       disadvantage: currentRoll.rollConfig.disadvantage,
+      ...(currentRoll.dc !== undefined ? { dc: currentRoll.dc } : {}),
+      ...(currentRoll.ac !== undefined ? { ac: currentRoll.ac } : {}),
     };
   }, [currentRoll]);
 

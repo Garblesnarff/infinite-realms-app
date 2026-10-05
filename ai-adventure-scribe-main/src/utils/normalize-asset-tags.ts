@@ -34,8 +34,32 @@ function getComparableWords(value: string): string[] {
   // Strip diacritics before matching so "Möbius" compares as "mobius" against
   // slug-derived names (#2343 B5). [a-z] in the word pattern is ASCII-only, so
   // without this the ö splits the word and the prefix match fails.
-  const asciiFolded = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return asciiFolded.match(ASSET_NAME_WORD_PATTERN)?.map((word) => word.toLowerCase()) ?? [];
+  // Hyphens are word separators too: the display form "Wall-Mouth" and the
+  // key-derived "Wall Mouth" are the same name in two spellings, and a possessive
+  // is the name itself ("the Vitruvian Spider's"), not a different phrase. Either
+  // spelling standing next to the tag means the name is already visible; reading
+  // them as different words is what printed both (#2513).
+  const asciiFolded = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-_]+/g, ' ');
+  return (
+    asciiFolded
+      .match(ASSET_NAME_WORD_PATTERN)
+      ?.map((word) => word.toLowerCase().replace(/['’]s$/, '')) ?? []
+  );
+}
+
+/**
+ * One text for comparing a visible name against the key-derived one, with the
+ * same two equivalences `getComparableWords` applies word-wise: hyphens read as
+ * spaces, and a possessive ending is the name itself.
+ */
+function comparableNameText(value: string): string {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/['’]s(?=\s|$)/g, '')
+    .replace(/\s+/g, ' ');
 }
 
 /**
@@ -120,16 +144,17 @@ export function isAssetNamePresentAroundTag(
 
   const beforeTag = content.slice(0, tagStart).replace(/[\s"'`*_]+$/, '');
   const afterTag = content.slice(tagStart + tagLength).replace(/^[^a-zA-Z]+/, '');
-  const normalizedBeforeTag = normalizeLeadingArticle(beforeTag).toLowerCase();
+  const normalizedBeforeTag = comparableNameText(normalizeLeadingArticle(beforeTag).toLowerCase());
   const originalAfterTag = normalizeLeadingArticle(afterTag);
-  const normalizedAfterTag = originalAfterTag.toLowerCase();
+  const normalizedAfterTag = comparableNameText(originalAfterTag.toLowerCase());
+  const comparableName = comparableNameText(normalizedName);
 
   return (
-    endsWithWholeName(normalizedBeforeTag, normalizedName) ||
-    startsWithWholeName(normalizedAfterTag, normalizedName) ||
-    endsWithVisibleNamePrefix(normalizedBeforeTag, normalizedName) ||
-    startsWithVisibleNamePrefix(normalizedAfterTag, normalizedName) ||
-    startsWithVisibleNameSuffix(normalizedAfterTag, normalizedName, originalAfterTag)
+    endsWithWholeName(normalizedBeforeTag, comparableName) ||
+    startsWithWholeName(normalizedAfterTag, comparableName) ||
+    endsWithVisibleNamePrefix(normalizedBeforeTag, comparableName) ||
+    startsWithVisibleNamePrefix(normalizedAfterTag, comparableName) ||
+    startsWithVisibleNameSuffix(normalizedAfterTag, comparableName, originalAfterTag)
   );
 }
 

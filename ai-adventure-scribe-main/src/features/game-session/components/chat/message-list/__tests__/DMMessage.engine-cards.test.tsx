@@ -190,7 +190,9 @@ describe('engine result cards in the chat (#2417)', () => {
       campaign.difficulty = 'hard';
       const { container } = renderMessage();
 
-      expect(container.textContent).toContain('vs your AC ?');
+      expect(container.textContent).toContain('d20 14 + 0 = 14');
+      expect(container.textContent).not.toContain('vs your AC');
+      expect(container.textContent).not.toContain('AC ?');
       expect(container.textContent).toContain('DEX save 6');
       expect(container.textContent).not.toContain('AC 11');
       expect(container.textContent).not.toContain('DC');

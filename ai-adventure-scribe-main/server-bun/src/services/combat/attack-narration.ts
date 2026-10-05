@@ -121,6 +121,7 @@ export function describeResolvedSpell(
   targetLabel: string,
   spellName: string,
   outcome: ResolvedSpellOutcome,
+  showTargetNumbers: boolean,
 ): string {
   if (outcome.autoHit) {
     return resolvedSpellLine(
@@ -131,22 +132,31 @@ export function describeResolvedSpell(
   }
   if (outcome.saveAbility && outcome.saveRoll != null && outcome.saveDC != null) {
     const result = outcome.saved ? 'PASS' : 'FAIL';
+    // The save's DC is a target number: on a campaign that hides them the DM is never
+    // told it, or it will say it. The target's own roll stays either way.
+    const versus = showTargetNumbers ? ` vs DC ${outcome.saveDC}` : '';
     return resolvedSpellLine(
       targetLabel,
       outcome,
       `${actorLabel} cast ${spellName} at ${targetLabel} — ${displaySaveAbility(
         outcome.saveAbility,
-      )} save ${outcome.saveRoll} vs DC ${outcome.saveDC} — ${result}.`,
+      )} save ${outcome.saveRoll}${versus} — ${result}.`,
     );
   }
   if (outcome.d20 != null && outcome.attackBonus != null && outcome.totalAttackRoll != null) {
     const result = outcome.hit ? 'HIT' : 'MISS';
+    // Same rule for AC, and an unknown AC drops the clause rather than printing
+    // "vs AC ?": an unknown target number is not a number the DM can be told.
+    const versus =
+      showTargetNumbers && outcome.targetAC != null && Number.isFinite(outcome.targetAC)
+        ? ` ${formatVersusArmorClass(outcome)}`
+        : '';
     return resolvedSpellLine(
       targetLabel,
       outcome,
       `${actorLabel} cast ${spellName} at ${targetLabel} — spell attack ${outcome.d20} + ${
         outcome.attackBonus
-      } = ${outcome.totalAttackRoll} ${formatVersusArmorClass(outcome)} — ${result}.`,
+      } = ${outcome.totalAttackRoll}${versus} — ${result}.`,
     );
   }
   return resolvedSpellLine(

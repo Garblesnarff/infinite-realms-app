@@ -180,14 +180,22 @@ export function engineCardSide(
 /**
  * `text` with the target's AC and the save DC taken out, for a card whose setting is off. Both
  * phrases are rebuilt from the card's own fields, so the text is never searched for patterns.
- * `text` may be the card's line or any longer text that holds it.
+ * `text` may be the card's line or any longer text that holds it. The clause is dropped
+ * entirely, never replaced with a placeholder: a hidden number does not print as `vs AC ?`
+ * (#2513).
  */
 export function hideTargetNumbers(text: string, card: EngineResultCard): string {
   if (!card.math) return text;
   if (card.math.kind === 'attack') {
-    return text.replace(formatVersusArmorClass(card.math.ac), 'vs AC ?');
+    // Every occurrence goes: a longer text holding the line (a tracker log, a
+    // saved block) must not keep a second copy of the number. Only spaces are
+    // collapsed, so paragraph breaks in a longer text survive.
+    return text
+      .split(` ${formatVersusArmorClass(card.math.ac)}`)
+      .join('')
+      .replace(/ {2,}/g, ' ');
   }
-  return text.replace(` vs DC ${card.math.dc}`, '');
+  return text.split(` vs DC ${card.math.dc}`).join('');
 }
 
 /** The card's screen reader sentence: the engine line, less the target numbers when they are off. */
@@ -199,7 +207,7 @@ export function engineCardAriaLabel(card: EngineResultCard, showTargetNumbers: b
 function armorClassPhrase(math: Extract<EngineCardMath, { kind: 'attack' }>): string {
   const { targetAC: effective, baseAc: base, coverBonus: bonus, cover } = math.ac;
   const owner = math.targetIsPlayer ? 'your ' : '';
-  if (effective == null || !Number.isFinite(effective)) return `vs ${owner}AC ?`;
+  if (effective == null || !Number.isFinite(effective)) return '';
   if (base != null && bonus != null && bonus > 0) {
     const kind = cover === 2 || bonus >= 5 ? 'three-quarters cover' : 'half cover';
     return `vs ${owner}AC ${effective} (${base} + ${bonus} ${kind})`;
@@ -207,7 +215,7 @@ function armorClassPhrase(math: Extract<EngineCardMath, { kind: 'attack' }>): st
   return `vs ${owner}AC ${effective}`;
 }
 
-/** The card's math line. Off, the target's AC reads `?` and the save leaves out its DC. */
+/** The card's math line. Off, the target numbers are left out entirely: no AC or DC clause. */
 export function engineCardMathText(math: EngineCardMath, showTargetNumbers: boolean): string {
   if (math.kind === 'save') {
     const base = `${math.ability} save ${math.roll}`;
@@ -215,9 +223,9 @@ export function engineCardMathText(math: EngineCardMath, showTargetNumbers: bool
   }
   const modifier = math.bonus < 0 ? `- ${Math.abs(math.bonus)}` : `+ ${math.bonus}`;
   const roll = `d20 ${math.d20} ${modifier} = ${math.total}`;
-  return showTargetNumbers
-    ? `${roll} ${armorClassPhrase(math)}`
-    : `${roll} vs ${math.targetIsPlayer ? 'your ' : ''}AC ?`;
+  if (!showTargetNumbers) return roll;
+  const phrase = armorClassPhrase(math);
+  return phrase ? `${roll} ${phrase}` : roll;
 }
 
 function isFiniteNumber(value: unknown): value is number {

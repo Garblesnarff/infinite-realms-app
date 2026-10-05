@@ -18,6 +18,7 @@ import type { RollRequest } from '@/types/roll-request';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { DiceRollEmbed } from '@/features/game-session/components';
+import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
 import { useDiceRollRequest, type RollResultHandler } from '@/hooks/game/use-dice-roll-request';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
@@ -77,6 +78,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       toggleAdvantage,
       toggleDisadvantage,
     } = useDiceRollRequest({ request, onResult, onRollCommit });
+    const { showTargetNumbers } = useShowTargetNumbers();
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
     const isRollPending = Boolean(requestId && pendingRollId === requestId);
@@ -143,7 +145,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               <span className="font-mono text-lg font-bold tabular-nums text-foreground">
                 {rollCalculation.formula}
               </span>
-              {(request.dc || request.ac) && (
+              {showTargetNumbers && (request.dc || request.ac) && (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
                   {request.dc ? `DC ${request.dc}` : `AC ${request.ac}`}
                 </Badge>

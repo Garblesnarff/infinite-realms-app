@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 /**
  * The player's "Show target numbers" setting (#2417). On, an engine result card shows the target's
- * AC and a save's DC; off, it shows `vs AC ?` and leaves the DC out. Easy and Medium start on,
+ * AC and a save's DC; off, it leaves both clauses out entirely. Easy and Medium start on,
  * Hard starts off.
  */
 export const TargetNumbersToggle: React.FC = () => {

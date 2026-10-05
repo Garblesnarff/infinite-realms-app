@@ -60,9 +60,11 @@ function spellTargetTrailer(target: string, result: CombatEngineResult): string 
   return ` ${target} is now at ${result.targetNewHp} HP${state}.`;
 }
 
-function terminalStatus(target: string, result: CombatEngineResult): string | undefined {
-  if (result.targetIsDead) return `${target} is dead.`;
-  if (result.targetIsConscious === false) return `${target} is unconscious.`;
+function terminalStatus(result: CombatEngineResult): string | undefined {
+  // Only called when the card's HP line already names the target, so the status
+  // line does not repeat the name in the same card (#2513).
+  if (result.targetIsDead) return 'Dead.';
+  if (result.targetIsConscious === false) return 'Unconscious.';
   return undefined;
 }
 
@@ -88,15 +90,19 @@ function formatSpellPart(
     line: string,
     parts: Pick<EngineResultCard, 'badge' | 'math' | 'effect'> & { title?: string },
   ): EngineTranscriptPart => {
-    const status = hp ? terminalStatus(target, result) : trailer.trim() || undefined;
+    const status = hp ? terminalStatus(result) : trailer.trim() || undefined;
     const { title, ...rest } = parts;
+    // A self-targeted cast does not name the same character twice in the title
+    // line: "The Scholar casts Cure Wounds", not "... at The Scholar" (#2513).
+    const defaultTitle =
+      actor === target ? `${actor} casts ${spell}` : `${actor} casts ${spell} at ${target}`;
     return {
       line,
       card: {
         kind: 'spell',
         side,
         line,
-        title: title ?? `${actor} casts ${spell} at ${target}`,
+        title: title ?? defaultTitle,
         ...rest,
         ...(hp ? { hp } : {}),
         ...(status ? { status } : {}),
@@ -104,17 +110,23 @@ function formatSpellPart(
     };
   };
   const effect = damageEffectText(result);
+  // A self-targeted cast repeats the name in one clause ("The Scholar cast
+  // Cure Wounds at The Scholar"); when the target is the actor the cast
+  // clause names them once (#2513). The damage and HP sentences that follow
+  // are separate clauses and still name the target.
+  const castClause =
+    actor === target ? `${actor} cast ${spell}` : `${actor} cast ${spell} at ${target}`;
 
   if (result.autoHit === true) {
     return card(
-      `⚙️ Engine: ${actor} cast ${spell} at ${target} — AUTO-HIT.${damage ? ` ${damage}` : ''}${trailer}`,
+      `⚙️ Engine: ${castClause} — AUTO-HIT.${damage ? ` ${damage}` : ''}${trailer}`,
       { badge: engineBadge('auto-hit', side), effect },
     );
   }
   if (result.saveAbility && isFiniteNumber(result.saveRoll) && isFiniteNumber(result.saveDC)) {
     const outcome = result.saved ? 'PASS' : 'FAIL';
     return card(
-      `⚙️ Engine: ${actor} cast ${spell} at ${target} — ${displaySaveAbility(result.saveAbility)} ` +
+      `⚙️ Engine: ${castClause} — ${displaySaveAbility(result.saveAbility)} ` +
         `save ${result.saveRoll} vs DC ${result.saveDC} — ${outcome}.${damage ? ` ${damage}` : ''}${trailer}`,
       {
         badge: engineBadge(result.saved ? 'target-saved' : 'target-failed', side),
@@ -135,9 +147,15 @@ function formatSpellPart(
   ) {
     const outcome = result.isCritical && result.hit ? 'CRITICAL HIT' : result.hit ? 'HIT' : 'MISS';
     const missDamage = result.hit ? damage : 'No damage.';
+    // An unknown AC gets no versus clause in the line itself, so no surface
+    // ever prints "vs AC ?" (#2513); the shared formatter is shared with the
+    // server, so the omission happens here at the client producer.
+    const versus = isFiniteNumber(result.targetAC)
+      ? ` ${formatVersusArmorClass(result)}`
+      : '';
     return card(
-      `⚙️ Engine: ${actor} cast ${spell} at ${target} — spell attack ${result.d20} + ${result.attackBonus} ` +
-        `= ${result.totalAttackRoll} ${formatVersusArmorClass(result)} — ${outcome}.` +
+      `⚙️ Engine: ${castClause} — spell attack ${result.d20} + ${result.attackBonus} ` +
+        `= ${result.totalAttackRoll}${versus} — ${outcome}.` +
         `${missDamage ? ` ${missDamage}` : ''}${trailer}`,
       {
         badge: engineBadge(
@@ -163,10 +181,14 @@ function formatSpellPart(
   }
   // A healing spell's result is `{hit: true, finalDamage: 0}` with no damage type.
   if (result.hit === true && result.finalDamage === 0 && !result.damageType) {
+    const healingSpell = result.spellName ?? 'a healing spell';
     return card(
-      `⚙️ Engine: ${actor} cast ${result.spellName ?? 'a healing spell'} at ${target} — HEALS.${trailer}`,
+      `⚙️ Engine: ${actor === target ? `${actor} cast ${healingSpell}` : `${actor} cast ${healingSpell} at ${target}`} — HEALS.${trailer}`,
       {
-        title: `${actor} casts ${result.spellName ?? 'a healing spell'} at ${target}`,
+        title:
+          actor === target
+            ? `${actor} casts ${healingSpell}`
+            : `${actor} casts ${healingSpell} at ${target}`,
         badge: engineBadge('heals', side),
       },
     );
@@ -174,7 +196,7 @@ function formatSpellPart(
   if (typeof result.hit === 'boolean') {
     const outcome = result.hit ? 'HIT' : 'MISS';
     return card(
-      `⚙️ Engine: ${actor} cast ${spell} at ${target} — ${outcome}.${damage ? ` ${damage}` : ''}${trailer}`,
+      `⚙️ Engine: ${castClause} — ${outcome}.${damage ? ` ${damage}` : ''}${trailer}`,
       { badge: engineBadge(result.hit ? 'hit' : 'miss', side), effect },
     );
   }

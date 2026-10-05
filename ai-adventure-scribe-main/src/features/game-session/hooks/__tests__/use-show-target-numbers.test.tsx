@@ -1,7 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { showTargetNumbersByDefault, useShowTargetNumbers } from '../use-show-target-numbers';
+import { showTargetNumbersByDefault } from '../../../../../shared/show-target-numbers';
+import { useShowTargetNumbers } from '../use-show-target-numbers';
 
 const campaign = vi.hoisted(() => ({ difficulty: undefined as string | undefined }));
 

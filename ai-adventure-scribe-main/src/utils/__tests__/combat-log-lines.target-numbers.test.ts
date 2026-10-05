@@ -49,8 +49,10 @@ describe('combat log and Show target numbers (#2417)', () => {
   it('leaves them out while it is off, for every line a card stands for', () => {
     const log = combatLogLines([withCards], undefined, false).join('\n');
 
-    expect(log).toContain('vs AC ?');
+    expect(log).toContain('rolled 14 + 0 = 14 against The Scholar');
     expect(log).toContain('DEX save 6 —');
+    expect(log).not.toContain('vs AC ?');
+    expect(log).not.toContain('vs AC');
     expect(log).not.toContain('AC 11');
     expect(log).not.toContain('DC');
   });

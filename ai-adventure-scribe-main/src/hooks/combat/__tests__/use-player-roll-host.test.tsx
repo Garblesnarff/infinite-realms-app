@@ -2,14 +2,24 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  attackAction,
+  FIGHT_ROSTER,
+  PLAYER_HITS_ENEMY,
+  REEVES,
+  SCHOLAR,
+} from '../../../../shared/test-fixtures/engine-results';
+import {
   settleCombatAttackRoll,
   settleCombatInitiativeRoll,
   usePlayerRollHost,
 } from '../use-player-roll-host';
 
+import { useOptionalCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
 import { useDiceRollRequest } from '@/hooks/game/use-dice-roll-request';
+import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
+import { engineCardAriaLabel } from '@/services/combat/engine-result-card';
 import {
   hasPendingPlayerRoll,
   markPlayerRollCommitted,
@@ -21,6 +31,7 @@ import {
 
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
 vi.mock('@/contexts/CharacterContext', () => ({ useCharacter: vi.fn() }));
+vi.mock('@/contexts/CampaignContext', () => ({ useOptionalCampaign: vi.fn() }));
 
 describe('usePlayerRollHost teardown', () => {
   const requestDiceRoll = vi.fn().mockReturnValue('initiative-roll-1');
@@ -33,6 +44,8 @@ describe('usePlayerRollHost teardown', () => {
     vi.clearAllMocks();
     requestDiceRoll.mockReturnValue('initiative-roll-1');
     vi.mocked(useGame).mockReturnValue({ requestDiceRoll, cancelDiceRoll } as never);
+    vi.mocked(useOptionalCampaign).mockReturnValue(undefined);
+    window.localStorage.clear();
     vi.mocked(useCharacter).mockReturnValue({ state: { character: null } } as never);
   });
 
@@ -211,5 +224,93 @@ describe('usePlayerRollHost teardown', () => {
     expect(vi.getTimerCount()).toBe(0);
     unmount();
     await expect(pending).resolves.toEqual({ d20: null });
+  });
+
+  it('drops the "vs AC" clause from the attack dialog on a Hard campaign, matching the engine line (#2573)', async () => {
+    vi.mocked(useOptionalCampaign).mockReturnValue({
+      state: { campaign: { difficulty_level: 'Hard' } },
+    } as never);
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Seeker',
+      targetLabel: 'Sentient Glaze',
+      weaponName: 'Longsword',
+      attackBonus: 1,
+      targetAc: 15,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    const request = requestDiceRoll.mock.calls[0][0];
+    expect(request.description).toBe('Longsword attack vs Sentient Glaze — 1d20+1');
+    expect(request.description).not.toContain('vs AC');
+    expect(request.description).not.toContain('15');
+    expect(request.description).not.toContain('(hidden)');
+    expect(request.ac).toBeUndefined();
+
+    // The engine line for the same attack, read through the real producers with
+    // target numbers off, agrees: neither surface names the AC.
+    const [part] = formatCombatEngineParts(
+      attackAction(SCHOLAR, REEVES),
+      PLAYER_HITS_ENEMY,
+      FIGHT_ROSTER,
+    );
+    expect(engineCardAriaLabel(part.card, false)).not.toContain('vs AC');
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
+
+  it('still shows the AC in the dialog when the player turned target numbers on (#2573)', async () => {
+    window.localStorage.setItem('ui:showTargetNumbers:v1', 'on');
+    vi.mocked(useOptionalCampaign).mockReturnValue({
+      state: { campaign: { difficulty_level: 'Hard' } },
+    } as never);
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Seeker',
+      targetLabel: 'Sentient Glaze',
+      weaponName: 'Longsword',
+      attackBonus: 1,
+      targetAc: 15,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    expect(requestDiceRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Longsword attack vs Sentient Glaze — 1d20+1 vs AC 15',
+        ac: 15,
+      }),
+    );
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
+
+  it('shows the AC in the attack dialog on an Easy campaign with no stored choice (#2573)', async () => {
+    vi.mocked(useOptionalCampaign).mockReturnValue({
+      state: { campaign: { difficulty_level: 'Easy' } },
+    } as never);
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerAttackRoll({
+      actorLabel: 'The Seeker',
+      targetLabel: 'Sentient Glaze',
+      weaponName: 'Longsword',
+      attackBonus: 1,
+      targetAc: 15,
+      advantage: false,
+      disadvantage: false,
+    });
+
+    const request = requestDiceRoll.mock.calls[0][0];
+    expect(request.description).toBe('Longsword attack vs Sentient Glaze — 1d20+1 vs AC 15');
+    expect(request.ac).toBe(15);
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
   });
 });

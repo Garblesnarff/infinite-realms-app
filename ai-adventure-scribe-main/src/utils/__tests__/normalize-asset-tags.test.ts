@@ -139,6 +139,56 @@ describe('normalize-asset-tags', () => {
       const result = normalizeAssetTagKeysInContent(input);
       expect(result).toBe('**Remy The Manager** [ASSET:npc:remy-the-manager]');
     });
+
+    it('does not prepend the name when it is already there as a possessive (#2513)', () => {
+      // Run D2, turn 14, verbatim shape: the name stood in the prose as a
+      // possessive before the tag, and the prepend printed it a second time.
+      const input =
+        "the wood thudding against the Vitruvian Spider's [ASSET:monster:the-vitruvian-spider] mangled frame.";
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Vitruvian Spider/g)).toHaveLength(1);
+    });
+
+    it('does not prepend the name when the possessive uses a curly apostrophe (#2513)', () => {
+      const input =
+        'the wood thudding against the Vitruvian Spider’s [ASSET:monster:the-vitruvian-spider] mangled frame.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Vitruvian Spider/g)).toHaveLength(1);
+    });
+
+    it('does not prepend the name when the prose uses the hyphenated display form after the tag (#2513)', () => {
+      // Run D7 verbatim shape: the prose named the creature "Wall-Mouth" while the
+      // key derives "Wall Mouth"; the two spellings are one name.
+      const input =
+        'revealing a [ASSET:monster:wall-mouth] Wall-Mouth camouflaged perfectly against the cavern wall.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Wall-Mouth/g)).toHaveLength(1);
+      expect(result).not.toContain('Wall Mouth');
+    });
+
+    it('does not prepend the name when the hyphenated display form stands before the tag (#2513)', () => {
+      const input =
+        'revealing a Wall-Mouth [ASSET:monster:wall-mouth] camouflaged perfectly against the cavern wall.';
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Wall-Mouth/g)).toHaveLength(1);
+      expect(result).not.toContain('Wall Mouth');
+    });
+
+    it('is idempotent on the possessive and hyphenated shapes (#2513)', () => {
+      const inputs = [
+        "the wood thudding against the Vitruvian Spider's [ASSET:monster:the-vitruvian-spider] mangled frame.",
+        'revealing a [ASSET:monster:wall-mouth] Wall-Mouth camouflaged perfectly against the cavern wall.',
+      ];
+      for (const input of inputs) {
+        const once = normalizeAssetTagsInContent(input);
+        expect(once).toBe(input);
+        expect(normalizeAssetTagsInContent(once)).toBe(once);
+      }
+    });
   });
 
   describe('normalizeAssetTagsInContent', () => {

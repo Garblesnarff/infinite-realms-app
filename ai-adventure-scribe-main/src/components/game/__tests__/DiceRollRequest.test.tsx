@@ -391,6 +391,22 @@ describe('DiceRollRequest', () => {
     // So if both DC and AC are present, it only shows DC.
   });
 
+  it('hides the DC/AC badge when target numbers are off (#2573)', () => {
+    window.localStorage.setItem('ui:showTargetNumbers:v1', 'off');
+    try {
+      const request = {
+        ...defaultRequest,
+        dc: 15,
+      };
+
+      render(<DiceRollRequest request={request} onResult={mockOnManualResult} />);
+
+      expect(screen.queryByText(/DC 15/i)).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.removeItem('ui:showTargetNumbers:v1');
+    }
+  });
+
   // --- Symbolic formula guard (regression: 1d20+cha/int/wis crashes dice engine) ---
 
   it('shows loading spinner when character is null and formula is symbolic', () => {

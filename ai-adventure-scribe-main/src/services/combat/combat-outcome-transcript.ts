@@ -253,9 +253,12 @@ export function formatCombatEngineParts(
     line += ` ${target} is ${state}.`;
   }
   const terminal = state === 'dead' || state === 'unconscious' ? state : null;
+  // With HP on the card, the HP line already names the target, so the status line
+  // under it does not name them again: "The Scholar · HP 0 of 7" then "Unconscious.",
+  // not "The Scholar is unconscious." a second time in the same card (#2513).
   const status = hp
     ? terminal
-      ? `${target} is ${terminal}.`
+      ? `${terminal.charAt(0).toUpperCase()}${terminal.slice(1)}.`
       : undefined
     : state
       ? `${target} is ${state}.`

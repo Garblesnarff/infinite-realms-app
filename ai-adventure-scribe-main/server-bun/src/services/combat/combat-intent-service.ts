@@ -30,6 +30,7 @@ import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
+import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { describeDamageAtZeroHp } from '../../../../shared/death-save-lines';
@@ -1037,6 +1038,10 @@ export async function executeCombatIntent(
           ?.participantType === 'player';
       const spellFactMap = await loadActiveTacticalMap(encounter.sessionId);
       const spellActorSlug = engineSlugForParticipant(spellFactMap, intent.actorId, actorLabel);
+      // The DM repeats the numbers it is told, so on a campaign that hides target
+      // numbers the spell facts are worded without them. The server cannot see the
+      // player's local toggle; campaign difficulty is all it follows.
+      const spellShowTargetNumbers = await showTargetNumbersForSession(encounter.sessionId);
       for (const [index, outcome] of spellResults.entries()) {
         const targetId = intent.targetIds[index];
         if (!targetId) continue;
@@ -1048,6 +1053,7 @@ export async function executeCombatIntent(
             targetLabel,
             outcome.spellName ?? intent.spellName,
             outcome,
+            spellShowTargetNumbers,
           ),
           {
             kind: 'spell',

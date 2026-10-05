@@ -10,6 +10,7 @@ import type {
 import type { DiceRollRequest } from '@/types/combat';
 
 import { useGame } from '@/contexts/GameContext';
+import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
 import { releasePlayerRollHost, setPlayerRollHost } from '@/services/combat/player-roll-bridge';
 
 /**
@@ -28,6 +29,7 @@ import { releasePlayerRollHost, setPlayerRollHost } from '@/services/combat/play
  */
 export function usePlayerRollHost(): string | null {
   const { requestDiceRoll, cancelDiceRoll } = useGame();
+  const { showTargetNumbers } = useShowTargetNumbers();
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export function usePlayerRollHost(): string | null {
             }
           : {
               requestType: 'attack' as const,
-              description: describeAttackRoll(spec),
+              description: describeAttackRoll(spec, showTargetNumbers),
               rollConfig: {
                 dieType: 20,
                 count: 1,
@@ -50,7 +52,9 @@ export function usePlayerRollHost(): string | null {
                 advantage: spec.advantage,
                 disadvantage: spec.disadvantage,
               },
-              ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 ? {} : { ac: spec.targetAc }),
+              ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 || !showTargetNumbers
+                ? {}
+                : { ac: spec.targetAc }),
               combatAttackRoll: true,
             };
         const rollId = requestDiceRoll(
@@ -79,23 +83,27 @@ export function usePlayerRollHost(): string | null {
       setPendingRollId(null);
       releasePlayerRollHost(rollHost);
     };
-  }, [requestDiceRoll, cancelDiceRoll]);
+  }, [requestDiceRoll, cancelDiceRoll, showTargetNumbers]);
 
   return pendingRollId;
 }
 
-/** "Longsword attack vs Sentient Glaze — 1d20+7 vs AC 15 (advantage)" */
-export function describeAttackRoll(spec: PlayerAttackRollSpec): string {
+/**
+ * "Longsword attack vs Sentient Glaze — 1d20+7 vs AC 15 (advantage)"
+ *
+ * When target numbers are hidden (Hard/Deadly, or the player turned them off), the
+ * "vs AC N" clause is dropped entirely — never rendered as "(hidden)" or "?" —
+ * so the dialog agrees with the engine line (#2513, #2573).
+ */
+export function describeAttackRoll(spec: PlayerAttackRollSpec, showTargetNumbers = true): string {
   const edge = spec.advantage ? ' (advantage)' : spec.disadvantage ? ' (disadvantage)' : '';
   if (spec.kind === 'spell-attack') {
     return `${spec.weaponName} spell attack vs ${spec.targetLabel}${edge}`;
   }
   const modifier = attackModifierForRoll(spec);
   const sign = modifier >= 0 ? '+' : '';
-  return (
-    `${spec.weaponName} attack vs ${spec.targetLabel} — ` +
-    `1d20${sign}${modifier} vs AC ${spec.targetAc}${edge}`
-  );
+  const target = showTargetNumbers ? ` vs AC ${spec.targetAc}` : '';
+  return `${spec.weaponName} attack vs ${spec.targetLabel} — ` + `1d20${sign}${modifier}${target}${edge}`;
 }
 
 /** The popup text and displayed total must use the exact modifier sent to the roll queue. */

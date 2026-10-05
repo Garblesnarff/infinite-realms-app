@@ -1,5 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
+import { showTargetNumbersByDefault } from '../../../../shared/show-target-numbers';
+
 import { useOptionalCampaign } from '@/contexts/CampaignContext';
 
 /** `on` or `off`. Absent means the player never chose, so the campaign's difficulty decides. */
@@ -26,18 +28,10 @@ function subscribe(listener: () => void): () => void {
 }
 
 /**
- * Easy and any difficulty with "medium" in its name show a target's AC and a save's DC; Hard and
- * Deadly do not (#2393, Rob 2026-10-01). A difficulty that is none of these shows them.
- */
-export function showTargetNumbersByDefault(difficulty: string | null | undefined): boolean {
-  const name = difficulty?.trim().toLowerCase() ?? '';
-  if (name.includes('medium')) return true;
-  return !name.includes('hard') && !name.includes('deadly');
-}
-
-/**
  * The player's "Show target numbers" setting. The player's own choice wins; until they make one,
- * the campaign's difficulty sets it. The choice is shared by every card and the toggle on screen.
+ * the campaign's difficulty sets it via `showTargetNumbersByDefault` (in shared, where the
+ * server narration reads the same rule). The choice is shared by every card and the toggle on
+ * screen.
  */
 export function useShowTargetNumbers(): {
   showTargetNumbers: boolean;

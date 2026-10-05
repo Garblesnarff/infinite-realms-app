@@ -307,14 +307,18 @@ describe('engine result card data (#2417)', () => {
 });
 
 describe('target numbers (#2417)', () => {
-  it('replaces the AC with ? and drops the DC when the setting is off', () => {
+  it('drops the AC clause and the DC when the setting is off, never printing a placeholder', () => {
     const attack = only(attacksPlayer(ENEMY_HITS_PLAYER));
     const save = only(castsAtEnemy(ENEMY_FAILS_SAVE));
 
-    expect(engineCardMathText(attack.math!, false)).toBe('d20 14 + 0 = 14 vs your AC ?');
+    expect(engineCardMathText(attack.math!, false)).toBe('d20 14 + 0 = 14');
     expect(engineCardMathText(save.math!, false)).toBe('DEX save 6');
-    expect(engineCardAriaLabel(attack, false)).toContain('vs AC ?');
+    expect(engineCardAriaLabel(attack, false)).toBe(
+      'Captain Sarah Reeves rolled 14 + 0 = 14 against The Scholar with Longsword — HIT. 3 slashing damage. The Scholar is now at 4 HP and is wounded.',
+    );
+    expect(engineCardAriaLabel(attack, false)).not.toContain('vs AC');
     expect(engineCardAriaLabel(attack, false)).not.toContain('AC 11');
+    expect(engineCardAriaLabel(attack, false)).not.toContain('?');
     expect(engineCardAriaLabel(save, false)).toContain('DEX save 6 — FAIL');
     expect(engineCardAriaLabel(save, false)).not.toContain('DC');
   });
@@ -323,6 +327,43 @@ describe('target numbers (#2417)', () => {
     const parts = attacksPlayer(ENEMY_HITS_PLAYER);
     expect(engineCardMathText(parts[0].card.math!, true)).toContain('vs your AC 11');
     expect(engineCardAriaLabel(parts[0].card, true)).toBe(parts[0].line.replace('⚙️ Engine: ', ''));
+  });
+
+  it('shows a save with its DC when the setting is on', () => {
+    const save = only(castsAtEnemy(ENEMY_FAILS_SAVE));
+    expect(engineCardMathText(save.math!, true)).toBe('DEX save 6 vs DC 14');
+    expect(engineCardAriaLabel(save, true)).toContain('vs DC 14');
+  });
+});
+
+describe('roll card name stutter (#2513)', () => {
+  it('does not name the target twice when the HP line already names them', () => {
+    // Producer shape follows ENEMY_HITS_PLAYER (CombatAttackService.resolveAttack
+    // + exposeAttackVisibility, copied in full in the fixture); only the fields
+    // that put the player at 0 HP unconscious are overridden, as in
+    // death-save-transcript.test.ts's struck-at-0-HP case.
+    const card = only(
+      attacksPlayer({
+        ...ENEMY_HITS_PLAYER,
+        targetNewHp: 0,
+        targetIsConscious: false,
+        targetIsDead: false,
+        targetCondition: undefined,
+      }),
+    );
+
+    expect(card.hp).toEqual({ name: 'The Scholar', newHp: 0, lost: 3, maxHp: 7 });
+    expect(card.status).toBe('Unconscious.');
+    expect(card.status).not.toContain('The Scholar');
+  });
+
+  it('does not name a self-healing caster twice in the card title', () => {
+    const card = only(
+      formatCombatEngineParts(spellAction(SCHOLAR, SCHOLAR), PLAYER_HEALS_ALLY, FIGHT_ROSTER),
+    );
+
+    expect(card.title).toBe('The Scholar casts Cure Wounds');
+    expect(card.title.match(/The Scholar/g)).toHaveLength(1);
   });
 });
 

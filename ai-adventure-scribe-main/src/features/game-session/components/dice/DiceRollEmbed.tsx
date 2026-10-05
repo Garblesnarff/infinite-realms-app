@@ -157,9 +157,12 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
       );
     }
     if (result.naturalRoll === 1) {
+      // Only attacks critically miss; a natural 1 on a check or save is a
+      // "Natural 1", with no hit/miss word (#2513).
+      const label = isAttack ? 'Critical Miss' : 'Natural 1';
       return (
-        <Badge variant="secondary" className="text-xs" aria-label="Critical Miss">
-          Critical Miss
+        <Badge variant="secondary" className="text-xs" aria-label={label}>
+          {label}
         </Badge>
       );
     }
@@ -315,15 +318,20 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                 className="text-xs text-gray-600"
                 data-testid="roll-breakdown"
               >
-                {formatRollBreakdown(result)}
+                {/* A separator before the breakdown, so the badge's face value does
+                    not run straight into it: "Natural 1 — 1 + 3 = 4" (#2513). */}
+                {`— ${formatRollBreakdown(result)}`}
               </motion.div>
 
-              {/* Natural Roll for d20s */}
-              {result.naturalRoll && (
-                <motion.div variants={cardItem} className="text-xs text-gray-600">
-                  Natural {result.naturalRoll}
-                </motion.div>
-              )}
+              {/* Natural Roll for d20s. On a check or save the Natural 1 / Natural 20
+                  badge above is the only natural indicator, so this line does not
+                  repeat it; an attack keeps it under its Critical Hit/Miss badge. */}
+              {result.naturalRoll &&
+                (isAttack || (result.naturalRoll !== 1 && result.naturalRoll !== 20)) && (
+                  <motion.div variants={cardItem} className="text-xs text-gray-600">
+                    Natural {result.naturalRoll}
+                  </motion.div>
+                )}
             </motion.div>
           )}
         </AnimatePresence>
