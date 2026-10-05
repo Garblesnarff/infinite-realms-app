@@ -2,8 +2,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
+  ACTION_NOT_SUPPORTED_REASON,
+  CombatIntentRefusedError,
   executeAuthoritativeCombatIntent,
   executeStructuredCombatAction,
+  executeStructuredCombatActionWithBoundary,
 } from '../combat-action-executor';
 
 const { mockReportClientFailure, mockToast } = vi.hoisted(() => ({
@@ -436,19 +439,36 @@ describe('combat-action-executor', () => {
       );
     });
 
-    it('should return empty array for unsupported action types', async () => {
-      const action = {
-        actor_id: 'actor-1',
-        action_type: 'use_object' as const,
-        target_ids: [],
-        weapon_id: null,
-        spell_id: null,
-        slot_level: null,
-        movement_feet: 0,
-      };
+    // This test used to assert `[]` and no fetch for `use_object` — it codified the bug:
+    // the empty success settled the declaration as if acted, so the turn ended and NPC
+    // turns advanced on an action the engine never ran. The executor has no engine owner
+    // for these three types, so it refuses them; `hide` is not among them (contested
+    // checks own it, #2420).
+    it('refuses declared action types the engine has no owner for', async () => {
+      for (const actionType of ['help', 'ready', 'use_object'] as const) {
+        const action = {
+          actor_id: 'actor-1',
+          action_type: actionType,
+          target_ids: [],
+          weapon_id: null,
+          spell_id: null,
+          slot_level: null,
+          movement_feet: 0,
+        };
 
-      const result = await executeStructuredCombatAction(encounterId, action);
-      expect(result).toEqual([]);
+        const refusal = await executeStructuredCombatActionWithBoundary(encounterId, action).catch(
+          (error: unknown) => error,
+        );
+
+        expect(refusal).toBeInstanceOf(CombatIntentRefusedError);
+        expect((refusal as CombatIntentRefusedError).message).toBe(
+          'That action is not supported yet',
+        );
+        expect((refusal as CombatIntentRefusedError).details?.reason).toBe(
+          ACTION_NOT_SUPPORTED_REASON,
+        );
+        expect((refusal as CombatIntentRefusedError).details?.intentType).toBe(actionType);
+      }
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 

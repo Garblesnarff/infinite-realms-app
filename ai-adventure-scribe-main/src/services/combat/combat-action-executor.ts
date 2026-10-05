@@ -249,6 +249,13 @@ export async function executeAuthoritativeCombatIntent(
   }
 }
 
+/**
+ * `CombatRefusalDetails.reason` for a declared action type the engine has no owner for:
+ * the intent schema knows attack, spell, dash, dodge, disengage, move, and end_turn — and
+ * nothing else. `hide` is deliberately absent here: contested checks own it (#2420).
+ */
+export const ACTION_NOT_SUPPORTED_REASON = 'action_not_supported';
+
 export async function executeStructuredCombatActionWithBoundary(
   encounterId: string,
   action: StructuredCombatAction,
@@ -320,6 +327,19 @@ export async function executeStructuredCombatActionWithBoundary(
       origin,
       signal,
     );
+  } else if (
+    action.action_type === 'help' ||
+    action.action_type === 'ready' ||
+    action.action_type === 'use_object'
+  ) {
+    // No engine intent exists for these action types, so there is nothing to dispatch.
+    // The empty success this branch used to return settled the declaration as if it had
+    // been acted: the turn ended and NPC turns advanced on an action that never happened.
+    // Refuse instead — the resolution step records it and keeps the turn open.
+    throw new CombatIntentRefusedError('That action is not supported yet', 422, {
+      reason: ACTION_NOT_SUPPORTED_REASON,
+      intentType: action.action_type,
+    });
   } else {
     return { outcomes: [], boundary: null };
   }

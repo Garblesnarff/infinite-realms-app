@@ -29,6 +29,7 @@ import {
   slotLevelOf,
 } from '@/services/combat/aoe-combat-action';
 import {
+  ACTION_NOT_SUPPORTED_REASON,
   CombatIntentRefusedError,
   combatBoundaryFromResult,
   executeAuthoritativeCombatIntent,
@@ -847,6 +848,16 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         continue;
       }
       recordRefusal(action, error);
+      if (error.details?.reason === ACTION_NOT_SUPPORTED_REASON) {
+        // The engine has no owner for this action type, so no repair can re-declare it
+        // into existence and there is no turn order to recover. The refusal is recorded
+        // above; the batch moves on with the turn still open — nothing settled for this
+        // actor, and no NPC turn advances on an action that never happened.
+        logger.info(
+          `[CombatBatch] outcome=action_not_supported actor=${action.actor_id} actionType=${action.action_type}`,
+        );
+        continue;
+      }
       const refusedCurrentParticipantId = error.details?.currentParticipantId;
       if (
         sessionId &&
@@ -1054,8 +1065,23 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     )
       ? playerParticipant
       : undefined;
-  const playerKeepsTurn = Boolean(keptBy);
+  /**
+   * An action type the engine has no owner for is refused no matter whose turn it is, so
+   * the refusal keeps the turn wherever the pre-flight left it. NPC turns resolved ahead
+   * of the declaration leave `turnHolder` on the player, where `keptBy` above (which
+   * requires no holder yet) never fires — without this, the refusal below would be
+   * announced as "declared out of turn" on the player's own turn, and the narration
+   * would be told it is not their turn.
+   */
+  const unsupportedPlayerRefusal = refusedPlayerActions.find(
+    (refusal) => refusal.refusalReason === ACTION_NOT_SUPPORTED_REASON,
+  );
   if (keptBy) turnHolder = { id: keptBy.id, name: keptBy.name };
+  const unsupportedKeepsTurn =
+    Boolean(unsupportedPlayerRefusal) &&
+    !combatOver &&
+    isPlayerActor(turnHolder?.id ?? '', participants);
+  const playerKeepsTurn = Boolean(keptBy) || unsupportedKeepsTurn;
   // A silent turn resolved nothing, so nothing ended the player's turn. If an NPC pre-flight
   // stopped short of the player (its safety cap), the note would be false; say nothing then.
   const silentTurn =
@@ -1067,7 +1093,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   if (silentTurn && !turnHolder && playerParticipant) {
     turnHolder = { id: playerParticipant.id, name: playerParticipant.name };
   }
-  const stillTheirTurn = keptBy ? ` It is still ${keptBy.name ?? 'the player'}'s turn.` : '';
+  const stillTheirTurn = playerKeepsTurn
+    ? ` It is still ${keptBy?.name ?? turnHolder?.name ?? 'the player'}'s turn.`
+    : '';
   /** What the narration pass is told, in words, about the player's own unresolved action. */
   const unresolvedPlayerAction = refusedPlayerActions.length
     ? refusedPlayerActions
@@ -1265,19 +1293,26 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         { holder: turnHolder, holderIsPlayer: playerTurn },
         resolvedActions.length > 0,
       )
-    : playerKeepsTurn
-      ? stillYourTurnNotice(
-          String(
-            refusedPlayerActions[0].playerFacingReason ??
-              refusedPlayerActions[0].engineRefusal ??
-              '',
-          ),
-        )
-      : turnNotice(
-          turnHolder,
-          isPlayerActor(turnHolder?.id ?? '', participants),
-          String(refusedPlayerActions[0].refusalReason ?? ''),
-        );
+    : unsupportedPlayerRefusal
+      ? // Named in every case: an unsupported action was never "declared out of turn",
+        // and when another action in the batch settled the turn it must not claim the
+        // turn is still the player's either.
+        playerKeepsTurn
+        ? stillYourTurnNotice(String(unsupportedPlayerRefusal.playerFacingReason ?? ''))
+        : '*(That action is not supported yet, so it was not resolved.)*'
+      : playerKeepsTurn
+        ? stillYourTurnNotice(
+            String(
+              refusedPlayerActions[0].playerFacingReason ??
+                refusedPlayerActions[0].engineRefusal ??
+                '',
+            ),
+          )
+        : turnNotice(
+            turnHolder,
+            isPlayerActor(turnHolder?.id ?? '', participants),
+            String(refusedPlayerActions[0].refusalReason ?? ''),
+          );
   const refusedText = `${narratedText}\n\n${notice}`.trim();
   return {
     ...narration,
