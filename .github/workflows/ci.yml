@@ -150,6 +150,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Every `*.real-db.test.ts` must be in the `server-real-db` job's explicit
+      # file list below. That list stays a list (a whole-suite `bun test` with a
+      # database configured fails 54 tests), which is exactly why adding a suite
+      # to it is a step someone forgets -- and an unregistered suite runs nowhere
+      # while `server-vitest` stays green (#1906, again in #2560). First step of
+      # this job so it fails before anything expensive (#2574).
+      - name: Real-DB test files must be registered in ci.yml
+        if: ${{ !cancelled() }}
+        run: node scripts/ci/check-real-db-test-list.mjs
       # Repo-root AGENTS.md is a byte-identical copy of
       # ai-adventure-scribe-main/AGENTS.md (#2104/#2107). Fail here if they drift.
       # This lived in `frontend`, which is now skipped on a docs-only change --
@@ -177,6 +186,14 @@ jobs:
         working-directory: ai-adventure-scribe-main/server-bun
       - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bun run lint
+      # The guard above is only trustworthy if its comparison function is tested,
+      # and scripts/ is outside every test glob (vitest includes src/**, tests/**
+      # and cli/src/** only), so this file is run explicitly. Same reason
+      # security-lint.test.ts has never run in CI -- see the T09 audit note.
+      - name: Real-DB test list guard unit tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun test scripts/ci/check-real-db-test-list.test.ts
+        working-directory: ai-adventure-scribe-main
       # Server typecheck gate (#2313). Runs tsc over the server program and
       # fails on any error in a file not quarantined in
       # server-bun/typecheck-known-errors.txt; a quarantined file with no errors
