@@ -19,6 +19,10 @@ import {
   resolveCombatantStats,
 } from './combatant-stat-resolution.js';
 import { appendActiveCompanionInputs } from './companion-seating.js';
+import {
+  expandParticipantInputs,
+  normalizeEncounterDifficulty,
+} from './encounter-sizing.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
 import { normalizeMonsterKey } from './monster-key.js';
 import {
@@ -41,6 +45,7 @@ import {
   npcs,
   sessionCompanions,
   combatParticipantStatus,
+  starterCampaigns,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../../db/schema/index';
@@ -114,7 +119,11 @@ export class CombatEncounterService {
     // as a 500 in production. The check is separable, so it is now separate, and the
     // insert-select ban in eslint.config.js stops the pattern coming back.
     const [session] = await db
-      .select({ id: gameSessions.id, starterCampaignId: gameSessions.starterCampaignId })
+      .select({
+        id: gameSessions.id,
+        starterCampaignId: gameSessions.starterCampaignId,
+        campaignId: gameSessions.campaignId,
+      })
       .from(gameSessions)
       .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
       .leftJoin(characters, eq(gameSessions.characterId, characters.id))
@@ -193,6 +202,61 @@ export class CombatEncounterService {
       // combatant. A campaign with no starter bible yields an empty index and the ladder
       // starts at the SRD rung, exactly as it did before authored stats existed.
       const campaignIndex = await loadCampaignMonsterIndex(session.starterCampaignId);
+
+      // #2514: encounter sizing backstop. The entry gate and the turn
+      // pipeline size the encounter first; this re-applies the same rule
+      // for any caller that seats directly (sheet Strike via /enter with
+      // an old or forged body), so the number of hostile creatures placed
+      // follows the campaign difficulty no matter which path started the
+      // fight. The partySize/4 scaler below is untouched: it fits each
+      // creature to the party, this decides how many creatures there are.
+      // No migration: difficulty already lives on starter_campaigns /
+      // campaigns, and the encounter row's own difficulty column stays
+      // as it was (null at creation).
+      try {
+        let difficultyRaw: string | null = null;
+        if (session.starterCampaignId) {
+          const [row] = await db
+            .select({ difficulty: starterCampaigns.difficulty })
+            .from(starterCampaigns)
+            .where(eq(starterCampaigns.id, session.starterCampaignId))
+            .limit(1);
+          difficultyRaw = row?.difficulty ?? null;
+        }
+        if (!difficultyRaw && session.campaignId) {
+          const [row] = await db
+            .select({ difficultyLevel: campaigns.difficultyLevel })
+            .from(campaigns)
+            .where(eq(campaigns.id, session.campaignId))
+            .limit(1);
+          difficultyRaw = row?.difficultyLevel ?? null;
+        }
+        const difficulty = normalizeEncounterDifficulty(difficultyRaw);
+        if (difficulty) {
+          const before = participantsToSeat.filter((input) => !input.characterId).length;
+          participantsToSeat = expandParticipantInputs(participantsToSeat, {
+            difficulty,
+            index: campaignIndex,
+          });
+          const after = participantsToSeat.filter((input) => !input.characterId).length;
+          if (after !== before) {
+            logger.info({
+              msg: 'COMBAT_ENCOUNTER_SIZED',
+              sessionId,
+              encounterId: encounter.id,
+              difficulty,
+              hostileCount: after,
+            });
+          }
+        }
+      } catch (sizingError) {
+        logger.warn({
+          msg: 'COMBAT_ENCOUNTER_SIZING_UNAVAILABLE',
+          sessionId,
+          encounterId: encounter.id,
+          error: sizingError,
+        });
+      }
 
       /**
        * The party the stat blocks are about to be fitted to.

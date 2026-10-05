@@ -16,12 +16,17 @@ import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
+import { loadSessionEncounterContext } from '../../services/combat/combat-entry-campaign-index.js';
 import {
   detectDeclaredAttack,
   detectUntargetedAttackSpell,
   looksLikeCombatIntent,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
+import {
+  buildEncounterSizeDirective,
+  expandDerivedCombatants,
+} from '../../services/combat/encounter-sizing.js';
 import {
   applyCombatEntryGate,
   stripUntargetedInitiativeRollRequests,
@@ -237,9 +242,14 @@ const extractPlayerInputFromPrompt = (prompt: string): string | undefined => {
 const escapeXmlAttribute = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-const appendDeclaredAttackDirective = (prompt: string, actorName: string): string => {
+export const appendDeclaredAttackDirective = (
+  prompt: string,
+  actorName: string,
+  encounterDirective = '',
+): string => {
   const escapedActor = escapeXmlAttribute(actorName);
-  return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. It has NOT been resolved: the engine has not rolled, so nothing has hit, missed, or dealt damage, and ${escapedActor} has not reacted or moved. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and describe only the moment before the roll.</declared_attack>`;
+  const size = encounterDirective ? ` ${encounterDirective}` : '';
+  return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. It has NOT been resolved: the engine has not rolled, so nothing has hit, missed, or dealt damage, and ${escapedActor} has not reacted or moved. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and describe only the moment before the roll.${size}</declared_attack>`;
 };
 
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
@@ -483,8 +493,40 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           detector: declaredAttack,
         });
       }
+      // #2514: the DM prompt receives the engine-decided creature count and
+      // names BEFORE it narrates the approach. For a declared attack the
+      // target is known before generation, so sizing runs here and the
+      // directive carries the count into the prose prompt; the gate and
+      // `startCombat` then seat exactly that sized encounter. A sizing
+      // failure must not block the turn: the directive falls back to the
+      // single named creature, as before #2514.
+      let encounterDirective = '';
+      if (declaredAttack && combatEntry?.sessionId) {
+        try {
+          const context = await loadSessionEncounterContext(combatEntry.sessionId, userId);
+          if (context.difficulty) {
+            const sized = expandDerivedCombatants(
+              [
+                {
+                  name: declaredAttack.actorName,
+                  ...(declaredAttack.monsterId ? { monsterId: declaredAttack.monsterId } : {}),
+                  count: 1,
+                },
+              ],
+              context,
+            );
+            encounterDirective = buildEncounterSizeDirective(sized);
+          }
+        } catch (sizingError) {
+          logger.warn({
+            msg: 'LLM_ENCOUNTER_SIZING_UNAVAILABLE',
+            sessionId: combatEntry.sessionId,
+            error: sizingError,
+          });
+        }
+      }
       const llmPrompt = declaredAttack
-        ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName)
+        ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
         : prompt;
 
       let result = await LLMProviderService.generate({

@@ -79,6 +79,42 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 mock.module('../../../services/combat/combat-intent-roster.js', () => ({
   loadCombatIntentActorRoster: async () => intentActors,
 }));
+// #2514: encounter sizing context. Default is "no difficulty" (pre-#2514
+// behaviour); the prompt-contract test below flips it to Hard. The index is
+// a hand-built `CampaignMonsterIndex` shape carrying only what sizing reads
+// (`byKey` / `blocklessNpcs`); the real builder is covered in
+// `services/combat/__tests__/encounter-sizing.test.ts`.
+let sizingDifficulty: 'hard' | null = null;
+const sizingIndex = {
+  campaignId: 'campaign-2514',
+  byKey: new Map([
+    [
+      'professoremildarkwater',
+      {
+        entityName: 'Professor Emil Darkwater',
+        chunkType: 'npc_tier1',
+        parsed: {},
+        coverage: 'full',
+        content: '**Professor Emil Darkwater**\n\n**HP:** 10 **AC:** 12 **Speed:** 30ft',
+      },
+    ],
+  ]),
+  chunkCount: 1,
+  blocklessNpcs: new Map(),
+};
+mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
+  loadSessionCampaignMonsterIndex: async () => ({
+    campaignId: 'campaign-2514',
+    byKey: new Map(),
+    chunkCount: 0,
+    blocklessNpcs: new Map(),
+  }),
+  loadSessionEncounterContext: async () => ({
+    difficulty: sizingDifficulty,
+    difficultyRaw: sizingDifficulty,
+    index: sizingIndex,
+  }),
+}));
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
@@ -118,6 +154,7 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
     generatedResult = { text: '{}', provider: 'openrouter', model: 'm' };
     generatedInputs = [];
     intentActors = defaultIntentActors;
+    sizingDifficulty = null;
     infoLogs.length = 0;
     warningLogs.length = 0;
   });
@@ -246,6 +283,65 @@ describe('POST /v1/llm/generate — combat entry gate', () => {
       '<declared_attack actor="Professor Emil Darkwater">',
     );
     expect(generatedInputs[0]?.prompt).toContain('Do NOT resolve it.');
+  });
+
+  it('tells the DM prompt the engine-decided count before it narrates (#2514)', async () => {
+    sizingDifficulty = 'hard';
+    generatedResult = {
+      text: 'The spell gathers at the tip of your finger.',
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'cast Magic Missile at the ghoul',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const body = (await response.json()) as { text: string };
+    const envelope = JSON.parse(body.text) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    // The prose prompt carries the count and the numbered names BEFORE the
+    // DM narrates the approach; the pending handoff seats the same total.
+    const prompt = String(generatedInputs[0]?.prompt);
+    expect(prompt).toContain('<declared_attack actor="The Ghoul">');
+    expect(prompt).toContain('Do NOT resolve it.');
+    expect(prompt).toContain('Encounter size (engine-decided): 2 hostile creatures');
+    expect(prompt).toContain('The Ghoul 1');
+    expect(prompt).toContain('The Ghoul 2');
+    expect(envelope.combat_entry_pending).toMatchObject({
+      combatants: [{ name: 'The Ghoul', monsterId: 'srd:ghoul', count: 2 }],
+    });
+  });
+
+  it('never multiplies a named NPC, even on Hard (#2514 round 2)', async () => {
+    sizingDifficulty = 'hard';
+    generatedResult = {
+      text: 'Darkwater flinches as you square your shoulders.',
+      provider: 'openrouter',
+      model: 'test/model',
+    };
+
+    const response = await generate({
+      prompt: 'Continue the scene.',
+      player_input: 'i punch Darkwater',
+      combatEntry: COMBAT_ENTRY,
+    });
+    const body = (await response.json()) as { text: string };
+    const envelope = JSON.parse(body.text) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    // Professor Emil Darkwater is a named unique: the prompt seats exactly
+    // one of him, with no invented numbered copies, and so does the handoff.
+    const prompt = String(generatedInputs[0]?.prompt);
+    expect(prompt).toContain('<declared_attack actor="Professor Emil Darkwater">');
+    expect(prompt).toContain('Encounter size (engine-decided): 1 hostile creature');
+    expect(prompt).not.toContain('Professor Emil Darkwater 1');
+    expect(prompt).not.toContain('Professor Emil Darkwater 2');
+    expect(envelope.combat_entry_pending).toMatchObject({
+      combatants: [{ name: 'Professor Emil Darkwater', count: 1 }],
+    });
   });
 
   it('drives ordinary attack phrasing through the contract-violation telemetry path (#1943)', async () => {

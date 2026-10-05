@@ -22,6 +22,7 @@
  * One model string stops being a single point of failure because combat *behavior* also
  * triggers entry.
  */
+import { expandDerivedCombatants } from './encounter-sizing.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './scene-spec-sanitizer.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
 import {
@@ -36,6 +37,7 @@ import type {
   CombatEntryFirstActionRefusal,
 } from './combat-entry-first-action.js';
 import type { DeclaredAttack } from './combat-intent-gate.js';
+import type { EncounterContext } from './encounter-sizing.js';
 import type { CombatSeatingHint, CombatSeatingReason } from '../../tactical/seating.js';
 import type { SceneSpec } from '../../tactical/types.js';
 import type { DMMapAction, DMResponse } from '../dm/dm-response-schema.js';
@@ -481,6 +483,17 @@ export interface CombatEntryGateDeps {
     player: CombatEntryPlayer;
     declaredAttack: DeclaredAttack;
   }) => Promise<CombatEntryFirstAction | CombatEntryFirstActionRefusal | null>;
+  /**
+   * Encounter sizing context (#2514). Optional so unit tests and older
+   * wirings seat exactly what they were handed; production wiring loads
+   * the campaign difficulty + monster index and the gate expands a
+   * one-creature entry to the difficulty-sized encounter before seating.
+   * `startCombat` re-applies the same sizing as a backstop.
+   */
+  loadEncounterContext?: (
+    sessionId: string,
+    userId: string,
+  ) => Promise<EncounterContext | null>;
   logger: {
     info: (data: unknown) => void;
     warn: (data: unknown) => void;
@@ -603,7 +616,27 @@ export async function seatCombatEntry(
       return null;
     }
 
-    const participants = buildEntryParticipants(player, combatants, {
+    // #2514: the engine decides how many hostile creatures this encounter
+    // places (campaign difficulty + the bible's encounter note), before
+    // any participant is seated. Idempotent with the pipeline sizing and
+    // with the `startCombat` backstop: an already-sized list is unchanged.
+    let sizedCombatants = combatants;
+    if (deps.loadEncounterContext) {
+      try {
+        const context = await deps.loadEncounterContext(sessionId, userId);
+        if (context) {
+          sizedCombatants = expandDerivedCombatants(combatants, context);
+        }
+      } catch (error) {
+        deps.logger.warn({
+          msg: 'Combat entry encounter sizing unavailable; seating as handed',
+          sessionId,
+          error,
+        });
+      }
+    }
+
+    const participants = buildEntryParticipants(player, sizedCombatants, {
       sceneDescription: sceneSpec.sceneDescription,
       sceneEntityName: declaredAttack?.actorName ?? seatingHint?.targetName,
       source: trigger,

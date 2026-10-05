@@ -83,6 +83,13 @@ mock.module('../../../services/combat/combat-intent-roster.js', () => ({
 }));
 mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
   loadSessionCampaignMonsterIndex: async () => campaignIndex,
+  // #2514: sizing reads difficulty through the same loader; these scenarios
+  // predate campaign difficulty, so it reports none.
+  loadSessionEncounterContext: async () => ({
+    difficulty: null,
+    difficultyRaw: null,
+    index: campaignIndex,
+  }),
 }));
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');

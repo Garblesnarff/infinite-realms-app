@@ -227,18 +227,46 @@ export function generateMap(spec: SceneSpec): TacticalMap {
     if (p) placeEntity(map, { ...pc, ...p });
   }
   const entry = map.entities[0] ? { x: map.entities[0].x, y: map.entities[0].y } : { x: 1, y: 1 };
+  // #2514: 2-3 hostiles are placed at sensible, non-stacked distances from
+  // each other. Previously 'guarding' stacked them in a tight line one cell
+  // apart at the centre and 'formation' walked straight back along a row, so
+  // pack encounters read as a conga line. Spread them around their
+  // placement anchor and prefer candidate cells at least two cells away from
+  // every already-placed hostile, falling back to any footprint-free cell
+  // (small maps, large footprints) when no spread candidate exists.
+  const placedHostiles: Array<{ x: number; y: number }> = [];
   for (let i = 0; i < enemies.length; i++) {
     const desired =
       spec.enemyPlacement === 'formation'
         ? { x: width - 2 - i * 2, y: Math.floor(height / 2) }
         : spec.enemyPlacement === 'guarding'
-          ? { x: Math.floor(width / 2) + i, y: Math.floor(height / 2) }
-          : { x: width - 2 - i, y: height - 2 - i };
+          ? {
+              x: Math.floor(width / 2) + (i - (enemies.length - 1) / 2) * 2,
+              y: Math.floor(height / 2),
+            }
+          : { x: width - 2 - i * 2, y: height - 2 - i };
     const positions = candidates(map, enemies[i], desired, rng);
-    const p = positions.find(
-      (p) => !map.entities.some((e) => entityFootprint(e).some((c) => c.x === p.x && c.y === p.y)),
+    const footprintFree = (p: { x: number; y: number }) =>
+      !map.entities.some((e) =>
+        entityFootprint(e).some((c) => {
+          const candidate = entityFootprint({ ...enemies[i], x: p.x, y: p.y });
+          return candidate.some((cc) => cc.x === c.x && cc.y === c.y);
+        }),
+      );
+    const spread = positions.find(
+      (p) =>
+        footprintFree(p) &&
+        placedHostiles.every(
+          (other) => Math.max(Math.abs(p.x - other.x), Math.abs(p.y - other.y)) >= 2,
+        ),
     );
-    if (p) placeEntity(map, { ...enemies[i], ...p });
+    const originFree = (p: { x: number; y: number }) =>
+      !map.entities.some((e) => entityFootprint(e).some((c) => c.x === p.x && c.y === p.y));
+    const p = spread ?? positions.find(footprintFree) ?? positions.find(originFree);
+    if (p) {
+      placeEntity(map, { ...enemies[i], ...p });
+      placedHostiles.push({ x: p.x, y: p.y });
+    }
   }
   // Guarantee each enemy can be reached from entry, including cellular cave islands.
   for (const enemy of map.entities.filter((e) => e.type !== 'pc'))

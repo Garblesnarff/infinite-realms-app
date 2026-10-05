@@ -19,6 +19,12 @@ export interface AuthoredMonster {
   chunkType: string;
   parsed: ParsedStatBlock;
   coverage: ParseCoverage;
+  /**
+   * Raw chunk content, retained so encounter sizing can read the bible's
+   * encounter note for this creature (#2514). Optional: indexes built by
+   * hand in older tests do not carry it and simply read as "no note".
+   */
+  content?: string;
 }
 
 export interface CampaignMonsterIndex {
@@ -78,6 +84,7 @@ export function buildCampaignMonsterIndex(
       chunkType: row.chunkType,
       parsed,
       coverage,
+      content: row.content,
     });
   }
 

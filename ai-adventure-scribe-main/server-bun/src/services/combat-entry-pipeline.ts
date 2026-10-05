@@ -11,13 +11,17 @@
  * here: the player must confirm the entry and may provide their own initiative d20 through the
  * separate `/v1/combat/sessions/:sessionId/enter` endpoint.
  */
-import { loadSessionCampaignMonsterIndex } from './combat/combat-entry-campaign-index.js';
+import {
+  loadSessionCampaignMonsterIndex,
+  loadSessionEncounterContext,
+} from './combat/combat-entry-campaign-index.js';
 import {
   detectCombatEntry,
   mapActionTarget,
   synthesizeSceneSpec,
 } from './combat/combat-entry-gate.js';
 import { nameUnresolvedCombatants } from './combat/combat-entry-unnamed-hostile.js';
+import { expandDerivedCombatants } from './combat/encounter-sizing.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from './combat/scene-spec-sanitizer.js';
 import { isUnresolvedNpcName } from '../../../shared/unresolved-creature-name';
 import { logger } from '../lib/logger.js';
@@ -29,6 +33,7 @@ import type {
   CombatEntryResponse,
 } from './combat/combat-entry-gate.js';
 import type { CombatIntentActor, DeclaredAttack } from './combat/combat-intent-gate.js';
+import type { EncounterContext } from './combat/encounter-sizing.js';
 import type { LLMResponse } from './llm-provider-service.js';
 
 /** What the client must send for the server to be able to seat the player in an encounter. */
@@ -259,6 +264,14 @@ export async function applyCombatEntryGate(params: {
   untargetedSpellRoster?: readonly CombatIntentActor[] | null;
   /** The session's authored creatures, read only to name a hostile the DM left unnamed. */
   campaignMonsterIndex?: (sessionId: string, userId: string) => Promise<CampaignMonsterIndex>;
+  /**
+   * Encounter sizing context (#2514): campaign difficulty + monster index.
+   * When supplied (or loaded by default in production), a pending entry's
+   * combatants are expanded to the difficulty-sized total before the
+   * handoff reaches the client, so the popup, the tracker and the DM's
+   * next narration all agree on how many creatures are present.
+   */
+  encounterContext?: (sessionId: string, userId: string) => Promise<EncounterContext>;
   deps?: CombatEntryGateDeps;
 }): Promise<LLMResponse> {
   const { combatEntry, declaredAttack, untargetedSpellRoster } = params;
@@ -407,6 +420,30 @@ export async function applyCombatEntryGate(params: {
       return { ...sanitizedResult, text: JSON.stringify(withoutCombatEntryFields(envelope)) };
     }
     pending = { ...pending, combatants: named };
+  }
+
+  // #2514: size the encounter before the handoff leaves the server. The
+  // engine decides the count (campaign difficulty + bible encounter note);
+  // the DM's prose in this turn already introduced the named creature, and
+  // every later turn reads the sized roster, so prose and tracker agree
+  // from the popup onward. A sizing failure seats what was handed, as before.
+  if (pending) {
+    try {
+      const context = params.encounterContext
+        ? await params.encounterContext(combatEntry.sessionId, params.userId)
+        : params.campaignMonsterIndex
+          ? null
+          : await loadSessionEncounterContext(combatEntry.sessionId, params.userId);
+      if (context?.difficulty) {
+        pending = { ...pending, combatants: expandDerivedCombatants(pending.combatants, context) };
+      }
+    } catch (sizingError) {
+      logger.warn({
+        msg: 'COMBAT_ENTRY_ENCOUNTER_SIZING_UNAVAILABLE',
+        sessionId: combatEntry.sessionId,
+        error: sizingError,
+      });
+    }
   }
 
   if (!pending) return sanitizedResult;

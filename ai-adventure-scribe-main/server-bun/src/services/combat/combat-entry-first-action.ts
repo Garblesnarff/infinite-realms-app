@@ -199,13 +199,23 @@ function findTarget(
   const claimName = normalize(declared.actorName);
   const exact = participants.find((participant) => {
     if (player && participant.id === player.id) return false;
+    // #2514: a difficulty-sized encounter seats duplicates as
+    // "Faceless Stalker 1 / 2". The declared target is the first of its
+    // kind, so a numbered seat of that kind is an exact match, not a miss
+    // that would silently drop the player's opening attack (#2551).
+    const participantName = normalize(participant.name);
+    const baseName = participantName.replace(/\s+\d+$/, '');
+    const participantSlug = slugify(participant.name);
+    const baseSlug = participantSlug.replace(/-\d+$/, '');
     return (
       participant.id === claim ||
       slugify(participant.id) === claimSlug ||
-      slugify(participant.name) === claimSlug ||
-      normalize(participant.name) === claimName ||
-      normalize(participant.name).endsWith(` ${claimName}`) ||
-      claimName.endsWith(` ${normalize(participant.name)}`)
+      participantSlug === claimSlug ||
+      baseSlug === claimSlug ||
+      participantName === claimName ||
+      baseName === claimName ||
+      participantName.endsWith(` ${claimName}`) ||
+      claimName.endsWith(` ${participantName}`)
     );
   });
   if (exact) return exact;
