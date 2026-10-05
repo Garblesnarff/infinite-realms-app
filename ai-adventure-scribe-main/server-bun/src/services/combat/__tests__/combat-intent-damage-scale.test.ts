@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { getTableColumns, getTableName, SQL } from 'drizzle-orm';
+import { getTableColumns, getTableName } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
 import {
@@ -9,6 +9,7 @@ import {
 } from '../../../../../db/schema/index.js';
 
 import type { TacticalMap } from '../../../tactical/types.js';
+import type { SQL } from 'drizzle-orm';
 
 /**
  * Damage-scale wiring at the intent boundary (#2534).
@@ -94,7 +95,7 @@ const matches = (table: any, condition: SQL | undefined, row: Row): boolean => {
   if (!condition) return true;
   const query = dialect.sqlToQuery(condition);
   const columns = getTableColumns(table);
-  return [...query.sql.matchAll(/\"[^\"]+\"\.\"([^\"]+)\" = \$(\d+)/g)].every((match) => {
+  return [...query.sql.matchAll(/"[^"]+"\."([^"]+)" = \$(\d+)/g)].every((match) => {
     const key = Object.keys(columns).find((key) => columns[key].name === match[1])!;
     return row[key] === query.params[Number(match[2]) - 1];
   });
@@ -300,7 +301,7 @@ describe('damage-scale wiring (#2534)', () => {
   test('movement-only: the DM fact carries no damage scale', async () => {
     approachResult = { movementOnly: false, attackType: 'melee' };
     attackResolution = { resolvedAs: 'movement_only', targetId: golem.id };
-    const result = await executeCombatIntent(
+    await executeCombatIntent(
       encounter.id,
       { type: 'attack', actorId: scholar.id, targetId: golem.id, weaponId: 'quarterstaff' },
       'user-1',
