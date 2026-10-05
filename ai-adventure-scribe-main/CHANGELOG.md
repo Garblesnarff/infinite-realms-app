@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.27.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.26.2...v0.27.0) (2026-10-05)
+
+
+### Features
+
+* **combat:** encounter size scales with campaign difficulty ([#2514](https://github.com/Garblesnarff/infinite-realms-production/issues/2514)) ([#2565](https://github.com/Garblesnarff/infinite-realms-production/issues/2565)) ([3e149b8](https://github.com/Garblesnarff/infinite-realms-production/commit/3e149b8e454d547c57d4566c83cbc3c7d2db9f58))
+
+
+### Bug Fixes
+
+* **combat:** send the initiative roll even while a narrative roll turn is running ([#2587](https://github.com/Garblesnarff/infinite-realms-production/issues/2587), [#2481](https://github.com/Garblesnarff/infinite-realms-production/issues/2481)) ([#2590](https://github.com/Garblesnarff/infinite-realms-production/issues/2590)) ([18cccd6](https://github.com/Garblesnarff/infinite-realms-production/commit/18cccd6912ed221bee109a486c3e06718721889c))
+* **spells:** spell slots read and write only the engine table ([#2598](https://github.com/Garblesnarff/infinite-realms-production/issues/2598)) ([#2610](https://github.com/Garblesnarff/infinite-realms-production/issues/2610)) ([dd6ca46](https://github.com/Garblesnarff/infinite-realms-production/commit/dd6ca46480dfb9a7ed5519dd57716cc746c14b45))
+
 ## [0.26.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.26.1...v0.26.2) (2026-10-05)
 
 
