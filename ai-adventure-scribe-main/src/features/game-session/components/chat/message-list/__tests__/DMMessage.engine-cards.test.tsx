@@ -13,6 +13,7 @@ import {
   spellAction,
 } from '../../../../../../../shared/test-fixtures/engine-results';
 import { DMMessage } from '../DMMessage';
+import { MessageRenderer } from '../MessageRenderer';
 
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 
@@ -241,5 +242,90 @@ describe('engine result cards in the chat (#2417)', () => {
 
     expect(screen.queryAllByTestId('engine-result-card')).toHaveLength(0);
     expect(screen.getByText(/rolled 14 \+ 0 = 14 vs AC 11/)).toBeTruthy();
+  });
+
+  it('renders the live roll result beside a persisted DM reply and keeps the Engine line visible', () => {
+    const rollResultResponse = {
+      formula: '2d20kh1+1',
+      count: 2,
+      dieType: 20,
+      modifier: 1,
+      advantage: true,
+      disadvantage: false,
+      total: 16,
+      naturalRoll: 15,
+      timestamp: '2026-10-04T14:39:00.000Z',
+    };
+    const persistedDmReplyRow = {
+      id: 'dm-reply-2586',
+      speaker_type: 'dm' as const,
+      message: 'The slope gives way beneath your feet.',
+      context: { combatEngineBlocks: [blockOf()] },
+      images: [],
+      timestamp: '2026-10-04T14:39:01.000Z',
+      sequence_number: 7,
+    };
+
+    const persistedChatMessage = {
+      id: persistedDmReplyRow.id,
+      text: persistedDmReplyRow.message,
+      sender: persistedDmReplyRow.speaker_type,
+      timestamp: persistedDmReplyRow.timestamp,
+      context: persistedDmReplyRow.context,
+    };
+
+    expect(() =>
+      render(
+        <>
+          <MessageRenderer
+            message={{
+              text: 'Acrobatics check: 16',
+              sender: 'player',
+              context: { intent: 'dice_roll', diceRoll: rollResultResponse },
+            }}
+            messageId="roll-result-2586"
+            groupIndex={0}
+            msgIndex={0}
+            isFirstInGroup
+            isLastInGroup
+            isPlayer
+            isDM={false}
+            isCompanion={false}
+            expandedMessages={new Set()}
+            setExpandedMessages={vi.fn()}
+            imageByMessage={{}}
+            generatingFor={new Set()}
+            genErrorByMessage={{}}
+            onGenerateScene={vi.fn().mockResolvedValue(undefined)}
+            onOptionSelect={vi.fn().mockResolvedValue(undefined)}
+          />
+          <MessageRenderer
+            message={persistedChatMessage}
+            messageId={persistedDmReplyRow.id}
+            groupIndex={0}
+            msgIndex={1}
+            isFirstInGroup={false}
+            isLastInGroup
+            isPlayer={false}
+            isDM
+            isCompanion={false}
+            expandedMessages={new Set()}
+            setExpandedMessages={vi.fn()}
+            imageByMessage={{}}
+            generatingFor={new Set()}
+            genErrorByMessage={{}}
+            onGenerateScene={vi.fn().mockResolvedValue(undefined)}
+            onOptionSelect={vi.fn().mockResolvedValue(undefined)}
+          />
+        </>,
+      ),
+    ).not.toThrow();
+
+    expect(
+      screen.getByText(
+        'Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11 against The Scholar with Longsword — HIT. 3 slashing damage. The Scholar is now at 4 HP and is wounded.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/Kept: \[15\]/)).toBeTruthy();
   });
 });

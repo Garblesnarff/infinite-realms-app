@@ -216,7 +216,10 @@ describe('useMessageDiceRolls', () => {
       });
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('Stealth Check: 15 (nat 13+2)'),
-        expect.objectContaining({ intent: 'dice_roll' }),
+        expect.objectContaining({
+          intent: 'dice_roll',
+          diceRoll: expect.objectContaining({ results: [13] }),
+        }),
       );
     });
 
@@ -339,12 +342,18 @@ describe('useMessageDiceRolls', () => {
       );
 
       await act(async () => {
-        await result.current.handleManualResult(7, { naturalRoll: 5 });
+        await result.current.handleManualResult(7, {
+          naturalRoll: 5,
+          results: [18, 5],
+          keptResults: [5],
+        });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
         expect.stringContaining('[DIS]'),
-        expect.anything(),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({ results: [18, 5], keptResults: [5] }),
+        }),
       );
     });
 

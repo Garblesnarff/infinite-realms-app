@@ -4,12 +4,13 @@
  * A subtracted group keeps its sign: 1d8+1d6-1d4 (8, 4, 2) reads "8 + 4 - 2 = 10".
  */
 export function formatRollBreakdown(result: {
-  rolls: Array<{ value: number; sign?: number }>;
+  rolls: Array<{ value: number; sign?: number; useInTotal?: boolean }>;
   modifiers: number;
   total: number;
 }): string {
   const parts: string[] = [];
   for (const roll of result.rolls) {
+    if (roll.useInTotal === false) continue;
     if (!Number.isFinite(roll.value)) continue;
     const negative = roll.sign === -1;
     if (parts.length === 0) {

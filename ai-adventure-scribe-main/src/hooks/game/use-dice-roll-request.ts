@@ -23,6 +23,10 @@ export function isNumericFormula(formula: string): boolean {
 export interface RolledResultDetails {
   /** The kept d20 face, before modifiers. The engine settlers consume this, never the total. */
   naturalRoll: number;
+  /** Every face shown by the animated roll, including a dropped advantage/disadvantage die. */
+  results?: number[];
+  /** Faces included in the total, used to label dropped dice in the saved message. */
+  keptResults?: number[];
 }
 
 export type RollResultHandler = (
@@ -212,13 +216,25 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
       if (typeof result === 'number') {
         totalResult = result;
       } else if (result && typeof result === 'object' && 'total' in result) {
-        const rolled = result as { total: number; naturalRoll?: unknown };
+        const rolled = result as {
+          total: number;
+          naturalRoll?: unknown;
+          rolls?: Array<{ value: number; useInTotal?: boolean }>;
+        };
         totalResult = rolled.total;
         // The total includes the formula's modifier. An engine prompt (attack, initiative) adds
         // its own bonus to the die it gets back, so it must receive the natural face, or a
         // natural 13 at +5 resolves as 18 + 5 (#2210).
         if (typeof rolled.naturalRoll === 'number') {
-          details = { naturalRoll: rolled.naturalRoll };
+          const results = rolled.rolls?.map((face) => face.value);
+          const keptResults = rolled.rolls
+            ?.filter((face) => face.useInTotal !== false)
+            .map((face) => face.value);
+          details = {
+            naturalRoll: rolled.naturalRoll,
+            ...(results && results.length > 0 ? { results } : {}),
+            ...(keptResults && keptResults.length > 0 ? { keptResults } : {}),
+          };
         }
       } else {
         logger.warn('Unexpected result type in handleDiceRollComplete:', result);

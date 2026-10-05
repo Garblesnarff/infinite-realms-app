@@ -14,6 +14,8 @@ export interface DiceRollResult {
     value: number;
     /** +1, or -1 when this face comes from a subtracted dice group. */
     sign?: 1 | -1;
+    /** False for a die dropped by an advantage/disadvantage keep modifier. */
+    useInTotal?: boolean;
     critical?: boolean;
   }>;
   modifiers: number;
@@ -42,32 +44,50 @@ export class DiceEngine {
   static roll(expression: string, options: DiceRollOptions = {}): DiceRollResult {
     const { advantage, disadvantage, purpose, actorId, secret } = options;
 
-    // Handle advantage/disadvantage for d20 rolls
+    // Advantage and disadvantage cancel out (SRD 5.1): the roll stays a plain d20.
+    const keepMode = !!advantage !== !!disadvantage && /(\d*)d20/.test(expression);
     let finalExpression = expression;
-    if ((advantage || disadvantage) && expression.includes('d20')) {
-      // Extract the d20 part and modifiers
-      const d20Match = expression.match(/(\d*)d20([+-]\d+)?/);
-      if (d20Match) {
-        const count = d20Match[1] || '1';
-
-        if (advantage && !disadvantage) {
-          finalExpression = expression.replace(/(\d*)d20/, `${count}d20kh1`);
-        } else if (disadvantage && !advantage) {
-          finalExpression = expression.replace(/(\d*)d20/, `${count}d20kl1`);
-        }
-        // If both advantage and disadvantage, they cancel out (normal roll)
-      }
+    if (keepMode) {
+      const count = expression.match(/(\d*)d20/)?.[1] || '1';
+      finalExpression = expression.replace(/(\d*)d20/, `${count}d20${advantage ? 'kh1' : 'kl1'}`);
     }
 
-    const roll = new DiceRoll(finalExpression);
-    const rolls = parseLibraryRoll(roll.rolls, finalExpression);
-    const naturalRoll = rolls.find((face) => face.dice === 20 && face.sign !== -1)?.value;
-    const signedSum = rolls.reduce((sum, face) => sum + face.value * face.sign, 0);
-    const modifiers = rolls.length > 0 ? roll.total - signedSum : 0;
+    // rpg-dice-roller drops the unkept face of `1d20kh1`/`kl1`, so roll the
+    // formula as written and add one extra d20. Every other dice group keeps
+    // its own faces, and the selected d20 is marked so both dice can be shown.
+    const roll = new DiceRoll(expression);
+    let rolls = parseLibraryRoll(roll.rolls, expression);
+    let total = roll.total;
+    const firstD20 = keepMode ? rolls.findIndex((f) => f.dice === 20 && f.sign !== -1) : -1;
+    if (firstD20 >= 0) {
+      const first = rolls[firstD20];
+      const extra = new DiceRoll('1d20').total;
+      const extraWins = advantage ? extra > first.value : extra < first.value;
+      rolls = [
+        ...rolls.slice(0, firstD20),
+        { ...first, useInTotal: !extraWins },
+        {
+          ...first,
+          value: extra,
+          useInTotal: extraWins,
+          critical: extra === 1 || extra === 20,
+        },
+        ...rolls.slice(firstD20 + 1),
+      ];
+      if (extraWins) total += extra - first.value;
+    }
+    const naturalRoll = rolls.find(
+      (face) => face.dice === 20 && face.sign !== -1 && face.useInTotal,
+    )?.value;
+    const signedSum = rolls.reduce(
+      (sum, face) => sum + (face.useInTotal ? face.value * face.sign : 0),
+      0,
+    );
+    const modifiers = rolls.length > 0 ? total - signedSum : 0;
 
     return {
       expression: finalExpression,
-      total: roll.total,
+      total,
       rolls,
       modifiers,
       advantage: (advantage && !disadvantage) || false,

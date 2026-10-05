@@ -178,8 +178,12 @@ describe('userDataApi.reportClientFailure (#2515)', () => {
     userDataApi.reportClientFailure(
       'react_error_boundary',
       'sess-9',
-      'render blew up',
-      { component: 'GameContent' },
+      'Error: render blew up\n    at GameContent (chunk.js:1:1)',
+      {
+        component: 'GameContent',
+        componentStack: '\n    at GameContent (chunk.js:1:1)',
+        message: 'render blew up',
+      },
     );
     // reportClientFailure is fire-and-forget; let the request flush.
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -190,9 +194,10 @@ describe('userDataApi.reportClientFailure (#2515)', () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.kind).toBe('react_error_boundary');
     expect(body.sessionId).toBe('sess-9');
-    expect(body.error).toBe('render blew up');
+    expect(body.error).toContain('Error: render blew up');
     expect(body.message).toBe('render blew up');
     expect(body.component).toBe('GameContent');
+    expect(body.componentStack).toBe('\n    at GameContent (chunk.js:1:1)');
     expect(body.route).toBe(window.location.pathname);
     expect(body.bundle).toBe(APP_BUILD_VERSION);
     expect(typeof body.clientTimestamp).toBe('string');
@@ -200,11 +205,7 @@ describe('userDataApi.reportClientFailure (#2515)', () => {
   });
 
   it('truncates a very long failure message instead of dropping the report (#2515)', async () => {
-    userDataApi.reportClientFailure(
-      'unhandled_promise_rejection',
-      'sess-9',
-      'e'.repeat(5_000),
-    );
+    userDataApi.reportClientFailure('unhandled_promise_rejection', 'sess-9', 'e'.repeat(5_000));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

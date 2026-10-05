@@ -50,6 +50,7 @@ const isAllowedKind = (kind: string): kind is ClientFailureKind =>
 
 /** The failure message is the one free-text field in the log line; cap it. */
 const CLIENT_FAILURE_MESSAGE_MAX_CHARS = 500;
+const CLIENT_FAILURE_ERROR_MAX_CHARS = 2_000;
 
 /**
  * The client-failure payload shape (#2515). Optional fields stay optional and unknown
@@ -72,14 +73,15 @@ const clientFailurePayloadSchema = z.object({
     .transform((value) => value.slice(0, 4_000))
     .optional(),
   component: z.string().max(200).optional(),
+  componentStack: z.string().max(CLIENT_FAILURE_ERROR_MAX_CHARS).optional(),
   route: z.string().max(500).optional(),
   bundle: z.string().max(200).optional(),
   clientTimestamp: z.string().max(64).optional(),
 });
 
-export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' }).use(requireAuth).post(
-  '/client-failure',
-  ({ body, user }) => {
+export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' })
+  .use(requireAuth)
+  .post('/client-failure', ({ body, user }) => {
     const parsed = clientFailurePayloadSchema.safeParse(body ?? {});
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: 'Invalid client-failure payload.' }), {
@@ -104,7 +106,9 @@ export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' }).use(requi
       userId: user?.userId,
       kind: payload.kind,
       message: (payload.message ?? payload.error)?.slice(0, CLIENT_FAILURE_MESSAGE_MAX_CHARS),
+      stack: payload.error?.slice(0, CLIENT_FAILURE_ERROR_MAX_CHARS),
       component: payload.component,
+      componentStack: payload.componentStack,
       route: payload.route,
       bundle: payload.bundle,
       clientTimestamp: payload.clientTimestamp,
@@ -116,5 +120,4 @@ export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' }).use(requi
     });
 
     return new Response(null, { status: 204 });
-  },
-);
+  });

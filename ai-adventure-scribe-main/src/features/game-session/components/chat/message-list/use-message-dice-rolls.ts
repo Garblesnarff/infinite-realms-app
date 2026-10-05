@@ -264,6 +264,8 @@ export function useMessageDiceRolls({
             modifier: roll.rollConfig.modifier,
             advantage: roll.rollConfig.advantage,
             disadvantage: roll.rollConfig.disadvantage,
+            results: details?.results ?? [naturalFace],
+            ...(details?.keptResults ? { keptResults: details.keptResults } : {}),
             total: numericResult,
             ...(details?.naturalRoll !== undefined ? { naturalRoll: details.naturalRoll } : {}),
             requestType: roll.requestType,

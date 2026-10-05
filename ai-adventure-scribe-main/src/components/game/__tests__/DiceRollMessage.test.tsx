@@ -165,4 +165,44 @@ describe('DiceRollMessage', () => {
     expect(screen.getByText(/Kept: \[15\]/)).toBeInTheDocument();
     expect(screen.getByText(/Dropped: \[10\]/)).toBeInTheDocument();
   });
+
+  it.each([{ advantage: true }, { disadvantage: true }])(
+    'shows the dropped die on a tie (%o)',
+    (flags) => {
+      render(
+        <DiceRollMessage
+          data={{
+            ...defaultData,
+            advantage: false,
+            disadvantage: false,
+            ...flags,
+            results: [12, 12],
+            keptResults: [12],
+            total: 17,
+            naturalRoll: 12,
+          }}
+        />,
+      );
+      expect(screen.getByText(/Kept: \[12\]/)).toBeInTheDocument();
+      expect(screen.getByText(/Dropped: \[12\]/)).toBeInTheDocument();
+    },
+  );
+
+  it('renders a disadvantage roll when the live roll-result context omits results', () => {
+    const liveRollResult = {
+      ...defaultData,
+      formula: '2d20kh1+1',
+      count: 2,
+      modifier: 1,
+      advantage: false,
+      disadvantage: true,
+      results: undefined,
+      total: 16,
+      naturalRoll: 15,
+    } as unknown as typeof defaultData;
+
+    expect(() => render(<DiceRollMessage data={liveRollResult} />)).not.toThrow();
+    expect(screen.getByText(/Kept: \[15\]/)).toBeInTheDocument();
+    expect(screen.getByText('2d20kh1+1')).toBeInTheDocument();
+  });
 });

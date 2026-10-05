@@ -217,6 +217,29 @@ describe('useDiceRollRequest', () => {
     expect(mockOnManualResult).toHaveBeenCalledWith(18, { naturalRoll: 13 });
   });
 
+  it('passes every animated advantage/disadvantage face to the message producer', () => {
+    const { result } = renderHook(() =>
+      useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+    );
+
+    act(() => {
+      result.current.handleDiceRollComplete({
+        total: 7,
+        naturalRoll: 5,
+        rolls: [
+          { value: 18, useInTotal: false },
+          { value: 5, useInTotal: true },
+        ],
+      });
+    });
+
+    expect(mockOnManualResult).toHaveBeenCalledWith(7, {
+      naturalRoll: 5,
+      results: [18, 5],
+      keptResults: [5],
+    });
+  });
+
   it('completes auto-roll with invalid result', () => {
     const { result } = renderHook(() =>
       useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),

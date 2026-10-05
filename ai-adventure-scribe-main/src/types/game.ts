@@ -37,7 +37,7 @@ export interface MessageContext {
     modifier: number;
     advantage: boolean;
     disadvantage: boolean;
-    results: number[];
+    results?: number[];
     keptResults?: number[];
     total: number;
     naturalRoll?: number;

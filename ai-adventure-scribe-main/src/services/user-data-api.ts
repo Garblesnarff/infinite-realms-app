@@ -71,7 +71,9 @@ export type SessionContextPayload = Record<string, unknown> & {
   starter_campaign_id?: string | null;
   campaign: Record<string, unknown>;
   character: Record<string, unknown> & {
-    character_stats?: Array<Record<string, number> & { vital_state?: string; died_at?: string | null }>;
+    character_stats?: Array<
+      Record<string, number> & { vital_state?: string; died_at?: string | null }
+    >;
   };
 };
 
@@ -220,6 +222,8 @@ export type ClientFailureDetails = {
   message?: string;
   /** Component the failure came from (e.g. the error-boundary's caught component). */
   component?: string;
+  /** React's component stack, capped before transport and server logging. */
+  componentStack?: string;
   /** Client route (path) active when the failure happened. */
   route?: string;
 };
@@ -479,8 +483,7 @@ export const userDataApi = {
         (typeof characterRecord.id === 'string' ? characterRecord.id : null),
       characterName: typeof characterRecord.name === 'string' ? characterRecord.name : null,
       campaignId:
-        context.campaign_id ??
-        (typeof campaignRecord.id === 'string' ? campaignRecord.id : null),
+        context.campaign_id ?? (typeof campaignRecord.id === 'string' ? campaignRecord.id : null),
       campaignName: typeof campaignRecord.name === 'string' ? campaignRecord.name : null,
       starterCampaignId: context.starter_campaign_id ?? null,
       diedAt: stats.died_at ?? null,
@@ -742,9 +745,9 @@ export const userDataApi = {
         error: error?.slice(0, CLIENT_FAILURE_ERROR_MAX_CHARS),
         message: (details?.message ?? error)?.slice(0, CLIENT_FAILURE_MESSAGE_MAX_CHARS),
         component: details?.component,
+        componentStack: details?.componentStack?.slice(0, CLIENT_FAILURE_ERROR_MAX_CHARS),
         route:
-          details?.route ??
-          (typeof window !== 'undefined' ? window.location.pathname : undefined),
+          details?.route ?? (typeof window !== 'undefined' ? window.location.pathname : undefined),
         bundle: APP_BUILD_VERSION,
         clientTimestamp: new Date().toISOString(),
       }),

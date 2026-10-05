@@ -13,6 +13,7 @@ import { userDataApi } from '@/services/user-data-api';
 export const CLIENT_FAILURE_REPORT_INTERVAL_MS = 60 * 1000;
 
 const lastReportedAtByKey = new Map<string, number>();
+let activeGameSessionId: string | undefined;
 
 function shouldReport(key: string, now: number): boolean {
   const lastReportedAt = lastReportedAtByKey.get(key);
@@ -35,16 +36,25 @@ function failureMessage(reason: unknown): string {
  * `GameContent` and the breadcrumbs read it from), and the CLIENT_FAILURE log
  * line is keyed by it (#2515).
  */
+export function setActiveClientFailureSessionId(sessionId: string | null | undefined): void {
+  activeGameSessionId = sessionId ?? undefined;
+}
+
 function activeSessionId(): string | undefined {
   if (typeof window === 'undefined') return undefined;
-  return new URLSearchParams(window.location.search).get('session') ?? undefined;
+  return (
+    activeGameSessionId ?? new URLSearchParams(window.location.search).get('session') ?? undefined
+  );
 }
 
 /** First component named in a React component stack (`at GameContent (...)`). */
 function componentNameFromStack(componentStack?: string | null): string | undefined {
   if (!componentStack) return undefined;
-  const match = componentStack.match(/^\s*at\s+([A-Za-z0-9_$.]+)/m);
-  return match?.[1];
+  for (const line of componentStack.split('\n')) {
+    const match = line.match(/^\s*at\s+([^\s(]+)/);
+    if (match && !/^https?:\/\//.test(match[1])) return match[1];
+  }
+  return undefined;
 }
 
 export function reportUnhandledPromiseRejection(reason: unknown, now = Date.now()): void {
@@ -60,9 +70,16 @@ export function reportReactErrorBoundaryFailure(
 ): void {
   const message = error.message;
   if (!shouldReport(`react_error_boundary:${message}`, now)) return;
-  userDataApi.reportClientFailure('react_error_boundary', activeSessionId(), message, {
-    component: componentNameFromStack(componentStack),
-  });
+  userDataApi.reportClientFailure(
+    'react_error_boundary',
+    activeSessionId(),
+    error.stack ?? message,
+    {
+      component: componentNameFromStack(componentStack),
+      componentStack: componentStack ?? undefined,
+      message,
+    },
+  );
 }
 
 let installedCleanup: (() => void) | null = null;

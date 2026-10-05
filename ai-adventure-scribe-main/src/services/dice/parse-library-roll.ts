@@ -11,6 +11,7 @@ export interface ParsedDieFace {
   value: number;
   /** +1 for a normal group, -1 when the expression subtracts that group. */
   sign: 1 | -1;
+  useInTotal: boolean;
   critical?: boolean;
 }
 
@@ -62,11 +63,12 @@ export function parseLibraryRoll(parts: Iterable<unknown>, expression: string): 
     groupIndex += 1;
 
     for (const face of group.rolls) {
-      if (!isFace(face) || face.useInTotal === false) continue;
+      if (!isFace(face)) continue;
       faces.push({
         dice: sides,
         value: face.value,
         sign,
+        useInTotal: face.useInTotal !== false,
         critical: sides === 20 && (face.value === 1 || face.value === 20),
       });
     }

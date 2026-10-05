@@ -74,18 +74,37 @@ describe('client-failure-reporting (#2515)', () => {
   });
 
   it('posts a React error-boundary failure with the caught component name', () => {
-    reportReactErrorBoundaryFailure(
-      new Error('render blew up'),
-      '\n    at GameContent (chunk.js:1:1)\n    at GameProviders (chunk.js:2:2)',
-      20_000,
-    );
+    const error = new Error('render blew up');
+    error.stack = 'Error: render blew up\n    at GameContent (chunk.js:1:1)';
+    reportReactErrorBoundaryFailure(error, '\n    at GameContent (chunk.js:1:1)', 20_000);
 
     expect(mocks.reportClientFailure).toHaveBeenCalledTimes(1);
     expect(mocks.reportClientFailure).toHaveBeenCalledWith(
       'react_error_boundary',
       undefined,
-      'render blew up',
-      { component: 'GameContent' },
+      error.stack,
+      {
+        component: 'GameContent',
+        componentStack: '\n    at GameContent (chunk.js:1:1)',
+        message: 'render blew up',
+      },
+    );
+  });
+
+  it('skips URL frames when extracting a component name', () => {
+    const error = new Error('minified render blew up');
+    error.stack = 'Error: minified render blew up\n    at https://host/assets/main-X.js:1:2';
+    reportReactErrorBoundaryFailure(
+      error,
+      '\n    at https://host/assets/main-X.js:1:2\n    at DiceRollMessage (chunk.js:1:1)',
+      21_000,
+    );
+
+    expect(mocks.reportClientFailure).toHaveBeenCalledWith(
+      'react_error_boundary',
+      undefined,
+      error.stack,
+      expect.objectContaining({ component: 'DiceRollMessage' }),
     );
   });
 

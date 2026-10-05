@@ -17,7 +17,7 @@ interface DiceRollData {
   modifier: number;
   advantage: boolean;
   disadvantage: boolean;
-  results: number[];
+  results?: number[];
   keptResults?: number[];
   total: number;
   naturalRoll?: number;
@@ -70,7 +70,12 @@ const IndividualRolls = React.memo(
   }) => {
     if (advantage || disadvantage) {
       const kept = keptResults || results.slice(0, 1);
-      const dropped = results.filter((r) => !kept.includes(r));
+      // One instance per kept value, so a tie (12 and 12) still shows its dropped die.
+      const dropped = [...results];
+      for (const value of kept) {
+        const index = dropped.indexOf(value);
+        if (index !== -1) dropped.splice(index, 1);
+      }
 
       return (
         <div className="flex flex-col gap-1">
@@ -117,6 +122,7 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
       critical,
       label,
     } = data;
+    const safeResults = Array.isArray(results) ? results : [naturalRoll ?? total];
 
     return (
       <Card
@@ -194,7 +200,7 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
             <IndividualRolls
               advantage={advantage}
               disadvantage={disadvantage}
-              results={results}
+              results={safeResults}
               keptResults={keptResults}
               count={count}
             />

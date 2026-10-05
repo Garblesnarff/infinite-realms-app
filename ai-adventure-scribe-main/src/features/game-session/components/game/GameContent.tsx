@@ -28,6 +28,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useStaleClientCheck } from '@/hooks/use-stale-client-check';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 import logger from '@/lib/logger';
+import { setActiveClientFailureSessionId } from '@/services/client-failure-reporting';
 import { userDataApi } from '@/services/user-data-api';
 import { handleAsyncError } from '@/utils/error-handler';
 import { hasStarterPlaythroughSignal } from '@/utils/starter-playthrough';
@@ -78,6 +79,11 @@ const GameContent: React.FC = () => {
     clearForceNewParam,
   );
 
+  useEffect(() => {
+    setActiveClientFailureSessionId(sessionId);
+    return () => setActiveClientFailureSessionId(undefined);
+  }, [sessionId]);
+
   // Load character and campaign data
   const { isLoading, loadingPhase, error, isDM, resolvedCharacterId, missingTarget } = useGameData(
     characterIdFromParams,
@@ -87,8 +93,7 @@ const GameContent: React.FC = () => {
   // #2517: gate the game screen on the character's vital state, read in the
   // session load payload. Until it is known, nothing of the game renders.
   const vitalGate = useSessionVitalGate(sessionId);
-  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } =
-    useStarterCampaigns();
+  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } = useStarterCampaigns();
   const { state: characterState } = useCharacter();
 
   // A link without ?character: put the hero we found into the URL, then load as usual.

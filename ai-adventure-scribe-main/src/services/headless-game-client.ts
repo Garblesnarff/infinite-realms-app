@@ -331,6 +331,9 @@ export class HeadlessGameClient {
       total: diceRoll.result.total,
       naturalRoll: diceRoll.result.naturalRoll,
       results: diceRoll.result.rolls.map((roll) => roll.value),
+      keptResults: diceRoll.result.rolls
+        .filter((roll) => roll.useInTotal !== false)
+        .map((roll) => roll.value),
       advantage: !!diceRoll.result.advantage,
       disadvantage: !!diceRoll.result.disadvantage,
     };

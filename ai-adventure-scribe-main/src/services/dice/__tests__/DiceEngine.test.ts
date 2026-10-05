@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NumberGenerator } from '@dice-roller/rpg-dice-roller';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { DiceEngine } from '../DiceEngine';
 
@@ -67,6 +68,9 @@ describe('DiceEngine', () => {
       expect(result.expression).toBe('1d20kh1+5');
       expect(result.advantage).toBe(true);
       expect(!!result.disadvantage).toBe(false);
+      expect(result.rolls).toHaveLength(2);
+      expect(result.rolls.filter((face) => face.useInTotal)).toHaveLength(1);
+      expect(result.rolls.filter((face) => face.useInTotal === false)).toHaveLength(1);
     });
 
     it('should handle disadvantage on d20 rolls', () => {
@@ -81,6 +85,88 @@ describe('DiceEngine', () => {
       expect(result.expression).toBe('1d20+5');
       expect(!!result.advantage).toBe(false);
       expect(!!result.disadvantage).toBe(false);
+      expect(result.rolls).toHaveLength(1);
+      expect(result.total).toBe(result.rolls[0].value + 5);
+    });
+
+    describe('with fixed faces', () => {
+      const engine = NumberGenerator.generator.engine;
+      /** Each die takes the next face in order; the engine reads `face - 1`. */
+      const fixFaces = (...faces: number[]) => {
+        let i = 0;
+        NumberGenerator.generator.engine = { next: () => faces[i++] - 1 };
+      };
+      afterEach(() => {
+        NumberGenerator.generator.engine = engine;
+      });
+
+      it('advantage keeps the highest d20', () => {
+        fixFaces(5, 18);
+        const result = DiceEngine.roll('1d20+5', { advantage: true });
+        expect(result.rolls.map((f) => [f.value, f.useInTotal])).toEqual([
+          [5, false],
+          [18, true],
+        ]);
+        expect(result.naturalRoll).toBe(18);
+        expect(result.total).toBe(23);
+        expect(result.modifiers).toBe(5);
+      });
+
+      it('disadvantage keeps the lowest d20', () => {
+        fixFaces(18, 5);
+        const result = DiceEngine.roll('1d20+5', { disadvantage: true });
+        expect(result.rolls.map((f) => [f.value, f.useInTotal])).toEqual([
+          [18, false],
+          [5, true],
+        ]);
+        expect(result.naturalRoll).toBe(5);
+        expect(result.total).toBe(10);
+        expect(result.modifiers).toBe(5);
+      });
+
+      it.each([{ advantage: true }, { disadvantage: true }])(
+        'a tie keeps exactly one d20 (%o)',
+        (options) => {
+          fixFaces(12, 12);
+          const result = DiceEngine.roll('1d20+5', options);
+          expect(result.rolls.map((f) => f.value)).toEqual([12, 12]);
+          expect(result.rolls.filter((f) => f.useInTotal)).toHaveLength(1);
+          expect(result.total).toBe(17);
+        },
+      );
+
+      it('advantage and disadvantage together roll one plain d20', () => {
+        fixFaces(18, 5);
+        const result = DiceEngine.roll('1d20+5', { advantage: true, disadvantage: true });
+        expect(result.rolls.map((f) => f.value)).toEqual([18]);
+        expect(result.naturalRoll).toBe(18);
+        expect(result.total).toBe(23);
+      });
+
+      it('keeps every dice group when the formula has more than the d20', () => {
+        fixFaces(5, 4, 2, 18);
+        const result = DiceEngine.roll('1d20+2d6', { advantage: true });
+        expect(result.rolls.map((f) => [f.dice, f.value, f.useInTotal])).toEqual([
+          [20, 5, false],
+          [20, 18, true],
+          [6, 4, true],
+          [6, 2, true],
+        ]);
+        expect(result.modifiers).toBe(0);
+        expect(result.total).toBe(18 + 4 + 2);
+      });
+
+      it('keeps the other group untouched when the extra d20 loses', () => {
+        fixFaces(15, 3, 4);
+        const result = DiceEngine.roll('1d20+1d4', { advantage: true });
+        expect(result.rolls.map((f) => [f.dice, f.value, f.useInTotal])).toEqual([
+          [20, 15, true],
+          [20, 4, false],
+          [4, 3, true],
+        ]);
+        expect(result.modifiers).toBe(0);
+        expect(result.total).toBe(18);
+      });
     });
 
     it('should preserve custom purpose and actorId', () => {

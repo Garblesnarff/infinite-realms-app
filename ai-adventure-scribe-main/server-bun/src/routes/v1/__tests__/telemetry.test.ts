@@ -182,6 +182,7 @@ describe('POST /v1/telemetry/client-failure', () => {
         error: 'Cannot read properties of undefined (reading "hp")',
         message: 'Cannot read properties of undefined (reading "hp")',
         component: 'GameContent',
+        componentStack: '\n    at GameContent (chunk.js:1:1)',
         route: '/app/game/sess-9',
         bundle: '2026.10.03-abc123',
         clientTimestamp: '2026-10-02T12:04:07.000Z',
@@ -196,11 +197,31 @@ describe('POST /v1/telemetry/client-failure', () => {
       userId: 'user-1',
       kind: 'react_error_boundary',
       message: 'Cannot read properties of undefined (reading "hp")',
+      stack: 'Cannot read properties of undefined (reading "hp")',
       component: 'GameContent',
+      componentStack: '\n    at GameContent (chunk.js:1:1)',
       route: '/app/game/sess-9',
       bundle: '2026.10.03-abc123',
       clientTimestamp: '2026-10-02T12:04:07.000Z',
     });
+  });
+
+  it('logs the posted render stack separately from the message', async () => {
+    const stack = 'Error: render exploded\n    at https://host/assets/main-X.js:1:2';
+    const response = await app.handle(
+      authedRequest({
+        kind: 'react_error_boundary',
+        error: stack,
+        message: 'render exploded',
+        component: 'DiceRollMessage',
+        componentStack: '\n    at DiceRollMessage (chunk.js:1:1)',
+      }),
+    );
+    expect(response.status).toBe(204);
+
+    const line = loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE');
+    expect(line?.stack).toBe(stack);
+    expect(line?.componentStack).toBe('\n    at DiceRollMessage (chunk.js:1:1)');
   });
 
   it('truncates the logged message to 500 chars (#2515)', async () => {
