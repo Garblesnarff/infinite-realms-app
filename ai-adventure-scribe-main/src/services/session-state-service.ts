@@ -102,10 +102,19 @@ export class SessionStateService {
 
       const candidate = event as { kind?: unknown; payload?: unknown };
       if (candidate.kind !== 'roll_result' || !candidate.payload) continue;
-      if (typeof candidate.payload !== 'object') return null;
+      // Text-parsed roll mentions are logged as roll_result too, with no authoritative
+      // outcome of their own ({ total, raw } and no success flag). They are the one
+      // skippable shape: a typed "I rolled 17" must not shadow the real roll below it.
+      // Any other entry without an authoritative outcome is a real roll that simply has
+      // no DC/AC verdict (an untargeted check, a damage roll) — stop there instead of
+      // surfacing an older roll from an earlier turn as the latest outcome.
+      if (typeof candidate.payload !== 'object') continue;
 
       const payload = candidate.payload as Record<string, unknown>;
-      if (typeof payload.success !== 'boolean' || typeof payload.total !== 'number') return null;
+      if (typeof payload.success !== 'boolean' || typeof payload.total !== 'number') {
+        if (typeof payload.raw === 'string') continue;
+        return null;
+      }
 
       return {
         success: payload.success,

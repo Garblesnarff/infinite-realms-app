@@ -126,4 +126,120 @@ describe('SessionStateService', () => {
       timestamp: '2026-08-15T00:01:00.000Z',
     });
   });
+
+  it('scans past a newer text-parsed roll mention to the newest authoritative outcome', async () => {
+    // The exact sequence that broke roll memory: a real engine roll, then the player
+    // typing "I rolled 17", which logTextRollResult logs as a roll_result with no
+    // success flag. The typed mention must not shadow the engine roll below it.
+    vi.spyOn(SessionStateService, 'getState').mockResolvedValue({
+      ...createDefaultSessionState(sessionId),
+      combatLog: [
+        {
+          timestamp: '2026-08-15T00:00:00.000Z',
+          entry: {
+            kind: 'roll_result',
+            payload: { success: false, total: 9, requestType: 'attack' },
+          },
+        },
+        {
+          timestamp: '2026-08-15T00:01:00.000Z',
+          entry: { kind: 'roll_result', payload: { total: 17, raw: 'I rolled 17' } },
+        },
+      ],
+    });
+
+    await expect(SessionStateService.getLatestRollOutcome(sessionId)).resolves.toEqual({
+      success: false,
+      total: 9,
+      requestType: 'attack',
+      timestamp: '2026-08-15T00:00:00.000Z',
+    });
+  });
+
+  it('never treats a text-parsed roll mention as an outcome on its own', async () => {
+    vi.spyOn(SessionStateService, 'getState').mockResolvedValue({
+      ...createDefaultSessionState(sessionId),
+      combatLog: [
+        {
+          timestamp: '2026-08-15T00:01:00.000Z',
+          entry: { kind: 'roll_result', payload: { total: 17, raw: 'I rolled 17' } },
+        },
+      ],
+    });
+
+    await expect(SessionStateService.getLatestRollOutcome(sessionId)).resolves.toBeNull();
+  });
+
+  it('scans past a roll_result whose payload is not an object', async () => {
+    vi.spyOn(SessionStateService, 'getState').mockResolvedValue({
+      ...createDefaultSessionState(sessionId),
+      combatLog: [
+        {
+          timestamp: '2026-08-15T00:00:00.000Z',
+          entry: {
+            kind: 'roll_result',
+            payload: { success: true, total: 20, requestType: 'saving_throw' },
+          },
+        },
+        {
+          timestamp: '2026-08-15T00:01:00.000Z',
+          entry: { kind: 'roll_result', payload: 'rolled 20' },
+        },
+      ],
+    });
+
+    await expect(SessionStateService.getLatestRollOutcome(sessionId)).resolves.toEqual({
+      success: true,
+      total: 20,
+      requestType: 'saving_throw',
+      timestamp: '2026-08-15T00:00:00.000Z',
+    });
+  });
+
+  it('stops at a newer real roll that carries no outcome instead of surfacing an older one', async () => {
+    // A dice roll without a DC has no success flag (dice-roll-formatter only sets one
+    // when the roll has a DC or an attack AC). It is still a real roll: the scan must
+    // stop there, not fall through to a stale outcome from an earlier turn.
+    vi.spyOn(SessionStateService, 'getState').mockResolvedValue({
+      ...createDefaultSessionState(sessionId),
+      combatLog: [
+        {
+          timestamp: '2026-08-15T00:00:00.000Z',
+          entry: {
+            kind: 'roll_result',
+            payload: {
+              formula: '1d20+2',
+              count: 1,
+              dieType: 20,
+              modifier: 2,
+              total: 11,
+              naturalRoll: 9,
+              requestType: 'skill_check',
+              description: 'Acrobatics Check',
+              dc: 15,
+              success: false,
+            },
+          },
+        },
+        {
+          timestamp: '2026-08-15T00:01:00.000Z',
+          entry: {
+            kind: 'roll_result',
+            payload: {
+              formula: '1d20+3',
+              count: 1,
+              dieType: 20,
+              modifier: 3,
+              total: 14,
+              naturalRoll: 11,
+              requestType: 'skill_check',
+              description: 'Athletics Check',
+            },
+          },
+        },
+      ],
+    });
+
+    await expect(SessionStateService.getLatestRollOutcome(sessionId)).resolves.toBeNull();
+  });
 });
