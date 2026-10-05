@@ -17,8 +17,10 @@
  * writes and only "commits" them if the callback returns, which is what lets the last test assert
  * that a failed mirror takes the character write down with it.
  */
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { getTableName } from 'drizzle-orm';
+
+import { logger } from '../../lib/logger.js';
 
 type Row = Record<string, unknown>;
 
@@ -42,6 +44,10 @@ let committed: Write[] = [];
 let rolledBack: Write[] = [];
 /** Makes the participant-status UPDATE fail, the way a constraint violation would. */
 let breakParticipantWrite = false;
+/** Makes the combat_encounters activity UPDATE reject, as a dropped pool connection would. */
+let breakEncounterTouch = false;
+/** Rows handed to `db.insert(...).values()`: the damage log, the only insert on these paths. */
+let inserted: Row[] = [];
 
 function characterStatsRow(overrides: Row = {}): Row {
   return {
@@ -87,8 +93,9 @@ function statusRow(overrides: Row = {}): Row {
 }
 
 /**
- * A statement builder thin enough to be obvious and complete enough for the two statements the
- * write-through issues: the vitals SELECT ... FOR UPDATE, and the two UPDATEs.
+ * A statement builder thin enough to be obvious and complete enough for the statements the
+ * write-through issues: the vitals SELECT ... FOR UPDATE, the participant UPDATE, and the
+ * encounter activity UPDATE.
  *
  * `record` is what separates the pooled path from the transactional one: the pool records
  * straight into `committed`, a transaction records into its own staging list first.
@@ -110,18 +117,27 @@ function makeWriter(record: (write: Write) => void) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     update: (table: any) => ({
       set: (values: Row) => ({
-        where: () => ({
-          returning: async (): Promise<Row[]> => {
-            const table_ = getTableName(table);
-            if (table_ === 'combat_participant_status' && breakParticipantWrite) {
-              throw new Error('participant status write rejected');
-            }
+        where: () => {
+          const table_ = getTableName(table);
+          if (table_ === 'combat_encounters') {
+            // A rejected statement wrote nothing, so there is nothing to record.
+            if (breakEncounterTouch) return Promise.reject(new Error('encounter touch rejected'));
             record({ table: table_, values });
-            return table_ === 'character_stats'
-              ? [{ ...characterRow, ...values }]
-              : [{ participantId: PARTICIPANT_ID, ...values }];
-          },
-        }),
+          }
+          return {
+            returning: async (): Promise<Row[]> => {
+              if (table_ === 'combat_participant_status' && breakParticipantWrite) {
+                throw new Error('participant status write rejected');
+              }
+              if (table_ !== 'combat_encounters') {
+                record({ table: table_, values });
+              }
+              return table_ === 'character_stats'
+                ? [{ ...characterRow, ...values }]
+                : [{ participantId: PARTICIPANT_ID, ...values }];
+            },
+          };
+        },
       }),
     }),
   };
@@ -142,7 +158,12 @@ const transaction = mock(async (callback: (tx: unknown) => Promise<unknown>) => 
 mock.module('../../../../db/client', () => ({
   db: {
     ...makeWriter((write) => committed.push(write)),
-    insert: () => ({ values: async () => [] }),
+    insert: () => ({
+      values: async (row: Row) => {
+        inserted.push(row);
+        return [];
+      },
+    }),
     transaction,
   },
 }));
@@ -168,6 +189,8 @@ async function withD20<T>(face: number, run: () => Promise<T>): Promise<T> {
   }
 }
 
+const warn = spyOn(logger, 'warn').mockImplementation((() => {}) as typeof logger.warn);
+
 describe('combat HP write-through to the character record', () => {
   beforeEach(() => {
     characterRow = characterStatsRow();
@@ -175,6 +198,9 @@ describe('combat HP write-through to the character record', () => {
     committed = [];
     rolledBack = [];
     breakParticipantWrite = false;
+    breakEncounterTouch = false;
+    inserted = [];
+    warn.mockClear();
     transaction.mockClear();
   });
 
@@ -198,6 +224,7 @@ describe('combat HP write-through to the character record', () => {
       expect(committed.map((write) => write.table)).toEqual([
         'character_stats',
         'combat_participant_status',
+        'combat_encounters',
       ]);
       expect(wrote('character_stats')).toMatchObject({
         currentHitPoints: 14,
@@ -205,6 +232,7 @@ describe('combat HP write-through to the character record', () => {
         vitalState: 'standing',
       });
       expect(wrote('combat_participant_status')).toMatchObject({ currentHp: 14 });
+      expect(wrote('combat_encounters')).toMatchObject({ updatedAt: expect.any(Date) });
     });
 
     it('records going down on both rows, not just the participant', async () => {
@@ -354,7 +382,10 @@ describe('combat HP write-through to the character record', () => {
         USER_ID,
       );
 
-      expect(committed.map((write) => write.table)).toEqual(['combat_participant_status']);
+      expect(committed.map((write) => write.table)).toEqual([
+        'combat_participant_status',
+        'combat_encounters',
+      ]);
       expect(transaction).not.toHaveBeenCalled();
     });
 
@@ -363,7 +394,10 @@ describe('combat HP write-through to the character record', () => {
 
       await CombatHPService.healDamage(PARTICIPANT_ID, ENCOUNTER_ID, 5, 'potion', USER_ID);
 
-      expect(committed.map((write) => write.table)).toEqual(['combat_participant_status']);
+      expect(committed.map((write) => write.table)).toEqual([
+        'combat_participant_status',
+        'combat_encounters',
+      ]);
     });
   });
 
@@ -386,6 +420,65 @@ describe('combat HP write-through to the character record', () => {
       expect(rolledBack.map((write) => write.table)).toEqual(['character_stats']);
     });
 
+    it('applies damage and logs it exactly once when the encounter activity bump fails', async () => {
+      breakEncounterTouch = true;
+
+      // The bump runs after the HP rows have committed. If it threw, the attack would report
+      // failure for damage that already landed, skip the log, and a retry would hit twice.
+      const result = await CombatHPService.applyDamage(
+        PARTICIPANT_ID,
+        ENCOUNTER_ID,
+        { damageAmount: 6, damageType: 'fire' },
+        USER_ID,
+      );
+
+      expect(result.newCurrentHp).toBe(14);
+      expect(committed.map((write) => write.table)).toEqual([
+        'character_stats',
+        'combat_participant_status',
+      ]);
+      expect(wrote('character_stats')).toMatchObject({ currentHitPoints: 14 });
+      expect(wrote('combat_participant_status')).toMatchObject({ currentHp: 14 });
+      expect(inserted).toHaveLength(1);
+      expect(inserted[0]).toMatchObject({
+        encounterId: ENCOUNTER_ID,
+        participantId: PARTICIPANT_ID,
+        damageAmount: 6,
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toMatchObject({
+        msg: 'COMBAT_ENCOUNTER_TOUCH_FAILED',
+        encounterId: ENCOUNTER_ID,
+      });
+    });
+
+    it('heals exactly once when the encounter activity bump fails', async () => {
+      breakEncounterTouch = true;
+      characterRow = characterStatsRow({ currentHitPoints: 4 });
+      context.status = statusRow({ currentHp: 4 });
+
+      const result = await CombatHPService.healDamage(
+        PARTICIPANT_ID,
+        ENCOUNTER_ID,
+        5,
+        'cure wounds',
+        USER_ID,
+      );
+
+      expect(result.newCurrentHp).toBe(9);
+      expect(committed.map((write) => write.table)).toEqual([
+        'character_stats',
+        'combat_participant_status',
+      ]);
+      expect(wrote('character_stats')).toMatchObject({ currentHitPoints: 9 });
+      expect(wrote('combat_participant_status')).toMatchObject({ currentHp: 9 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toMatchObject({
+        msg: 'COMBAT_ENCOUNTER_TOUCH_FAILED',
+        encounterId: ENCOUNTER_ID,
+      });
+    });
+
     it('leaves both rows alone when the character has no stats row to mirror into', async () => {
       characterRow = null;
 
@@ -399,7 +492,10 @@ describe('combat HP write-through to the character record', () => {
       // The fight goes on against the participant row alone rather than failing an attack over a
       // data gap that predates write-through. The warning log is how it gets found.
       expect(result.newCurrentHp).toBe(14);
-      expect(committed.map((write) => write.table)).toEqual(['combat_participant_status']);
+      expect(committed.map((write) => write.table)).toEqual([
+        'combat_participant_status',
+        'combat_encounters',
+      ]);
     });
   });
 });

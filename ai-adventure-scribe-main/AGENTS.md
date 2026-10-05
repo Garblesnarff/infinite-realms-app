@@ -39,6 +39,7 @@ Authored monster attack lines (name, reach, and range) are in `docs/content/stat
 ## 4. Tests and secrets
 
 - Do not delete a test. Do not add `.skip` or `.only` to a test.
+- For time-based tests, use `dialogue_history.created_at` as the server clock; `timestamp` is client-supplied display data only.
 - Do not paste secret values into code, commits, comments, logs, or PR bodies. Reference env var names only. If you accidentally see a secret, do not repeat it.
 - A PR that changes what the client sends to a server route must include a test that sends that exact body through the real route: `createRequestPipelineApp().use(<routes>)` or the real-DB suite. A mocked API does not count: #2250's tests mocked it, and the body they approved 422'd on every narrative roll in production (#2280). Pattern: #2286, where one shared fixture (`shared/test-fixtures/dm-roll-reply-saves.ts`) holds the wire body, the client test asserts the client sends exactly it, and the server test posts it through the real route schema.
 

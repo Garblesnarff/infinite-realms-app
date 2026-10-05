@@ -196,6 +196,23 @@ describeWithDb('combat damage reaches the character record', () => {
     return row;
   };
 
+  const encounterUpdatedAt = async () => {
+    const [row] = await db
+      .select({ updatedAt: combatEncounters.updatedAt })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    return row.updatedAt;
+  };
+
+  const backdateEncounter = async () => {
+    const baseline = new Date(Date.now() - 60_000);
+    await db
+      .update(combatEncounters)
+      .set({ updatedAt: baseline })
+      .where(eq(combatEncounters.id, encounterId));
+    return baseline;
+  };
+
   it('moves the character sheet and the participant row in the same request', async () => {
     const { CombatHPService } = await import('../combat-hp-service.js');
 
@@ -210,6 +227,49 @@ describeWithDb('combat damage reaches the character record', () => {
     // because nothing ever copied combat's damage back onto the sheet.
     expect((await sheet()).currentHitPoints).toBe(MAX_HP - 6);
     expect((await participant(heroId)).currentHp).toBe(MAX_HP - 6);
+  });
+
+  it('moves the encounter clock when damage is applied', async () => {
+    const { CombatHPService } = await import('../combat-hp-service.js');
+    const baseline = await backdateEncounter();
+
+    await CombatHPService.applyDamage(
+      heroId,
+      encounterId,
+      { damageAmount: 6, damageType: 'slashing' },
+      userId,
+    );
+
+    expect((await encounterUpdatedAt()).getTime()).toBeGreaterThan(baseline.getTime());
+  });
+
+  it('moves the encounter clock when healing is applied', async () => {
+    const { CombatHPService } = await import('../combat-hp-service.js');
+    await CombatHPService.applyDamage(
+      heroId,
+      encounterId,
+      { damageAmount: 6, damageType: 'slashing' },
+      userId,
+    );
+    const baseline = await backdateEncounter();
+
+    await CombatHPService.healDamage(heroId, encounterId, 3, 'cure wounds', userId);
+
+    expect((await encounterUpdatedAt()).getTime()).toBeGreaterThan(baseline.getTime());
+  });
+
+  it('does not move the encounter clock for zero damage', async () => {
+    const { CombatHPService } = await import('../combat-hp-service.js');
+    const baseline = await backdateEncounter();
+
+    await CombatHPService.applyDamage(
+      heroId,
+      encounterId,
+      { damageAmount: 0, damageType: 'slashing' },
+      userId,
+    );
+
+    expect((await encounterUpdatedAt()).getTime()).toBe(baseline.getTime());
   });
 
   it('records going down and coming back up on both rows', async () => {

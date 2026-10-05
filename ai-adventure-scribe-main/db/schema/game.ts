@@ -319,10 +319,12 @@ export const dialogueHistory = pgTable(
     speakerType: text('speaker_type'), // 'player', 'dm', 'npc'
     speakerId: uuid('speaker_id'), // References character or npc
     message: text('message').notNull(),
+    // Client-supplied; display only.
     timestamp: timestamp('timestamp', { withTimezone: true, mode: 'date' }).defaultNow(),
     context: jsonb('context'),
     images: jsonb('images'),
     sequenceNumber: integer('sequence_number'),
+    // Server clock — the only column safe to reason about time from.
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   },

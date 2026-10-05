@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
+import { combatEncounters } from '../../../../db/schema/index';
 import { NotFoundError, BusinessLogicError } from '../../lib/errors.js';
 import * as HPDataAccess from '../combat/hp-data-access.js';
 import { CombatHPService } from '../combat-hp-service.js';
@@ -197,11 +198,13 @@ describe('CombatHPService', () => {
         );
 
         expect(result.newCurrentHp).toBe(14);
-        // Two UPDATEs -- character_stats first, combat_participant_status second -- inside one
-        // transaction. This shared query-builder mock cannot tell the payloads apart;
+        // Three UPDATEs. character_stats first, then combat_participant_status, both inside the
+        // transaction; combat_encounters third, after it commits, on the pool. This shared
+        // query-builder mock cannot tell the payloads apart;
         // combat-hp-write-through.test.ts asserts what each row actually receives.
         expect(db.transaction).toHaveBeenCalledTimes(1);
-        expect(db.update).toHaveBeenCalledTimes(2);
+        expect(db.update).toHaveBeenCalledTimes(3);
+        expect(db.update).toHaveBeenNthCalledWith(3, combatEncounters);
       });
     });
 

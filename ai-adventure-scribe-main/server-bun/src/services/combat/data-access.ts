@@ -307,21 +307,6 @@ export interface AbilityProfile {
   spellIds: string[];
 }
 
-export async function claimEncounterVersion(
-  encounterId: string,
-  expectedVersion: number,
-): Promise<number> {
-  const [updated] = await db
-    .update(combatEncounters)
-    .set({ version: sql`${combatEncounters.version} + 1`, updatedAt: new Date() })
-    .where(and(eq(combatEncounters.id, encounterId), eq(combatEncounters.version, expectedVersion)))
-    .returning({ version: combatEncounters.version });
-  if (!updated) {
-    throw new BusinessLogicError('Combat state changed; refresh and retry', { expectedVersion });
-  }
-  return updated.version;
-}
-
 export async function getActiveConditionNames(participantId: string): Promise<string[]> {
   const rows = await db
     .select({ name: conditionsLibrary.name })

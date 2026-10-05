@@ -82,6 +82,24 @@ interface WriteThroughRequest {
 }
 
 /**
+ * Marks the encounter as having just had activity (`combat_encounters.updated_at`, which the
+ * idle-encounter sweeper reads). Best-effort, for the same reason the damage log is: it runs on
+ * the pool after the HP write has committed, so letting it throw would fail an attack whose
+ * damage already landed -- skipping the damage-log insert and inviting a retry that applies the
+ * damage a second time. A missed bump costs the sweeper a stale timestamp, nothing more.
+ */
+async function touchEncounterActivity(encounterId: string): Promise<void> {
+  try {
+    await db
+      .update(combatEncounters)
+      .set({ updatedAt: new Date() })
+      .where(eq(combatEncounters.id, encounterId));
+  } catch (error) {
+    logger.warn({ msg: 'COMBAT_ENCOUNTER_TOUCH_FAILED', error, encounterId });
+  }
+}
+
+/**
  * Combat HP Service
  */
 export class CombatHPService {
@@ -291,6 +309,10 @@ export class CombatHPService {
       },
     });
 
+    if (damageAmount > 0) {
+      await touchEncounterActivity(encounterId);
+    }
+
     // Telemetry only. The ownership check the old insert-select carried in its
     // WHERE clause is redundant here: the UPDATE above ran under the same
     // ownership filter and we threw NotFoundError just now if it matched no row,
@@ -375,6 +397,10 @@ export class CombatHPService {
         deathSavesFailures,
       },
     });
+
+    if (healingAmount > 0) {
+      await touchEncounterActivity(encounterId);
+    }
 
     return result;
   }
