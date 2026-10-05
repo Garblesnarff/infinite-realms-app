@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.26.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.26.1...v0.26.2) (2026-10-05)
+
+
+### Bug Fixes
+
+* **combat:** refuse Help/Ready/Use Object declarations instead of silently ending the turn ([#2596](https://github.com/Garblesnarff/infinite-realms-production/issues/2596)) ([#2604](https://github.com/Garblesnarff/infinite-realms-production/issues/2604)) ([724c580](https://github.com/Garblesnarff/infinite-realms-production/commit/724c5803eb13294f867bcfc3d5aa3014e2dc9cff))
+* **rolls:** crit labels only on attacks, hidden target numbers dropped on Hard, no name stutter ([#2513](https://github.com/Garblesnarff/infinite-realms-production/issues/2513), [#2573](https://github.com/Garblesnarff/infinite-realms-production/issues/2573)) ([#2567](https://github.com/Garblesnarff/infinite-realms-production/issues/2567)) ([c2d80be](https://github.com/Garblesnarff/infinite-realms-production/commit/c2d80bef10e07857b0e814adfbbe6235a4f47b3c))
+* **rolls:** roll memory skips typed roll mentions and stops at real rolls ([#2597](https://github.com/Garblesnarff/infinite-realms-production/issues/2597)) ([#2607](https://github.com/Garblesnarff/infinite-realms-production/issues/2607)) ([62228e7](https://github.com/Garblesnarff/infinite-realms-production/commit/62228e7e58ce8b5890dcce1acfeb7811b24f661c))
+
 ## [0.26.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.26.0...v0.26.1) (2026-10-05)
 
 
