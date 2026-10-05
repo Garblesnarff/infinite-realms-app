@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.26.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.26.0...v0.26.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **combat:** HP writes update encounter activity ([#2570](https://github.com/Garblesnarff/infinite-realms-production/issues/2570)) ([#2585](https://github.com/Garblesnarff/infinite-realms-production/issues/2585)) ([cea154e](https://github.com/Garblesnarff/infinite-realms-production/commit/cea154e4b5c910a70e3284d1e28c8265f943a682))
+
+
+### CI/CD
+
+* guard the real-DB test file list against ci.yml ([#2574](https://github.com/Garblesnarff/infinite-realms-production/issues/2574) part 1) ([#2593](https://github.com/Garblesnarff/infinite-realms-production/issues/2593)) ([e8621ec](https://github.com/Garblesnarff/infinite-realms-production/commit/e8621ec97dbad9c923e9a3fa1eaafc172f614620))
+
 ## [0.26.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.25.6...v0.26.0) (2026-10-04)
 
 
