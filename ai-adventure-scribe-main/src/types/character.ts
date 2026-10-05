@@ -456,8 +456,10 @@ export function transformCharacterForStorage(character: Character) {
     known_spells: (character.knownSpells || []).join(','),
     prepared_spells: (character.preparedSpells || []).join(','),
     ritual_spells: (character.ritualSpells || []).join(','),
-    // New: Persist spell slots and concentration
-    spell_slots: JSON.stringify(character.spellSlots || {}),
+    // Spell slots are not persisted from the sheet: the engine's
+    // character_spell_slots table is the single source of truth (#2598), and
+    // every sheet-facing read serves it. Writing the sheet's local view back
+    // into the legacy JSONB column is what kept the two stores disagreeing.
     pact_slots: JSON.stringify(character.pactSlots || {}),
     active_concentration: character.activeConcentration || null,
     class_features: JSON.stringify(character.classFeatures || {}),

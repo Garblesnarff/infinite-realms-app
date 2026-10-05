@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
 import { RestService } from '../rest-service.js';
+import { SpellSlotsService } from '../spell-slots-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -92,6 +93,16 @@ describe('RestService Security', () => {
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
       (db.query.combatParticipants.findMany as any).mockResolvedValue([]);
 
+      // #2598: the short-rest result serves the engine's slot table through
+      // SpellSlotDataAccess.getCharacterSpellSlots, which awaits the
+      // select→from→leftJoin→where→orderBy chain. No rows here.
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockResolvedValue([{ slot: null, charId: mockCharacterId }]),
+      });
+
       // Mock rest event insertion
       (db.insert as any).mockReturnValue({
         values: vi.fn().mockReturnValue({
@@ -140,15 +151,147 @@ describe('RestService Security', () => {
       // SpellSlotsService.restoreSpellSlots, whose ownership check is a
       // select→from→leftJoin→where chain. Resolve it as "character found, no
       // slot rows", so the restore is a no-op here.
+      //
+      // #2598: the result also reads the slot table through
+      // SpellSlotDataAccess.getCharacterSpellSlots, which chains .orderBy()
+      // after .where(). One thenable serves both shapes.
+      const noSlotRows = [{ slot: null, charId: mockCharacterId }];
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnThis(),
         leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{ slot: null, charId: mockCharacterId }]),
+        where: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockResolvedValue(noSlotRows),
+          then: (resolve: (value: unknown) => void) => resolve(noSlotRows),
+        }),
       });
 
       const result = await RestService.takeLongRest(mockCharacterId, mockUserId);
       expect(result).toBeDefined();
       expect(result.restEventId).toBe('event-456');
+    });
+  });
+
+  describe('spell slots served from the engine table (#2598)', () => {
+    const staleJsonb = { '1': { max: 4, current: 2 } };
+    const tableRowsAllSpent = [
+      {
+        id: 'slot-1',
+        characterId: mockCharacterId,
+        spellLevel: 1,
+        totalSlots: 4,
+        usedSlots: 4,
+        remainingSlots: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+    const tableRowsRestored = [
+      {
+        id: 'slot-1',
+        characterId: mockCharacterId,
+        spellLevel: 1,
+        totalSlots: 4,
+        usedSlots: 0,
+        remainingSlots: 4,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    function mockRestEventInsert() {
+      (db.insert as any).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'event-1' }]),
+        }),
+      });
+    }
+
+    it('short rest serves the table rows, not the stale JSONB', async () => {
+      (db.query.characters.findFirst as any).mockResolvedValue({
+        id: mockCharacterId,
+        hitDice: [],
+        classFeatures: null,
+        pactSlots: null,
+        spellSlots: staleJsonb,
+      });
+      (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
+      mockRestEventInsert();
+      const getSpy = vi
+        .spyOn(SpellSlotsService, 'getCharacterSpellSlots')
+        .mockResolvedValue({
+          characterId: mockCharacterId,
+          slots: tableRowsAllSpent,
+          totalAvailableSlots: 4,
+          totalUsedSlots: 4,
+        } as any);
+
+      const result = await RestService.takeShortRest(mockCharacterId, mockUserId);
+      getSpy.mockRestore();
+
+      // The JSONB says current 2; the table says all 4 slots spent, so the
+      // result must show current 0. Reading character.spellSlots (the revert)
+      // reports 2 here instead.
+      expect(result.spellSlots).toEqual({ '1': { max: 4, current: 0 } });
+    });
+
+    it('long rest restores the table and leaves characters.spell_slots untouched', async () => {
+      (db.query.characters.findFirst as any).mockResolvedValue({
+        id: mockCharacterId,
+        stats: {
+          constitution: 10,
+          maxHitPoints: 10,
+          currentHitPoints: 10,
+        },
+        hitDice: [],
+        classFeatures: null,
+        pactSlots: null,
+        // NULL JSONB: the old code returned null here even though the table
+        // was reset, so the sheet kept its spent slots.
+        spellSlots: null,
+      });
+      (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
+      mockRestEventInsert();
+      const restoreSpy = vi
+        .spyOn(SpellSlotsService, 'restoreSpellSlots')
+        .mockResolvedValue({
+          characterId: mockCharacterId,
+          slotsRestored: [{ level: 1, restoredAmount: 4 }],
+          totalRestored: 4,
+        } as any);
+      const getSpy = vi
+        .spyOn(SpellSlotsService, 'getCharacterSpellSlots')
+        .mockResolvedValue({
+          characterId: mockCharacterId,
+          slots: tableRowsRestored,
+          totalAvailableSlots: 4,
+          totalUsedSlots: 0,
+        } as any);
+      const setCalls: any[] = [];
+      const updateMock = db.update as any;
+      const updateImpl = updateMock.getMockImplementation();
+      updateMock.mockImplementation(() => ({
+        set: vi.fn((arg: any) => {
+          setCalls.push(arg);
+          return { where: vi.fn() };
+        }),
+      }));
+
+      const result = await RestService.takeLongRest(mockCharacterId, mockUserId);
+
+      expect(restoreSpy).toHaveBeenCalledWith({ characterId: mockCharacterId }, mockUserId);
+      // The table was restored, so current is back to max. The old code served
+      // the JSONB here (null for this character).
+      expect(result.spellSlots).toEqual({ '1': { max: 4, current: 4 } });
+      // The characters UPDATE must no longer write the legacy JSONB column.
+      // The stats update is the other db.update call; the characters one is
+      // the one that also writes pactSlots.
+      const characterUpdate = setCalls.find((arg) => 'pactSlots' in arg);
+      expect(characterUpdate).toBeDefined();
+      expect(characterUpdate).not.toHaveProperty('spellSlots');
+
+      restoreSpy.mockRestore();
+      getSpy.mockRestore();
+      updateMock.mockImplementation(updateImpl);
     });
   });
 

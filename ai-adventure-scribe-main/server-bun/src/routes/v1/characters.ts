@@ -34,8 +34,11 @@ import type { Character, CharacterStats } from '../../../../db/schema/index';
 /**
  * Overlay the engine's spell-slot table onto the sheet-facing character
  * payload. The `character_spell_slots` table is the single source of truth for
- * slot usage (#2459); the legacy `characters.spell_slots` JSONB is only a
- * fallback for characters that have no slot rows yet.
+ * slot usage (#2459); the legacy `characters.spell_slots` JSONB is no longer
+ * read anywhere (#2598). A character with no slot rows reports no stored slots:
+ * the sheet falls back to its class-calculated totals, which is also the state
+ * the engine derives from the progression table on that character's first cast.
+ * Rows for legacy characters are seeded by the 20261005 backfill migration.
  */
 export async function overlayEngineSpellSlots(
   mapped: Record<string, unknown> | null,
@@ -44,7 +47,6 @@ export async function overlayEngineSpellSlots(
 ): Promise<Record<string, unknown> | null> {
   if (!mapped) return mapped;
   const { slots } = await SpellSlotDataAccess.getCharacterSpellSlots(characterId, userId);
-  if (slots.length === 0) return mapped;
   return {
     ...mapped,
     spell_slots: Object.fromEntries(
@@ -325,8 +327,16 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         // 🛡️ Sentinel: Use CharacterService.listForUser which correctly checks
         // both userId AND ownerId for comprehensive character access.
         const characters = await CharacterService.listForUser(user!.userId, query.campaign_id);
-        return (characters || []).map((c) =>
-          mapCharacterToApi(c as Character & { stats?: CharacterStats }),
+        // The list feeds sheet-facing payloads too, so each entry gets the same
+        // engine-slot overlay as the single-character read (#2598).
+        return Promise.all(
+          (characters || []).map((c) =>
+            overlayEngineSpellSlots(
+              mapCharacterToApi(c as Character & { stats?: CharacterStats }),
+              (c as Character).id,
+              user!.userId,
+            ),
+          ),
         );
       } catch (error) {
         logger.error({ msg: 'CHARACTERS_LIST error', error });

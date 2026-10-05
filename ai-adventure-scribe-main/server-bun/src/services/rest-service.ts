@@ -37,6 +37,26 @@ import type {
   ShortRestResult,
   SpendHitDiceResult,
 } from '../types/rest.js';
+import type { SpellSlot } from '../types/spell-slots.js';
+
+/**
+ * Convert engine spell-slot table rows to the rest result's spellSlots wire
+ * shape (#2598). `current` is derived as max − used, the same mapping the
+ * sheet overlay uses. Returns null when the character has no slot rows; the
+ * client treats null as "leave the sheet's slots alone", which matches the
+ * old null-JSONB case.
+ */
+function toRestSpellSlots(
+  slots: SpellSlot[],
+): Record<string, { max: number; current: number }> | null {
+  if (slots.length === 0) return null;
+  return Object.fromEntries(
+    slots.map((slot) => [
+      String(slot.spellLevel),
+      { max: slot.totalSlots, current: slot.totalSlots - slot.usedSlots },
+    ]),
+  );
+}
 
 /**
  * Rest Service
@@ -257,7 +277,12 @@ export class RestService {
       hitDiceSpent,
       hitDiceRemaining: updatedHitDice,
       resourcesRestored,
-      spellSlots: character.spellSlots as Record<string, { max?: number; current?: number }> | null,
+      // The engine's slot table is the single source of truth (#2598): the
+      // result serves the table's rows, never the legacy JSONB. A short rest
+      // does not restore slots, so the table is read as-is.
+      spellSlots: toRestSpellSlots(
+        (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
+      ),
       pactSlots: updatedPactSlots,
       classFeatures: updatedClassFeatures,
       restEventId: restEvent.id,
@@ -320,9 +345,6 @@ export class RestService {
       max?: number;
       current?: number;
     } | null;
-    const updatedSpellSlots = RestMechanics.restoreSpellSlots(
-      character.spellSlots as Record<string, { max?: number; current?: number }> | null,
-    );
     const updatedPactSlots = pactSlots
       ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
       : pactSlots;
@@ -333,15 +355,19 @@ export class RestService {
     await db
       .update(characters)
       .set({
-        spellSlots: updatedSpellSlots,
         pactSlots: updatedPactSlots,
         classFeatures: updatedClassFeatures,
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
-    // The engine's slot table is the single source the sheet reads, so a long
-    // rest resets it alongside the JSONB above (#2459).
+    // The engine's slot table is the single source the sheet reads (#2459), so
+    // a long rest resets it here. The legacy characters.spell_slots JSONB is
+    // neither read nor written anymore (#2598).
     await SpellSlotsService.restoreSpellSlots({ characterId }, userId);
+    // Serve the restored table rows in the result, not the stale JSONB.
+    const spellSlots = toRestSpellSlots(
+      (await SpellSlotsService.getCharacterSpellSlots(characterId, userId)).slots,
+    );
     await ClassFeaturesService.restoreFeatures({ characterId, restType: 'long', userId });
 
     const participants = await db.query.combatParticipants.findMany({
@@ -385,7 +411,7 @@ export class RestService {
       hitDiceRestored,
       hitDiceRemaining: updatedHitDice,
       resourcesRestored,
-      spellSlots: updatedSpellSlots,
+      spellSlots,
       pactSlots: updatedPactSlots,
       classFeatures: updatedClassFeatures,
       restEventId: restEvent.id,
