@@ -1095,45 +1095,48 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.responseText).toBe('');
   });
 
-  it.each([
-    [
-      'decline',
-      async () => {
-        vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
-        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
-      },
-    ],
-    [
-      'non-ok /enter',
-      async () => {
-        vi.mocked(userDataApi.enterCombat).mockResolvedValue({
-          ok: false,
-          status: 503,
-          json: vi.fn().mockResolvedValue({ error: 'unavailable' }),
-        } as any);
-        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
-      },
-    ],
-    [
-      'thrown /enter',
-      async () => {
-        vi.mocked(userDataApi.enterCombat).mockRejectedValue(new Error('network down'));
-        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
-      },
-    ],
-    [
-      'no confirmation host',
-      async () => {
-        const error = Object.assign(new Error('Combat entry confirmation UI is unavailable'), {
-          name: 'CombatEntryConfirmationUnavailableError',
-          code: 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE',
-        });
-        vi.mocked(requestCombatEntryConfirmation).mockRejectedValue(error);
-        return invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY });
-      },
-    ],
-  ])('produces a visible non-empty line for %s', async (_branch, run) => {
-    const outcome = await run();
+  it('keeps a declined entry as a visible non-empty line', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    const outcome = await invoke({
+      combat_transition: 'none',
+      combat_entry_pending: PENDING_ENTRY,
+    });
+    expect(outcome.localNotice).toBeTruthy();
+  });
+
+  it('propagates a refused /enter so the outer turn can offer retry recovery', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: vi.fn().mockResolvedValue({ error: 'unavailable' }),
+    } as any);
+
+    await expect(
+      invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY }),
+    ).rejects.toMatchObject({
+      name: 'CombatEntryFailedError',
+      status: 503,
+    });
+  });
+
+  it('propagates a thrown /enter failure so the outer turn can offer retry recovery', async () => {
+    vi.mocked(userDataApi.enterCombat).mockRejectedValue(new Error('network down'));
+
+    await expect(
+      invoke({ combat_transition: 'none', combat_entry_pending: PENDING_ENTRY }),
+    ).rejects.toThrow('network down');
+  });
+
+  it('keeps a missing confirmation host as its explicit visible line', async () => {
+    const error = Object.assign(new Error('Combat entry confirmation UI is unavailable'), {
+      name: 'CombatEntryConfirmationUnavailableError',
+      code: 'COMBAT_ENTRY_CONFIRMATION_HOST_UNAVAILABLE',
+    });
+    vi.mocked(requestCombatEntryConfirmation).mockRejectedValue(error);
+    const outcome = await invoke({
+      combat_transition: 'none',
+      combat_entry_pending: PENDING_ENTRY,
+    });
     expect(outcome.localNotice).toBeTruthy();
   });
 

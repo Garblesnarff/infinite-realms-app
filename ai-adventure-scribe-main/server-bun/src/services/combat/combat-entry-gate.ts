@@ -515,6 +515,7 @@ export function buildCombatSeatingTranscript(
   playerInitiativeRoll?: number,
 ): string {
   let playerNamed = false;
+  let playerInitiativeLine: string | undefined;
   const ordered = [...participants].sort(
     (left, right) => (left.turnOrder ?? 0) - (right.turnOrder ?? 0),
   );
@@ -540,10 +541,19 @@ export function buildCombatSeatingTranscript(
         ? ' (auto-rolled)'
         : ' (you rolled)'
       : '';
+    if (isPlayer) {
+      const compactModifier =
+        participant.initiativeModifier > 0
+          ? `+${participant.initiativeModifier}`
+          : participant.initiativeModifier < 0
+            ? `${participant.initiativeModifier}`
+            : '';
+      playerInitiativeLine = `Initiative: ${participant.initiative} (nat ${roll}${compactModifier})`;
+    }
     return `${label}: ${roll} ${modifier} = ${participant.initiative}${playerRollNote}.`;
   });
 
-  return `⚙️ Engine: Initiative — ${entries.join(' ')}`;
+  return `⚙️ Engine: ${playerInitiativeLine ?? 'Initiative'} — ${entries.join(' ')}`;
 }
 
 function validatePlayerInitiativeRoll(roll: number | undefined): void {

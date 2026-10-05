@@ -62,6 +62,8 @@ export const DM_STILL_THINKING_TIMEOUT_MS = 30_000;
 export const DM_TURN_TIMEOUT_MS = 90_000;
 export const DM_TIMEOUT_MESSAGE = 'The DM did not respond in time. Your message is still here.';
 export const DM_NETWORK_ERROR_MESSAGE = 'The connection was lost. Your message is still here.';
+export const DM_PROCESSING_ERROR_MESSAGE =
+  'The DM could not finish this turn. Your message is still here. Retry to continue.';
 
 type TurnAbortSignal = AbortSignal & {
   onPlayerWaitChange?: (waiting: boolean) => void;
@@ -807,6 +809,7 @@ export const useMessageHandlerLogic = ({
       const networkError = isNetworkError(error);
       const quotaExceeded = error instanceof QuotaExceededError;
       if (networkError) abortController.abort();
+      settlePendingPlayerInput();
       handleAsyncError(error, {
         userMessage: sessionExpired ? SESSION_EXPIRED_MESSAGE : 'Failed to process your message',
         showToast: false,
@@ -867,14 +870,27 @@ export const useMessageHandlerLogic = ({
         }
       }
 
-      if (timedOut || networkError) {
-        setComposerBlocked(false);
-        retryInputRef.current = playerInput;
-        retryContextRef.current = playerMessagePersisted
-          ? { intent: 'resume_unanswered', retryInput: playerInput }
-          : providedContext;
-        setSendError(timedOut ? DM_TIMEOUT_MESSAGE : DM_NETWORK_ERROR_MESSAGE);
-      }
+      // Any failed turn needs the same visible recovery path. Combat entry can fail after the
+      // initiative die has already settled; leaving the composer blocked for a non-network error
+      // makes that committed roll look like a pending prompt with no way forward.
+      setComposerBlocked(false);
+      retryInputRef.current = playerInput;
+      retryContextRef.current = playerMessagePersisted
+        ? { intent: 'resume_unanswered', retryInput: playerInput }
+        : providedContext;
+      setSendError(
+        timedOut
+          ? DM_TIMEOUT_MESSAGE
+          : networkError
+            ? DM_NETWORK_ERROR_MESSAGE
+            : sessionExpired
+              ? SESSION_EXPIRED_MESSAGE
+              : quotaExceeded
+                ? recoveryMessage
+                : combatIntentFailure
+                  ? recoveryMessage
+                  : DM_PROCESSING_ERROR_MESSAGE,
+      );
 
       toast({
         title: sessionExpired

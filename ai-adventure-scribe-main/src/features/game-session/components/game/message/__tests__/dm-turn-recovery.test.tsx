@@ -322,4 +322,20 @@ describe('DM turn recovery (#2480)', () => {
     expect(state.sendError).toBe(DM_NETWORK_ERROR_MESSAGE);
     expect(mockGetAIResponse).toHaveBeenCalledTimes(1);
   });
+
+  it('shows retry recovery when the DM turn fails after combat entry', async () => {
+    mockGetAIResponse.mockRejectedValueOnce(new Error('combat resolution failed'));
+    renderHandler();
+
+    await act(async () => {
+      await expect(send('Strike the goblin')).rejects.toMatchObject({
+        message: 'combat resolution failed',
+      });
+    });
+
+    expect(state.isProcessing).toBe(false);
+    expect(state.sendError).toBe(
+      'The DM could not finish this turn. Your message is still here. Retry to continue.',
+    );
+  });
 });

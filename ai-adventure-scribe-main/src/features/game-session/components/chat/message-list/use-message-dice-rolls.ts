@@ -66,6 +66,10 @@ export function useMessageDiceRolls({
 
   const lastRollRef = useRef<LastRollMeta | null>(null);
   const pendingRollIdRef = useRef<string | null>(null);
+  // Rolls whose result is being handled. A narrative roll's handler awaits the whole DM turn,
+  // and that turn can open an engine prompt (combat-entry initiative) whose result arrives here
+  // while the first handler is still running. The guard is per roll, never one global slot (#2587).
+  const handlingRollIdsRef = useRef<Set<string>>(new Set());
   const cancelledRollIdRef = useRef<string | null>(null);
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
   const [rollError, setRollError] = useState<string | null>(null);
@@ -190,7 +194,8 @@ export function useMessageDiceRolls({
         return;
       }
 
-      if (pendingRollIdRef.current) return;
+      if (handlingRollIdsRef.current.has(roll.id)) return;
+      handlingRollIdsRef.current.add(roll.id);
       pendingRollIdRef.current = roll.id;
       setPendingRollId(roll.id);
       setRollError(null);
@@ -342,9 +347,12 @@ export function useMessageDiceRolls({
           context: { location: 'useMessageDiceRolls.handleManualResult' },
         });
       } finally {
+        handlingRollIdsRef.current.delete(roll.id);
         if (pendingRollIdRef.current === roll.id) {
-          pendingRollIdRef.current = null;
-          setPendingRollId(null);
+          // An earlier handler may still be running; the pending id falls back to it.
+          const stillHandling = Array.from(handlingRollIdsRef.current).pop() ?? null;
+          pendingRollIdRef.current = stillHandling;
+          setPendingRollId(stillHandling);
         }
       }
     },

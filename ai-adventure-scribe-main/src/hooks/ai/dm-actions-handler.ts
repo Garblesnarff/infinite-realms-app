@@ -359,11 +359,10 @@ export async function handleDmActionsAndTransitions(
             const failurePayload = await responsePayload(enterResponse);
             logger.warn('[CombatEntry] server refused explicit entry', failurePayload);
             if (enterResponse.status === 401) throw new SessionExpiredError();
-            responseText = '';
-            narrationSegments = undefined;
-            appendLocalNotice(COMBAT_ENTRY_FAILURE_NOTICE);
-            logClearedRollRequests('entry_refused');
-            result = { ...result, combat_actions: [], roll_requests: [] };
+            throw Object.assign(new Error(COMBAT_ENTRY_FAILURE_NOTICE), {
+              name: 'CombatEntryFailedError',
+              status: enterResponse.status,
+            });
           } else {
             const entryPayload = await enterResponse.json().catch(() => null);
             // `seatCombatEntry` already persisted this exact system row. Keep it
@@ -457,6 +456,8 @@ export async function handleDmActionsAndTransitions(
         ) {
           throw error;
         }
+        if (error instanceof Error && error.name === 'CombatEntryFailedError') throw error;
+        if (!isCombatEntryConfirmationNoHostError(error)) throw error;
         responseText = '';
         narrationSegments = undefined;
         appendLocalNotice(
@@ -853,10 +854,7 @@ export async function handleDmActionsAndTransitions(
       aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
       aiContext.gameState.round = activeEncounter?.currentRound;
     } else {
-      logger.warn(
-        'Server refused tactical combat end',
-        await endResponse.json().catch(() => null),
-      );
+      logger.warn('Server refused tactical combat end', await endResponse.json().catch(() => null));
       result = { ...result, combat_transition: 'none' };
       isInCombat = true;
       aiContext.gameState.isInCombat = true;

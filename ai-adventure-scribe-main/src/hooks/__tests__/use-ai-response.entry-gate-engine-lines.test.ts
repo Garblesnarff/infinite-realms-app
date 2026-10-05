@@ -143,7 +143,8 @@ const encounterHeldBy = (participantId: string): Record<string, unknown> => ({
   participants,
 });
 
-const SEATING_LINE = '⚙️ Engine: Initiative — Professor Emil Darkwater: 7 + 0 = 7. You: 2 + 1 = 3.';
+const SEATING_LINE =
+  '⚙️ Engine: Initiative: 3 (nat 2+1) — Professor Emil Darkwater: 7 + 0 = 7. You: 2 + 1 = 3.';
 
 /** What Emil's opening quarterstaff swing returns from `advance-npc-turns`: 7 HP down to 1. */
 const emilOpeningAttack = {

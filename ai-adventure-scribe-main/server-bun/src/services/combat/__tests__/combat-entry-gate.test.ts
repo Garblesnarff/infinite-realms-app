@@ -857,7 +857,7 @@ describe('seatCombatEntry', () => {
     expect(started[0].participants[0].initiativeRoll).toBe(16);
     expect(started[0].participants[1].initiativeRoll).toBeUndefined();
     expect(outcome?.seatingTranscript).toBe(
-      '⚙️ Engine: Initiative — You: 16 + 2 = 18 (you rolled). Geometrist: 15 + 0 = 15.',
+      '⚙️ Engine: Initiative: 18 (nat 16+2) — You: 16 + 2 = 18 (you rolled). Geometrist: 15 + 0 = 15.',
     );
   });
 
