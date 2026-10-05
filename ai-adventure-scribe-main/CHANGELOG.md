@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.27.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.0...v0.27.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **rolls:** roll-result render recovery: no slice crash, adv+disadv cancel, every dice group kept, boundary reports once ([#2586](https://github.com/Garblesnarff/infinite-realms-production/issues/2586)) ([#2589](https://github.com/Garblesnarff/infinite-realms-production/issues/2589)) ([dd78234](https://github.com/Garblesnarff/infinite-realms-production/commit/dd782343e4076c9a7dc5d894a1d25aa0f5c48bb1))
+
 ## [0.27.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.26.2...v0.27.0) (2026-10-05)
 
 
