@@ -19,7 +19,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -307,6 +313,9 @@ export const BlogPostEditor: React.FC<BlogPostEditorProps> = ({ post, onSuccess,
           <DialogContent className="max-w-4xl h-[80vh]">
             <DialogHeader>
               <DialogTitle>Preview</DialogTitle>
+              <DialogDescription className="sr-only">
+                Preview the blog post before publishing.
+              </DialogDescription>
             </DialogHeader>
             <iframe
               src={previewUrl}

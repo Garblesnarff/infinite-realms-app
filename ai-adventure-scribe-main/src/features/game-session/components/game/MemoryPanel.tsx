@@ -10,7 +10,7 @@ import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -160,6 +160,10 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[80vw] max-w-sm p-0">
+                <SheetTitle className="sr-only">Session panel</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Session notes, memories and game panels.
+                </SheetDescription>
                 <GameSidePanelContent
                   sessionId={sessionId}
                   sessionData={sessionData}

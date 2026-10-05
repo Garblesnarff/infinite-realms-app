@@ -59,6 +59,7 @@ export type AggregatedContractAction = {
   hit: boolean | undefined;
   /** True when instances disagree (some hit, some missed). */
   mixed: boolean;
+  damageScale: 'scratch' | 'wounded' | 'grievous' | undefined;
 };
 
 /** Group resolved actions by kind, keeping per-kind counts and hit/miss agreement. */
@@ -75,12 +76,20 @@ export function aggregateContractActions(
     const hits = list.map((action) => action.hit).filter((hit) => hit !== undefined);
     const allHit = hits.length > 0 && hits.every(Boolean);
     const allMiss = hits.length > 0 && hits.every((hit) => !hit);
+    const damageScales = list
+      .map((action) => action.damageScale)
+      .filter((scale): scale is NonNullable<typeof scale> => scale !== undefined);
+    const damageScale =
+      damageScales.length > 0 && damageScales.every((scale) => scale === damageScales[0])
+        ? damageScales[0]
+        : undefined;
     return {
       kind,
       count: list.length,
       actorSlugs: [...new Set(list.map((action) => action.actorSlug))],
       hit: allHit ? true : allMiss ? false : undefined,
       mixed: hits.length > 1 && !allHit && !allMiss,
+      damageScale,
     };
   });
 }
@@ -185,6 +194,19 @@ export function buildNarrationContract(input: NarrationContractInput): string {
   } else {
     lines.push('3. Describe each outcome exactly as the engine resolved it: HIT means it landed, MISS means it did not.');
   }
+  const damageGuidance = aggregated
+    .filter((action) => action.damageScale)
+    .map(
+      (action) =>
+        `${KIND_LABEL[action.kind]}: ${action.damageScale} damage scale ` +
+        `(${action.damageScale === 'scratch' ? '<25%' : action.damageScale === 'wounded' ? '25–60%' : '>60%'} of target max HP)`,
+    );
+  if (damageGuidance.length) {
+    lines.push(
+      `Damage-scale cues for landed hits: ${damageGuidance.join('; ')}. ` +
+        'Match the prose to the cue: scratch is a glancing or surface-level hit, wounded is a meaningful injury, and grievous is severe. Do not call a scratch devastating or grievous.',
+    );
+  }
   lines.push(
     '4. Keep the setting. The scene anchor above and the scene state are the only setting ' +
       'you may describe. Do not relocate the fight: no stone floors, chambers, halls, or ' +
@@ -209,6 +231,7 @@ export function buildNarrationContract(input: NarrationContractInput): string {
       actors: action.actorSlugs,
       hit: action.hit,
       mixed: action.mixed,
+      damageScale: action.damageScale,
     })),
     sceneDescription: sceneDescription ?? null,
   };

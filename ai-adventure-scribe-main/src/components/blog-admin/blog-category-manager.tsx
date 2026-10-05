@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -268,6 +269,9 @@ export const BlogCategoryManager: React.FC = () => {
                         <DialogContent className="sm:max-w-lg">
                           <DialogHeader>
                             <DialogTitle>Edit Category</DialogTitle>
+                            <DialogDescription className="sr-only">
+                              Update the category title and slug.
+                            </DialogDescription>
                           </DialogHeader>
                           <Form {...editForm}>
                             <form

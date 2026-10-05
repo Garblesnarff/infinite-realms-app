@@ -39,13 +39,25 @@ export function combatLogLines(
   messages: readonly ChatMessage[],
   limit: number = COMBAT_LOG_LIMIT,
   showTargetNumbers = true,
+  currentEncounterId?: string,
 ): string[] {
   const withheld = withheldDmRollReplies(messages);
   return messages
-    .filter(
-      (message) =>
-        message.sender === 'system' || (message.sender === 'dm' && !withheld.has(message)),
-    )
+    .filter((message) => {
+      const taggedEncounterId = message.context?.combatEncounterId;
+      // Only lines tagged to a different encounter are dropped. Untagged
+      // lines (restored history, the seating card, engine notices that do
+      // not go through scopedEngineNotice) belong to the live encounter:
+      // every producer tags its lines, so an untagged line is legacy, not
+      // another encounter's.
+      if (
+        currentEncounterId &&
+        taggedEncounterId &&
+        taggedEncounterId !== currentEncounterId
+      )
+        return false;
+      return message.sender === 'system' || (message.sender === 'dm' && !withheld.has(message));
+    })
     .flatMap((message) => engineLinesOfMessage(message, showTargetNumbers))
     .slice(-limit)
     .reverse();

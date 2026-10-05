@@ -527,6 +527,9 @@ export const useMessageHandlerLogic = ({
               persist: notice.persist,
               context: {
                 intent: 'combat_pending_intent',
+                ...(notice.combatEncounterId
+                  ? { combatEncounterId: notice.combatEncounterId }
+                  : {}),
                 ...(notice.cards ? { engineCards: notice.cards } : {}),
               },
             }),

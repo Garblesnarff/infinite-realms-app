@@ -4,7 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { trpc } from '@/infrastructure/api';
@@ -138,6 +144,7 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Session Chronicle</DialogTitle>
+          <DialogDescription>Review the story recorded in this session.</DialogDescription>
         </DialogHeader>
         {renderContent()}
       </DialogContent>

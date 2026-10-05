@@ -5,7 +5,8 @@ import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
 import type { SpellCastHandlerRef } from '../spell-cast-handler';
 
 import CombatInterface from '@/components/combat/CombatInterface';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { useCombat } from '@/contexts/CombatContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { combatLogLines } from '@/utils/combat-log-lines';
 
@@ -34,16 +35,24 @@ interface GameCombatSheetProps {
 export const GameCombatSheet: React.FC<GameCombatSheetProps> = memo(
   ({ showTracker, setShowTracker, isDM, spellCastHandlerRef }) => {
     const { messages = [] } = useMessageContext();
+    const { state: combatState } = useCombat();
     const { showTargetNumbers } = useShowTargetNumbers();
     // Only read the chat while the sheet is open; the log is the engine lines the chat shows.
     const logLines = useMemo(
-      () => (showTracker ? combatLogLines(messages, undefined, showTargetNumbers) : []),
-      [showTracker, messages, showTargetNumbers],
+      () =>
+        showTracker
+          ? combatLogLines(messages, undefined, showTargetNumbers, combatState.activeEncounter?.id)
+          : [],
+      [showTracker, messages, showTargetNumbers, combatState.activeEncounter?.id],
     );
 
     return (
       <Sheet open={showTracker} onOpenChange={setShowTracker}>
         <SheetContent side="right" className="w-full sm:w-[420px] sm:max-w-[480px] overflow-y-auto">
+          <SheetTitle className="sr-only">Combat tracker</SheetTitle>
+          <SheetDescription className="sr-only">
+            View the current combat encounter and its engine-resolved actions.
+          </SheetDescription>
           <CombatInterface
             isDM={isDM && import.meta.env.DEV}
             logLines={logLines}

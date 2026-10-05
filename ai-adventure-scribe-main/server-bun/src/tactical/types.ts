@@ -95,6 +95,8 @@ export interface DmFactAction {
    * Undefined for actions with no success/failure outcome (dash, dodge, disengage, move).
    */
   hit?: boolean;
+  /** Damage severity relative to the target's max HP, for hit narration guidance. */
+  damageScale?: 'scratch' | 'wounded' | 'grievous';
   timestamp: number;
 }
 

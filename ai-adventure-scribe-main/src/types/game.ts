@@ -21,6 +21,8 @@ export interface MessageContext {
   emotion?: string | null;
   intent?: string | null;
   combat_transition?: 'none' | 'start' | 'end' | null;
+  /** Encounter that produced the combat engine lines in this message. */
+  combatEncounterId?: string;
   combatEngineBlocks?: CombatEngineBlock[];
   /** Cards that stand for a system row's text, e.g. the seating card (#2417). */
   engineCards?: EngineResultCard[];

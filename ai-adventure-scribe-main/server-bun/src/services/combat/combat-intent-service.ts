@@ -2,7 +2,11 @@
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
 import { randomUUID } from 'node:crypto';
 
-import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
+import {
+  damageScaleForDamage,
+  describeRefusedSpell,
+  describeResolvedSpell,
+} from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { executeCombatCheck } from './combat-check-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
@@ -1127,6 +1131,9 @@ export async function executeCombatIntent(
     } else if (intent.type === 'attack') {
       const actorLabel = facingName(actor.name, intent.actorId, rosterFrom(state.participants));
       const targetLabel = await participantLabel(encounterId, intent.targetId, userId);
+      const targetParticipant = state.participants.find(
+        (participant) => participant.id === intent.targetId,
+      );
       // The approach decision and the resolution must swing the same weapon. Deciding approach
       // from `[0]` while resolving with `intent.weaponId` is how a bow-and-sword character got
       // walked into melee to fire an arrow, or reach-refused for a sword she was holding.
@@ -1214,7 +1221,11 @@ export async function executeCombatIntent(
           describeResolvedAttack(
             actorLabel,
             targetLabel,
-            { ...resolvedAttack, autoRolled: actorIsPlayer && resolvedAttack.autoRolled === true },
+            {
+              ...resolvedAttack,
+              autoRolled: actorIsPlayer && resolvedAttack.autoRolled === true,
+              targetMaxHitPoints: targetParticipant?.maxHp,
+            },
             playerFacingWeaponName(weapon.name, actorLabel),
           ),
           {
@@ -1223,6 +1234,9 @@ export async function executeCombatIntent(
             actorIsPlayer,
             targetSlug: engineSlugForParticipant(factMap, intent.targetId, targetLabel),
             hit: movementOnly ? undefined : resolvedAttack.hit,
+            damageScale: movementOnly
+              ? undefined
+              : damageScaleForDamage(resolvedAttack.finalDamage, targetParticipant?.maxHp),
           },
         );
         // Going down is its own event, and the most important one the DM has never been told

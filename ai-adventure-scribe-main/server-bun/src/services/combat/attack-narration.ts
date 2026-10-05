@@ -7,6 +7,27 @@
  * poisoned by a process-wide `mock.module` leak from an unrelated file.
  */
 import { formatVersusArmorClass } from '../../../../shared/engine-display-name';
+
+export type DamageScale = 'scratch' | 'wounded' | 'grievous';
+
+export function damageScaleForDamage(
+  damage: number | undefined,
+  targetMaxHitPoints: number | undefined,
+): DamageScale | undefined {
+  if (
+    !Number.isFinite(damage) ||
+    damage == null ||
+    damage <= 0 ||
+    !Number.isFinite(targetMaxHitPoints) ||
+    targetMaxHitPoints == null ||
+    targetMaxHitPoints <= 0
+  )
+    return undefined;
+  const fraction = (damage ?? 0) / targetMaxHitPoints;
+  if (fraction < 0.25) return 'scratch';
+  if (fraction <= 0.6) return 'wounded';
+  return 'grievous';
+}
 /**
  * The sentence the DM reads after an attack the engine actually rolled.
  *
@@ -22,6 +43,7 @@ export function describeResolvedAttack(
     hit?: boolean;
     finalDamage?: number;
     targetNewHp?: number;
+    targetMaxHitPoints?: number;
     isCritical?: boolean;
     /** Set when the crit is the unconscious / paralyzed rule rather than a natural 20 (#2640). */
     autoCritReason?: 'unconscious' | 'paralyzed';
@@ -45,6 +67,7 @@ export function describeResolvedAttack(
       : 'CRITICAL HIT'
     : 'HIT';
   const damage = Number(outcome.finalDamage ?? 0);
+  const damageScale = damageScaleForDamage(damage, outcome.targetMaxHitPoints);
   const hp =
     outcome.targetNewHp == null ? '' : ` ${targetLabel} is now at ${outcome.targetNewHp} HP`;
   const state = outcome.targetIsDead
@@ -53,7 +76,11 @@ export function describeResolvedAttack(
       ? ` and is UNCONSCIOUS`
       : '';
   return (
-    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit}${auto} for ${damage} damage.${hp}${state}. ` +
+    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit}${auto} for ${damage} damage.${hp}${state}.` +
+    (damageScale
+      ? ` Damage scale cue: ${damageScale} (${damageScale === 'scratch' ? '<25%' : damageScale === 'wounded' ? '25–60%' : '>60%'} of target max HP).`
+      : '') +
+    ' ' +
     'Narrate this outcome; it already happened.'
   );
 }

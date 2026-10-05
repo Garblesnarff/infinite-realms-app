@@ -26,6 +26,7 @@ export type ContractEnvelopeAction = {
   /** True when every resolved instance succeeded, false when every one failed. */
   hit?: boolean;
   mixed?: boolean;
+  damageScale?: 'scratch' | 'wounded' | 'grievous';
 };
 
 export type ContractEnvelope = {
@@ -39,6 +40,7 @@ export type NarrationViolationRule =
   | 'false_turn_denial'
   | 'success_on_miss'
   | 'inflated_action_count'
+  | 'damage_scale'
   | 'scene_drift';
 
 export type NarrationViolation = {
@@ -82,6 +84,12 @@ export function parseContractEnvelope(
           : undefined,
         hit: typeof action.hit === 'boolean' ? action.hit : undefined,
         mixed: action.mixed === true,
+        damageScale:
+          action.damageScale === 'scratch' ||
+          action.damageScale === 'wounded' ||
+          action.damageScale === 'grievous'
+            ? action.damageScale
+            : undefined,
       })),
       sceneDescription:
         typeof parsed.sceneDescription === 'string' ? parsed.sceneDescription : null,
@@ -353,6 +361,23 @@ export function checkNarrationAgainstContract(
     }
   }
 
+  const scratchAction = contract.actions.find(
+    (action) =>
+      (action.kind === 'attack' || action.kind === 'spell') &&
+      action.damageScale === 'scratch' &&
+      action.hit !== false,
+  );
+  if (scratchAction) {
+    const matched = damageScaleMismatch(voice);
+    if (matched) {
+      violations.push({
+        rule: 'damage_scale',
+        matched,
+        detail: `Narration calls a scratch-tier hit ${matched}, but the engine says it was under 25% of target max HP.`,
+      });
+    }
+  }
+
   // 5. Scene drift: an open-air scene relocated indoors.
   const scene = contract.sceneDescription ?? '';
   if (OPEN_AIR_SETTING.test(scene) && !ENCLOSED_SETTING.test(scene)) {
@@ -375,6 +400,27 @@ function firstMatch(patterns: RegExp[], text: string): string | null {
   for (const pattern of patterns) {
     const match = pattern.exec(text);
     if (match) return match[0];
+  }
+  return null;
+}
+
+const DAMAGE_SCALE_WORD =
+  /\b(?:devastat(?:e|ed|ing)|grievous|catastrophic|crippling|massive)\b/i;
+/** Words that mean the sentence is describing the hit itself, not the scenery. */
+const DAMAGE_ANCHOR =
+  /\b(?:damages?|hit(?:s|ting)?|wounds?|wounded|strikes?|blows?|slash(?:es)?|gash(?:es)?|cuts?|pierc(?:e|es|ing)|crush(?:es|ed|ing)?|shatter(?:s|ed)?|rends?|cleaves?|batters?|harms?)\b/i;
+
+/**
+ * A scale word ("massive", "crippling", ...) only contradicts a scratch-tier
+ * hit when it describes the hit. Require a damage anchor in the same
+ * sentence, so "a massive door" in the scenery is not flagged (#2534).
+ */
+function damageScaleMismatch(voice: string): string | null {
+  for (const sentence of voice.split(/[.!?]+\s+/)) {
+    const scaleMatch = DAMAGE_SCALE_WORD.exec(sentence);
+    if (!scaleMatch) continue;
+    const withoutScale = sentence.replace(scaleMatch[0], ' ');
+    if (DAMAGE_ANCHOR.test(withoutScale)) return scaleMatch[0];
   }
   return null;
 }

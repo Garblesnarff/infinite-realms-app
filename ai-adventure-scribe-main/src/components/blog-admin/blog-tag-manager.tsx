@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -249,6 +250,9 @@ export const BlogTagManager: React.FC = () => {
                       <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
                           <DialogTitle>Edit Tag</DialogTitle>
+                          <DialogDescription className="sr-only">
+                            Update the tag name and slug.
+                          </DialogDescription>
                         </DialogHeader>
                         <Form {...editForm}>
                           <form onSubmit={editForm.handleSubmit(handleEdit)} className="space-y-4">

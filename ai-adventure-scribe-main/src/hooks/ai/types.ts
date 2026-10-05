@@ -42,6 +42,8 @@ export interface ImageRequest {
 export interface LocalNotice {
   text: string;
   persist: boolean;
+  /** Encounter whose engine event produced this notice. */
+  combatEncounterId?: string;
   /** Cards that stand for `text` on screen (the seating card); `text` stays the screen reader line. */
   cards?: EngineResultCard[];
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatMessage } from '@/types/game';
 import type { ActionOption } from '@/utils/parseMessageOptions';
@@ -34,6 +34,36 @@ type LegalAction = {
   x?: number;
   y?: number;
 };
+
+type LegalActionsResponse = { actorId?: string; actions?: LegalAction[] };
+
+const inFlightLegalActions = new Map<string, Promise<LegalActionsResponse | null>>();
+
+export function fetchLegalActions(
+  encounterId: string,
+  actorId: string | undefined,
+  round: number | undefined,
+  options?: { force?: boolean },
+): Promise<LegalActionsResponse | null> {
+  const key = `${encounterId}:${actorId ?? ''}:${round ?? ''}`;
+  if (!options?.force) {
+    const existing = inFlightLegalActions.get(key);
+    if (existing) return existing;
+  }
+
+  const request = fetch(`${apiBase}/v1/combat/${encodeURIComponent(encounterId)}/legal-actions`, {
+    headers: getAuthHeaders(),
+  }).then(async (response) => {
+    if (!response.ok) return null;
+    return (await response.json()) as LegalActionsResponse;
+  });
+  inFlightLegalActions.set(key, request);
+  const clear = (): void => {
+    if (inFlightLegalActions.get(key) === request) inFlightLegalActions.delete(key);
+  };
+  void request.then(clear, clear);
+  return request;
+}
 
 interface DynamicOptionsSectionProps {
   options: ActionOption[];
@@ -94,28 +124,32 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       actions: [],
     });
 
-    const refreshLegalActions = useCallback(async () => {
-      if (!showCombatMenu || !encounter?.id) return;
-      const response = await fetch(
-        `${apiBase}/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
-        {
-          headers: getAuthHeaders(),
-        },
-      );
-      if (!response.ok) return;
-      const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
-      // A dying player's only legal action is the death save, and the dying panel owns it: a
-      // chip here would send the label as a typed action to a character who cannot act.
-      setLegalState({
-        actorId: payload.actorId,
-        actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
-      });
-    }, [
-      showCombatMenu,
-      encounter?.id,
-      encounter?.currentTurnParticipantId,
-      encounter?.currentRound,
-    ]);
+    // Monotonic id of the latest legal-actions GET. A forced refresh does
+    // not stop an older GET from landing last, so only the latest request
+    // may write its payload; a stale one is dropped.
+    const legalRequestSeq = useRef(0);
+
+    const refreshLegalActions = useCallback(
+      async (force = false) => {
+        if (!showCombatMenu || !encounter?.id) return;
+        const seq = (legalRequestSeq.current += 1);
+        const payload = await fetchLegalActions(
+          encounter.id,
+          encounter.currentTurnParticipantId,
+          encounter.currentRound,
+          { force },
+        );
+        if (!payload) return;
+        if (seq !== legalRequestSeq.current) return;
+        setLegalState({ actorId: payload.actorId, actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save') });
+      },
+      [
+        showCombatMenu,
+        encounter?.id,
+        encounter?.currentTurnParticipantId,
+        encounter?.currentRound,
+      ],
+    );
 
     useEffect(() => {
       void refreshLegalActions();
@@ -413,7 +447,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             : 'The action could not be completed. You can end your turn.',
         );
       } finally {
-        await refreshLegalActions();
+        // The action may have changed the engine state under the same
+        // encounter/actor/round key, so recompute instead of reusing any
+        // legal-actions GET that is still in flight.
+        await refreshLegalActions(true);
       }
     };
 

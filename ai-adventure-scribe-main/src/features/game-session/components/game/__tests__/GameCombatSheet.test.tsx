@@ -131,14 +131,65 @@ describe('GameCombatSheet (#2257)', () => {
   it('fills the log from the engine lines in the chat', () => {
     vi.stubEnv('DEV', false);
     mocks.messages = [
-      { sender: 'dm', text: '⚙️ Engine: Goblin Boss attacks: HIT for 3.\nYou stagger.' },
+      {
+        sender: 'dm',
+        text: '⚙️ Engine: Goblin Boss attacks: HIT for 3.\nYou stagger.',
+        context: { combatEncounterId: 'e' },
+      },
       { sender: 'player', text: 'I swing back' },
-      { sender: 'dm', text: '⚙️ Engine: The Apprentice attacks: MISS.\nThe blade whistles by.' },
+      {
+        sender: 'dm',
+        text: '⚙️ Engine: The Apprentice attacks: MISS.\nThe blade whistles by.',
+        context: { combatEncounterId: 'e' },
+      },
     ] satisfies ChatMessage[];
     renderSheet(false);
     const entries = screen.getAllByRole('listitem').map((item) => item.textContent);
     expect(entries).toEqual(['The Apprentice attacks: MISS.', 'Goblin Boss attacks: HIT for 3.']);
     expect(screen.queryByText('Nothing has happened yet.')).toBeNull();
+  });
+
+  it('shows only engine lines from the live encounter', () => {
+    vi.stubEnv('DEV', false);
+    mocks.messages = [
+      {
+        sender: 'dm',
+        text: '⚙️ Engine: Earlier Goblin attacks: HIT for 2.',
+        context: { combatEncounterId: 'earlier-encounter' },
+      },
+      {
+        sender: 'dm',
+        text: '⚙️ Engine: Live Goblin attacks: MISS.',
+        context: { combatEncounterId: 'e' },
+      },
+    ] satisfies ChatMessage[];
+    renderSheet(false);
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Live Goblin attacks: MISS.',
+    ]);
+    expect(screen.queryByText('Earlier Goblin attacks: HIT for 2.')).toBeNull();
+  });
+
+  it('shows an untagged engine line in the live encounter (restored history, seating card)', () => {
+    vi.stubEnv('DEV', false);
+    mocks.messages = [
+      {
+        sender: 'dm',
+        text: '⚙️ Engine: The seating card resolves.',
+        // No context: restored history and the seating card carry no
+        // encounter tag, but they belong to the live encounter.
+      },
+      {
+        sender: 'dm',
+        text: '⚙️ Engine: Live Goblin attacks: MISS.',
+        context: { combatEncounterId: 'e' },
+      },
+    ] satisfies ChatMessage[];
+    renderSheet(false);
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Live Goblin attacks: MISS.',
+      'The seating card resolves.',
+    ]);
   });
 
   it('says nothing has happened when the chat has no engine lines', () => {

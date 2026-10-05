@@ -44,6 +44,12 @@ const RUN_M4_SPELL_DECLARED: ContractEnvelope = {
   sceneDescription: 'A ruined laboratory, the elemental crackling near the far bench.',
 };
 
+const SCRATCH_HIT: ContractEnvelope = {
+  currentTurn: { slug: 'vitruvian-spider', isPlayer: false, round: 4 },
+  actions: [{ kind: 'attack', count: 1, hit: true, mixed: false, damageScale: 'scratch' }],
+  sceneDescription: null,
+};
+
 describe('parseContractEnvelope', () => {
   it('returns null when there is no contract (non-combat turns skip the check)', () => {
     expect(parseContractEnvelope(null)).toBeNull();
@@ -149,6 +155,45 @@ describe('success_on_miss + inflated_action_count (run 10)', () => {
         RUN_10_NPC_MISS,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('damage_scale (#2534)', () => {
+  it('rejects devastating prose for a one-damage scratch-tier hit', () => {
+    const violations = checkNarrationAgainstContract(
+      'The blow lands, devastating your armor and leaving you grievously wounded.',
+      SCRATCH_HIT,
+    );
+    expect(violations).toEqual([
+      expect.objectContaining({ rule: 'damage_scale', matched: 'devastating' }),
+    ]);
+  });
+
+  it('allows a restrained scratch-tier description', () => {
+    expect(
+      checkNarrationAgainstContract(
+        'The hit glances off your armor, leaving only a scrape.',
+        SCRATCH_HIT,
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not flag scenery scale words ("massive door") beside a scratch hit', () => {
+    const violations = checkNarrationAgainstContract(
+      'The hit grazes your arm, barely a scratch. Beyond the fray looms a massive door.',
+      SCRATCH_HIT,
+    );
+    expect(violations.some((v) => v.rule === 'damage_scale')).toBe(false);
+  });
+
+  it('still flags a scale word describing the hit in the same sentence', () => {
+    const violations = checkNarrationAgainstContract(
+      'The hit lands, a massive blow that rattles your bones.',
+      SCRATCH_HIT,
+    );
+    expect(violations).toEqual([
+      expect.objectContaining({ rule: 'damage_scale', matched: 'massive' }),
+    ]);
   });
 });
 

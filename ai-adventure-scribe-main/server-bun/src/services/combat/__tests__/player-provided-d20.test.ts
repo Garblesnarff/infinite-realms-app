@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { describeResolvedAttack } from '../attack-narration.js';
+import { damageScaleForDamage, describeResolvedAttack } from '../attack-narration.js';
 
 /**
  * Whose die decided the attack, said out loud.
@@ -23,6 +23,40 @@ describe('the attack record', () => {
 
     expect(line).toContain('(auto-rolled)');
     expect(line).toContain('8 damage');
+  });
+
+  it('gives the DM a scratch cue for a one-damage hit', () => {
+    const line = describeResolvedAttack(
+      'The Seeker',
+      'Sentient Glaze',
+      { hit: true, finalDamage: 1, targetMaxHitPoints: 10, targetNewHp: 9 },
+      'claws',
+    );
+
+    expect(line).toContain('Damage scale cue: scratch (<25%');
+    expect(line).not.toContain('devastating');
+    expect(damageScaleForDamage(1, 10)).toBe('scratch');
+  });
+
+  it('ends the hit sentence with a period before the damage cue', () => {
+    expect(
+      describeResolvedAttack(
+        'The Seeker',
+        'Sentient Glaze',
+        { hit: true, finalDamage: 1, targetMaxHitPoints: 10, targetNewHp: 9 },
+        'claws',
+      ),
+    ).toBe(
+      'The Seeker attacked Sentient Glaze with its claws: HIT for 1 damage. Sentient Glaze is now at 9 HP. Damage scale cue: scratch (<25% of target max HP). Narrate this outcome; it already happened.',
+    );
+  });
+
+  it('keeps the wounded and grievous cues at their engine thresholds', () => {
+    expect(damageScaleForDamage(2.49, 10)).toBe('scratch');
+    expect(damageScaleForDamage(2.5, 10)).toBe('wounded');
+    expect(damageScaleForDamage(6, 10)).toBe('wounded');
+    expect(damageScaleForDamage(6.01, 10)).toBe('grievous');
+    expect(damageScaleForDamage(0, 10)).toBeUndefined();
   });
 
   it('marks a miss too, which is the outcome a player is most likely to question', () => {

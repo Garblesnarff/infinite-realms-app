@@ -464,6 +464,21 @@ export const useAIResponse = (): {
         // and structured action execution — reads these two locals, so a fight the server ended
         // on a killing blow (or started while this closure was already captured) is seen here.
         let activeEncounter = await rejectWhenAborted(refreshCombatState(signal), signal);
+        const initialEncounterId = activeEncounter?.id;
+        const scopedEngineNotice = onEngineNotice
+          ? (notice: LocalNotice): void =>
+              onEngineNotice({
+                ...notice,
+                ...(activeEncounter?.id || initialEncounterId || lastCombatEncounterRef.current?.id
+                  ? {
+                      combatEncounterId:
+                        activeEncounter?.id ??
+                        initialEncounterId ??
+                        lastCombatEncounterRef.current?.id,
+                    }
+                  : {}),
+              })
+          : undefined;
         logger.info('TURN_PREFLIGHT_TIMING', {
           sessionId,
           stage: 'incoming-roll-log-and-combat-refresh',
@@ -935,7 +950,7 @@ export const useAIResponse = (): {
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin,
           entryConfirmed: heldEntry?.decision === 'confirmed',
-          onEngineNotice,
+          onEngineNotice: scopedEngineNotice,
           signal,
           onPlayerWaitChange: turnSignal?.onPlayerWaitChange,
         }).finally(() => window.removeEventListener('session-engine-rows', collectEngineRows));
@@ -974,6 +989,8 @@ export const useAIResponse = (): {
             combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
           );
         }
+        const combatEncounterId =
+          activeEncounter?.id ?? initialEncounterId ?? lastCombatEncounterRef.current?.id;
         // #2517: combat ended during this turn's resolution (the player's own
         // action, then the NPC loop inside it). If the ending was the party's
         // defeat, the death screen comes from this resolution — not from the
@@ -1098,7 +1115,11 @@ export const useAIResponse = (): {
             .join('\n\n');
           if (engineText && finalResponseText.startsWith(engineText)) {
             const cards = combatEngineBlocks.flatMap((block) => block.cards ?? []);
-            onEngineNotice({ text: engineText, persist: true, ...(cards.length ? { cards } : {}) });
+            scopedEngineNotice?.({
+              text: engineText,
+              persist: true,
+              ...(cards.length ? { cards } : {}),
+            });
             finalResponseText = finalResponseText.slice(engineText.length).trimStart();
             replyEngineBlocks = undefined;
           } else if (engineText) {
@@ -1140,6 +1161,7 @@ export const useAIResponse = (): {
             intent: 'response',
             combat_transition: result.combat_transition ?? 'none',
             scene_spec: result.scene_spec != null,
+            ...(combatEncounterId ? { combatEncounterId } : {}),
             npcRollResults:
               processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
             handouts: deliveredHandouts,

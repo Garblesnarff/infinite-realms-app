@@ -31,7 +31,7 @@ import { Toolbar } from '@/components/battle-map/Toolbar';
 import { ToolOptionsPanel } from '@/components/battle-map/ToolOptionsPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
@@ -315,6 +315,9 @@ export const BattleMapPage: React.FC = () => {
             <SheetContent side="right" className="w-80 p-0">
               <SheetHeader className="p-4 border-b">
                 <SheetTitle>Layers</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Battle map layers panel.
+                </SheetDescription>
               </SheetHeader>
               <div className="overflow-y-auto h-[calc(100vh-5rem)]">
                 <LayersPanel sceneId={sceneId} side="right" />

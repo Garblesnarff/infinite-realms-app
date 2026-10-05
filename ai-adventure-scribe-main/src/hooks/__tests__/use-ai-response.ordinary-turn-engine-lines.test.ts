@@ -455,6 +455,7 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
       {
         text: KILL_LINE,
         persist: true,
+        combatEncounterId: 'enc-1',
         cards: [expect.objectContaining({ kind: 'attack', line: KILL_LINE })],
       },
     ]);
@@ -483,6 +484,65 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     expect(response.text.startsWith(KILL_LINE)).toBe(true);
     expect(response.text.match(/rolled 18 \+ 5 = 23/g)).toHaveLength(1);
   });
+
+  it('tags a notice with the live encounter, never the previous one', async () => {
+    // One hook instance across two turns: after turn 1 the ref holds
+    // enc-old, so turn 2 proves the fresh server truth wins the tag. The
+    // hook reads useCombat at render, so the mock is set before render and
+    // the hook is rerendered for the new encounter. `held` drives the
+    // mock's combat-ended behavior (the killing blow empties it, like the
+    // shared fixture).
+    let liveEncounterId = 'enc-old';
+    const setEncounter = (id: string): void => {
+      liveEncounterId = id;
+      held = 'scholar-1';
+      vi.mocked(useCombat).mockReturnValue({
+        state: { isInCombat: true, activeEncounter: null },
+        refreshCombatState: vi.fn(async () =>
+          held ? { ...encounterHeldBy('scholar-1'), id: liveEncounterId } : null,
+        ),
+      } as any);
+    };
+    setEncounter('enc-old');
+    const { result, rerender } = renderHook(() => useAIResponse());
+    const shown: LocalNotice[] = [];
+    const turn = async (playerText: string, purpose: string): Promise<void> => {
+      commitResult = killingBlow;
+      vi.mocked(AIService.chatWithDM)
+        .mockResolvedValueOnce({
+          text: 'You swing your staff.',
+          roll_requests: [],
+          combat_actions: [declaredSwing],
+        } as any)
+        .mockResolvedValueOnce({
+          text: 'The professor crumples. The study falls quiet.',
+          // A distinct check per turn: the hook dedups identical roll
+          // requests across turns on one instance.
+          roll_requests: [{ ...POST_COMBAT_CHECK, purpose }],
+        } as any);
+      const response = await result.current.getAIResponse(
+        [{ text: playerText, sender: 'player', timestamp: new Date().toISOString() }] as any,
+        DECLARED_ATTACK_SESSION_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        (notice) => {
+          shown.push(notice);
+        },
+      );
+      expect(response.rollRequests).toHaveLength(1);
+    };
+
+    await turn(PLAYER_INPUT, 'Investigation check to search the study');
+    expect(shown.map((notice) => notice.combatEncounterId)).toEqual(['enc-old']);
+    shown.length = 0;
+    setEncounter('enc-live');
+    rerender();
+    await turn('I swing my staff at Professor Emil Darkwater again', 'Perception check to spot the exit');
+    expect(shown.map((notice) => notice.combatEncounterId)).toEqual(['enc-live']);
+  });
+
 
   // Migrated (#2658 step 3): was "A1: a silent turn after a pre-flight NPC hit is not engine-free: right note, no false trailer, no fabrication flag"
   // The creatures now act on the End turn that precedes this message, never inside a silent turn

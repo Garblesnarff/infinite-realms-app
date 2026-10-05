@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useSidebar, SIDEBAR_WIDTH_MOBILE } from './sidebar-context';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
@@ -59,6 +59,8 @@ export const Sidebar = React.forwardRef<
             }
             side={side}
           >
+            <SheetTitle className="sr-only">Sidebar</SheetTitle>
+            <SheetDescription className="sr-only">Navigation sidebar.</SheetDescription>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>
