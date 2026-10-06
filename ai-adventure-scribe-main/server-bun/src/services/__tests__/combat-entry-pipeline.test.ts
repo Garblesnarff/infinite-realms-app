@@ -121,6 +121,39 @@ describe('applyCombatEntryGate', () => {
     expect(envelope.text).toBe('Your fist arcs toward the Ifrit Guard.');
   });
 
+  it('does not hand a pending entry back when a fight is already live (#2623)', async () => {
+    const { deps, startedAt } = stubDeps();
+    const returned = await applyCombatEntryGate({
+      result: {
+        text: dmEnvelope({
+          text: 'Your fist arcs toward the Ifrit Guard.',
+          combat_transition: 'start',
+          roll_requests: [
+            {
+              type: 'attack',
+              formula: '1d20+4',
+              purpose: 'Punch the Ifrit Guard',
+              dc: null,
+              ac: null,
+              advantage: false,
+              disadvantage: false,
+            },
+          ],
+        }),
+      } as never,
+      userId: USER_ID,
+      combatEntry: COMBAT_ENTRY,
+      deps,
+      liveEncounter: async () => ({ id: 'encounter-live', status: 'active' }),
+    });
+
+    expect(startedAt).toHaveLength(0);
+    const envelope = JSON.parse(returned.text) as Record<string, unknown>;
+    expect(envelope.combat_entry_pending).toBeUndefined();
+    expect(envelope.combat_transition).toBe('none');
+    expect(envelope.text).toBe('Your fist arcs toward the Ifrit Guard.');
+  });
+
   it('leaves a peaceful turn byte-identical', async () => {
     const { deps, startedAt } = stubDeps();
     const original = { text: dmEnvelope() } as never;

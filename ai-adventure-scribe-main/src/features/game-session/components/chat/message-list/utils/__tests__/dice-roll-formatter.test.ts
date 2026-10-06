@@ -118,4 +118,26 @@ describe('critical copy only on attack rolls (#2513)', () => {
     expect(formatted).not.toContain('Critical');
     expect(formatted).not.toMatch(/\bhit\b|\bmiss\b/i);
   });
+
+  it('ends a resolved check that has no DC with (no DC), and leaves attacks alone (#2623)', () => {
+    // `rollOf` copies the settled DiceRoll the queue stores (dieType, count, modifier,
+    // results, keptResults, total, naturalRoll, critical). Run D8's Perception line had
+    // a total and a natural breakdown and no success/fail, because the request had no DC.
+    const perception = rollOf('skill_check', 12, 2, {});
+    expect(formatDiceRoll(perception)).toBe('Perception check: 14 (nat 12+2) (no DC)');
+    expect(getDiceRollOutcome(perception)).toBeUndefined();
+
+    const ability = {
+      ...rollOf('ability_check', 8, -1, {}),
+      description: 'Strength check',
+    };
+    expect(formatDiceRoll(ability)).toBe('Strength check: 7 (nat 8-1) (no DC)');
+
+    expect(formatDiceRoll(rollOf('saving_throw', 3, 0, {}))).toBe('Wisdom saving throw: 3 (no DC)');
+    expect(formatDiceRoll(rollOf('skill_check', 18, 6, { dc: 15 }))).toContain(' success');
+    expect(formatDiceRoll(rollOf('skill_check', 3, -1, { dc: 12 }))).toContain(' fail');
+
+    expect(formatDiceRoll(rollOf('attack', 12, 2, {}))).not.toContain('(no DC)');
+    expect(formatDiceRoll(rollOf('initiative', 4, 1, {}))).not.toContain('(no DC)');
+  });
 });

@@ -288,6 +288,8 @@ export const entryRoutes = createCombatEntryRoutes();
 export interface DeclaredAttackRouteOptions {
   authenticateRequest?: typeof defaultAuthenticateRequest;
   loadCombatIntentActorRoster?: typeof defaultLoadCombatIntentActorRoster;
+  /** When this returns an encounter, the message is a turn inside a fight, not a new entry. */
+  getActiveEncounter?: (sessionId: string, userId: string) => Promise<unknown>;
 }
 
 /**
@@ -300,6 +302,7 @@ export interface DeclaredAttackRouteOptions {
 export function createDeclaredAttackRoutes({
   authenticateRequest = defaultAuthenticateRequest,
   loadCombatIntentActorRoster = defaultLoadCombatIntentActorRoster,
+  getActiveEncounter,
 }: DeclaredAttackRouteOptions = {}) {
   return new Elysia().post(
     '/sessions/:sessionId/declared-attack',
@@ -345,6 +348,7 @@ export function createDeclaredAttackRoutes({
           },
         },
         declaredAttack,
+        ...(getActiveEncounter ? { liveEncounter: getActiveEncounter } : {}),
       });
       const envelope = JSON.parse(gated.text) as { combat_entry_pending?: unknown };
       return { pending: envelope.combat_entry_pending ?? null };
@@ -353,4 +357,7 @@ export function createDeclaredAttackRoutes({
   );
 }
 
-export const declaredAttackRoutes = createDeclaredAttackRoutes();
+export const declaredAttackRoutes = createDeclaredAttackRoutes({
+  getActiveEncounter: (sessionId, userId) =>
+    defaultCombatEntryGateDeps.getActiveEncounter(sessionId, userId),
+});

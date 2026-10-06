@@ -76,6 +76,14 @@ export function formatDiceRoll(roll: DiceRollRequest): string {
     } else {
       formatted += outcome.success ? ' success' : ' fail';
     }
+  } else if (
+    requestType === 'skill_check' ||
+    requestType === 'ability_check' ||
+    requestType === 'saving_throw'
+  ) {
+    // A resolved check with no DC still ends in a verdict (#2623). Attacks and
+    // initiative are not checks and stay unmarked.
+    formatted += ' (no DC)';
   }
 
   // Add critical indicators

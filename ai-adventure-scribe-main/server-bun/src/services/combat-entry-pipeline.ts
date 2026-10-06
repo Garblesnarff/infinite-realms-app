@@ -262,6 +262,11 @@ export async function applyCombatEntryGate(params: {
    * the DM made up from its own description ("shadows that do not cast light") is not a target.
    */
   untargetedSpellRoster?: readonly CombatIntentActor[] | null;
+  /**
+   * The session's already-seated encounter, when the caller can read it. A live fight must not
+   * be handed back as a new entry (#2623).
+   */
+  liveEncounter?: (sessionId: string, userId: string) => Promise<unknown>;
   /** The session's authored creatures, read only to name a hostile the DM left unnamed. */
   campaignMonsterIndex?: (sessionId: string, userId: string) => Promise<CampaignMonsterIndex>;
   /**
@@ -447,6 +452,32 @@ export async function applyCombatEntryGate(params: {
   }
 
   if (!pending) return sanitizedResult;
+
+  // A fight that is already seated is not a new entry. The menu, a reload, or a turn whose
+  // client refresh lagged must not be handed the confirmation popup again (#2623).
+  if (params.liveEncounter) {
+    try {
+      const active = await params.liveEncounter(combatEntry.sessionId, params.userId);
+      if (active) {
+        logger.info({
+          msg: 'COMBAT_ENTRY_SKIPPED_LIVE_ENCOUNTER',
+          sessionId: combatEntry.sessionId,
+        });
+        const rest = { ...envelope } as Record<string, unknown>;
+        delete rest.combat_entry_pending;
+        return {
+          ...sanitizedResult,
+          text: JSON.stringify({ ...rest, combat_transition: 'none' }),
+        };
+      }
+    } catch (error) {
+      logger.warn({
+        msg: 'COMBAT_ENTRY_LIVE_ENCOUNTER_UNREADABLE',
+        sessionId: combatEntry.sessionId,
+        error,
+      });
+    }
+  }
 
   logger.info({
     msg: 'COMBAT_ENTRY_DETECTED_PENDING_PLAYER_ENTRY',

@@ -428,6 +428,74 @@ describe('buildEntryParticipants', () => {
       ),
     ).toContain('Chiropteran Hulk: 15 + 0 = 15.');
   });
+
+  it('prints one-digit totals, two-digit totals, and negative modifiers in full (#2623)', () => {
+    // Seats follow `startCombat`'s participant rows: id, name, initiative, initiativeModifier,
+    // characterId or participantType, and turnOrder. The line is sorted by turnOrder, so the
+    // player's two-digit-bearing neighbours and their own total all have to survive.
+    const player = {
+      id: 'player',
+      name: 'The Scholar',
+      initiative: 5,
+      initiativeModifier: 1,
+      characterId: 'character-scholar',
+      participantType: 'player' as const,
+      turnOrder: 2,
+    };
+    const line = buildCombatSeatingTranscript(
+      [
+        {
+          id: 'stalker-2',
+          name: 'Faceless Stalker 2',
+          initiative: 15,
+          initiativeModifier: 0,
+          participantType: 'monster',
+          turnOrder: 0,
+        },
+        {
+          id: 'stalker-1',
+          name: 'Faceless Stalker 1',
+          initiative: 11,
+          initiativeModifier: 0,
+          participantType: 'monster',
+          turnOrder: 1,
+        },
+        player,
+        {
+          id: 'one-digit',
+          name: 'Goblin',
+          initiative: 7,
+          initiativeModifier: 0,
+          participantType: 'monster',
+          turnOrder: 3,
+        },
+      ],
+      { characterId: 'character-scholar', name: 'The Scholar', initiativeModifier: 1 },
+      4,
+    );
+
+    expect(line).toBe(
+      '⚙️ Engine: Initiative: 5 (nat 4+1) — Faceless Stalker 2: 15 + 0 = 15. Faceless Stalker 1: 11 + 0 = 11. You: 4 + 1 = 5 (you rolled). Goblin: 7 + 0 = 7.',
+    );
+    expect(line.length).toBeGreaterThan(100);
+    expect(line.endsWith('= 7.')).toBe(true);
+
+    const negative = buildCombatSeatingTranscript(
+      [
+        {
+          id: 'player',
+          name: 'The Scholar',
+          initiative: 9,
+          initiativeModifier: -1,
+          characterId: 'character-scholar',
+          turnOrder: 0,
+        },
+      ],
+      { characterId: 'character-scholar', name: 'The Scholar', initiativeModifier: -1 },
+      10,
+    );
+    expect(negative).toBe('⚙️ Engine: Initiative: 9 (nat 10-1) — You: 10 - 1 = 9 (you rolled).');
+  });
 });
 
 describe('seating transcript display name (#2398)', () => {

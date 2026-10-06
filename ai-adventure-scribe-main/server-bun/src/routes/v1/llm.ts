@@ -408,9 +408,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           // Dynamic import: CombatEncounterService pulls in the database
           // client at import time. Loading it lazily keeps the route
           // importable in tests that don't mock the database.
-          const { CombatEncounterService } = await import(
-            '../../services/combat/combat-encounter-service.js'
-          );
+          const { CombatEncounterService } =
+            await import('../../services/combat/combat-encounter-service.js');
           const latestConcluded = await CombatEncounterService.getLatestConcludedEncounter(
             terminalCheckSessionId,
             userId,
@@ -438,7 +437,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           logger.warn({
             msg: 'LLM_GENERATE_TERMINAL_CHECK_FAILED',
             sessionId: terminalCheckSessionId,
-            error: terminalCheckError instanceof Error ? terminalCheckError.message : String(terminalCheckError),
+            error:
+              terminalCheckError instanceof Error
+                ? terminalCheckError.message
+                : String(terminalCheckError),
           });
         }
       }
@@ -555,9 +557,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // route's module graph must stay loadable without DATABASE_URL.
         recordTacticalFact: factSessionId
           ? async (fact) => {
-              const { recordDmTacticalFact } = await import(
-                '../../services/combat/tactical-action-service.js'
-              );
+              const { recordDmTacticalFact } =
+                await import('../../services/combat/tactical-action-service.js');
               await recordDmTacticalFact(factSessionId, fact);
             }
           : undefined,
@@ -572,6 +573,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         combatEntry: combatEntry as CombatEntryContext | undefined,
         declaredAttack,
         untargetedSpellRoster,
+        liveEncounter: async (sessionId, ownerId) => {
+          const { combatEntryGateDeps } =
+            await import('../../services/combat/combat-entry-gate-deps.js');
+          return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
+        },
       });
 
       if (result.error) {

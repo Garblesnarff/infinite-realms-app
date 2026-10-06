@@ -3,6 +3,7 @@ import { render, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  DECLARED_ATTACK_PLAYER_INPUT,
   DECLARED_ATTACK_SESSION_ID,
   declaredAttackCharacter,
 } from '../../../shared/test-fixtures/declared-attack-hold';
@@ -427,6 +428,24 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     ]);
     expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true);
     expect(round).toBe(2);
+  });
+
+  it('does not reopen combat entry for a menu action while the encounter is live (#2623)', async () => {
+    // Run D8 turn 16 clicked "Option 1 - Attack with Quarterstaff" after entry. That chip
+    // declares the attack itself (the d20 dialog) and must not call the entry check. A menu
+    // label that still goes out as chat (a spell) must not either: this turn's refresh is
+    // the seated encounter from mapAuthoritativeCombat, the same read the menu is showing.
+    extraAction = { type: 'spell', label: DECLARED_ATTACK_PLAYER_INPUT };
+    render(<Game />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Attack with Quarterstaff/ }));
+    await waitFor(() => expect(proposals).toHaveLength(1));
+    expect(userDataApi.detectDeclaredAttack).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Chill Touch/ }));
+    await waitFor(() => expect(AIService.chatWithDM).toHaveBeenCalled());
+    expect(userDataApi.detectDeclaredAttack).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert', { name: 'Combat entry confirmation' })).toBeNull();
   });
 
   it('declares a hinted attack directly — the move hint never reaches the DM or the engine', async () => {

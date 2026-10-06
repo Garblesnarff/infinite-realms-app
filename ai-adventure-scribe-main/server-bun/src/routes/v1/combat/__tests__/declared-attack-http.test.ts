@@ -31,6 +31,7 @@ const { createRequestPipelineApp } = await import('../../../../http-pipeline.js'
 const { createDeclaredAttackRoutes } = await import('../entry.js');
 
 let authenticated = true;
+let liveEncounter: unknown;
 let roster: Array<{ name: string; source?: 'ledger' | 'map' | 'campaign' }> = [];
 const defaultRoster = [{ name: 'Valerius' }, { name: 'Professor Darkwater' }];
 const rosterCalls: Array<{ sessionId: string; userId: string }> = [];
@@ -49,6 +50,7 @@ const app = createRequestPipelineApp().use(
       rosterCalls.push({ sessionId, userId });
       return roster;
     }) as never,
+    getActiveEncounter: async () => liveEncounter,
   }),
 );
 
@@ -64,8 +66,16 @@ const post = (body: unknown, sessionId = DECLARED_ATTACK_SESSION_ID) =>
 describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
   beforeEach(() => {
     authenticated = true;
+    liveEncounter = undefined;
     roster = defaultRoster;
     rosterCalls.splice(0);
+  });
+
+  it('returns no pending entry when a fight is already live (#2623)', async () => {
+    liveEncounter = { id: 'encounter-live', status: 'active' };
+    const response = await post(declaredAttackCheckBody);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ pending: null });
   });
 
   it("returns the pending entry for run 14's Chill Touch turn", async () => {
