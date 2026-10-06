@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { detectCombatCheck } from '../../../shared/combat-check-intent';
+
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import type { PlayerAttackRollSpec } from '@/services/combat/player-roll-bridge';
@@ -23,6 +25,10 @@ import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
 import { type PlayerInputOrigin } from '@/services/combat/combat-action-origin';
 import {
+  runDeclaredCombatCheck,
+  skillCheckModifierFor,
+} from '@/services/combat/combat-check-client';
+import {
   engineRosterOf,
   formatNpcTurnOutcome,
   npcTurnOptions,
@@ -40,6 +46,7 @@ import {
   trackPlayerRollDismissal,
 } from '@/services/combat/player-roll-bridge';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
+import { standingHostiles } from '@/services/combat/sheet-cast-save-hold';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
 import { userDataApi } from '@/services/user-data-api';
 import { dropEngineOwnedRollRequests, loggableRollType } from '@/utils/roll-request/engine-channel';
@@ -759,6 +766,84 @@ export async function handleDmActionsAndTransitions(
   // warning and the DM narrated a spell that never happened (#2304).
   const declaredPlayerSpell = isInCombat ? declaredSheetSpell(playerMessage) : null;
 
+  // #2420: a mid-combat ability check ("shove the goblin", "grapple it", "hide behind the
+  // pillar", "talk it down"). Resolved HERE, beside the sheet cast, because the check is the
+  // engine's turn rather than the DM's: the player rolls their own d20 in the ordinary roll
+  // dialog, the engine rolls the contest, and the result is an engine line the DM restates. Run
+  // any later, after the DM has already narrated the attempt, the fiction precedes the rules.
+  //
+  // Gated on the player actually holding the turn, so a check cannot spend an action the player
+  // does not have, and on the check being recognised at all — an ordinary message, or one whose
+  // check the engine has no owner for, falls through to today's behaviour with a reason logged.
+  let declaredCombatCheck: Awaited<ReturnType<typeof runDeclaredCombatCheck>> | null = null;
+  /** Set once the engine resolved the check: the turn is then the engine's line, not the DM's prose. */
+  /** Set when the engine refused the check: nothing was rolled and the action is still the player's. */
+  let refusedCombatCheck = false;
+  let resolvedCombatCheck: {
+    actorId: string;
+    engineLine: string;
+    dmFact: string;
+  } | null = null;
+  if (isInCombat && activeEncounter && playerInputOrigin === 'typed' && playerMessage?.trim()) {
+    const checkRoster = activeEncounter.participants ?? [];
+    const playerParticipant = checkRoster.find(
+      (participant: any) =>
+        participant.participantType === 'player' &&
+        (!params.characterRecord?.id || participant.characterId === params.characterRecord.id),
+    );
+    if (playerParticipant && isPlayerTurn(activeEncounter, playerParticipant)) {
+      // The player is on the roster and is not a target: with the player counted, "grapple it"
+      // sees two creatures and never resolves.
+      const detection = detectCombatCheck(
+        playerMessage,
+        standingHostiles(checkRoster).map((participant: any) => ({ name: participant.name ?? '' })),
+      );
+      // Only a message that really declared a check opens the roll prompt. Asking first and
+      // discovering afterwards that the sentence was ordinary conversation is a die the player
+      // rolled for nothing.
+      if (detection.intent) {
+        declaredCombatCheck = await runDeclaredCombatCheck(playerMessage, {
+          encounterId: activeEncounter.id,
+          actorId: playerParticipant.id,
+          actorLabel: playerParticipant.name ?? 'You',
+          participants: checkRoster,
+          checkModifier: skillCheckModifierFor(playerParticipant, detection.intent.kind),
+          origin: 'typed',
+        });
+        activeEncounter = await refreshCombatState(signal);
+        if (declaredCombatCheck.reason === 'refused' && declaredCombatCheck.message) {
+          // The engine's reason is the whole answer. The attempt did not happen, so the DM's
+          // first-pass prose for it is stale too, and the turn is narrated as one where nothing
+          // resolved.
+          appendLocalNotice(`⚙️ Engine: ${declaredCombatCheck.message}`);
+          refusedCombatCheck = true;
+          result = { ...result, combat_actions: [], text: '' };
+          responseText = '';
+          narrationSegments = undefined;
+        }
+        const resolved = declaredCombatCheck.result as
+          | { engineLine?: string; dmEngineLine?: string; dmFact?: string }
+          | undefined;
+        if (resolved?.engineLine) {
+          appendLocalNotice(`⚙️ Engine: ${resolved.engineLine}`);
+          // The engine resolved this turn, so the DM's first-pass reply is stale: it was written
+          // before the roll and can state a result the engine did not produce, and any action it
+          // declared for the player would spend an action the check already used. Narration is
+          // rebuilt from the engine line below.
+          resolvedCombatCheck = {
+            actorId: playerParticipant.id,
+            // The DM's copy of the line: the player's own line above keeps a DC the DM must not repeat.
+            engineLine: resolved.dmEngineLine ?? resolved.engineLine,
+            dmFact: resolved.dmFact ?? '',
+          };
+          result = { ...result, combat_actions: [], text: '' };
+          responseText = '';
+          narrationSegments = undefined;
+        }
+      }
+    }
+  }
+
   // #1701 repairs the action the engine refused. This repairs the action that was never
   // declared: during an active fight the player plainly attacked, and the DM answered with
   // prose and `actions:0`, so nothing was refused because nothing was submitted. Same budget,
@@ -771,7 +856,12 @@ export async function handleDmActionsAndTransitions(
   // resolved) and on a sheet cast (the engine refuses an undeclared one itself, #2304). Both
   // carried `combat_transition: 'none'`, which used to stop the guard by accident (#2380).
   const forcedActions =
-    entryWasSeated || entryFirstActionPresent || droppedNpcCombatActions || declaredPlayerSpell
+    entryWasSeated ||
+    entryFirstActionPresent ||
+    droppedNpcCombatActions ||
+    declaredPlayerSpell ||
+    resolvedCombatCheck ||
+    refusedCombatCheck
       ? null
       : await enforceCombatActionOnAttempt({
           isInCombat,
@@ -804,8 +894,9 @@ export async function handleDmActionsAndTransitions(
     !!playerMessage?.trim() &&
     // A typed attack the DM answered with only NPC actions, or the repair could not turn into a
     // player action, is an attack that did not resolve, not a non-action. Not this path.
-    !looksLikeCombatActionAttempt(playerMessage) &&
+    (refusedCombatCheck || !looksLikeCombatActionAttempt(playerMessage)) &&
     !declaredPlayerSpell &&
+    !resolvedCombatCheck &&
     !result.combat_actions?.length &&
     !result.roll_requests?.length &&
     // `processDMResponse` writes 'none' on every reply, so "no transition" is 'none' or absent (#2373).
@@ -835,6 +926,7 @@ export async function handleDmActionsAndTransitions(
     (result.combat_actions?.length ||
       hasPreflightEngineLines ||
       declaredPlayerSpell ||
+      resolvedCombatCheck ||
       silentPlayerTurn)
   ) {
     const narrationResult = await resolveDeclaredCombatActions({
@@ -859,6 +951,7 @@ export async function handleDmActionsAndTransitions(
       playerInputOrigin,
       playerMessage,
       declaredPlayerSpell,
+      ...(resolvedCombatCheck ? { resolvedPlayerCheck: resolvedCombatCheck } : {}),
       signal,
       onPlayerWaitChange: params.onPlayerWaitChange,
       ...(silentPlayerTurn ? { silentPlayerTurn: { playerMessage: playerMessage as string } } : {}),

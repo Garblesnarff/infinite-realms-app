@@ -161,6 +161,67 @@ describe('advanceNpcTurns', () => {
     expect(state.currentParticipant.id).toBe('p1');
   });
 
+  describe('a grappled NPC (#2420)', () => {
+    const grappled = [
+      {
+        id: 'c-grapple',
+        isActive: true,
+        sourceDescription: 'combat_check:grappler:p1',
+        condition: { name: 'Grappled' },
+      },
+    ];
+
+    it('spends its action trying to escape instead of attacking, and prints the engine line', async () => {
+      const player = participant('p1', 'player');
+      const npc = { ...participant('npc1', 'monster'), conditions: grappled };
+      const { intents, dependencies } = harness([npc, player], 'npc1', (intent, live) => {
+        live.currentParticipant = player;
+        return intent.type === 'check'
+          ? { engineLine: 'Escape: 19 (nat 20-1) vs Athletics 4 — success, npc1 breaks free of The Seeker\'s grapple' }
+          : { currentParticipant: player };
+      });
+
+      const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(intents).toEqual([
+        { type: 'check', actorId: 'npc1', checkKind: 'escape' },
+        { type: 'end_turn', actorId: 'npc1' },
+      ]);
+      expect(result.results[0].transcriptLines).toEqual([
+        "⚙️ Engine: Escape: 19 (nat 20-1) vs Athletics 4 — success, npc1 breaks free of The Seeker's grapple",
+      ]);
+    });
+
+    it('attacks again once the grapple is gone', async () => {
+      const player = participant('p1', 'player');
+      const npc = { ...participant('npc1', 'monster'), conditions: [] };
+      const { intents, dependencies } = harness([npc, player], 'npc1', (intent, live) => {
+        live.currentParticipant = player;
+        return { currentParticipant: player };
+      });
+
+      await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(intents[0]).toMatchObject({ type: 'attack', actorId: 'npc1' });
+    });
+
+    it('a grapple a spell or a trap wrote is not an escape attempt', async () => {
+      const player = participant('p1', 'player');
+      const npc = {
+        ...participant('npc1', 'monster'),
+        conditions: [{ ...grappled[0], sourceDescription: 'Black tentacles' }],
+      };
+      const { intents, dependencies } = harness([npc, player], 'npc1', (intent, live) => {
+        live.currentParticipant = player;
+        return { currentParticipant: player };
+      });
+
+      await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(intents[0]).toMatchObject({ type: 'attack' });
+    });
+  });
+
   it('keeps an unprovoked neutral NPC dodging but attacks after player damage provokes it', async () => {
     const player = participant('p1', 'player');
     const neutral = {

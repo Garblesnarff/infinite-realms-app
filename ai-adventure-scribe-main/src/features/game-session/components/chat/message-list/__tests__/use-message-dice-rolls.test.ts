@@ -8,6 +8,7 @@ import { useMessageDiceRolls } from '../use-message-dice-rolls';
 import { useGame } from '@/contexts/GameContext';
 import {
   settleCombatAttackRoll,
+  settleCombatCheckRoll,
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
@@ -22,6 +23,7 @@ vi.mock('@/contexts/GameContext', () => ({
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(),
   settleCombatInitiativeRoll: vi.fn(),
+  settleCombatCheckRoll: vi.fn(),
 }));
 
 vi.mock('@/services/combat/player-roll-bridge', () => ({
@@ -70,6 +72,7 @@ describe('useMessageDiceRolls', () => {
     };
     vi.mocked(settleCombatAttackRoll).mockReturnValue(false);
     vi.mocked(settleCombatInitiativeRoll).mockReturnValue(false);
+    vi.mocked(settleCombatCheckRoll).mockReturnValue(false);
     vi.mocked(hasPendingPlayerRoll).mockReturnValue(false);
   });
 

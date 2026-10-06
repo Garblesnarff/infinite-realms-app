@@ -445,6 +445,7 @@ export const useAIResponse = (): {
               roll.status !== 'pending' ||
               roll.combatAttackRoll ||
               roll.combatInitiativeRoll ||
+              roll.combatCheckRoll ||
               isNarrativeRollCommitted(roll.id)
             ) {
               continue;

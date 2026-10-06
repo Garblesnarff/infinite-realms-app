@@ -9,6 +9,7 @@ import { useGame } from '@/contexts/GameContext';
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(() => false),
+  settleCombatCheckRoll: vi.fn(() => false),
   settleCombatInitiativeRoll: vi.fn(() => false),
 }));
 vi.mock('@/services/combat/player-roll-bridge', () => ({

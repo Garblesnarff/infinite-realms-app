@@ -75,6 +75,28 @@ function authoredDisposition(stats: unknown): string | undefined {
   return typeof disposition === 'string' ? disposition : undefined;
 }
 
+/**
+ * An authored number from a creature's stat block, e.g. `passivePerception` or `parleyDc`.
+ *
+ * Flattened onto the participant the same way {@link authoredDisposition} is, because
+ * `getCombatState` destructures the joined `npc` row away — a participant carries `npcId`, not
+ * `npc`. Reading `participant.npc.stats` therefore finds nothing on every row and silently
+ * downgrades every authored value to a recomputed one.
+ */
+function authoredNumbers(stats: unknown): Record<string, number> {
+  if (!stats || typeof stats !== 'object' || Array.isArray(stats)) return {};
+  const source = stats as Record<string, unknown>;
+  const flattened: Record<string, number> = {};
+  for (const key of AUTHORED_STAT_NUMBERS) {
+    const value = source[key];
+    if (typeof value === 'number' && Number.isFinite(value)) flattened[key] = value;
+  }
+  return flattened;
+}
+
+/** The stat-block numbers the engine honours verbatim rather than recomputing (see #2420). */
+const AUTHORED_STAT_NUMBERS = ['passivePerception', 'parleyDc'] as const;
+
 export class CombatEncounterService {
   /**
    * Start a new combat encounter
@@ -576,7 +598,10 @@ export class CombatEncounterService {
           // numbers duplicates ("Shadow Roach 2"), which normalizes to a key no catalog
           // holds. Resolving once here, where the campaign index and the catalog are both
           // in hand, is also what lets the row record WHICH rung supplied the numbers.
-          monsterAttack: attackProfile,
+          monsterAttack:
+            attackProfile && monster?.abilityScores
+              ? { ...attackProfile, abilityScores: monster.abilityScores }
+              : attackProfile,
           bestiaryName: monster?.source === 'campaign' ? bestiaryName : null,
           tacticalSize: monster?.size ?? GENERIC_NPC_STATS.size,
         };
@@ -643,7 +668,12 @@ export class CombatEncounterService {
         .sort((a, b) => a.turnOrder - b.turnOrder)
         .map((participant) => {
           const disposition = authoredDisposition(npcsById.get(participant.npcId ?? '')?.stats);
-          return disposition ? { ...participant, disposition } : participant;
+          const authored = authoredNumbers(npcsById.get(participant.npcId ?? '')?.stats);
+          return {
+            ...participant,
+            ...(disposition ? { disposition } : {}),
+            ...authored,
+          };
         });
     }
 
@@ -813,7 +843,8 @@ export class CombatEncounterService {
     const { participants: participantRows, ...encounter } = encounterWithParticipants;
     const participants = participantRows.map(({ npc, ...participant }) => {
       const disposition = authoredDisposition(npc?.stats);
-      return disposition ? { ...participant, disposition } : participant;
+      const authored = authoredNumbers(npc?.stats);
+      return { ...participant, ...(disposition ? { disposition } : {}), ...authored };
     });
 
     // Filter active participants and determine current turn in-memory

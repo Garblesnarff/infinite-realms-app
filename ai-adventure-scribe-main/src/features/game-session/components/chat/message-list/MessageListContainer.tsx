@@ -265,7 +265,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
             story and the chat box (#2252) rather than floating inside the scroll area. */}
         {currentRoll && rollRequest && (
           <RollTray>
-            {(currentRoll.combatInitiativeRoll || currentRoll.combatAttackRoll) && (
+            {(currentRoll.combatInitiativeRoll ||
+              currentRoll.combatAttackRoll ||
+              currentRoll.combatCheckRoll) && (
               <RollAutoCountdown rollId={currentRoll.id} />
             )}
             <DiceRollRequest
@@ -282,7 +284,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                 // engine would roll its own d20 and the player's number would be dropped, so the
                 // player sees one number and the narration uses another (#2200). A narrative
                 // roll has no timer, but the next turn must still not set it aside mid-throw.
-                currentRoll.combatInitiativeRoll || currentRoll.combatAttackRoll
+                currentRoll.combatInitiativeRoll ||
+                currentRoll.combatAttackRoll ||
+                currentRoll.combatCheckRoll
                   ? () => markPlayerRollCommitted(currentRoll.id)
                   : () => markNarrativeRollCommitted(currentRoll.id)
               }

@@ -55,6 +55,11 @@ export interface TacticalMap {
    */
   pendingDmFacts?: string[];
   /**
+   * Creatures whose action a won parley holds, and the round it holds it for (#2420). The NPC
+   * runner reads it on the creature's turn; a hold from an earlier round no longer matches.
+   */
+  parleyHolds?: Array<{ participantId: string; round: number }>;
+  /**
    * Structured sibling of `pendingDmFacts`: the discrete actions the engine resolved this
    * turn (kind, actor, target, hit/miss), recorded alongside their narration sentence.
    * The narration contract is built from these, and the client post-check validates the

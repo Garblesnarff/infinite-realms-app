@@ -305,6 +305,17 @@ export interface AbilityProfile {
   scores: Record<string, number>;
   saveBonuses: Record<string, number>;
   spellIds: string[];
+  /**
+   * The character's `skill_proficiencies` column, parsed and lowercased (#2420).
+   *
+   * Read by the mid-combat ability checks, which owe the player's sheet its skill proficiencies:
+   * a proficient Athletics shove adds proficiency, an unproficient one does not. Empty for an
+   * NPC, whose stat block prints no skill proficiencies.
+   *
+   * Optional so the existing fakes of this profile keep compiling; readers must treat an absent
+   * value as "no proficiencies", which is the truth for every creature anyway.
+   */
+  skillProficiencies?: string[];
 }
 
 export async function getActiveConditionNames(participantId: string): Promise<string[]> {
@@ -319,6 +330,16 @@ export async function getActiveConditionNames(participantId: string): Promise<st
       ),
     );
   return rows.map((row) => row.name.toLowerCase());
+}
+
+/** Split a persisted comma-separated proficiency column into lowercased entries (#1827). */
+function parseCsvColumn(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((entry) => String(entry).trim().toLowerCase());
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 export async function getParticipantAbilityProfile(participant: any): Promise<AbilityProfile> {
@@ -343,6 +364,7 @@ export async function getParticipantAbilityProfile(participant: any): Promise<Ab
       level: result.character.level,
       className: result.character.class,
       savingThrowProficiencies: proficiencies,
+      skillProficiencies: parseCsvColumn(result.character.skillProficiencies),
       scores: {
         str: result.stats?.strength ?? 10,
         dex: result.stats?.dexterity ?? 10,
@@ -372,6 +394,7 @@ export async function getParticipantAbilityProfile(participant: any): Promise<Ab
     return {
       level: Number(stats.level || stats.challengeRating || 1),
       savingThrowProficiencies: [],
+      skillProficiencies: [],
       scores: {
         str: Number(stats.strength ?? stats.str ?? 10),
         dex: Number(stats.dexterity ?? stats.dex ?? 10),
@@ -385,7 +408,14 @@ export async function getParticipantAbilityProfile(participant: any): Promise<Ab
     };
   }
 
-  return { level: 1, savingThrowProficiencies: [], scores: {}, saveBonuses: {}, spellIds: [] };
+  return {
+    level: 1,
+    savingThrowProficiencies: [],
+    skillProficiencies: [],
+    scores: {},
+    saveBonuses: {},
+    spellIds: [],
+  };
 }
 
 /**

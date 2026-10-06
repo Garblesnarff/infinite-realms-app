@@ -27,6 +27,7 @@ vi.mock('@/contexts/GameContext', () => ({ useGame: () => game }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(() => false),
   settleCombatInitiativeRoll: vi.fn(() => false),
+  settleCombatCheckRoll: vi.fn(() => false),
 }));
 vi.mock('@/services/combat/player-roll-bridge', () => ({ hasPendingPlayerRoll: () => false }));
 vi.mock('@/lib/logger', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));

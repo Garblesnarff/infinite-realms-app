@@ -1,5 +1,7 @@
+import { grappleOf } from './grapple-source.js';
 import { describeDeathSave } from '../../../../shared/death-save-lines';
 import { combatLogger } from '../../lib/logger.js';
+
 
 import type { SubmittedCombatIntent } from './combat-intent-service.js';
 import type { WeaponRuleProfile } from './combat-rules.js';
@@ -8,7 +10,7 @@ import type { CombatState, DeathSaveResult } from '../../types/combat.js';
 /** The action shape returned to the browser so it can reuse its transcript formatter. */
 export type NpcTurnAction = {
   actor_id: string;
-  action_type: 'attack' | 'dodge' | 'end_turn';
+  action_type: 'attack' | 'dodge' | 'check' | 'end_turn';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -57,6 +59,8 @@ export type NpcTurnRunnerDependencies = {
   getCombatState: (encounterId: string, userId: string) => Promise<CombatState>;
   getDefaultWeapon: (participant: unknown) => Promise<WeaponRuleProfile>;
   executeIntent: ExecuteNpcIntent;
+  /** Whether a won parley holds this creature's action in this round (#2420). */
+  isParleyHeld?: (sessionId: string, participantId: string, round: number) => Promise<boolean>;
 };
 
 const defaultDependencies: NpcTurnRunnerDependencies = {
@@ -72,6 +76,10 @@ const defaultDependencies: NpcTurnRunnerDependencies = {
     const { executeCombatIntent } = await import('./combat-intent-service.js');
     return executeCombatIntent(encounterId, intent, userId, source, dmStartedAt);
   },
+  isParleyHeld: async (sessionId, participantId, round) => {
+    const { isParleyHeld } = await import('./parley-hold.js');
+    return isParleyHeld(sessionId, participantId, round);
+  },
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -83,7 +91,7 @@ const isPlayer = (participant: { participantType?: string }): boolean =>
 const npcIsStanding = (participant: { maxHp: number; status?: { currentHp: number } | null }) =>
   (participant.status?.currentHp ?? participant.maxHp) > 0;
 
-const nonHostileDisposition = (participant: Record<string, unknown>): boolean => {
+export const nonHostileDisposition = (participant: Record<string, unknown>): boolean => {
   const raw =
     participant.disposition ??
     (participant.stats as Record<string, unknown> | undefined)?.disposition;
@@ -93,7 +101,7 @@ const nonHostileDisposition = (participant: Record<string, unknown>): boolean =>
   );
 };
 
-const isProvoked = (participant: Record<string, unknown>): boolean => participant.provoked === true;
+export const isProvoked = (participant: Record<string, unknown>): boolean => participant.provoked === true;
 
 function storedMonsterWeapon(participant: Record<string, unknown>): WeaponRuleProfile | null {
   const profile = participant.monsterAttack;
@@ -136,6 +144,7 @@ function chooseAction(
   actor: CombatState['currentParticipant'],
   weapon: WeaponRuleProfile | null,
   canAct: boolean,
+  parleyHeld = false,
 ): NpcTurnAction {
   if (!actor) throw new Error('Cannot choose an NPC action without a current participant');
 
@@ -149,13 +158,27 @@ function chooseAction(
     movement_feet: 0,
   });
 
-  if (!canAct) return endTurn();
+  if (!canAct || parleyHeld) return endTurn();
 
   const actorRecord = actor as unknown as Record<string, unknown>;
   if (nonHostileDisposition(actorRecord) && !isProvoked(actorRecord)) {
     return {
       actor_id: actor.id,
       action_type: 'dodge',
+      target_ids: [],
+      weapon_id: null,
+      spell_id: null,
+      slot_level: null,
+      movement_feet: 0,
+    };
+  }
+
+  // A grappled creature spends its action trying to break free (SRD 5.1); it does not strike
+  // while the grapple holds it.
+  if (grappleOf(actorRecord)) {
+    return {
+      actor_id: actor.id,
+      action_type: 'check',
       target_ids: [],
       weapon_id: null,
       spell_id: null,
@@ -189,6 +212,9 @@ function toIntent(action: NpcTurnAction): SubmittedCombatIntent {
     };
   }
   if (action.action_type === 'dodge') return { type: 'dodge', actorId: action.actor_id };
+  if (action.action_type === 'check') {
+    return { type: 'check', actorId: action.actor_id, checkKind: 'escape' };
+  }
   return { type: 'end_turn', actorId: action.actor_id };
 }
 
@@ -211,6 +237,12 @@ function outcomesFrom(action: NpcTurnAction, value: unknown): NpcTurnOutcome['ou
       ...(typeof value.isCritical === 'boolean' ? { isCritical: value.isCritical } : {}),
     },
   ];
+}
+
+/** The engine line of a creature's own check (an escape), which the client cannot rebuild. */
+function checkLines(action: NpcTurnAction, value: unknown): string[] {
+  if (action.action_type !== 'check' || !isRecord(value)) return [];
+  return typeof value.engineLine === 'string' ? [`⚙️ Engine: ${value.engineLine}`] : [];
 }
 
 function deathSaveLines(value: unknown, state: CombatState): string[] {
@@ -273,7 +305,17 @@ export async function advanceNpcTurns(
     const canAct = standing && actor.actionUsed !== true;
     // Monsters at 0 HP are dead and stat-less NPCs that cannot act must not hold the board.
     const weapon = canAct ? await dependencies.getDefaultWeapon(actor) : null;
-    const action = chooseAction(state, actor, weapon, canAct);
+    const parleyHeld =
+      canAct &&
+      (await dependencies.isParleyHeld?.(
+        state.encounter.sessionId,
+        actor.id,
+        state.encounter.currentRound,
+      )) === true;
+    if (parleyHeld) {
+      combatLogger.info({ msg: 'NPC_TURN_HELD_BY_PARLEY', encounterId, actorId: actor.id });
+    }
+    const action = chooseAction(state, actor, weapon, canAct, parleyHeld);
     const resolved = await dependencies.executeIntent(
       encounterId,
       toIntent(action),
@@ -296,7 +338,10 @@ export async function advanceNpcTurns(
       ended = combatEndedFrom(boundary);
     }
 
-    const resultTranscript = deathSaveLines(engineResult, state);
+    const resultTranscript = [
+      ...checkLines(action, engineResult),
+      ...deathSaveLines(engineResult, state),
+    ];
     transcriptLines.push(...resultTranscript);
     results.push({
       action,

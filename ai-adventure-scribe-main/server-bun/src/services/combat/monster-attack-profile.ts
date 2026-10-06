@@ -56,6 +56,13 @@ export interface MonsterAttackProfile {
   source: AttackProfileSource;
   attacks: MonsterAttack[];
   /**
+   * The creature's printed ability scores (`str`…`cha`), stored at seating beside its attacks so
+   * a mid-combat ability check reads the stat block rather than a defaulted 10 (#2420). Absent
+   * when no catalog entry supplied them. A participant has no ability-score column, and a
+   * DM-structured monster has no `npcs` row to read them from.
+   */
+  abilityScores?: Partial<Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number>>;
+  /**
    * Bible heading (plus seat number) to show players, set at seating when the DM's label for
    * a campaign creature differs from it. `participant.name` stays the DM's label because
    * targeting, the entry gate and per-seat HP key on it. Read via

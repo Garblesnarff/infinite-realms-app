@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import type {
   PlayerAttackRollSpec,
+  PlayerCheckRollSpec,
   PlayerInitiativeRollSpec,
   PlayerRollHost,
   PlayerRollOutcome,
@@ -42,21 +43,28 @@ export function usePlayerRollHost(): string | null {
               rollConfig: { dieType: 20, count: 1, modifier: spec.initiativeModifier },
               combatInitiativeRoll: true,
             }
-          : {
-              requestType: 'attack' as const,
-              description: describeAttackRoll(spec, showTargetNumbers),
-              rollConfig: {
-                dieType: 20,
-                count: 1,
-                modifier: attackModifierForRoll(spec),
-                advantage: spec.advantage,
-                disadvantage: spec.disadvantage,
-              },
-              ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 || !showTargetNumbers
-                ? {}
-                : { ac: spec.targetAc }),
-              combatAttackRoll: true,
-            };
+          : isCheckSpec(spec)
+            ? {
+                requestType: 'skill_check' as const,
+                description: describeCheckRoll(spec),
+                rollConfig: { dieType: 20, count: 1, modifier: spec.checkModifier },
+                combatCheckRoll: true,
+              }
+            : {
+                requestType: 'attack' as const,
+                description: describeAttackRoll(spec, showTargetNumbers),
+                rollConfig: {
+                  dieType: 20,
+                  count: 1,
+                  modifier: attackModifierForRoll(spec),
+                  advantage: spec.advantage,
+                  disadvantage: spec.disadvantage,
+                },
+                ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 || !showTargetNumbers
+                  ? {}
+                  : { ac: spec.targetAc }),
+                combatAttackRoll: true,
+              };
         const rollId = requestDiceRoll(
           request as Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>,
         );
@@ -117,6 +125,19 @@ export function describeInitiativeRoll(spec: PlayerInitiativeRollSpec): string {
   return `Initiative for ${spec.actorLabel} — 1d20${sign}${spec.initiativeModifier}`;
 }
 
+/** "Shove vs Goblin — 1d20+3" / "Hide — 1d20+5 vs passive Perception 13" */
+export function describeCheckRoll(spec: PlayerCheckRollSpec): string {
+  const sign = spec.checkModifier >= 0 ? '+' : '';
+  const die = `1d20${sign}${spec.checkModifier}`;
+  const target = spec.targetLabel ? ` vs ${spec.targetLabel}` : '';
+  const opposed = spec.opposedByLabel ? ` vs ${spec.opposedByLabel}` : '';
+  return `${spec.checkLabel}${target} — ${die}${opposed}`;
+}
+
+function isCheckSpec(spec: PlayerRollSpec): spec is PlayerCheckRollSpec {
+  return 'checkLabel' in spec;
+}
+
 /**
  * The settlers, keyed by queued roll id.
  *
@@ -155,6 +176,24 @@ export function settleCombatAttackRoll(
 /** Hands an initiative d20 back to the entry flow instead of sending it to the DM. */
 export function settleCombatInitiativeRoll(rollId: string, d20: number | null): boolean {
   return settleCombatPlayerRoll(rollId, { d20 });
+}
+
+/**
+ * Hands a mid-combat check's d20 back to the engine instead of sending it to the DM (#2420).
+ *
+ * A dismissed check prompt withdraws the check, exactly as a dismissed attack withdraws the
+ * attack: the resolution waiting on it skips the action instead of rolling it for the player,
+ * so the player's action stays unspent.
+ */
+export function settleCombatCheckRoll(
+  rollId: string,
+  d20: number | null,
+  options: { cancelled?: boolean } = {},
+): boolean {
+  return settleCombatPlayerRoll(
+    rollId,
+    options.cancelled ? { d20: null, cancelled: true } : { d20 },
+  );
 }
 
 function settleCombatPlayerRoll(rollId: string, outcome: PlayerRollOutcome): boolean {

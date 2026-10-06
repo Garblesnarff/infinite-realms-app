@@ -14,6 +14,7 @@ import {
 } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
 import {
   settleCombatAttackRoll,
+  settleCombatCheckRoll,
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import logger from '@/lib/logger';
@@ -158,6 +159,8 @@ export function useMessageDiceRolls({
     // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
     const attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
     const initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
+    // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
+    const checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
     cancelDiceRoll(currentRoll.id);
     // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
     // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
@@ -165,7 +168,12 @@ export function useMessageDiceRolls({
     const engineOwned =
       attackSettled ||
       initiativeSettled ||
-      Boolean(currentRoll.combatAttackRoll || currentRoll.combatInitiativeRoll) ||
+      checkSettled ||
+      Boolean(
+        currentRoll.combatAttackRoll ||
+          currentRoll.combatInitiativeRoll ||
+          currentRoll.combatCheckRoll,
+      ) ||
       isEngineChannelRollType(currentRoll.requestType);
     if (!engineOwned) {
       const declined = declinedRollMessage(currentRoll.description);
@@ -289,6 +297,14 @@ export function useMessageDiceRolls({
           logger.info(
             '[useMessageDiceRolls] manual combat initiative die returned to the entry flow',
           );
+          return;
+        }
+
+        // A mid-combat check's die returns to the engine for the same reason an attack's does:
+        // the check is already mid-resolution (#2420).
+        if (settleCombatCheckRoll(roll.id, naturalFace)) {
+          completeDiceRoll(roll.id, settledResult);
+          logger.info('[useMessageDiceRolls] manual combat check die returned to the engine');
           return;
         }
 

@@ -59,10 +59,41 @@ const defensiveFields = {
  * racing player clients — two browsers on the same encounter — and a player intent that does
  * not say which version it read is a lost-update waiting to happen.
  */
+/**
+ * The mid-combat ability check (#2420).
+ *
+ * A check costs the action like an attack, so it carries `expectedVersion` in the player
+ * dialect for the same reason the attack variant does. `d20` is the player's kept die when the
+ * roll dialog rolled it, bounded to a real d20 face exactly as the attack die is — a body
+ * carrying `d20: 40` is a malformed payload, not a lucky roll. Absent means the engine rolls it.
+ *
+ * `shoveOutcome` is the SRD's "either knock the target prone or push it 5 feet" choice the player
+ * makes in the confirm; absent means prone, the default the rules name first.
+ */
+const checkFields = {
+  type: t.Literal('check'),
+  actorId: participantId,
+  /** Absent for a hide, which is measured against everyone in the room. */
+  targetId: t.Optional(participantId),
+  /** Which check the player declared. */
+  checkKind: t.Union([
+    t.Literal('shove'),
+    t.Literal('grapple'),
+    t.Literal('escape'),
+    t.Literal('hide'),
+    t.Literal('parley'),
+  ]),
+  /** Which Charisma skill a parley used; ignored by the other three kinds. */
+  parleySkill: t.Optional(t.Union([t.Literal('persuade'), t.Literal('intimidate')])),
+  shoveOutcome: t.Optional(t.Union([t.Literal('prone'), t.Literal('push')])),
+  d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
+};
+
 const playerCombatIntentSchema = t.Union([
   ...unversionedIntentVariants,
   t.Object({ ...attackFields, expectedVersion }),
   t.Object({ ...spellFields, expectedVersion }),
+  t.Object({ ...checkFields, expectedVersion }),
   t.Object({ ...defensiveFields, expectedVersion }),
 ]);
 
@@ -78,6 +109,7 @@ const dmCombatIntentSchema = t.Union([
   ...unversionedIntentVariants,
   t.Object({ ...attackFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...spellFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...checkFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...defensiveFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 

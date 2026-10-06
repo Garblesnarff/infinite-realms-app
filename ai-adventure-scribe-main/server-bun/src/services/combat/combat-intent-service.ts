@@ -2,6 +2,7 @@
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
+import { executeCombatCheck } from './combat-check-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { partyHasLeftTheFight } from './combat-end-guard.js';
 import { concludeEncounter } from './combat-ending.js';
@@ -97,6 +98,20 @@ export type CombatIntent =
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion: number }
   | { type: 'flee' | 'yield'; actorId: string; expectedVersion: number }
+  /**
+   * A mid-combat ability check (#2420): shove, grapple, hide, or a Charisma parley. Costs the
+   * action like an attack. `d20` is the player's own die when the roll dialog rolled it.
+   */
+  | {
+      type: 'check';
+      actorId: string;
+      targetId?: string;
+      checkKind: 'shove' | 'grapple' | 'escape' | 'hide' | 'parley';
+      parleySkill?: 'persuade' | 'intimidate';
+      shoveOutcome?: 'prone' | 'push';
+      expectedVersion: number;
+      d20?: number;
+    }
   | { type: 'end_turn'; actorId: string };
 
 export type CombatActionSource = 'player' | 'dm';
@@ -122,6 +137,7 @@ const PLAYER_INPUT_ORIGINS = new Set<CombatActionOrigin>([
 const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'attack',
   'spell',
+  'check',
   'move',
   'dash',
   'dodge',
@@ -188,6 +204,7 @@ export type EncounterAlreadyConcludedResult = {
 const VERSIONED_INTENT_TYPES = new Set([
   'attack',
   'spell',
+  'check',
   'dash',
   'dodge',
   'disengage',
@@ -1271,6 +1288,25 @@ export async function executeCombatIntent(
         },
       );
       await recordDiscreteActionFact(encounter.sessionId, state, intent.actorId, action);
+    } else if (intent.type === 'check') {
+      // #2420: a mid-combat ability check. Claimed and resolved by the check service, which
+      // rolls the player's die (or takes the popup's), rolls the target's contest, applies the
+      // condition, and records the Engine line and the DM fact. It claims the action itself, so
+      // a check costs the turn exactly like an attack.
+      result = await executeCombatCheck({
+        encounterId,
+        actorId: intent.actorId,
+        ...(intent.targetId ? { targetId: intent.targetId } : {}),
+        ...(intent.d20 !== undefined ? { d20: intent.d20 } : {}),
+        ...(intent.shoveOutcome ? { shoveOutcome: intent.shoveOutcome } : {}),
+        intent: {
+          kind: intent.checkKind,
+          verb: intent.checkKind,
+          ...(intent.parleySkill ? { parleySkill: intent.parleySkill } : {}),
+        },
+        expectedVersion: intent.expectedVersion,
+        userId,
+      });
     } else {
       // A downed character's turn is a death saving throw, not an action. Resolving it here,
       // as the order reaches them, is what makes 0 HP a state a fight passes through rather

@@ -89,6 +89,20 @@ export type ClientCombatIntent =
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
   | { type: 'flee' | 'yield'; actorId: string; expectedVersion?: number }
+  /**
+   * A mid-combat ability check (#2420). Costs the action like an attack; `d20` is the player's
+   * own die when the roll dialog rolled it, and absent means the engine rolls the whole check.
+   */
+  | {
+      type: 'check';
+      actorId: string;
+      targetId?: string;
+      checkKind: 'shove' | 'grapple' | 'escape' | 'hide' | 'parley';
+      parleySkill?: 'persuade' | 'intimidate';
+      shoveOutcome?: 'prone' | 'push';
+      expectedVersion?: number;
+      d20?: number;
+    }
   | { type: 'end_turn'; actorId: string }
   | { type: 'move'; actorId: string; x: number; y: number };
 
@@ -102,6 +116,7 @@ export type ClientCombatIntent =
 const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'attack',
   'spell',
+  'check',
   'dash',
   'dodge',
   'disengage',

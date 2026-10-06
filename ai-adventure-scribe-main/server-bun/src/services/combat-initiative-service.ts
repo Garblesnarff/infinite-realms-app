@@ -14,6 +14,7 @@ import {
   verifyNPCAccess,
   verifyParticipantOwnership,
 } from './combat/combat-authorization.js';
+import { settleCheckConditionsForTurn } from './combat/combat-check-conditions.js';
 import { InitiativeMechanics, rollD20 } from './combat/initiative-mechanics.js';
 import { db } from '../../../db/client';
 import {
@@ -284,6 +285,13 @@ export class CombatInitiativeService {
     }
 
     await resetTurnResources(currentParticipant.id, newRoundNumber);
+    await settleCheckConditionsForTurn({
+      encounterId,
+      sessionId: encounter.sessionId,
+      startingParticipantId: currentParticipant.id,
+      roundNumber: newRoundNumber,
+      newRound,
+    });
 
     return {
       previousParticipant,

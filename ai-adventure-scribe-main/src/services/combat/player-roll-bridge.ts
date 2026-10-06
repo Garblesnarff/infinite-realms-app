@@ -43,7 +43,33 @@ export interface PlayerInitiativeRollSpec {
   initiativeModifier: number;
 }
 
-export type PlayerRollSpec = PlayerAttackRollSpec | PlayerInitiativeRollSpec;
+/**
+ * What the engine asks for before it resolves a mid-combat ability check (#2420).
+ *
+ * The SAME popup the skill checks use, reached through this bridge rather than the dice queue's
+ * narrative path: the check is already mid-resolution when it is asked for, so its result must
+ * come back to the engine and must not be posted to the DM as a fresh player utterance — the
+ * same reason an attack die is engine-owned.
+ */
+export interface PlayerCheckRollSpec {
+  actorLabel: string;
+  /** "Shove", "Grapple", "Hide", "Persuasion", "Intimidation" — the check being made. */
+  checkLabel: string;
+  /** The ability modifier (and proficiency) the sheet adds to the die. */
+  checkModifier: number;
+  /** The target's name, when the check names one. A hide has none. */
+  targetLabel?: string;
+  /**
+   * What the die is measured against, for the popup's wording: a target's contest skill, or a
+   * DC. Shown so the die is not a bare number, exactly as the attack prompt shows the AC.
+   */
+  opposedByLabel?: string;
+}
+
+export type PlayerRollSpec =
+  | PlayerAttackRollSpec
+  | PlayerInitiativeRollSpec
+  | PlayerCheckRollSpec;
 
 /**
  * `null` means nobody rolled: the engine should roll this attack itself — unless `cancelled`,
@@ -228,13 +254,24 @@ function isInitiativeSpec(spec: PlayerRollSpec): spec is PlayerInitiativeRollSpe
   return 'initiativeModifier' in spec;
 }
 
+function isCheckSpec(spec: PlayerRollSpec): spec is PlayerCheckRollSpec {
+  return 'checkLabel' in spec;
+}
+
+/** How a prompt is named in the log, so a check reads as a check and not as a weapon. */
+function rollLabelOf(spec: PlayerRollSpec): string {
+  if (isInitiativeSpec(spec)) return 'initiative';
+  if (isCheckSpec(spec)) return `check ${spec.checkLabel}`;
+  return `attack ${spec.weaponName}`;
+}
+
 function requestPlayerRoll(
   spec: PlayerRollSpec,
   timeoutMs: number | undefined,
 ): Promise<PlayerRollOutcome> {
   if (!host) {
     logger.warn(
-      `[PlayerRoll] no dice host mounted; the engine will roll this ${isInitiativeSpec(spec) ? 'initiative' : 'attack'}`,
+      `[PlayerRoll] no dice host mounted; the engine will roll this ${rollLabelOf(spec)}`,
     );
     return Promise.resolve({ d20: null });
   }
@@ -246,7 +283,7 @@ function requestPlayerRoll(
     settlePendingPlayerRoll({ d20: null });
   }
 
-  const rollLabel = isInitiativeSpec(spec) ? 'initiative' : `attack ${spec.weaponName}`;
+  const rollLabel = rollLabelOf(spec);
   return new Promise<PlayerRollOutcome>((resolve) => {
     let settled = false;
     let dismissPopup = (): void => {};
@@ -334,4 +371,16 @@ export function requestPlayerInitiativeRoll(
   spec: PlayerInitiativeRollSpec,
 ): Promise<PlayerRollOutcome> {
   return requestPlayerRoll(spec, PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
+}
+
+/**
+ * Asks for the player's die on a mid-combat ability check and waits for it (#2420).
+ *
+ * Same popup, same seam and same bounded timer as the attack die, because it is the same
+ * situation: the check is already resolving and is waiting on exactly one number. A dismissed
+ * prompt resolves `{ d20: null, cancelled: true }`, which the caller reads as "do not resolve
+ * this check" rather than rolling it for the player — the check's action stays unspent.
+ */
+export function requestPlayerCheckRoll(spec: PlayerCheckRollSpec): Promise<PlayerRollOutcome> {
+  return requestPlayerRoll(spec, PLAYER_ATTACK_ROLL_TIMEOUT_MS);
 }

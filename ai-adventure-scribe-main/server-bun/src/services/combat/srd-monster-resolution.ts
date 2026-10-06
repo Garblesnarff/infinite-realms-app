@@ -42,6 +42,12 @@ export interface ResolvedMonsterStats {
   damageImmunities: string[];
   damageVulnerabilities: string[];
   /**
+   * The printed ability scores, keyed like `AbilityProfile.scores` (`str`…`cha`). Present only
+   * when the catalog entry carries them; a mid-combat ability check reads them for a creature
+   * that has no `npcs` row (#2420).
+   */
+  abilityScores?: Partial<Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number>>;
+  /**
    * The entry's own `actions`, classified into what the attack pipeline can swing and what
    * it cannot. Read here rather than at attack time because this is the only place holding
    * the catalog entry; the caller stores the result on the participant.
@@ -193,6 +199,26 @@ export function findSrdMonster(
  * suppresses it: the caller still falls back to a generic NPC, but the fallback is never
  * silent.
  */
+const SRD_ABILITY_KEYS = {
+  str: 'strength',
+  dex: 'dexterity',
+  con: 'constitution',
+  int: 'intelligence',
+  wis: 'wisdom',
+  cha: 'charisma',
+} as const;
+
+function srdAbilityScores(
+  abilities: Record<string, number>,
+): NonNullable<ResolvedMonsterStats['abilityScores']> {
+  const scores: NonNullable<ResolvedMonsterStats['abilityScores']> = {};
+  for (const [short, long] of Object.entries(SRD_ABILITY_KEYS)) {
+    const value = Number(abilities[long]);
+    if (Number.isFinite(value)) scores[short as keyof typeof SRD_ABILITY_KEYS] = value;
+  }
+  return scores;
+}
+
 export function resolveSrdMonsterStats(
   monsterId?: string | null,
   name?: string | null,
@@ -248,6 +274,7 @@ export function resolveSrdMonsterStats(
     damageResistances: entry.resistances ?? [],
     damageImmunities: entry.immunities ?? [],
     damageVulnerabilities: entry.vulnerabilities ?? [],
+    ...(entry.abilities ? { abilityScores: srdAbilityScores(entry.abilities) } : {}),
     attacks: parseSrdActions(entry.actions),
   };
 }

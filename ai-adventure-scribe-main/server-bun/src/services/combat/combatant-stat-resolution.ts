@@ -143,6 +143,7 @@ export function resolveCombatantStats(
         damageResistances: parsed.damageResistances ?? srd?.damageResistances ?? [],
         damageImmunities: parsed.damageImmunities ?? srd?.damageImmunities ?? [],
         damageVulnerabilities: parsed.damageVulnerabilities ?? srd?.damageVulnerabilities ?? [],
+        ...(srd?.abilityScores ? { abilityScores: srd.abilityScores } : {}),
         attacks: srd?.attacks ?? { attacks: [], unsupported: [] },
         filledFromFallback,
         attackProfile: resolveMonsterAttackProfile({

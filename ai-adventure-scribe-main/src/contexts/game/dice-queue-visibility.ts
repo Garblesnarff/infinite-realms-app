@@ -18,7 +18,7 @@ import logger from '@/lib/logger';
 export function isEngineTaggedRoll(roll: Pick<DiceRollRequest, 'id'> | undefined): boolean {
   if (!roll) return false;
   const tagged = roll as Partial<DiceRollRequest>;
-  return Boolean(tagged.combatAttackRoll || tagged.combatInitiativeRoll);
+  return Boolean(tagged.combatAttackRoll || tagged.combatInitiativeRoll || tagged.combatCheckRoll);
 }
 
 /** True when `incoming` must displace whatever request is currently visible. */

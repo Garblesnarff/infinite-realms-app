@@ -150,6 +150,12 @@ export interface CombatResolutionParams {
    * turn stays the player's.
    */
   silentPlayerTurn?: { playerMessage: string };
+  /**
+   * The player's mid-combat ability check the engine already resolved before this pass (#2420).
+   * It spent the player's action, so the turn ends here like any other accepted player action,
+   * and the narration is told the engine line rather than the DM's first-pass prose.
+   */
+  resolvedPlayerCheck?: { actorId: string; engineLine: string; dmFact: string };
   signal?: AbortSignal;
   onPlayerWaitChange?: (waiting: boolean) => void;
 }
@@ -210,6 +216,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     playerMessage,
     declaredPlayerSpell,
     silentPlayerTurn,
+    resolvedPlayerCheck,
     signal,
     onPlayerWaitChange,
   } = params;
@@ -725,6 +732,51 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     return settleExecutedAction(resolvedAction, execution, false);
   };
 
+  /**
+   * Cross the turn boundary an accepted player action produced: end the actor's turn, settle death
+   * saves, and — for the player — run the NPC turns that follow.
+   */
+  const crossTurnBoundary = async (actorId: string): Promise<BatchBoundary> => {
+    // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
+    // is told the boundary already happened. Both answers name whoever is up, which is what the
+    // player has to be told when their own declaration was refused.
+    const turn = signal
+      ? await executeAuthoritativeCombatIntent(
+          encounterId,
+          { type: 'end_turn', actorId },
+          'dm',
+          undefined,
+          undefined,
+          signal,
+        )
+      : await executeAuthoritativeCombatIntent(encounterId, { type: 'end_turn', actorId }, 'dm');
+    // Death saves settled by the explicit end_turn boundary get their own engine lines and
+    // cards too (#2457) — they are not part of the action's result. Print BEFORE the
+    // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
+    // must still be visible.
+    const turnDeathSaveParts = formatDeathSaveParts(turn, roster);
+    if (turnDeathSaveParts.length) {
+      appendEngineBlock({
+        source: isPlayerActor(actorId, participants) ? 'player' : 'npc',
+        actorId,
+        lines: [turnDeathSaveParts.map((part) => part.line).join('\n\n')],
+        cards: turnDeathSaveParts.map((part) => part.card),
+        round: combatRoundFrom(turn, playerRound ?? 1),
+        serverSequence: combatSequenceFrom(turn),
+      });
+    }
+    if (combatBoundaryFromResult(turn)) return 'combat_ended';
+    const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
+    if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
+    if (sessionId && isPlayerActor(actorId, participants)) {
+      const advanced = signal
+        ? await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id, signal)
+        : await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
+      return appendAutonomousNpcResults(advanced, true);
+    }
+    return 'turn_ended';
+  };
+
   /** Print the engine line, report the result, and cross the turn boundary it produced. */
   const settleExecutedAction = async (
     action: StructuredCombatAction,
@@ -769,48 +821,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       isPlayerActor(action.actor_id, participants)
     )
       return null;
-    // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
-    // is told the boundary already happened. Both answers name whoever is up, which is what the
-    // player has to be told when their own declaration was refused.
-    const turn = signal
-      ? await executeAuthoritativeCombatIntent(
-          encounterId,
-          { type: 'end_turn', actorId: action.actor_id },
-          'dm',
-          undefined,
-          undefined,
-          signal,
-        )
-      : await executeAuthoritativeCombatIntent(
-          encounterId,
-          { type: 'end_turn', actorId: action.actor_id },
-          'dm',
-        );
-    // Death saves settled by the explicit end_turn boundary get their own engine lines and
-    // cards too (#2457) — they are not part of the action's result. Print BEFORE the
-    // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
-    // must still be visible.
-    const turnDeathSaveParts = formatDeathSaveParts(turn, roster);
-    if (turnDeathSaveParts.length) {
-      appendEngineBlock({
-        source: isPlayerActor(action.actor_id, participants) ? 'player' : 'npc',
-        actorId: action.actor_id,
-        lines: [turnDeathSaveParts.map((part) => part.line).join('\n\n')],
-        cards: turnDeathSaveParts.map((part) => part.card),
-        round: combatRoundFrom(turn, playerRound ?? 1),
-        serverSequence: combatSequenceFrom(turn),
-      });
-    }
-    if (combatBoundaryFromResult(turn)) return 'combat_ended';
-    const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
-    if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
-    if (sessionId && isPlayerActor(action.actor_id, participants)) {
-      const advanced = signal
-        ? await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id, signal)
-        : await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
-      return appendAutonomousNpcResults(advanced, true);
-    }
-    return 'turn_ended';
+    return crossTurnBoundary(action.actor_id);
   };
 
   for (
@@ -996,6 +1007,19 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     }
   }
 
+  if (resolvedPlayerCheck && preflightBoundary !== 'combat_ended' && !encounterAlreadyConcluded) {
+    try {
+      await crossTurnBoundary(resolvedPlayerCheck.actorId);
+    } catch (error) {
+      if (!(error instanceof CombatIntentRefusedError)) throw error;
+      // The check already resolved and its line is on screen; a refused end-of-turn must not
+      // throw the turn away (#2234). The player keeps the turn and can end it themselves.
+      logger.warn('[CombatCheck] end of turn refused after a resolved check', {
+        reason: error.details?.reason,
+      });
+    }
+  }
+
   if (cancelledPlayerAction) {
     // No DM narration: the declaration prose describes an action that did not happen, and the
     // narration pass would be handed it as setup. Engine lines already produced (NPC turns
@@ -1137,12 +1161,16 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     : pendingPlayerAreaSpells.length
       ? 'The declared area spell has not been cast yet; it waits for the player to confirm it on ' +
         'the map. Narrate only the authoritative results supplied, and state whose turn it is.'
-      : silentTurn
-        ? SILENT_PLAYER_TURN_SETUP
-        : encounterAlreadyConcluded
-          ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
-            'as something that happened.'
-          : declarationText;
+      : resolvedPlayerCheck
+        ? "The player's declared ability check was resolved by the engine. Narrate only the " +
+          'authoritative check result supplied and any authoritative combat results; do not ' +
+          'add or change an outcome, and state whose turn it is.'
+        : silentTurn
+          ? SILENT_PLAYER_TURN_SETUP
+          : encounterAlreadyConcluded
+            ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
+              'as something that happened.'
+            : declarationText;
 
   const playerTurn = isPlayerActor(turnHolder?.id ?? '', participants);
   const playerName =
@@ -1168,6 +1196,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           dmFacingResolvedAction(entry, roster),
         ),
         ...(resolvedActions.length ? { authoritativeCombatResultsNote: ENGINE_FACT_NOTE } : {}),
+        ...(resolvedPlayerCheck
+          ? {
+              authoritativeCheckResult: {
+                engineLine: resolvedPlayerCheck.engineLine,
+                fact: resolvedPlayerCheck.dmFact,
+              },
+              authoritativeCheckResultNote: ENGINE_FACT_NOTE,
+            }
+          : {}),
         ...(encounterAlreadyConcluded ? { encounterAlreadyConcluded: true } : {}),
         // Named as refusals, not as results, and carrying no outcome to narrate — because there
         // is none. The engine rolled nothing for these.

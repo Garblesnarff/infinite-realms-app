@@ -159,6 +159,13 @@ export interface DiceRollRequest {
   combatAttackRoll?: boolean;
   /** Set when this d20 belongs to the ask-first combat-entry initiative prompt. */
   combatInitiativeRoll?: boolean;
+  /**
+   * Set when this d20 belongs to a mid-combat ability check the engine is resolving (#2420).
+   * Such a roll settles the check directly and must NOT be sent to the DM as a chat message: the
+   * check it belongs to is already mid-resolution, and posting the die as a fresh player
+   * utterance would put the same check through the engine twice.
+   */
+  combatCheckRoll?: boolean;
 }
 
 export interface DiceRollQueue {
