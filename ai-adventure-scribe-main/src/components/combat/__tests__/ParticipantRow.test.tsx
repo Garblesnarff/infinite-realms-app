@@ -98,3 +98,57 @@ describe('ParticipantRow (#2257)', () => {
     expect(ratio).toBeLessThan(1.5);
   });
 });
+
+describe('ParticipantRow: the dying state (#2518)', () => {
+  const renderPlayer = (overrides: Record<string, unknown>): void => {
+    render(
+      <TooltipProvider>
+        <ParticipantRow
+          participant={{ ...player, ...overrides } as unknown as CombatParticipant}
+          isCurrentTurn={false}
+          roundNumber={1}
+        />
+      </TooltipProvider>,
+    );
+  };
+
+  it('a dying player reads UNCONSCIOUS in words, with the death save pips the server counted', () => {
+    renderPlayer({
+      currentHitPoints: 0,
+      isUnconscious: true,
+      deathSaves: { successes: 1, failures: 2 },
+    });
+
+    expect(screen.getByTestId('participant-vital-badge').textContent).toBe('Unconscious');
+    expect(screen.getByLabelText('Death saves: 1 successes, 2 failures')).toBeTruthy();
+  });
+
+  it('a stable player reads Stable and shows no more death saves', () => {
+    renderPlayer({
+      currentHitPoints: 0,
+      isUnconscious: true,
+      isStable: true,
+      deathSaves: { successes: 3, failures: 0 },
+    });
+
+    expect(screen.getByTestId('participant-vital-badge').textContent).toBe('Stable');
+    expect(screen.queryByLabelText(/Death saves:/)).toBeNull();
+  });
+
+  it('a dead player reads Dead', () => {
+    renderPlayer({
+      currentHitPoints: 0,
+      isUnconscious: true,
+      isDead: true,
+      deathSaves: { successes: 0, failures: 3 },
+    });
+
+    expect(screen.getByTestId('participant-vital-badge').textContent).toBe('Dead');
+  });
+
+  it('a player on their feet carries no state badge', () => {
+    renderPlayer({});
+
+    expect(screen.queryByTestId('participant-vital-badge')).toBeNull();
+  });
+});

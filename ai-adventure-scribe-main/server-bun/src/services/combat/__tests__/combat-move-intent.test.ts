@@ -289,7 +289,10 @@ mock.module('../data-access.js', () => ({
 }));
 mock.module('../death-saves-service.js', () => ({
   describeGoingDown: () => '',
-  settleDownedTurns: async () => ({ deathSaves: [] }),
+  settleDownedTurns: async () => ({ awaitingDeathSave: false }),
+  rollOwedDeathSave: async () => ({}),
+  planStableWake: async () => [],
+  applyStableWake: async () => [],
   vitalStateOf: () => 'standing',
 }));
 mock.module('../tactical-combat-lifecycle.js', () => ({

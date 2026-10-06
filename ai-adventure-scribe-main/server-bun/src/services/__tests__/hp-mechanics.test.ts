@@ -233,3 +233,156 @@ describe('HPMechanics', () => {
     });
   });
 });
+
+describe('HPMechanics: dropping to 0 and the dying state (#2518, SRD 5.1)', () => {
+  const standing: HPStatusInput = {
+    currentHp: 5,
+    maxHp: 7,
+    tempHp: 0,
+    isConscious: true,
+    deathSavesSuccesses: 0,
+    deathSavesFailures: 0,
+  };
+  const none = { damageImmunities: [], damageResistances: [], damageVulnerabilities: [] };
+  const hit = (
+    status: HPStatusInput,
+    damageAmount: number,
+    extra: Partial<ApplyDamageOptions> = {},
+  ) => HPMechanics.calculateDamageResult('p1', status, none, { damageAmount, ...extra });
+
+  it('a drop whose overflow is below the maximum is dying {0,0}: unconscious, not dead, no failures', () => {
+    const result = hit(standing, 8); // 5 HP + 3 overflow, maximum 7
+    expect(result).toMatchObject({
+      newCurrentHp: 0,
+      isConscious: false,
+      isDead: false,
+      massiveDamage: false,
+      overflow: 3,
+      deathSaveFailuresAdded: 0,
+      newDeathSavesFailures: 0,
+      newDeathSavesSuccesses: 0,
+    });
+  });
+
+  it('a drop whose overflow EQUALS the maximum is instant death', () => {
+    const result = hit(standing, 12); // 5 HP + 7 overflow, maximum 7
+    expect(result).toMatchObject({
+      newCurrentHp: 0,
+      isDead: true,
+      massiveDamage: true,
+      overflow: 7,
+      newDeathSavesFailures: 3,
+    });
+  });
+
+  it('one under the maximum is not instant death', () => {
+    expect(hit(standing, 11)).toMatchObject({ isDead: false, massiveDamage: false, overflow: 6 });
+  });
+
+  it('temporary hit points are spent before the overflow is counted', () => {
+    // 4 temp absorbs 4 of 12; 8 reaches the 5 HP: overflow 3.
+    expect(hit({ ...standing, tempHp: 4 }, 12)).toMatchObject({
+      overflow: 3,
+      isDead: false,
+      newTempHp: 0,
+    });
+  });
+
+  it('a drop starts the sequence over: stale tallies from an earlier fall are cleared', () => {
+    const result = hit({ ...standing, deathSavesSuccesses: 2, deathSavesFailures: 2 }, 5);
+    expect(result).toMatchObject({ newDeathSavesFailures: 0, newDeathSavesSuccesses: 0 });
+  });
+
+  it('a hit on a stable creature is dying again: successes start over, one failure', () => {
+    const stable: HPStatusInput = {
+      ...standing,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 3,
+    };
+    expect(hit(stable, 2)).toMatchObject({
+      deathSaveFailuresAdded: 1,
+      newDeathSavesFailures: 1,
+      newDeathSavesSuccesses: 0,
+    });
+  });
+
+  it('a critical hit on a creature at 0 is two failures; a third kills', () => {
+    const dying: HPStatusInput = {
+      ...standing,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesFailures: 1,
+    };
+    expect(hit(dying, 2, { isCriticalHit: true })).toMatchObject({
+      deathSaveFailuresAdded: 2,
+      newDeathSavesFailures: 3,
+      isDead: true,
+    });
+  });
+
+  it('the dead are not healed', () => {
+    const dead: HPStatusInput = {
+      ...standing,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesFailures: 3,
+    };
+    expect(HPMechanics.calculateHealingResult('p1', dead, 6)).toMatchObject({
+      healingApplied: 0,
+      newCurrentHp: 0,
+      wasRevived: false,
+      isConscious: false,
+    });
+  });
+
+  it('healing a dying creature wakes it on exactly that HP', () => {
+    const dying: HPStatusInput = {
+      ...standing,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesFailures: 2,
+    };
+    expect(HPMechanics.calculateHealingResult('p1', dying, 3)).toMatchObject({
+      newCurrentHp: 3,
+      wasRevived: true,
+      isConscious: true,
+    });
+  });
+  describe('a stable creature that takes no damage', () => {
+    const stable: HPStatusInput = {
+      currentHp: 0,
+      maxHp: 10,
+      tempHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 3,
+      deathSavesFailures: 0,
+    };
+    const resistances = {
+      damageImmunities: ['fire'] as DamageType[],
+      damageResistances: [],
+      damageVulnerabilities: [],
+    };
+
+    it('stays stable when the damage is fully negated', () => {
+      const result = HPMechanics.calculateDamageResult('p1', stable, resistances, {
+        damageAmount: 6,
+        damageType: 'fire',
+      });
+      expect(result.hpLost).toBe(0);
+      expect(result.newDeathSavesSuccesses).toBe(3);
+    });
+
+    it('is dying again once real damage lands', () => {
+      const result = HPMechanics.calculateDamageResult(
+        'p1',
+        stable,
+        { damageImmunities: [], damageResistances: [], damageVulnerabilities: [] },
+        {
+          damageAmount: 2,
+        },
+      );
+      expect(result.newDeathSavesSuccesses).toBe(0);
+    });
+  });
+});

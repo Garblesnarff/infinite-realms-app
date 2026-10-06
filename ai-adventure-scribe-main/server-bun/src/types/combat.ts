@@ -282,8 +282,14 @@ export type CombatStatus = 'active' | 'paused' | 'completed';
 export type CombatEndReason =
   /** The last hostile went down. A victory. */
   | 'last_hostile_defeated'
-  /** No member of the party is standing or dying. A TPK. */
+  /** No member of the party is standing, dying or stable. A TPK; the hero is dead. */
   | 'party_defeated'
+  /**
+   * Nobody on the party's side is standing or dying and at least one player is stable (SRD 5.1:
+   * unconscious, no longer rolling, back on 1 HP after 1d4 hours). Not a death: the encounter
+   * ends, the engine rolls the hours and wakes them, and the DM narrates the aftermath.
+   */
+  | 'player_down_stable'
   /** The DM's `combat_transition: "end"` — the fiction moved on while combatants still stood. */
   | 'dm_ended_scene'
   /** A client asked for this encounter to end outright. */
@@ -623,6 +629,10 @@ export interface AttackResult {
   deathSaveFailuresAdded?: number;
   /** The target's death-save failure tally after those failures were added. */
   deathSavesFailures?: number;
+  /** True when this blow's overflow past 0 HP reached the target's maximum: instant death. */
+  instantDeath?: boolean;
+  /** True when a melee blow within 5 ft on an unconscious target hit automatically as a critical. */
+  autoCritOnDowned?: boolean;
   /** Authoritative condition tier after damage; numeric HP stays private to engine/UI state. */
   targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   isCritical: boolean;
@@ -1016,8 +1026,12 @@ export interface DamageResult {
   wasVulnerable: boolean;
   wasImmune: boolean;
   massiveDamage: boolean;
+  /** Damage left over after the target reached 0 HP on this hit; 0 when it did not drop. */
+  overflow?: number;
   deathSaveFailuresAdded: number;
   newDeathSavesFailures: number;
+  /** The success tally after this hit: a fresh drop, or a stable creature hit, resets it. */
+  newDeathSavesSuccesses?: number;
   /**
    * What the target actually took after the per-hit safety cap, before temp HP absorbed any
    * of it. Optional so pre-existing constructions of this shape stay valid; every result the
@@ -1084,6 +1098,12 @@ export interface ApplyDamageOptions {
    * by callers, so no call site can forget it.
    */
   targetIsPlayer?: boolean;
+  /**
+   * Skip the per-hit cap. For damage that is not an attack roll (a hazard, a trap, a DM-resolved
+   * blow): the cap exists to keep one monster roll from ending a run, and applying a different
+   * number than the one the source named would be a silent HP change (#2622).
+   */
+  uncapped?: boolean;
 }
 
 /**

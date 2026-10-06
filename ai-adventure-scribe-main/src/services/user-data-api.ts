@@ -151,7 +151,13 @@ export type AdvanceNpcTurnsResponse = {
     actorIsPlayer: false;
     transcriptLines: string[];
   }>;
-  currentParticipant: { id: string; name: string; participantType: string } | null;
+  currentParticipant: {
+    id: string;
+    name: string;
+    participantType: string;
+    /** `standing`, `dying`, `stabilized` or `dead`: the server's state machine (#2518). */
+    vitalState?: string;
+  } | null;
   round?: number;
   sequence?: number;
   combatEnded: boolean;
@@ -701,7 +707,12 @@ export const userDataApi = {
   applyCharacterDamage: (
     characterId: string,
     amount: number,
-  ): Promise<{ currentHitPoints: number; temporaryHitPoints: number }> =>
+  ): Promise<{
+    currentHitPoints: number;
+    temporaryHitPoints: number;
+    /** The engine's sentences for what the damage did (dropped to 0, a failure, instant death). */
+    engineLines?: string[];
+  }> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}/damage`, {
       method: 'POST',
       body: JSON.stringify({ amount }),

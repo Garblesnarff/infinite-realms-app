@@ -314,4 +314,31 @@ describe('CombatRulesPrompts', () => {
       );
     });
   });
+
+  describe('the dying rules in the in-combat prompt (#2518)', () => {
+    const inCombat = flat(CombatRulesPrompts.buildCombatRulesSection({ inCombat: true }));
+
+    it('says the PLAYER rolls the death save, once per turn, and the DM never requests it', () => {
+      expect(inCombat).toContain(
+        "the player rolls a death save (d20, DC 10, no modifiers) through the engine's prompt, once per turn; the turn ends with it",
+      );
+      expect(inCombat).toContain(
+        'Do not request the death save; the player rolls it on their turn and the engine reports it',
+      );
+      expect(inCombat).not.toContain('the engine rolls a death save');
+    });
+
+    it('gives the monster-behaviour default and the enforced consequences', () => {
+      expect(inCombat).toContain('Monsters and a downed character');
+      expect(inCombat).toContain(
+        'A hostile already in melee with a downed character keeps attacking them unless the campaign bible says otherwise',
+      );
+      expect(inCombat).toContain('automatic critical hit (2 failures)');
+      expect(inCombat).toContain('kills them outright');
+    });
+
+    it('requires a narration paragraph for the round that kills a character', () => {
+      expect(inCombat).toContain('always gets a narration paragraph');
+    });
+  });
 });

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type {
   PlayerAttackRollSpec,
   PlayerCheckRollSpec,
+  PlayerDeathSaveRollSpec,
   PlayerInitiativeRollSpec,
   PlayerRollHost,
   PlayerRollOutcome,
@@ -36,12 +37,13 @@ export function usePlayerRollHost(): string | null {
   useEffect(() => {
     const rollHost: PlayerRollHost = {
       present: (spec: PlayerRollSpec, settle: (outcome: PlayerRollOutcome) => void) => {
-        const request = isInitiativeSpec(spec)
+        const request = isDeathSaveSpec(spec)
           ? {
-              requestType: 'initiative' as const,
-              description: describeInitiativeRoll(spec),
-              rollConfig: { dieType: 20, count: 1, modifier: spec.initiativeModifier },
-              combatInitiativeRoll: true,
+              requestType: 'death_save' as const,
+              description: DEATH_SAVE_ROLL_DESCRIPTION,
+              rollConfig: { dieType: 20, count: 1, modifier: 0 },
+              dc: DEATH_SAVE_DC,
+              combatDeathSaveRoll: true,
             }
           : isCheckSpec(spec)
             ? {
@@ -50,21 +52,28 @@ export function usePlayerRollHost(): string | null {
                 rollConfig: { dieType: 20, count: 1, modifier: spec.checkModifier },
                 combatCheckRoll: true,
               }
-            : {
-                requestType: 'attack' as const,
-                description: describeAttackRoll(spec, showTargetNumbers),
-                rollConfig: {
-                  dieType: 20,
-                  count: 1,
-                  modifier: attackModifierForRoll(spec),
-                  advantage: spec.advantage,
-                  disadvantage: spec.disadvantage,
-                },
-                ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 || !showTargetNumbers
-                  ? {}
-                  : { ac: spec.targetAc }),
-                combatAttackRoll: true,
-              };
+            : isInitiativeSpec(spec)
+              ? {
+                  requestType: 'initiative' as const,
+                  description: describeInitiativeRoll(spec),
+                  rollConfig: { dieType: 20, count: 1, modifier: spec.initiativeModifier },
+                  combatInitiativeRoll: true,
+                }
+              : {
+                  requestType: 'attack' as const,
+                  description: describeAttackRoll(spec, showTargetNumbers),
+                  rollConfig: {
+                    dieType: 20,
+                    count: 1,
+                    modifier: attackModifierForRoll(spec),
+                    advantage: spec.advantage,
+                    disadvantage: spec.disadvantage,
+                  },
+                  ...(spec.kind === 'spell-attack' || spec.targetAc <= 0 || !showTargetNumbers
+                    ? {}
+                    : { ac: spec.targetAc }),
+                  combatAttackRoll: true,
+                };
         const rollId = requestDiceRoll(
           request as Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>,
         );
@@ -111,7 +120,9 @@ export function describeAttackRoll(spec: PlayerAttackRollSpec, showTargetNumbers
   const modifier = attackModifierForRoll(spec);
   const sign = modifier >= 0 ? '+' : '';
   const target = showTargetNumbers ? ` vs AC ${spec.targetAc}` : '';
-  return `${spec.weaponName} attack vs ${spec.targetLabel} — ` + `1d20${sign}${modifier}${target}${edge}`;
+  return (
+    `${spec.weaponName} attack vs ${spec.targetLabel} — ` + `1d20${sign}${modifier}${target}${edge}`
+  );
 }
 
 /** The popup text and displayed total must use the exact modifier sent to the roll queue. */
@@ -207,3 +218,11 @@ function settleCombatPlayerRoll(rollId: string, outcome: PlayerRollOutcome): boo
 function isInitiativeSpec(spec: PlayerRollSpec): spec is PlayerInitiativeRollSpec {
   return 'initiativeModifier' in spec;
 }
+
+function isDeathSaveSpec(spec: PlayerRollSpec): spec is PlayerDeathSaveRollSpec {
+  return 'deathSave' in spec;
+}
+
+/** SRD 5.1: a death saving throw is a bare d20; 10 or higher is a success. */
+export const DEATH_SAVE_DC = 10;
+export const DEATH_SAVE_ROLL_DESCRIPTION = 'Death saving throw — roll a d20';

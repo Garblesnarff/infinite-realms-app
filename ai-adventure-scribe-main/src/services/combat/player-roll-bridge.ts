@@ -44,6 +44,15 @@ export interface PlayerInitiativeRollSpec {
 }
 
 /**
+ * What the dying player's prompt is told. A death saving throw is a bare d20 against DC 10: no
+ * modifier, no advantage, nothing the player's sheet adds (SRD 5.1).
+ */
+export interface PlayerDeathSaveRollSpec {
+  actorLabel: string;
+  deathSave: true;
+}
+
+/**
  * What the engine asks for before it resolves a mid-combat ability check (#2420).
  *
  * The SAME popup the skill checks use, reached through this bridge rather than the dice queue's
@@ -69,7 +78,8 @@ export interface PlayerCheckRollSpec {
 export type PlayerRollSpec =
   | PlayerAttackRollSpec
   | PlayerInitiativeRollSpec
-  | PlayerCheckRollSpec;
+  | PlayerCheckRollSpec
+  | PlayerDeathSaveRollSpec;
 
 /**
  * `null` means nobody rolled: the engine should roll this attack itself — unless `cancelled`,
@@ -125,6 +135,14 @@ export const PLAYER_INITIATIVE_ROLL_TIMEOUT_MS = 30_000;
  * "roll it yourself", so the turn always completes.
  */
 export const PLAYER_ATTACK_ROLL_TIMEOUT_MS = 45_000;
+
+/**
+ * The death saving throw prompt is bounded like the attack prompt, and for a stronger reason: the
+ * dying turn is the whole turn, so a prompt nobody answers must still end it. After 45 s the
+ * engine rolls the d20 (a visible countdown runs beside the prompt, #2538), so death is never
+ * silent and never stuck.
+ */
+export const PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS = 45_000;
 
 /** Bumped each time the player explicitly dismisses a combat roll prompt. */
 let dismissCount = 0;
@@ -254,6 +272,10 @@ function isInitiativeSpec(spec: PlayerRollSpec): spec is PlayerInitiativeRollSpe
   return 'initiativeModifier' in spec;
 }
 
+function isDeathSaveSpec(spec: PlayerRollSpec): spec is PlayerDeathSaveRollSpec {
+  return 'deathSave' in spec;
+}
+
 function isCheckSpec(spec: PlayerRollSpec): spec is PlayerCheckRollSpec {
   return 'checkLabel' in spec;
 }
@@ -261,6 +283,7 @@ function isCheckSpec(spec: PlayerRollSpec): spec is PlayerCheckRollSpec {
 /** How a prompt is named in the log, so a check reads as a check and not as a weapon. */
 function rollLabelOf(spec: PlayerRollSpec): string {
   if (isInitiativeSpec(spec)) return 'initiative';
+  if (isDeathSaveSpec(spec)) return 'death saving throw';
   if (isCheckSpec(spec)) return `check ${spec.checkLabel}`;
   return `attack ${spec.weaponName}`;
 }
@@ -371,6 +394,22 @@ export function requestPlayerInitiativeRoll(
   spec: PlayerInitiativeRollSpec,
 ): Promise<PlayerRollOutcome> {
   return requestPlayerRoll(spec, PLAYER_INITIATIVE_ROLL_TIMEOUT_MS);
+}
+
+/**
+ * Asks the dying player for their death saving throw die and waits for it.
+ *
+ * Dismissing the prompt is not a way out of the roll: a dying character cannot decline their
+ * own turn, so a dismissal reads as "the engine rolls it", exactly like the timer.
+ */
+export async function requestPlayerDeathSaveRoll(
+  spec: Omit<PlayerDeathSaveRollSpec, 'deathSave'>,
+): Promise<{ d20: number | null }> {
+  const outcome = await requestPlayerRoll(
+    { ...spec, deathSave: true },
+    PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS,
+  );
+  return { d20: outcome.cancelled ? null : outcome.d20 };
 }
 
 /**

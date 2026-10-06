@@ -32,7 +32,12 @@ export interface StructuredCombatAction {
     | 'help'
     | 'hide'
     | 'ready'
-    | 'use_object';
+    | 'use_object'
+    /**
+     * The dying player's death saving throw (#2518). Never declared by the DM: the client builds
+     * it when the turn reaches a player on the floor, and the die is the player's.
+     */
+    | 'death_save';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -104,6 +109,8 @@ export type ClientCombatIntent =
       d20?: number;
     }
   | { type: 'end_turn'; actorId: string }
+  /** The dying player's save; `d20` is the die they rolled, absent when the prompt timed out. */
+  | { type: 'death_save'; actorId: string; d20?: number }
   | { type: 'move'; actorId: string; x: number; y: number };
 
 /**
@@ -322,6 +329,15 @@ export async function executeStructuredCombatActionWithBoundary(
           : {}),
         d20: providedD20,
       },
+      'dm',
+      dmStartedAt,
+      origin,
+      signal,
+    );
+  } else if (action.action_type === 'death_save') {
+    result = await executeAuthoritativeCombatIntent(
+      encounterId,
+      { type: 'death_save', actorId: action.actor_id, d20: providedD20 },
       'dm',
       dmStartedAt,
       origin,

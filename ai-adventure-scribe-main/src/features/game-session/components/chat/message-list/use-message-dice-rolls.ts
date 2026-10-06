@@ -7,6 +7,7 @@ import type { RollRequest } from '@/types/roll-request';
 import type { DiceRollRequest } from '@/utils/diceRolls';
 import type { MutableRefObject } from 'react';
 
+import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { useGame } from '@/contexts/GameContext';
 import {
   formatDiceRoll as formatDiceRollUtil,
@@ -169,11 +170,7 @@ export function useMessageDiceRolls({
       attackSettled ||
       initiativeSettled ||
       checkSettled ||
-      Boolean(
-        currentRoll.combatAttackRoll ||
-        currentRoll.combatInitiativeRoll ||
-        currentRoll.combatCheckRoll,
-      ) ||
+      isEngineTaggedRoll(currentRoll) ||
       isEngineChannelRollType(currentRoll.requestType);
     if (!engineOwned) {
       const declined = declinedRollMessage(currentRoll.description);

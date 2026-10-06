@@ -2,7 +2,17 @@ import { createCombatParticipant } from './participant-factory';
 
 import type { CombatEncounter } from '@/types/combat';
 
-type ServerStatus = { currentHp: number; maxHp: number; tempHp: number; isConscious: boolean };
+type ServerStatus = {
+  currentHp: number;
+  maxHp: number;
+  tempHp: number;
+  isConscious: boolean;
+  /** The death-save tallies the server counts. Absent on payloads older than #2518. */
+  deathSavesSuccesses?: number;
+  deathSavesFailures?: number;
+};
+/** The server's player state machine (`vitalStateOf`): standing, dying, stable or dead. */
+export type ServerVitalState = 'standing' | 'dying' | 'stabilized' | 'dead';
 type ServerCondition = { condition?: { name?: string; description?: string } };
 type ServerParticipant = {
   id: string;
@@ -19,6 +29,7 @@ type ServerParticipant = {
   reactionUsed?: boolean;
   isActive?: boolean;
   status?: ServerStatus | null;
+  vitalState?: ServerVitalState;
   conditions?: ServerCondition[];
   /** Stored attack profile; only its `displayName` is read here. */
   monsterAttack?: { displayName?: string } | null;
@@ -65,19 +76,46 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
         bonusActionTaken: participant.bonusActionUsed ?? false,
         reactionTaken: participant.reactionUsed ?? false,
         isUnconscious: participant.status ? !participant.status.isConscious : false,
+        // Death saves come off the wire the server counted them on. They used to be rebuilt at
+        // 0/0 here, so a dying character's tracker never showed the saves the engine recorded.
+        deathSaves: {
+          successes: participant.status?.deathSavesSuccesses ?? 0,
+          failures: participant.status?.deathSavesFailures ?? 0,
+        },
+        isStable: participant.vitalState === 'stabilized',
+        isDead: participant.vitalState === 'dead',
         isActive: participant.isActive,
-        conditions: (participant.conditions ?? []).flatMap((entry) =>
-          entry.condition?.name
+        conditions: [
+          ...(participant.conditions ?? []).flatMap((entry) =>
+            entry.condition?.name
+              ? [
+                  {
+                    name: entry.condition.name.toLowerCase() as never,
+                    description: entry.condition.description ?? entry.condition.name,
+                    duration: -1,
+                    concentrationRequired: false,
+                  },
+                ]
+              : [],
+          ),
+          // Unconscious is the persisted `is_conscious = false` at 0 HP, read as the condition
+          // it is, so the tracker and the attack rules agree about a character on the floor.
+          ...(participant.participantType === 'player' &&
+          participant.status &&
+          !participant.status.isConscious &&
+          !(participant.conditions ?? []).some(
+            (entry) => entry.condition?.name?.toLowerCase() === 'unconscious',
+          )
             ? [
                 {
-                  name: entry.condition.name.toLowerCase() as never,
-                  description: entry.condition.description ?? entry.condition.name,
+                  name: 'unconscious' as never,
+                  description: 'Unconscious: cannot act; attacks within 5 ft are critical hits.',
                   duration: -1,
                   concentrationRequired: false,
                 },
               ]
-            : [],
-        ),
+            : []),
+        ],
       },
       { rollInitiative: false },
     ),

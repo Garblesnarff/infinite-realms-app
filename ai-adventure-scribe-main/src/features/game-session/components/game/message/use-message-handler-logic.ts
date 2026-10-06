@@ -600,6 +600,16 @@ export const useMessageHandlerLogic = ({
       // processing — no sanitizing, no persistence, no generic error text.
       if (aiResponseMessage.context?.terminalState === 'party_defeated') {
         setComposerBlocked(false);
+        // The killing round's paragraph (#2518) is the one thing a terminal turn can carry: save
+        // it as the DM's row so the story the end state links to ends on the death.
+        if (aiResponseMessage.text.trim()) {
+          await persistDmReply({
+            ...aiResponseMessage,
+            id: dmMessageId,
+            text: sanitizeDMText(aiResponseMessage.text),
+            sender: 'dm',
+          });
+        }
         return;
       }
       // Sanitize the AI response text first

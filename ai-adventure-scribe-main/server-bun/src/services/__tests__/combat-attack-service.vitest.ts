@@ -83,6 +83,16 @@ vi.mock('drizzle-orm', async () => {
   };
 });
 
+/**
+ * What getActiveConditionNames' second read answers: `select({ isConscious }).from(status)
+ * .where().limit(1)` resolves to rows shaped `{ isConscious }` (data-access.ts).
+ */
+const statusRead = (isConscious: boolean) => ({
+  from: vi.fn().mockReturnThis(),
+  where: vi.fn().mockReturnThis(),
+  limit: vi.fn().mockResolvedValue([{ isConscious }]),
+});
+
 describe('CombatAttackService', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = 'char-123';
@@ -261,7 +271,9 @@ describe('CombatAttackService', () => {
           where: vi.fn().mockReturnThis(),
           orderBy: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue([]),
-        });
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(true)); // target
 
       const result = await service.resolveAttack(
         mockEncounterId,
@@ -345,7 +357,9 @@ describe('CombatAttackService', () => {
           where: vi.fn().mockReturnThis(),
           orderBy: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue([]),
-        });
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(false)); // target
 
       const result = await service.resolveAttack(
         mockEncounterId,
@@ -419,7 +433,9 @@ describe('CombatAttackService', () => {
           where: vi.fn().mockReturnThis(),
           orderBy: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue([]),
-        });
+        })
+        .mockReturnValueOnce(statusRead(true)) // attacker: getActiveConditionNames reads its status row
+        .mockReturnValueOnce(statusRead(true)); // target
 
       const result = await service.resolveAttack(
         mockEncounterId,

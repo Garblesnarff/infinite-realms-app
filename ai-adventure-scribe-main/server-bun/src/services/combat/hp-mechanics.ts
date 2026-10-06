@@ -55,6 +55,9 @@ export interface ParticipantResistances {
  */
 export const MAX_SINGLE_HIT_FRACTION_OF_MAX_HP = 0.5;
 
+/** Three successes stabilise, three failures kill (SRD 5.1). */
+const DEATH_SAVE_LIMIT = 3;
+
 /** Why a hit's damage was rewritten. Always reported; never silent. */
 export type DamageCapReason = 'per_hit_fraction' | 'critical_overkill_from_full_hp';
 
@@ -120,7 +123,7 @@ export class HPMechanics {
      * (`massiveDamage` below), and that clamp is what guarantees one blow can never reach it.
      */
     let damageCap: DamageResult['damageCap'];
-    const capTarget = options.targetIsPlayer === true;
+    const capTarget = options.targetIsPlayer === true && options.uncapped !== true;
     if (capTarget && modifiedDamage > 0) {
       if (isCriticalHit) {
         const atFullHealth = status.currentHp >= status.maxHp && status.currentHp > 0;
@@ -167,13 +170,28 @@ export class HPMechanics {
       }
     }
 
-    // Check for massive damage (instant death)
-    // Massive damage = taking damage >= max HP while at 0 HP
-    const massiveDamage = status.currentHp === 0 && hpLost >= status.maxHp;
+    // SRD 5.1, "Instant Death": damage that drops a creature to 0 with damage remaining that
+    // equals or exceeds its hit point maximum kills it outright; the same holds for a single
+    // blow that would take a creature already at 0 past its maximum. The overflow is what is
+    // left after temporary hit points and the creature's remaining hit points are used up.
+    const droppedToZero = status.currentHp > 0 && newCurrentHp === 0;
+    const overflow = droppedToZero ? hpLost - status.currentHp : 0;
+    const massiveDamage =
+      (status.currentHp === 0 && hpLost >= status.maxHp) ||
+      (droppedToZero && overflow >= status.maxHp);
+
+    // A creature that just dropped starts a fresh dying sequence; one that was stable and takes
+    // damage is dying again (SRD: "if the creature takes any damage, it is no longer stable").
+    const wasStable =
+      hpLost > 0 &&
+      status.currentHp === 0 &&
+      !status.isConscious &&
+      status.deathSavesSuccesses >= DEATH_SAVE_LIMIT;
+    let newDeathSavesSuccesses = droppedToZero || wasStable ? 0 : status.deathSavesSuccesses;
 
     // D&D 5E Rule: Damage at 0 HP causes death save failures
     let deathSaveFailuresAdded = 0;
-    let newDeathSavesFailures = status.deathSavesFailures;
+    let newDeathSavesFailures = droppedToZero ? 0 : status.deathSavesFailures;
 
     const wasAlreadyUnconscious = status.currentHp === 0 && !status.isConscious;
 
@@ -184,6 +202,7 @@ export class HPMechanics {
 
     if (massiveDamage) {
       newDeathSavesFailures = 3;
+      newDeathSavesSuccesses = 0;
     }
 
     const isDead = newDeathSavesFailures >= 3;
@@ -217,8 +236,10 @@ export class HPMechanics {
       wasVulnerable,
       wasImmune,
       massiveDamage,
+      overflow,
       deathSaveFailuresAdded,
       newDeathSavesFailures,
+      newDeathSavesSuccesses,
       // What the target actually took, cap included. Callers report this rather than the
       // number they rolled: a telemetry line or a DM fact that quoted the pre-cap figure
       // would describe a blow that did not land the way it says it did.
@@ -236,6 +257,19 @@ export class HPMechanics {
     healingAmount: number,
   ): HealingResult {
     const wasUnconscious = !status.isConscious;
+
+    // The dead stay dead: three failures at 0 HP is terminal, and no healing reaches them.
+    if (status.currentHp === 0 && status.deathSavesFailures >= DEATH_SAVE_LIMIT) {
+      return {
+        participantId,
+        healingAmount,
+        healingApplied: 0,
+        overheal: healingAmount,
+        newCurrentHp: 0,
+        wasRevived: false,
+        isConscious: false,
+      };
+    }
 
     // Calculate new HP (capped at max HP)
     const newCurrentHp = Math.min(status.maxHp, status.currentHp + healingAmount);

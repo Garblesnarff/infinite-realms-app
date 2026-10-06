@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 
+import {
+  deathSaveIntentWire,
+  deathSaveIntentWireAutoRolled,
+} from '../../../../../../shared/test-fixtures/death-save-intent';
 import { playerExitIntentBody } from '../../../../../../shared/test-fixtures/player-exit-intent';
-import { combatIntentRequestValidator } from '../intent-schema.js';
+import { combatIntentRequestValidator, describeIntentRejection } from '../intent-schema.js';
 
 const cantrip = {
   type: 'spell' as const,
@@ -35,6 +39,34 @@ describe('combat spell intent schema', () => {
   });
 });
 
+describe('combat death save intent schema (#2518)', () => {
+  it('accepts the exact body the client sends, with the die the player rolled', () => {
+    expect(combatIntentRequestValidator.Check(deathSaveIntentWire('player-1', 14))).toBe(true);
+  });
+
+  it('accepts the auto-rolled body: no die, the engine rolls it', () => {
+    expect(combatIntentRequestValidator.Check(deathSaveIntentWireAutoRolled('player-1'))).toBe(
+      true,
+    );
+  });
+
+  it('needs no expectedVersion: the save is not an optimistic-concurrency action', () => {
+    // `end_turn` has none either; a player-dialect save must not be refused for lacking one.
+    expect(
+      combatIntentRequestValidator.Check({
+        source: 'player',
+        intent: { type: 'death_save', actorId: 'player-1', d20: 3 },
+      }),
+    ).toBe(true);
+  });
+
+  it.each([0, 21, 40])('refuses a die that is not a d20 face (%s)', (d20) => {
+    const body = deathSaveIntentWire('player-1', d20);
+    expect(combatIntentRequestValidator.Check(body)).toBe(false);
+    expect(describeIntentRejection(body).variant).toBe('death_save');
+  });
+});
+
 /**
  * #2580: the player's own exits have to survive the route's own contract, in the exact body the
  * client sends. The union is the first thing a `flee` chip meets, and a schema that rejected the
@@ -49,9 +81,9 @@ describe('the player exit intents (flee / yield)', () => {
     'refuses %s without expectedVersion, like every versioned player intent',
     (type) => {
       const { expectedVersion: _omitted, ...intent } = playerExitIntentBody(type).intent;
-      expect(
-        combatIntentRequestValidator.Check({ ...playerExitIntentBody(type), intent }),
-      ).toBe(false);
+      expect(combatIntentRequestValidator.Check({ ...playerExitIntentBody(type), intent })).toBe(
+        false,
+      );
     },
   );
 

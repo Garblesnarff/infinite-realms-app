@@ -13,6 +13,7 @@ import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetectio
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
+import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { useGame } from '@/contexts/GameContext';
 import { fetchGameContext, buildAIContext } from '@/hooks/ai/ai-utils';
 import {
@@ -27,6 +28,7 @@ import {
   combatTurnErrorMessage,
   combatTurnUiStateForEncounter,
   INITIAL_COMBAT_TURN_UI_STATE,
+  playerParticipantForCharacter,
   preflightErrorStatus,
   preflightNpcTurnsBeforePlayerDeclaration,
   reconcileCombatTurnAfterAction,
@@ -34,7 +36,9 @@ import {
 } from '@/hooks/ai/combat-turn-preflight';
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions, showNpcTurnLines } from '@/hooks/ai/dm-actions-handler';
+import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dying-turn';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
+import { narrateKillingRound } from '@/hooks/ai/killing-round-narration';
 import {
   enforceNarrationGate,
   narrativeTurnHasNoEngineEvent,
@@ -47,6 +51,7 @@ import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
+import { participantVital } from '@/services/combat/participant-vital';
 import {
   hasPendingPlayerRoll,
   isNarrativeRollCommitted,
@@ -443,9 +448,7 @@ export const useAIResponse = (): {
           for (const roll of diceRollQueueRef.current.pendingRolls) {
             if (
               roll.status !== 'pending' ||
-              roll.combatAttackRoll ||
-              roll.combatInitiativeRoll ||
-              roll.combatCheckRoll ||
+              isEngineTaggedRoll(roll) ||
               isNarrativeRollCommitted(roll.id)
             ) {
               continue;
@@ -532,6 +535,31 @@ export const useAIResponse = (): {
         const characterId = String(characterRecord.id || '');
         lastCombatCharacterIdRef.current = characterId;
         lastCombatEncounterRef.current = activeEncounter;
+
+        // A character on the floor cannot act (SRD 5.1): the one thing their turn holds is the
+        // death saving throw, which the dying panel's driver sends as `death_save_turn`. Any other
+        // message is refused here with the reason — no DM turn, no engine call. A dice result for
+        // a narrative check is not an action and passes.
+        const dyingPlayer = isInCombat
+          ? playerParticipantForCharacter(activeEncounter, characterId)
+          : undefined;
+        const isDyingTurn = latestMessage.context?.intent === 'death_save_turn';
+        const playerIsDying = Boolean(dyingPlayer && participantVital(dyingPlayer) === 'dying');
+        if (playerIsDying && !isDyingTurn && !isDiceRollMessage) {
+          logger.info('DYING_ACTION_REFUSED', { sessionId });
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+          );
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+            localNotice: DYING_ACTION_REFUSED_NOTICE,
+            localNotices: [{ text: DYING_ACTION_REFUSED_NOTICE, persist: true }],
+          };
+        }
+
         setCombatTurnUiState(
           combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId, 'running'),
         );
@@ -597,17 +625,29 @@ export const useAIResponse = (): {
             preflightNpcTurns?.combatEnded &&
             preflightNpcTurns.endedReason === 'party_defeated'
           ) {
-            setCombatTurnUiState(
-              combatTurnUiStateForEncounter(null, false, characterId),
-            );
+            setCombatTurnUiState(combatTurnUiStateForEncounter(null, false, characterId));
+            // The end state shows at once, from the engine's own lines; it never waits on the
+            // DM. The killing round still gets its paragraph (#2518): the DM is asked for it
+            // now, and the handler saves it with the story the end state links to.
             setTerminalDeathState({
               state: 'party_defeated',
               encounterId: preflightEncounterId ?? null,
               receivedAt: Date.now(),
               finalLines: preflightNpcTurns.transcriptLines,
             });
+            const killingRoundText = await narrateKillingRound({
+              npcTurns: preflightNpcTurns,
+              participants: preflightParticipants,
+              sessionId,
+              gameContext,
+              messages,
+              userId: user?.id,
+              userPlan: userPlan || undefined,
+              turnCount,
+              signal,
+            });
             return {
-              text: '',
+              text: killingRoundText,
               sender: 'dm',
               timestamp: new Date().toISOString(),
               context: {
@@ -767,10 +807,19 @@ export const useAIResponse = (): {
         // Only a turn that could end up gated parks its memory and world writes; the rest write
         // as they always did.
         const holdSideEffects = narrativeTurnHasNoEngineEvent(narrativeTurnOf({ text: '' }));
+        // The dying player's turn has no declaration for the DM to write: the action is the
+        // death save, built here from the engine's own state, and the DM is called once, after
+        // the engine resolves it, to narrate (#2518). Read from the board the pre-flight left.
+        const dyingTurnPlayer =
+          isDyingTurn && activeEncounter?.phase === 'active'
+            ? playerParticipantForCharacter(activeEncounter, characterId)
+            : undefined;
         const askDm =
           heldEntry && heldEntry.decision !== 'declined'
             ? async () => heldEntryResult(heldEntry.pending)
-            : AIService.chatWithDM;
+            : isDyingTurn
+              ? async () => dyingTurnDeclaration(dyingTurnPlayer)
+              : AIService.chatWithDM;
 
         // A cast from the sheet can be cancelled while the DM reads the scene (#2418). Aborting
         // the request is safe: the slot is spent only when the engine is handed the cast, after
@@ -1254,5 +1303,11 @@ export const useAIResponse = (): {
     ],
   );
 
-  return { getAIResponse, combatTurnUiState, resumeCombatTurn, terminalDeathState, checkRestoredDefeat };
+  return {
+    getAIResponse,
+    combatTurnUiState,
+    resumeCombatTurn,
+    terminalDeathState,
+    checkRestoredDefeat,
+  };
 };

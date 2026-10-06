@@ -42,7 +42,9 @@ const assertNoDmInstructions = (strings: readonly string[]): void => {
 
 describe('damage at 0 HP in the player transcript (#2457)', () => {
   // Producer: CombatAttackService.resolveAttack spreads the damage layer's failure fields
-  // onto the AttackResult (server-bun/src/services/combat/combat-attack-service.ts).
+  // onto the AttackResult (server-bun/src/services/combat/combat-attack-service.ts). A melee
+  // blow within 5 ft on an unconscious target is an automatic critical hit, and the producer
+  // always says so with `autoCritOnDowned` (#2518); a ranged hit carries neither it nor a crit.
   const CRIT_AT_ZERO_HP = {
     ...ENEMY_HITS_PLAYER,
     finalDamage: 6,
@@ -50,6 +52,7 @@ describe('damage at 0 HP in the player transcript (#2457)', () => {
     targetIsConscious: false,
     targetIsDead: false,
     isCritical: true,
+    autoCritOnDowned: true,
     deathSaveFailuresAdded: 2,
     deathSavesFailures: 2,
   };
@@ -65,9 +68,8 @@ describe('damage at 0 HP in the player transcript (#2457)', () => {
     const extra = parts[parts.length - 1];
     // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
     expect(extra.line.startsWith('⚙️ Engine:')).toBe(true);
-    expect(extra.line).toContain('takes damage at 0 HP');
-    expect(extra.line).toContain('2 automatic death-save failures');
-    expect(extra.line).toContain('2 of 3 failures');
+    expect(extra.line).toContain('strikes the unconscious The Scholar — automatic critical hit.');
+    expect(extra.line).toContain('Two death-save failures. ✕✕○');
     expect(extra.card.kind).toBe('death_save');
     expect(extra.card.badge).toMatchObject({ word: 'FAILED' });
     expect(extra.card.deathSave).toMatchObject({ failures: 2 });
@@ -234,16 +236,16 @@ describe('three-round death-save arc through the real client path (#2457)', () =
       deathSaveFailuresAdded: 1,
       deathSavesFailures: 2,
     };
-    const parts = formatCombatEngineParts(
-      attackAction(REEVES, SCHOLAR),
-      hitAtZero,
-      FIGHT_ROSTER,
-      { targetHp: true, targetMaxHp: 7 },
-    );
+    const parts = formatCombatEngineParts(attackAction(REEVES, SCHOLAR), hitAtZero, FIGHT_ROSTER, {
+      targetHp: true,
+      targetMaxHp: 7,
+    });
     const failurePart = parts[parts.length - 1];
     expect(failurePart.line.startsWith('⚙️ Engine:')).toBe(true);
-    expect(failurePart.line).toContain('takes damage at 0 HP');
-    expect(failurePart.line).toContain('one automatic death-save failure');
+    // A ranged hit on the body: one failure, no automatic critical.
+    expect(failurePart.line).toContain('hits the unconscious The Scholar from range.');
+    expect(failurePart.line).toContain('One death-save failure. ✕✕○');
+    expect(failurePart.line).not.toContain('automatic critical');
     expect(failurePart.card.kind).toBe('death_save');
     assertNoDmInstructions(payloadStrings(parts));
   });
@@ -279,5 +281,4 @@ describe('three-round death-save arc through the real client path (#2457)', () =
     expect(parts[0].line).toContain('third failure');
     assertNoDmInstructions(payloadStrings(parts));
   });
-
 });

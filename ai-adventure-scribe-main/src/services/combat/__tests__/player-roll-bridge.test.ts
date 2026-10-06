@@ -6,8 +6,10 @@ import {
   pendingPlayerRollDeadline,
   pendingPlayerRollLabel,
   requestPlayerAttackRoll,
+  requestPlayerDeathSaveRoll,
   requestPlayerInitiativeRoll,
   PLAYER_ATTACK_ROLL_TIMEOUT_MS,
+  PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS,
   PLAYER_INITIATIVE_ROLL_TIMEOUT_MS,
   setPlayerRollHost,
   settlePendingPlayerRoll,
@@ -388,5 +390,65 @@ describe('what the prompt tells the player about its own timer (#2530)', () => {
 
     settlePendingPlayerRoll({ d20: 11 });
     expect(pendingPlayerRollLabel()).toBeNull();
+  });
+});
+
+describe('the death saving throw prompt (#2518)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-05T12:00:00.000Z'));
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('is told it is a death save, and returns the die the player kept', async () => {
+    const present = vi.fn((_spec, settle) => {
+      settle({ d20: 14 });
+      return hostHandle('death-roll-1');
+    });
+    setPlayerRollHost({ present });
+
+    await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
+      d20: 14,
+    });
+    expect(present.mock.calls[0][0]).toEqual({ actorLabel: 'The Scholar', deathSave: true });
+  });
+
+  it('auto-rolls after 45 s with a visible deadline, so a hidden prompt cannot make death silent', async () => {
+    setPlayerRollHost({ present: () => hostHandle('death-roll-1') });
+    const pending = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+
+    expect(pendingPlayerRollLabel()).toBe('death saving throw');
+    expect(pendingPlayerRollDeadline('death-roll-1')).toBe(
+      Date.parse('2026-10-05T12:00:00.000Z') + PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS,
+    );
+    expect(PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS).toBe(45_000);
+
+    await vi.advanceTimersByTimeAsync(PLAYER_DEATH_SAVE_ROLL_TIMEOUT_MS);
+    await expect(pending).resolves.toEqual({ d20: null });
+    expect(hasPendingPlayerRoll()).toBe(false);
+  });
+
+  it('a dismissed prompt is not a way out: it reads as "the engine rolls it"', async () => {
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        settle({ d20: null, cancelled: true });
+        return hostHandle('death-roll-1');
+      },
+    });
+
+    await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
+      d20: null,
+    });
+  });
+
+  it('with no dice host mounted the engine rolls it, so the turn can never wedge', async () => {
+    await expect(requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' })).resolves.toEqual({
+      d20: null,
+    });
   });
 });

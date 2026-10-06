@@ -341,7 +341,9 @@ export async function enforceCombatTransitionContract(params: {
     });
   if (!breach && !hint) {
     const sanitized = stripKillClaimsFromResponse(acceptance.response, prompt);
-    return sanitized === acceptance.response ? accepted : { ...accepted, text: JSON.stringify(sanitized) };
+    return sanitized === acceptance.response
+      ? accepted
+      : { ...accepted, text: JSON.stringify(sanitized) };
   }
 
   if (breach)

@@ -47,6 +47,11 @@ export const ROLL_TYPE_CONFIG: Record<string, DiceRollTypeConfig> = {
     icon: <Zap className="w-4 h-4" />,
     label: 'Initiative',
   },
+  death_save: {
+    color: 'border-red-300 bg-red-100',
+    icon: <AlertCircle className="w-4 h-4 text-red-600" />,
+    label: 'Death Saving Throw',
+  },
 };
 
 export const DEFAULT_TYPE_CONFIG: DiceRollTypeConfig = {

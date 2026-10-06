@@ -208,7 +208,7 @@ describe('useAIResponse', () => {
     });
   });
 
-  it('#2517: NPC preflight that defeats the party sets the death state without a DM send', async () => {
+  it('#2517/#2518: NPC preflight that defeats the party shows the death state at once, then asks the DM for the killing round', async () => {
     const { AIService } = await import('@/services/ai-service');
 
     const mockSessionData = {
@@ -276,15 +276,30 @@ describe('useAIResponse', () => {
       transcriptLines: deathLines,
     } as any);
 
+    // #2518: the killing round gets its narration paragraph (run D2 had none). The DM is asked
+    // from the engine's results alone and told the fight is over.
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      text: 'The spider’s fangs find the Scholar a last time, and the Membrane goes quiet.',
+    } as any);
+
     const { result } = renderHook(() => useAIResponse());
     let response: EnhancedChatMessage | null = null;
     await act(async () => {
       response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
     });
 
-    // The death screen state came from the combat resolution: no DM call ran.
-    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    // The death screen state came from the combat resolution, not from the DM's words…
     expect(response!.context?.terminalState).toBe('party_defeated');
+    // …and the DM is called exactly once, for the narration: no declaration, a concluded fight.
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
+    const asked = vi.mocked(AIService.chatWithDM).mock.calls[0][0] as {
+      message: string;
+      context: any;
+    };
+    expect(JSON.parse(asked.message)).toMatchObject({ encounterAlreadyConcluded: true });
+    expect(asked.context.gameState.resolutionOnly).toBe(true);
+    // The paragraph rides on the terminal reply for the handler to save beside the story.
+    expect(response!.text).toContain('the Membrane goes quiet');
     await waitFor(() => {
       expect(result.current.terminalDeathState).toMatchObject({
         state: 'party_defeated',

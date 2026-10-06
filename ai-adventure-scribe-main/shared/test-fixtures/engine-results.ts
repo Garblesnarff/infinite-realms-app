@@ -11,6 +11,8 @@
  *   roll, the save), then `exposeAttackVisibility`'s spell twin, which adds the same names.
  * - Movement only: `decideAttackApproach` (`combat-approach-service.ts`).
  * - Death saves: `mergeBoundaryDeathSaves` (`npc-turn-runner.ts`) over `DeathSaveResult`.
+ * - Hits on a downed player (#2518): `resolveAttack` with `deathSaveFailureFields` and, for a melee
+ *   blow within 5 ft on an unconscious target, `autoCritOnDowned`; instant death sets `instantDeath`.
  *
  * Names are the display names the card prints; ids are the engine's.
  */
@@ -287,6 +289,70 @@ export const PLAYER_HEALS_ALLY = spellExposed(
 );
 
 /** `DeathSaveResult` for a failed save (the second failure). */
+/**
+ * A melee blow within 5 ft on an unconscious player (#2518): `resolveAttack` returns an automatic
+ * critical hit, two failures (the tally after them: 2 of 3), and says so with `autoCritOnDowned`.
+ */
+export const ENEMY_STRIKES_DOWNED_PLAYER = exposed(
+  {
+    ...rawHit,
+    d20: 2,
+    totalAttackRoll: 2,
+    damage: 6,
+    finalDamage: 6,
+    targetNewHp: 0,
+    targetIsConscious: false,
+    targetIsDead: false,
+    targetCondition: 'near death',
+    isCritical: true,
+    autoCritOnDowned: true,
+    deathSaveFailuresAdded: 2,
+    deathSavesFailures: 2,
+  },
+  REEVES,
+  SCHOLAR,
+);
+
+/**
+ * A ranged hit on an unconscious player: one failure, no automatic critical (`autoCritOnDowned`
+ * is absent, as `resolveAttack` leaves it).
+ */
+export const ENEMY_SHOOTS_DOWNED_PLAYER = exposed(
+  {
+    ...rawHit,
+    damage: 2,
+    finalDamage: 2,
+    targetNewHp: 0,
+    targetIsConscious: false,
+    targetIsDead: false,
+    targetCondition: 'near death',
+    deathSaveFailuresAdded: 1,
+    deathSavesFailures: 1,
+  },
+  REEVES,
+  SCHOLAR,
+);
+
+/** A critical on a player with 1 HP whose overflow reached the maximum: instant death. */
+export const ENEMY_INSTANT_KILLS_PLAYER = exposed(
+  {
+    ...rawHit,
+    d20: 20,
+    totalAttackRoll: 20,
+    damage: 22,
+    finalDamage: 22,
+    targetNewHp: 0,
+    targetIsConscious: false,
+    targetIsDead: true,
+    targetCondition: 'near death',
+    isCritical: true,
+    isNaturalTwenty: true,
+    instantDeath: true,
+  },
+  REEVES,
+  SCHOLAR,
+);
+
 export const DEATH_SAVE_FAILED = {
   participantId: SCHOLAR.id,
   roll: 6,

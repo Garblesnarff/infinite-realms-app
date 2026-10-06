@@ -77,7 +77,12 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({} as any);
     legalActionsFor([
-      { type: 'attack', label: 'Attack with Quarterstaff', weaponId: 'quarterstaff', targetIds: [SWARM_1_ID] },
+      {
+        type: 'attack',
+        label: 'Attack with Quarterstaff',
+        weaponId: 'quarterstaff',
+        targetIds: [SWARM_1_ID],
+      },
       { type: 'flee', label: 'Flee (Light-Eater Swarm 1 attacks)' },
       { type: 'yield', label: 'Yield' },
       { type: 'end_turn', label: 'End turn' },
@@ -98,7 +103,9 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
       sent.push(intent);
       return { encounterId } as never;
     });
-    render(<DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
     fireEvent.click(await screen.findByText('Yield'));
 
     await waitFor(() => expect(sent).toHaveLength(1));
@@ -108,7 +115,9 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
   });
 
   it('commits the flee intent through the executor, never as DM text', async () => {
-    render(<DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
     fireEvent.click(await screen.findByText('Flee (Light-Eater Swarm 1 attacks)'));
 
     await waitFor(() => expect(executeAuthoritativeCombatIntent).toHaveBeenCalled());
@@ -124,7 +133,9 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
   });
 
   it('warns, in one line, that a hostile in reach gets its attack', async () => {
-    render(<DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
     fireEvent.click(await screen.findByText('Flee (Light-Eater Swarm 1 attacks)'));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
@@ -135,7 +146,9 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
 
   it('a declined confirm flees nobody: nothing is posted', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
-    render(<DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
     fireEvent.click(await screen.findByText('Flee (Light-Eater Swarm 1 attacks)'));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
@@ -147,7 +160,9 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
       { type: 'flee', label: 'Flee' },
       { type: 'yield', label: 'Yield' },
     ]);
-    render(<DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
     fireEvent.click(await screen.findByText('Flee'));
 
     await waitFor(() => expect(executeAuthoritativeCombatIntent).toHaveBeenCalled());
@@ -157,7 +172,9 @@ describe('Flee and Yield are options the player can actually take (#2580)', () =
   });
 
   it('Yield commits its own slug and provokes no confirm at all', async () => {
-    render(<DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
     fireEvent.click(await screen.findByText('Yield'));
 
     await waitFor(() => expect(executeAuthoritativeCombatIntent).toHaveBeenCalled());

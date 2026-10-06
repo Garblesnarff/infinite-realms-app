@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMessageHandlerLogic } from '../use-message-handler-logic';
 
+import { useCombat } from '@/contexts/CombatContext';
 import { AIService } from '@/services/ai-service';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -92,7 +93,10 @@ vi.mock('@/services/combat/combat-action-executor', () => ({
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   settlePendingCombatEntryConfirmation: () => {},
 }));
-vi.mock('@/services/combat/player-roll-bridge', () => ({
+vi.mock('@/services/combat/player-roll-bridge', async (importOriginal) => ({
+  // Real bridge (no popup host is mounted, so nothing is ever pending); only the settle that the
+  // handler fires on a timeout stays a no-op.
+  ...(await importOriginal<Record<string, unknown>>()),
   settlePendingPlayerRoll: () => {},
 }));
 vi.mock('@/services/combat/spell-target-save-bridge', () => ({
@@ -163,7 +167,9 @@ vi.mock('@/infrastructure/api', async (importOriginal) => {
   return {
     ...actual,
     llmApiClient: {
-      generateText: vi.fn().mockResolvedValue('A. **Look around**.\nB. **Press on**.\nC. **Call out**.'),
+      generateText: vi
+        .fn()
+        .mockResolvedValue('A. **Look around**.\nB. **Press on**.\nC. **Call out**.'),
     },
   };
 });
@@ -281,5 +287,74 @@ describe('useMessageHandlerLogic fallen end state (#2517)', () => {
       expect(result.current.terminalDeathState).toMatchObject({ state: 'party_defeated' });
     });
     expect(fetchFallen.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('#2518: the round that killed the character is saved as the DM’s paragraph beside the story', async () => {
+    // The NPC turns ahead of the player's declaration kill the Scholar: the end state shows from
+    // the engine's lines at once, and the DM is asked for the death's narration (run D2 had none).
+    const activeEncounter = {
+      id: 'encounter-789',
+      phase: 'active',
+      currentRound: 4,
+      currentTurnParticipantId: 'npc-spider',
+      participants: [
+        { id: 'player-1', characterId: 'char-1', name: 'The Scholar', participantType: 'player' },
+        { id: 'npc-spider', name: 'Vitruvian Spider', participantType: 'monster' },
+      ],
+    };
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter },
+      refreshCombatState: vi.fn().mockResolvedValueOnce(activeEncounter).mockResolvedValue(null),
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+      results: [
+        {
+          action: {
+            actor_id: 'npc-spider',
+            action_type: 'attack',
+            target_ids: ['player-1'],
+            weapon_id: null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+          round: 4,
+          outcomes: [],
+          actorIsPlayer: false,
+          transcriptLines: ['⚙️ Engine: The Scholar is DEAD.'],
+        },
+      ],
+      currentParticipant: null,
+      round: 4,
+      combatEnded: true,
+      endedReason: 'party_defeated',
+      iterationCount: 1,
+      iterationCap: 4,
+      capReached: false,
+      transcriptLines: ['⚙️ Engine: The Scholar is DEAD.'],
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      text: 'The Membrane takes the Scholar into its quiet.',
+    } as any);
+
+    const { result } = renderHandler();
+    await waitFor(() => expect(vi.mocked(userDataApi.fetchSessionFallenState)).toHaveBeenCalled());
+    await act(async () => {
+      await result.current.handleSendMessage('I step back from the spider');
+    });
+
+    await waitFor(() => {
+      expect(result.current.terminalDeathState).toMatchObject({
+        state: 'party_defeated',
+        finalLines: ['⚙️ Engine: The Scholar is DEAD.'],
+      });
+    });
+    // The paragraph is saved as the DM's row, so "Read the story so far" ends on the death.
+    const dmRows = sendMessageMock.mock.calls
+      .map(([row]) => row)
+      .filter((row: any) => row?.sender === 'dm');
+    expect(dmRows).toHaveLength(1);
+    expect(dmRows[0].text).toContain('The Membrane takes the Scholar into its quiet.');
+    expect(toastMock).not.toHaveBeenCalled();
   });
 });

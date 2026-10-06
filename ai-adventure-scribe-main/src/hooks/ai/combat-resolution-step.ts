@@ -44,6 +44,7 @@ import {
   engineRosterOf,
   formatCombatEngineParts,
   formatDeathSaveParts,
+  formatWakeParts,
   formatNpcTurnOutcome,
   npcTurnOptions,
   formatRefusedSpellPart,
@@ -52,7 +53,11 @@ import {
 import { repairRefusedCombatAction } from '@/services/combat/combat-repair';
 import { isSameSpell } from '@/services/combat/declared-player-spell';
 import { dmFacingResolvedAction, ENGINE_FACT_NOTE } from '@/services/combat/dm-resolved-action';
-import { askPlayerForAttackDie, isPlayerActor } from '@/services/combat/player-attack-roll';
+import {
+  askPlayerForAttackDie,
+  askPlayerForDeathSaveDie,
+  isPlayerActor,
+} from '@/services/combat/player-attack-roll';
 import {
   playerCombatSpellLabel,
   resolvePlayerCombatSpell,
@@ -292,7 +297,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     return playerInputOrigin ?? 'dm';
   };
   /** Whose turn it is once everything the engine accepted has been applied. */
-  let turnHolder: { id?: string; name?: string } | null = null;
+  let turnHolder: { id?: string; name?: string; vitalState?: string } | null = null;
   let encounterAlreadyConcluded = false;
   let playerDeclarationWasRefused = false;
   /**
@@ -304,6 +309,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // Area spells travel in the same batch as targeted actions (#2304). They used to be proposed
   // on the side, where a refusal was a console warning and a success was never narrated.
   const targetedActions = combatActions.filter(isDeclaredCombatAction);
+  /** The dying player's turn: the declared action is their death save (#2518). */
+  const declaredDeathSave = targetedActions.some(
+    (action) => (action as { action_type?: string }).action_type === 'death_save',
+  );
   /**
    * Set once the spell the player declared reached the engine — resolved, refused, or placed on
    * the map. Keyed on the spell, not on "some player spell": a batch that casts Chill Touch for a
@@ -587,6 +596,13 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         (action.action_type === 'attack' || action.action_type === 'cast_spell');
       if (entryRoll) {
         playerDie = entryRoll;
+      } else if (
+        action.action_type === 'death_save' &&
+        isPlayerActor(action.actor_id, participants)
+      ) {
+        // The dying player's whole turn is this one die. Never withdrawn: a dismissed or
+        // timed-out prompt means the engine rolls it, and the line says it did.
+        playerDie = await awaitPlayerInput(askPlayerForDeathSaveDie({ actorLabel }));
       } else if (asksPlayer) {
         const asked = await awaitPlayerInput(
           trackPlayerRollDismissal(() =>
@@ -736,25 +752,36 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
    * Cross the turn boundary an accepted player action produced: end the actor's turn, settle death
    * saves, and — for the player — run the NPC turns that follow.
    */
-  const crossTurnBoundary = async (actorId: string): Promise<BatchBoundary> => {
+  const crossTurnBoundary = async (
+    actorId: string,
+    /**
+     * A death saving throw IS the dying player's whole turn: the engine ended it with the save
+     * (its result already names whoever is up), so there is no `end_turn` to send and its lines
+     * are already printed. Pass that result here to skip the boundary call.
+     */
+    turnEndedByAction?: unknown,
+  ): Promise<BatchBoundary> => {
+    const endedWithAction = turnEndedByAction !== undefined;
     // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
     // is told the boundary already happened. Both answers name whoever is up, which is what the
     // player has to be told when their own declaration was refused.
-    const turn = signal
-      ? await executeAuthoritativeCombatIntent(
-          encounterId,
-          { type: 'end_turn', actorId },
-          'dm',
-          undefined,
-          undefined,
-          signal,
-        )
-      : await executeAuthoritativeCombatIntent(encounterId, { type: 'end_turn', actorId }, 'dm');
+    const turn = endedWithAction
+      ? turnEndedByAction
+      : signal
+        ? await executeAuthoritativeCombatIntent(
+            encounterId,
+            { type: 'end_turn', actorId },
+            'dm',
+            undefined,
+            undefined,
+            signal,
+          )
+        : await executeAuthoritativeCombatIntent(encounterId, { type: 'end_turn', actorId }, 'dm');
     // Death saves settled by the explicit end_turn boundary get their own engine lines and
     // cards too (#2457) — they are not part of the action's result. Print BEFORE the
     // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
     // must still be visible.
-    const turnDeathSaveParts = formatDeathSaveParts(turn, roster);
+    const turnDeathSaveParts = endedWithAction ? [] : formatDeathSaveParts(turn, roster);
     if (turnDeathSaveParts.length) {
       appendEngineBlock({
         source: isPlayerActor(actorId, participants) ? 'player' : 'npc',
@@ -802,6 +829,19 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       round: combatRoundFrom(execution.result, playerRound ?? 1),
       serverSequence: combatSequenceFrom(execution.result),
     });
+    // A stable hero waking after the fight ended on them (#2518): the hours the engine rolled,
+    // printed before the boundary check below so the line survives the fight ending.
+    const wakeParts = formatWakeParts(execution.result);
+    if (wakeParts.length) {
+      appendEngineBlock({
+        source: 'player',
+        actorId: action.actor_id,
+        lines: [wakeParts.map((part) => part.line).join('\n\n')],
+        cards: wakeParts.map((part) => part.card),
+        round: combatRoundFrom(execution.result, playerRound ?? 1),
+        serverSequence: combatSequenceFrom(execution.result),
+      });
+    }
     resolvedActions.push({
       action,
       outcomes: execution.outcomes,
@@ -821,7 +861,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       isPlayerActor(action.actor_id, participants)
     )
       return null;
-    return crossTurnBoundary(action.actor_id);
+    return crossTurnBoundary(
+      action.actor_id,
+      action.action_type === 'death_save' ? execution.result : undefined,
+    );
   };
 
   for (
@@ -1155,24 +1198,31 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
    * it as established fact. A repaired turn's real actions are in `authoritativeCombatResults`
    * and need no prose to be narrated from.
    */
-  const setupText = playerDeclarationWasRefused
-    ? 'The declaration for this turn was refused by the engine and is void. Narrate only the ' +
-      'authoritative results supplied, and state whose turn it is.'
-    : pendingPlayerAreaSpells.length
-      ? 'The declared area spell has not been cast yet; it waits for the player to confirm it on ' +
-        'the map. Narrate only the authoritative results supplied, and state whose turn it is.'
-      : resolvedPlayerCheck
-        ? "The player's declared ability check was resolved by the engine. Narrate only the " +
-          'authoritative check result supplied and any authoritative combat results; do not ' +
-          'add or change an outcome, and state whose turn it is.'
-        : silentTurn
-          ? SILENT_PLAYER_TURN_SETUP
-          : encounterAlreadyConcluded
-            ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
-              'as something that happened.'
-            : declarationText;
+  const setupText = declaredDeathSave
+    ? 'The player character is unconscious and dying; their turn was a death saving throw, ' +
+      'rolled by the player and resolved by the engine. Narrate only the authoritative ' +
+      'results supplied. The character cannot act, speak or decide anything.'
+    : playerDeclarationWasRefused
+      ? 'The declaration for this turn was refused by the engine and is void. Narrate only the ' +
+        'authoritative results supplied, and state whose turn it is.'
+      : pendingPlayerAreaSpells.length
+        ? 'The declared area spell has not been cast yet; it waits for the player to confirm it on ' +
+          'the map. Narrate only the authoritative results supplied, and state whose turn it is.'
+        : resolvedPlayerCheck
+          ? "The player's declared ability check was resolved by the engine. Narrate only the " +
+            'authoritative check result supplied and any authoritative combat results; do not ' +
+            'add or change an outcome, and state whose turn it is.'
+          : silentTurn
+            ? SILENT_PLAYER_TURN_SETUP
+            : encounterAlreadyConcluded
+              ? 'Combat has already concluded. This batch is a no-op; do not narrate its declared action ' +
+                'as something that happened.'
+              : declarationText;
 
-  const playerTurn = isPlayerActor(turnHolder?.id ?? '', participants);
+  // A player on the floor holds the turn only to roll a death save: the DM is not to hand them
+  // the turn with "what do you do?", because they cannot do anything (#2518).
+  const playerDying = turnHolder?.vitalState === 'dying';
+  const playerTurn = isPlayerActor(turnHolder?.id ?? '', participants) && !playerDying;
   const playerName =
     participants?.find((participant) => participant.id === turnHolder?.id)?.name ??
     turnHolder?.name ??
@@ -1238,6 +1288,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         ...(playerTurn
           ? {
               turnHandoff: `End your response with: "${playerName}, what do you do?"`,
+            }
+          : {}),
+        ...(playerDying
+          ? {
+              turnHandoff:
+                `${playerName} is unconscious and dying. Do not ask what they do and do not ` +
+                'give them anything to decide: end on the state of the scene around them. Their ' +
+                'next turn is a death saving throw the engine will prompt for.',
             }
           : {}),
       }),

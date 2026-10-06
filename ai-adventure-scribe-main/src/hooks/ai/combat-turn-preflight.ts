@@ -68,10 +68,9 @@ export const INITIAL_COMBAT_TURN_UI_STATE: CombatTurnUiState = {
   preflight: 'idle',
 };
 
-function playerParticipantForCharacter(
-  encounter: ActiveEncounter | null | undefined,
-  characterId?: string,
-): CombatParticipant | undefined {
+export function playerParticipantForCharacter<
+  P extends { participantType?: string; characterId?: string | null },
+>(encounter: { participants?: P[] } | null | undefined, characterId?: string): P | undefined {
   const players = encounter?.participants?.filter(
     (participant) => participant.participantType === 'player',
   );

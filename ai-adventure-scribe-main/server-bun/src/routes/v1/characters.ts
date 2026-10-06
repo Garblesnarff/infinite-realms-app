@@ -26,7 +26,6 @@ import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
-import { CharacterVitalsService } from '../../services/character-vitals-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
 import type { Character, CharacterStats } from '../../../../db/schema/index';
@@ -548,9 +547,21 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .post(
     '/:id/damage',
-    async ({ params, body, user }) =>
-      CharacterVitalsService.applyDamage(params.id, user!.userId, body.amount),
-    { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
+    async ({ params, body, user }) => {
+      // One dying transition for every writer: in a live encounter this is the combat path
+      // (participant row, sheet mirror, engine line); out of one it is the sheet path (#2518, #2622).
+      // Loaded on use: the combat write path is a heavy import chain no other character route needs.
+      const { applyNonAttackDamage } = await import('../../services/combat/non-attack-damage.js');
+      const { vitals, engineLines } = await applyNonAttackDamage(
+        params.id,
+        user!.userId,
+        body.amount,
+        'damage_taken',
+        { critical: body.critical === true },
+      );
+      return { ...vitals, engineLines };
+    },
+    { body: t.Object({ amount: t.Number({ minimum: 0 }), critical: t.Optional(t.Boolean()) }) },
   )
 
   .put(

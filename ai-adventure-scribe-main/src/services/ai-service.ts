@@ -30,7 +30,11 @@ import type { SessionVoiceContext } from './voice-consistency-service';
 import type { PersistedRollOutcome } from '@/types/session-state';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { PartyDefeatedError, QuotaExceededError, type TurnPhaseReporter } from '@/infrastructure/api/rest-client';
+import {
+  PartyDefeatedError,
+  QuotaExceededError,
+  type TurnPhaseReporter,
+} from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 
 export type { AIResponse, ChatMessage, NarrationSegment, GameContext } from './ai/shared/types';
@@ -332,8 +336,7 @@ export class AIService {
           .slice(-8)
           .map(formatConversationHistoryMessage)
           .join('\n\n');
-        const activeEntityNames =
-          CampaignContextPrompts.extractSceneEntityNames(sceneStateBlock);
+        const activeEntityNames = CampaignContextPrompts.extractSceneEntityNames(sceneStateBlock);
 
         const assembleFixedPrompt = (contextPromptValue: string): string =>
           `${contextPromptValue}${sceneSection}${tacticalContext}\n\n${systemBlock}\n\n${sceneStateSection}<player_input>\n${playerInput}\n</player_input>`;

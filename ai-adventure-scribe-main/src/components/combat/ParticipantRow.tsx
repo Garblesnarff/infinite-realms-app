@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { participantVital } from '@/services/combat/participant-vital';
 import { getEnemyHealthTier, getPlayerHPBarColor } from '@/utils/hp-utils';
 
 // ===========================
@@ -56,12 +57,15 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
       participant.maxHitPoints > 0
         ? (participant.currentHitPoints / participant.maxHitPoints) * 100
         : 0;
-    const isDead = participant.currentHitPoints === 0 && participant.deathSaves.failures >= 3;
-    const _isUnconscious =
-      participant.currentHitPoints === 0 && participant.deathSaves.failures < 3;
+    const vital = participantVital(participant);
+    const isDead =
+      vital === 'dead' ||
+      (participant.currentHitPoints === 0 && participant.deathSaves.failures >= 3);
     const isPlayer = participant.participantType === 'player';
-    // Only a player rolls death saves; an enemy at 0 HP reads "Down" and nothing more.
-    const needsDeathSave = isPlayer && participant.currentHitPoints === 0 && !isDead;
+    // Only a player rolls death saves; an enemy at 0 HP reads "Down" and nothing more. A stable
+    // player rolls no more of them (#2518).
+    const needsDeathSave =
+      isPlayer && participant.currentHitPoints === 0 && !isDead && vital !== 'stable';
 
     // Look up portrait from campaign assets
     const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
@@ -161,6 +165,17 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
             <h4 className={`font-semibold ${isDead ? 'line-through' : ''}`}>
               {participant.displayName ?? participant.name}
             </h4>
+
+            {/* The word, not only a colour or a pip: a screen reader hears the state. */}
+            {isPlayer && (vital === 'dying' || vital === 'stable' || vital === 'dead') && (
+              <Badge
+                variant="secondary"
+                data-testid="participant-vital-badge"
+                className="text-[0.65rem] font-medium uppercase tracking-wide"
+              >
+                {vital === 'dead' ? 'Dead' : vital === 'stable' ? 'Stable' : 'Unconscious'}
+              </Badge>
+            )}
 
             {/* Action Status Indicators */}
             {isCurrentTurn && (

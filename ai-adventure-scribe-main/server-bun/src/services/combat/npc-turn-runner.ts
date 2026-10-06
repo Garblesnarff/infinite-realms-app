@@ -2,7 +2,6 @@ import { grappleOf } from './grapple-source.js';
 import { describeDeathSave } from '../../../../shared/death-save-lines';
 import { combatLogger } from '../../lib/logger.js';
 
-
 import type { SubmittedCombatIntent } from './combat-intent-service.js';
 import type { WeaponRuleProfile } from './combat-rules.js';
 import type { CombatState, DeathSaveResult } from '../../types/combat.js';
@@ -37,7 +36,13 @@ export type NpcTurnOutcome = {
 
 export type AdvanceNpcTurnsResult = {
   results: NpcTurnOutcome[];
-  currentParticipant: { id: string; name: string; participantType: string } | null;
+  currentParticipant: {
+    id: string;
+    name: string;
+    participantType: string;
+    /** Where the turn holder stands (`vitalStateOf`): a dying player owes a death save. */
+    vitalState?: string;
+  } | null;
   /** The encounter round after the last NPC turn: the round the next turn holder is in. */
   round: number;
   combatEnded: boolean;
@@ -59,6 +64,14 @@ export type NpcTurnRunnerDependencies = {
   getCombatState: (encounterId: string, userId: string) => Promise<CombatState>;
   getDefaultWeapon: (participant: unknown) => Promise<WeaponRuleProfile>;
   executeIntent: ExecuteNpcIntent;
+  /**
+   * Whether `actor` stands within 5 ft of `target` on the tactical board. Absent, or when no
+   * board can say, a creature is taken to be in reach: the fight it was already in is the one
+   * it keeps fighting.
+   */
+  withinMeleeReach?: (state: CombatState, actorId: string, targetId: string) => Promise<boolean>;
+  /** Tells the DM what a creature chose to do about a downed player instead of attacking. */
+  recordDownedChoice?: (sessionId: string, fact: string) => Promise<void>;
   /** Whether a won parley holds this creature's action in this round (#2420). */
   isParleyHeld?: (sessionId: string, participantId: string, round: number) => Promise<boolean>;
 };
@@ -75,6 +88,20 @@ const defaultDependencies: NpcTurnRunnerDependencies = {
   executeIntent: async (encounterId, intent, userId, source, dmStartedAt) => {
     const { executeCombatIntent } = await import('./combat-intent-service.js');
     return executeCombatIntent(encounterId, intent, userId, source, dmStartedAt);
+  },
+  withinMeleeReach: async (state, actorId, targetId) => {
+    const [{ loadActiveTacticalMap }, { getDistance }] = await Promise.all([
+      import('./tactical-map-store.js'),
+      import('../../tactical/engine.js'),
+    ]);
+    const map = await loadActiveTacticalMap(state.encounter.sessionId);
+    const from = map?.entities.find((entity) => entity.id === actorId);
+    const to = map?.entities.find((entity) => entity.id === targetId);
+    return !from || !to || getDistance(from, to) <= 5;
+  },
+  recordDownedChoice: async (sessionId, fact) => {
+    const { recordDmTacticalFact } = await import('./tactical-action-service.js');
+    await recordDmTacticalFact(sessionId, fact);
   },
   isParleyHeld: async (sessionId, participantId, round) => {
     const { isParleyHeld } = await import('./parley-hold.js');
@@ -101,7 +128,8 @@ export const nonHostileDisposition = (participant: Record<string, unknown>): boo
   );
 };
 
-export const isProvoked = (participant: Record<string, unknown>): boolean => participant.provoked === true;
+export const isProvoked = (participant: Record<string, unknown>): boolean =>
+  participant.provoked === true;
 
 function storedMonsterWeapon(participant: Record<string, unknown>): WeaponRuleProfile | null {
   const profile = participant.monsterAttack;
@@ -130,6 +158,28 @@ function storedMonsterWeapon(participant: Record<string, unknown>): WeaponRulePr
   };
 }
 
+/**
+ * What a creature does about a player it has put on the floor. The rules dictate the
+ * consequences of each choice, not which one a creature makes: the campaign bible does
+ * (`stats.downedTargetBehavior` on the authored creature). With nothing authored, a hostile that
+ * is already fighting keeps fighting — which keeps death reachable without the engine inventing
+ * behaviour.
+ */
+export type DownedTargetBehavior = 'finish' | 'ignore' | 'drag' | 'flee';
+
+const DOWNED_BEHAVIORS = new Set<string>(['finish', 'ignore', 'drag', 'flee']);
+
+export function downedBehaviorOf(actor: unknown): DownedTargetBehavior {
+  const raw = isRecord(actor) ? actor.downedBehavior : undefined;
+  return typeof raw === 'string' && DOWNED_BEHAVIORS.has(raw)
+    ? (raw as DownedTargetBehavior)
+    : 'finish';
+}
+
+const isDownedPlayer = (participant: { participantType?: string; vitalState?: string }): boolean =>
+  isPlayer(participant) &&
+  (participant.vitalState === 'dying' || participant.vitalState === 'stabilized');
+
 function chooseTarget(state: CombatState, actorId: string) {
   return state.participants.find((participant) => {
     if (participant.id === actorId || !participant.isActive || !isPlayer(participant)) return false;
@@ -139,11 +189,23 @@ function chooseTarget(state: CombatState, actorId: string) {
   });
 }
 
+/** The first player on the floor, when there is nobody left standing to fight. */
+function downedTargetOf(state: CombatState, actorId: string) {
+  return state.participants.find(
+    (participant) =>
+      participant.id !== actorId &&
+      participant.isActive &&
+      isDownedPlayer(participant as unknown as { participantType?: string; vitalState?: string }),
+  );
+}
+
 function chooseAction(
   state: CombatState,
   actor: CombatState['currentParticipant'],
   weapon: WeaponRuleProfile | null,
   canAct: boolean,
+  /** The downed player this creature may strike, already cleared for behaviour and reach. */
+  downedTarget?: { id: string },
   parleyHeld = false,
 ): NpcTurnAction {
   if (!actor) throw new Error('Cannot choose an NPC action without a current participant');
@@ -187,7 +249,7 @@ function chooseAction(
     };
   }
 
-  const target = chooseTarget(state, actor.id);
+  const target = chooseTarget(state, actor.id) ?? downedTarget;
   const actionWeapon = storedMonsterWeapon(actorRecord) ?? weapon;
   if (!target || !actionWeapon) return endTurn();
 
@@ -252,7 +314,9 @@ function deathSaveLines(value: unknown, state: CombatState): string[] {
     const participant = state.participants.find((candidate) => candidate.id === save.participantId);
     if (!participant) return [];
     // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
-    return [`⚙️ Engine: ${describeDeathSave(participant.name, save as unknown as DeathSaveResult)}`];
+    return [
+      `⚙️ Engine: ${describeDeathSave(participant.name, save as unknown as DeathSaveResult)}`,
+    ];
   });
 }
 
@@ -305,6 +369,30 @@ export async function advanceNpcTurns(
     const canAct = standing && actor.actionUsed !== true;
     // Monsters at 0 HP are dead and stat-less NPCs that cannot act must not hold the board.
     const weapon = canAct ? await dependencies.getDefaultWeapon(actor) : null;
+    // Nobody standing to fight: a creature may still act on a player on the floor, if that is
+    // what it does (authored behaviour, default: keep attacking) and it can reach them.
+    let downedTarget: { id: string } | undefined;
+    if (canAct && !chooseTarget(state, actor.id)) {
+      const downed = downedTargetOf(state, actor.id);
+      if (downed) {
+        const behavior = downedBehaviorOf(actor);
+        const actorWeapon =
+          storedMonsterWeapon(actor as unknown as Record<string, unknown>) ?? weapon;
+        const inReach =
+          actorWeapon?.ranged === true ||
+          (await (dependencies.withinMeleeReach?.(state, actor.id, downed.id) ?? true));
+        if (behavior === 'finish' && inReach) {
+          downedTarget = downed;
+        } else {
+          await dependencies.recordDownedChoice?.(
+            state.encounter.sessionId,
+            behavior === 'finish'
+              ? `${actor.name} is not within reach of ${downed.name} and does not attack them this turn.`
+              : `${actor.name} chooses not to attack the fallen ${downed.name} (${behavior}): no blow is struck at them this turn.`,
+          );
+        }
+      }
+    }
     const parleyHeld =
       canAct &&
       (await dependencies.isParleyHeld?.(
@@ -315,7 +403,7 @@ export async function advanceNpcTurns(
     if (parleyHeld) {
       combatLogger.info({ msg: 'NPC_TURN_HELD_BY_PARLEY', encounterId, actorId: actor.id });
     }
-    const action = chooseAction(state, actor, weapon, canAct, parleyHeld);
+    const action = chooseAction(state, actor, weapon, canAct, downedTarget, parleyHeld);
     const resolved = await dependencies.executeIntent(
       encounterId,
       toIntent(action),
@@ -393,6 +481,7 @@ export async function advanceNpcTurns(
           id: finalState.currentParticipant.id,
           name: finalState.currentParticipant.name,
           participantType: finalState.currentParticipant.participantType,
+          vitalState: (finalState.currentParticipant as { vitalState?: string }).vitalState,
         }
       : null,
     round: finalState.encounter.currentRound,

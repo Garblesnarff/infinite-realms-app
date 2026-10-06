@@ -177,7 +177,10 @@ describe('advanceNpcTurns', () => {
       const { intents, dependencies } = harness([npc, player], 'npc1', (intent, live) => {
         live.currentParticipant = player;
         return intent.type === 'check'
-          ? { engineLine: 'Escape: 19 (nat 20-1) vs Athletics 4 — success, npc1 breaks free of The Seeker\'s grapple' }
+          ? {
+              engineLine:
+                "Escape: 19 (nat 20-1) vs Athletics 4 — success, npc1 breaks free of The Seeker's grapple",
+            }
           : { currentParticipant: player };
       });
 
@@ -325,6 +328,134 @@ describe('advanceNpcTurns', () => {
     expect(result.combatEnded).toBe(true);
     expect(result.iterationCount).toBe(1);
     expect(intents).toEqual([{ type: 'end_turn', actorId: 'npc1' }]);
+  });
+
+  describe('a downed player (#2518)', () => {
+    /** A player on the floor as `getCombatState` serves one: `vitalState` and the status row. */
+    const downed = (vitalState: 'dying' | 'stabilized') => ({
+      ...participant('p1', 'player', 0),
+      vitalState,
+      status: {
+        currentHp: 0,
+        isConscious: false,
+        deathSavesSuccesses: vitalState === 'stabilized' ? 3 : 0,
+        deathSavesFailures: 0,
+      },
+    });
+
+    it('keeps attacking a dying player when nothing says otherwise: death stays reachable', async () => {
+      const npc = participant('npc1', 'monster');
+      const { intents, dependencies } = harness([npc, downed('dying')], 'npc1');
+
+      const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(intents[0]).toMatchObject({ type: 'attack', actorId: 'npc1', targetId: 'p1' });
+      expect(result.results[0].action).toMatchObject({ action_type: 'attack', target_ids: ['p1'] });
+    });
+
+    it('strikes a stable player too: a hit on a stable creature makes it dying again', async () => {
+      const npc = participant('npc1', 'monster');
+      const { intents, dependencies } = harness([npc, downed('stabilized')], 'npc1');
+
+      await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(intents[0]).toMatchObject({ type: 'attack', targetId: 'p1' });
+    });
+
+    it('prefers a player still standing over one on the floor', async () => {
+      const npc = participant('npc1', 'monster');
+      const standingPlayer = participant('p2', 'player');
+      const { intents, dependencies } = harness([npc, downed('dying'), standingPlayer], 'npc1');
+
+      await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(intents[0]).toMatchObject({ type: 'attack', targetId: 'p2' });
+    });
+
+    it.each(['ignore', 'drag', 'flee'] as const)(
+      'a creature whose bible says it will %s the fallen does not strike them, and the DM is told',
+      async (behavior) => {
+        const npc = { ...participant('npc1', 'monster'), downedBehavior: behavior };
+        const { intents, dependencies } = harness([npc, downed('dying')], 'npc1');
+        const facts: string[] = [];
+
+        await advanceNpcTurns('encounter-1', 'user-1', {
+          ...dependencies,
+          recordDownedChoice: async (_sessionId, fact) => {
+            facts.push(fact);
+          },
+        });
+
+        // The harness leaves the turn with the creature, so the loop retries until its cap: what
+        // matters is that it never attacked, and that the first choice was told to the DM.
+        expect(intents.length).toBeGreaterThan(0);
+        expect(intents.every((intent) => intent.type === 'end_turn')).toBe(true);
+        expect(facts[0]).toBe(
+          `npc1 chooses not to attack the fallen The Seeker (${behavior}): no blow is struck at them this turn.`,
+        );
+      },
+    );
+
+    it('a melee creature out of reach of the body does not walk over to strike it', async () => {
+      const npc = participant('npc1', 'monster');
+      const { intents, dependencies } = harness([npc, downed('dying')], 'npc1');
+      const facts: string[] = [];
+
+      await advanceNpcTurns('encounter-1', 'user-1', {
+        ...dependencies,
+        withinMeleeReach: async () => false,
+        recordDownedChoice: async (_sessionId, fact) => {
+          facts.push(fact);
+        },
+      });
+
+      expect(intents.every((intent) => intent.type === 'end_turn')).toBe(true);
+      expect(facts[0]).toContain('is not within reach of The Seeker');
+    });
+
+    it('a ranged creature strikes the body from where it stands', async () => {
+      const npc = {
+        ...participant('npc1', 'monster'),
+        monsterAttack: {
+          source: 'authored',
+          attacks: [
+            {
+              name: 'Spit',
+              attackBonus: 4,
+              damageDice: '1d4',
+              damageBonus: 0,
+              damageType: 'acid',
+              normalRange: 30,
+              ranged: true,
+            },
+          ],
+        },
+      };
+      const { intents, dependencies } = harness([npc, downed('dying')], 'npc1');
+
+      await advanceNpcTurns('encounter-1', 'user-1', {
+        ...dependencies,
+        withinMeleeReach: async () => false,
+      });
+
+      expect(intents[0]).toMatchObject({ type: 'attack', targetId: 'p1' });
+    });
+
+    it('reports a dying player on the floor as the turn holder, so the client rolls the save', async () => {
+      const player = downed('dying');
+      const npc = participant('npc1', 'monster');
+      const { dependencies } = harness([npc, player], 'npc1', (intent, live) => {
+        if (intent.type === 'attack') {
+          live.currentParticipant = player;
+          return { hit: true, finalDamage: 1 };
+        }
+        return { turnAlreadyEnded: true, currentParticipant: player };
+      });
+
+      const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
+
+      expect(result.currentParticipant).toMatchObject({ id: 'p1', vitalState: 'dying' });
+    });
   });
 
   it('includes an engine death-save line when an NPC turn reaches a downed player', async () => {

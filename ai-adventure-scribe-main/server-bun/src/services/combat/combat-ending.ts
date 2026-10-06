@@ -34,7 +34,7 @@ import {
 } from './combat-end-guard.js';
 import { trackCombatEvent } from './combat-events.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { vitalStateOf, type VitalsInput } from './death-saves-service.js';
+import { vitalStateOf, type VitalsInput, type WakeOutcome } from './death-saves-service.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { destroyTacticalCombatMap } from './tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
@@ -69,6 +69,8 @@ export function describeCombatEnd(reason: CombatEndReason): string {
         'THE FIGHT IS OVER: no member of the party is still able to fight. Narrate the defeat ' +
         'and what becomes of them. Do not start a new encounter in the same breath.'
       );
+    case 'player_down_stable':
+      return describeStableWake([]);
     case 'dm_ended_scene':
       return (
         'THE FIGHT IS OVER: combat has ended by your own scene transition, with combatants ' +
@@ -101,9 +103,34 @@ export function describeCombatEnd(reason: CombatEndReason): string {
   }
 }
 
+/**
+ * The sentence for a hero who stabilised with nobody left to fight beside them: not a death, a
+ * story beat. `wake` carries the hours the engine rolled; without it (the bare reason) the DM is
+ * told only that the hero stabilised.
+ */
+export function describeStableWake(wake: WakeOutcome[]): string {
+  const woke = wake
+    .map(
+      (entry) =>
+        `${entry.name} stabilised and lay unconscious for ${entry.hours} ` +
+        `hour${entry.hours === 1 ? '' : 's'} (1d4 rolled by the engine); they now wake with 1 HP`,
+    )
+    .join('; ');
+  return (
+    `THE FIGHT IS OVER, and nobody died: ${woke || 'the fallen hero stabilised'}. This is a ` +
+    'story beat, not a death. Narrate what the creatures did while the hero lay stable — ' +
+    'they left, looted, or dragged the body away, as the fight and the campaign suggest — ' +
+    'and then the hero waking, with the elapsed time. If you say they were looted, name what ' +
+    'is missing; if you say they were dragged, say where they woke. Do not narrate a death, ' +
+    'and do not start a new encounter in the same breath.'
+  );
+}
+
 /** A defeat on either side is a resolution; everything else stopped a fight that was still live. */
 const isResolution = (reason: CombatEndReason): boolean =>
-  reason === 'last_hostile_defeated' || reason === 'party_defeated';
+  reason === 'last_hostile_defeated' ||
+  reason === 'party_defeated' ||
+  reason === 'player_down_stable';
 
 /**
  * Persist only facts the combat engine can prove. Ledger failures are deliberately non-fatal:
@@ -194,7 +221,16 @@ export async function concludeEncounter(
   sessionId: string,
   userId: string,
   requestedReason: CombatEndReason,
-  options: { exits?: CombatExitDeclaration[] } = {},
+  options: {
+    exits?: CombatExitDeclaration[];
+    wake?: WakeOutcome[];
+    /**
+     * Filled in with whether THIS call claimed the terminal transition. `true` is returned for a
+     * claim and for an encounter somebody else already concluded; only the first may go on to
+     * wake anyone (the claimer owns the ending's side effects).
+     */
+    claim?: { claimed: boolean };
+  } = {},
 ): Promise<boolean> {
   // The live-hostile guard (#2524) sits at this one choke point: every path that sets
   // `dm_ended_scene` funnels through here, so a DM scene end can never close a fight
@@ -284,6 +320,7 @@ export async function concludeEncounter(
     }
     return claimed;
   });
+  if (options.claim) options.claim.claimed = Boolean(concluded);
   if (!concluded) {
     logger.info({
       msg: 'COMBAT_END_ALREADY_CONCLUDED',
@@ -335,7 +372,14 @@ export async function concludeEncounter(
   // The encounter row is already claimed as completed, but the tactical board remains active
   // until after this write. This is the only ordering in which the reason the fight ended can
   // reach the DM at all.
-  await recordDmTacticalFact(sessionId, describeCombatEnd(reason));
+  await recordDmTacticalFact(
+    sessionId,
+    options.wake?.length
+      ? reason === 'player_down_stable'
+        ? describeStableWake(options.wake)
+        : `${describeCombatEnd(reason)} ${describeStableWake(options.wake)}`
+      : describeCombatEnd(reason),
+  );
   await destroyTacticalCombatMap(sessionId);
   trackCombatEvent('combat_ended', { encounterId, sessionId, reason });
   // An encounter stopped while it was still winnable is the thing run 18 could not see. It

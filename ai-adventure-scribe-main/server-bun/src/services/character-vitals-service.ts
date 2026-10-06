@@ -125,20 +125,23 @@ function toHpStatusInput(vitals: CharacterVitals): HPStatusInput {
  *   carries a number the DM already resolved — fall damage, a trap, a hazard — and
  *   silently halving it would re-create the defect this service exists to fix, one step
  *   further down.
- * - The death-save failures `HPMechanics` computes for damage taken at 0 HP are
- *   discarded. Death-save progression is PR3; PR1 only records that the character is
- *   down.
+ * - (Death-save failures at 0 HP ARE kept: SRD 5.1, damage at 0 HP is one failure, two for a
+ *   critical hit, and massive damage is death. The same rule as an attack in combat, #2518.)
  *
  * Damage type is not applied either: the route carries a bare amount, so there is
  * nothing to match against a resistance list.
  */
-export function computeVitalsAfterDamage(current: CharacterVitals, amount: number): VitalsWrite {
+export function computeVitalsAfterDamage(
+  current: CharacterVitals,
+  amount: number,
+  options: { critical?: boolean } = {},
+): VitalsWrite {
   const damageAmount = Math.max(0, Math.trunc(amount));
   const result = HPMechanics.calculateDamageResult(
     current.characterId,
     toHpStatusInput(current),
     {},
-    { damageAmount },
+    { damageAmount, isCriticalHit: options.critical === true },
   );
 
   let vitalState: VitalState = current.vitalState;
@@ -148,14 +151,39 @@ export function computeVitalsAfterDamage(current: CharacterVitals, amount: numbe
     vitalState = 'dying';
   }
 
+  // Instant death (SRD 5.1) holds for every source of damage: a hazard or a DM-authored blow
+  // that drops a character to 0 with the overflow at or above their maximum kills them here
+  // and now, with no dying phase.
+  if (result.massiveDamage && current.vitalState !== 'dead') {
+    return {
+      currentHitPoints: 0,
+      temporaryHitPoints: result.newTempHp,
+      isConscious: false,
+      vitalState: 'dead',
+      deathSavesSuccesses: 0,
+      deathSavesFailures: DEATH_SAVE_LIMIT,
+      diedAt: new Date(),
+    };
+  }
+
+  // The dead take no further failures; for anyone else the tallies are the damage rules' answer
+  // (a fresh drop starts over, damage at 0 HP adds a failure, a hit on a stable character makes
+  // them dying again with their successes cleared).
+  const failures =
+    current.vitalState === 'dead' ? current.deathSavesFailures : result.newDeathSavesFailures;
+  const successes =
+    current.vitalState === 'dead'
+      ? current.deathSavesSuccesses
+      : (result.newDeathSavesSuccesses ?? current.deathSavesSuccesses);
+  const diesNow = current.vitalState !== 'dead' && failures >= DEATH_SAVE_LIMIT;
   return {
     currentHitPoints: result.newCurrentHp,
     temporaryHitPoints: result.newTempHp,
     isConscious: result.isConscious,
-    vitalState,
-    // Unchanged on purpose — see the note above about PR3.
-    deathSavesSuccesses: current.deathSavesSuccesses,
-    deathSavesFailures: current.deathSavesFailures,
+    vitalState: diesNow ? 'dead' : vitalState,
+    deathSavesSuccesses: successes,
+    deathSavesFailures: failures,
+    ...(diesNow ? { diedAt: new Date() } : {}),
   };
 }
 
@@ -363,6 +391,7 @@ export class CharacterVitalsService {
     characterId: string,
     userId: string,
     amount: number,
+    options: { critical?: boolean } = {},
   ): Promise<CharacterVitals> {
     return db.transaction(async (tx) => {
       const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
@@ -372,7 +401,7 @@ export class CharacterVitalsService {
         tx,
         characterId,
         current.maxHitPoints,
-        computeVitalsAfterDamage(current, amount),
+        computeVitalsAfterDamage(current, amount, options),
       );
     });
   }
@@ -381,11 +410,7 @@ export class CharacterVitalsService {
    * Apply healing. Healing that leaves the character above 0 HP revives them from dying
    * to standing and clears their death saves.
    */
-  static async heal(
-    characterId: string,
-    userId: string,
-    amount: number,
-  ): Promise<CharacterVitals> {
+  static async heal(characterId: string, userId: string, amount: number): Promise<CharacterVitals> {
     return db.transaction(async (tx) => {
       const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
       if (!current) throw notFound();

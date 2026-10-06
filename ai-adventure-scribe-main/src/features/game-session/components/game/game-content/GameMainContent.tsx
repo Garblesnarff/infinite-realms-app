@@ -11,6 +11,7 @@ import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
+import { DyingComposerSlot } from '../dying/DyingComposerSlot';
 import { MessageHandler } from '../message/MessageHandler';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 import { CombatTurnBarLive } from '../overhaul/CombatTurnBar';
@@ -58,8 +59,7 @@ function FallenEndStateWithCharacter({
 }) {
   const { state: characterState } = useCharacter();
   const { state: campaignState } = useCampaign();
-  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } =
-    useStarterCampaigns();
+  const { campaigns: starterCampaigns, isLoading: starterCampaignsLoading } = useStarterCampaigns();
   const starterSlug = sessionData.starter_campaign_id
     ? (starterCampaigns.find((c) => c.id === sessionData.starter_campaign_id)?.slug ?? null)
     : null;
@@ -533,25 +533,31 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       className="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
                       style={{ zIndex: Z_INDEX.STICKY }}
                     >
-                      <ChatInput
+                      <DyingComposerSlot
                         onSendMessage={handleSendMessage}
-                        isReconnecting={isReconnecting}
-                        isStillThinking={isStillThinking}
-                        sendError={sendError ?? undefined}
-                        onRetry={onRetry}
-                        disabledReason={
-                          rollBlocksInput && !isProcessing
-                            ? 'Roll the dice above to continue'
-                            : undefined
-                        }
-                        isDisabled={
-                          isProcessing ||
-                          rollBlocksInput ||
-                          combatTurnUiState.preflight === 'unknown' ||
-                          combatTurnUiState.preflight === 'failed' ||
-                          combatTurnUiState.preflight === 'running'
-                        }
-                      />
+                        isProcessing={isProcessing}
+                        promptOpen={rollBlocksInput}
+                      >
+                        <ChatInput
+                          onSendMessage={handleSendMessage}
+                          isReconnecting={isReconnecting}
+                          isStillThinking={isStillThinking}
+                          sendError={sendError ?? undefined}
+                          onRetry={onRetry}
+                          disabledReason={
+                            rollBlocksInput && !isProcessing
+                              ? 'Roll the dice above to continue'
+                              : undefined
+                          }
+                          isDisabled={
+                            isProcessing ||
+                            rollBlocksInput ||
+                            combatTurnUiState.preflight === 'unknown' ||
+                            combatTurnUiState.preflight === 'failed' ||
+                            combatTurnUiState.preflight === 'running'
+                          }
+                        />
+                      </DyingComposerSlot>
                     </div>
                   </div>
                 </RollTraySlotProvider>

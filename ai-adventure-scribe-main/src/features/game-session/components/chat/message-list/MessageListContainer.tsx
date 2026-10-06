@@ -17,6 +17,7 @@ import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirma
 import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConfirmation';
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { useCombat } from '@/contexts/CombatContext';
+import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { RollTray } from '@/features/game-session/components/game/game-content/roll-tray-slot';
 import { SpellTargetSaveCard } from '@/features/game-session/components/game/SpellTargetSaveCard';
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
@@ -265,11 +266,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
             story and the chat box (#2252) rather than floating inside the scroll area. */}
         {currentRoll && rollRequest && (
           <RollTray>
-            {(currentRoll.combatInitiativeRoll ||
-              currentRoll.combatAttackRoll ||
-              currentRoll.combatCheckRoll) && (
-              <RollAutoCountdown rollId={currentRoll.id} />
-            )}
+            {isEngineTaggedRoll(currentRoll) && <RollAutoCountdown rollId={currentRoll.id} />}
             <DiceRollRequest
               key={currentRoll.id}
               request={rollRequest}
@@ -284,9 +281,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                 // engine would roll its own d20 and the player's number would be dropped, so the
                 // player sees one number and the narration uses another (#2200). A narrative
                 // roll has no timer, but the next turn must still not set it aside mid-throw.
-                currentRoll.combatInitiativeRoll ||
-                currentRoll.combatAttackRoll ||
-                currentRoll.combatCheckRoll
+                isEngineTaggedRoll(currentRoll)
                   ? () => markPlayerRollCommitted(currentRoll.id)
                   : () => markNarrativeRollCommitted(currentRoll.id)
               }

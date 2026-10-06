@@ -19,10 +19,7 @@ import {
   resolveCombatantStats,
 } from './combatant-stat-resolution.js';
 import { appendActiveCompanionInputs } from './companion-seating.js';
-import {
-  expandParticipantInputs,
-  normalizeEncounterDifficulty,
-} from './encounter-sizing.js';
+import { expandParticipantInputs, normalizeEncounterDifficulty } from './encounter-sizing.js';
 import { InitiativeMechanics, rollD20 } from './initiative-mechanics.js';
 import { normalizeMonsterKey } from './monster-key.js';
 import {
@@ -34,6 +31,7 @@ import { seatParticipantArmorClass } from './participant-armor-class.js';
 import { resolveParticipantType } from './participant-type.js';
 import { scaleMonsterForParty } from './party-scaling.js';
 import { GENERIC_NPC_STATS } from './srd-monster-resolution.js';
+import { vitalStateOf, type VitalsInput } from './vital-state.js';
 import { db } from '../../../../db/client';
 import {
   combatEncounters,
@@ -73,6 +71,13 @@ function authoredDisposition(stats: unknown): string | undefined {
   if (!stats || typeof stats !== 'object' || Array.isArray(stats)) return undefined;
   const disposition = (stats as Record<string, unknown>).disposition;
   return typeof disposition === 'string' ? disposition : undefined;
+}
+
+/** What a creature does about a downed player, as its authored stats (the campaign bible) say. */
+function authoredDownedBehavior(stats: unknown): string | undefined {
+  if (!stats || typeof stats !== 'object' || Array.isArray(stats)) return undefined;
+  const behavior = (stats as Record<string, unknown>).downedTargetBehavior;
+  return typeof behavior === 'string' ? behavior : undefined;
 }
 
 /**
@@ -843,8 +848,17 @@ export class CombatEncounterService {
     const { participants: participantRows, ...encounter } = encounterWithParticipants;
     const participants = participantRows.map(({ npc, ...participant }) => {
       const disposition = authoredDisposition(npc?.stats);
+      const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
-      return { ...participant, ...(disposition ? { disposition } : {}), ...authored };
+      return {
+        ...participant,
+        ...(disposition ? { disposition } : {}),
+        ...authored,
+        ...(downedBehavior ? { downedBehavior } : {}),
+        // The persisted state machine, stamped on the wire so the client (tracker, dying panel,
+        // roll prompt) reads it instead of re-deriving it from raw columns (#2518).
+        vitalState: vitalStateOf(participant as unknown as VitalsInput),
+      };
     });
 
     // Filter active participants and determine current turn in-memory

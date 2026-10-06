@@ -12,6 +12,7 @@
  */
 import {
   formatCombatEngineOutcome,
+  formatDeathSaveParts,
   type CombatEngineResult,
   type CombatTranscriptAction,
 } from './combat-outcome-transcript';
@@ -104,6 +105,16 @@ export function dmFacingResolvedAction(
   const action = entry.action as CombatTranscriptAction | undefined;
   if (!action || !isRecord(entry.engineResult)) return entry;
   const engineResult = entry.engineResult as CombatEngineResult;
+  // The dying player's turn: the fact is the death save sentence, not a JSON tally.
+  if (action.action_type === 'death_save') {
+    const saves = formatDeathSaveParts(engineResult, roster);
+    return saves.length
+      ? {
+          ...entry,
+          engineFact: saves.map((part) => part.line.replace(/⚙️ Engine: /g, '')).join(' '),
+        }
+      : entry;
+  }
   const results = Array.isArray(engineResult.results) ? engineResult.results : [engineResult];
   const isSaveSpell =
     action.action_type === 'cast_spell' && results.length > 0 && results.every(isSaveOutcome);

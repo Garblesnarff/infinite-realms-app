@@ -79,6 +79,18 @@ interface WriteThroughRequest {
   userId?: string;
   status: ParticipantStatusPatch;
   character: CombatResolvedVitals;
+  /**
+   * Compare-and-set guard: the write lands only while the row still holds these tallies at 0 HP
+   * and unconscious. A death save is one roll per turn, so two saves racing on the same tallies
+   * must resolve to one accepted write and one conflict (#2518).
+   */
+  expectedDying?: { successes: number; failures: number };
+  /**
+   * Spend the participant's Action in the same transaction as the write. A death save is the
+   * dying player's whole turn, and this is the per-turn marker: a retry of a save that was
+   * already recorded finds the Action spent and rolls nothing (#2518).
+   */
+  spendAction?: boolean;
 }
 
 /**
@@ -149,6 +161,7 @@ export class CombatHPService {
     encounterId: string,
     patch: ParticipantStatusPatch,
     userId?: string,
+    expectedDying?: { successes: number; failures: number },
   ): Promise<void> {
     const updated = await writer
       .update(combatParticipantStatus)
@@ -157,10 +170,25 @@ export class CombatHPService {
         and(
           eq(combatParticipantStatus.participantId, participantId),
           userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+          expectedDying
+            ? and(
+                eq(combatParticipantStatus.currentHp, 0),
+                eq(combatParticipantStatus.isConscious, false),
+                eq(combatParticipantStatus.deathSavesSuccesses, expectedDying.successes),
+                eq(combatParticipantStatus.deathSavesFailures, expectedDying.failures),
+              )
+            : sql`true`,
         ),
       )
       .returning();
 
+    if (expectedDying && (!updated || updated.length === 0)) {
+      // Not NotFound: the participant exists, another save got there first.
+      throw new BusinessLogicError('A death saving throw was already recorded for this turn', {
+        participantId,
+        reason: 'death_save_conflict',
+      });
+    }
     if (userId && (!updated || updated.length === 0)) {
       throw new NotFoundError('Participant', participantId);
     }
@@ -175,10 +203,57 @@ export class CombatHPService {
    * goblin's hit points have never outlived the encounter.
    */
   private static async writeThrough(request: WriteThroughRequest): Promise<void> {
-    const { participantId, encounterId, characterId, userId, status, character } = request;
+    const {
+      participantId,
+      encounterId,
+      characterId,
+      userId,
+      status,
+      character,
+      expectedDying,
+      spendAction,
+    } = request;
+
+    const spend = async (writer: StatusWriter): Promise<void> => {
+      if (!spendAction) return;
+      const spent = await writer
+        .update(combatParticipants)
+        .set({ actionUsed: true, updatedAt: new Date() })
+        .where(
+          and(eq(combatParticipants.id, participantId), eq(combatParticipants.actionUsed, false)),
+        )
+        .returning({ id: combatParticipants.id });
+      if (spent.length === 0) {
+        throw new BusinessLogicError('A death saving throw was already recorded for this turn', {
+          participantId,
+          reason: 'death_save_conflict',
+        });
+      }
+    };
 
     if (!characterId) {
-      await this.updateParticipantStatus(db, participantId, encounterId, status, userId);
+      if (!spendAction) {
+        await this.updateParticipantStatus(
+          db,
+          participantId,
+          encounterId,
+          status,
+          userId,
+          expectedDying,
+        );
+        return;
+      }
+      await db.transaction(async (tx) => {
+        await this.updateParticipantStatus(
+          tx,
+          participantId,
+          encounterId,
+          status,
+          userId,
+          expectedDying,
+        );
+        await spend(tx);
+      });
       return;
     }
 
@@ -197,7 +272,15 @@ export class CombatHPService {
         });
       }
 
-      await this.updateParticipantStatus(tx, participantId, encounterId, status, userId);
+      await this.updateParticipantStatus(
+        tx,
+        participantId,
+        encounterId,
+        status,
+        userId,
+        expectedDying,
+      );
+      await spend(tx);
     });
   }
 
@@ -296,15 +379,16 @@ export class CombatHPService {
         currentHp: result.newCurrentHp,
         tempHp: result.newTempHp,
         isConscious: result.isConscious,
+        deathSavesSuccesses: result.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
         deathSavesFailures: result.newDeathSavesFailures,
       },
       character: {
         currentHitPoints: result.newCurrentHp,
         temporaryHitPoints: result.newTempHp,
         isConscious: result.isConscious,
-        // Damage never adds successes; carrying the participant's count keeps the two rows
-        // saying the same thing about a character already rolling saves.
-        deathSavesSuccesses: status.deathSavesSuccesses,
+        // Damage never adds successes. It only clears them: a fresh drop starts a new dying
+        // sequence and a hit on a stable creature makes it dying again.
+        deathSavesSuccesses: result.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
         deathSavesFailures: result.newDeathSavesFailures,
       },
     });
@@ -471,8 +555,21 @@ export class CombatHPService {
     participantId: string,
     encounterId: string,
     userId?: string,
+    providedRoll?: number,
+    /**
+     * The tallies the caller read when it decided this save was owed. The write lands only while
+     * the row still holds them, so a read-then-roll that raced another save is refused.
+     */
+    expectedTallies?: { successes: number; failures: number },
   ): Promise<DeathSaveResult> {
-    const roll = Math.floor(Math.random() * 20) + 1;
+    // The player's own die when they rolled one; the engine rolls only when nobody did.
+    const roll =
+      providedRoll !== undefined &&
+      Number.isInteger(providedRoll) &&
+      providedRoll >= 1 &&
+      providedRoll <= 20
+        ? providedRoll
+        : Math.floor(Math.random() * 20) + 1;
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
     const { participant, status } = await getParticipantWithFullContext(
@@ -483,6 +580,12 @@ export class CombatHPService {
 
     if (status.isConscious) {
       throw new BusinessLogicError('Cannot roll death save for conscious participant', {
+        participantId,
+      });
+    }
+    // A stable creature rolls no more saves and a dead one rolls none at all (SRD 5.1).
+    if (status.deathSavesFailures >= 3 || status.deathSavesSuccesses >= 3) {
+      throw new BusinessLogicError('Cannot roll death save for a stable or dead participant', {
         participantId,
       });
     }
@@ -510,6 +613,11 @@ export class CombatHPService {
         deathSavesSuccesses: result.successes,
         deathSavesFailures: result.failures,
       },
+      expectedDying: expectedTallies ?? {
+        successes: status.deathSavesSuccesses,
+        failures: status.deathSavesFailures,
+      },
+      spendAction: true,
     });
 
     return result;
@@ -607,7 +715,10 @@ export class CombatHPService {
         characterId: participant.characterId ?? null,
         userId,
         status: {
-          deathSavesSuccesses: 0,
+          // A full success tally is how a stable creature reads at 0 HP (`vitalStateOf`):
+          // cleared counters are indistinguishable from "dying, has not rolled yet", and a
+          // stabilised creature is precisely the one who stops rolling.
+          deathSavesSuccesses: 3,
           deathSavesFailures: 0,
           // Note: isConscious stays false, currentHp stays 0
           // The creature is stable but still unconscious
@@ -615,10 +726,8 @@ export class CombatHPService {
         character: {
           currentHitPoints: status.currentHp,
           isConscious: status.isConscious,
-          deathSavesSuccesses: 0,
+          deathSavesSuccesses: 3,
           deathSavesFailures: 0,
-          // Named outright: cleared counters at 0 HP are indistinguishable from "dying, has
-          // not rolled yet", and a stabilised character is precisely the one who stops rolling.
           vitalState: 'stabilized',
         },
       });

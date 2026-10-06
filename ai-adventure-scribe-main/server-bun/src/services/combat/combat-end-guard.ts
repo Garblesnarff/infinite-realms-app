@@ -156,7 +156,12 @@ export function describeSceneEndRefusal(unaccounted: readonly SceneEndParticipan
 
 /** The engine notice for an accepted non-lethal exit. */
 export function describeCombatExit(name: string, exit: CombatExitKind): string {
-  const verb = exit === 'fled' ? 'has fled the fight' : exit === 'surrendered' ? 'has surrendered' : 'has withdrawn from the fight';
+  const verb =
+    exit === 'fled'
+      ? 'has fled the fight'
+      : exit === 'surrendered'
+        ? 'has surrendered'
+        : 'has withdrawn from the fight';
   return `${name} ${verb}. It is NOT dead.`;
 }
 
@@ -189,7 +194,8 @@ const ORDINAL_WORDS = [
 ];
 
 /** A kill sentence that opens by pointing back at the last-named creature (#2563). */
-const ANAPHORIC_OPENER = /^\s*(?:the\s+(?:creature|monster|beast|thing|fiend|horror|entity)\b|it\b)/i;
+const ANAPHORIC_OPENER =
+  /^\s*(?:the\s+(?:creature|monster|beast|thing|fiend|horror|entity)\b|it\b)/i;
 
 /**
  * Whether a sentence names this participant: the whole name or its slug, or a single

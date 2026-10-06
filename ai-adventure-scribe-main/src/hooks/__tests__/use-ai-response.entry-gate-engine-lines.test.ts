@@ -237,7 +237,12 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
     // The dice popup: each prompt is answered with the die the player "rolled" for it.
     setPlayerRollHost({
       present: (spec, settle) => {
-        const kind = 'initiativeModifier' in spec ? 'initiative' : `attack ${spec.weaponName}`;
+        const kind =
+          'initiativeModifier' in spec
+            ? 'initiative'
+            : 'deathSave' in spec
+              ? 'death save'
+              : `attack ${spec.weaponName}`;
         order.push(`prompt: ${kind}`);
         queueMicrotask(() => settle({ d20: 'initiativeModifier' in spec ? 2 : 7 }));
         return { rollId: `roll-${kind}`, dismiss: () => {} };

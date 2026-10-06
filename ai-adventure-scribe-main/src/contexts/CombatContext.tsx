@@ -45,6 +45,13 @@ export const useCombat = (): CombatContextValue => {
   return context;
 };
 
+/**
+ * The combat state when a provider is mounted, `undefined` otherwise. For the one surface that
+ * must render with or without a fight in view (the composer slot, #2518): a missing provider
+ * means no combat, not an error.
+ */
+export const useOptionalCombat = (): CombatContextValue | undefined => useContext(CombatContext);
+
 // ===========================
 // Provider Component
 // ===========================

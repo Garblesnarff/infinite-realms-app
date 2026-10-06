@@ -14,6 +14,11 @@ const player = {
   armorClass: 18,
   characterId: 'character-1',
   encounterId: 'encounter-1',
+  // `combat_participants.max_hp` is not null and every hydrated participant carries its status
+  // row (`getCombatState` joins it); the dying-player branch of `getLegalCombatActions` reads
+  // both, so the fixture carries them as the producer does.
+  maxHp: 20,
+  status: { currentHp: 20, isConscious: true, deathSavesSuccesses: 0, deathSavesFailures: 0 },
   turnOrder: 0,
 };
 const monster = {

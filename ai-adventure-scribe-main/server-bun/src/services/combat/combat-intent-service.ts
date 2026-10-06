@@ -17,9 +17,13 @@ import {
 } from './data-access.js';
 import {
   describeGoingDown,
+  rollOwedDeathSave,
   settleDownedTurns,
   vitalStateOf,
+  applyStableWake,
+  planStableWake,
   type VitalsInput,
+  type WakeOutcome,
 } from './death-saves-service.js';
 import { grantTacticalDash, resetTacticalMovementForTurn } from './tactical-combat-lifecycle.js';
 import { isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
@@ -45,7 +49,11 @@ import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entit
 import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { describeDamageAtZeroHp } from '../../../../shared/death-save-lines';
+import {
+  describeDamageAtZeroHp,
+  describeInstantDeath,
+  describeStrikeOnDowned,
+} from '../../../../shared/death-save-lines';
 import {
   facingName,
   rosterEntryForParticipant,
@@ -59,7 +67,7 @@ import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.j
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { TacticalMap } from '../../tactical/types.js';
-import type { AttackRollInput, SpellAttackInput } from '../../types/combat.js';
+import type { AttackRollInput, CombatEndReason, SpellAttackInput } from '../../types/combat.js';
 
 /**
  * Keep the attack resolver out of the intent gateway's eager module graph. Both the gateway and
@@ -112,7 +120,12 @@ export type CombatIntent =
       expectedVersion: number;
       d20?: number;
     }
-  | { type: 'end_turn'; actorId: string };
+  | { type: 'end_turn'; actorId: string }
+  /**
+   * The death saving throw a dying player owes at the start of their turn. `d20` is the die the
+   * player rolled in the roll prompt; absent, the engine rolls it (the prompt's auto-roll).
+   */
+  | { type: 'death_save'; actorId: string; d20?: number };
 
 export type CombatActionSource = 'player' | 'dm';
 
@@ -142,6 +155,7 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'dash',
   'dodge',
   'disengage',
+  'death_save',
   'flee',
   'yield',
 ]);
@@ -260,11 +274,14 @@ function resolveExpectedVersion(
 const isHostile = (participantType: string): boolean => participantType !== 'player';
 
 /** Preserve the engine result while telling the client that this action crossed combat's end. */
-function markCombatEnded(result: unknown): unknown {
+function markCombatEnded(result: unknown, ending?: CombatEnding | null): unknown {
+  const facts = ending
+    ? { endedReason: ending.reason, ...(ending.wake.length ? { wake: ending.wake } : {}) }
+    : {};
   if (result && typeof result === 'object' && !Array.isArray(result)) {
-    return { ...(result as Record<string, unknown>), combatEnded: true };
+    return { ...(result as Record<string, unknown>), combatEnded: true, ...facts };
   }
-  return { result, combatEnded: true };
+  return { result, combatEnded: true, ...facts };
 }
 
 type AttackVisibilityContext = {
@@ -285,6 +302,7 @@ type SpellResolutionVisibility = Parameters<typeof describeResolvedSpell>[3] & {
   targetIsDead?: boolean;
   deathSaveFailuresAdded?: number;
   deathSavesFailures?: number;
+  instantDeath?: boolean;
 };
 
 /** Keep the engine's descriptive attack facts attached to the mutation response. */
@@ -308,7 +326,13 @@ function exposeAttackVisibility(result: unknown, context: AttackVisibilityContex
   };
 }
 
-async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
+/** What an ending left behind, for the client: why it ended and who woke after how long. */
+type CombatEnding = { reason: CombatEndReason; wake: WakeOutcome[] };
+
+async function endCombatIfResolved(
+  encounterId: string,
+  userId: string,
+): Promise<CombatEnding | null> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   // A player who fled or yielded has left the fight, not lost it (#2580). With nobody of the
   // party in the order, the check below would read a defeat on the next end_turn, damage or NPC
@@ -324,7 +348,7 @@ async function endCombatIfResolved(encounterId: string, userId: string): Promise
       state.participants as unknown as Parameters<typeof partyHasLeftTheFight>[0],
     )
   )
-    return false;
+    return null;
   const active = state.participants.filter((participant) => participant.isActive);
   const vitals = active.map((participant) => ({
     participant,
@@ -349,12 +373,37 @@ async function endCombatIfResolved(encounterId: string, userId: string): Promise
     ({ participant, state: vital }) =>
       isHostile(participant.participantType as string) && vital === 'standing',
   );
-  if (partyInPlay && hostilesStanding) return false;
+  if (partyInPlay && hostilesStanding) return null;
   // Which side ran out is the difference between a victory and a TPK, and the old fixed
-  // string reported a victory for both.
-  const reason = hostilesStanding ? 'party_defeated' : 'last_hostile_defeated';
-  await concludeEncounter(encounterId, state.encounter.sessionId, userId, reason);
-  return true;
+  // string reported a victory for both. A party that ran out of fight but still has someone
+  // stable is not a TPK: that player wakes (SRD 5.1) and the run goes on.
+  const someoneStable = vitals.some(
+    ({ participant, state: vital }) =>
+      !isHostile(participant.participantType as string) && vital === 'stabilized',
+  );
+  // A dying player holds the fight open even with no hostile left: their turn comes round, they
+  // roll their save, and the encounter ends when they are stable, back on their feet, or dead.
+  const partyStanding = vitals.some(
+    ({ participant, state: vital }) =>
+      !isHostile(participant.participantType as string) && vital === 'standing',
+  );
+  if (!hostilesStanding && partyInPlay && !partyStanding) return null;
+  const reason: CombatEndReason = !hostilesStanding
+    ? 'last_hostile_defeated'
+    : someoneStable
+      ? 'player_down_stable'
+      : 'party_defeated';
+  // Roll who wakes first, claim the encounter, and only then wake them: a lost claim or a failed
+  // conclusion must not leave a player woken (1d4 hours spent) in a fight that is still live.
+  const plan = someoneStable ? await planStableWake(encounterId, userId) : [];
+  const claim = { claimed: false };
+  await concludeEncounter(encounterId, state.encounter.sessionId, userId, reason, {
+    wake: plan,
+    claim,
+  });
+  // Only the call that claimed the ending wakes anyone: a lost or refused claim wakes nobody.
+  const wake = claim.claimed && plan.length ? await applyStableWake(encounterId, userId, plan) : [];
+  return { reason, wake };
 }
 
 function rosterFrom(
@@ -428,13 +477,13 @@ type TurnResourceView = { id: string; actionUsed?: boolean | null } & VitalsInpu
 
 /**
  * One turn boundary, done properly: advance the order, refund the new actor's movement, and
- * roll death saving throws for anyone the order reaches on the floor.
+ * pass over anyone the order reaches who cannot act. A dying player stops the order — their
+ * turn is a death save, and `awaitingDeathSave` says so.
  *
  * Deliberately the same three calls the `end_turn` branch of the dispatch makes, in the same
  * order. An implicit end of turn that only nudged `current_turn_order` would be a different
- * kind of turn boundary from an explicit one — a dying character passed this way would never
- * roll the save the rules owe them, and the movement pool of whoever came next would still
- * hold last turn's remainder.
+ * kind of turn boundary from an explicit one, and the movement pool of whoever came next would
+ * still hold last turn's remainder.
  */
 async function advanceOneTurn(encounterId: string, sessionId: string, userId: string) {
   const turn = await CombatInitiativeService.advanceTurn(encounterId, userId);
@@ -482,9 +531,9 @@ async function advanceOneTurn(encounterId: string, sessionId: string, userId: st
  * position, every time. An action addressed further down the order is refused, and the
  * participant that blocked it is named in the refusal.
  *
- * A participant that cannot act at all (unconscious, stabilised, dead) is not passed by this
- * function either — `settleDownedTurns`, inside the one advance, rolls the save the rules owe
- * them and moves the order on itself.
+ * A participant that cannot act at all (stabilised, dead) is not passed by this function either —
+ * `settleDownedTurns`, inside the one advance, moves the order on itself. A DYING player is not
+ * passed at all: their turn is a death save only they roll (`vitalOfCurrent` below).
  */
 async function resolveActorTurn(
   encounterId: string,
@@ -497,7 +546,6 @@ async function resolveActorTurn(
 ): Promise<{
   actor: NonNullable<CombatState['currentParticipant']>;
   encounter: CombatState['encounter'];
-  deathSaves: unknown[];
 }> {
   const current = initial.currentParticipant as TurnResourceView | null;
   const known = initial.participants.some((participant) => participant.id === actorId);
@@ -509,17 +557,24 @@ async function resolveActorTurn(
   const absorbable =
     source === 'dm' && known && intentType !== 'end_turn' && !!current && current.id !== actorId;
   // The refusal that must survive this wave, unchanged: a creature being made to act twice.
-  if (!absorbable || (vitalStateOf(current!) === 'standing' && !current!.actionUsed)) {
-    return { ...assertActorTurn(initial, actorId, index), deathSaves: [] };
+  // A dying player's turn is a death saving throw only they can roll: it is never absorbed
+  // as a "missing end_turn", or the save the rules owe them would be skipped without a die.
+  const vitalOfCurrent = current ? vitalStateOf(current) : null;
+  if (
+    !absorbable ||
+    vitalOfCurrent === 'dying' ||
+    (vitalOfCurrent === 'standing' && !current!.actionUsed)
+  ) {
+    return assertActorTurn(initial, actorId, index);
   }
 
-  const settled = await advanceOneTurn(encounterId, initial.encounter.sessionId, userId);
+  await advanceOneTurn(encounterId, initial.encounter.sessionId, userId);
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   if (state.currentParticipant?.id !== actorId) {
     // One position was not enough to reach the addressed creature. The advance itself was
     // legitimate — the previous participant really had finished — so the board is left where
     // it now honestly stands rather than rolled back to a position that was already wrong.
-    return { ...assertActorTurn(state, actorId, index), deathSaves: settled.deathSaves };
+    return assertActorTurn(state, actorId, index);
   }
   logger.warn({
     msg: 'DM_IMPLICIT_TURN_ADVANCE',
@@ -536,7 +591,6 @@ async function resolveActorTurn(
   return {
     actor: state.currentParticipant,
     encounter: state.encounter,
-    deathSaves: settled.deathSaves,
   };
 }
 
@@ -970,11 +1024,7 @@ export async function executeCombatIntent(
       });
       return stale;
     }
-    const {
-      actor,
-      encounter,
-      deathSaves: boundaryDeathSaves,
-    } = await resolveActorTurn(
+    const { actor, encounter } = await resolveActorTurn(
       encounterId,
       state,
       resolved.actorId,
@@ -983,6 +1033,24 @@ export async function executeCombatIntent(
       resolved.type,
       source,
     );
+    // An unconscious creature cannot act (SRD 5.1): the only thing a downed player's turn
+    // holds is the death saving throw. Typed actions, spells and moves are refused here, at the
+    // one gate every producer passes, so no client, DM or repair path can make a body act.
+    if (
+      actor.participantType === 'player' &&
+      resolved.type !== 'death_save' &&
+      resolved.type !== 'end_turn' &&
+      // flee / yield carry their own, more specific refusal below (#2580).
+      resolved.type !== 'flee' &&
+      resolved.type !== 'yield' &&
+      vitalStateOf(actor as unknown as VitalsInput) !== 'standing'
+    ) {
+      throw new BusinessLogicError('A downed character cannot act', {
+        reason: 'actor_unconscious',
+        actorId: resolved.actorId,
+        intentType: resolved.type,
+      });
+    }
     const intent = resolveExpectedVersion(resolved, source, encounter.version);
     let result: unknown;
     if (intent.type === 'move') {
@@ -1135,12 +1203,24 @@ export async function executeCombatIntent(
           targetIsDead?: boolean;
           deathSaveFailuresAdded?: number;
           deathSavesFailures?: number;
+          instantDeath?: boolean;
+          autoCritOnDowned?: boolean;
         };
         const targetIsPlayer =
           state.participants.find((participant) => participant.id === intent.targetId)
             ?.participantType === 'player';
-        if (targetIsPlayer && outcome.targetNewHp === 0 && outcome.targetIsDead !== true) {
+        if (
+          targetIsPlayer &&
+          outcome.targetNewHp === 0 &&
+          outcome.targetIsDead !== true &&
+          (outcome.deathSaveFailuresAdded ?? 0) === 0
+        ) {
           await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+        }
+        // Instant death is the biggest beat in a run: its own fact, so the killing round is
+        // narrated as a death rather than as a hit.
+        if (targetIsPlayer && outcome.instantDeath === true) {
+          await recordDmTacticalFact(encounter.sessionId, describeInstantDeath(targetLabel));
         }
         // Damage at 0 HP adds death-save failures: its own engine fact, in the same
         // sentence the player reads, so the DM narrates the failure it caused (#2457).
@@ -1148,11 +1228,12 @@ export async function executeCombatIntent(
         if (deathSaveFailuresAdded > 0) {
           await recordDmTacticalFact(
             encounter.sessionId,
-            describeDamageAtZeroHp(
-              targetLabel,
-              deathSaveFailuresAdded,
-              outcome.deathSavesFailures ?? 0,
-            ),
+            describeStrikeOnDowned(actorLabel, targetLabel, {
+              failuresAdded: deathSaveFailuresAdded,
+              failures: outcome.deathSavesFailures ?? 0,
+              automaticCritical: outcome.autoCritOnDowned === true,
+              critical: resolvedAttack.isCritical === true,
+            }),
           );
         }
       }
@@ -1228,8 +1309,16 @@ export async function executeCombatIntent(
         const targetIsPlayer =
           state.participants.find((participant) => participant.id === targetId)?.participantType ===
           'player';
-        if (targetIsPlayer && outcome.targetNewHp === 0 && outcome.targetIsDead !== true) {
+        if (
+          targetIsPlayer &&
+          outcome.targetNewHp === 0 &&
+          outcome.targetIsDead !== true &&
+          (outcome.deathSaveFailuresAdded ?? 0) === 0
+        ) {
           await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+        }
+        if (targetIsPlayer && outcome.instantDeath === true) {
+          await recordDmTacticalFact(encounter.sessionId, describeInstantDeath(targetLabel));
         }
         // Damage at 0 HP adds death-save failures: its own engine fact, in the same
         // sentence the player reads, so the DM narrates the failure it caused (#2457).
@@ -1307,15 +1396,37 @@ export async function executeCombatIntent(
         expectedVersion: intent.expectedVersion,
         userId,
       });
-    } else {
-      // A downed character's turn is a death saving throw, not an action. Resolving it here,
-      // as the order reaches them, is what makes 0 HP a state a fight passes through rather
-      // than the state a fight ends in. `advanceOneTurn` is the same boundary an implicit
-      // advance performs, so the two kinds of turn end cannot drift apart.
+    } else if (intent.type === 'death_save') {
+      // The dying player's whole turn: one save, rolled by the player (or auto-rolled by the
+      // prompt's timer), then the turn ends. It runs before the board moves so the result and
+      // the next holder of the turn reach the client together.
+      const save = await rollOwedDeathSave(
+        encounterId,
+        encounter.sessionId,
+        userId,
+        intent.actorId,
+        intent.d20,
+      );
       const settled = await advanceOneTurn(encounterId, encounter.sessionId, userId);
-      result = settled.deathSaves.length
-        ? { ...settled.turn, deathSaves: settled.deathSaves }
-        : settled.turn;
+      result = { ...settled.turn, deathSaves: save ? [save] : [] };
+    } else {
+      // An `end_turn` for a dying player is not a turn: the save is owed and only a death_save
+      // intent pays it. Refusing here keeps a stray boundary (the action bar's End Turn chip,
+      // a replayed client) from skipping the roll.
+      const endingActor = state.participants.find(
+        (participant) => participant.id === intent.actorId,
+      ) as (VitalsInput & { id: string }) | undefined;
+      if (endingActor && vitalStateOf(endingActor) === 'dying') {
+        throw new BusinessLogicError(
+          'A dying player cannot end their turn: a death saving throw is owed',
+          {
+            reason: 'death_save_required',
+            actorId: intent.actorId,
+          },
+        );
+      }
+      const settled = await advanceOneTurn(encounterId, encounter.sessionId, userId);
+      result = settled.turn;
     }
 
     trackCombatEvent('action_accepted', {
@@ -1343,11 +1454,12 @@ export async function executeCombatIntent(
     // `end_turn` joins damage as a trigger because a character can now die without any damage
     // being dealt: three failed death saving throws end a campaign, and the check that ends
     // the encounter has to run on the turn that produced the third failure.
-    const combatEnded =
-      (damage > 0 || intent.type === 'end_turn') &&
-      (await endCombatIfResolved(encounterId, userId));
-    let combatBoundary = combatEnded;
-    if (!combatEnded) {
+    let ending =
+      damage > 0 || intent.type === 'end_turn' || intent.type === 'death_save'
+        ? await endCombatIfResolved(encounterId, userId)
+        : null;
+    let combatBoundary = ending !== null;
+    if (!ending) {
       // After the end check, never before: a killing blow ends the fight, and there is no next
       // turn to advance to. And before the publish, so the board the client receives already
       // names whoever is up — one broadcast, no window in which the UI shows a spent NPC as
@@ -1363,25 +1475,11 @@ export async function executeCombatIntent(
       // The advance settles death saves for anyone the order reaches on the floor, and a third
       // failure ends a campaign without a point of damage being dealt. Same reason `end_turn`
       // triggers the check above.
-      const endedOnAdvance = advanced ? await endCombatIfResolved(encounterId, userId) : false;
-      if (advanced?.deathSaves.length && result && typeof result === 'object') {
-        result = { ...(result as Record<string, unknown>), deathSaves: advanced.deathSaves };
-      }
-      combatBoundary = endedOnAdvance;
-      if (!endedOnAdvance) await publishCombatState(encounterId, userId, intent.type);
+      ending = advanced ? await endCombatIfResolved(encounterId, userId) : null;
+      combatBoundary = ending !== null;
+      if (!ending) await publishCombatState(encounterId, userId, intent.type);
     }
-    // Death saves settled by the implicit turn advance in resolveActorTurn (#2457) — the
-    // previous participant was down and the advance rolled their save before this action.
-    // Attach ALWAYS, even when combat ended: a lethal third failure ends the fight, and the
-    // DEAD line must still reach the client.
-    if (boundaryDeathSaves.length && result && typeof result === 'object') {
-      const existing = (result as { deathSaves?: unknown[] }).deathSaves;
-      result = {
-        ...(result as Record<string, unknown>),
-        deathSaves: [...boundaryDeathSaves, ...(Array.isArray(existing) ? existing : [])],
-      };
-    }
-    return combatBoundary ? markCombatEnded(result) : result;
+    return combatBoundary ? markCombatEnded(result, ending) : result;
   } catch (error) {
     trackCombatEvent('action_refused', {
       encounterId,
@@ -1458,6 +1556,15 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     encounterId: string;
   };
   if (!actor) throw new NotFoundError('Current combat participant', encounterId);
+  // A dying player's turn offers one thing: the death saving throw. No attack, move or spell.
+  if (vitalStateOf(actor as unknown as VitalsInput) === 'dying') {
+    return {
+      encounterId,
+      version: state.encounter.version,
+      actorId: actor.id,
+      actions: [{ type: 'death_save', label: 'Death saving throw' }],
+    };
+  }
   const map = await loadActiveTacticalMap(state.encounter.sessionId);
   const mapActor = map?.entities.find((entity) => entity.id === actor.id);
   const actions: Array<Record<string, unknown>> = [];

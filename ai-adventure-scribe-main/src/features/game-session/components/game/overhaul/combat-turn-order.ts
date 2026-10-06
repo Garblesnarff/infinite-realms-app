@@ -6,6 +6,7 @@ import {
 import type { CombatEncounter } from '@/types/combat-encounter';
 
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
+import { participantVital } from '@/services/combat/participant-vital';
 
 export type TurnActorState = 'acted' | 'now' | 'waiting';
 
@@ -16,6 +17,8 @@ export interface TurnActor {
   initiative: number;
   isPlayer: boolean;
   isEnemy: boolean;
+  /** A player on the floor with death saves owed: their turn is the save, nothing else (#2518). */
+  isDying: boolean;
   state: TurnActorState;
 }
 
@@ -65,6 +68,7 @@ export function summarizeCombatTurn(
       initiative: participant.initiative ?? 0,
       isPlayer: participant.participantType === 'player',
       isEnemy: isHostileParticipantType(participant.participantType),
+      isDying: participantVital(participant) === 'dying',
       state: index < activeIndex ? 'acted' : index === activeIndex ? 'now' : 'waiting',
     };
   });
@@ -87,5 +91,6 @@ export type CombatTurnBusy = 'casting' | 'acting' | null;
 export function combatTurnText(summary: CombatTurnSummary, busy: CombatTurnBusy): string {
   if (busy === 'casting' && summary.active.isPlayer) return 'Casting…';
   if (busy && !summary.active.isPlayer) return `${summary.active.name} is acting…`;
+  if (summary.active.isPlayer && summary.active.isDying) return 'Dying';
   return summary.active.isPlayer ? 'Your turn' : summary.active.name;
 }

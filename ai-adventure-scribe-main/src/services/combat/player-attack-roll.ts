@@ -2,7 +2,10 @@ import type { StructuredCombatAction } from '@/services/combat/combat-action-exe
 
 import logger from '@/lib/logger';
 import { proposeAuthoritativeAttack } from '@/services/combat/combat-attack-proposal';
-import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import {
+  requestPlayerAttackRoll,
+  requestPlayerDeathSaveRoll,
+} from '@/services/combat/player-roll-bridge';
 import { slugify } from '@/utils/slug';
 
 /**
@@ -106,5 +109,26 @@ export async function askPlayerForAttackDie(
     // did, which is exactly the behaviour on `main`, so this path can never be a regression.
     logger.warn('[PlayerRoll] proposal failed; the engine rolls this attack', error);
     return { autoRolled: true, movementOnly: false };
+  }
+}
+
+/**
+ * The dying player's death saving throw die. There is nothing to propose first: the roll is a
+ * bare d20 against DC 10, with no bonus, no target and no advantage, so the prompt opens at once.
+ *
+ * Returns `{ d20: undefined, autoRolled: true }` when the prompt timed out or was dismissed. A
+ * dying character cannot decline their own turn, so the engine rolls the die rather than the
+ * action being withdrawn, and the transcript says so, as it does for every other player die.
+ */
+export async function askPlayerForDeathSaveDie(params: {
+  actorLabel: string;
+}): Promise<{ d20?: number; autoRolled: boolean }> {
+  try {
+    const outcome = await requestPlayerDeathSaveRoll({ actorLabel: params.actorLabel });
+    if (outcome.d20 === null) return { autoRolled: true };
+    return { d20: outcome.d20, autoRolled: false };
+  } catch (error) {
+    logger.warn('[PlayerRoll] death save prompt failed; the engine rolls it', error);
+    return { autoRolled: true };
   }
 }

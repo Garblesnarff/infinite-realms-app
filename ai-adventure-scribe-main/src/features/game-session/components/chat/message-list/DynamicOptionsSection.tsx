@@ -58,7 +58,12 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       );
       if (!response.ok) return;
       const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
-      setLegalState({ actorId: payload.actorId, actions: payload.actions ?? [] });
+      // A dying player's only legal action is the death save, and the dying panel owns it: a
+      // chip here would send the label as a typed action to a character who cannot act.
+      setLegalState({
+        actorId: payload.actorId,
+        actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
+      });
     }, [
       combatState.isInCombat,
       encounter?.id,
@@ -137,7 +142,12 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           // in reach — so a flee into empty space is never dressed up as dangerous, and a real
           // opportunity attack is never sprung on a player who was not warned first.
           const provoked = action.label.match(/\((.+?) attacks\)/)?.[1];
-          if (action.type === 'flee' && provoked && !window.confirm(`Flee? ${provoked} gets one attack as you turn.`)) return;
+          if (
+            action.type === 'flee' &&
+            provoked &&
+            !window.confirm(`Flee? ${provoked} gets one attack as you turn.`)
+          )
+            return;
           await executeAuthoritativeCombatIntent(
             encounter.id,
             { type: action.type, actorId },
@@ -187,8 +197,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           );
           const movementOnly =
             die.movementOnly ||
-            (execution.result as { resolvedAs?: string } | null)?.resolvedAs ===
-              'movement_only';
+            (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
           // A resolved attack settles the turn, the same settlement the DM pipeline
           // performs. A movement-only approach spent no Action, so the turn stays
           // open and the refreshed menu offers the attack again — now in reach.

@@ -8,7 +8,11 @@
  * Colour rule (Rob, 2026-10-01): gold helps you, red hurts you, grey changes nothing. The word and
  * the icon always carry the same meaning as the colour.
  */
-import { describeDamageAtZeroHp } from '../../../shared/death-save-lines';
+import {
+  describeDamageAtZeroHp,
+  describeInstantDeath,
+  describeStrikeOnDowned,
+} from '../../../shared/death-save-lines';
 import {
   facingName,
   formatVersusArmorClass,
@@ -316,20 +320,53 @@ export function initiativeCard(
 }
 
 /**
- * The player-visible engine line and card for damage taken at 0 HP (#2457): 5e
- * adds one death-save failure per hit, two on a critical. Returns null when the
- * result carries no such failures. The line is the same sentence the server
- * records as a DM fact, so the DM narrates exactly what the player read.
+ * The player-visible engine line and card for damage taken at 0 HP (#2457) and for instant death
+ * (#2518). 5e adds one death-save failure per hit on a downed creature, two on a critical; a
+ * melee blow within 5 ft is an automatic critical hit; a blow whose overflow reaches the
+ * target's hit point maximum kills outright. Returns null when the result carries none of it.
+ * The line is the same sentence the server records as a DM fact, so the DM narrates exactly what
+ * the player read.
  */
 export function damageAtZeroHpPart(
-  result: Pick<CombatEngineResult, 'deathSaveFailuresAdded' | 'deathSavesFailures'>,
+  result: Pick<
+    CombatEngineResult,
+    | 'deathSaveFailuresAdded'
+    | 'deathSavesFailures'
+    | 'instantDeath'
+    | 'autoCritOnDowned'
+    | 'isCritical'
+  >,
   target: string,
+  attacker?: string,
 ): EngineTranscriptPart | null {
+  if (result.instantDeath === true) {
+    // The engine prefix marks this as engine fact, not DM fiction (#2457).
+    const line = `⚙️ Engine: ${describeInstantDeath(target)}`;
+    return {
+      line,
+      card: {
+        kind: 'death_save',
+        side: 'party',
+        line,
+        title: `${target} is dead`,
+        badge: engineBadge('death-save-failed', 'party'),
+        detail: describeInstantDeath(target),
+        deathSave: { failures: 3 },
+      },
+    };
+  }
   const added = result.deathSaveFailuresAdded ?? 0;
   if (!Number.isFinite(added) || added <= 0) return null;
   const failures = result.deathSavesFailures ?? 0;
-  // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
-  const description = describeDamageAtZeroHp(target, added, failures);
+  const description =
+    attacker !== undefined
+      ? describeStrikeOnDowned(attacker, target, {
+          failuresAdded: added,
+          failures,
+          automaticCritical: result.autoCritOnDowned === true,
+          critical: result.isCritical === true,
+        })
+      : describeDamageAtZeroHp(target, added, failures);
   const line = `⚙️ Engine: ${description}`;
   return {
     line,

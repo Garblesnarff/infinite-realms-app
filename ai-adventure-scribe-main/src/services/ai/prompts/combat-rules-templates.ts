@@ -342,12 +342,24 @@ export const COMBAT_RULES_IN_COMBAT_TEMPLATE = [
   [` Make a death saving throw!"`, `"`],
   [
     `- Each turn at 0 HP, roll a death save (d20, DC 10, no modifiers)`,
-    `- Each turn at 0 HP, the engine rolls a death save (d20, DC 10, no modifiers)`,
+    `- Each turn at 0 HP, the player rolls a death save (d20, DC 10, no modifiers) through the engine's prompt, once per turn; the turn ends with it`,
+  ],
+  [
+    `- Critical hit while at 0 HP = 2 automatic death save failures
+`,
+    `- Critical hit while at 0 HP = 2 automatic death save failures
+- A melee blow within 5 feet of an unconscious character is an automatic critical hit (2 failures)
+- Damage that drops a character to 0 with the overflow at or above their hit point maximum kills them outright: no dying phase
+
+Monsters and a downed character (the engine enforces the consequences; you narrate the choice):
+- A hostile already in melee with a downed character keeps attacking them unless the campaign bible says otherwise: a creature that feeds may keep feeding, a guard may drag them to a cell, a pack may move on. Never invent a blow the engine did not report.
+- The round that kills a character always gets a narration paragraph: the engine's DEAD line is the biggest beat of the run.
+`,
   ],
   [
     `2. Add to \`roll_requests\`: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10, "ac": null, "advantage": false, "disadvantage": false}\`
 3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."`,
-    `2. Do not request the death save; the engine rolls it and reports it in \`<engine_resolved_outcomes>\`
+    `2. Do not request the death save; the player rolls it on their turn and the engine reports it in \`<engine_resolved_outcomes>\`
 3. Narrate the result the engine reports: "That's one success. Two more and you stabilize."`,
   ],
   [

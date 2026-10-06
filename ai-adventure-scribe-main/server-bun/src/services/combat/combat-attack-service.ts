@@ -82,11 +82,18 @@ function isProvidedD20(value: number | undefined): value is number {
  * (#2457). Spread onto the attack result only when a failure was actually added,
  * so the client can print the engine line and card for it.
  */
-function deathSaveFailureFields(hpResult: DamageResult): Pick<AttackResult, 'deathSaveFailuresAdded' | 'deathSavesFailures'> {
-  if ((hpResult.deathSaveFailuresAdded ?? 0) <= 0) return {};
+function deathSaveFailureFields(
+  hpResult: DamageResult,
+): Pick<AttackResult, 'deathSaveFailuresAdded' | 'deathSavesFailures' | 'instantDeath'> {
   return {
-    deathSaveFailuresAdded: hpResult.deathSaveFailuresAdded,
-    deathSavesFailures: hpResult.newDeathSavesFailures,
+    ...((hpResult.deathSaveFailuresAdded ?? 0) > 0
+      ? {
+          deathSaveFailuresAdded: hpResult.deathSaveFailuresAdded,
+          deathSavesFailures: hpResult.newDeathSavesFailures,
+        }
+      : {}),
+    // SRD 5.1 instant death: the overflow past 0 HP reached the target's maximum.
+    ...(hpResult.massiveDamage ? { instantDeath: true } : {}),
   };
 }
 
@@ -417,14 +424,31 @@ export class CombatAttackService {
         cover: geometry?.cover ?? null,
       };
 
+      // SRD 5.1: a melee attack within 5 ft of an unconscious creature is an automatic critical
+      // hit. The engine enforces it whatever the attacker chose to do about a creature on the
+      // floor; the die is still rolled and shown, but it cannot turn the blow into a miss.
+      const autoCritOnDowned =
+        targetConditions.includes('unconscious') &&
+        !weapon.ranged &&
+        (geometry?.distanceFeet ?? 5) <= 5;
+
       // Check if attack hits
-      const hitCheck = checkHit({
-        attackRoll,
-        attackBonus: rules.attackBonus,
-        targetAC,
-        advantage: rules.advantage,
-        disadvantage: rules.disadvantage,
-      });
+      const hitCheck = autoCritOnDowned
+        ? {
+            hit: true,
+            totalAttackRoll: attackRoll + rules.attackBonus,
+            targetAC,
+            isNaturalOne: false,
+            isNaturalTwenty: false,
+            isCritical: true,
+          }
+        : checkHit({
+            attackRoll,
+            attackBonus: rules.attackBonus,
+            targetAC,
+            advantage: rules.advantage,
+            disadvantage: rules.disadvantage,
+          });
 
       // Everything the telemetry line knows before damage is rolled. Both branches below
       // finish it with their own outcome, so a miss is logged as fully as a hit -- see
@@ -489,7 +513,9 @@ export class CombatAttackService {
       // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
       const autoCrit = checkAutoCrit(
         targetConditions,
-        !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : undefined,
+        // Outside 5 ft (or ranged) there is no automatic critical: `undefined` would read as
+        // "assume melee" and make every ranged hit on a downed creature cost two failures.
+        !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : Number.POSITIVE_INFINITY,
       );
       const isCrit = hitCheck.isCritical || autoCrit;
 
@@ -569,6 +595,7 @@ export class CombatAttackService {
           targetIsConscious: hpResult.isConscious,
           targetIsDead: hpResult.isDead,
           ...deathSaveFailureFields(hpResult),
+          ...(autoCritOnDowned ? { autoCritOnDowned: true } : {}),
           targetCondition: healthConditionForCombat(
             hpResult.newCurrentHp,
             targetParticipant.maxHp,
@@ -982,7 +1009,7 @@ export class CombatAttackService {
             const targetConditionsForTarget = await getActiveConditionNames(targetId);
             const autoCrit = checkAutoCrit(
               targetConditionsForTarget,
-              spell.attackType === 'melee' ? 5 : undefined,
+              spell.attackType === 'melee' ? 5 : Number.POSITIVE_INFINITY,
             );
             const spellIsCrit = hitCheckResult.isCritical || autoCrit;
 

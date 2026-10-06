@@ -159,6 +159,8 @@ export interface DiceRollRequest {
   combatAttackRoll?: boolean;
   /** Set when this d20 belongs to the ask-first combat-entry initiative prompt. */
   combatInitiativeRoll?: boolean;
+  /** Set when this d20 is the dying player's death saving throw, owed on their turn (#2518). */
+  combatDeathSaveRoll?: boolean;
   /**
    * Set when this d20 belongs to a mid-combat ability check the engine is resolving (#2420).
    * Such a roll settles the check directly and must NOT be sent to the DM as a chat message: the

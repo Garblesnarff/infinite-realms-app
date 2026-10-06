@@ -72,7 +72,67 @@ export function describeDamageAtZeroHp(
   failures: number,
 ): string {
   const added =
-    failuresAdded === 1 ? 'one automatic death-save failure' : `${failuresAdded} automatic death-save failures`;
+    failuresAdded === 1
+      ? 'one automatic death-save failure'
+      : `${failuresAdded} automatic death-save failures`;
   const dead = failures >= 3 ? ` ${name} is DEAD.` : '';
   return `${name} takes damage at 0 HP — ${added} (${failures} of 3 failures).${dead}`;
+}
+
+/** Failure pips for a tally of three: `✕✕○`. The word beside them always carries the count. */
+export function failurePips(failures: number): string {
+  const filled = Math.max(0, Math.min(3, failures));
+  return '✕'.repeat(filled) + '○'.repeat(3 - filled);
+}
+
+/** The facts a strike on a downed creature needs to be described. */
+export interface StrikeOnDownedFacts {
+  /** Failures this strike added: two for a critical, one otherwise. */
+  failuresAdded: number;
+  /** The failure tally after the strike. */
+  failures: number;
+  /** A melee blow within 5 ft: an automatic critical hit, whatever the die said. */
+  automaticCritical?: boolean;
+  /** A ranged blow that was a critical hit on its own natural 20. */
+  critical?: boolean;
+}
+
+/**
+ * One player-visible engine sentence for a hit on an unconscious creature (SRD 5.1): a melee
+ * blow within 5 ft is an automatic critical hit (two failures), a ranged hit is one failure,
+ * two on a critical. The DM fact and the player line are the same sentence.
+ */
+export function describeStrikeOnDowned(
+  attacker: string,
+  target: string,
+  facts: StrikeOnDownedFacts,
+): string {
+  const count =
+    facts.failuresAdded === 1
+      ? 'One death-save failure'
+      : `${numberWord(facts.failuresAdded)} death-save failures`;
+  const how = facts.automaticCritical
+    ? `${attacker} strikes the unconscious ${target} — automatic critical hit.`
+    : facts.critical
+      ? `${attacker} hits the unconscious ${target} from range — critical hit.`
+      : `${attacker} hits the unconscious ${target} from range.`;
+  const dead = facts.failures >= 3 ? ` ${target} is DEAD.` : '';
+  return `${how} ${count}. ${failurePips(facts.failures)}${dead}`;
+}
+
+/** SRD 5.1 instant death: the blow's overflow past 0 HP reached the target's maximum. */
+export function describeInstantDeath(target: string): string {
+  return `${target} takes massive damage — more than their hit point maximum. ${target} is DEAD.`;
+}
+
+function numberWord(value: number): string {
+  return value === 2 ? 'Two' : value === 3 ? 'Three' : String(value);
+}
+
+/**
+ * The line for a stable hero waking once the fight is over (SRD 5.1: 1 HP after 1d4 hours). The
+ * engine rolled the hours; the DM narrates what happened while they lay there.
+ */
+export function describeWake(name: string, hours: number): string {
+  return `${name} is stable and unconscious for ${hours} ${hours === 1 ? 'hour' : 'hours'} (1d4). ${name} wakes with 1 HP.`;
 }

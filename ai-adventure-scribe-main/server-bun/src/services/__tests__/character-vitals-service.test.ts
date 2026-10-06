@@ -57,9 +57,7 @@ function makeTx() {
   };
 }
 
-const transaction = mock(async (callback: (tx: unknown) => Promise<unknown>) =>
-  callback(makeTx()),
-);
+const transaction = mock(async (callback: (tx: unknown) => Promise<unknown>) => callback(makeTx()));
 
 mock.module('../../../../db/client', () => ({
   db: { transaction },
@@ -113,7 +111,7 @@ describe('CharacterVitalsService', () => {
       expect(vitals.vitalState).toBe('standing');
     });
 
-    it('leaves an already dying character at 0 and dying, with death saves untouched', async () => {
+    it('keeps an already dying character at 0 and dying, and counts the damage as one death save failure (#2518)', async () => {
       currentRow = vitalsRow({
         currentHitPoints: 0,
         isConscious: false,
@@ -126,9 +124,26 @@ describe('CharacterVitalsService', () => {
       expect(vitals.currentHitPoints).toBe(0);
       expect(vitals.vitalState).toBe('dying');
       expect(vitals.isConscious).toBe(false);
-      // Death-save progression is PR3. PR1 must not quietly start counting.
-      expect(vitals.deathSavesFailures).toBe(1);
-      expect(writes[0]).toMatchObject({ deathSavesFailures: 1 });
+      // SRD 5.1: damage at 0 HP is a death save failure (this test used to pin them untouched,
+      // back when death-save progression was a later change).
+      expect(vitals.deathSavesFailures).toBe(2);
+      expect(writes[0]).toMatchObject({ deathSavesFailures: 2 });
+    });
+
+    it('a critical hit at 0 HP is two failures, and the third failure is death', async () => {
+      currentRow = vitalsRow({
+        currentHitPoints: 0,
+        isConscious: false,
+        vitalState: 'dying',
+        deathSavesFailures: 1,
+      });
+
+      const vitals = await CharacterVitalsService.applyDamage(CHARACTER_ID, OWNER_ID, 1, {
+        critical: true,
+      });
+
+      expect(vitals.vitalState).toBe('dead');
+      expect(vitals.deathSavesFailures).toBe(3);
     });
 
     it('rejects a character the caller does not own and writes nothing', async () => {

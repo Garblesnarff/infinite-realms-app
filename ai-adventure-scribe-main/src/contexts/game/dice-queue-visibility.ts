@@ -9,7 +9,7 @@ import logger from '@/lib/logger';
  * player which of two dice they are rolling without telling them — but it means the order
  * matters: a request left queued behind another may never be answered.
  *
- * Engine-tagged requests (`combatAttackRoll` / `combatInitiativeRoll`) therefore take the slot
+ * Engine-tagged requests (`combatAttackRoll` / `combatInitiativeRoll` / `combatDeathSaveRoll`) therefore take the slot
  * from an ordinary narrative roll. The engine is blocked awaiting that exact die and its prompt
  * auto-rolls on a timer, so leaving it behind a narrative check throws the player's roll away and
  * seats the encounter with a number they never rolled (#2190). Two engine prompts never compete:
@@ -18,7 +18,12 @@ import logger from '@/lib/logger';
 export function isEngineTaggedRoll(roll: Pick<DiceRollRequest, 'id'> | undefined): boolean {
   if (!roll) return false;
   const tagged = roll as Partial<DiceRollRequest>;
-  return Boolean(tagged.combatAttackRoll || tagged.combatInitiativeRoll || tagged.combatCheckRoll);
+  return Boolean(
+    tagged.combatAttackRoll ||
+    tagged.combatInitiativeRoll ||
+    tagged.combatCheckRoll ||
+    tagged.combatDeathSaveRoll,
+  );
 }
 
 /** True when `incoming` must displace whatever request is currently visible. */

@@ -42,6 +42,9 @@ export function playerInputOriginOf(
   const origin = message.context?.origin;
   if (origin === 'action_bar') return 'action_bar';
   if (message.context?.intent === 'spell_cast') return 'sheet_cast';
-  if (message.context?.intent === 'dice_roll') return 'dice_roll';
+  // The death save's die is the player's own, thrown in the roll prompt (#2518).
+  if (message.context?.intent === 'dice_roll' || message.context?.intent === 'death_save_turn') {
+    return 'dice_roll';
+  }
   return 'typed';
 }

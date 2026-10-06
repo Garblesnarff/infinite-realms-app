@@ -239,6 +239,49 @@ export async function updateCombatParticipantStatus(
     throw new ValidationError('At least one combat participant status field is required');
   }
 
+  // A patch that takes a character to 0 HP is damage, and damage has one dying transition:
+  // the same rules, state change and engine line as any other writer (#2518, #2622). The raw
+  // columns it carried (HP, consciousness, tallies) are the transition's to set, not the client's.
+  const dropsToZero = updates.currentHp === 0;
+  if (dropsToZero) {
+    const [live] = await db
+      .select({
+        characterId: combatParticipants.characterId,
+        currentHp: combatParticipantStatus.currentHp,
+        tempHp: combatParticipantStatus.tempHp,
+      })
+      .from(combatParticipants)
+      .innerJoin(
+        combatParticipantStatus,
+        eq(combatParticipantStatus.participantId, combatParticipants.id),
+      )
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          participantStatusOwnershipCondition(participantId, userId),
+        ),
+      )
+      .limit(1);
+    if (live?.characterId && live.currentHp > 0) {
+      const { applyNonAttackDamage } = await import('./non-attack-damage.js');
+      await applyNonAttackDamage(
+        live.characterId,
+        userId,
+        live.currentHp + live.tempHp,
+        'status patch',
+      );
+      const {
+        currentHp: _hp,
+        isConscious: _c,
+        deathSavesSuccesses: _s,
+        deathSavesFailures: _f,
+        ...rest
+      } = updates;
+      if (Object.keys(rest).length === 0) return getCombatParticipantStatus(participantId, userId);
+      updates = rest;
+    }
+  }
+
   const values: {
     currentHp?: number;
     tempHp?: number;

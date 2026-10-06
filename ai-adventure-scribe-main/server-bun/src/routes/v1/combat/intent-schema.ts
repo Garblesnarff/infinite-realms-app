@@ -11,10 +11,17 @@ const participantId = t.String({ minLength: 1, maxLength: 255 });
 const expectedVersion = t.Number({ minimum: 0 });
 
 // Intents that mutate the encounter carry an optimistic-concurrency token; `move` and
-// `end_turn` do not, in either dialect.
+// `end_turn` and `death_save` do not, in either dialect.
 const unversionedIntentVariants = [
   t.Object({ type: t.Literal('move'), actorId: participantId, x: t.Number(), y: t.Number() }),
   t.Object({ type: t.Literal('end_turn'), actorId: participantId }),
+  // The player's death saving throw. Bounded to a real d20 face, like the attack dice; absent
+  // means the roll prompt ran out and the engine rolls it.
+  t.Object({
+    type: t.Literal('death_save'),
+    actorId: participantId,
+    d20: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
+  }),
 ];
 
 const attackFields = {

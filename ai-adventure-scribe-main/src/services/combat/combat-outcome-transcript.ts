@@ -15,7 +15,7 @@ import {
   type EngineResultCard,
 } from './engine-result-card';
 import { isPlayerActor } from './player-attack-roll';
-import { describeDeathSave } from '../../../shared/death-save-lines';
+import { describeDeathSave, describeWake } from '../../../shared/death-save-lines';
 import {
   facingName,
   formatVersusArmorClass,
@@ -89,6 +89,10 @@ export interface CombatEngineResult {
   deathSaveFailuresAdded?: number;
   /** The target's death-save failure tally after those failures were added. */
   deathSavesFailures?: number;
+  /** The blow's overflow past 0 HP reached the target's maximum: instant death (#2518). */
+  instantDeath?: boolean;
+  /** A melee blow within 5 ft on an unconscious target: an automatic critical hit (#2518). */
+  autoCritOnDowned?: boolean;
 }
 
 export interface EngineDeathSave {
@@ -297,7 +301,7 @@ export function formatCombatEngineParts(
     },
   });
   // Damage at 0 HP adds death-save failures: the failure is its own engine line and card (#2457).
-  const damageAtZero = damageAtZeroHpPart(result, target);
+  const damageAtZero = damageAtZeroHpPart(result, target, actor);
   if (damageAtZero) parts.push(damageAtZero);
   return parts;
 }
@@ -387,6 +391,34 @@ export function formatDeathSaveParts(
     // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
     const line = `⚙️ Engine: ${describeDeathSave(name, save)}`;
     return [{ line, card: deathSaveCard(name, save, line) }];
+  });
+}
+
+/**
+ * The line and card for a stable hero waking after a fight that ended on them (#2518): the engine
+ * rolled the 1d4 hours and put them back on 1 HP. Carried on the result that ended the fight.
+ */
+export function formatWakeParts(value: unknown): EngineTranscriptPart[] {
+  const wakes = (isRecord(value) && Array.isArray(value.wake) ? value.wake : []) as Array<{
+    name?: string;
+    hours?: number;
+  }>;
+  return wakes.flatMap((wake) => {
+    if (typeof wake?.name !== 'string' || !isFiniteNumber(wake.hours)) return [];
+    const description = describeWake(wake.name, wake.hours);
+    const line = `⚙️ Engine: ${description}`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'death_save' as const,
+          side: 'party' as const,
+          line,
+          title: `${wake.name} wakes`,
+          detail: description,
+        },
+      },
+    ];
   });
 }
 

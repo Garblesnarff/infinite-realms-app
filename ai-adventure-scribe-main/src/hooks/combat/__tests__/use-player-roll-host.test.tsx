@@ -25,6 +25,7 @@ import {
   markPlayerRollCommitted,
   requestPlayerInitiativeRoll,
   requestPlayerAttackRoll,
+  requestPlayerDeathSaveRoll,
   setPlayerRollHost,
   settlePendingPlayerRoll,
 } from '@/services/combat/player-roll-bridge';
@@ -312,5 +313,46 @@ describe('usePlayerRollHost teardown', () => {
     settlePendingPlayerRoll({ d20: 12 });
     await expect(pending).resolves.toEqual({ d20: 12 });
     unmount();
+  });
+});
+
+describe('usePlayerRollHost: the death saving throw prompt (#2518)', () => {
+  const requestDiceRoll = vi.fn().mockReturnValue('death-roll-1');
+  const cancelDiceRoll = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+    vi.clearAllMocks();
+    requestDiceRoll.mockReturnValue('death-roll-1');
+    vi.mocked(useGame).mockReturnValue({ requestDiceRoll, cancelDiceRoll } as never);
+    vi.mocked(useOptionalCampaign).mockReturnValue(undefined);
+    window.localStorage.clear();
+    vi.mocked(useCharacter).mockReturnValue({ state: { character: null } } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('queues a bare d20 against DC 10 with the engine tag, and the player’s die settles it', async () => {
+    renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerDeathSaveRoll({ actorLabel: 'The Scholar' });
+
+    // The request the roll tray shows: the label the issue names, no modifier, DC 10, tagged so
+    // the ordinary dice handler does not also send it to the DM as a chat message.
+    expect(requestDiceRoll).toHaveBeenCalledWith({
+      requestType: 'death_save',
+      description: 'Death saving throw — roll a d20',
+      rollConfig: { dieType: 20, count: 1, modifier: 0 },
+      dc: 10,
+      combatDeathSaveRoll: true,
+    });
+
+    act(() => {
+      expect(settleCombatAttackRoll('death-roll-1', 14)).toBe(true);
+    });
+    await expect(pending).resolves.toEqual({ d20: 14 });
   });
 });

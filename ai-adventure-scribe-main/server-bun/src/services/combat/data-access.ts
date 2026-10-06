@@ -228,7 +228,9 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
  */
 function monsterAttackProfiles(participant: any): WeaponRuleProfile[] {
   const profile = participant?.monsterAttack as
-    { source?: string; attacks?: MonsterAttack[] } | null | undefined;
+    | { source?: string; attacks?: MonsterAttack[] }
+    | null
+    | undefined;
   const attacks = Array.isArray(profile?.attacks) ? profile.attacks : [];
   return attacks
     .filter((attack) => attack && typeof attack.damageDice === 'string' && attack.damageDice)
@@ -329,7 +331,20 @@ export async function getActiveConditionNames(participantId: string): Promise<st
         eq(combatParticipantConditions.isActive, true),
       ),
     );
-  return rows.map((row) => row.name.toLowerCase());
+  const names = rows.map((row) => row.name.toLowerCase());
+  // Unconscious is not a row anyone has to remember to write: it is what `is_conscious = false`
+  // at 0 HP means (SRD 5.1), so it is read from the status row, the one place it is persisted.
+  // That keeps the attack rules (advantage, automatic critical within 5 ft) and the client's
+  // tracker reading one fact.
+  const [status] = await db
+    .select({ isConscious: combatParticipantStatus.isConscious })
+    .from(combatParticipantStatus)
+    .where(eq(combatParticipantStatus.participantId, participantId))
+    .limit(1);
+  if (status && status.isConscious === false && !names.includes('unconscious')) {
+    names.push('unconscious');
+  }
+  return names;
 }
 
 /** Split a persisted comma-separated proficiency column into lowercased entries (#1827). */

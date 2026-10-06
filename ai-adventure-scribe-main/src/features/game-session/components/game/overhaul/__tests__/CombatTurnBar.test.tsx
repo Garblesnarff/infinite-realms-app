@@ -1,6 +1,10 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  DYING_SCHOLAR_ENCOUNTER,
+  DYING_SCHOLAR_PARTICIPANT,
+} from '../../../../../../../shared/test-fixtures/dying-participant-wire';
 import { summarizeCombatTurn } from '../combat-turn-order';
 import { CombatTurnBar, CombatTurnBarLive } from '../CombatTurnBar';
 import { LeftRail } from '../LeftRail';
@@ -63,6 +67,35 @@ describe('turn bar (#2417)', () => {
     expect(screen.getByTestId('combat-turn-bar').textContent).toContain('Round 2');
     expect(screen.getByTestId('combat-turn-text').textContent).toBe('Turn 1 of 2 · Your turn');
     expect(screen.getByText('Next: Captain Sarah Reeves.')).toBeTruthy();
+  });
+
+  it('says Dying on the turn of a player at 0 HP whose saves are owed (#2518)', () => {
+    // The Scholar as the server serves her, on the floor; the bar reads "Round 3 · Turn 1 of 2 · Dying".
+    const dying = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 3, currentTurnOrder: 0 },
+      participants: [
+        DYING_SCHOLAR_PARTICIPANT,
+        {
+          ...DYING_SCHOLAR_PARTICIPANT,
+          id: 'm1',
+          characterId: null,
+          name: 'Captain Sarah Reeves',
+          participantType: 'monster',
+          vitalState: 'standing',
+          status: {
+            ...DYING_SCHOLAR_PARTICIPANT.status,
+            currentHp: 7,
+            isConscious: true,
+            deathSavesFailures: 0,
+          },
+        },
+      ],
+    } as never);
+    const summary = summarizeCombatTurn(dying)!;
+    render(<CombatTurnBar summary={summary} busy={null} />);
+
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Turn 1 of 2 · Dying');
+    expect(screen.getByText('Round 3. Turn 1 of 2. Dying.')).toBeTruthy();
   });
 
   it('names an enemy turn in red and says the round starts over after the last actor', () => {

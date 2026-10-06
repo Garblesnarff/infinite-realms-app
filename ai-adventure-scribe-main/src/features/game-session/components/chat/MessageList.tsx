@@ -57,7 +57,19 @@ export interface ResumeUnansweredTurnContext {
   retryInput?: string;
 }
 
-export type MessageSendContext = DiceRollContext | SpellCastContext | ResumeUnansweredTurnContext;
+/**
+ * The dying player's turn (#2518). It is sent by the dying panel's driver, not typed: the turn is
+ * a death saving throw the player rolls, resolved by the engine, then narrated by the DM.
+ */
+export interface DeathSaveTurnContext {
+  intent: 'death_save_turn';
+}
+
+export type MessageSendContext =
+  | DiceRollContext
+  | SpellCastContext
+  | ResumeUnansweredTurnContext
+  | DeathSaveTurnContext;
 
 interface MessageListProps {
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;

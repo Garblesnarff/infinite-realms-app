@@ -94,7 +94,13 @@ describe('combat intent route diagnosability (#2569)', () => {
 
   it('logs one COMBAT_INTENT_ACCEPTED line with phase/source/origin and d20 presence', async () => {
     const res = await post('/v1/combat/enc-1/intent', {
-      intent: { type: 'attack', actorId: 'actor-1', targetId: 'goblin-1', d20: 17, expectedVersion: 3 },
+      intent: {
+        type: 'attack',
+        actorId: 'actor-1',
+        targetId: 'goblin-1',
+        d20: 17,
+        expectedVersion: 3,
+      },
       source: 'player',
       origin: 'dice_roll',
     });
