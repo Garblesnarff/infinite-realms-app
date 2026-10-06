@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.28.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.28.1...v0.28.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **rolls:** the roll dialog adds the character modifier for saves, checks, skills and attacks, and the saved roll records it ([#2614](https://github.com/Garblesnarff/infinite-realms-production/issues/2614)) ([#2628](https://github.com/Garblesnarff/infinite-realms-production/issues/2628)) ([ca94b68](https://github.com/Garblesnarff/infinite-realms-production/commit/ca94b68e5d0d794b5a986a763e21efd19297c371))
+
 ## [0.28.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.28.0...v0.28.1) (2026-10-06)
 
 
