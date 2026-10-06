@@ -55,6 +55,46 @@ export async function claimTurnAction(
   });
 }
 
+/**
+ * Claims the optimistic encounter version for an actor who must still be in the fight, and spends
+ * nothing (#2580). Flee is movement and Yield is a declaration, so neither costs the Action: a
+ * player who already Disengaged this turn, or whose Action is gone, can still leave.
+ *
+ * The `isActive` predicate is what makes a second click refuse: once the exit is recorded the
+ * participant is out of the turn order, so a repeat finds no row to claim.
+ */
+export async function claimTurnVersion(
+  participantId: string,
+  encounterId: string,
+  expectedVersion: number,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    const [encounter] = await tx
+      .update(combatEncounters)
+      .set({ version: sql`${combatEncounters.version} + 1`, updatedAt: new Date() })
+      .where(
+        and(eq(combatEncounters.id, encounterId), eq(combatEncounters.version, expectedVersion)),
+      )
+      .returning({ version: combatEncounters.version });
+    if (!encounter)
+      throw new BusinessLogicError('Combat state changed; refresh and retry', { expectedVersion });
+    const [participant] = await tx
+      .update(combatParticipants)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+          eq(combatParticipants.isActive, true),
+        ),
+      )
+      .returning({ id: combatParticipants.id });
+    if (!participant)
+      throw new BusinessLogicError('Participant is not in the fight', { participantId });
+    return encounter.version;
+  });
+}
+
 export async function claimTurnBonusAction(
   participantId: string,
   encounterId: string,
@@ -210,6 +250,48 @@ export async function resetTurnResources(participantId: string, round: number): 
       updatedAt: new Date(),
     })
     .where(eq(combatParticipants.id, participantId));
+}
+
+/**
+ * Claim one reaction, and release it if `resolve` throws (#2580).
+ *
+ * An opportunity attack is a reaction, not an action: it happens on somebody ELSE's turn, so it
+ * must not spend the attacker's Action and must not advance the order. The engine had no way to
+ * express that — every attack went through `claimTurnActionAndResolve` — which is why fleeing
+ * a fight had to be modelled as the fleeing player Dash-ing rather than as the rules describe it.
+ */
+export async function claimTurnReactionAndResolve<T>(
+  participantId: string,
+  encounterId: string,
+  resolve: () => Promise<T>,
+): Promise<T> {
+  const [claimed] = await db
+    .update(combatParticipants)
+    .set({ reactionUsed: true, updatedAt: new Date() })
+    .where(
+      and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId),
+        eq(combatParticipants.isActive, true),
+        eq(combatParticipants.reactionUsed, false),
+      ),
+    )
+    .returning({ id: combatParticipants.id });
+  if (!claimed) throw new BusinessLogicError('Reaction already used this turn', { participantId });
+  try {
+    return await resolve();
+  } catch (error) {
+    await db
+      .update(combatParticipants)
+      .set({ reactionUsed: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+        ),
+      );
+    throw error;
+  }
 }
 
 export async function setDefensiveAction(

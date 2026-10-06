@@ -29,6 +29,7 @@ import {
   describeCombatExit,
   describeSceneEndRefusal,
   evaluateSceneEnd,
+  partyHasLeftTheFight,
   type CombatExitDeclaration,
 } from './combat-end-guard.js';
 import { trackCombatEvent } from './combat-events.js';
@@ -139,18 +140,28 @@ async function recordCombatNarrativeFacts(
     // Keep this separate from creature death so the DM cannot turn an unresolved retreat into
     // a victory on the next turn.
     if (reason === 'abandoned') {
-      await NarrativeLedgerService.assertFact(
-        {
-          sessionId,
-          subjectType: 'party',
-          subjectName: 'party',
-          predicate: 'status',
-          value: { state: 'fled', encounterId },
-          knownBy: ['dm'],
-          source: 'engine',
-        },
-        userId,
-      );
+      // A player exit (#2580) already wrote the party's slug (fled or surrendered) when it was
+      // recorded; writing `fled` over it would turn every yield into a flight.
+      const partyFacts = await NarrativeLedgerService.currentFacts(sessionId, userId, {
+        subjectType: 'party',
+        subjectName: 'party',
+      });
+      const partyStatus = partyFacts.find((fact) => fact.predicate === 'status');
+      const recordedFor = (partyStatus?.value as { encounterId?: string } | undefined)?.encounterId;
+      if (recordedFor !== encounterId) {
+        await NarrativeLedgerService.assertFact(
+          {
+            sessionId,
+            subjectType: 'party',
+            subjectName: 'party',
+            predicate: 'status',
+            value: { state: 'fled', encounterId },
+            knownBy: ['dm'],
+            source: 'engine',
+          },
+          userId,
+        );
+      }
     }
   } catch (error) {
     logger.warn({
@@ -182,7 +193,7 @@ export async function concludeEncounter(
   encounterId: string,
   sessionId: string,
   userId: string,
-  reason: CombatEndReason,
+  requestedReason: CombatEndReason,
   options: { exits?: CombatExitDeclaration[] } = {},
 ): Promise<boolean> {
   // The live-hostile guard (#2524) sits at this one choke point: every path that sets
@@ -195,7 +206,11 @@ export async function concludeEncounter(
   let exitState: Awaited<ReturnType<typeof CombatEncounterService.getCombatState>> | null = null;
   let boardSlugOf: (participant: { id: string; name?: string | null }) => string = (participant) =>
     slugify(participant.name ?? participant.id);
-  if (reason === 'dm_ended_scene') {
+  // #2580: a guard cleared by the party leaving the fight (#2580) is not the DM deciding the
+  // scene was over — nobody was left in it. It is recorded as the abandonment it is, so the row
+  // cannot later be read as a fight the DM ended while hostiles stood.
+  let reason: CombatEndReason = requestedReason;
+  if (requestedReason === 'dm_ended_scene') {
     exitState = await CombatEncounterService.getCombatState(encounterId, userId);
     if (exitState.encounter.status !== 'active') return true;
     // The DM addresses participants by the board's slugs — numbered for duplicates
@@ -206,11 +221,21 @@ export async function concludeEncounter(
       const entity = map ? resolveEntityRef(map.entities, participant.id) : null;
       return entity ? entitySlug(entity) : slugify(participant.name ?? participant.id);
     };
-    exitDecision = evaluateSceneEnd(
-      exitState.participants as unknown as Parameters<typeof evaluateSceneEnd>[0],
-      combatExitsOf(options.exits),
-      boardSlugOf,
-    );
+    const roster = exitState.participants as unknown as Parameters<typeof evaluateSceneEnd>[0];
+    // #2580: a party that has left the fight makes the standing creatures nobody's problem, so
+    // there is no live hostile left to protect a scene end from. Judged on the full roster,
+    // which is what this call site has: the exited player is still a row here.
+    // Only a roster that HAD a player row can have lost it to an exit: with no player row at all
+    // the #2524 guard still judges the live hostiles.
+    const partyLeft =
+      roster.some((participant) => participant.participantType === 'player') &&
+      partyHasLeftTheFight(roster);
+    exitDecision = partyLeft
+      ? { allowed: true as const, exits: combatExitsOf(options.exits) }
+      : evaluateSceneEnd(roster, combatExitsOf(options.exits), boardSlugOf);
+    // Recorded as the abandonment it is: an end the player walked out of is not the DM having
+    // decided the scene was over, and the row should never be readable as one (#2524).
+    if (partyLeft) reason = 'abandoned';
     if (!exitDecision.allowed) {
       logger.warn({
         msg: 'COMBAT_END_REFUSED_LIVE_HOSTILES',

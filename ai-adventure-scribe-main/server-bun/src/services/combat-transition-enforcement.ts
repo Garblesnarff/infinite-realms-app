@@ -19,6 +19,7 @@ import {
   describeSceneEndRefusal,
   evaluateSceneEnd,
   findKillClaims,
+  partyHasLeftTheFight,
   stripKillSentences,
   type SceneEndParticipant,
 } from './combat/combat-end-guard.js';
@@ -111,10 +112,18 @@ const killClaimRoster = (prompt: string): SceneEndParticipant[] =>
 /**
  * Live hostiles that forbid a generation-time scene end: roster lines above 0 HP,
  * excluding the current-turn actor, not accounted for by a declared exit.
+ *
+ * The party-left test (#2580) is taken from the FULL roster, before the current-turn line is
+ * filtered out. That filter exists because the creature holding the turn is mid-action and the
+ * DM is not deciding about it — but the player's own line is exactly the one filtered, so judging
+ * the filtered roster would read "no player in the fight" on every ordinary turn and wave every
+ * end through.
  */
 function liveHostilesBlockingEnd(response: DMResponse, prompt: string): SceneEndParticipant[] {
+  const roster = participantsFromPrompt(prompt);
+  if (partyHasLeftTheFight(roster)) return [];
   const decision = evaluateSceneEnd(
-    participantsFromPrompt(prompt).filter((participant) => !participant.isCurrentTurn),
+    roster.filter((participant) => !participant.isCurrentTurn),
     combatExitsOf(response.combat_exits),
   );
   return decision.allowed ? [] : decision.unaccounted;

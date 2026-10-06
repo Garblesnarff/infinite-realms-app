@@ -562,6 +562,12 @@ export interface AttackRollInput {
    * cancelled or abandoned.
    */
   providedD20?: number;
+  /**
+   * An opportunity attack: a reaction provoked on somebody else's turn (#2580). It skips the
+   * current-turn gate and claims the attacker's Reaction rather than their Action, which is the
+   * only difference from an ordinary attack the rules make.
+   */
+  isReaction?: boolean;
 }
 
 /**

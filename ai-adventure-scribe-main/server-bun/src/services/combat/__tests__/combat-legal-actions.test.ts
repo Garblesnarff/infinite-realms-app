@@ -14,6 +14,7 @@ const player = {
   armorClass: 18,
   characterId: 'character-1',
   encounterId: 'encounter-1',
+  turnOrder: 0,
 };
 const monster = {
   id: 'monster-1',
@@ -24,6 +25,11 @@ const monster = {
   bonusActionUsed: false,
   armorClass: 14,
   encounterId: 'encounter-1',
+  turnOrder: 1,
+  // HP the way `getCombatState` supplies it. Absent, a participant reads as 0 HP and is not a
+  // live hostile at all, which is a correct reading of a row that says nothing about vitals.
+  maxHp: 27,
+  status: { currentHp: 27, isConscious: true },
 };
 
 mock.module('../combat-encounter-service.js', () => ({
@@ -31,7 +37,9 @@ mock.module('../combat-encounter-service.js', () => ({
     getCombatState: async () => ({
       encounter: { id: 'encounter-1', sessionId: 'session-1', version: 1 },
       participants: [player, monster],
-      currentParticipant: player,
+      // Derived, as `getCombatState` does, so a test can hand the turn to the monster: pinning
+      // the player here would have made "no exit chip on a monster's turn" untestable.
+      currentParticipant: (player as { turnOrder?: number }).turnOrder === 0 ? player : monster,
     }),
   },
 }));
@@ -284,6 +292,89 @@ describe('getLegalCombatActions', () => {
     const result = await getLegalCombatActions('encounter-1', 'user-1');
 
     expect(result.actions.some((action) => action.type === 'spell')).toBe(false);
+  });
+
+  // #2580: the way out of a fight. Offered outside the Action gate on purpose — a player whose
+  // Action is spent is exactly the player stuck in a fight they cannot finish — and offered only
+  // on the PLAYER's turn, because a monster leaving is the DM's declaration, not a chip.
+  test("offers Flee and Yield on the player's turn, naming the hostile in reach", async () => {
+    map.entities[0].x = 4;
+    map.entities[0].y = 4;
+    map.entities[1].x = 5;
+    map.entities[1].y = 4;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions).toContainEqual({
+      type: 'flee',
+      label: 'Flee (Chiropteran Hulk attacks)',
+    });
+    expect(result.actions).toContainEqual({ type: 'yield', label: 'Yield' });
+  });
+
+  test('offers Flee unadorned when nothing is in reach', async () => {
+    map.entities[0].x = 0;
+    map.entities[0].y = 0;
+    map.entities[1].x = 9;
+    map.entities[1].y = 9;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions).toContainEqual({ type: 'flee', label: 'Flee' });
+  });
+
+  test('labels a plain Flee when the only hostile nearby carries a ranged weapon', async () => {
+    // An opportunity attack is melee. The same bow that reaches 80 ft must not read as "in
+    // reach" at 30 ft, nor at 5 ft: the label is the player's warning of what the exit costs.
+    const melee = equippedWeapons;
+    equippedWeapons = [
+      {
+        id: 'shortbow',
+        name: 'Shortbow',
+        damageDice: '1d6',
+        damageType: 'piercing',
+        normalRange: 80,
+        longRange: 320,
+        magicBonus: 0,
+        finesse: false,
+        ranged: true,
+        proficient: true,
+      },
+    ];
+    map.entities[0].x = 4;
+    map.entities[0].y = 4;
+    map.entities[1].x = 10 - 4; // 30 ft
+    map.entities[1].y = 4;
+    const far = await getLegalCombatActions('encounter-1', 'user-1');
+    map.entities[1].x = 5; // 5 ft
+    const adjacent = await getLegalCombatActions('encounter-1', 'user-1');
+    equippedWeapons = melee;
+
+    expect(far.actions).toContainEqual({ type: 'flee', label: 'Flee' });
+    expect(adjacent.actions).toContainEqual({ type: 'flee', label: 'Flee' });
+  });
+
+  test('offers them to a player whose Action is already spent', async () => {
+    player.actionUsed = true;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+
+    expect(result.actions.some((action) => action.type === 'flee')).toBe(true);
+  });
+
+  test('offers neither chip on a monster’s turn', async () => {
+    player.actionUsed = false;
+    // The turn moves to the Hulk; restored immediately so no later case inherits it.
+    monster.turnOrder = 0;
+    player.turnOrder = 1;
+
+    const result = await getLegalCombatActions('encounter-1', 'user-1');
+    monster.turnOrder = 1;
+    player.turnOrder = 0;
+
+    expect(result.actions.some((action) => action.type === 'flee' || action.type === 'yield')).toBe(
+      false,
+    );
   });
 
   test('offers no cast once the action is spent', async () => {

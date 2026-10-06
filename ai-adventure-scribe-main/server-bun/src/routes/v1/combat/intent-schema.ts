@@ -42,7 +42,15 @@ const spellFields = {
 };
 
 const defensiveFields = {
-  type: t.Union([t.Literal('dash'), t.Literal('dodge'), t.Literal('disengage')]),
+  type: t.Union([
+    t.Literal('dash'),
+    t.Literal('dodge'),
+    t.Literal('disengage'),
+    // #2580: the player's own exits. Carried on the same machinery as the DM's `combat_exits`,
+    // so a fight the player abandons reaches the same conclusion the guard already accepts.
+    t.Literal('flee'),
+    t.Literal('yield'),
+  ]),
   actorId: participantId,
 };
 

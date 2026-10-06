@@ -131,6 +131,23 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             'typed',
           );
           await refreshCombatState();
+        } else if (action.type === 'flee' || action.type === 'yield') {
+          // #2580: the way out of a fight the end guard holds open. The one-line confirm names
+          // the attacker the engine put in the legal-action label, and is asked only when one is
+          // in reach — so a flee into empty space is never dressed up as dangerous, and a real
+          // opportunity attack is never sprung on a player who was not warned first.
+          const provoked = action.label.match(/\((.+?) attacks\)/)?.[1];
+          if (action.type === 'flee' && provoked && !window.confirm(`Flee? ${provoked} gets one attack as you turn.`)) return;
+          await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: action.type, actorId },
+            'dm',
+            Date.now(),
+            'action_bar',
+          );
+          // No `end_turn` after it: the exit has already taken the player out of the turn order,
+          // and a turn boundary for a participant who no longer has one is a second refusal.
+          await refreshCombatState();
         } else if (action.type === 'dash') {
           await executeAuthoritativeCombatIntent(
             encounter.id,

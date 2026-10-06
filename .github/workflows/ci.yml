@@ -387,6 +387,7 @@ jobs:
             src/services/__tests__/dm-reply-reconcile.real-db.test.ts \
             src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts \
             src/services/__tests__/monster-attacks.real-db.test.ts \
+            src/services/__tests__/player-exit-intent.real-db.test.ts \
             src/services/__tests__/session-initial-greeting.real-db.test.ts \
             src/services/__tests__/session-init-once.real-db.test.ts \
             src/services/__tests__/spell-slot-backfill.real-db.test.ts \

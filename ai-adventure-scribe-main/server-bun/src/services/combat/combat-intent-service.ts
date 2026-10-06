@@ -3,12 +3,11 @@
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
+import { partyHasLeftTheFight } from './combat-end-guard.js';
 import { concludeEncounter } from './combat-ending.js';
 import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
-import { publishCombatState } from './combat-sync-service.js';
-import { claimTurnActionAndResolve, setDefensiveAction } from './combat-turn-resources.js';
 import { buildCombatWeaponOptions } from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
@@ -28,7 +27,19 @@ import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules } from './combat-rules.js';
+import { publishCombatState } from './combat-sync-service.js';
+import {
+  claimTurnActionAndResolve,
+  claimTurnVersion,
+  setDefensiveAction,
+} from './combat-turn-resources.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
+import {
+  hasLeftTheBoard,
+  recordPlayerExit,
+  selectOpportunityAttacker,
+  type OpportunityAttacker,
+} from './player-exit-service.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
@@ -85,6 +96,7 @@ export type CombatIntent =
       expectedVersion: number;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion: number }
+  | { type: 'flee' | 'yield'; actorId: string; expectedVersion: number }
   | { type: 'end_turn'; actorId: string };
 
 export type CombatActionSource = 'player' | 'dm';
@@ -114,6 +126,8 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'dash',
   'dodge',
   'disengage',
+  'flee',
+  'yield',
 ]);
 
 /**
@@ -171,7 +185,15 @@ export type EncounterAlreadyConcludedResult = {
   status: 'completed';
 };
 
-const VERSIONED_INTENT_TYPES = new Set(['attack', 'spell', 'dash', 'dodge', 'disengage']);
+const VERSIONED_INTENT_TYPES = new Set([
+  'attack',
+  'spell',
+  'dash',
+  'dodge',
+  'disengage',
+  'flee',
+  'yield',
+]);
 
 /**
  * Optimistic concurrency arbitrates *racing player clients*: two browsers acting on one
@@ -271,6 +293,21 @@ function exposeAttackVisibility(result: unknown, context: AttackVisibilityContex
 
 async function endCombatIfResolved(encounterId: string, userId: string): Promise<boolean> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
+  // A player who fled or yielded has left the fight, not lost it (#2580). With nobody of the
+  // party in the order, the check below would read a defeat on the next end_turn, damage or NPC
+  // auto-advance; only the DM's own end closes a fight the party walked out of.
+  // Only a roster that HAD a player row can have lost it to an exit: an encounter with no player
+  // participant at all still ends the ordinary way.
+  const hasPlayerRow = state.participants.some(
+    (participant) => (participant.participantType as string) === 'player',
+  );
+  if (
+    hasPlayerRow &&
+    partyHasLeftTheFight(
+      state.participants as unknown as Parameters<typeof partyHasLeftTheFight>[0],
+    )
+  )
+    return false;
   const active = state.participants.filter((participant) => participant.isActive);
   const vitals = active.map((participant) => ({
     participant,
@@ -761,6 +798,86 @@ async function proposeCombatSpell(
   };
 }
 
+/**
+ * A player's `flee` / `yield`, resolved through the exit machinery (#2580).
+ *
+ * The provoked opportunity attack goes through the ordinary attack resolver, as a REACTION: the
+ * same roll, the same damage write, the same telemetry and the same narration contract entry any
+ * other attack takes, with no second attack path to keep honest. `isReaction` is what makes that
+ * honest here — it is what lets a creature that is not the current-turn participant swing, and
+ * what claims the Reaction instead of a second Action.
+ *
+ * Deliberately NOT routed back through `executeCombatIntent`: the flee has already claimed this
+ * turn's action and bumped the encounter version, so a nested attack intent would be refused by
+ * the version check it can no longer satisfy, and the attack would never happen — silently, in
+ * the one place the player is entitled to be hit.
+ *
+ * Submitted before the exit is marked, which is the whole ordering rule: the blow lands while the
+ * player is still in reach.
+ */
+async function resolvePlayerExit(params: {
+  encounterId: string;
+  sessionId: string;
+  userId: string;
+  state: CombatState;
+  actorId: string;
+  intent: 'flee' | 'yield';
+}): Promise<unknown> {
+  const { encounterId, sessionId, userId, state, actorId, intent } = params;
+  const map = await loadActiveTacticalMap(sessionId);
+  const roster = rosterFrom(state.participants);
+  return recordPlayerExit({
+    encounterId,
+    sessionId,
+    userId,
+    state,
+    actorId,
+    intent,
+    label: (participantId) => facingName(undefined, participantId, roster),
+    slugOf: (participantId) =>
+      engineSlugForParticipant(map, participantId, facingName(undefined, participantId, roster)),
+    selectAttacker: (actor) =>
+      selectOpportunityAttacker({
+        state,
+        actor,
+        map,
+        reachOf: async (participant) => {
+          const { getDefaultCombatWeapon } = await import('./equipped-loadout.js');
+          return getDefaultCombatWeapon(participant);
+        },
+        hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
+        distanceFeet: getDistance,
+      }),
+    resolveOpportunityAttack: async (attacker: OpportunityAttacker) => {
+      const attackService = await createCombatAttackService();
+      const outcome = await attackService.resolveAttack(
+        encounterId,
+        {
+          attackerId: attacker.participant.id,
+          targetId: actorId,
+          weaponId: attacker.weapon.id,
+          // An opportunity attack is melee by rule; `selectOpportunityAttacker` never offers a
+          // ranged weapon, so this is the attack type it was chosen for.
+          attackType: 'melee',
+          expectedVersion: state.encounter.version,
+          isReaction: true,
+        } satisfies AttackRollInput,
+        userId,
+      );
+      return {
+        hit: outcome.hit,
+        finalDamage: outcome.finalDamage,
+        targetNewHp: outcome.targetNewHp,
+        targetIsConscious: outcome.targetIsConscious,
+        targetIsDead: outcome.targetIsDead,
+        isCritical: outcome.isCritical,
+      };
+    },
+    markExited: (id, participantId) =>
+      CombatEncounterService.markParticipantExited(id, participantId),
+  });
+}
+
 /** The single mutation gateway for player and AI-DM combat intents. */
 export async function executeCombatIntent(
   encounterId: string,
@@ -872,6 +989,24 @@ export async function executeCombatIntent(
           encounter.sessionId,
           `${actor.name ?? 'The player'} moved to (${destination.x}, ${destination.y}) by the engine. Describe the movement and keep the action unused.`,
         );
+        // #2580 option 2: a Disengage that actually leaves the board is an exit, with no chip.
+        // Moving to the edge is the same decision the Flee chip makes, so it records the same
+        // exit rather than leaving the player off the map and still counted as fighting.
+        const map = await loadActiveTacticalMap(encounter.sessionId);
+        const actorDisengaged = (actor as unknown as { isDisengaged?: boolean | null })
+          .isDisengaged;
+        if (actorDisengaged && map && hasLeftTheBoard(map, destination)) {
+          await resolvePlayerExit({
+            encounterId,
+            sessionId: encounter.sessionId,
+            userId,
+            state,
+            actorId: intent.actorId,
+            // A Disengaged move has already paid the opportunity-attack cost, so the recorded
+            // exit is the same one the chip would have made had the player not moved.
+            intent: 'flee',
+          });
+        }
       }
     } else if (intent.type === 'attack') {
       const actorLabel = facingName(actor.name, intent.actorId, rosterFrom(state.participants));
@@ -1093,6 +1228,29 @@ export async function executeCombatIntent(
           );
         }
       }
+    } else if (intent.type === 'flee' || intent.type === 'yield') {
+      // #2580: the player's own exit. Fleeing is movement and yielding is a declaration, so it
+      // claims the turn and the encounter version but NOT the Action: "Disengage, then Flee" has
+      // to work, and so does leaving with the Action already spent. It provokes one opportunity
+      // attack on the way out (flee only), then marks the player exited so the DM's next
+      // `dm_ended_scene` is judged against a roster with nobody left to be fought.
+      // A dying character is not choosing to leave: the death-save flow owns them.
+      const exiting = state.participants.find((participant) => participant.id === intent.actorId);
+      if (vitalStateOf(exiting as unknown as VitalsInput) !== 'standing')
+        throw new BusinessLogicError('Only a standing character can flee or yield', {
+          actorId: intent.actorId,
+        });
+      await claimTurnVersion(intent.actorId, encounterId, intent.expectedVersion);
+      result = await resolvePlayerExit({
+        encounterId,
+        sessionId: encounter.sessionId,
+        userId,
+        state,
+        actorId: intent.actorId,
+        intent: intent.type,
+      });
+      // No discrete-action fact here: `describePlayerExit` is the engine line, and a second
+      // "dashed" line under it would tell the DM the player ran and then dashed.
     } else if (intent.type === 'dash') {
       result = await claimTurnActionAndResolve(
         intent.actorId,
@@ -1350,6 +1508,32 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       { type: 'dodge', label: 'Dodge' },
       { type: 'disengage', label: 'Disengage' },
     );
+  }
+  // #2580: the way out of a fight the end guard would otherwise hold open. Offered outside the
+  // Action gate on purpose — a player whose Action is already spent is exactly the player stuck
+  // in a fight they cannot finish, so gating these would deny the escape to the people who need
+  // it most. The Flee label names the attacker, because whether a hostile is in reach is the
+  // difference between running away and running at something, and the player is the one who has
+  // to make that choice.
+  if (actor.participantType === 'player') {
+    const flees = await selectOpportunityAttacker({
+      state,
+      actor: actor as unknown as Parameters<typeof selectOpportunityAttacker>[0]['actor'],
+      map: map ?? null,
+      reachOf: async (participant) => {
+        const { getDefaultCombatWeapon } = await import('./equipped-loadout.js');
+        return getDefaultCombatWeapon(participant);
+      },
+      hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
+      distanceFeet: getDistance,
+    });
+    actions.push({
+      type: 'flee',
+      label: flees
+        ? `Flee (${facingName(undefined, flees.participant.id, rosterFrom(state.participants))} attacks)`
+        : 'Flee',
+    });
+    actions.push({ type: 'yield', label: 'Yield' });
   }
   const spells = profile.spellIds
     .map((id) => resolveCatalogSpell(id))

@@ -20,6 +20,7 @@ import { resolveAttackRules } from './combat-rules.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
+  claimTurnReactionAndResolve,
 } from './combat-turn-resources.js';
 import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
 import {
@@ -258,7 +259,9 @@ export class CombatAttackService {
   private async prepareAttack(encounterId: string, input: AttackRollInput, userId: string) {
     const { attackerId, targetId, weaponId, advantage = false, disadvantage = false } = input;
 
-    await this.assertCurrentTurn(encounterId, attackerId, userId);
+    // An opportunity attack belongs to the reaction, not the turn (#2580): the creature making
+    // it is not the current-turn participant and must not have to be.
+    if (!input.isReaction) await this.assertCurrentTurn(encounterId, attackerId, userId);
 
     // ⚡ Bolt: Batch fetch both attacker and target with their stats in a single query.
     // This reduces database round-trips from 3 down to 2 (1 for participants, 1 for weapon).
@@ -370,7 +373,7 @@ export class CombatAttackService {
     input: AttackRollInput,
     userId: string,
   ): Promise<AttackResult> {
-    const { attackerId, expectedVersion, targetId, providedD20 } = input;
+    const { attackerId, expectedVersion, targetId, providedD20, isReaction } = input;
 
     const {
       attackerData,
@@ -391,7 +394,11 @@ export class CombatAttackService {
     // Version and action claims happen only after all legal-action checks pass.
     // Wrapped so that anything throwing below -- damage application above all --
     // releases the claim instead of stranding the actor mid-turn.
-    return claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, async () => {
+    //
+    // A reaction claims the Reaction instead (#2580) and takes no version: it happens on the
+    // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
+    // Action for a blow provoked by the first one.
+    const resolveAttackRoll = async () => {
       // The player's own die when they rolled one, and only then. `rollD20` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
       // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die
@@ -578,7 +585,10 @@ export class CombatAttackService {
         logger.error({ msg: 'Failed to apply damage to HP', error });
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
       }
-    });
+    };
+    return isReaction
+      ? claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll)
+      : claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, resolveAttackRoll);
   }
 
   /**

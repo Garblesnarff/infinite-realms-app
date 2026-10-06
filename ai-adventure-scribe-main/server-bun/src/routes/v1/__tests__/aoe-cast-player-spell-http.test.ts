@@ -166,6 +166,15 @@ mock.module('../../../services/combat/combat-turn-resources.js', () => ({
     version: number,
     resolve: (version: number) => Promise<unknown>,
   ) => resolve(version),
+  // #2580: the reaction claim an opportunity attack resolves under. A mocked module with a
+  // missing export is a hard "Export named ... not found" for every importer in the run, so
+  // the whole surface is stubbed here, not just the claims this suite exercises.
+  claimTurnVersion: async () => 1,
+  claimTurnReactionAndResolve: async (
+    _participantId: string,
+    _encounterId: string,
+    resolve: () => Promise<unknown>,
+  ) => resolve(),
 }));
 mock.module('../../../services/combat-hp-service.js', () => ({
   CombatHPService: {

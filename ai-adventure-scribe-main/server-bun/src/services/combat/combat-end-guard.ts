@@ -84,6 +84,31 @@ export type SceneEndDecision =
     };
 
 /**
+ * Whether the player's side has left the fight entirely — every player and ally participant out
+ * of the turn order.
+ *
+ * A standing hostile blocks a scene end because there is still somebody in the fight for it to
+ * hurt. Once the party has left — every player and ally participant out of the turn order —
+ * that reason is gone: the creatures are still standing, but nobody is left to be fought, and
+ * the fight the guard was protecting is over. The exited party is never written back as dead
+ * and never counted as defeated; the encounter simply has no participants left on one side.
+ *
+ * Callers apply this to the FULL roster and judge `evaluateSceneEnd` on it too. It cannot live
+ * inside that judge, because the generation-time caller filters the current-turn line out before
+ * judging — and the filtered roster has no player in it on an ordinary turn, so a judge that
+ * tested it there would wave every end through.
+ */
+export function partyHasLeftTheFight(participants: readonly SceneEndParticipant[]): boolean {
+  const stillFighting = participants.some((participant) => {
+    if (!participant.isActive) return false;
+    if (participant.participantType === 'player') return true;
+    const disposition = (participant.disposition ?? '').toLowerCase();
+    return disposition.includes('ally') || disposition.includes('friend');
+  });
+  return !stillFighting;
+}
+
+/**
  * Judge a DM scene end against the engine's roster. An exit declaration accounts only
  * for the live hostile it names — matched on id or on the slug the DM was shown, since
  * the model addresses participants by slug, never by database id. Declarations naming

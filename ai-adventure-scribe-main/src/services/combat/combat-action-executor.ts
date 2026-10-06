@@ -87,6 +87,8 @@ export type ClientCombatIntent =
       d20?: number;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
+  /** #2580: the player's own exits — the way out of a fight nothing else can end. */
+  | { type: 'flee' | 'yield'; actorId: string; expectedVersion?: number }
   | { type: 'end_turn'; actorId: string }
   | { type: 'move'; actorId: string; x: number; y: number };
 
@@ -97,7 +99,15 @@ export type ClientCombatIntent =
  * every caller that constructed an intent without one — which was all of them. That silence is
  * how run 10 sent three versionless attacks straight into the route's union.
  */
-const INTENT_TYPES_REQUIRING_VERSION = new Set(['attack', 'spell', 'dash', 'dodge', 'disengage']);
+const INTENT_TYPES_REQUIRING_VERSION = new Set([
+  'attack',
+  'spell',
+  'dash',
+  'dodge',
+  'disengage',
+  'flee',
+  'yield',
+]);
 
 type VersionedClientIntent = Extract<ClientCombatIntent, { expectedVersion?: number }>;
 

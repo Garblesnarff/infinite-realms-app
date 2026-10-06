@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   evaluateSceneEnd,
   findKillClaims,
+  partyHasLeftTheFight,
   stripKillSentences,
 } from '../combat-end-guard.js';
 
@@ -85,6 +86,68 @@ describe('the live-hostile guard', () => {
       slugOf,
     );
     expect(allowed.allowed).toBe(true);
+  });
+
+  // #2580: the guard exists to stop the DM narrating a kill of a creature the engine counts as
+  // alive. It had no answer for the player who wants out of the fight entirely, so the only end
+  // it accepted was one that killed everything standing.
+  describe('a party that has left the fight (#2580)', () => {
+    const exitedHero = participant({
+      id: 'hero-1',
+      name: 'The Scholar',
+      participantType: 'player',
+      isActive: false,
+      maxHp: 7,
+      status: { currentHp: 5, isConscious: true },
+    });
+
+    // `evaluateSceneEnd` still refuses here, and that is deliberate: it is handed a filtered
+    // roster by the generation-time caller, where the player's own line is the one removed, so
+    // it must never infer "nobody is left" from what it was given. The rule lives in
+    // `partyHasLeftTheFight` and both call sites apply it to the roster they actually hold —
+    // pinned end to end in player-exit-intent.real-db.test.ts.
+    test('the judge alone still refuses, and the rule is the caller’s to apply', () => {
+      expect(evaluateSceneEnd([exitedHero, spiderAtFiveOfEleven], []).allowed).toBe(false);
+      expect(partyHasLeftTheFight([exitedHero, spiderAtFiveOfEleven])).toBe(true);
+    });
+
+    test('an ally still in the fight keeps holding the end', () => {
+      const ally = participant({
+        id: 'ally-1',
+        name: 'Mira Thane',
+        participantType: 'npc',
+        disposition: 'ally',
+      });
+      expect(evaluateSceneEnd([exitedHero, ally, spiderAtFiveOfEleven], []).allowed).toBe(false);
+      expect(partyHasLeftTheFight([exitedHero, ally, spiderAtFiveOfEleven])).toBe(false);
+    });
+
+    test('a player still in the turn order is not an exit, whoever the slug says', () => {
+      expect(partyHasLeftTheFight([hero, spiderAtFiveOfEleven])).toBe(false);
+      expect(
+        evaluateSceneEnd([hero, spiderAtFiveOfEleven], [{ participant_id: 'hero-1', exit: 'fled' }])
+          .allowed,
+      ).toBe(false);
+    });
+
+    test('a downed player is still in the fight — 0 HP is dying, not left', () => {
+      const down = participant({
+        id: 'hero-1',
+        name: 'The Scholar',
+        participantType: 'player',
+        status: { currentHp: 0, isConscious: false },
+      });
+      expect(partyHasLeftTheFight([down, spiderAtFiveOfEleven])).toBe(false);
+      expect(evaluateSceneEnd([down, spiderAtFiveOfEleven], []).allowed).toBe(false);
+    });
+
+    test('a roster with no player line reads as the party having left', () => {
+      // This is deliberate, and it is the shape of the prompt after an exit: the turn-order block
+      // lists only active participants, so once the player leaves their line is simply absent
+      // and the generation-time guard has nothing else to read the exit from. Absence IS the
+      // signal here; the real-DB suite pins that the real block produces exactly this roster.
+      expect(partyHasLeftTheFight([spiderAtFiveOfEleven])).toBe(true);
+    });
   });
 
   test('an exit for one hostile does not account for another', () => {
@@ -171,7 +234,7 @@ describe('kill language about a living participant', () => {
   test('no claim for a felled monster named beside the living player', () => {
     const dead = participant({ id: 'spider-1', status: { currentHp: 0, isConscious: false } });
     expect(
-      findKillClaims('The finishing blow drops the Vitruvian Spider at The Veteran\'s feet.', [
+      findKillClaims("The finishing blow drops the Vitruvian Spider at The Veteran's feet.", [
         hero,
         dead,
       ]),
@@ -254,10 +317,11 @@ describe('the D5 narration: a numbered swarm, an ordinal and a pronoun (#2563)',
       maxHp: 4,
       status: { currentHp: 4, isConscious: true },
     });
-    const claims = findKillClaims(
-      'You turn on the second Light-Eater. It dissipates into ash.',
-      [scholar, swarm1Down, swarm2],
-    );
+    const claims = findKillClaims('You turn on the second Light-Eater. It dissipates into ash.', [
+      scholar,
+      swarm1Down,
+      swarm2,
+    ]);
     expect(claims.map((claim) => claim.participantId)).toEqual(['light-eater-swarm-2']);
   });
 });
