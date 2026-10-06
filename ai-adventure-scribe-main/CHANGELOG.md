@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.29.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.28.2...v0.29.0) (2026-10-06)
+
+
+### Features
+
+* **combat:** dying and death per SRD 5.1: death saves, stable, dead, damage at 0 HP, massive damage ([#2518](https://github.com/Garblesnarff/infinite-realms-production/issues/2518), [#2622](https://github.com/Garblesnarff/infinite-realms-production/issues/2622)) ([#2618](https://github.com/Garblesnarff/infinite-realms-production/issues/2618)) ([604c490](https://github.com/Garblesnarff/infinite-realms-production/commit/604c4904ddfcb1d70d4a16d494e65064b845fbef))
+
+
+### Bug Fixes
+
+* **dm:** chatWithDM rethrows typed errors (session expired, 429, abort) unchanged ([#2601](https://github.com/Garblesnarff/infinite-realms-production/issues/2601)) ([#2634](https://github.com/Garblesnarff/infinite-realms-production/issues/2634)) ([f93e9e2](https://github.com/Garblesnarff/infinite-realms-production/commit/f93e9e22b2000b537e82a270cf4d997c5eb4caee))
+* **sheet:** Spells tab reads real character data, read-only slot pips, non-caster state ([#2599](https://github.com/Garblesnarff/infinite-realms-production/issues/2599)) ([#2627](https://github.com/Garblesnarff/infinite-realms-production/issues/2627)) ([6244212](https://github.com/Garblesnarff/infinite-realms-production/commit/6244212c4cb0e8351cb4bebfedb458f254e9bfc0))
+
 ## [0.28.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.28.1...v0.28.2) (2026-10-06)
 
 
