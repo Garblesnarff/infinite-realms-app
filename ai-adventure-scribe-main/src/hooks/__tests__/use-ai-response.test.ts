@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { useAIResponse, type EnhancedChatMessage } from '../use-ai-response';
 
 import { useCombat } from '@/contexts/CombatContext';
+import { formatDiceRoll } from '@/features/game-session/components/chat/message-list/utils/dice-roll-formatter';
 import { NEUTRAL_NO_EFFECT_LINE } from '@/hooks/ai/narration-gate';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -426,6 +427,100 @@ describe('useAIResponse', () => {
         expect.objectContaining({
           dmReply: { messageId: DM_ID, inCombat: false, narrationGated: false },
         }),
+      );
+    });
+
+    // #2609: the live wiring at use-ai-response.ts:798-800 — the roll-outcome
+    // gate opens from the dice-UI intent on the message, not from its text.
+    it('passes isDiceRollMessage: true to chatWithDM for a dice-UI roll message', async () => {
+      const { AIService } = await import('@/services/ai-service');
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'The moss holds your weight.' });
+
+      // Real producer fixture: the dice UI formats the player message with
+      // formatDiceRoll and sends intent 'dice_roll' (use-message-dice-rolls).
+      const rollRequest = {
+        id: 'roll-2609-ui-1',
+        requestType: 'skill_check',
+        description: 'Athletics Check',
+        rollConfig: { dieType: 20, count: 1, modifier: 3 },
+        timestamp: new Date('2026-10-05T18:00:00.000Z'),
+        status: 'completed',
+        result: {
+          dieType: 20,
+          count: 1,
+          modifier: 3,
+          results: [10],
+          keptResults: [10],
+          total: 13,
+          naturalRoll: 10,
+        },
+        dc: 15,
+      };
+
+      const { result } = renderHook(() => useAIResponse());
+      await result.current.getAIResponse(
+        [
+          {
+            text: formatDiceRoll(rollRequest as any),
+            sender: 'player',
+            timestamp: new Date().toISOString(),
+            context: {
+              intent: 'dice_roll',
+              diceRoll: {
+                formula: '1d20+3',
+                count: 1,
+                dieType: 20,
+                modifier: 3,
+                total: 13,
+                naturalRoll: 10,
+                requestType: 'skill_check',
+                description: 'Athletics Check',
+                dc: 15,
+                success: false,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          },
+        ] as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        undefined,
+        DM_ID,
+      );
+
+      expect((AIService.chatWithDM as any).mock.calls[0][0]).toEqual(
+        expect.objectContaining({ isDiceRollMessage: true }),
+      );
+    });
+
+    it('does not set isDiceRollMessage for a typed "I rolled 17" message', async () => {
+      const { AIService } = await import('@/services/ai-service');
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(sessionContext as any);
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'Noted.' });
+
+      const { result } = renderHook(() => useAIResponse());
+      await result.current.getAIResponse(
+        [
+          {
+            text: 'I rolled 17',
+            sender: 'player',
+            timestamp: new Date().toISOString(),
+            context: { intent: 'query' },
+          },
+        ] as any,
+        mockSessionId,
+        undefined,
+        undefined,
+        undefined,
+        DM_ID,
+      );
+
+      // The flag is derived from the dice-UI intent only: deriving it from
+      // message text must not sneak the property onto the call.
+      expect((AIService.chatWithDM as any).mock.calls[0][0]).not.toHaveProperty(
+        'isDiceRollMessage',
       );
     });
 

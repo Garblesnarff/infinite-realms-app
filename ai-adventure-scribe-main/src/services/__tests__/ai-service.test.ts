@@ -584,7 +584,11 @@ describe('AIService', () => {
       });
 
       // The persisted value is authoritative even if transcript decoration disagrees.
-      await AIService.chatWithDM(buildParams('Acrobatics Check: 13 ✓'));
+      // #2609: the gate opens from the dice-UI flag, not the ✓ glyph in the text.
+      await AIService.chatWithDM({
+        ...buildParams('Acrobatics Check: 13 ✓'),
+        isDiceRollMessage: true,
+      });
 
       expect(SessionStateService.getLatestRollOutcome).toHaveBeenCalledWith('session-1');
       expect(lastPrompt()).toContain(

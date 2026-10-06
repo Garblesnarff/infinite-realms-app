@@ -355,8 +355,9 @@ export class HeadlessGameClient {
     }
     if (result.advantage) formatted += ' [ADV]';
     if (result.disadvantage) formatted += ' [DIS]';
-    const target = request.type === 'attack' ? request.ac : request.dc;
-    if (target !== undefined && target !== null) formatted += result.total >= target ? ' ✓' : ' ✗';
+    // #2609: the ✓/✗ verdict suffix is retired. No reader needs it — the
+    // roll-outcome gate opens from the dice-UI flag, not message text — and it
+    // is the same glyph-in-DM-text hazard #1807 removed from the live formatter.
     if (request.type === 'attack' && result.naturalRoll === 20) formatted += ' CRITICAL HIT!';
     if (request.type === 'attack' && result.naturalRoll === 1) formatted += ' Critical Miss';
     return formatted;

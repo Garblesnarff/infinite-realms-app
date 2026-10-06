@@ -17,7 +17,11 @@ export function conversationHistoryFrom(messages: readonly ChatMessage[]): Servi
       msg.sender === 'companion'
         ? `Companion ${msg.speakerName ?? msg.characterName ?? 'Unknown'} (in-world speech): ${msg.text}`
         : msg.text,
-    timestamp: new Date(),
+    // #2609: carry the source timestamp, not "now". The roll-outcome staleness
+    // bound compares the outcome's roll_result entry against the latest DM
+    // reply; stamping every entry with the conversion time would make every
+    // reply look newer than any roll.
+    timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
     narrationSegments: msg.narrationSegments,
     speakerType: msg.sender,
     speakerName: msg.speakerName ?? msg.characterName,

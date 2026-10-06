@@ -795,6 +795,9 @@ export const useAIResponse = (): {
         // Call AIService
         const answered = await askDmUnlessCancelled({
           message: latestMessage.text,
+          // #2609: the dice-UI send path opens the roll-outcome gate from the
+          // roll itself, not from message text.
+          ...(isDiceRollMessage ? { isDiceRollMessage } : {}),
           context: aiContext,
           conversationHistory,
           userPlan: userPlan || undefined,

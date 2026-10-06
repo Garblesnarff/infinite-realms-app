@@ -27,6 +27,7 @@ import { dmResponseSchema } from '../../server-bun/src/services/dm/dm-response-s
 import type { AIResponse, ChatMessage, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
 import type { SessionVoiceContext } from './voice-consistency-service';
+import type { PersistedRollOutcome } from '@/types/session-state';
 
 import { llmApiClient } from '@/infrastructure/api';
 import { PartyDefeatedError, QuotaExceededError, type TurnPhaseReporter } from '@/infrastructure/api/rest-client';
@@ -55,6 +56,35 @@ function reportTurnPhase(
   } catch (loggingError) {
     logger.warn('[AIService] Turn-phase logging failed:', loggingError);
   }
+}
+
+/**
+ * #2609: staleness bound for the roll-outcome gate. A repaired gate still needs
+ * a rule for how old is too old: the outcome's roll_result entry must be newer
+ * than the latest DM reply in the session, because the roll answers the DM's
+ * current request. The reader skips typed mentions ("I rolled 17"), so without
+ * this bound it can surface a stale authoritative outcome from an earlier turn —
+ * that outcome must not reach the DM as `lastRollOutcome`.
+ */
+function isRollOutcomeStale(
+  outcome: PersistedRollOutcome,
+  conversationHistory: ChatMessage[] | undefined,
+): boolean {
+  let latestDmReplyMs = -1;
+  for (const message of conversationHistory ?? []) {
+    if (message.speakerType !== 'dm') continue;
+    const ts = message.timestamp;
+    const ms = ts instanceof Date ? ts.getTime() : NaN;
+    if (!Number.isNaN(ms) && ms > latestDmReplyMs) latestDmReplyMs = ms;
+  }
+  // No DM reply in history: the dice-UI flag gate stands alone; nothing to
+  // prove stale.
+  if (latestDmReplyMs < 0) return false;
+  const outcomeMs = Date.parse(outcome.timestamp);
+  // An unparseable outcome timestamp fails closed: never hand the DM an
+  // outcome we cannot place after its request.
+  if (Number.isNaN(outcomeMs)) return true;
+  return outcomeMs <= latestDmReplyMs;
 }
 
 export class AIService {
@@ -123,6 +153,13 @@ export class AIService {
      * `message` so the player's words reach memory and the context builder unchanged.
      */
     narrationViolation?: string;
+    /**
+     * #2609: set by the dice-UI send path when the message carries a structured
+     * roll result. Opens the roll-outcome gate — the retired ✓/✗ glyph regex
+     * never fired on live formatter output (words, not glyphs, since #1866).
+     * A typed "I rolled 17" never sets this.
+     */
+    isDiceRollMessage?: boolean;
     /** #2418: aborts the generate request, so a cancelled cast stops waiting for the DM. */
     signal?: AbortSignal;
   }): Promise<AIResponse> {
@@ -191,7 +228,10 @@ export class AIService {
         // over unescaped content — and main's post-#1687 ContextBuilder returns one opaque
         // string anyway. The fetch is awaited concurrently with the context build, so
         // ground truth costs no extra wall-clock on the turn path.
-        const shouldLoadRollOutcome = /[✓✗]/u.test(params.message);
+        // #2609: the gate opens from the roll itself, not from text. The dice-UI
+        // send path passes `isDiceRollMessage`; the ✓/✗ regex is retired — no
+        // live writer emits those glyphs since #1866.
+        const shouldLoadRollOutcome = params.isDiceRollMessage === true;
         // #2450: the starter-campaign lore fetch is hoisted out of ContextBuilder
         // so the canon section can be relevance-ranked and token-capped BEFORE the
         // context prompt is built. Canon is budgeted to leave room for the
@@ -226,6 +266,16 @@ export class AIService {
                   stage: 'latest-roll-outcome',
                   ms: Math.round(performance.now() - preparationCheckpoint),
                 });
+                // #2609 staleness bound: the outcome answers the DM's current
+                // request, so its roll_result entry must be newer than the
+                // latest DM reply. Anything older is stale — omit the key.
+                if (value && isRollOutcomeStale(value, params.conversationHistory)) {
+                  logger.info('ROLL_OUTCOME_STALE_OMITTED', {
+                    sessionId: params.context.sessionId,
+                    outcomeTimestamp: value.timestamp,
+                  });
+                  return null;
+                }
                 return value;
               })
             : Promise.resolve(null),
