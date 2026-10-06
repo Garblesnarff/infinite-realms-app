@@ -2,6 +2,27 @@ import { findCatalogWeapon } from './weapon-catalog.js';
 
 import type { WeaponRuleProfile } from './combat-rules.js';
 
+/**
+ * Builds the "(move closer first)" hint suffix, with or without the distance
+ * ("(move closer first — 20 ft)"). The generator below and the strip share
+ * this one definition so the two can never drift apart: if the label format
+ * changes, the strip changes with it. (#2555, #2564)
+ */
+export function buildMoveCloserHint(distanceFeet?: number): string {
+  return ` (move closer first${distanceFeet !== undefined ? ` — ${distanceFeet} ft` : ''})`;
+}
+
+/**
+ * Matches the hint suffix built by `buildMoveCloserHint`, with or without the
+ * distance. Used by `stripMoveCloserHint`.
+ */
+export const MOVE_CLOSER_HINT_PATTERN = /\s*\(move closer first(?: — \d+ ft)?\)\s*$/i;
+
+/** Removes the "(move closer first)" hint suffix from an attack label, if present. */
+export function stripMoveCloserHint(label: string): string {
+  return label.replace(MOVE_CLOSER_HINT_PATTERN, '');
+}
+
 export function isEquippedWeaponCandidate(candidate: {
   itemType: string | null | undefined;
   name: string;
@@ -22,6 +43,7 @@ export type WeaponTargetResolution = {
   targetId: string;
   legal: boolean;
   refusal?: 'no_line_of_sight' | 'out_of_range' | 'total_cover';
+  distanceFeet?: number;
 };
 
 /**
@@ -44,10 +66,13 @@ export function buildCombatWeaponOptions(
     );
     if (!targetIds.length) return [];
     const needsMovement = legalTargets.length === 0 && meleeTargetsNeedingMovement.length > 0;
+    const movementHint = needsMovement
+      ? buildMoveCloserHint(meleeTargetsNeedingMovement[0].distanceFeet)
+      : '';
     return [
       {
         type: 'attack' as const,
-        label: `Attack with ${weapon.name}${needsMovement ? ' (move closer first)' : ''}`,
+        label: `Attack with ${weapon.name}${movementHint}`,
         weaponId: weapon.id,
         targetIds,
       },

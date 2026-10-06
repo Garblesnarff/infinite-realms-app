@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { readSeededPremadeTemplates } from '../../../../../src/services/character/__tests__/seeded-premade-templates.ts';
 import { resolveAttackRules } from '../combat-rules.js';
-import { buildCombatWeaponOptions, isEquippedWeaponCandidate } from '../combat-weapon-options.js';
+import { buildCombatWeaponOptions, isEquippedWeaponCandidate, MOVE_CLOSER_HINT_PATTERN, stripMoveCloserHint } from '../combat-weapon-options.js';
 import { findCatalogWeapon } from '../weapon-catalog.js';
 
 import type { WeaponRuleProfile } from '../combat-rules.js';
@@ -332,7 +332,9 @@ describe('combat weapon option builder', () => {
           weapon,
           geometry: { distanceFeet: 50, hasLineOfSight: true, cover: 0 },
         });
-        return [{ targetId: 'hostile-1', legal: rules.legal, refusal: rules.refusal }];
+        return [
+          { targetId: 'hostile-1', legal: rules.legal, refusal: rules.refusal, distanceFeet: 50 },
+        ];
       });
 
       expect(options, template.template_key).toHaveLength(expectedWeapons.length);
@@ -344,7 +346,7 @@ describe('combat weapon option builder', () => {
           weapon.ranged && (weapon.longRange ?? weapon.normalRange ?? 0) >= 50
             ? `Attack with ${weapon.name}`
             : !weapon.ranged && (weapon.reachFeet ?? 0) < 50
-              ? `Attack with ${weapon.name} (move closer first)`
+              ? `Attack with ${weapon.name} (move closer first — 50 ft)`
               : `Attack with ${weapon.name}`,
         ),
       );
@@ -421,5 +423,37 @@ describe('combat weapon option builder', () => {
     expect(isEquippedWeaponCandidate({ itemType: 'equipment', name: "scholar's pack" })).toBe(
       false,
     );
+  });
+
+  test('hint generator and strip share one definition (#2555, #2564)', () => {
+    // Build labels through the real generator, with and without a distance.
+    // If the generator's format changes, the pattern and strip must change with it.
+    const weapon = {
+      id: 'quarterstaff-1',
+      name: 'Quarterstaff',
+      ranged: false,
+    };
+    const buildLabels = (distanceFeet?: number) =>
+      buildCombatWeaponOptions([weapon] as never, () => [
+        {
+          targetId: 'goblin-1',
+          legal: false,
+          refusal: 'out_of_range' as const,
+          ...(distanceFeet !== undefined ? { distanceFeet } : {}),
+        },
+      ]).map((option) => option.label);
+
+    const labels = [...buildLabels(), ...buildLabels(15), ...buildLabels(20)];
+    expect(labels).toHaveLength(3);
+
+    for (const label of labels) {
+      // Each generator-built label matches the shared pattern...
+      expect(label).toMatch(MOVE_CLOSER_HINT_PATTERN);
+      // ...and the strip removes the hint, leaving the base label.
+      expect(stripMoveCloserHint(label)).toBe('Attack with Quarterstaff');
+    }
+
+    // Labels without the hint are untouched.
+    expect(stripMoveCloserHint('Attack with Quarterstaff')).toBe('Attack with Quarterstaff');
   });
 });
