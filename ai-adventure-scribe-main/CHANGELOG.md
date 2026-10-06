@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.27.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.1...v0.27.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **diagnostics:** build SHA and session id in the game header, crash card Copy details, plain-text /version ([#2608](https://github.com/Garblesnarff/infinite-realms-production/issues/2608)) ([#2605](https://github.com/Garblesnarff/infinite-realms-production/issues/2605)) ([993c6d2](https://github.com/Garblesnarff/infinite-realms-production/commit/993c6d2cc0fd388d4519a61eb57c29699f0d3e51))
+
 ## [0.27.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.0...v0.27.1) (2026-10-05)
 
 
