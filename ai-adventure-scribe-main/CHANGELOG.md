@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.28.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.28.0...v0.28.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **combat:** initiative line lock, no second entry confirm once a fight is seated, (no DC) check verdict ([#2623](https://github.com/Garblesnarff/infinite-realms-production/issues/2623)) ([#2629](https://github.com/Garblesnarff/infinite-realms-production/issues/2629)) ([efd9dfc](https://github.com/Garblesnarff/infinite-realms-production/commit/efd9dfcd56ba9f03430bc3ee093846d01adc0f16))
+
 ## [0.28.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.3...v0.28.0) (2026-10-06)
 
 
