@@ -70,9 +70,13 @@ const IndividualRolls = React.memo(
     count: number;
   }) => {
     if (advantage || disadvantage) {
-      const kept = keptResults || results.slice(0, 1);
+      // #2586: a roll result can arrive without a results array (the D6
+      // disadvantage check carried disadvantage: true and no results), so
+      // neither the slice nor the spread below may assume it.
+      const faces = Array.isArray(results) ? results : [];
+      const kept = keptResults || faces.slice(0, 1);
       // One instance per kept value, so a tie (12 and 12) still shows its dropped die.
-      const dropped = [...results];
+      const dropped = [...faces];
       for (const value of kept) {
         const index = dropped.indexOf(value);
         if (index !== -1) dropped.splice(index, 1);

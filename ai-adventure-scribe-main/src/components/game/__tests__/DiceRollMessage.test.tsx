@@ -206,6 +206,27 @@ describe('DiceRollMessage', () => {
     expect(screen.getByText('2d20kh1+1')).toBeInTheDocument();
   });
 
+  it('renders a disadvantage roll when results and naturalRoll are both missing (#2586)', () => {
+    // The degenerate end of the D6 shape: no results array and no natural face
+    // either (only possible from a malformed payload, never from
+    // handleManualResult). The card falls back to the total instead of throwing.
+    const degenerateRoll = {
+      ...defaultData,
+      formula: '2d20kl1+1',
+      count: 2,
+      modifier: 1,
+      advantage: false,
+      disadvantage: true,
+      results: undefined,
+      naturalRoll: undefined,
+      total: 16,
+    } as unknown as typeof defaultData;
+
+    expect(() => render(<DiceRollMessage data={degenerateRoll} />)).not.toThrow();
+    expect(screen.getByText(/Kept: \[16\]/)).toBeInTheDocument();
+    expect(screen.getByText('2d20kl1+1')).toBeInTheDocument();
+  });
+
   it('labels natural, modifier and total, and never shows the natural as the total (#2588)', () => {
     render(
       <DiceRollMessage
