@@ -33,6 +33,8 @@ import { llmApiClient } from '@/infrastructure/api';
 import {
   PartyDefeatedError,
   QuotaExceededError,
+  SessionExpiredError,
+  ApiClientError,
   type TurnPhaseReporter,
 } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
@@ -538,6 +540,19 @@ export class AIService {
             terminalState: 'party_defeated' as const,
             terminalEncounterId: providerError.encounterId,
           };
+        }
+        // #2601: typed errors survive the chatWithDM boundary. The downstream
+        // handler checks instanceof/status on the top-level error; wrapping
+        // them would defeat session-expiry and retry handling.
+        if (providerError instanceof SessionExpiredError) throw providerError;
+        if (providerError instanceof ApiClientError) throw providerError;
+        // #2601 (candidate 18): preserve abort identity. The rewrap strips
+        // the AbortError name, defeating abort-rethrow guards downstream.
+        if (
+          providerError instanceof Error &&
+          providerError.name === 'AbortError'
+        ) {
+          throw providerError;
         }
         throw new Error('Failed to get DM response - AI service unavailable', {
           cause: providerError,
