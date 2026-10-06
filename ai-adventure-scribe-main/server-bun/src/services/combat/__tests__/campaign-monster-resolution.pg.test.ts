@@ -116,15 +116,17 @@ describeWithDb('campaign monster index against real Postgres', () => {
 
       const index = await loadCampaignMonsterIndex(campaignId);
 
-      // 5 stat-bearing rows exist; the unnamed one is excluded by the IS NOT NULL filter
-      // before it is ever counted, which is why chunkCount is 4 rather than 5.
-      expect(index.chunkCount).toBe(4);
+      // Named monster/encounter rows are 4. npc_tier1 joined STAT_BEARING_CHUNK_TYPES
+      // in #2406, so The Sugar Golem is a fifth row. The unnamed monster is still
+      // excluded by IS NOT NULL; counting it would make this 6.
+      expect(index.chunkCount).toBe(5);
+      expect(index.blocklessNpcs.has(key('The Sugar Golem'))).toBe(true);
       expect(index.byKey.get(key('Gluten Golem'))?.parsed).toMatchObject({
         maxHp: 90,
         armorClass: 14,
       });
       expect(index.byKey.get(key('Shadow Roach'))?.parsed.maxHp).toBe(20);
-      // npc_tier1 was filtered out by the query, not merely unmatched.
+      // The NPC bio parses to no stat block, so it is not a stat source.
       expect(index.byKey.has(key('The Sugar Golem'))).toBe(false);
       // The unnamed 999 HP chunk is excluded by the IS NOT NULL filter.
       expect([...index.byKey.values()].some((m) => m.parsed.maxHp === 999)).toBe(false);

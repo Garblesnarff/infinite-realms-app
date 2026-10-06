@@ -46,6 +46,15 @@ const SpellSlotsService = hasRealDb
 const SpellSlotDataAccess = hasRealDb
   ? (await import('../spell-slots/spell-slot-data-access.js')).SpellSlotDataAccess
   : undefined;
+// The route module's import graph reaches services/workos.ts, which constructs
+// its client at import time. This suite never calls WorkOS; the dummies only
+// satisfy that import, the same way spell-slot-backfill.real-db.test.ts does.
+if (hasRealDb) {
+  process.env.PORT ??= '3100';
+  process.env.CORS_ORIGIN ??= 'http://localhost:3100';
+  process.env.WORKOS_API_KEY ??= 'test-dummy-key';
+  process.env.WORKOS_CLIENT_ID ??= 'test-dummy-client-id';
+}
 const routeExports = hasRealDb ? await import('../../routes/v1/characters.js') : undefined;
 const { BusinessLogicError } = hasRealDb
   ? await import('../../lib/errors.js')
@@ -152,23 +161,23 @@ describeWithDb('single spell-slot source (#2459)', () => {
       where: eq(characters.id, wizardId),
     });
     const routes = routeExports as NonNullable<typeof routeExports>;
-    const mapped = routes.mapCharacterToApi(
-      row as Parameters<typeof routes.mapCharacterToApi>[0],
-    );
+    const mapped = routes.mapCharacterToApi(row as Parameters<typeof routes.mapCharacterToApi>[0]);
     const overlaid = await routes.overlayEngineSpellSlots(mapped, wizardId, userId);
     expect(overlaid?.spell_slots).toEqual({ '1': { max: 2, current: 1 } });
   });
 
   it('a non-caster with no slot rows gets a refusal that names the cause', async () => {
-    const error = await SpellSlotsService!.useSpellSlot(
-      {
-        characterId: fighterId,
-        spellName: 'Burning Hands',
-        spellLevel: 1,
-        slotLevelUsed: 1,
-      },
-      userId,
-    ).catch((cause: unknown) => cause);
+    const error = await SpellSlotsService!
+      .useSpellSlot(
+        {
+          characterId: fighterId,
+          spellName: 'Burning Hands',
+          spellLevel: 1,
+          slotLevelUsed: 1,
+        },
+        userId,
+      )
+      .catch((cause: unknown) => cause);
 
     expect(error).toBeInstanceOf(BusinessLogicError);
     expect(String((error as Error).message)).toMatch(/has no level 1 spell slots/);
