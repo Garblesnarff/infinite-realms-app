@@ -77,14 +77,21 @@ export interface CombatEntryFirstAction {
 
 /**
  * A declared opening attack the engine refused to queue, with the reason in player language.
- * Returned instead of a bare `null` when the player named a weapon the sheet does not back:
- * combat still seats, but the caller surfaces `notice` so the player learns why there is no
- * opening attack instead of a generic "declare your action" (#2551).
+ * Returned instead of a bare `null` when the player named a weapon the sheet does not back
+ * (#2551), or a spell the catalog does not know, the engine cannot open with, or the sheet
+ * does not list (#2569): combat still seats, but the caller surfaces `notice` so the player
+ * learns why there is no opening action instead of a generic "declare your action".
  */
 export interface CombatEntryFirstActionRefusal {
-  reason: 'declared_weapon_not_equipped';
+  reason:
+    | 'declared_weapon_not_equipped'
+    | 'declared_spell_unknown'
+    | 'declared_spell_unsupported'
+    | 'declared_spell_not_known';
   notice: string;
   requestedWeapon: string | null;
+  /** Set for spell refusals; the declared spell name or id the player used. */
+  requestedSpell?: string | null;
   actor: string;
   target: string;
   /** A refusal queues no action: these stay absent so union readers can narrow on them. */
@@ -333,9 +340,30 @@ export async function deriveCombatEntryFirstAction(
           ? 'unsupported_spell'
           : 'spell_not_known',
     });
-    // Never turn a refused spell declaration into a fabricated weapon attack. The caller can
-    // begin combat without an opening action and the normal refusal path will explain the miss.
-    return null;
+    // Never turn a refused spell declaration into a fabricated weapon attack. Like the weapon
+    // refusal (#2551), return the reason in player language so the entry notice can name the
+    // miss instead of falling back to a silent generic notice (#2569).
+    const spellRefusalReason = !spell
+      ? ('declared_spell_unknown' as const)
+      : !isPlayerCombatSpell(spell)
+        ? ('declared_spell_unsupported' as const)
+        : ('declared_spell_not_known' as const);
+    const declaredSpellLabel =
+      params.declaredAttack.spellName || params.declaredAttack.verb.replace(/^cast\s+/i, '');
+    const spellRefusalWhy =
+      spellRefusalReason === 'declared_spell_unknown'
+        ? 'no such spell was recognized'
+        : spellRefusalReason === 'declared_spell_unsupported'
+          ? 'the engine cannot open combat with that spell'
+          : 'it is not on your character sheet';
+    return {
+      reason: spellRefusalReason,
+      notice: `You declared casting ${declaredSpellLabel}, but ${spellRefusalWhy}, so your opening spell was not queued.`,
+      requestedWeapon: null,
+      requestedSpell: declaredSpellLabel,
+      actor: playerParticipant.id,
+      target: targetParticipant.id,
+    };
   }
 
   const requestedAttackSource = requestedSource;

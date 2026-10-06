@@ -739,6 +739,12 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       text: 'Combat has begun. Declare your action.',
       persist: true,
     });
+    // #2569: the seated_without_actions notice path logs the status too.
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_DECLARE_ACTION_NOTICE', {
+      reason: 'absent',
+      path: 'seated_without_actions',
+      encounterId: 'encounter-1',
+    });
     expect(outcome.result.combat_actions).toEqual([]);
   });
 
@@ -879,11 +885,59 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     });
     expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
       reason: 'declared_weapon_not_equipped',
+      status: 'refused',
       encounterId: 'encounter-1',
     });
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
     expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
     expect(outcome.result.combat_actions).toEqual([]);
+  });
+
+  it('names the miss for a refused declared spell: specific server notice, status refused on every notice path (#2569)', async () => {
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
+      response({
+        encounter: { id: 'encounter-1' },
+        notice:
+          'You declared casting Zorblaxian Annihilation, but no such spell was recognized, so your opening spell was not queued.',
+        first_action_refusal: { reason: 'declared_spell_unknown' },
+      }) as any,
+    );
+    const refresh = vi.fn().mockResolvedValue(PLAYER_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: {
+          ...PENDING_ENTRY,
+          declaredAttack: {
+            verb: 'cast Zorblaxian Annihilation',
+            actorName: 'Vance',
+            attackSource: 'spell',
+            spellName: 'Zorblaxian Annihilation',
+          },
+        },
+        combat_actions: [],
+      },
+      refresh,
+    );
+
+    // The specific refusal notice, not a silent generic one.
+    expect(outcome.localNotices).toContainEqual({
+      text: 'You declared casting Zorblaxian Annihilation, but no such spell was recognized, so your opening spell was not queued.',
+      persist: true,
+    });
+    // The status is computed at payload read; every notice path logs it.
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_SERVER_NOTICE', {
+      reason: 'refused',
+      path: 'server_notice',
+      encounterId: 'encounter-1',
+    });
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_DECLARE_ACTION_NOTICE', {
+      reason: 'refused',
+      path: 'seated_without_actions',
+      encounterId: 'encounter-1',
+    });
+    expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
   });
 
   it('logs malformed_first_action when /enter returns a first_action the client cannot use (#2551)', async () => {
@@ -906,6 +960,13 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
 
     expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
       reason: 'malformed_first_action',
+      status: 'malformed',
+      encounterId: 'encounter-1',
+    });
+    // #2569: the first_action_unusable notice path logs the status too.
+    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_DECLARE_ACTION_NOTICE', {
+      reason: 'malformed',
+      path: 'first_action_unusable',
       encounterId: 'encounter-1',
     });
     expect(outcome.localNotices).toContainEqual({

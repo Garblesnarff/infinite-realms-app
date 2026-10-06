@@ -395,13 +395,85 @@ describe('deriveCombatEntryFirstAction', () => {
       { ...deps, logger: { warn: (data: unknown) => warnings.push(data) } },
     );
 
-    expect(firstAction).toBeNull();
+    // #2569: the spell refusal returns a CombatEntryFirstActionRefusal like the
+    // weapon refusal, so the entry notice can name the miss.
+    expect(firstAction).toEqual({
+      reason: 'declared_spell_unsupported',
+      notice: expect.stringContaining('Fireball'),
+      requestedWeapon: null,
+      requestedSpell: 'Fireball',
+      actor: 'participant-player',
+      target: expect.any(String),
+    });
     expect(warnings).toEqual([
       expect.objectContaining({
         msg: 'FIRST_ACTION_SPELL_REFUSED',
         spellId: 'fireball',
         participantId: 'participant-player',
         reason: 'unsupported_spell',
+      }),
+    ]);
+  });
+
+  it('refuses an unrecognized declared spell with a specific notice (#2569)', async () => {
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: {
+          verb: 'cast Zorblaxian Annihilation',
+          actorName: 'Professor Emil Darkwater',
+          attackSource: 'spell',
+          spellName: 'Zorblaxian Annihilation',
+        },
+      },
+      { ...deps, logger: { warn: () => {} } },
+    );
+
+    expect(firstAction).toEqual({
+      reason: 'declared_spell_unknown',
+      notice:
+        'You declared casting Zorblaxian Annihilation, but no such spell was recognized, so your opening spell was not queued.',
+      requestedWeapon: null,
+      requestedSpell: 'Zorblaxian Annihilation',
+      actor: 'participant-player',
+      target: expect.any(String),
+    });
+  });
+
+  it('refuses a declared spell the character does not know with a specific notice (#2569)', async () => {
+    const warnings: unknown[] = [];
+    const firstAction = await deriveCombatEntryFirstAction(
+      {
+        sessionId: 'session-1',
+        combatState: state,
+        player: { characterId: 'character-1', name: 'Rook' },
+        declaredAttack: {
+          verb: 'cast Ray of Frost',
+          actorName: 'Professor Emil Darkwater',
+          attackSource: 'spell',
+          spellId: 'ray-of-frost',
+        },
+      },
+      { ...deps, logger: { warn: (data: unknown) => warnings.push(data) } },
+    );
+
+    // The sheet has magic-missile and fire-bolt; ray-of-frost is a real spell
+    // the character does not know, so the third branch fires.
+    expect(firstAction).toEqual({
+      reason: 'declared_spell_not_known',
+      notice:
+        'You declared casting Ray of Frost, but it is not on your character sheet, so your opening spell was not queued.',
+      requestedWeapon: null,
+      requestedSpell: 'Ray of Frost',
+      actor: 'participant-player',
+      target: expect.any(String),
+    });
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        msg: 'FIRST_ACTION_SPELL_REFUSED',
+        reason: 'spell_not_known',
       }),
     ]);
   });

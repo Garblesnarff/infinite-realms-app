@@ -261,6 +261,9 @@ export async function handleDmActionsAndTransitions(
   let entryFirstActionPresent = false;
   let entryFirstAction: StructuredCombatAction | null = null;
   let entryFirstActionPayload: unknown;
+  // #2569: self-describing entry first_action status, computed when the `/enter`
+  // payload is read. The declare-action notice paths log this, never the payload.
+  let entryFirstActionStatus: 'accepted' | 'refused' | 'malformed' | 'absent' = 'absent';
   let entryPlayerAttackRoll:
     | { action: StructuredCombatAction; d20?: number; autoRolled: boolean; cancelled?: boolean }
     | undefined;
@@ -394,11 +397,29 @@ export async function handleDmActionsAndTransitions(
             );
             entryFirstActionPayload = (entryPayload as any)?.first_action;
             entryFirstAction = asEntryAction(entryFirstActionPayload);
+            // #2569: compute the status here, where the payload is read, so every
+            // downstream notice path can name the reason without re-deriving it.
+            const refusalReason = (entryPayload as any)?.first_action_refusal?.reason;
+            entryFirstActionStatus = entryFirstAction
+              ? 'accepted'
+              : typeof refusalReason === 'string'
+                ? 'refused'
+                : entryFirstActionPresent
+                  ? 'malformed'
+                  : 'absent';
+            // #2569: the server-notice path logs its reason too. When the server refused
+            // the declared action, this is the specific notice, not the generic one.
+            if (typeof (entryPayload as any)?.notice === 'string') {
+              logger.warn('COMBAT_ENTRY_SERVER_NOTICE', {
+                reason: entryFirstActionStatus,
+                path: 'server_notice',
+                encounterId: enteredEncounterId,
+              });
+            }
             if (!entryFirstAction) {
               // One structured line saying why the entry first_action is unusable, so the
               // generic declare-action notice below is never the only evidence (#2551).
               // Reason only — never the payload.
-              const refusalReason = (entryPayload as any)?.first_action_refusal?.reason;
               logger.warn('COMBAT_ENTRY_FIRST_ACTION_UNUSABLE', {
                 reason:
                   typeof refusalReason === 'string'
@@ -406,6 +427,7 @@ export async function handleDmActionsAndTransitions(
                     : entryFirstActionPresent
                       ? 'malformed_first_action'
                       : 'absent_first_action',
+                status: entryFirstActionStatus,
                 encounterId: enteredEncounterId,
               });
             }
@@ -674,12 +696,24 @@ export async function handleDmActionsAndTransitions(
       }
     } else {
       result = { ...result, combat_actions: [] };
+      // #2569: the notice path logs its reason — the status computed at payload read.
+      logger.warn('COMBAT_ENTRY_DECLARE_ACTION_NOTICE', {
+        reason: entryFirstActionStatus,
+        path: 'first_action_unusable',
+        encounterId: activeEncounter?.id ?? null,
+      });
       appendLocalNotice(COMBAT_ENTRY_DECLARE_ACTION_NOTICE);
       responseText = '';
       narrationSegments = undefined;
     }
   } else if (entryWasSeated && !result.combat_actions?.length) {
     result = { ...result, combat_actions: [] };
+    // #2569: the notice path logs its reason — the status computed at payload read.
+    logger.warn('COMBAT_ENTRY_DECLARE_ACTION_NOTICE', {
+      reason: entryFirstActionStatus,
+      path: 'seated_without_actions',
+      encounterId: activeEncounter?.id ?? null,
+    });
     appendLocalNotice(COMBAT_ENTRY_DECLARE_ACTION_NOTICE);
     responseText = '';
     narrationSegments = undefined;

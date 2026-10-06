@@ -83,6 +83,35 @@ function requestIdOf(context: unknown, request: Request): string {
     : request.headers.get('x-request-id') || 'unknown';
 }
 
+/**
+ * #2569: one accepted-intent line with phase/source/origin and whether the
+ * player supplied their own d20. No intent bodies, no user text.
+ */
+function logIntentAccepted(
+  context: unknown,
+  request: Request,
+  params: { encounterId: string },
+  payload: {
+    intent?: { type: string; d20?: unknown };
+    phase?: 'propose' | 'commit';
+    source?: 'player' | 'dm';
+    origin?: CombatActionOrigin;
+  },
+): void {
+  logger.info(
+    {
+      requestId: requestIdOf(context, request),
+      encounterId: params.encounterId,
+      intentType: payload.intent?.type ?? 'unknown',
+      phase: payload.phase ?? 'commit',
+      source: payload.source ?? 'player',
+      origin: payload.origin ?? null,
+      d20Supplied: payload.intent?.d20 != null,
+    },
+    'COMBAT_INTENT_ACCEPTED',
+  );
+}
+
 export const intentRoutes = new Elysia()
   .get(
     '/:encounterId/legal-actions',
@@ -99,7 +128,26 @@ export const intentRoutes = new Elysia()
         return { error: access.error!.message };
       }
       try {
-        return await getLegalCombatActions(params.encounterId, user.userId);
+        const legalActions = await getLegalCombatActions(params.encounterId, user.userId);
+        // #2569: one info line per legal-actions response with option-type counts.
+        // Counts only — no bodies, no user text.
+        const optionTypeCounts: Record<string, number> = {};
+        for (const action of legalActions.actions) {
+          const type = typeof action.type === 'string' ? action.type : 'unknown';
+          optionTypeCounts[type] = (optionTypeCounts[type] ?? 0) + 1;
+        }
+        logger.info(
+          {
+            requestId: requestIdOf(context, request),
+            encounterId: params.encounterId,
+            actorId: legalActions.actorId,
+            version: legalActions.version,
+            optionTypeCounts,
+            totalOptions: legalActions.actions.length,
+          },
+          'LEGAL_ACTIONS_SERVED',
+        );
+        return legalActions;
       } catch (cause) {
         return mapIntentError(set, cause, {
           requestId: requestIdOf(context, request),
@@ -165,15 +213,14 @@ export const intentRoutes = new Elysia()
         // check, and reference resolution unchanged — a proposal computed under looser rules
         // than the commit would be a proposal about a different attack.
         if (payload.phase === 'propose') {
-          return {
-            accepted: true,
-            proposal: await proposeCombatAttack(
-              params.encounterId,
-              payload.intent,
-              user.userId,
-              payload.source === 'dm' ? 'dm' : 'player',
-            ),
-          };
+          const proposal = await proposeCombatAttack(
+            params.encounterId,
+            payload.intent,
+            user.userId,
+            payload.source === 'dm' ? 'dm' : 'player',
+          );
+          logIntentAccepted(context, request, params, payload);
+          return { accepted: true, proposal };
         }
         const result = await executeCombatIntent(
           params.encounterId,
@@ -183,6 +230,7 @@ export const intentRoutes = new Elysia()
           payload.dmStartedAt,
           payload.origin,
         );
+        logIntentAccepted(context, request, params, payload);
         return { accepted: true, result };
       } catch (cause) {
         return mapIntentError(set, cause, {
