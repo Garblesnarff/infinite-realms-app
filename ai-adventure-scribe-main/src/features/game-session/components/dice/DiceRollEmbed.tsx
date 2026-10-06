@@ -266,7 +266,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                     className="text-2xl font-bold text-purple-800"
                     aria-label={`Total result: ${result.total}`}
                   >
-                    {result.total}
+                    Total {result.total}
                   </span>
                   {getCriticalityBadge(result)}
                   {getAdvantageIndicator(result)}
@@ -319,19 +319,9 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                 data-testid="roll-breakdown"
               >
                 {/* A separator before the breakdown, so the badge's face value does
-                    not run straight into it: "Natural 1 — 1 + 3 = 4" (#2513). */}
+                    not run straight into it: "Natural 1 — Natural 1 + Modifier +3 = Total 4" (#2513). */}
                 {`— ${formatRollBreakdown(result)}`}
               </motion.div>
-
-              {/* Natural Roll for d20s. On a check or save the Natural 1 / Natural 20
-                  badge above is the only natural indicator, so this line does not
-                  repeat it; an attack keeps it under its Critical Hit/Miss badge. */}
-              {result.naturalRoll &&
-                (isAttack || (result.naturalRoll !== 1 && result.naturalRoll !== 20)) && (
-                  <motion.div variants={cardItem} className="text-xs text-gray-600">
-                    Natural {result.naturalRoll}
-                  </motion.div>
-                )}
             </motion.div>
           )}
         </AnimatePresence>

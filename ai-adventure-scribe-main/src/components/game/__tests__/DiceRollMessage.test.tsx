@@ -149,7 +149,7 @@ describe('DiceRollMessage', () => {
 
   it('displays Natural 1 badge even when critical is undefined', () => {
     render(<DiceRollMessage data={{ ...defaultData, naturalRoll: 1, total: 5 }} />);
-    expect(screen.getByText(/Natural 1.../)).toBeInTheDocument();
+    expect(screen.getByText('Natural 1...')).toBeInTheDocument();
   });
 
   it('handles missing keptResults for advantage/disadvantage by taking the first result', () => {
@@ -204,5 +204,89 @@ describe('DiceRollMessage', () => {
     expect(() => render(<DiceRollMessage data={liveRollResult} />)).not.toThrow();
     expect(screen.getByText(/Kept: \[15\]/)).toBeInTheDocument();
     expect(screen.getByText('2d20kh1+1')).toBeInTheDocument();
+  });
+
+  it('labels natural, modifier and total, and never shows the natural as the total (#2588)', () => {
+    render(
+      <DiceRollMessage
+        data={{ ...defaultData, modifier: 6, naturalRoll: 16, results: [16], total: 22 }}
+      />,
+    );
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 16 + Modifier +6 = Total 22',
+    );
+    expect(screen.queryByText('Total 16')).not.toBeInTheDocument();
+  });
+
+  it('subtracts a negative modifier in the labelled line', () => {
+    render(
+      <DiceRollMessage
+        data={{ ...defaultData, modifier: -1, naturalRoll: 9, results: [9], total: 8 }}
+      />,
+    );
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 9 \u2212 Modifier 1 = Total 8',
+    );
+  });
+
+  it('names the kept die and the dropped die on disadvantage', () => {
+    render(
+      <DiceRollMessage
+        data={{
+          ...defaultData,
+          modifier: 1,
+          advantage: false,
+          disadvantage: true,
+          results: [18, 15],
+          keptResults: [15],
+          naturalRoll: 15,
+          total: 16,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 15 (kept, 18 dropped) + Modifier +1 = Total 16',
+    );
+  });
+
+  it('names a tied dropped die on the card: results [12, 12], kept [12]', () => {
+    render(
+      <DiceRollMessage
+        data={{
+          ...defaultData,
+          advantage: true,
+          results: [12, 12],
+          keptResults: [12],
+          naturalRoll: 12,
+          modifier: 1,
+          total: 13,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 12 (kept, 12 dropped) + Modifier +1 = Total 13',
+    );
+  });
+
+  it('prints a zero modifier on the card as "+0"', () => {
+    render(
+      <DiceRollMessage
+        data={{ ...defaultData, modifier: 0, naturalRoll: 16, results: [16], total: 16 }}
+      />,
+    );
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 16 + Modifier +0 = Total 16',
+    );
+  });
+
+  it('takes the modifier from the total, not from data.modifier', () => {
+    render(
+      <DiceRollMessage
+        data={{ ...defaultData, modifier: 0, naturalRoll: 13, results: [13], total: 18 }}
+      />,
+    );
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 13 + Modifier +5 = Total 18',
+    );
   });
 });

@@ -65,9 +65,7 @@ describe('DiceRollEmbed natural 1 and 20 copy (#2513)', () => {
   });
 
   function roll(props: { isAttack?: boolean; purpose?: string }): void {
-    render(
-      <DiceRollEmbed expression="1d20+3" autoRoll showAnimation={false} {...props} />,
-    );
+    render(<DiceRollEmbed expression="1d20+3" autoRoll showAnimation={false} {...props} />);
     act(() => {
       vi.advanceTimersByTime(200);
     });
@@ -79,7 +77,9 @@ describe('DiceRollEmbed natural 1 and 20 copy (#2513)', () => {
     const badge = screen.getByLabelText('Critical Miss');
     expect(badge).toHaveTextContent('Critical Miss');
     expect(screen.queryByLabelText('Natural 1')).not.toBeInTheDocument();
-    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent('— 1 + 3 = 4');
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      '— Natural 1 + Modifier +3 = Total 4',
+    );
   });
 
   it('says "Natural 1" for a natural 1 on a skill check, with no miss word', () => {
@@ -91,9 +91,11 @@ describe('DiceRollEmbed natural 1 and 20 copy (#2513)', () => {
     expect(screen.queryByText(/Critical Miss/)).not.toBeInTheDocument();
     // Badge only: the natural line under the breakdown does not repeat it, and
     // a separator stands before the breakdown, so the face value does not
-    // stutter ("Natural 1 — 1 + 3 = 4", not "Natural 1 1 + 3 = 4").
+    // stutter ("Natural 1 — Natural 1 + Modifier +3 = Total 4", not "Natural 1 Natural 1 + …").
     expect(screen.getAllByText('Natural 1')).toHaveLength(1);
-    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent('— 1 + 3 = 4');
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      '— Natural 1 + Modifier +3 = Total 4',
+    );
   });
 
   it('says "Natural 1" for a natural 1 on a saving throw, with no miss word', () => {
@@ -118,6 +120,8 @@ describe('DiceRollEmbed natural 1 and 20 copy (#2513)', () => {
     expect(screen.getByLabelText('Natural 20')).toHaveTextContent('Natural 20');
     expect(screen.queryByText(/Critical Hit/)).not.toBeInTheDocument();
     expect(screen.getAllByText('Natural 20')).toHaveLength(1);
-    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent('— 20 + 3 = 23');
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      '— Natural 20 + Modifier +3 = Total 23',
+    );
   });
 });

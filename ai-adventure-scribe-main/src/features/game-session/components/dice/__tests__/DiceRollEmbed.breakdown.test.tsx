@@ -37,14 +37,16 @@ describe('DiceRollEmbed breakdown', () => {
     vi.useRealTimers();
   });
 
-  it('shows 7 + 4 = 11 instead of Base: 11+0', () => {
+  it('labels the natural roll, modifier, and total instead of Base: 11+0', () => {
     render(<DiceRollEmbed expression="1d20+4" autoRoll showAnimation={false} />);
 
     act(() => {
       vi.advanceTimersByTime(200);
     });
 
-    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent('7 + 4 = 11');
+    expect(screen.getByTestId('roll-breakdown')).toHaveTextContent(
+      'Natural 7 + Modifier +4 = Total 11',
+    );
     expect(screen.queryByText(/Base:/)).not.toBeInTheDocument();
   });
 });

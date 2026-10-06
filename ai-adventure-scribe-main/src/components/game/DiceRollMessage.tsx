@@ -8,6 +8,7 @@ import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { formatRollBreakdown } from '@/features/game-session/components/dice/format-roll-breakdown';
 import { cn } from '@/lib/utils';
 
 interface DiceRollData {
@@ -103,6 +104,23 @@ const IndividualRolls = React.memo(
 
 IndividualRolls.displayName = 'IndividualRolls';
 
+/** Faces for the shared breakdown: one instance per kept value stays in the total. */
+const breakdownFaces = (
+  naturalRoll: number,
+  edge: boolean,
+  results: number[] | undefined,
+  keptResults: number[] | undefined,
+) => {
+  if (!edge || !Array.isArray(results) || results.length < 2) return [{ value: naturalRoll }];
+  const pool = [...(keptResults ?? results.slice(0, 1))];
+  return results.map((value) => {
+    const index = pool.indexOf(value);
+    if (index === -1) return { value, useInTotal: false };
+    pool.splice(index, 1);
+    return { value };
+  });
+};
+
 /**
  * Dice Roll Message Component for Chat
  * Displays dice roll results with visual styling similar to CombatMessage
@@ -123,6 +141,27 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
       label,
     } = data;
     const safeResults = Array.isArray(results) ? results : [naturalRoll ?? total];
+
+    // Same labelled line the roll dialog shows, so both read "Natural 16 + Modifier +6 = Total 22".
+    // The modifier is what the total holds beyond the counted dice, not `data.modifier`: that is
+    // the request's config, which is 0 for a save with a symbolic formula, while the total
+    // already carries the character's bonus.
+    let breakdown: string | null = null;
+    if (typeof naturalRoll === 'number') {
+      const faces = breakdownFaces(naturalRoll, advantage || disadvantage, results, keptResults);
+      const counted = faces.reduce(
+        (sum, face) => (face.useInTotal === false ? sum : sum + face.value),
+        0,
+      );
+      breakdown = formatRollBreakdown({
+        rolls: faces,
+        modifiers: total - counted,
+        total,
+        naturalRoll,
+        advantage,
+        disadvantage,
+      });
+    }
 
     return (
       <Card
@@ -194,6 +233,15 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
               </div>
             </div>
           </div>
+
+          {breakdown && (
+            <div
+              className="mb-3 text-center text-xs text-muted-foreground"
+              data-testid="roll-breakdown"
+            >
+              {breakdown}
+            </div>
+          )}
 
           {/* Individual Roll Results */}
           <div aria-label="Individual roll breakdown">
