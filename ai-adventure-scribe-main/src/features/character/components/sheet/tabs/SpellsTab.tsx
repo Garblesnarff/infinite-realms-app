@@ -22,20 +22,20 @@ interface SpellsTabProps {
 /**
  * Spells tab with spell slot tracking and spell management
  */
-const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate }) => {
+const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
   const {
     loading,
     error,
+    resting,
+    restError,
     spellSlots,
     spellcastingAbility,
     spellAttackBonus,
     spellSaveDC,
     cantrips,
     leveledSpells,
-    consumeSpellSlot,
-    restoreSpellSlot,
     longRest,
-  } = useSpells(character);
+  } = useSpells(character, onUpdate);
 
   // Show loading state
   if (loading) {
@@ -60,13 +60,23 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate })
     );
   }
 
+  // Non-casters get a clear empty state — never a Spell DC, attack bonus or
+  // Long Rest computed from a fallback ability as if they were real.
+  if (spellcastingAbility === null) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        This class does not cast spells
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="space-y-6">
         {/* Spellcasting Info */}
         <SpellcastingOverview
-          spellAttackBonus={spellAttackBonus}
-          spellSaveDC={spellSaveDC}
+          spellAttackBonus={spellAttackBonus ?? 0}
+          spellSaveDC={spellSaveDC ?? 0}
           spellcastingAbility={spellcastingAbility}
         />
 
@@ -161,8 +171,8 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate })
               <SpellSlotsSection
                 spellSlots={spellSlots}
                 longRest={longRest}
-                restoreSpellSlot={restoreSpellSlot}
-                consumeSpellSlot={consumeSpellSlot}
+                resting={resting}
+                restError={restError}
               />
             </TabsContent>
           </div>
