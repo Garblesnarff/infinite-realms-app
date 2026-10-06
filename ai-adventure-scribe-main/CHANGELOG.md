@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.27.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.2...v0.27.3) (2026-10-06)
+
+
+### Bug Fixes
+
+* **rolls:** one labelled roll rendering, Natural + Modifier = Total ([#2588](https://github.com/Garblesnarff/infinite-realms-production/issues/2588)) ([#2591](https://github.com/Garblesnarff/infinite-realms-production/issues/2591)) ([9e59c04](https://github.com/Garblesnarff/infinite-realms-production/commit/9e59c045cf7af71941743df0f7a44e15eaad475e))
+* **rolls:** repair the chatWithDM roll-outcome gate ([#2609](https://github.com/Garblesnarff/infinite-realms-production/issues/2609)) ([#2615](https://github.com/Garblesnarff/infinite-realms-production/issues/2615)) ([cfab667](https://github.com/Garblesnarff/infinite-realms-production/commit/cfab66768a6dc861f016e95d4865e867ecad59da))
+
 ## [0.27.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.1...v0.27.2) (2026-10-06)
 
 
