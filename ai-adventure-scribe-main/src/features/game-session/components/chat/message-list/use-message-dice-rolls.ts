@@ -171,8 +171,8 @@ export function useMessageDiceRolls({
       checkSettled ||
       Boolean(
         currentRoll.combatAttackRoll ||
-          currentRoll.combatInitiativeRoll ||
-          currentRoll.combatCheckRoll,
+        currentRoll.combatInitiativeRoll ||
+        currentRoll.combatCheckRoll,
       ) ||
       isEngineChannelRollType(currentRoll.requestType);
     if (!engineOwned) {
@@ -255,21 +255,30 @@ export function useMessageDiceRolls({
             ? { total: numericResult, naturalRoll: details.naturalRoll }
             : { total: numericResult };
 
+        // The queue stores modifier 0 for a save. The dialog total already includes the
+        // character's bonus, so the saved modifier is total minus the natural face.
+        const queuedModifier = roll.rollConfig.modifier;
+        const recordedModifier =
+          details?.naturalRoll !== undefined ? numericResult - details.naturalRoll : queuedModifier;
         const completedRoll = {
           ...roll,
+          rollConfig: { ...roll.rollConfig, modifier: recordedModifier },
           result: settledResult,
         };
         const formattedRoll = formatDiceRoll(completedRoll);
         const outcome = getDiceRollOutcome(completedRoll);
+        const signedModifier = `${recordedModifier >= 0 ? '+' : ''}${recordedModifier}`;
+        const formula =
+          recordedModifier === queuedModifier && roll.rollConfig.abilityModifier
+            ? `${roll.rollConfig.count}d${roll.rollConfig.dieType}+${roll.rollConfig.abilityModifier}`
+            : `${roll.rollConfig.count}d${roll.rollConfig.dieType}${signedModifier}`;
         const diceRollContext: DiceRollContext = {
           intent: 'dice_roll',
           diceRoll: {
-            formula: roll.rollConfig.abilityModifier
-              ? `${roll.rollConfig.count}d${roll.rollConfig.dieType}+${roll.rollConfig.abilityModifier}`
-              : `${roll.rollConfig.count}d${roll.rollConfig.dieType}${roll.rollConfig.modifier >= 0 ? '+' : ''}${roll.rollConfig.modifier}`,
+            formula,
             count: roll.rollConfig.count,
             dieType: roll.rollConfig.dieType,
-            modifier: roll.rollConfig.modifier,
+            modifier: recordedModifier,
             advantage: roll.rollConfig.advantage,
             disadvantage: roll.rollConfig.disadvantage,
             results: details?.results ?? [naturalFace],

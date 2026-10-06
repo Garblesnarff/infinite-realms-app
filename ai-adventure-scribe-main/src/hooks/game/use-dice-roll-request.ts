@@ -1,20 +1,12 @@
-/* eslint-disable max-lines */
 import { useState, useMemo, useCallback, useRef } from 'react';
 
 import type { RollRequest } from '@/types/roll-request';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { isNumericFormula, resolveDialogRollFormula } from '@/hooks/game/resolve-dialog-roll';
 import logger from '@/lib/logger';
-import {
-  calculateRollWithBreakdown,
-  SKILL_ABILITIES,
-  type AbilityName,
-} from '@/utils/characterModifiers';
 
-/** Returns true when the formula is safe to pass to the dice engine (no unresolved symbolic modifiers). */
-export function isNumericFormula(formula: string): boolean {
-  return !/\b(cha|int|wis|str|dex|con|mod|modifier)\b/i.test(formula);
-}
+export { isNumericFormula };
 
 /**
  * What the animated roll knows beyond its total. A hand-entered result has no details: the player
@@ -58,127 +50,24 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   const { state: characterState } = useCharacter();
   const character = characterState.character;
 
-  // Calculate the actual roll formula with character modifiers
-  const rollCalculation = useMemo(() => {
-    // For damage rolls, ALWAYS use the exact formula from the DM - no modifier calculations
-    if (request.type === 'damage') {
-      return {
-        formula: request.formula,
-        breakdown: [request.formula],
-        totalModifier: 0,
-        isProficient: false,
-      };
-    }
+  // One resolver turns the DM request into the formula this dialog rolls.
+  const rollCalculation = useMemo(
+    () => resolveDialogRollFormula(request, character),
+    [character, request],
+  );
 
-    // If formula already has numbers (like "1d20+5"), use it as-is - no modifier calculations
-    if (/\d+d\d+[+-]\d+/.test(request.formula)) {
-      return {
-        formula: request.formula,
-        breakdown: [request.formula],
-        totalModifier: 0,
-        isProficient: false,
-      };
-    }
-
-    if (!character) {
-      return {
-        formula: request.formula,
-        breakdown: [request.formula],
-        totalModifier: 0,
-        isProficient: false,
-      };
-    }
-
-    try {
-      // Only calculate modifiers for ability checks, saves, attacks, and initiative
-      let ability: AbilityName | undefined;
-      let skillName: string | undefined;
-
-      // Extract ability or skill from formula or purpose
-      if (request.formula.includes('+str') || request.formula.includes('strength')) {
-        ability = 'strength';
-      } else if (request.formula.includes('+dex') || request.formula.includes('dexterity')) {
-        ability = 'dexterity';
-      } else if (request.formula.includes('+con') || request.formula.includes('constitution')) {
-        ability = 'constitution';
-      } else if (request.formula.includes('+int') || request.formula.includes('intelligence')) {
-        ability = 'intelligence';
-      } else if (request.formula.includes('+wis') || request.formula.includes('wisdom')) {
-        ability = 'wisdom';
-      } else if (request.formula.includes('+cha') || request.formula.includes('charisma')) {
-        ability = 'charisma';
-      } else {
-        // Try to parse from purpose text
-        const purposeLower = request.purpose.toLowerCase();
-
-        // Check for skill names in purpose
-        for (const [skill, skillAbility] of Object.entries(SKILL_ABILITIES)) {
-          if (purposeLower.includes(skill)) {
-            skillName = skill;
-            ability = skillAbility;
-            break;
-          }
-        }
-
-        // Check for ability names in purpose
-        if (!ability) {
-          for (const abilityName of [
-            'strength',
-            'dexterity',
-            'constitution',
-            'intelligence',
-            'wisdom',
-            'charisma',
-          ]) {
-            if (
-              purposeLower.includes(abilityName) ||
-              purposeLower.includes(abilityName.slice(0, 3))
-            ) {
-              ability = abilityName as AbilityName;
-              break;
-            }
-          }
-        }
-      }
-
-      // Determine roll type and calculate
-      let rollType: 'attack' | 'save' | 'check' | 'skill' | 'initiative' = 'check';
-
-      if (skillName) {
-        rollType = 'skill';
-      } else if (request.type === 'skill_check') {
-        // skill_check but no specific skill detected → plain ability check (won't throw)
-        rollType = 'check';
-      } else if (request.type === 'save') {
-        rollType = 'save';
-      } else if (request.type === 'attack') {
-        rollType = 'attack';
-        ability = ability || 'strength'; // Default to strength for attacks
-      } else if (request.type === 'initiative') {
-        rollType = 'initiative';
-        ability = 'dexterity';
-      }
-
-      return calculateRollWithBreakdown(character, rollType, ability, skillName);
-    } catch (error) {
-      logger.warn('Error calculating roll with character modifiers:', error);
-      return {
-        formula: request.formula,
-        breakdown: [request.formula],
-        totalModifier: 0,
-        isProficient: false,
-      };
-    }
-  }, [character, request]);
-
-  // Derived: null when formula still contains unresolved symbolic ability names
+  // Derived: null when the formula is not safe to roll (symbolic, or the modifier is unknown).
   const resolvedFormula = useMemo(
-    () => (isNumericFormula(rollCalculation.formula) ? rollCalculation.formula : null),
-    [rollCalculation.formula],
+    () =>
+      rollCalculation.modifierUnknown || !isNumericFormula(rollCalculation.formula)
+        ? null
+        : rollCalculation.formula,
+    [rollCalculation.formula, rollCalculation.modifierUnknown],
   );
 
   // Synchronous fallback: character loaded but formula still symbolic → show manual entry immediately.
-  const effectiveManualMode = manualMode || (!!character && resolvedFormula === null);
+  const effectiveManualMode =
+    manualMode || (!!character && resolvedFormula === null && !rollCalculation.modifierUnknown);
 
   const handleAutoRoll = useCallback(() => {
     if (isRolling || isSubmittingRef.current) return;

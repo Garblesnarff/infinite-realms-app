@@ -8,12 +8,8 @@ import type { DiceRollRequest, DiceRollRequestType, DamageType } from '@/types/c
 import { useCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
 import { throttle } from '@/lib/utils';
-import {
-  calculateRollWithBreakdown,
-  SKILL_ABILITIES,
-  SKILL_ALIASES,
-  type AbilityName,
-} from '@/utils/characterModifiers';
+import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
+import { findDeclaredAbility, findDeclaredSkill } from '@/utils/roll-request/declared-roll';
 
 /**
  * Shape of a roll request from AI responses, before conversion
@@ -159,38 +155,6 @@ export const useAiRollProcessor = (
     throttledProcessAiResponse,
   };
 };
-
-const SKILL_TERMS = Array.from(
-  new Set([...Object.keys(SKILL_ABILITIES), ...Object.keys(SKILL_ALIASES)]),
-).sort((a, b) => b.length - a.length);
-
-const ABILITY_TERMS: ReadonlyArray<[AbilityName, string[]]> = [
-  ['strength', ['strength', 'str']],
-  ['dexterity', ['dexterity', 'dex']],
-  ['constitution', ['constitution', 'con']],
-  ['intelligence', ['intelligence', 'int']],
-  ['wisdom', ['wisdom', 'wis']],
-  ['charisma', ['charisma', 'cha']],
-];
-
-function containsTerm(text: string, term: string): boolean {
-  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-  return new RegExp(`(?:^|[^a-z])${escapedTerm}(?:$|[^a-z])`, 'i').test(text);
-}
-
-function findDeclaredSkill(request: AiRollRequest): string | undefined {
-  const text = `${request.purpose || ''} ${request.formula || ''}`;
-  const term = SKILL_TERMS.find((candidate) => containsTerm(text, candidate));
-  return term ? SKILL_ALIASES[term] || term : undefined;
-}
-
-function findDeclaredAbility(request: AiRollRequest): AbilityName | undefined {
-  const text = `${request.purpose || ''} ${request.formula || ''}`;
-  for (const [ability, terms] of ABILITY_TERMS) {
-    if (terms.some((term) => containsTerm(text, term))) return ability;
-  }
-  return undefined;
-}
 
 /**
  * Build the modifier for a player ability/skill check from the loaded character record.

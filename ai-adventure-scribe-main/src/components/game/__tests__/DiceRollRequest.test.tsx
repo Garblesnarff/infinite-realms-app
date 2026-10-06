@@ -340,7 +340,8 @@ describe('DiceRollRequest', () => {
 
     render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
 
-    expect(screen.getByText('1d20')).toBeInTheDocument();
+    expect(screen.getAllByText('modifier unknown').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /^roll /i })).not.toBeInTheDocument();
   });
 
   it('renders different request types correctly', () => {
@@ -365,7 +366,7 @@ describe('DiceRollRequest', () => {
     });
   });
 
-  it('handles formula with numbers as-is', () => {
+  it('does not keep a numeric formula when the character can supply the modifier', () => {
     const request = {
       ...defaultRequest,
       formula: '1d20+5',
@@ -373,8 +374,8 @@ describe('DiceRollRequest', () => {
 
     render(<DiceRollRequest request={request} onResult={mockOnManualResult} />);
 
-    expect(screen.getByText('1d20+5')).toBeInTheDocument();
-    expect(calculateRollWithBreakdown).not.toHaveBeenCalled();
+    expect(screen.getByText('1d20+2')).toBeInTheDocument();
+    expect(calculateRollWithBreakdown).toHaveBeenCalled();
   });
 
   it('handles DC and AC display', () => {

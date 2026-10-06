@@ -16,6 +16,7 @@ import { DiceRollModifierControls } from './DiceRollModifierControls';
 import type { RollRequest } from '@/types/roll-request';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DiceRollEmbed } from '@/features/game-session/components';
 import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
@@ -179,8 +180,26 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           {/* Roll Actions */}
           {!effectiveManualMode ? (
             <div className="space-y-2">
-              {/* Character not yet loaded — formula cannot be resolved */}
-              {!character && resolvedFormula === null ? (
+              {rollCalculation.modifierUnknown ? (
+                <div className="space-y-2">
+                  <p role="status" className="py-2 text-center text-sm text-muted-foreground">
+                    modifier unknown
+                  </p>
+                  {onCancel && (
+                    <div className="flex justify-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={onCancel}
+                        className="min-h-11 text-sm text-foreground/80 hover:bg-white/10 hover:text-foreground"
+                        aria-label="Dismiss roll request"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : !character && resolvedFormula === null ? (
                 <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
                   <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-muted-foreground" />
                   Loading character data…
@@ -231,11 +250,13 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           )}
 
           {/* Hint Text: the buttons say it at phone width, where every line costs story. */}
-          <p className="hidden text-center text-xs text-muted-foreground sm:block">
-            {effectiveManualMode
-              ? 'Enter the total result of your dice roll'
-              : "Roll here, or 'Enter my own roll' if you roll physical dice"}
-          </p>
+          {!rollCalculation.modifierUnknown && (
+            <p className="hidden text-center text-xs text-muted-foreground sm:block">
+              {effectiveManualMode
+                ? 'Enter the total result of your dice roll'
+                : "Roll here, or 'Enter my own roll' if you roll physical dice"}
+            </p>
+          )}
         </div>
       </Card>
     );

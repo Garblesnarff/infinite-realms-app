@@ -259,11 +259,11 @@ describe('useDiceRollRequest', () => {
     expect(calculateRollWithBreakdown).not.toHaveBeenCalled();
   });
 
-  it('handles formula with numbers as-is', () => {
+  it('does not keep a numeric formula when the character can supply the modifier', () => {
     const request = { ...defaultRequest, formula: '1d20+5' };
     renderHook(() => useDiceRollRequest({ request, onResult: mockOnManualResult }));
 
-    expect(calculateRollWithBreakdown).not.toHaveBeenCalled();
+    expect(calculateRollWithBreakdown).toHaveBeenCalled();
   });
 
   it('identifies skill check from purpose', () => {
@@ -458,7 +458,9 @@ describe('useDiceRollRequest', () => {
     );
 
     expect(result.current.character).toBeNull();
-    expect(result.current.rollCalculation.formula).toBe('1d20');
+    expect(result.current.rollCalculation.formula).toBe('modifier unknown');
+    expect(result.current.rollCalculation.modifierUnknown).toBe(true);
+    expect(result.current.resolvedFormula).toBeNull();
   });
 
   it('handles error in calculation gracefully', () => {
@@ -470,7 +472,8 @@ describe('useDiceRollRequest', () => {
       useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
     );
 
-    expect(result.current.rollCalculation.formula).toBe('1d20');
+    expect(result.current.rollCalculation.formula).toBe('modifier unknown');
+    expect(result.current.resolvedFormula).toBeNull();
   });
 
   it('isNumericFormula identifies symbolic and numeric formulas correctly', () => {

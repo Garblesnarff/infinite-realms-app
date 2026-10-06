@@ -874,13 +874,14 @@ describe('useMessageDiceRolls', () => {
       );
 
       // Successor of the retired `handleDiceRoll` version: an ordinary check is not a combat
-      // die, so it reaches the DM — now with its natural face.
+      // die, so it reaches the DM. The fixture copies the attack's +5, but the total is 15
+      // and the face is 13, so the saved line uses +2.
       await act(async () => {
         await result.current.handleManualResult(15, { naturalRoll: 13 });
       });
 
       expect(mockOnSendFullMessage).toHaveBeenCalledWith(
-        expect.stringContaining('Athletics to keep your footing: 15 (nat 13+5)'),
+        expect.stringContaining('Athletics to keep your footing: 15 (nat 13+2)'),
         expect.anything(),
       );
     });
