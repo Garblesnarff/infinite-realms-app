@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.28.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.3...v0.28.0) (2026-10-06)
+
+
+### Features
+
+* **combat:** Flee and Yield, a player way out of a fight the end guard holds open ([#2580](https://github.com/Garblesnarff/infinite-realms-production/issues/2580)) ([#2612](https://github.com/Garblesnarff/infinite-realms-production/issues/2612)) ([06d253c](https://github.com/Garblesnarff/infinite-realms-production/commit/06d253cc68878bd8b91d9df58508ac1966c6b94b))
+* **combat:** mid-combat ability checks (shove, grapple, hide, persuade) get an engine owner ([#2420](https://github.com/Garblesnarff/infinite-realms-production/issues/2420)) ([#2603](https://github.com/Garblesnarff/infinite-realms-production/issues/2603)) ([040eb12](https://github.com/Garblesnarff/infinite-realms-production/commit/040eb12f0c8908e2a81eb793915b51d883fffff1))
+
+
+### Bug Fixes
+
+* **combat:** combat diagnosability logs and spell-entry refusal notice ([#2569](https://github.com/Garblesnarff/infinite-realms-production/issues/2569)) ([#2616](https://github.com/Garblesnarff/infinite-realms-production/issues/2616)) ([627e1dc](https://github.com/Garblesnarff/infinite-realms-production/commit/627e1dc184bd9c7e28e83df6776eb52cbfe9de71))
+
+
+### CI/CD
+
+* register unlisted server suites and fail when a server test runs in no job ([#2602](https://github.com/Garblesnarff/infinite-realms-production/issues/2602)) ([#2626](https://github.com/Garblesnarff/infinite-realms-production/issues/2626)) ([8676b26](https://github.com/Garblesnarff/infinite-realms-production/commit/8676b26f3a17e2e86b5795d78347d7e38a873f69))
+
 ## [0.27.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.27.2...v0.27.3) (2026-10-06)
 
 
