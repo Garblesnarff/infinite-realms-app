@@ -27,6 +27,15 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
         <div
           class="flex flex-wrap items-center justify-end gap-2"
         >
+          <button
+            aria-label="Copy build and session id: build dev · session session-"
+            class="rounded px-1.5 py-0.5 font-mono text-[10px] leading-tight text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+            data-testid="build-session-status"
+            title="Copy build and session id"
+            type="button"
+          >
+            build dev · session session-
+          </button>
           <div>
             Panel controls
           </div>

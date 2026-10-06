@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 
 import { describe, expect, it } from 'bun:test';
 
+import { servedIndexHtml } from '../../../../shared/test-fixtures/served-index-html';
 import { createRequestPipelineApp } from '../../http-pipeline.js';
 import { createVersionRoutes, versionRoutes } from '../version.js';
 
@@ -10,9 +11,7 @@ import { createVersionRoutes, versionRoutes } from '../version.js';
 // Authorization header, the way Playtest's browser and ops/smoke.sh call it.
 
 const SHA = '3fa7eefe0c1d2b3a4f5e6d7c8b9a0f1e2d3c4b5a';
-const INDEX_HTML =
-  '<html><head><meta name="app-version" content="3fa7eefe0c1d">' +
-  '<script type="module" crossorigin src="/assets/main-DMthKkaE.js"></script></head></html>';
+const INDEX_HTML = servedIndexHtml;
 
 async function getVersion(routes: ReturnType<typeof createVersionRoutes>) {
   const app = createRequestPipelineApp().use(routes);
@@ -54,6 +53,46 @@ describe('GET /version', () => {
     );
     expect(body.commit).toBe(SHA);
     expect(body.builtAt).toBe(startedAt.toISOString());
+  });
+
+  it('serves "<sha> <bundle>" as text/plain for ?format=text (#2583)', async () => {
+    // `?format=text` is the explicit ask a curl or a fetch can make without changing what a
+    // browser sees. It works on the API host (api.infiniterealms.app/version); the app host's
+    // /version is the SPA shell until prod nginx proxies it, which this route cannot change.
+    const app = createRequestPipelineApp().use(
+      createVersionRoutes({ env: { GIT_COMMIT: SHA }, readClientIndex: () => INDEX_HTML }),
+    );
+    const res = await app.handle(new Request('http://localhost/version?format=text'));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    expect((await res.text()).trim()).toBe(`${SHA} main-DMthKkaE.js`);
+  });
+
+  it('serves the same plain text when Accept prefers text/plain', async () => {
+    const app = createRequestPipelineApp().use(
+      createVersionRoutes({ env: { GIT_COMMIT: SHA }, readClientIndex: () => INDEX_HTML }),
+    );
+    const res = await app.handle(
+      new Request('http://localhost/version', { headers: { Accept: 'text/plain' } }),
+    );
+
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    expect((await res.text()).trim()).toBe(`${SHA} main-DMthKkaE.js`);
+  });
+
+  it('keeps JSON for a browser Accept header', async () => {
+    const app = createRequestPipelineApp().use(
+      createVersionRoutes({ env: { GIT_COMMIT: SHA }, readClientIndex: () => INDEX_HTML }),
+    );
+    const res = await app.handle(
+      new Request('http://localhost/version', {
+        headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+      }),
+    );
+
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(((await res.json()) as Record<string, unknown>).commit).toBe(SHA);
   });
 
   it('never fails: unknown commit and no bundle when neither can be read', async () => {

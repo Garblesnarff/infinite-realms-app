@@ -1,6 +1,7 @@
 import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 
+import { BuildSessionStatus } from './BuildSessionStatus';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './DeathScreen';
 import { GamePanelControls } from './GamePanelControls';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
@@ -289,6 +290,9 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               />
 
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* Build + session id a player can quote (#2583). In this header row, so it adds
+                    no height to the story column and can never reach the composer dock below. */}
+                <BuildSessionStatus sessionId={sessionId} />
                 <GamePanelControls
                   isLeftCollapsed={isLeftCollapsed}
                   isRightCollapsed={isRightCollapsed}

@@ -40,7 +40,7 @@ export function setActiveClientFailureSessionId(sessionId: string | null | undef
   activeGameSessionId = sessionId ?? undefined;
 }
 
-function activeSessionId(): string | undefined {
+export function activeSessionId(): string | undefined {
   if (typeof window === 'undefined') return undefined;
   return (
     activeGameSessionId ?? new URLSearchParams(window.location.search).get('session') ?? undefined

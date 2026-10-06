@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GameContent from '../GameContent';
 
 import { characterLoaderService } from '@/services/character-loader';
+import { activeSessionId } from '@/services/client-failure-reporting';
 import { userDataApi } from '@/services/user-data-api';
 
 // Stable references: useGameData lists the dispatch functions as effect dependencies.
@@ -186,5 +187,31 @@ describe('GameContent without ?character', () => {
 
     await waitFor(() => expect(screen.getByTestId('game-open')).toHaveTextContent('hero:hero-2'));
     expect(userDataApi.listCharacters).not.toHaveBeenCalled();
+  });
+});
+
+// #2583: a game started from character selection has no ?session= in the URL, so the crash card
+// and CLIENT_FAILURE name the session from the id GameContent publishes (the same setter #2589
+// added). Leaving the game must clear it, or a crash on another page quotes this session.
+describe('GameContent publishes the resolved session id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (characterLoaderService.loadCharacterWithSpells as any).mockImplementation(
+      async (id: string) => ({ id, name: 'Hero' }),
+    );
+    (userDataApi.getCampaign as any).mockResolvedValue(campaign);
+    (userDataApi.listSessions as any).mockResolvedValue([]);
+  });
+
+  it('publishes on resolve and clears on unmount', async () => {
+    expect(activeSessionId()).toBeUndefined();
+
+    const { unmount } = renderRoute('/game/camp-1?character=hero-2&new=true');
+
+    await waitFor(() => expect(screen.getByTestId('game-open')).toBeInTheDocument());
+    expect(activeSessionId()).toBe('session-1');
+
+    unmount();
+    expect(activeSessionId()).toBeUndefined();
   });
 });
