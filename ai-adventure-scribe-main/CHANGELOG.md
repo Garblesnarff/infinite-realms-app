@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.30.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.0...v0.30.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **combat:** refuse malformed or unknown combat declarations with a plain sentence; the turn stays open ([#2606](https://github.com/Garblesnarff/infinite-realms-production/issues/2606)) ([#2650](https://github.com/Garblesnarff/infinite-realms-production/issues/2650)) ([e4e1515](https://github.com/Garblesnarff/infinite-realms-production/commit/e4e1515ee4057d593cc03965a6a8aadf125d62b1))
+
 ## [0.30.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.29.2...v0.30.0) (2026-10-07)
 
 
