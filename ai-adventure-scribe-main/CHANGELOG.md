@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.30.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.29.2...v0.30.0) (2026-10-07)
+
+
+### Features
+
+* **dm:** DM prompt diet, about 47% fewer tokens per turn ([#2533](https://github.com/Garblesnarff/infinite-realms-production/issues/2533)) ([#2648](https://github.com/Garblesnarff/infinite-realms-production/issues/2648)) ([ce742e9](https://github.com/Garblesnarff/infinite-realms-production/commit/ce742e9a0313500c62509c82b31461ad600cad91))
+
+
+### Bug Fixes
+
+* **chat:** past suggestion groups keep their options ([#2641](https://github.com/Garblesnarff/infinite-realms-production/issues/2641)) ([#2646](https://github.com/Garblesnarff/infinite-realms-production/issues/2646)) ([a836b9b](https://github.com/Garblesnarff/infinite-realms-production/commit/a836b9bd507fdb6fab0ec8f7014df7e657e0c61e))
+* **combat:** End turn and a capped NPC loop run the creatures that follow ([#2641](https://github.com/Garblesnarff/infinite-realms-production/issues/2641)) ([#2649](https://github.com/Garblesnarff/infinite-realms-production/issues/2649)) ([a73a63b](https://github.com/Garblesnarff/infinite-realms-production/commit/a73a63ba37f2a32de066bc73a57bcb6c4a776c69))
+* **combat:** header HP follows the encounter ([#2641](https://github.com/Garblesnarff/infinite-realms-production/issues/2641)) ([#2645](https://github.com/Garblesnarff/infinite-realms-production/issues/2645)) ([1263f9c](https://github.com/Garblesnarff/infinite-realms-production/commit/1263f9c75b6ffa6c22bb37564a68975f145f5528))
+
 ## [0.29.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.29.1...v0.29.2) (2026-10-07)
 
 
