@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from 'react';
 
+import { useCharacterRefreshOnCombatUpdate } from './use-character-refresh';
+
 import type { Campaign as CampaignType } from '@/types/campaign';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -195,47 +197,7 @@ export function useGameData(
     loadGameData();
   }, [characterId, campaignId, characterDispatch, campaignDispatch, user?.id]);
 
-  // The combat tracker is reconciled from the engine's broadcast, but the character sheet reads
-  // CharacterContext. Refresh that snapshot on each engine state event so persisted HP and spell
-  // slots stay aligned with the tracker.
-  useEffect(() => {
-    if (!characterId) return;
-    let cancelled = false;
-    let refreshing = false;
-    let refreshAgain = false;
-
-    const refreshCharacter = async (): Promise<void> => {
-      if (refreshing) {
-        refreshAgain = true;
-        return;
-      }
-      refreshing = true;
-      do {
-        refreshAgain = false;
-        try {
-          const refreshedCharacter = await characterLoaderService.loadCharacterWithSpells(
-            characterId,
-            user?.id,
-          );
-          if (!cancelled && refreshedCharacter) {
-            characterDispatch({ type: 'SET_CHARACTER', payload: refreshedCharacter });
-          }
-        } catch (refreshError) {
-          logger.warn('[GameContent] Could not refresh character after engine event', {
-            characterId,
-            error: refreshError,
-          });
-        }
-      } while (refreshAgain && !cancelled);
-      refreshing = false;
-    };
-
-    window.addEventListener('combat-state-updated', refreshCharacter);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('combat-state-updated', refreshCharacter);
-    };
-  }, [characterId, characterDispatch, user?.id]);
+  useCharacterRefreshOnCombatUpdate(characterId, user?.id, characterDispatch);
 
   return { isLoading, loadingPhase, error, isDM, resolvedCharacterId, missingTarget };
 }

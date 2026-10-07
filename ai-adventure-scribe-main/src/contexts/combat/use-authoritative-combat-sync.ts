@@ -92,6 +92,21 @@ export function applyAuthoritativeCombat(
   return encounter;
 }
 
+/**
+ * Whether a pull moved any character's hit points, or ended the fight that held them. A fight that
+ * ends in the same read as its last hit never shows that hit in a participant, so the end itself
+ * counts.
+ */
+function hitPointsMoved(before: CombatEncounter | null, after: CombatEncounter | null): boolean {
+  if (before && !after) return true;
+  if (!after) return false;
+  return after.participants.some((participant) => {
+    if (!participant.characterId) return false;
+    const previous = before?.participants.find((candidate) => candidate.id === participant.id);
+    return previous?.currentHitPoints !== participant.currentHitPoints;
+  });
+}
+
 export function useAuthoritativeCombatSync(
   sessionId: string | undefined,
   dispatch: Dispatch<ReducerAction>,
@@ -100,11 +115,16 @@ export function useAuthoritativeCombatSync(
   const refreshCombatState = useCallback(
     async (signal?: AbortSignal): Promise<CombatEncounter | null> => {
       if (!sessionId) return getEncounter();
-      return applyAuthoritativeCombat(
-        await readAuthoritativeCombat(sessionId, signal),
-        dispatch,
-        getEncounter(),
-      );
+      const before = getEncounter();
+      const read = await readAuthoritativeCombat(sessionId, signal);
+      const encounter = applyAuthoritativeCombat(read, dispatch, before);
+      // A pull changed a character's hit points, or ended the fight, without the socket's event.
+      // The header reads the character, not the participant, so it is told the way the socket
+      // tells it (#2641). The event carries no `combat`, so the listener below ignores it.
+      if (read.state !== 'unknown' && hitPointsMoved(before, encounter)) {
+        window.dispatchEvent(new CustomEvent('combat-state-updated'));
+      }
+      return encounter;
     },
     [dispatch, getEncounter, sessionId],
   );
