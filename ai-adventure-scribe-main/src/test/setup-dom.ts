@@ -175,16 +175,6 @@ if (!(globalThis as any).indexedDB) {
   };
 }
 
-// MSW setup - disabled due to missing dependency
-// import { setupServer } from 'msw/node';
-// import { handlers } from '../mocks/handlers';
-
-// const server = setupServer(...handlers);
-
-// beforeAll(() => server.listen());
-// afterEach(() => server.resetHandlers());
-// afterAll(() => server.close());
-
 // Mock global objects that might be missing in jsdom or causing issues
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
