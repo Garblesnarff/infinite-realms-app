@@ -2,8 +2,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
+  ACTION_MISSING_DESTINATION_REASON,
+  ACTION_MISSING_TARGET_REASON,
   ACTION_NOT_SUPPORTED_REASON,
   CombatIntentRefusedError,
+  HIDE_CHECK_UNROUTABLE_REASON,
   executeAuthoritativeCombatIntent,
   executeStructuredCombatAction,
   executeStructuredCombatActionWithBoundary,
@@ -469,6 +472,179 @@ describe('combat-action-executor', () => {
         );
         expect((refusal as CombatIntentRefusedError).details?.intentType).toBe(actionType);
       }
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    // #2606: a declaration the engine cannot execute as-is must refuse, not settle. An
+    // attack with no target and a move with no destination used to fall through to the
+    // catch-all empty success, which the resolution step settled like an executed action:
+    // the turn ended and NPC turns advanced on an action that never ran.
+    it('refuses a declared attack that named no target', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'attack' as const,
+        target_ids: [],
+        weapon_id: 'weapon-longbow',
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+
+      const refusal = await executeStructuredCombatActionWithBoundary(encounterId, action).catch(
+        (error: unknown) => error,
+      );
+
+      expect(refusal).toBeInstanceOf(CombatIntentRefusedError);
+      expect((refusal as CombatIntentRefusedError).message).toBe(
+        'No target named — pick a target or type who you attack.',
+      );
+      expect((refusal as CombatIntentRefusedError).details?.reason).toBe(
+        ACTION_MISSING_TARGET_REASON,
+      );
+      expect((refusal as CombatIntentRefusedError).details?.intentType).toBe('attack');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses a declared move with no destination square', async () => {
+      // x/y are optional on the DM's declaration: absent (or only one present) means the
+      // DM named no square.
+      for (const coords of [{}, { x: 7 }, { y: 0 }] as const) {
+        const action = {
+          actor_id: 'actor-1',
+          action_type: 'move' as const,
+          target_ids: [],
+          weapon_id: null,
+          spell_id: null,
+          slot_level: null,
+          movement_feet: 30,
+          ...coords,
+        };
+
+        const refusal = await executeStructuredCombatActionWithBoundary(encounterId, action).catch(
+          (error: unknown) => error,
+        );
+
+        expect(refusal).toBeInstanceOf(CombatIntentRefusedError);
+        expect((refusal as CombatIntentRefusedError).message).toBe(
+          'No destination — pick a square on the map.',
+        );
+        expect((refusal as CombatIntentRefusedError).details?.reason).toBe(
+          ACTION_MISSING_DESTINATION_REASON,
+        );
+        expect((refusal as CombatIntentRefusedError).details?.intentType).toBe('move');
+      }
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('routes a DM-declared hide to the check intent with checkKind hide', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'hide' as const,
+        target_ids: [],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: { resolvedAs: 'check', success: true } }),
+      });
+
+      await executeStructuredCombatActionWithBoundary(encounterId, action);
+
+      // The same check intent the player-initiated Hide posts (#2603): DM-sourced, so no
+      // version read — exactly one POST, straight to the intent route.
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          body: expect.stringContaining('"type":"check"'),
+        }),
+      );
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'http://localhost:8888/v1/combat/encounter-123/intent',
+        expect.objectContaining({
+          body: expect.stringContaining('"checkKind":"hide"'),
+        }),
+      );
+    });
+
+    it('refuses a hide the engine will not route instead of settling it', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'hide' as const,
+        target_ids: [],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ error: 'nothing to hide behind', details: { reason: 'no_cover' } }),
+      });
+
+      const refusal = await executeStructuredCombatActionWithBoundary(encounterId, action).catch(
+        (error: unknown) => error,
+      );
+
+      expect(refusal).toBeInstanceOf(CombatIntentRefusedError);
+      // The engine's reason is not actionable here: the player is pointed at the Hide
+      // option that owns the die and the popup.
+      expect((refusal as CombatIntentRefusedError).message).toBe(
+        'Hide needs a Stealth check — use the Hide option.',
+      );
+      expect((refusal as CombatIntentRefusedError).details?.reason).toBe(
+        HIDE_CHECK_UNROUTABLE_REASON,
+      );
+      expect((refusal as CombatIntentRefusedError).details?.intentType).toBe('hide');
+    });
+
+    it('does not translate a non-refusal failure on the hide check route', async () => {
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'hide' as const,
+        target_ids: [],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+      (globalThis.fetch as any).mockRejectedValue(new TypeError('network down'));
+
+      await expect(
+        executeStructuredCombatActionWithBoundary(encounterId, action),
+      ).rejects.toThrow('network down');
+    });
+
+    it('refuses an action_type outside the union instead of settling it', async () => {
+      // Declared actions arrive as parsed DM JSON: a typo or hallucinated verb reaches
+      // the catch-all at runtime. It used to return the empty success, which the
+      // resolution step settled like an executed action.
+      const action = {
+        actor_id: 'actor-1',
+        action_type: 'sneak' as unknown as 'attack',
+        target_ids: [],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      };
+
+      const refusal = await executeStructuredCombatActionWithBoundary(encounterId, action).catch(
+        (error: unknown) => error,
+      );
+
+      expect(refusal).toBeInstanceOf(CombatIntentRefusedError);
+      expect((refusal as CombatIntentRefusedError).message).toBe(
+        'That action is not supported yet',
+      );
+      expect((refusal as CombatIntentRefusedError).details?.reason).toBe(
+        ACTION_NOT_SUPPORTED_REASON,
+      );
+      expect((refusal as CombatIntentRefusedError).details?.intentType).toBe('sneak');
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 

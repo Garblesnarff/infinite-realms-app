@@ -30,11 +30,14 @@ import {
   slotLevelOf,
 } from '@/services/combat/aoe-combat-action';
 import {
+  ACTION_MISSING_DESTINATION_REASON,
+  ACTION_MISSING_TARGET_REASON,
   ACTION_NOT_SUPPORTED_REASON,
   CombatIntentRefusedError,
   combatBoundaryFromResult,
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
+  HIDE_CHECK_UNROUTABLE_REASON,
 } from '@/services/combat/combat-action-executor';
 import {
   isPlayerInputOrigin,
@@ -94,6 +97,21 @@ import { slugify } from '@/utils/slug';
  * attack that was never rolled. A report of what happened has to include the things that did
  * not.
  */
+
+/**
+ * Refusal reasons the batch short-circuits on: the engine has no owner for the action type,
+ * or the declaration is malformed (attack with no target, move with no destination, hide
+ * no Stealth check will take). No repair is attempted — nothing can re-declare these into
+ * an executable action — so the turn stays open and the player is told what was missing.
+ *
+ * A function, not a module-level set: the constants are read when called, inside the
+ * resolution flow, so tests that partially mock the executor module keep working.
+ */
+const isUnrepairableDeclarationReason = (reason: unknown): boolean =>
+  reason === ACTION_NOT_SUPPORTED_REASON ||
+  reason === ACTION_MISSING_TARGET_REASON ||
+  reason === ACTION_MISSING_DESTINATION_REASON ||
+  reason === HIDE_CHECK_UNROUTABLE_REASON;
 
 export interface CombatResolutionParams {
   encounterId: string;
@@ -900,13 +918,16 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         continue;
       }
       recordRefusal(action, error);
-      if (error.details?.reason === ACTION_NOT_SUPPORTED_REASON) {
-        // The engine has no owner for this action type, so no repair can re-declare it
-        // into existence and there is no turn order to recover. The refusal is recorded
-        // above; the batch moves on with the turn still open — nothing settled for this
-        // actor, and no NPC turn advances on an action that never happened.
+      const refusalReason = error.details?.reason;
+      if (refusalReason && isUnrepairableDeclarationReason(refusalReason)) {
+        // No repair can fix these: the engine has no owner for the action type
+        // (`action_not_supported`), or the declaration is malformed — an attack with no
+        // target, a move with no destination, a hide no Stealth check will take. The
+        // refusal is recorded above; the batch moves on with the turn still open —
+        // nothing settled for this actor, and no NPC turn advances on an action that
+        // never happened.
         logger.info(
-          `[CombatBatch] outcome=action_not_supported actor=${action.actor_id} actionType=${action.action_type}`,
+          `[CombatBatch] outcome=${refusalReason} actor=${action.actor_id} actionType=${action.action_type}`,
         );
         continue;
       }
@@ -1133,22 +1154,22 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ? playerParticipant
       : undefined;
   /**
-   * An action type the engine has no owner for is refused no matter whose turn it is, so
-   * the refusal keeps the turn wherever the pre-flight left it. NPC turns resolved ahead
+   * A declaration the engine cannot execute as-is is refused no matter whose turn it is,
+   * so the refusal keeps the turn wherever the pre-flight left it. NPC turns resolved ahead
    * of the declaration leave `turnHolder` on the player, where `keptBy` above (which
    * requires no holder yet) never fires — without this, the refusal below would be
    * announced as "declared out of turn" on the player's own turn, and the narration
    * would be told it is not their turn.
    */
-  const unsupportedPlayerRefusal = refusedPlayerActions.find(
-    (refusal) => refusal.refusalReason === ACTION_NOT_SUPPORTED_REASON,
+  const unrepairablePlayerRefusal = refusedPlayerActions.find((refusal) =>
+    isUnrepairableDeclarationReason(refusal.refusalReason),
   );
   if (keptBy) turnHolder = { id: keptBy.id, name: keptBy.name };
-  const unsupportedKeepsTurn =
-    Boolean(unsupportedPlayerRefusal) &&
+  const unrepairableKeepsTurn =
+    Boolean(unrepairablePlayerRefusal) &&
     !combatOver &&
     isPlayerActor(turnHolder?.id ?? '', participants);
-  const playerKeepsTurn = Boolean(keptBy) || unsupportedKeepsTurn;
+  const playerKeepsTurn = Boolean(keptBy) || unrepairableKeepsTurn;
   // A silent turn resolved nothing, so nothing ended the player's turn. If an NPC pre-flight
   // stopped short of the player (its safety cap), the note would be false; say nothing then.
   const silentTurn =
@@ -1402,13 +1423,17 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         { holder: turnHolder, holderIsPlayer: playerTurn },
         resolvedActions.length > 0,
       )
-    : unsupportedPlayerRefusal
-      ? // Named in every case: an unsupported action was never "declared out of turn",
-        // and when another action in the batch settled the turn it must not claim the
-        // turn is still the player's either.
+    : unrepairablePlayerRefusal
+      ? // Named in every case: an unrepairable declaration was never "declared out of
+        // turn", and when another action in the batch settled the turn it must not claim
+        // the turn is still the player's either.
         playerKeepsTurn
-        ? stillYourTurnNotice(String(unsupportedPlayerRefusal.playerFacingReason ?? ''))
-        : '*(That action is not supported yet, so it was not resolved.)*'
+        ? stillYourTurnNotice(String(unrepairablePlayerRefusal.playerFacingReason ?? ''))
+        : unrepairablePlayerRefusal.refusalReason === ACTION_NOT_SUPPORTED_REASON
+          ? '*(That action is not supported yet, so it was not resolved.)*'
+          : `*(That action was not resolved: ${String(
+              unrepairablePlayerRefusal.playerFacingReason ?? 'the game could not resolve it',
+            )})*`
       : playerKeepsTurn
         ? stillYourTurnNotice(
             String(

@@ -282,11 +282,18 @@ export async function executeAuthoritativeCombatIntent(
 }
 
 /**
- * `CombatRefusalDetails.reason` for a declared action type the engine has no owner for:
- * the intent schema knows attack, spell, dash, dodge, disengage, move, and end_turn — and
- * nothing else. `hide` is deliberately absent here: contested checks own it (#2420).
+ * `CombatRefusalDetails.reason` for a declared action the engine has no owner for:
+ * help / ready / use_object, which the intent schema does not know, and anything else
+ * that reaches the executor's catch-all (an action_type outside the union from the DM's
+ * parsed JSON). `hide` is not among them: it routes to the Stealth check intent (#2420).
  */
 export const ACTION_NOT_SUPPORTED_REASON = 'action_not_supported';
+/** A declared attack that named no target: malformed, not unsupported (#2606). */
+export const ACTION_MISSING_TARGET_REASON = 'action_missing_target';
+/** A declared move with no destination square: malformed, not unsupported (#2606). */
+export const ACTION_MISSING_DESTINATION_REASON = 'action_missing_destination';
+/** A DM-declared hide whose Stealth check the engine would not route (#2606). */
+export const HIDE_CHECK_UNROUTABLE_REASON = 'hide_check_unroutable';
 
 export async function executeStructuredCombatActionWithBoundary(
   encounterId: string,
@@ -299,7 +306,17 @@ export async function executeStructuredCombatActionWithBoundary(
 ): Promise<StructuredCombatActionExecution> {
   const dmStartedAt = Date.now();
   let result: unknown;
-  if (action.action_type === 'attack' && action.target_ids[0]) {
+  if (action.action_type === 'attack') {
+    if (!action.target_ids[0]) {
+      // A declaration that names no target is malformed, not an unsupported action type:
+      // settling it would end the turn and advance NPCs on an action that never ran.
+      // Refuse instead — the resolution step records it and keeps the turn open.
+      throw new CombatIntentRefusedError(
+        'No target named — pick a target or type who you attack.',
+        422,
+        { reason: ACTION_MISSING_TARGET_REASON, intentType: 'attack' },
+      );
+    }
     result = await executeAuthoritativeCombatIntent(
       encounterId,
       {
@@ -355,11 +372,17 @@ export async function executeStructuredCombatActionWithBoundary(
       origin,
       signal,
     );
-  } else if (
-    action.action_type === 'move' &&
-    typeof action.x === 'number' &&
-    typeof action.y === 'number'
-  ) {
+  } else if (action.action_type === 'move') {
+    if (typeof action.x !== 'number' || typeof action.y !== 'number') {
+      // A move with no destination square is malformed: settling it would end the turn
+      // and advance NPCs on a move that never happened. Refuse instead — the resolution
+      // step records it and keeps the turn open.
+      throw new CombatIntentRefusedError(
+        'No destination — pick a square on the map.',
+        422,
+        { reason: ACTION_MISSING_DESTINATION_REASON, intentType: 'move' },
+      );
+    }
     result = await executeAuthoritativeCombatIntent(
       encounterId,
       { type: 'move', actorId: action.actor_id, x: action.x, y: action.y },
@@ -368,6 +391,30 @@ export async function executeStructuredCombatActionWithBoundary(
       origin,
       signal,
     );
+  } else if (action.action_type === 'hide') {
+    // A DM-declared hide is a Stealth check: post the check intent the player-initiated
+    // Hide uses (#2603) instead of settling an empty success. When the engine will not
+    // route it, the refusal names the fix rather than fabricating an outcome.
+    try {
+      result = await executeAuthoritativeCombatIntent(
+        encounterId,
+        { type: 'check', actorId: action.actor_id, checkKind: 'hide', d20: providedD20 },
+        'dm',
+        dmStartedAt,
+        origin,
+        signal,
+      );
+    } catch (error) {
+      if (!(error instanceof CombatIntentRefusedError)) throw error;
+      // Known limitation: this copy points at the player's Hide option even when the
+      // declaration named a non-player actor, for whom there is no Hide button. The
+      // executor never sees the roster, so it cannot tell the two apart; the fixed
+      // sentence was the decided copy, and a misleading pointer beats a silent settle.
+      throw new CombatIntentRefusedError('Hide needs a Stealth check — use the Hide option.', 422, {
+        reason: HIDE_CHECK_UNROUTABLE_REASON,
+        intentType: 'hide',
+      });
+    }
   } else if (
     action.action_type === 'help' ||
     action.action_type === 'ready' ||
@@ -382,7 +429,14 @@ export async function executeStructuredCombatActionWithBoundary(
       intentType: action.action_type,
     });
   } else {
-    return { outcomes: [], boundary: null };
+    // The typed union is fully covered above, but declared actions arrive as parsed DM
+    // JSON: an action_type outside the union (a typo, a hallucinated verb) still reaches
+    // here at runtime. Settling it as an empty success ended the turn and advanced NPCs
+    // on an action the engine never ran — refuse it like any other unowned declaration.
+    throw new CombatIntentRefusedError('That action is not supported yet', 422, {
+      reason: ACTION_NOT_SUPPORTED_REASON,
+      intentType: String(action.action_type),
+    });
   }
   const boundary = combatBoundaryFromResult(result);
   // A post-conclusion no-op has no engine outcome. In particular, do not turn the marker into a
