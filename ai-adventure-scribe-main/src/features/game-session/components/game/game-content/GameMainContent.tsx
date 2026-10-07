@@ -387,6 +387,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 isProcessing,
                 isReconnecting,
                 isStillThinking,
+                attackWaitLabel,
                 sendError,
                 onRetry,
                 combatTurnUiState,
@@ -542,6 +543,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           onSendMessage={handleSendMessage}
                           isReconnecting={isReconnecting}
                           isStillThinking={isStillThinking}
+                          attackWaitLabel={rollBlocksInput ? null : attackWaitLabel}
                           sendError={sendError ?? undefined}
                           onRetry={onRetry}
                           disabledReason={

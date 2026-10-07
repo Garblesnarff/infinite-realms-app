@@ -1,6 +1,8 @@
 import { Send, Paperclip, Smile, Dice6, Loader2 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useId } from 'react';
 
+import { ATTACK_WAIT_RESOLVING } from '../game/message/turn-wait-copy';
+
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,6 +21,11 @@ interface ChatInputProps {
   isDisabled: boolean;
   isReconnecting?: boolean;
   isStillThinking?: boolean;
+  /**
+   * Staged turn wait (#2536). Shown in this composer until the roll prompt or the reply
+   * replaces it. "Resolving your attack…" only after an attack die.
+   */
+  attackWaitLabel?: string | null;
   sendError?: string;
   onRetry?: (input: string) => void | Promise<void>;
   /**
@@ -44,6 +51,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
     isDisabled,
     isReconnecting = false,
     isStillThinking = false,
+    attackWaitLabel = null,
     sendError,
     onRetry,
     disabledReason,
@@ -349,7 +357,16 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
             </Tooltip>
           </div>
 
-          {isStillThinking && (
+          {attackWaitLabel === ATTACK_WAIT_RESOLVING ? (
+            <div
+              className="px-3 pb-2 text-sm text-muted-foreground"
+              role="status"
+              aria-live="polite"
+              data-testid="attack-wait-status"
+            >
+              {attackWaitLabel}
+            </div>
+          ) : isStillThinking ? (
             <div
               className="px-3 pb-2 text-sm text-muted-foreground"
               role="status"
@@ -357,6 +374,17 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
             >
               The DM is still thinking…
             </div>
+          ) : (
+            attackWaitLabel && (
+              <div
+                className="px-3 pb-2 text-sm text-muted-foreground"
+                role="status"
+                aria-live="polite"
+                data-testid="attack-wait-status"
+              >
+                {attackWaitLabel}
+              </div>
+            )
           )}
 
           {sendError && (

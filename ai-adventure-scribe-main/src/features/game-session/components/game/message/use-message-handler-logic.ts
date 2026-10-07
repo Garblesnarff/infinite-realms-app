@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { toHeaderExcerpt } from './scene-blurb';
+import { ATTACK_WAIT_RESOLVING, TURN_WAIT_WORKING } from './turn-wait-copy';
 import { useHeldEntryRecovery } from './use-held-entry-recovery';
 import { useMessageCommandHandler } from './use-message-command-handler';
 import { useMessageSendQueue } from './use-message-send-queue';
@@ -64,6 +65,8 @@ export const DM_TIMEOUT_MESSAGE = 'The DM did not respond in time. Your message 
 export const DM_NETWORK_ERROR_MESSAGE = 'The connection was lost. Your message is still here.';
 export const DM_PROCESSING_ERROR_MESSAGE =
   'The DM could not finish this turn. Your message is still here. Retry to continue.';
+
+export { ATTACK_WAIT_RESOLVING, TURN_WAIT_WORKING };
 
 type TurnAbortSignal = AbortSignal & {
   onPlayerWaitChange?: (waiting: boolean) => void;
@@ -162,6 +165,8 @@ export const useMessageHandlerLogic = ({
   isProcessing: boolean;
   isReconnecting: boolean;
   isStillThinking: boolean;
+  /** #2536: staged attack wait in the composer. Null once the prompt, engine line, or turn end replaces it. */
+  attackWaitLabel: string | null;
   sendError: string | null;
   retrySendMessage: () => Promise<void>;
   combatTurnUiState: CombatTurnUiState;
@@ -183,7 +188,9 @@ export const useMessageHandlerLogic = ({
     terminalDeathState = null,
     checkRestoredDefeat = async () => false,
   } = useAIResponse();
-  const { processAiResponse } = useGame();
+  const { processAiResponse, state: gameState } = useGame();
+  const gameStateRef = React.useRef(gameState);
+  gameStateRef.current = gameState;
   const { toast } = useToast();
   const { state: characterState } = useCharacter();
   const character = characterState.character;
@@ -206,6 +213,7 @@ export const useMessageHandlerLogic = ({
   const composerBlockedRef = React.useRef(false);
   const [isReconnecting, setIsReconnecting] = React.useState(false);
   const [isStillThinking, setIsStillThinking] = React.useState(false);
+  const [attackWaitLabel, setAttackWaitLabel] = React.useState<string | null>(null);
   const [sendError, setSendError] = React.useState<string | null>(null);
   const retryInputRef = React.useRef<string | null>(null);
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
@@ -342,15 +350,55 @@ export const useMessageHandlerLogic = ({
       pausedForPlayerInput = false;
       scheduleTurnTimeout();
     };
+    // #2536: every send shows a composer line before the first await, inside the 2 s window.
+    // The words stay neutral until the queue's current roll is an attack die — that is the
+    // first moment "attack" is known. NPC notices during generate are not the replacement.
+    // `attackNoticesReplaceStatus` flips once the attack die is in, so a post-roll notice
+    // can take "Resolving…" down.
+    let attackPhase: 'deciding' | 'resolving' | null = null;
+    let attackNoticesReplaceStatus = false;
+    const setAttackPhase = (next: 'deciding' | 'resolving' | null): void => {
+      attackPhase = next;
+      setAttackWaitLabel(
+        next === 'deciding'
+          ? TURN_WAIT_WORKING
+          : next === 'resolving'
+            ? ATTACK_WAIT_RESOLVING
+            : null,
+      );
+    };
     turnSignal.onPlayerWaitChange = (waiting) => {
-      if (waiting) pauseTurnTimers();
-      else resumeTurnTimers();
+      if (waiting) {
+        pauseTurnTimers();
+        // Do not drop the line here. This fires at the start of awaitPlayerInput, before
+        // proposeAuthoritativeAttack / detectDeclaredAttack return and before any prompt is
+        // on screen. The tray replaces the line (GameMainContent passes null while
+        // rollBlocksInput); this callback only changes the line once that wait ends.
+      } else {
+        resumeTurnTimers();
+        if (abortController.signal.aborted) return;
+        // The die is still the queue's current roll here: the bridge settles before the queue
+        // marks it complete. Only that attack die starts "Resolving…". An initiative or check
+        // prompt closing returns to the neutral line; the attack prompt has not happened yet.
+        const queue = gameStateRef.current?.diceRollQueue;
+        const current = queue?.pendingRolls?.find(
+          (roll) => roll.id === queue.currentRollId && roll.status === 'pending',
+        );
+        const attackDie = Boolean(current?.combatAttackRoll || current?.requestType === 'attack');
+        if (attackDie) {
+          attackNoticesReplaceStatus = true;
+          setAttackPhase('resolving');
+        } else {
+          setAttackPhase('deciding');
+        }
+      }
     };
     stillThinkingTimer = setTimeout(() => setIsStillThinking(true), DM_STILL_THINKING_TIMEOUT_MS);
     scheduleTurnTimeout();
 
     setSendError(null);
     setIsStillThinking(false);
+    setAttackPhase('deciding');
     const turnPhase = createTurnPhaseReporter();
     turnPhaseRef.current = turnPhase;
     setComposerBlocked(true);
@@ -466,6 +514,9 @@ export const useMessageHandlerLogic = ({
       // so the turn is one row whichever side writes it and a dead tab cannot lose the reply.
       const dmMessageId = crypto.randomUUID();
       const showEngineNotice = (notice: LocalNotice): void => {
+        if (attackNoticesReplaceStatus && attackPhase) {
+          setAttackPhase(null);
+        }
         runDeferredTask(
           'local notice persistence',
           () =>
@@ -595,6 +646,10 @@ export const useMessageHandlerLogic = ({
         ),
         turnSignal,
       );
+      // The returned row is the attack's result: its text leads with the engine line
+      // (`prependCombatEngineTranscript`) or it is the turn that had no roll. Either way the
+      // composer line has been replaced.
+      setAttackPhase(null);
       // #2456: the party was defeated. The hook has already surfaced the death
       // screen state and settled the combat preflight. Skip ordinary DM-reply
       // processing — no sanitizing, no persistence, no generic error text.
@@ -925,6 +980,7 @@ export const useMessageHandlerLogic = ({
       clearTurnTimers();
       delete turnSignal.onPlayerWaitChange;
       setIsStillThinking(false);
+      setAttackPhase(null);
     }
   };
 
@@ -967,6 +1023,7 @@ export const useMessageHandlerLogic = ({
     isProcessing,
     isReconnecting: isProcessing && isReconnecting,
     isStillThinking,
+    attackWaitLabel,
     sendError,
     retrySendMessage,
     combatTurnUiState,

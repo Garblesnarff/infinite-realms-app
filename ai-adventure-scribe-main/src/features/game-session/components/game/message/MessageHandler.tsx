@@ -35,6 +35,7 @@ interface MessageHandlerProps {
     isProcessing: boolean;
     isReconnecting: boolean;
     isStillThinking: boolean;
+    attackWaitLabel: string | null;
     sendError: string | null;
     onRetry: (input: string) => Promise<void>;
     combatTurnUiState: CombatTurnUiState;
@@ -55,6 +56,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     isProcessing,
     isReconnecting,
     isStillThinking,
+    attackWaitLabel,
     sendError,
     retrySendMessage,
     combatTurnUiState,
@@ -91,6 +93,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     isProcessing,
     isReconnecting,
     isStillThinking,
+    attackWaitLabel,
     sendError,
     onRetry: retrySendMessage,
     combatTurnUiState,
