@@ -41,6 +41,11 @@ interface MessageRendererProps {
   previousEngineKey?: string;
   /** Keep the current player's combat menu mounted after a DM notice without inline options. */
   combatOptionsVisible?: boolean;
+  /**
+   * Only the newest message carries the live combat menu. An earlier group shows the options the
+   * DM saved with it, whatever the game mode is now (#2641).
+   */
+  isLatestMessage?: boolean;
 }
 
 /**
@@ -68,6 +73,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     characterName: _characterName,
     previousEngineKey,
     combatOptionsVisible = false,
+    isLatestMessage = true,
   }) => {
     // Parse for this message
     const parsedMessage = isDM ? parseMessageOptions(message.text) : null;
@@ -197,6 +203,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
               onOptionSelect={onOptionSelect}
               onSendMessage={onSendMessage}
               hasDynamicOverlay={false}
+              isLatest={isLatestMessage}
             />
           )}
       </div>
@@ -220,7 +227,13 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
 
     if (prev.onSendMessage !== next.onSendMessage) return false;
 
-    if (!basicPropsMatch || prev.combatOptionsVisible !== next.combatOptionsVisible) return false;
+    if (
+      !basicPropsMatch ||
+      prev.combatOptionsVisible !== next.combatOptionsVisible ||
+      prev.isLatestMessage !== next.isLatestMessage
+    ) {
+      return false;
+    }
 
     // Optimized check for collection-based props to avoid re-renders when OTHER messages change
     // We only care if the state relevant to THIS specific message has changed

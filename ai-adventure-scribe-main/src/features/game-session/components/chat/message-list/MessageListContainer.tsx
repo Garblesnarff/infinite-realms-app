@@ -251,6 +251,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onOptionSelect={onOptionSelect}
                       onSendMessage={onSendMessage}
                       combatOptionsVisible={combatOptionsVisible}
+                      isLatestMessage={isLastMessage}
                       characterName={group.messages[0].characterName}
                       previousEngineKey={previousEngineKeys.get(message)}
                     />

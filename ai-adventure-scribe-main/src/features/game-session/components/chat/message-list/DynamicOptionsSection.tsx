@@ -40,6 +40,8 @@ interface DynamicOptionsSectionProps {
   onOptionSelect: (optionText: string) => Promise<void>;
   hasDynamicOverlay: boolean;
   onSendMessage?: (message: ChatMessage) => Promise<void>;
+  /** False for a past message: it keeps its own options and never turns into the combat menu. */
+  isLatest?: boolean;
 }
 
 type EngineNotice = {
@@ -79,8 +81,9 @@ async function sendEngineNotice(
  * section when unrelated message list state changes.
  */
 export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React.memo(
-  ({ options, onOptionSelect, hasDynamicOverlay, onSendMessage }) => {
+  ({ options, onOptionSelect, hasDynamicOverlay, onSendMessage, isLatest = true }) => {
     const { state: combatState, refreshCombatState } = useCombat();
+    const showCombatMenu = isLatest && combatState.isInCombat;
     const [error, setError] = useState<string | null>(null);
     const encounter = combatState.activeEncounter;
     const roster = useMemo(
@@ -92,7 +95,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     });
 
     const refreshLegalActions = useCallback(async () => {
-      if (!combatState.isInCombat || !encounter?.id) return;
+      if (!showCombatMenu || !encounter?.id) return;
       const response = await fetch(
         `${apiBase}/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
         {
@@ -108,7 +111,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
       });
     }, [
-      combatState.isInCombat,
+      showCombatMenu,
       encounter?.id,
       encounter?.currentTurnParticipantId,
       encounter?.currentRound,
@@ -119,7 +122,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     }, [refreshLegalActions]);
 
     const renderedOptions = useMemo<ActionOption[]>(() => {
-      if (!combatState.isInCombat) return options;
+      if (!showCombatMenu) return options;
       if (
         legalState.actorId !== encounter?.currentTurnParticipantId ||
         !encounter?.participants.some(
@@ -134,13 +137,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         text: action.label,
         fullText: action.label,
       }));
-    }, [
-      combatState.isInCombat,
-      legalState.actions,
-      legalState.actorId,
-      encounter?.participants,
-      options,
-    ]);
+    }, [showCombatMenu, legalState.actions, legalState.actorId, encounter?.participants, options]);
 
     if (!renderedOptions || renderedOptions.length === 0) {
       return null;
@@ -178,7 +175,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     };
 
     const handleSelection = async (option: ActionOption) => {
-      if (!combatState.isInCombat || !encounter?.id) {
+      if (!showCombatMenu || !encounter?.id) {
         await onOptionSelect(createPlayerMessageFromOption(option));
         return;
       }
@@ -394,8 +391,8 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         <ActionOptions
           options={renderedOptions}
           onOptionSelect={handleSelection}
-          resetSelectionAfterCompletion={combatState.isInCombat}
-          delay={hasDynamicOverlay ? 0 : 10000}
+          resetSelectionAfterCompletion={showCombatMenu}
+          delay={hasDynamicOverlay || showCombatMenu ? 0 : 10000}
         />
       </div>
     );
