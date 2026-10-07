@@ -297,6 +297,8 @@ describe('CombatRulesPrompts', () => {
     // GUARD, not a spec: pins the out-of-combat rules of play to the bytes origin/main had before
     // #2400. A deliberate edit to that prompt fails it; update the hash in the same PR. The other
     // out-of-combat sections are pinned in context-builder-in-combat-prompt.test.ts.
+    // #2533 re-pinned it after condensing the five engine-owned combat blocks (1:1 with
+    // COMBAT_RULES_TEMPLATE in combat-rules-templates.ts); nothing else in the prompt moved.
     it('is byte-identical to the prompt before the in-combat change', () => {
       const notCombat: CombatDetectionResult = {
         isCombat: false,
@@ -308,9 +310,9 @@ describe('CombatRulesPrompts', () => {
 
       expect(CombatRulesPrompts.formatCombatContext(notCombat)).toBe('');
       const rules = RulesPrompts.buildRulesOfPlaySection();
-      expect(rules).toHaveLength(26874);
+      expect(rules).toHaveLength(23777);
       expect(sha256(rules)).toBe(
-        'b914eda1af7159cd8d0232c0d01ae147034d7a7f40df3d5ab6d5ec226daa667c',
+        'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
       );
     });
   });

@@ -17,6 +17,22 @@ export const DM_HISTORY_TOKEN_FLOOR = 4_000;
  */
 export const DM_CANON_TOKEN_CAP = 13_000;
 
+/**
+ * #2533: per-turn cap on the entity cards chosen by name for the canon block (cards for
+ * entities in the current scene are exempt and always kept). Roughly eight 350-token cards.
+ */
+export const DM_TURN_CANON_ENTITY_TOKEN_BUDGET = 3_000;
+
+/**
+ * #2533: the DM prompt carries the last 12 messages (~6 player/DM exchanges; system and companion rows count too) of the
+ * transcript, not all of it. Six exchanges cover the longest span the prompt itself asks for
+ * (DM requests a roll, player rolls, DM narrates) plus the thread being continued; what
+ * happened earlier reaches the DM through `<scene_state>` (the fact ledger, which wins over
+ * history) and `<story_memories>`, both of which are sent every turn. History used to grow
+ * ~230 tokens per turn without bound (519 -> 4,402 over 22 turns in run D4).
+ */
+export const DM_HISTORY_MAX_MESSAGES = 12;
+
 export function approximateTokens(value: string): number {
   return Math.ceil(value.length / CHARS_PER_TOKEN);
 }

@@ -5,7 +5,7 @@
  * XML-style prompt block templates extracted from combat-rules-prompts.ts for modularity.
  */
 
-export const COMBAT_RULES_TEMPLATE = `<combat>
+const COMBAT_RULES_FULL_TEMPLATE = `<combat>
 <title>COMBAT GUIDELINES</title>
 - Request initiative when combat begins
 - Declare the current player's attack in \`roll_requests\` as a \`"type": "attack"\` entry naming
@@ -315,9 +315,9 @@ const swapText = (source: string, from: string, to: string): string => {
 };
 
 /**
- * COMBAT_RULES_TEMPLATE as sent while combat is active (#2400). The engine resolves attacks, spells
+ * COMBAT_RULES_FULL_TEMPLATE as sent while combat is active (#2400). The engine resolves attacks, spells
  * and saves there and the client drops every DM roll_request (#2385), so the template must not
- * teach one. The out-of-combat template above is unchanged.
+ * teach one. The out-of-combat template is `COMBAT_RULES_TEMPLATE` below.
  */
 export const COMBAT_RULES_IN_COMBAT_TEMPLATE = [
   [
@@ -384,7 +384,75 @@ request - never ask for two separate d20 rolls.**
 `,
     ``,
   ],
-].reduce((text, [from, to]) => swapText(text, from, to), COMBAT_RULES_TEMPLATE);
+].reduce((text, [from, to]) => swapText(text, from, to), COMBAT_RULES_FULL_TEMPLATE);
+
+/**
+ * #2533: the rules the engine now owns -- how an HP buffer, healing, a crit or an enemy turn is
+ * calculated -- need one short line telling the DM the engine owns them, not paragraphs, so the
+ * template sent on ordinary turns replaces those five blocks with that line. The title of every
+ * block stays, and the fabrication guards (no numeric HP, never narrate an outcome the engine did
+ * not produce, an attack that is only narrated never happened) are in blocks this does not touch.
+ * The in-combat variant above is derived from the full text and does not change.
+ */
+const replaceBlock = (source: string, tag: string, block: string): string => {
+  const open = `<${tag}>`;
+  const close = `</${tag}>`;
+  const start = source.indexOf(open);
+  const end = source.indexOf(close);
+  if (start === -1 || end === -1 || source.indexOf(open, start + 1) !== -1)
+    throw new Error(`combat-rules-templates: block not found exactly once: ${tag}`);
+  return source.slice(0, start) + block + source.slice(end + close.length);
+};
+
+export const COMBAT_RULES_TEMPLATE = [
+  [
+    'multiple_enemies',
+    `<multiple_enemies>
+<title>MANAGING MULTIPLE ENEMIES</title>
+Give each enemy of a kind a stable name ("Goblin 1", "Goblin 2") and keep it for the whole fight.
+The engine runs every enemy turn in initiative order: narrate each authoritative result distinctly,
+and never emit an NPC \`combat_actions\` entry. An enemy dies only when the engine reports it.
+</multiple_enemies>`,
+  ],
+  [
+    'healing',
+    `<healing>
+<title>HEALING AND RECOVERY</title>
+The engine applies healing and rest recovery and caps it at maximum HP. Healing brings an
+unconscious character back and resets their death saves; it never restores temporary HP.
+When a player casts a healing spell, request the healing amount as a \`"type": "damage"\` entry in
+\`roll_requests\` (positive HP change), e.g. \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing", "dc": null, "ac": null, "advantage": false, "disadvantage": false}\`.
+Narrate the condition change without a number: "The divine light washes over your wounds. You look less battered."
+</healing>`,
+  ],
+  [
+    'temporary_hp',
+    `<temporary_hp>
+<title>TEMPORARY HIT POINTS</title>
+The engine tracks temporary hit points (absorbed first, never stacked, never restored by healing).
+Narrate the source and describe the buffer without stating its numeric amount.
+</temporary_hp>`,
+  ],
+  [
+    'advantage_disadvantage',
+    `<advantage_disadvantage>
+<title>ADVANTAGE AND DISADVANTAGE</title>
+**Advantage and disadvantage on an attack are applied by the engine**, read off the board when the
+attack is resolved. Set \`advantage\`/\`disadvantage\` on a \`roll_requests\` entry only for saves and
+ability checks, and never ask for two separate d20 rolls. They do not stack: any number of sources of
+one is just that one, and advantage plus disadvantage cancel out.
+</advantage_disadvantage>`,
+  ],
+  [
+    'critical_hits',
+    `<critical_hits>
+<title>CRITICAL HITS AND FUMBLES</title>
+The engine decides every critical hit and fumble (a natural 20 hits and doubles the damage dice; a
+natural 1 misses) and applies the damage. You never request the damage roll. Narrate the crit or
+fumble the engine reports; never announce one it did not.
+</critical_hits>`,
+  ],
+].reduce((text, [tag, block]) => replaceBlock(text, tag, block), COMBAT_RULES_FULL_TEMPLATE);
 
 export const ENCOUNTER_DIFFICULTY_TEMPLATE = `<encounter_difficulty>
 <title>CRITICAL: ENCOUNTER SCALING BY CHARACTER LEVEL</title>

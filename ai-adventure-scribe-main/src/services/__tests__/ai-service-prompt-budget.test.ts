@@ -142,12 +142,16 @@ describe('AIService prompt budget guard (#2450)', () => {
     const conversationHistory = Array.from({ length: 20 }, (_, i) => ({
       id: `msg-${i}`,
       role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: `Turn ${i} content. ` + 'z'.repeat(800),
+      // #2533: only the last DM_HISTORY_MAX_MESSAGES (12) of these 20 reach the prompt, so each
+      // is sized (~350 tokens) for those 12 to still fill the 4,000-token history floor.
+      content: `Turn ${i} content. ` + 'z'.repeat(1400),
       timestamp: new Date(),
     }));
 
     await AIService.chatWithDM({
-      message: 'I ask Active NPC about the souffle',
+      // #2533: canon is selected per turn, so a 27k canon only overflows the budget when the
+      // turn names most of it. This player names the whole kitchen staff.
+      message: `I ask Active NPC about the souffle and call for ${Array.from({ length: 60 }, (_, i) => `Kitchenhand ${i}`).join(', ')}`,
       context: {
         sessionId: 'budget-session',
         campaignId: 'campaign-1',
@@ -177,7 +181,10 @@ describe('AIService prompt budget guard (#2450)', () => {
     expect(metrics.history).toBeGreaterThanOrEqual(4_000);
     expect(metrics.history_below_floor).toBe(0);
     expect(prompt).toContain('<conversation_history>');
-    expect(prompt).toContain('Turn 0 content.');
+    // #2533: the newest messages are kept and the oldest fall off the 12-message cap.
+    expect(prompt).toContain('Turn 19 content.');
+    expect(prompt).toContain('Turn 8 content.');
+    expect(prompt).not.toContain('Turn 7 content.');
     // The whole prompt stays within the 24k budget.
     expect(approximateTokens(prompt)).toBeLessThanOrEqual(DM_PROMPT_TOKEN_BUDGET);
     // The cut trips the loud client-side alarm (counts only, no prompt text).

@@ -2,23 +2,14 @@
 import { fetchCampaignAssetsForPrompt } from '../asset-processor';
 import { approximateTokens } from '../shared/token-budget';
 
-import type {
-  CampaignChunk,
-  CampaignRule,
-} from '@/agents/services/lore-keeper/data-mapping';
+import type { CampaignChunk, CampaignRule } from '@/agents/services/lore-keeper/data-mapping';
 
 import { getLoreKeeperService } from '@/agents/services/lore-keeper/LoreKeeperService';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
 /** Canonical entity sections, in the order they render in the prompt. */
-export type LoreSectionType =
-  | 'npcs'
-  | 'locations'
-  | 'factions'
-  | 'items'
-  | 'monsters'
-  | 'handouts';
+export type LoreSectionType = 'npcs' | 'locations' | 'factions' | 'items' | 'monsters' | 'handouts';
 
 /** Starter campaign lore fetched from the server, before rendering. */
 export interface StarterCampaignLore {
@@ -42,6 +33,26 @@ export interface LoreRenderOptions {
   recentTurnsText?: string;
   /** Entity names present in the current scene (from `<scene_state>`) — always kept. */
   activeEntityNames?: string[];
+  /**
+   * #2533: render canon for THIS turn instead of the whole bible. The fixed core
+   * (setting, creative direction, world rules, adherence) is always sent; entity
+   * cards are sent only for entities in `activeEntityNames` and for entities named
+   * in the turn text; every other entity is listed by name in `<canon_roster>`.
+   * Which entities exist is unchanged: LoreKeeper stays the source of every card.
+   */
+  turnScope?: TurnCanonScope;
+}
+
+/**
+ * What this turn names, in descending weight: the player's input, the last DM message, and the
+ * scene (the current scene description and, in combat, the tactical digest).
+ */
+export interface TurnCanonScope {
+  playerInput: string;
+  lastDmMessage: string;
+  sceneText: string;
+  /** Token cap for the entity cards chosen by name (scene-active entities are not charged to it). */
+  entityTokenBudget: number;
 }
 
 export interface LoreRenderResult {
@@ -52,6 +63,12 @@ export interface LoreRenderResult {
   keptEntities: number;
   droppedEntities: number;
 }
+
+// Wrapper overhead the greedy fill must leave room for: the
+// `<canonical_entities>` opener/instruction/closer plus the per-type
+// `<npcs count="N">` wrappers. Unbudgeted, the final section can exceed
+// tokenBudget by ~90 tokens on wrapper-heavy campaigns.
+const WRAPPER_TOKEN_ALLOWANCE = 100;
 
 const LORE_SECTION_ORDER: LoreSectionType[] = [
   'npcs',
@@ -111,6 +128,110 @@ function wordsOf(text: string): string[] {
   return text.toLowerCase().match(/[a-z]{5,}/g) || [];
 }
 
+/** Words that must not select an entity on their own: function words and bare titles. */
+const NAME_TOKEN_STOPWORDS = new Set([
+  'the',
+  'of',
+  'and',
+  'from',
+  'with',
+  'that',
+  'this',
+  'into',
+  'captain',
+  'warden',
+  'brother',
+  'sister',
+  'madam',
+  'magistrate',
+  'lord',
+  'lady',
+  'master',
+  'doctor',
+  'old',
+  'new',
+  'sir',
+  'von',
+  'van',
+  'dame',
+  'baron',
+  'duke',
+  'king',
+  'queen',
+  'father',
+  'mother',
+  'chief',
+  'elder',
+]);
+
+/**
+ * People and places are referred to by part of their name ("Brine", "the chapel"), so one name
+ * token selects them. Everything else (factions, items, creatures) is named by common words
+ * ("order", "flame", "ghoul" in a sentence about something else), so it needs the full name or
+ * two of its name tokens.
+ */
+const SINGLE_TOKEN_SECTIONS = new Set<LoreSectionType>(['npcs', 'locations']);
+
+const isWordChar = (char: string | undefined): boolean => !!char && /[a-z0-9]/.test(char);
+
+/** Whole-word, case-insensitive containment; linear, no regex built from campaign text. */
+function containsWord(textLower: string, wordLower: string): boolean {
+  if (!wordLower) return false;
+  let from = 0;
+  for (;;) {
+    const at = textLower.indexOf(wordLower, from);
+    if (at === -1) return false;
+    if (!isWordChar(textLower[at - 1]) && !isWordChar(textLower[at + wordLower.length]))
+      return true;
+    from = at + 1;
+  }
+}
+
+/** Lower-case, one apostrophe form, no possessive: "Marrek’s" and "Lamplighters'" fold to bare words. */
+function foldName(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\u2018\u2019`]/g, "'")
+    .replace(/'s\b/g, '')
+    .replace(/'/g, '');
+}
+
+/** How strongly `textFolded` names the entity: a full-name mention outweighs name tokens. */
+function mentionScore(
+  entityName: string,
+  sectionType: LoreSectionType,
+  textFolded: string,
+): number {
+  const nameFolded = foldName(entityName).trim();
+  if (nameFolded.length < 3 || !textFolded) return 0;
+  if (containsWord(textFolded, nameFolded)) return 10;
+  // A short name ("Pip") is a name token for a person; elsewhere three letters is a common word.
+  const minToken = sectionType === 'npcs' ? 3 : 4;
+  let tokens = 0;
+  for (const token of nameFolded.split(/[^a-z0-9]+/)) {
+    if (
+      token.length >= minToken &&
+      !NAME_TOKEN_STOPWORDS.has(token) &&
+      containsWord(textFolded, token)
+    ) {
+      tokens += 1;
+    }
+  }
+  return SINGLE_TOKEN_SECTIONS.has(sectionType) || tokens >= 2 ? tokens : 0;
+}
+
+function turnMentionScore(
+  entityName: string,
+  sectionType: LoreSectionType,
+  scope: TurnCanonScope,
+): number {
+  return (
+    4 * mentionScore(entityName, sectionType, foldName(scope.playerInput)) +
+    2 * mentionScore(entityName, sectionType, foldName(scope.lastDmMessage)) +
+    mentionScore(entityName, sectionType, foldName(scope.sceneText))
+  );
+}
+
 /**
  * Relevance score for one entity block. Active scene entities always win;
  * then entities named in recent turns; then keyword overlap with recent turns.
@@ -152,9 +273,7 @@ ${lore.creativeBrief}
 <world_rules>
 These rules govern how the world responds to player actions:
 ${lore.rules
-  .map(
-    (rule) => `- ${rule.condition} → ${rule.effect}${rule.reversible ? ' (reversible)' : ''}`,
-  )
+  .map((rule) => `- ${rule.condition} → ${rule.effect}${rule.reversible ? ' (reversible)' : ''}`)
   .join('\n')}
 </world_rules>`;
   }
@@ -220,12 +339,25 @@ ${content}
   }
 }
 
+function renderHandoutIndexLine(entity: CampaignChunk): string {
+  const metadata = (entity.metadata as any) || {};
+  return `<handout key="${metadata.key || ''}" title="${metadata.title || entity.entityName || ''}" giver="${metadata.giver || ''}" />`;
+}
+
+/**
+ * `indexOnly` (handouts only, #2533): authored handouts not selected for this turn stay
+ * deliverable by exact key, as one line each without the body.
+ */
 function renderEntityTypeSection(
   sectionType: LoreSectionType,
   entities: CampaignChunk[],
+  indexOnly: CampaignChunk[] = [],
 ): string {
-  if (entities.length === 0) return '';
-  const blocks = entities.map((entity) => renderEntityBlock(sectionType, entity)).join('\n');
+  if (entities.length === 0 && !(sectionType === 'handouts' && indexOnly.length > 0)) return '';
+  const blocks = [
+    ...entities.map((entity) => renderEntityBlock(sectionType, entity)),
+    ...(sectionType === 'handouts' ? indexOnly.map(renderHandoutIndexLine) : []),
+  ].join('\n');
   switch (sectionType) {
     case 'npcs':
       return `
@@ -267,6 +399,35 @@ ${blocks}
   }
 }
 
+const ROSTER_LABEL: Record<Exclude<LoreSectionType, 'handouts'>, string> = {
+  npcs: 'NPCs',
+  locations: 'Locations',
+  factions: 'Factions',
+  items: 'Items',
+  monsters: 'Creatures',
+};
+
+function renderCanonRoster(
+  left: { entity: CampaignChunk; sectionType: LoreSectionType }[],
+): string {
+  const lines: string[] = [];
+  for (const sectionType of LORE_SECTION_ORDER) {
+    if (sectionType === 'handouts') continue;
+    const names = left
+      .filter((unit) => unit.sectionType === sectionType)
+      .map((unit) => unit.entity.entityName || '')
+      .filter(Boolean);
+    if (names.length > 0) lines.push(`${ROSTER_LABEL[sectionType]}: ${names.join('; ')}`);
+  }
+  if (lines.length === 0) return '';
+  return `
+
+<canon_roster>
+<instruction>The rest of this campaign's canon, by name. Each one's full card is supplied on the turns it is in the scene or is named by the player or the previous DM message. Until then use these exact names and do not invent a stand-in for any of them.</instruction>
+${lines.join('\n')}
+</canon_roster>`;
+}
+
 /**
  * Drop asset list lines for entities that were cut from canon. The asset
  * section lists `- Name [ASSET:type:key]` lines; header/footer lines stay.
@@ -301,13 +462,14 @@ export class CampaignContextPrompts {
   ): Promise<StarterCampaignLore | null> {
     try {
       const loreKeeper = getLoreKeeperService();
-      const [campaignOverview, campaignRules, campaignAssets, campaignEntities] =
-        await Promise.all([
+      const [campaignOverview, campaignRules, campaignAssets, campaignEntities] = await Promise.all(
+        [
           loreKeeper.getCampaignOverview(starterCampaignId),
           loreKeeper.getRules(starterCampaignId),
           fetchCampaignAssetsForPrompt(starterCampaignId),
           loreKeeper.getEntities(starterCampaignId),
-        ]);
+        ],
+      );
 
       if (!campaignOverview) {
         return null;
@@ -362,8 +524,7 @@ export class CampaignContextPrompts {
     const head = renderLoreHead(lore);
     const tail = renderLoreTail();
 
-    const units: { entity: CampaignChunk; sectionType: LoreSectionType; order: number }[] =
-      [];
+    const units: { entity: CampaignChunk; sectionType: LoreSectionType; order: number }[] = [];
     for (const sectionType of LORE_SECTION_ORDER) {
       for (const entity of lore.entitiesByType[sectionType]) {
         units.push({ entity, sectionType, order: units.length });
@@ -372,7 +533,61 @@ export class CampaignContextPrompts {
 
     let kept = units;
     let canonCut = false;
-    if (options.tokenBudget !== undefined) {
+    if (options.turnScope) {
+      const scope = options.turnScope;
+      const activeNames = new Set(
+        (options.activeEntityNames || []).map((name) => name.toLowerCase()),
+      );
+      const nameOf = (unit: (typeof units)[number]): string =>
+        (unit.entity.entityName || '').toLowerCase();
+      const cost = (unit: (typeof units)[number]): number =>
+        approximateTokens(renderEntityBlock(unit.sectionType, unit.entity));
+      // Two limits, neither charged for the scene: the per-turn allowance for cards chosen by
+      // name, and (when given) what is left of the whole-canon token budget.
+      let allowance = scope.entityTokenBudget;
+      let remaining =
+        options.tokenBudget === undefined
+          ? Infinity
+          : Math.max(
+              0,
+              options.tokenBudget -
+                approximateTokens(head + tail + lore.assetsSection) -
+                WRAPPER_TOKEN_ALLOWANCE,
+            );
+      // Scene-active entities are always kept, exactly as in the ranked path; they count
+      // against the whole-canon budget but not against the per-turn allowance.
+      kept = units.filter((unit) => activeNames.has(nameOf(unit)));
+      for (const unit of kept) remaining = Math.max(0, remaining - cost(unit));
+      const named = units
+        .filter((unit) => !activeNames.has(nameOf(unit)))
+        .map((unit) => ({
+          unit,
+          score: turnMentionScore(unit.entity.entityName || '', unit.sectionType, scope),
+        }))
+        .filter((candidate) => candidate.score > 0)
+        .sort((a, b) => b.score - a.score || a.unit.order - b.unit.order);
+      for (const { unit } of named) {
+        if (cost(unit) <= Math.min(allowance, remaining)) {
+          kept.push(unit);
+          allowance -= cost(unit);
+          remaining -= cost(unit);
+        } else {
+          canonCut = true;
+        }
+      }
+      // A handout rides with the NPC who gives it.
+      const keptNames = new Set(kept.map(nameOf));
+      for (const unit of units) {
+        if (unit.sectionType !== 'handouts' || kept.includes(unit)) continue;
+        const giver = String((unit.entity.metadata as any)?.giver || '').toLowerCase();
+        if (giver && keptNames.has(giver) && cost(unit) <= Math.min(allowance, remaining)) {
+          kept.push(unit);
+          allowance -= cost(unit);
+          remaining -= cost(unit);
+        }
+      }
+      kept.sort((a, b) => a.order - b.order);
+    } else if (options.tokenBudget !== undefined) {
       const recentLower = (options.recentTurnsText || '').toLowerCase();
       const recentWords = new Set(wordsOf(options.recentTurnsText || ''));
       const activeNames = new Set(
@@ -384,11 +599,6 @@ export class CampaignContextPrompts {
       }));
       scored.sort((a, b) => b.score - a.score || a.order - b.order);
       const headTokens = approximateTokens(head + tail + lore.assetsSection);
-      // Wrapper overhead the greedy fill must leave room for: the
-      // `<canonical_entities>` opener/instruction/closer plus the per-type
-      // `<npcs count="N">` wrappers. Unbudgeted, the final section can exceed
-      // tokenBudget by ~90 tokens on wrapper-heavy campaigns.
-      const WRAPPER_TOKEN_ALLOWANCE = 100;
       let remaining = Math.max(0, options.tokenBudget - headTokens - WRAPPER_TOKEN_ALLOWANCE);
       kept = [];
       // Active scene entities are always kept (#2450): reserve them before the
@@ -416,8 +626,14 @@ export class CampaignContextPrompts {
       canonCut = kept.length < units.length;
     }
 
+    const notKept = options.turnScope ? units.filter((unit) => !kept.includes(unit)) : [];
+    const roster = options.turnScope ? renderCanonRoster(notKept) : '';
+    const handoutIndex = notKept
+      .filter((unit) => unit.sectionType === 'handouts')
+      .map((unit) => unit.entity);
+
     let entitiesSection = '';
-    if (kept.length > 0) {
+    if (kept.length > 0 || roster || handoutIndex.length > 0) {
       entitiesSection = `
 
 <canonical_entities>
@@ -426,23 +642,24 @@ export class CampaignContextPrompts {
         entitiesSection += renderEntityTypeSection(
           sectionType,
           kept.filter((unit) => unit.sectionType === sectionType).map((unit) => unit.entity),
+          sectionType === 'handouts' ? handoutIndex : [],
         );
       }
+      entitiesSection += roster;
       entitiesSection += `
 </canonical_entities>`;
     }
 
-    const keptNames = new Set(
-      kept.map((unit) => (unit.entity.entityName || '').toLowerCase()),
-    );
+    const keptNames = new Set(kept.map((unit) => (unit.entity.entityName || '').toLowerCase()));
     const droppedNames = new Set(
       units
         .filter((unit) => !keptNames.has((unit.entity.entityName || '').toLowerCase()))
         .map((unit) => (unit.entity.entityName || '').toLowerCase()),
     );
-    const assetsSection = canonCut
-      ? filterAssetsSection(lore.assetsSection, droppedNames)
-      : lore.assetsSection;
+    const assetsSection =
+      canonCut || options.turnScope
+        ? filterAssetsSection(lore.assetsSection, droppedNames)
+        : lore.assetsSection;
 
     const section = head + entitiesSection + tail + assetsSection;
     const sectionTokens = approximateTokens(section);

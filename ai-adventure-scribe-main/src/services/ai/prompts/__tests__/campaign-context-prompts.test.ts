@@ -1,9 +1,9 @@
- 
 import { describe, it, expect } from 'vitest';
 
 import {
   CampaignContextPrompts,
   type StarterCampaignLore,
+  type TurnCanonScope,
 } from '../campaign-context-prompts';
 
 import type { CampaignChunk } from '@/agents/services/lore-keeper/data-mapping';
@@ -41,9 +41,13 @@ const smallLore: StarterCampaignLore = {
   ],
   entitiesByType: {
     npcs: [
-      chunk('Headmaster Brine', 'A stern halfling who runs the academy kitchen with an iron ladle.', {
-        image_url: 'https://example.com/brine.png',
-      }),
+      chunk(
+        'Headmaster Brine',
+        'A stern halfling who runs the academy kitchen with an iron ladle.',
+        {
+          image_url: 'https://example.com/brine.png',
+        },
+      ),
       chunk('Sous-Chef Pip', 'A nervous gnome apprentice.'),
     ],
     locations: [chunk('The Grand Kitchen', 'Copper pots hang above a roaring hearth.')],
@@ -308,5 +312,251 @@ describe('CampaignContextPrompts.extractSceneEntityNames', () => {
     expect(CampaignContextPrompts.extractSceneEntityNames('<scene_state></scene_state>')).toEqual(
       [],
     );
+  });
+});
+
+describe('CampaignContextPrompts.renderStarterCampaignLore with a turnScope (#2533)', () => {
+  const entity = (
+    chunkType: CampaignChunk['chunkType'],
+    name: string,
+    content: string,
+    metadata: Record<string, unknown> = {},
+  ): CampaignChunk => ({
+    id: `chunk-${name}`,
+    campaignId: 'campaign-1',
+    chunkType,
+    entityName: name,
+    content,
+    metadata,
+  });
+
+  const lore: StarterCampaignLore = {
+    ...smallLore,
+    entitiesByType: {
+      npcs: [
+        entity('npc_tier1', 'Headmaster Brine', 'Brine runs the kitchen.', {
+          image_url: 'https://example.com/brine.png',
+        }),
+        entity('npc_tier1', 'Sous-Chef Pip', 'Pip is a nervous gnome.'),
+        entity('npc_tier1', 'Chef Marrow', 'Marrow is the reclusive head chef.'),
+        entity('npc_tier1', 'Dame Quillfeather', 'Quillfeather judges the finals.'),
+      ],
+      locations: [
+        entity('location', 'The Grand Kitchen', 'Copper pots hang above a roaring hearth.'),
+        entity('location', 'The Cellar Larder', 'Cold shelves of cured meat.'),
+      ],
+      factions: [entity('faction', 'Order of the Silver Spoon', 'A guild of judges.')],
+      items: [entity('item', 'Golden Ladle', 'A ceremonial ladle.')],
+      monsters: [entity('monster', 'Flour Wraith', 'A dusty haunt.', { image_url: 'x' })],
+      handouts: [
+        entity('handout', 'Menu Card', 'Tonight: souffle.', {
+          key: 'menu-card',
+          title: 'Menu Card',
+          giver: 'Chef Marrow',
+        }),
+        entity('handout', 'Judge Scorecard', 'Scores for the finals.', {
+          key: 'judge-scorecard',
+          title: 'Judge Scorecard',
+          giver: 'Dame Quillfeather',
+        }),
+      ],
+    },
+    assetsSection: `<available_visual_assets>
+<MANDATORY_REQUIREMENT>
+Include the tags.
+</MANDATORY_REQUIREMENT>
+
+- Headmaster Brine [ASSET:npc:headmaster-brine]
+- Flour Wraith [ASSET:monster:flour-wraith]
+- Wren Ashdown [ASSET:character:wren-ashdown]
+</available_visual_assets>`,
+  };
+
+  const scope = (over: Partial<TurnCanonScope> = {}): TurnCanonScope => ({
+    playerInput: '',
+    lastDmMessage: '',
+    sceneText: '',
+    entityTokenBudget: 3_000,
+    ...over,
+  });
+
+  const render = (turnScope: TurnCanonScope, activeEntityNames: string[] = []) =>
+    CampaignContextPrompts.renderStarterCampaignLore(lore, { turnScope, activeEntityNames });
+
+  it('sends the fixed core and a roster, but no entity card, when nothing is in scene or named', () => {
+    const { section, keptEntities, canonCut } = render(scope());
+
+    expect(section).toContain('<canonical_setting>');
+    expect(section).toContain('TITLE: The Gilded Cauldron');
+    expect(section).toContain('<creative_direction>');
+    expect(section).toContain('<world_rules>');
+    expect(section).toContain('<lore_adherence>');
+    expect(section).not.toContain('<npc ');
+    expect(section).not.toContain('<location ');
+    expect(keptEntities).toBe(0);
+    expect(canonCut).toBe(false);
+    expect(section).toContain(
+      'NPCs: Headmaster Brine; Sous-Chef Pip; Chef Marrow; Dame Quillfeather',
+    );
+  });
+
+  it("picks the scene's entities: those in the ledger scene, always", () => {
+    const { section } = render(scope(), ['Sous-Chef Pip', 'The Grand Kitchen']);
+
+    expect(section).toContain('<npc name="Sous-Chef Pip">');
+    expect(section).toContain('<location name="The Grand Kitchen">');
+    expect(section).not.toContain('<npc name="Headmaster Brine"');
+    expect(section).not.toContain('<npc name="Chef Marrow"');
+    // The rest of the canon is still named, so the DM cannot invent a stand-in.
+    expect(section).toContain('Headmaster Brine');
+    expect(section).toContain('<canon_roster>');
+    expect(section).not.toMatch(/NPCs: [^\n]*Sous-Chef Pip/);
+  });
+
+  it('picks entities named in the player input, by full name or by a name token', () => {
+    const { section } = render(scope({ playerInput: 'I ask Brine about the Cellar Larder' }));
+
+    expect(section).toContain('<npc name="Headmaster Brine"');
+    expect(section).toContain('<location name="The Cellar Larder">');
+    expect(section).not.toContain('<npc name="Chef Marrow"');
+    expect(section).not.toContain('<location name="The Grand Kitchen">');
+  });
+
+  it('picks entities named in the last DM message and in the scene description', () => {
+    const { section } = render(
+      scope({
+        lastDmMessage: 'DM: Chef Marrow glares from behind the pass.',
+        sceneText: 'The Grand Kitchen at the dinner rush.',
+      }),
+    );
+
+    expect(section).toContain('<npc name="Chef Marrow">');
+    expect(section).toContain('<location name="The Grand Kitchen">');
+    expect(section).not.toContain('<npc name="Dame Quillfeather"');
+  });
+
+  it('picks the creatures on the tactical digest, named by id', () => {
+    const { section } = render(
+      scope({
+        sceneText: 'flour-wraith-1|Flour Wraith@4,4 mv30/30 vs[the-seeker:15ft/LoS/c0/melee]',
+      }),
+    );
+
+    expect(section).toContain('<monster name="Flour Wraith"');
+  });
+
+  it('matches whole words only, and never on a bare title', () => {
+    const { section } = render(
+      scope({
+        playerInput: 'I walk past the headmasters and a dame of the court; the pipeline is fine',
+      }),
+    );
+
+    expect(section).not.toContain('<npc name="Headmaster Brine"');
+    expect(section).not.toContain('<npc name="Dame Quillfeather"');
+    expect(section).not.toContain('<npc name="Sous-Chef Pip"');
+  });
+
+  it('needs the full name or two name tokens for a faction, item or creature', () => {
+    const generic = render(scope({ playerInput: 'I grab a spoon and the golden light fades' }));
+    expect(generic.section).not.toContain('<faction ');
+    expect(generic.section).not.toContain('<item ');
+
+    const named = render(scope({ playerInput: 'I take the Golden Ladle from the Flour Wraith' }));
+    expect(named.section).toContain('<item name="Golden Ladle">');
+    expect(named.section).toContain('<monster name="Flour Wraith"');
+  });
+
+  it('keeps every authored handout deliverable by key, with the body only when it is in play', () => {
+    const { section } = render(scope(), ['Chef Marrow']);
+
+    // The giver is in the scene, so the Menu Card arrives in full ...
+    expect(section).toContain('<handout key="menu-card" title="Menu Card" giver="Chef Marrow">');
+    expect(section).toContain('Tonight: souffle.');
+    // ... and the other handout is still listed by its exact key, without its body.
+    expect(section).toContain(
+      '<handout key="judge-scorecard" title="Judge Scorecard" giver="Dame Quillfeather" />',
+    );
+    expect(section).not.toContain('Scores for the finals.');
+    expect(section).toContain('Deliver authored handouts only through handout_actions');
+  });
+
+  it('drops asset lines for entities left out, keeps those for entities sent and the party', () => {
+    const { section } = render(scope({ playerInput: 'I greet Headmaster Brine' }));
+
+    expect(section).toContain('- Headmaster Brine [ASSET:npc:headmaster-brine]');
+    expect(section).toContain('- Wren Ashdown [ASSET:character:wren-ashdown]');
+    expect(section).not.toContain('- Flour Wraith [ASSET:monster:flour-wraith]');
+  });
+
+  it('is much smaller than the full render and leaves the whole-bible render alone', () => {
+    const whole = CampaignContextPrompts.renderStarterCampaignLore(lore);
+    const scoped = render(scope({ playerInput: 'I greet Headmaster Brine' }));
+
+    expect(whole.section).toContain('<npc name="Dame Quillfeather">');
+    expect(whole.section).not.toContain('<canon_roster>');
+    expect(scoped.sectionTokens).toBeLessThan(whole.sectionTokens);
+  });
+
+  it('selects a person by a short name token and a place or faction across apostrophe forms', () => {
+    const pip = render(scope({ playerInput: 'I ask Pip', lastDmMessage: 'DM: Pip frowns.' }));
+    expect(pip.section).toContain('<npc name="Sous-Chef Pip">');
+
+    const apos: StarterCampaignLore = {
+      ...lore,
+      entitiesByType: {
+        ...lore.entitiesByType,
+        factions: [entity('faction', "The Spoon-Bearers' Guild", 'Judges.')],
+        items: [entity('item', "Marrow's Ledger", 'A ledger.')],
+      },
+    };
+    const result = CampaignContextPrompts.renderStarterCampaignLore(apos, {
+      turnScope: scope({
+        playerInput: 'I ask the Spoon-Bearers Guild',
+        lastDmMessage: 'DM: Marrow\u2019s Ledger lies open.',
+      }),
+    });
+    expect(result.section).toContain('<faction name="The Spoon-Bearers\' Guild">');
+    expect(result.section).toContain('<item name="Marrow\'s Ledger">');
+  });
+
+  it('does not charge the scene to the per-turn allowance for named cards', () => {
+    const crowd = Array.from({ length: 9 }, (_, i) =>
+      entity('npc_tier1', `Scene${i}person`, `Scene ${i}. ` + 'x'.repeat(1_400)),
+    );
+    const big: StarterCampaignLore = {
+      ...lore,
+      entitiesByType: { ...lore.entitiesByType, npcs: [...crowd, ...lore.entitiesByType.npcs] },
+    };
+    const result = CampaignContextPrompts.renderStarterCampaignLore(big, {
+      turnScope: scope({ playerInput: 'I turn to Brine', entityTokenBudget: 1_000 }),
+      activeEntityNames: crowd.map((npc) => npc.entityName as string),
+    });
+
+    // Nine scene cards (~3k tokens) exceed the 1,000-token allowance, yet Brine is still sent.
+    expect(result.section).toContain('<npc name="Headmaster Brine"');
+    expect(result.canonCut).toBe(false);
+  });
+
+  it('flags a cut and keeps the scene when the entities a turn names overflow the entity budget', () => {
+    const big: StarterCampaignLore = {
+      ...lore,
+      entitiesByType: {
+        ...lore.entitiesByType,
+        npcs: Array.from({ length: 10 }, (_, i) =>
+          entity('npc_tier1', `Cook${i}name`, `Cook ${i}. ` + 'x'.repeat(1_600)),
+        ),
+      },
+    };
+    const names = Array.from({ length: 10 }, (_, i) => `Cook${i}name`);
+    const result = CampaignContextPrompts.renderStarterCampaignLore(big, {
+      turnScope: scope({ playerInput: names.join(' '), entityTokenBudget: 1_000 }),
+      activeEntityNames: ['Cook9name'],
+    });
+
+    expect(result.canonCut).toBe(true);
+    expect(result.section).toContain('<npc name="Cook9name">');
+    expect(result.keptEntities).toBeLessThan(10);
+    expect(result.keptEntities).toBeGreaterThan(1);
   });
 });

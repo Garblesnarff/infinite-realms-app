@@ -14,8 +14,10 @@ import { measurePromptSections } from './ai/shared/prompt-metrics';
 import {
   approximateTokens,
   DM_CANON_TOKEN_CAP,
+  DM_HISTORY_MAX_MESSAGES,
   DM_HISTORY_TOKEN_FLOOR,
   DM_PROMPT_TOKEN_BUDGET,
+  DM_TURN_CANON_ENTITY_TOKEN_BUDGET,
   selectRecentMessagesWithinTokenBudget,
 } from './ai/shared/token-budget';
 import { buildCombatEntryPlayer } from './combat/structured-combat-payload';
@@ -339,6 +341,30 @@ export class AIService {
           .map(formatConversationHistoryMessage)
           .join('\n\n');
         const activeEntityNames = CampaignContextPrompts.extractSceneEntityNames(sceneStateBlock);
+        // #2533: after the opening, canon is rendered for this turn (the scene's entities plus
+        // those the player's input, the last DM message and the scene name) instead of the whole
+        // bible. The opening has no scene yet and must see the whole campaign to stage it.
+        const lastDmMessage = [...(params.conversationHistory || [])]
+          .reverse()
+          .find(
+            (message) =>
+              (message.speakerType ?? (message.role === 'user' ? 'player' : 'dm')) === 'dm',
+          );
+        const turnScope = isFirstMessage
+          ? undefined
+          : {
+              playerInput: params.message,
+              lastDmMessage: lastDmMessage ? formatConversationHistoryMessage(lastDmMessage) : '',
+              sceneText: [
+                params.context.currentSceneDescription?.trim(),
+                typeof params.context.gameState?.tacticalContext === 'string'
+                  ? params.context.gameState.tacticalContext
+                  : '',
+              ]
+                .filter(Boolean)
+                .join('\n'),
+              entityTokenBudget: DM_TURN_CANON_ENTITY_TOKEN_BUDGET,
+            };
 
         const assembleFixedPrompt = (contextPromptValue: string): string =>
           `${contextPromptValue}${sceneSection}${tacticalContext}\n\n${systemBlock}\n\n${sceneStateSection}<player_input>\n${playerInput}\n</player_input>`;
@@ -368,6 +394,7 @@ export class AIService {
               tokenBudget: canonBudget,
               recentTurnsText,
               activeEntityNames,
+              turnScope,
             })
           : null;
 
@@ -392,7 +419,7 @@ export class AIService {
         const historyBudget = Math.max(0, DM_PROMPT_TOKEN_BUDGET - approximateTokens(fixedPrompt));
         const historyBelowFloor = historyBudget < DM_HISTORY_TOKEN_FLOOR;
         const historyContext = selectRecentMessagesWithinTokenBudget(
-          params.conversationHistory || [],
+          (params.conversationHistory || []).slice(-DM_HISTORY_MAX_MESSAGES),
           formatConversationHistoryMessage,
           historyBudget,
         ).join('\n\n');
@@ -548,10 +575,7 @@ export class AIService {
         if (providerError instanceof ApiClientError) throw providerError;
         // #2601 (candidate 18): preserve abort identity. The rewrap strips
         // the AbortError name, defeating abort-rethrow guards downstream.
-        if (
-          providerError instanceof Error &&
-          providerError.name === 'AbortError'
-        ) {
+        if (providerError instanceof Error && providerError.name === 'AbortError') {
           throw providerError;
         }
         throw new Error('Failed to get DM response - AI service unavailable', {

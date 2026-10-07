@@ -123,12 +123,13 @@ describe('the prompt outside combat (#2400)', () => {
    * GUARD, not a spec: this pins the out-of-combat prompt to the bytes it had before #2400 split
    * out the combat variants. It exists so the split cannot change what a non-combat turn sends.
    * A deliberate edit to these sections will fail it: update the hashes in that same PR.
+   * #2533 re-pinned the rules-of-play hash after condensing the five engine-owned combat blocks.
    */
   it('keeps the byte-identical sections it had before the combat variants existed', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
     expect(sha256(RulesPrompts.buildRulesOfPlaySection())).toBe(
-      'b914eda1af7159cd8d0232c0d01ae147034d7a7f40df3d5ab6d5ec226daa667c',
+      'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
       'b29b276ba637e3fe7c8414e183d23081bea4f74d12297212df0ab06d11c2376a',
