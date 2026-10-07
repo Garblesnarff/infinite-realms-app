@@ -8,7 +8,6 @@ import {
   CombatIntentRefusedError,
   HIDE_CHECK_UNROUTABLE_REASON,
   executeAuthoritativeCombatIntent,
-  executeStructuredCombatAction,
   executeStructuredCombatActionWithBoundary,
 } from '../combat-action-executor';
 
@@ -237,7 +236,7 @@ describe('combat-action-executor', () => {
     });
   });
 
-  describe('executeStructuredCombatAction', () => {
+  describe('executeStructuredCombatActionWithBoundary', () => {
     it('should handle attack actions correctly', async () => {
       const action = {
         actor_id: 'actor-1',
@@ -264,7 +263,10 @@ describe('combat-action-executor', () => {
       };
       (globalThis.fetch as any).mockResolvedValue(intentResponse);
 
-      const result = await executeStructuredCombatAction(encounterId, action);
+      const { outcomes: result } = await executeStructuredCombatActionWithBoundary(
+        encounterId,
+        action,
+      );
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://localhost:8888/v1/combat/encounter-123/intent',
@@ -309,7 +311,10 @@ describe('combat-action-executor', () => {
       };
       (globalThis.fetch as any).mockResolvedValue(intentResponse);
 
-      const result = await executeStructuredCombatAction(encounterId, action);
+      const { outcomes: result } = await executeStructuredCombatActionWithBoundary(
+        encounterId,
+        action,
+      );
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://localhost:8888/v1/combat/encounter-123/intent',
@@ -353,7 +358,7 @@ describe('combat-action-executor', () => {
         json: async () => ({ result: { results: [] } }),
       });
 
-      await executeStructuredCombatAction(encounterId, action, 17);
+      await executeStructuredCombatActionWithBoundary(encounterId, action, 17);
 
       const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
       expect(body.intent).toEqual(
@@ -380,7 +385,7 @@ describe('combat-action-executor', () => {
         json: async () => ({ result: { results: [] } }),
       });
 
-      await executeStructuredCombatAction(encounterId, action);
+      await executeStructuredCombatActionWithBoundary(encounterId, action);
 
       const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
       expect(body.intent.type).toBe('spell');
@@ -405,7 +410,10 @@ describe('combat-action-executor', () => {
         };
         (globalThis.fetch as any).mockResolvedValue(intentResponse);
 
-        const result = await executeStructuredCombatAction(encounterId, action);
+        const { outcomes: result } = await executeStructuredCombatActionWithBoundary(
+          encounterId,
+          action,
+        );
         expect(result).toEqual([]);
       }
     });
@@ -427,7 +435,9 @@ describe('combat-action-executor', () => {
         json: async () => ({ result: { success: true, remainingFeet: 0 } }),
       });
 
-      await expect(executeStructuredCombatAction(encounterId, action)).resolves.toEqual([]);
+      expect(
+        (await executeStructuredCombatActionWithBoundary(encounterId, action)).outcomes,
+      ).toEqual([]);
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://localhost:8888/v1/combat/encounter-123/intent',
         expect.objectContaining({
@@ -614,9 +624,9 @@ describe('combat-action-executor', () => {
       };
       (globalThis.fetch as any).mockRejectedValue(new TypeError('network down'));
 
-      await expect(
-        executeStructuredCombatActionWithBoundary(encounterId, action),
-      ).rejects.toThrow('network down');
+      await expect(executeStructuredCombatActionWithBoundary(encounterId, action)).rejects.toThrow(
+        'network down',
+      );
     });
 
     it('refuses an action_type outside the union instead of settling it', async () => {
@@ -672,7 +682,10 @@ describe('combat-action-executor', () => {
       };
       (globalThis.fetch as any).mockResolvedValue(intentResponse);
 
-      const result = await executeStructuredCombatAction(encounterId, action);
+      const { outcomes: result } = await executeStructuredCombatActionWithBoundary(
+        encounterId,
+        action,
+      );
 
       expect(result).toEqual([
         {

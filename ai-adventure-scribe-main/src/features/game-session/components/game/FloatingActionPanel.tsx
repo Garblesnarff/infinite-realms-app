@@ -1,13 +1,11 @@
-import { Dice6, Heart, Shield, Zap, Plus, Minus, X } from 'lucide-react';
-import React, { useState, useCallback, useMemo } from 'react';
+import { Heart, Shield, Zap, Plus, X } from 'lucide-react';
+import React, { useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { useCombat } from '@/contexts/CombatContext';
 import { useCharacterStats } from '@/hooks/use-character-stats';
-import logger from '@/lib/logger';
 import {
   getCharacterSheetArmorClass,
   MISSING_ARMOR_CLASS_LABEL,
@@ -35,7 +33,6 @@ interface FloatingActionPanelProps {
 export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.memo(
   ({ isVisible, onToggle, combatMode, anchored = false }) => {
     const { state: characterState } = useCharacter();
-    const { state: _combatState } = useCombat();
     const character = characterState.character;
 
     // ⚡ Bolt: Use memoized character stats to avoid redundant D&D 5e calculations
@@ -45,8 +42,6 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
       () => (character ? getCharacterSheetHitPoints(character) : { current: null, maximum: null }),
       [character],
     );
-
-    const [isExpanded, setIsExpanded] = useState(false);
 
     // ⚡ Bolt: Memoize derived stats to ensure they only update when stats object changes
     const displayStats = useMemo(() => {
@@ -73,12 +68,6 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
       currentHp !== null && maxHp !== null
         ? `Hit Points: ${currentHp} out of ${maxHp}`
         : `Hit Points: ${hpDisplay}`;
-
-    const handleQuickRoll = useCallback((type: string): void => {
-      // This would integrate with your dice rolling system
-      logger.info(`Quick rolling ${type}`);
-      // You could dispatch a dice roll event or call a dice service here
-    }, []);
 
     if (!character) return null;
 
@@ -130,18 +119,6 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  aria-label={isExpanded ? 'Collapse actions' : 'Expand actions'}
-                  aria-pressed={isExpanded}
-                  title={isExpanded ? 'Collapse actions' : 'Expand actions'}
-                  className="h-6 w-6 p-0 rounded-full hover:bg-infinite-purple/20"
-                >
-                  {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
                   onClick={onToggle}
                   aria-label="Close Quick Actions"
                   title="Close Quick Actions"
@@ -187,83 +164,6 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
                 <div className="text-xs font-bold text-card-foreground">+{proficiency}</div>
                 <div className="text-[10px] text-muted-foreground">PROF</div>
               </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="p-3">
-            <div className="space-y-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => handleQuickRoll('d20')}
-                title="Roll a d20"
-                className="w-full justify-start h-8 text-xs hover:bg-infinite-purple/10"
-              >
-                <Dice6 className="h-3 w-3 mr-2" />
-                Roll d20
-              </Button>
-
-              {combatMode && (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleQuickRoll('initiative')}
-                    title="Roll Initiative"
-                    className="w-full justify-start h-8 text-xs hover:bg-red-500/10"
-                  >
-                    ⚡ Initiative
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleQuickRoll('attack')}
-                    title="Make an Attack Roll"
-                    className="w-full justify-start h-8 text-xs hover:bg-orange-500/10"
-                  >
-                    ⚔️ Attack Roll
-                  </Button>
-                </>
-              )}
-
-              {isExpanded && (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleQuickRoll('perception')}
-                    title="Make a Perception check"
-                    className="w-full justify-start h-8 text-xs hover:bg-infinite-teal/10"
-                  >
-                    👁️ Perception
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleQuickRoll('stealth')}
-                    title="Make a Stealth check"
-                    className="w-full justify-start h-8 text-xs hover:bg-purple-500/10"
-                  >
-                    🥷 Stealth
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleQuickRoll('investigation')}
-                    title="Make an Investigation check"
-                    className="w-full justify-start h-8 text-xs hover:bg-blue-500/10"
-                  >
-                    🔍 Investigation
-                  </Button>
-                </>
-              )}
             </div>
           </div>
 

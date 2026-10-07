@@ -122,14 +122,6 @@ export type CombatParticipantStatusResponse = {
   damage_vulnerabilities: string[];
 };
 
-export type CombatParticipantStatusUpdate = {
-  currentHp?: number;
-  tempHp?: number;
-  isConscious?: boolean;
-  deathSavesSuccesses?: number;
-  deathSavesFailures?: number;
-};
-
 export type AdvanceNpcTurnsResponse = {
   results: Array<{
     action: {
@@ -178,15 +170,6 @@ type ActiveCombatSnapshot = {
       participantType: string;
     } | null;
   } | null;
-};
-
-export type CombatDamageLogPayload = {
-  participantId: string;
-  damageAmount: number;
-  damageType: string;
-  sourceParticipantId: string | null;
-  sourceDescription: string | null;
-  roundNumber: number;
 };
 
 export type JournalHandoutEntry = {
@@ -442,24 +425,6 @@ export const userDataApi = {
   promotePendingCombatIntent: (encounterId: string): Promise<Response> =>
     requestResponse(`/v1/combat/${encodeURIComponent(encounterId)}/pending-intent/promote`, {
       method: 'POST',
-    }),
-  logCombatDamage: (
-    encounterId: string,
-    payload: CombatDamageLogPayload,
-  ): Promise<{ ok: boolean; id: string }> =>
-    request(`/v1/combat/encounters/${encodeURIComponent(encounterId)}/damage-log`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  getCombatParticipantStatus: (participantId: string): Promise<CombatParticipantStatusResponse> =>
-    request(`/v1/combat/participants/${encodeURIComponent(participantId)}/status`),
-  updateCombatParticipantStatus: (
-    participantId: string,
-    payload: CombatParticipantStatusUpdate,
-  ): Promise<CombatParticipantStatusResponse> =>
-    request(`/v1/combat/participants/${encodeURIComponent(participantId)}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
     }),
   getCharacterCombatStatus: (
     characterId: string,

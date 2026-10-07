@@ -461,13 +461,3 @@ export async function executeStructuredCombatActionWithBoundary(
     boundary,
   };
 }
-
-/** Backward-compatible outcome-only bridge for callers that do not own a DM action batch. */
-export async function executeStructuredCombatAction(
-  encounterId: string,
-  action: StructuredCombatAction,
-  providedD20?: number,
-): Promise<ResolvedTargetDamage[]> {
-  return (await executeStructuredCombatActionWithBoundary(encounterId, action, providedD20))
-    .outcomes;
-}

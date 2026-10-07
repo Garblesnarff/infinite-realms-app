@@ -86,39 +86,6 @@ describe('userDataApi tactical transport', () => {
       },
     );
   });
-
-  it('routes combat damage logs through the authenticated persistence boundary', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ ok: true, id: 'log-1' }),
-    });
-    const payload = {
-      participantId: 'participant-1',
-      damageAmount: 7,
-      damageType: 'fire',
-      sourceParticipantId: null,
-      sourceDescription: 'test hit',
-      roundNumber: 2,
-    };
-
-    await expect(userDataApi.logCombatDamage('encounter/id', payload)).resolves.toEqual({
-      ok: true,
-      id: 'log-1',
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8888/v1/combat/encounters/encounter%2Fid/damage-log',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer access-token',
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-  });
 });
 
 describe('userDataApi request errors (#2280)', () => {

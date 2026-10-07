@@ -1,25 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockGetCombatParticipantStatus } = vi.hoisted(() => ({
-  mockGetCombatParticipantStatus: vi.fn(),
-}));
+const { mockFetchWithAuth } = vi.hoisted(() => ({ mockFetchWithAuth: vi.fn() }));
+vi.mock('@/infrastructure/api/rest-client', () => ({ fetchWithAuth: mockFetchWithAuth }));
+vi.mock('@/lib/auth-gate', () => ({ waitForAuth: vi.fn().mockResolvedValue(undefined) }));
 
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: {
-    getCombatParticipantStatus: mockGetCombatParticipantStatus,
-  },
-}));
-
-vi.mock('@/lib/logger', () => ({
-  default: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
-import { getParticipantStatus } from '../participant-status';
+import { userDataApi } from '@/services/user-data-api';
 
 const statusResponse = {
   participant_id: 'participant-1',
@@ -35,43 +20,33 @@ const statusResponse = {
   damage_vulnerabilities: ['acid'],
 };
 
-describe('getParticipantStatus', () => {
+describe('participant status through the live API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('returns the ownership-scoped server status response', async () => {
-    mockGetCombatParticipantStatus.mockResolvedValue(statusResponse);
-
-    const result = await getParticipantStatus('participant-1');
-
-    expect(result).toEqual({
-      current_hp: 10,
-      max_hp: 20,
-      temp_hp: 5,
-      is_conscious: true,
-      damage_resistances: ['fire'],
-      damage_immunities: ['cold'],
-      damage_vulnerabilities: ['acid'],
-    });
-    expect(mockGetCombatParticipantStatus).toHaveBeenCalledWith('participant-1');
+    mockFetchWithAuth.mockResolvedValue(new Response(JSON.stringify(statusResponse)));
+    expect(await userDataApi.getCharacterCombatStatus('participant-1')).toEqual(statusResponse);
+    expect(mockFetchWithAuth).toHaveBeenCalledWith(
+      '/v1/combat/characters/participant-1/combat-status',
+      expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
+    );
   });
 
-  it('returns null when the server masks a missing or unauthorized participant', async () => {
-    mockGetCombatParticipantStatus.mockRejectedValue(new Error('Not found'));
-
-    await expect(getParticipantStatus('missing')).resolves.toBeNull();
+  it('reports a missing or unauthorized participant', async () => {
+    mockFetchWithAuth.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }),
+    );
+    await expect(userDataApi.getCharacterCombatStatus('missing')).rejects.toThrow(
+      'Not found (404)',
+    );
   });
 
-  it('returns null and logs when the server request fails', async () => {
-    mockGetCombatParticipantStatus.mockRejectedValue(new Error('Network failure'));
-
-    await expect(getParticipantStatus('participant-1')).resolves.toBeNull();
-  });
-
-  it('returns null for an unusable response', async () => {
-    mockGetCombatParticipantStatus.mockResolvedValue(null);
-
-    await expect(getParticipantStatus('participant-1')).resolves.toBeNull();
+  it('reports a failed server request', async () => {
+    mockFetchWithAuth.mockRejectedValue(new Error('Network failure'));
+    await expect(userDataApi.getCharacterCombatStatus('participant-1')).rejects.toThrow(
+      'Network failure',
+    );
   });
 });

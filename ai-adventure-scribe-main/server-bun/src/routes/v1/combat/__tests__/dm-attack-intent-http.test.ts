@@ -264,8 +264,8 @@ const { buildTacticalPrompt } = await import('../../../../tactical/prompt.js');
  * typecheck honest; `DMTargetedCombatAction` is structurally the bridge's own action type.
  */
 const bridgeModule = '../../../../../../src/services/combat/combat-action-executor';
-const { executeStructuredCombatAction } = (await import(bridgeModule)) as {
-  executeStructuredCombatAction(
+const { executeStructuredCombatActionWithBoundary } = (await import(bridgeModule)) as {
+  executeStructuredCombatActionWithBoundary(
     encounterId: string,
     action: DMTargetedCombatAction,
   ): Promise<unknown>;
@@ -381,7 +381,7 @@ describe('a translated legacy attack reaches the engine through the real intent 
     expect(accepted.inference).toBeNull();
     expect(actions).toHaveLength(1);
 
-    await executeStructuredCombatAction(ENCOUNTER_ID, actions[0]);
+    await executeStructuredCombatActionWithBoundary(ENCOUNTER_ID, actions[0]);
 
     // The bridge went straight to the intent route — no version read, because it does not own one.
     expect(sentRequests).toHaveLength(1);
@@ -416,7 +416,7 @@ describe('a prose-inferred attack reaches the engine through the real intent rou
     expect(accepted.inference).not.toBeNull();
     expect(actions).toHaveLength(1);
 
-    await executeStructuredCombatAction(ENCOUNTER_ID, actions[0]);
+    await executeStructuredCombatActionWithBoundary(ENCOUNTER_ID, actions[0]);
 
     const sent = sentRequests[0].body as { intent: Record<string, unknown>; source: string };
     expect(sent.source).toBe('dm');

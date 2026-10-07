@@ -217,8 +217,8 @@ type StructuredCombatAction = {
   movement_feet: number;
 };
 const bridgeModule = '../../../../../../src/services/combat/combat-action-executor';
-const { executeStructuredCombatAction } = (await import(bridgeModule)) as {
-  executeStructuredCombatAction(
+const { executeStructuredCombatActionWithBoundary } = (await import(bridgeModule)) as {
+  executeStructuredCombatActionWithBoundary(
     encounterId: string,
     action: StructuredCombatAction,
   ): Promise<unknown>;
@@ -471,12 +471,12 @@ describe('the intent boundary resolves numbered slugs and refuses what it cannot
 });
 
 /**
- * The browser path, end to end. `executeStructuredCombatAction` is what the React client and
+ * The browser path, end to end. `executeStructuredCombatActionWithBoundary` is what the React client and
  * the headless CLI both call with the DM's `combat_actions` entries verbatim — slugs included.
  */
 describe('the browser bridge carries a slug actor_id all the way to the engine', () => {
   it('reaches the engine with participant ids, having sent the slug over the wire', async () => {
-    await executeStructuredCombatAction(ENCOUNTER_ID, {
+    await executeStructuredCombatActionWithBoundary(ENCOUNTER_ID, {
       actor_id: 'the-void-maw',
       action_type: 'attack',
       target_ids: ['the-seeker'],

@@ -5,10 +5,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { FloatingActionPanel } from '../FloatingActionPanel';
 
+import type { CharacterStatsRow } from '@/utils/character/data-transformers';
+
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCharacterStats } from '@/hooks/use-character-stats';
 import logger from '@/lib/logger';
+import { buildStarterCharacterSeed } from '@/services/character/starter-character-seeding';
+import { transformCharacterData } from '@/utils/character/data-transformers';
 
 // Mock dependencies
 vi.mock('@/contexts/CharacterContext', () => ({
@@ -105,49 +109,58 @@ describe('FloatingActionPanel', () => {
     expect(screen.getByLabelText(/proficiency bonus: \+3/i)).toBeDefined();
   });
 
-  it('toggles expansion state', () => {
-    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
+  it.each([false, true])('has no log-only control in combat mode %s', async (combatMode) => {
+    const seed = buildStarterCharacterSeed(
+      {
+        name: 'The Veteran',
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        ability_scores: {
+          strength: 16,
+          dexterity: 12,
+          constitution: 14,
+          intelligence: 10,
+          wisdom: 13,
+          charisma: 10,
+        },
+        equipment: ['chain mail', 'shield'],
+      },
+      'abyssal-descent',
+    );
+    vi.mocked(useCharacter).mockReturnValue({
+      state: {
+        character: transformCharacterData(
+          {
+            id: 'panel-character',
+            user_id: 'panel-user',
+            name: seed.name,
+            race: 'Human',
+            class: 'Fighter',
+            level: 1,
+          },
+          seed.stats as CharacterStatsRow,
+          [],
+        ),
+      },
+    } as ReturnType<typeof useCharacter>);
+    const actualStats = await vi.importActual<{ useCharacterStats: typeof useCharacterStats }>(
+      '@/hooks/use-character-stats',
+    );
+    vi.mocked(useCharacterStats).mockImplementation(actualStats.useCharacterStats);
+    render(
+      <FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={combatMode} />,
+    );
 
-    // Should not show perception by default
-    expect(screen.queryByTitle(/make a perception check/i)).toBeNull();
-
-    const expandButton = screen.getByRole('button', { name: /expand actions/i });
-    fireEvent.click(expandButton);
-
-    expect(screen.getByTitle(/make a perception check/i)).toBeDefined();
-    expect(screen.getByTitle(/make a stealth check/i)).toBeDefined();
-    expect(screen.getByTitle(/make an investigation check/i)).toBeDefined();
-
-    const collapseButton = screen.getByRole('button', { name: /collapse actions/i });
-    fireEvent.click(collapseButton);
-    expect(screen.queryByTitle(/make a perception check/i)).toBeNull();
-  });
-
-  it('shows combat actions when in combat mode', () => {
-    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={true} />);
-
-    expect(screen.getByTitle(/roll initiative/i)).toBeDefined();
-    expect(screen.getByTitle(/make an attack roll/i)).toBeDefined();
-  });
-
-  it('hides combat actions when not in combat mode', () => {
-    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={false} />);
-
-    expect(screen.queryByTitle(/roll initiative/i)).toBeNull();
-    expect(screen.queryByTitle(/make an attack roll/i)).toBeNull();
-  });
-
-  it('calls logger when quick roll buttons are clicked', () => {
-    render(<FloatingActionPanel isVisible={true} onToggle={mockOnToggle} combatMode={true} />);
-
-    fireEvent.click(screen.getByTitle(/roll a d20/i));
-    expect(logger.info).toHaveBeenCalledWith('Quick rolling d20');
-
-    fireEvent.click(screen.getByTitle(/roll initiative/i));
-    expect(logger.info).toHaveBeenCalledWith('Quick rolling initiative');
-
-    fireEvent.click(screen.getByTitle(/make an attack roll/i));
-    expect(logger.info).toHaveBeenCalledWith('Quick rolling attack');
+    expect(
+      screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Close Quick Actions']);
+    expect(
+      screen.queryByRole('button', { name: /roll|initiative|perception|stealth|investigation/i }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /close quick actions/i }));
+    expect(mockOnToggle).toHaveBeenCalledTimes(1);
+    expect(logger.info).not.toHaveBeenCalled();
   });
 
   it('calls onToggle when close button is clicked', () => {
