@@ -333,6 +333,8 @@ export function damageAtZeroHpPart(
     | 'deathSaveFailuresAdded'
     | 'deathSavesFailures'
     | 'instantDeath'
+    | 'damageOverflow'
+    | 'hpMaximum'
     | 'autoCritOnDowned'
     | 'isCritical'
   >,
@@ -341,7 +343,8 @@ export function damageAtZeroHpPart(
 ): EngineTranscriptPart | null {
   if (result.instantDeath === true) {
     // The engine prefix marks this as engine fact, not DM fiction (#2457).
-    const line = `⚙️ Engine: ${describeInstantDeath(target)}`;
+    const facts = { overflow: result.damageOverflow, hpMax: result.hpMaximum };
+    const line = `⚙️ Engine: ${describeInstantDeath(target, facts)}`;
     return {
       line,
       card: {
@@ -350,7 +353,7 @@ export function damageAtZeroHpPart(
         line,
         title: `${target} is dead`,
         badge: engineBadge('death-save-failed', 'party'),
-        detail: describeInstantDeath(target),
+        detail: describeInstantDeath(target, facts),
         deathSave: { failures: 3 },
       },
     };

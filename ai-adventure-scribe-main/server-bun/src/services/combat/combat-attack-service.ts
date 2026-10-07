@@ -37,7 +37,7 @@ import {
   monsterAttackSource,
 } from './data-access.js';
 import { healthConditionForCombat } from './health-condition.js';
-import { checkHit, checkAutoCrit } from './hit-check.js';
+import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
@@ -84,8 +84,15 @@ function isProvidedD20(value: number | undefined): value is number {
  */
 function deathSaveFailureFields(
   hpResult: DamageResult,
-): Pick<AttackResult, 'deathSaveFailuresAdded' | 'deathSavesFailures' | 'instantDeath'> {
+): Pick<
+  AttackResult,
+  'deathSaveFailuresAdded' | 'deathSavesFailures' | 'instantDeath' | 'damageOverflow' | 'hpMaximum'
+> {
   return {
+    // The numbers behind the verdict, so the engine line can state them (#2640).
+    ...((hpResult.overflow ?? 0) > 0
+      ? { damageOverflow: hpResult.overflow, hpMaximum: hpResult.hpMaximum }
+      : {}),
     ...((hpResult.deathSaveFailuresAdded ?? 0) > 0
       ? {
           deathSaveFailuresAdded: hpResult.deathSaveFailuresAdded,
@@ -518,6 +525,8 @@ export class CombatAttackService {
         !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : Number.POSITIVE_INFINITY,
       );
       const isCrit = hitCheck.isCritical || autoCrit;
+      // When the die is not a natural 20 the line says what made the hit critical (#2640).
+      const critReason = autoCritReason(targetConditions, attackRoll, isCrit);
 
       // Aggregate resistances using the extracted module
       const defenses = aggregateResistances(targetParticipant, targetStats);
@@ -596,6 +605,7 @@ export class CombatAttackService {
           targetIsDead: hpResult.isDead,
           ...deathSaveFailureFields(hpResult),
           ...(autoCritOnDowned ? { autoCritOnDowned: true } : {}),
+          ...(critReason ? { autoCritReason: critReason } : {}),
           targetCondition: healthConditionForCombat(
             hpResult.newCurrentHp,
             targetParticipant.maxHp,
@@ -1012,6 +1022,11 @@ export class CombatAttackService {
               spell.attackType === 'melee' ? 5 : Number.POSITIVE_INFINITY,
             );
             const spellIsCrit = hitCheckResult.isCritical || autoCrit;
+            const spellCritReason = autoCritReason(
+              targetConditionsForTarget,
+              attackRoll,
+              spellIsCrit,
+            );
 
             const damageCalc = calculateDamage({
               ...damageProfile,
@@ -1065,6 +1080,7 @@ export class CombatAttackService {
                   hpResult.isDead,
                 ),
                 isCritical: spellIsCrit,
+                ...(spellCritReason ? { autoCritReason: spellCritReason } : {}),
                 isNaturalOne: hitCheckResult.isNaturalOne,
                 isNaturalTwenty: hitCheckResult.isNaturalTwenty,
                 spellName: spell.name,

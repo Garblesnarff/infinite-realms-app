@@ -103,6 +103,7 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
           ...(participant.participantType === 'player' &&
           participant.status &&
           !participant.status.isConscious &&
+          participant.status.currentHp <= 0 &&
           !(participant.conditions ?? []).some(
             (entry) => entry.condition?.name?.toLowerCase() === 'unconscious',
           )

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { HPMechanics, type HPStatusInput } from '../combat/hp-mechanics.js';
+import { HPMechanics, instantDeathOutcome, type HPStatusInput } from '../combat/hp-mechanics.js';
 
 import type { ApplyDamageOptions, DamageType } from '../../types/combat.js';
 
@@ -383,6 +383,64 @@ describe('HPMechanics: dropping to 0 and the dying state (#2518, SRD 5.1)', () =
         },
       );
       expect(result.newDeathSavesSuccesses).toBe(0);
+    });
+  });
+
+  describe('instant death is the damage REMAINING after 0 HP (#2640)', () => {
+    const status = (currentHp: number): HPStatusInput => ({
+      currentHp,
+      maxHp: 12,
+      tempHp: 0,
+      isConscious: currentHp > 0,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+    const none = { damageImmunities: [], damageResistances: [], damageVulnerabilities: [] };
+    // `uncapped`: a hazard or a critical, so the per-hit cap does not rewrite the number.
+    const hit = (hp: number, amount: number) =>
+      HPMechanics.calculateDamageResult('p1', status(hp), none, {
+        damageAmount: amount,
+        targetIsPlayer: true,
+        uncapped: true,
+      });
+
+    it('1 HP, max 12, 12 damage: 11 remains, which is less than 12: dying {0,0}, not dead', () => {
+      const result = hit(1, 12);
+      expect(result.overflow).toBe(11);
+      expect(result.hpMaximum).toBe(12);
+      expect(result.massiveDamage).toBe(false);
+      expect(result.isDead).toBe(false);
+      expect(result.newCurrentHp).toBe(0);
+      expect(result.newDeathSavesFailures).toBe(0);
+    });
+
+    it('1 HP, max 12, 13 damage: 12 remains, which equals the maximum: dead', () => {
+      const result = hit(1, 13);
+      expect(result.overflow).toBe(12);
+      expect(result.massiveDamage).toBe(true);
+      expect(result.isDead).toBe(true);
+    });
+
+    it('temporary hit points come off first: 5 temp, 1 HP, 17 damage is 12 to HP, 11 remaining', () => {
+      const result = HPMechanics.calculateDamageResult('p1', { ...status(1), tempHp: 5 }, none, {
+        damageAmount: 17,
+        uncapped: true,
+      });
+      expect(result.overflow).toBe(11);
+      expect(result.massiveDamage).toBe(false);
+    });
+
+    it('already at 0 HP the whole hit is the remainder: 11 is a failure, 12 is dead', () => {
+      expect(hit(0, 11)).toMatchObject({
+        massiveDamage: false,
+        deathSaveFailuresAdded: 1,
+        overflow: 11,
+      });
+      expect(hit(0, 12)).toMatchObject({ massiveDamage: true, isDead: true });
+    });
+
+    it('a hit that does not reduce to 0 never kills outright, however large the number', () => {
+      expect(instantDeathOutcome(40, 30, 12)).toEqual({ overflow: 0, massiveDamage: false });
     });
   });
 });

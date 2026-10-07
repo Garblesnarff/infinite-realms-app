@@ -90,7 +90,8 @@ vi.mock('drizzle-orm', async () => {
 const statusRead = (isConscious: boolean) => ({
   from: vi.fn().mockReturnThis(),
   where: vi.fn().mockReturnThis(),
-  limit: vi.fn().mockResolvedValue([{ isConscious }]),
+  // The two columns getActiveConditionNames selects; a conscious creature has hit points left.
+  limit: vi.fn().mockResolvedValue([{ isConscious, currentHp: isConscious ? 5 : 0 }]),
 });
 
 describe('CombatAttackService', () => {

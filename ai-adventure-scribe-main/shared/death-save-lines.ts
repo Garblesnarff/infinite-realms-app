@@ -121,7 +121,16 @@ export function describeStrikeOnDowned(
 }
 
 /** SRD 5.1 instant death: the blow's overflow past 0 HP reached the target's maximum. */
-export function describeInstantDeath(target: string): string {
+export function describeInstantDeath(
+  target: string,
+  facts?: { overflow?: number; hpMax?: number },
+): string {
+  if (facts?.overflow !== undefined && facts.hpMax !== undefined) {
+    return (
+      `${target} takes massive damage: ${facts.overflow} damage remains after 0 HP, and ` +
+      `the hit point maximum is ${facts.hpMax}. ${target} is DEAD.`
+    );
+  }
   return `${target} takes massive damage — more than their hit point maximum. ${target} is DEAD.`;
 }
 

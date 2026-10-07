@@ -335,3 +335,42 @@ describe('spell engine lines', () => {
     });
   });
 });
+
+describe('why a hit is critical (#2640)', () => {
+  const roll = {
+    actorName: 'Silent Monk',
+    targetName: 'The Veteran',
+    attackBonus: 3,
+    targetAC: 18,
+    hit: true,
+    isCritical: true,
+    finalDamage: 12,
+    damageType: 'force',
+  };
+
+  it('an automatic critical on an unconscious target says so', () => {
+    const line = formatCombatEngineOutcome(attack, {
+      ...roll,
+      d20: 18,
+      totalAttackRoll: 21,
+      autoCritReason: 'unconscious',
+    });
+    expect(line).toContain('— CRITICAL HIT (the target is unconscious).');
+  });
+
+  it('a paralyzed target is named as the reason too', () => {
+    const line = formatCombatEngineOutcome(attack, {
+      ...roll,
+      d20: 9,
+      totalAttackRoll: 12,
+      autoCritReason: 'paralyzed',
+    });
+    expect(line).toContain('— CRITICAL HIT (the target is paralyzed).');
+  });
+
+  it('a natural 20 keeps the plain wording', () => {
+    const line = formatCombatEngineOutcome(attack, { ...roll, d20: 20, totalAttackRoll: 23 });
+    expect(line).toContain('— CRITICAL HIT.');
+    expect(line).not.toContain('the target is');
+  });
+});

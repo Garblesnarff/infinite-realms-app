@@ -303,6 +303,8 @@ type SpellResolutionVisibility = Parameters<typeof describeResolvedSpell>[3] & {
   deathSaveFailuresAdded?: number;
   deathSavesFailures?: number;
   instantDeath?: boolean;
+  damageOverflow?: number;
+  hpMaximum?: number;
 };
 
 /** Keep the engine's descriptive attack facts attached to the mutation response. */
@@ -1204,6 +1206,8 @@ export async function executeCombatIntent(
           deathSaveFailuresAdded?: number;
           deathSavesFailures?: number;
           instantDeath?: boolean;
+          damageOverflow?: number;
+          hpMaximum?: number;
           autoCritOnDowned?: boolean;
         };
         const targetIsPlayer =
@@ -1215,12 +1219,24 @@ export async function executeCombatIntent(
           outcome.targetIsDead !== true &&
           (outcome.deathSaveFailuresAdded ?? 0) === 0
         ) {
-          await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+          await recordDmTacticalFact(
+            encounter.sessionId,
+            describeGoingDown(targetLabel, {
+              overflow: outcome.damageOverflow,
+              hpMax: outcome.hpMaximum,
+            }),
+          );
         }
         // Instant death is the biggest beat in a run: its own fact, so the killing round is
         // narrated as a death rather than as a hit.
         if (targetIsPlayer && outcome.instantDeath === true) {
-          await recordDmTacticalFact(encounter.sessionId, describeInstantDeath(targetLabel));
+          await recordDmTacticalFact(
+            encounter.sessionId,
+            describeInstantDeath(targetLabel, {
+              overflow: outcome.damageOverflow,
+              hpMax: outcome.hpMaximum,
+            }),
+          );
         }
         // Damage at 0 HP adds death-save failures: its own engine fact, in the same
         // sentence the player reads, so the DM narrates the failure it caused (#2457).
@@ -1315,10 +1331,22 @@ export async function executeCombatIntent(
           outcome.targetIsDead !== true &&
           (outcome.deathSaveFailuresAdded ?? 0) === 0
         ) {
-          await recordDmTacticalFact(encounter.sessionId, describeGoingDown(targetLabel));
+          await recordDmTacticalFact(
+            encounter.sessionId,
+            describeGoingDown(targetLabel, {
+              overflow: outcome.damageOverflow,
+              hpMax: outcome.hpMaximum,
+            }),
+          );
         }
         if (targetIsPlayer && outcome.instantDeath === true) {
-          await recordDmTacticalFact(encounter.sessionId, describeInstantDeath(targetLabel));
+          await recordDmTacticalFact(
+            encounter.sessionId,
+            describeInstantDeath(targetLabel, {
+              overflow: outcome.damageOverflow,
+              hpMax: outcome.hpMaximum,
+            }),
+          );
         }
         // Damage at 0 HP adds death-save failures: its own engine fact, in the same
         // sentence the player reads, so the DM narrates the failure it caused (#2457).

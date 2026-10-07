@@ -100,8 +100,13 @@ export interface CombatEngineResult {
   deathSavesFailures?: number;
   /** The blow's overflow past 0 HP reached the target's maximum: instant death (#2518). */
   instantDeath?: boolean;
+  /** Damage left after 0 HP and the maximum it was judged against (#2640). */
+  damageOverflow?: number;
+  hpMaximum?: number;
   /** A melee blow within 5 ft on an unconscious target: an automatic critical hit (#2518). */
   autoCritOnDowned?: boolean;
+  /** Why a non-natural-20 hit is critical: the target's condition (#2640). */
+  autoCritReason?: 'unconscious' | 'paralyzed';
 }
 
 export interface EngineDeathSave {
@@ -249,7 +254,11 @@ export function formatCombatEngineParts(
   const roll = hasRoll
     ? `rolled ${result.d20} ${formatModifier(result.attackBonus as number)} = ${result.totalAttackRoll} ${formatVersusArmorClass(result)}`
     : `resolved an attack against ${target}`;
-  const outcome = result.isCritical && result.hit ? 'CRITICAL HIT' : result.hit ? 'HIT' : 'MISS';
+  const critical =
+    result.autoCritReason !== undefined
+      ? `CRITICAL HIT (the target is ${result.autoCritReason})`
+      : 'CRITICAL HIT';
+  const outcome = result.isCritical && result.hit ? critical : result.hit ? 'HIT' : 'MISS';
   const auto = result.autoRolled === true ? ' (auto-rolled)' : '';
   let line = `⚙️ Engine: ${actor} ${roll}${roll.startsWith('rolled ') ? ` against ${target}` : ''}${weapon} — ${outcome}${auto}.`;
   if (result.hit) {

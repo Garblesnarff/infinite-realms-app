@@ -73,6 +73,23 @@ export function checkHit(input: HitCheckInput): HitCheckResult {
 }
 
 /**
+ * Why a hit is critical when the die did not make it so (#2640): the target is unconscious or
+ * paralyzed within 5 ft. A natural 20 is critical on its own and keeps its plain wording, so a 20
+ * has no reason to give. `undefined` when the automatic-critical rule is not what made the crit.
+ */
+export function autoCritReason(
+  targetConditions: string[] | undefined,
+  naturalRoll: number,
+  isCritical: boolean,
+): 'unconscious' | 'paralyzed' | undefined {
+  if (!isCritical || naturalRoll === 20 || !targetConditions) return undefined;
+  const names = targetConditions.map((condition) => condition.toLowerCase());
+  if (names.includes('unconscious')) return 'unconscious';
+  if (names.includes('paralyzed')) return 'paralyzed';
+  return undefined;
+}
+
+/**
  * D&D 5E Auto-Crit Detection
  *
  * Per PHB: Attacks against paralyzed or unconscious creatures

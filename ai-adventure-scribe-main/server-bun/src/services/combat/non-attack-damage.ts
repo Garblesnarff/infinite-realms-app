@@ -20,6 +20,7 @@ import { describeDamageAtZeroHp, describeInstantDeath } from '../../../../shared
 import { CharacterVitalsService, type CharacterVitals } from '../character-vitals-service.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { describeGoingDown } from './death-saves-service.js';
+import { instantDeathOutcome } from './hp-mechanics.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 
 export interface NonAttackDamageResult {
@@ -69,15 +70,22 @@ interface TransitionFacts {
   instantDeath: boolean;
   failuresAdded: number;
   failures: number;
+  /** Damage that remained after 0 HP, and the maximum it is judged against (#2640). */
+  overflow?: number;
+  hpMax?: number;
 }
 
 /** The engine sentences for what one piece of damage did to a player, most important first. */
 export function nonAttackDamageLines(name: string, facts: TransitionFacts): string[] {
-  if (facts.instantDeath) return [describeInstantDeath(name)];
+  if (facts.instantDeath) {
+    return [describeInstantDeath(name, { overflow: facts.overflow, hpMax: facts.hpMax })];
+  }
   if (facts.failuresAdded > 0) {
     return [describeDamageAtZeroHp(name, facts.failuresAdded, facts.failures)];
   }
-  if (facts.droppedToZero) return [describeGoingDown(name)];
+  if (facts.droppedToZero) {
+    return [describeGoingDown(name, { overflow: facts.overflow, hpMax: facts.hpMax })];
+  }
   return [];
 }
 
@@ -98,19 +106,32 @@ export async function applyNonAttackDamage(
     const before = await CharacterVitalsService.getVitals(characterId, userId);
     const vitals = await CharacterVitalsService.applyDamage(characterId, userId, amount, options);
     const name = 'The character';
+    // The same truncation computeVitalsAfterDamage applies, so the line is judged on the number
+    // the sheet actually took, and the verdict is the one instantDeathOutcome gave it.
+    const damage = Math.max(0, Math.trunc(amount));
+    const outcome = instantDeathOutcome(
+      before.currentHitPoints,
+      Math.max(0, damage - before.temporaryHitPoints),
+      before.maxHitPoints,
+    );
+    const alreadyDead = before.vitalState === 'dead';
     const dropped = before.currentHitPoints > 0 && vitals.currentHitPoints === 0;
     const failuresAdded =
-      before.currentHitPoints === 0 && before.vitalState !== 'dead'
+      before.currentHitPoints === 0 && !alreadyDead
         ? Math.max(0, vitals.deathSavesFailures - before.deathSavesFailures)
         : 0;
     return {
       vitals,
-      engineLines: nonAttackDamageLines(name, {
-        droppedToZero: dropped && vitals.vitalState !== 'dead',
-        instantDeath: dropped && vitals.vitalState === 'dead',
-        failuresAdded,
-        failures: vitals.deathSavesFailures,
-      }),
+      engineLines: alreadyDead
+        ? []
+        : nonAttackDamageLines(name, {
+            droppedToZero: dropped && !outcome.massiveDamage,
+            instantDeath: outcome.massiveDamage,
+            failuresAdded: outcome.massiveDamage ? 0 : failuresAdded,
+            failures: vitals.deathSavesFailures,
+            overflow: outcome.overflow,
+            hpMax: before.maxHitPoints,
+          }),
     };
   }
 
@@ -131,6 +152,8 @@ export async function applyNonAttackDamage(
     instantDeath: result.massiveDamage === true,
     failuresAdded: result.deathSaveFailuresAdded ?? 0,
     failures: result.newDeathSavesFailures,
+    overflow: result.overflow,
+    hpMax: result.hpMaximum,
   });
   for (const line of engineLines) await recordDmTacticalFact(live.sessionId, line);
 

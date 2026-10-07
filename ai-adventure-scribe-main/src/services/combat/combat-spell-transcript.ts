@@ -118,10 +118,10 @@ function formatSpellPart(
     actor === target ? `${actor} cast ${spell}` : `${actor} cast ${spell} at ${target}`;
 
   if (result.autoHit === true) {
-    return card(
-      `⚙️ Engine: ${castClause} — AUTO-HIT.${damage ? ` ${damage}` : ''}${trailer}`,
-      { badge: engineBadge('auto-hit', side), effect },
-    );
+    return card(`⚙️ Engine: ${castClause} — AUTO-HIT.${damage ? ` ${damage}` : ''}${trailer}`, {
+      badge: engineBadge('auto-hit', side),
+      effect,
+    });
   }
   if (result.saveAbility && isFiniteNumber(result.saveRoll) && isFiniteNumber(result.saveDC)) {
     const outcome = result.saved ? 'PASS' : 'FAIL';
@@ -145,14 +145,15 @@ function formatSpellPart(
     isFiniteNumber(result.attackBonus) &&
     isFiniteNumber(result.totalAttackRoll)
   ) {
-    const outcome = result.isCritical && result.hit ? 'CRITICAL HIT' : result.hit ? 'HIT' : 'MISS';
+    const critical = result.autoCritReason
+      ? `CRITICAL HIT (the target is ${result.autoCritReason})`
+      : 'CRITICAL HIT';
+    const outcome = result.isCritical && result.hit ? critical : result.hit ? 'HIT' : 'MISS';
     const missDamage = result.hit ? damage : 'No damage.';
     // An unknown AC gets no versus clause in the line itself, so no surface
     // ever prints "vs AC ?" (#2513); the shared formatter is shared with the
     // server, so the omission happens here at the client producer.
-    const versus = isFiniteNumber(result.targetAC)
-      ? ` ${formatVersusArmorClass(result)}`
-      : '';
+    const versus = isFiniteNumber(result.targetAC) ? ` ${formatVersusArmorClass(result)}` : '';
     return card(
       `⚙️ Engine: ${castClause} — spell attack ${result.d20} + ${result.attackBonus} ` +
         `= ${result.totalAttackRoll}${versus} — ${outcome}.` +
@@ -195,10 +196,10 @@ function formatSpellPart(
   }
   if (typeof result.hit === 'boolean') {
     const outcome = result.hit ? 'HIT' : 'MISS';
-    return card(
-      `⚙️ Engine: ${castClause} — ${outcome}.${damage ? ` ${damage}` : ''}${trailer}`,
-      { badge: engineBadge(result.hit ? 'hit' : 'miss', side), effect },
-    );
+    return card(`⚙️ Engine: ${castClause} — ${outcome}.${damage ? ` ${damage}` : ''}${trailer}`, {
+      badge: engineBadge(result.hit ? 'hit' : 'miss', side),
+      effect,
+    });
   }
   return null;
 }

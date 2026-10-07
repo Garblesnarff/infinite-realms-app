@@ -55,6 +55,28 @@ export interface ParticipantResistances {
  */
 export const MAX_SINGLE_HIT_FRACTION_OF_MAX_HP = 0.5;
 
+/**
+ * SRD 5.1, "Instant Death", in ONE place (#2640): damage that reduces a creature to 0 hit points
+ * with damage REMAINING kills it outright when the remaining damage equals or exceeds its hit
+ * point maximum; damage taken while already at 0 kills outright when it equals or exceeds the
+ * maximum. The remaining damage is what is left after the hit points the creature had (not the
+ * whole hit), so 12 damage at 1 HP leaves 11 and a 12-maximum creature is dying, not dead.
+ *
+ * @param hpBefore - current hit points before the hit
+ * @param damageAfterTemp - the damage that reached hit points (temporary hit points already used)
+ * @param hpMax - hit point maximum
+ */
+export function instantDeathOutcome(
+  hpBefore: number,
+  damageAfterTemp: number,
+  hpMax: number,
+): { overflow: number; massiveDamage: boolean } {
+  if (!(damageAfterTemp > 0)) return { overflow: 0, massiveDamage: false };
+  const overflow = hpBefore > 0 ? Math.max(0, damageAfterTemp - hpBefore) : damageAfterTemp;
+  const reducedToZero = hpBefore <= 0 || damageAfterTemp >= hpBefore;
+  return { overflow, massiveDamage: reducedToZero && overflow >= hpMax };
+}
+
 /** Three successes stabilise, three failures kill (SRD 5.1). */
 const DEATH_SAVE_LIMIT = 3;
 
@@ -175,10 +197,7 @@ export class HPMechanics {
     // blow that would take a creature already at 0 past its maximum. The overflow is what is
     // left after temporary hit points and the creature's remaining hit points are used up.
     const droppedToZero = status.currentHp > 0 && newCurrentHp === 0;
-    const overflow = droppedToZero ? hpLost - status.currentHp : 0;
-    const massiveDamage =
-      (status.currentHp === 0 && hpLost >= status.maxHp) ||
-      (droppedToZero && overflow >= status.maxHp);
+    const { overflow, massiveDamage } = instantDeathOutcome(status.currentHp, hpLost, status.maxHp);
 
     // A creature that just dropped starts a fresh dying sequence; one that was stable and takes
     // damage is dying again (SRD: "if the creature takes any damage, it is no longer stable").
@@ -237,6 +256,7 @@ export class HPMechanics {
       wasImmune,
       massiveDamage,
       overflow,
+      hpMaximum: status.maxHp,
       deathSaveFailuresAdded,
       newDeathSavesFailures,
       newDeathSavesSuccesses,

@@ -52,10 +52,18 @@ export {
 export { describeDeathSave };
 
 /** The line the DM gets when a character is put down, so the transition itself is narratable. */
-export function describeGoingDown(name: string): string {
+export function describeGoingDown(
+  name: string,
+  facts?: { overflow?: number; hpMax?: number },
+): string {
+  // The numbers the verdict rests on (#2640): what remained after 0 HP against the maximum.
+  const numbers =
+    facts?.overflow !== undefined && facts.overflow > 0 && facts.hpMax !== undefined
+      ? ` (${facts.overflow} damage remains; HP max ${facts.hpMax} — dying)`
+      : '';
   return (
-    `${name} has dropped to 0 HP and is UNCONSCIOUS and still dying — not dead. They will make ` +
-    `a death saving throw at the start of each of their turns.`
+    `${name} has dropped to 0 HP${numbers} and is UNCONSCIOUS and still dying — not dead. They ` +
+    `will make a death saving throw at the start of each of their turns.`
   );
 }
 

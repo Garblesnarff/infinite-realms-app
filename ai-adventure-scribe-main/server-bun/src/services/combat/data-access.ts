@@ -337,11 +337,22 @@ export async function getActiveConditionNames(participantId: string): Promise<st
   // That keeps the attack rules (advantage, automatic critical within 5 ft) and the client's
   // tracker reading one fact.
   const [status] = await db
-    .select({ isConscious: combatParticipantStatus.isConscious })
+    .select({
+      isConscious: combatParticipantStatus.isConscious,
+      currentHp: combatParticipantStatus.currentHp,
+    })
     .from(combatParticipantStatus)
     .where(eq(combatParticipantStatus.participantId, participantId))
     .limit(1);
-  if (status && status.isConscious === false && !names.includes('unconscious')) {
+  // Unconscious means 0 HP AND not conscious. A creature with hit points left is on its feet,
+  // whatever a stale `is_conscious` column says: this is the condition that turns a hit into an
+  // automatic critical, so it must never fire on a conscious target (#2640).
+  if (
+    status &&
+    status.isConscious === false &&
+    status.currentHp <= 0 &&
+    !names.includes('unconscious')
+  ) {
     names.push('unconscious');
   }
   return names;

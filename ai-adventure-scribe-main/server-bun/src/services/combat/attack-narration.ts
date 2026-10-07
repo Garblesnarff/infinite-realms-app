@@ -23,6 +23,8 @@ export function describeResolvedAttack(
     finalDamage?: number;
     targetNewHp?: number;
     isCritical?: boolean;
+    /** Set when the crit is the unconscious / paralyzed rule rather than a natural 20 (#2640). */
+    autoCritReason?: 'unconscious' | 'paralyzed';
     targetIsDead?: boolean;
     targetIsConscious?: boolean;
     autoRolled?: boolean;
@@ -37,7 +39,11 @@ export function describeResolvedAttack(
   const auto = outcome.autoRolled ? ' (auto-rolled)' : '';
   if (!outcome.hit)
     return `${actorLabel} attacked ${targetLabel}${weapon} and MISSED${auto}. No damage.`;
-  const crit = outcome.isCritical ? 'CRITICAL HIT' : 'HIT';
+  const crit = outcome.isCritical
+    ? outcome.autoCritReason
+      ? `CRITICAL HIT (the target is ${outcome.autoCritReason})`
+      : 'CRITICAL HIT'
+    : 'HIT';
   const damage = Number(outcome.finalDamage ?? 0);
   const hp =
     outcome.targetNewHp == null ? '' : ` ${targetLabel} is now at ${outcome.targetNewHp} HP`;

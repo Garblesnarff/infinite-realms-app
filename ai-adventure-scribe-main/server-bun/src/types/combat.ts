@@ -631,8 +631,13 @@ export interface AttackResult {
   deathSavesFailures?: number;
   /** True when this blow's overflow past 0 HP reached the target's maximum: instant death. */
   instantDeath?: boolean;
+  /** Damage left over after the target reached 0 HP on this hit, and the maximum it is judged against. */
+  damageOverflow?: number;
+  hpMaximum?: number;
   /** True when a melee blow within 5 ft on an unconscious target hit automatically as a critical. */
   autoCritOnDowned?: boolean;
+  /** Why the hit is critical when the die is not a natural 20: the target's condition (#2640). */
+  autoCritReason?: 'unconscious' | 'paralyzed';
   /** Authoritative condition tier after damage; numeric HP stays private to engine/UI state. */
   targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   isCritical: boolean;
@@ -1028,6 +1033,8 @@ export interface DamageResult {
   massiveDamage: boolean;
   /** Damage left over after the target reached 0 HP on this hit; 0 when it did not drop. */
   overflow?: number;
+  /** The target's hit point maximum when the hit landed (the number `overflow` is judged against). */
+  hpMaximum?: number;
   deathSaveFailuresAdded: number;
   newDeathSavesFailures: number;
   /** The success tally after this hit: a fresh drop, or a stable creature hit, resets it. */

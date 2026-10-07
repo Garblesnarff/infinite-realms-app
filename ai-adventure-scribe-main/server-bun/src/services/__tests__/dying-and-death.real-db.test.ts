@@ -160,6 +160,8 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
    */
   const seedScene = async (options: {
     heroHp: number;
+    /** The hero's hit point maximum (default {@link HERO_MAX_HP}). */
+    heroMax?: number;
     spiderDamageBonus?: number;
     spiderRanged?: boolean;
     spiderDownedBehavior?: 'ignore';
@@ -179,7 +181,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       characterId,
       strength: 8,
       armorClass: 11,
-      maxHitPoints: HERO_MAX_HP,
+      maxHitPoints: options.heroMax ?? HERO_MAX_HP,
       currentHitPoints: options.heroHp,
       isConscious: options.heroHp > 0,
       speed: 30,
@@ -220,7 +222,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
           turnOrder: 0,
           initiative: 15,
           armorClass: 11,
-          maxHp: HERO_MAX_HP,
+          maxHp: options.heroMax ?? HERO_MAX_HP,
           speed: 30,
         },
         {
@@ -258,7 +260,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       {
         participantId: heroId,
         currentHp: options.heroHp,
-        maxHp: HERO_MAX_HP,
+        maxHp: options.heroMax ?? HERO_MAX_HP,
         isConscious: options.heroHp > 0,
       },
       { participantId: spiderId, currentHp: 40, maxHp: 40, isConscious: true },
@@ -1339,5 +1341,185 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     const next = await deathSave(scene, 15);
     expect(next.deathSaves[0]).toMatchObject({ successes: 2 });
     expect(deathSaveLogs).toHaveLength(2);
+  });
+
+  // -----------------------------------------------------------------------------------------
+  // 13. Run D9 (#2640): massive damage is the OVERFLOW past 0 HP, and a natural 18 is no crit
+  // -----------------------------------------------------------------------------------------
+
+  /** The D9 shape: a 12-max hero at `hp`, and a hit rolled `d20` that deals `damage` unless capped. */
+  const d9Strike = async (hp: number, damage: number, d20: number) => {
+    // 1d1 + bonus: the damage is arithmetic.
+    const scene = await seedScene({ heroHp: hp, heroMax: 12, spiderDamageBonus: damage - 1 });
+    const result = await spiderStrikes(scene, d20);
+    return { scene, result };
+  };
+
+  test('D9: a conscious hero at 1 HP (max 12) hit by a natural 18 takes a NORMAL hit: no critical, dying {0,0}, not dead', async () => {
+    const { scene, result } = await d9Strike(1, 12, 18);
+    expect(result.isCritical).toBe(false);
+    expect(result.instantDeath).toBeUndefined();
+    expect(result.targetIsDead).not.toBe(true);
+    // Normal dice, and the per-hit cap (half of max) applies to a non-critical blow.
+    expect(result.finalDamage).toBe(6);
+    expect(await statusOf(scene.heroId)).toMatchObject({
+      currentHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+    expect(await sheetOf(scene.characterId)).toMatchObject({ vitalState: 'dying' });
+    const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
+    expect(facts).not.toContain('CRITICAL HIT');
+    expect(facts).not.toContain('massive damage');
+  });
+
+  test('D9: a real natural 20 critical totalling 12 at 1 HP (max 12) leaves 11 damage over: dying, and the line says so', async () => {
+    // 1d1 doubled is 2, plus 10: 12 in all.
+    const { scene, result } = await d9Strike(1, 11, 20);
+    expect(result.isCritical).toBe(true);
+    expect(result.finalDamage).toBe(12);
+    expect(result.instantDeath).toBeUndefined();
+    expect(await statusOf(scene.heroId)).toMatchObject({
+      currentHp: 0,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+    expect(
+      (await stateOf(scene.encounterId)).participants.find((p) => p.id === scene.heroId)
+        ?.vitalState,
+    ).toBe('dying');
+    const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
+    expect(facts).toContain('11 damage remains; HP max 12 — dying');
+    expect(facts).not.toContain('massive damage');
+  });
+
+  test('D9: a critical totalling 13 at 1 HP (max 12) leaves 12 over, which is the maximum: dead, and the line states the numbers', async () => {
+    const { scene, result } = await d9Strike(1, 12, 20);
+    expect(result.isCritical).toBe(true);
+    expect(result.finalDamage).toBe(13);
+    expect(result.instantDeath).toBe(true);
+    expect(await statusOf(scene.heroId)).toMatchObject({ currentHp: 0, deathSavesFailures: 3 });
+    const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
+    expect(facts).toContain('12 damage remains after 0 HP, and the hit point maximum is 12');
+  });
+
+  test('D9: a stale is_conscious=false on a hero WITH hit points left is not "unconscious": a natural 18 is a normal hit', async () => {
+    const scene = await seedScene({ heroHp: 1, heroMax: 12, spiderDamageBonus: 11 });
+    // The inconsistent row: hit points left, but the column still says unconscious.
+    await db
+      .update(combatParticipantStatus)
+      .set({ isConscious: false })
+      .where(eq(combatParticipantStatus.participantId, scene.heroId));
+    expect(await getActiveConditionNames(scene.heroId)).not.toContain('unconscious');
+    const result = await spiderStrikes(scene, 18);
+    expect(result.isCritical).toBe(false);
+    expect(result.autoCritOnDowned).toBeUndefined();
+    expect(result.finalDamage).toBe(6);
+    expect(result.instantDeath).toBeUndefined();
+  });
+
+  test('D9 through the non-attack writer: 12 at 1 HP (max 12) is dying with the numbers; 13 is dead; both in and out of a fight', async () => {
+    for (const inFight of [true, false]) {
+      const dying = await seedScene({ heroHp: 1, heroMax: 12 });
+      const dead = await seedScene({ heroHp: 1, heroMax: 12 });
+      if (!inFight) {
+        for (const scene of [dying, dead]) {
+          await db
+            .update(combatEncounters)
+            .set({ status: 'completed' })
+            .where(eq(combatEncounters.id, scene.encounterId));
+        }
+      }
+      const twelve = await applyNonAttackDamage(dying.characterId, userId, 12, 'fall');
+      expect(twelve.vitals).toMatchObject({
+        currentHitPoints: 0,
+        vitalState: 'dying',
+        deathSavesFailures: 0,
+      });
+      expect(twelve.engineLines[0]).toContain('11 damage remains; HP max 12 — dying');
+
+      const thirteen = await applyNonAttackDamage(dead.characterId, userId, 13, 'fall');
+      expect(thirteen.vitals).toMatchObject({ vitalState: 'dead', deathSavesFailures: 3 });
+      expect(thirteen.engineLines[0]).toContain(
+        '12 damage remains after 0 HP, and the hit point maximum is 12',
+      );
+    }
+  });
+
+  test('D9 through the non-attack writer, hero ALREADY at 0 HP (max 12): 12 is dead with three failures and the numbers; 11 stays dying; in and out of a fight', async () => {
+    for (const inFight of [true, false]) {
+      const dying = await seedScene({ heroHp: 0, heroMax: 12 });
+      const dead = await seedScene({ heroHp: 0, heroMax: 12 });
+      for (const scene of [dying, dead]) {
+        // A player at 0 HP is dying on the sheet too (the dying transition wrote it).
+        await db
+          .update(characterStats)
+          .set({ vitalState: 'dying' })
+          .where(eq(characterStats.characterId, scene.characterId));
+        if (!inFight) {
+          await db
+            .update(combatEncounters)
+            .set({ status: 'completed' })
+            .where(eq(combatEncounters.id, scene.encounterId));
+        }
+      }
+
+      const eleven = await applyNonAttackDamage(dying.characterId, userId, 11, 'fall');
+      expect(eleven.vitals).toMatchObject({ vitalState: 'dying', deathSavesFailures: 1 });
+      expect(eleven.engineLines[0]).toContain('takes damage at 0 HP');
+
+      const twelve = await applyNonAttackDamage(dead.characterId, userId, 12, 'fall');
+      expect(twelve.vitals).toMatchObject({ vitalState: 'dead', deathSavesFailures: 3 });
+      expect(twelve.engineLines).toHaveLength(1);
+      expect(twelve.engineLines[0]).toContain(
+        '12 damage remains after 0 HP, and the hit point maximum is 12',
+      );
+      expect(twelve.engineLines[0]).toContain('DEAD');
+    }
+  });
+
+  test('a fractional amount is truncated the way the sheet truncates it: 12.9 at 0 HP (max 12) is 12, dead', async () => {
+    const scene = await seedScene({ heroHp: 0, heroMax: 12 });
+    await db
+      .update(characterStats)
+      .set({ vitalState: 'dying' })
+      .where(eq(characterStats.characterId, scene.characterId));
+    await db
+      .update(combatEncounters)
+      .set({ status: 'completed' })
+      .where(eq(combatEncounters.id, scene.encounterId));
+    const result = await applyNonAttackDamage(scene.characterId, userId, 12.9, 'fall');
+    expect(result.vitals.vitalState).toBe('dead');
+    expect(result.engineLines[0]).toContain('12 damage remains after 0 HP');
+  });
+
+  test('the engine line says WHY a hit is critical: the auto-critical names the unconscious target; a natural 20 keeps the plain wording', async () => {
+    // A non-20 die on an unconscious (dying) hero: critical by the rule, and the line says so.
+    const down = await dropHero();
+    await consumeDmTacticalFacts(down.sessionId);
+    const auto = await spiderStrikes(down, 15);
+    expect(auto.isCritical).toBe(true);
+    expect(auto.autoCritReason).toBe('unconscious');
+    const autoFacts = (await consumeDmTacticalFacts(down.sessionId)).join('\n');
+    expect(autoFacts).toContain('CRITICAL HIT (the target is unconscious)');
+
+    // A natural 20 on a conscious hero: critical by the die, plain wording, no reason.
+    const standing = await seedScene({ heroHp: 7 });
+    const natural = await spiderStrikes(standing, 20);
+    expect(natural.isCritical).toBe(true);
+    expect(natural.autoCritReason).toBeUndefined();
+    const naturalFacts = (await consumeDmTacticalFacts(standing.sessionId)).join('\n');
+    expect(naturalFacts).toContain('CRITICAL HIT');
+    expect(naturalFacts).not.toContain('the target is unconscious');
+
+    // A natural 20 on an unconscious hero is still the die's critical: plain wording.
+    const downToo = await dropHero();
+    await consumeDmTacticalFacts(downToo.sessionId);
+    const twenty = await spiderStrikes(downToo, 20);
+    expect(twenty.autoCritReason).toBeUndefined();
+    expect((await consumeDmTacticalFacts(downToo.sessionId)).join('\n')).not.toContain(
+      'the target is unconscious)',
+    );
   });
 });
