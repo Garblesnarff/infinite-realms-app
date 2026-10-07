@@ -10,8 +10,13 @@ cd "$APP_DIR" || exit 1
 client_status="PASS"
 server_status="PASS"
 
-echo "=== client typecheck: bun x tsc --noEmit ==="
-if bun x tsc --noEmit; then
+echo "=== client typecheck: scripts/client-typecheck-gate.sh ==="
+# The client typecheck gate (#2664 step 0) runs tsc against the real client
+# program (tsconfig.app.json) with the pre-existing errors quarantined
+# per-file in client-typecheck-known-errors.txt. The old `bun x tsc --noEmit`
+# checked zero files (root tsconfig.json has "files": [] plus references,
+# and tsc without -b typechecks nothing).
+if bash scripts/client-typecheck-gate.sh; then
   echo "client typecheck: PASS"
 else
   client_status="FAIL"
