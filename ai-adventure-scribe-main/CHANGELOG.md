@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.30.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.2...v0.30.3) (2026-10-07)
+
+
+### Bug Fixes
+
+* **dm:** the prose floor reads only what the player affirmed ([#2641](https://github.com/Garblesnarff/infinite-realms-production/issues/2641)) ([#2643](https://github.com/Garblesnarff/infinite-realms-production/issues/2643)) ([c62ca2b](https://github.com/Garblesnarff/infinite-realms-production/commit/c62ca2bf54ee0ccad26b11395fc6c1726aacc6ef))
+* **rest:** one long rest, heal through the write paths, active encounters only ([#2600](https://github.com/Garblesnarff/infinite-realms-production/issues/2600)) ([#2633](https://github.com/Garblesnarff/infinite-realms-production/issues/2633)) ([30d7d41](https://github.com/Garblesnarff/infinite-realms-production/commit/30d7d41b37b2f093e452b7a1bd14a27a1a044a25))
+
 ## [0.30.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.1...v0.30.2) (2026-10-07)
 
 
