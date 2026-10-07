@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.30.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.1...v0.30.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **chat:** composer status while a turn waits ([#2536](https://github.com/Garblesnarff/infinite-realms-production/issues/2536)) ([#2651](https://github.com/Garblesnarff/infinite-realms-production/issues/2651)) ([a87e0fd](https://github.com/Garblesnarff/infinite-realms-production/commit/a87e0fd06c196cf0789df730557ae2f37e2417ee))
+* **combat:** death lines state their numbers; auto-crit says why ([#2640](https://github.com/Garblesnarff/infinite-realms-production/issues/2640)) ([#2642](https://github.com/Garblesnarff/infinite-realms-production/issues/2642)) ([a6ed75a](https://github.com/Garblesnarff/infinite-realms-production/commit/a6ed75a65415da73ad3aabf9e238cc492a0e78d5))
+
 ## [0.30.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.0...v0.30.1) (2026-10-07)
 
 
