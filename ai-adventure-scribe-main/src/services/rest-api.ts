@@ -1,5 +1,5 @@
 import type { Character } from '@/types/character';
-import type { CombatParticipant } from '@/types/combat';
+import type { CombatParticipant, Condition } from '@/types/combat';
 
 import { getAuthHeaders } from '@/services/auth/TokenService';
 
@@ -61,6 +61,40 @@ function aggregateHitDice(hitDice: RestHitDie[]): Character['hitDice'] | undefin
   };
 }
 
+/**
+ * #2600: conditions a long rest ends. SRD 5.1 does not list condition-clearing
+ * among long-rest benefits, so as a product decision a rest ends only the
+ * conditions it resolves: unconscious ends when hit points are restored, and
+ * prone is not carried through eight hours of rest. Lasting conditions
+ * (poisoned, cursed, petrified, charmed, frightened, paralyzed, ...) survive
+ * the rest.
+ */
+const LONG_REST_ENDED_CONDITIONS: ReadonlySet<string> = new Set(['unconscious', 'prone']);
+
+export interface LongRestEntity {
+  conditions?: Condition[] | null;
+  activeConcentration?: unknown;
+}
+
+/**
+ * #2600: the single long-rest semantics both rest appliers share. Returns the
+ * conditions that survive the rest and ends concentration. Death-save tallies
+ * are server-owned (#2618) and reset server-side in RestService.takeLongRest;
+ * the client takes the wire value and never resets them itself. Exhaustion is
+ * reduced server-side (RestService.takeLongRest calls
+ * ExhaustionService.reduceExhaustion); the client does not re-derive it.
+ * Combat-only action economy stays in the combat applier.
+ */
+export function applyLongRestSemantics(entity: LongRestEntity): {
+  conditions: Condition[];
+  activeConcentration: null;
+} {
+  const conditions = (entity.conditions ?? []).filter(
+    (condition) => !LONG_REST_ENDED_CONDITIONS.has(condition.name.toLowerCase()),
+  );
+  return { conditions, activeConcentration: null };
+}
+
 export function applyRestResultToCharacter(
   character: Character,
   result: RestApiResult,
@@ -86,6 +120,10 @@ export function applyRestResultToCharacter(
                 ),
         }
       : character.hitPoints,
+    // #2600: long-rest semantics (conditions, concentration) come from the
+    // shared implementation — the sheet is not a second ruleset. Death-save
+    // tallies are server-owned (#2618); the client never touches them.
+    ...(result.restType === 'long' ? applyLongRestSemantics(character) : {}),
   };
 }
 
@@ -113,8 +151,8 @@ export function applyRestResultToCombatParticipant(
     ...(spellSlots ? { spellSlots: spellSlots as CombatParticipant['spellSlots'] } : {}),
     ...(result.restType === 'long'
       ? {
-          conditions: participant.conditions?.filter((condition) => condition.duration === -1) || [],
-          activeConcentration: null,
+          // #2600: shared long-rest semantics; only combat action economy stays here.
+          ...applyLongRestSemantics(participant),
           actionTaken: false,
           bonusActionTaken: false,
           reactionTaken: false,

@@ -5,6 +5,17 @@ import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
 import { RestService } from '../rest-service.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
+import { CharacterVitalsService } from '../character-vitals-service.js';
+import { CombatHPService } from '../combat-hp-service.js';
+
+// Mock the write-through services: the real-db suite proves what they store;
+// the mocked suite pins that takeLongRest calls them (not raw updates).
+vi.mock('../character-vitals-service.js', () => ({
+  CharacterVitalsService: { heal: vi.fn() },
+}));
+vi.mock('../combat-hp-service.js', () => ({
+  CombatHPService: { healDamage: vi.fn() },
+}));
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -168,6 +179,70 @@ describe('RestService Security', () => {
       const result = await RestService.takeLongRest(mockCharacterId, mockUserId);
       expect(result).toBeDefined();
       expect(result.restEventId).toBe('event-456');
+    });
+
+    it('heals the sheet and participants through the write-through paths (#2600)', async () => {
+      // The write-through services are module-mocked above: the real-db suite
+      // proves what they store; here we pin that takeLongRest calls them
+      // (not raw updates).
+      const healMock = vi.mocked(CharacterVitalsService.heal);
+      const healDamageMock = vi.mocked(CombatHPService.healDamage);
+      healMock.mockResolvedValue({} as any);
+      healDamageMock.mockResolvedValue({} as any);
+
+      try {
+        (db.query.characters.findFirst as any).mockResolvedValue({
+          id: mockCharacterId,
+          stats: {
+            constitution: 10,
+            maxHitPoints: 30,
+            currentHitPoints: 0,
+          },
+          hitDice: [],
+          classFeatures: null,
+          pactSlots: null,
+          spellSlots: null,
+        });
+
+        (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
+        // A participant mid-death-saves (2 successes, 1 failure, dying).
+        (db.query.combatParticipants.findMany as any).mockResolvedValue([
+          {
+            id: 'part-1',
+            encounterId: 'enc-1',
+            status: { maxHp: 30 },
+            encounter: { status: 'active' },
+          },
+        ]);
+        (db.insert as any).mockReturnValue({
+          values: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 'event-789' }]),
+          }),
+        });
+
+        // Same slot-table shape as the test above: character found, no slot rows.
+        const noSlotRows = [{ slot: null, charId: mockCharacterId }];
+        (db.select as any).mockReturnValue({
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(noSlotRows),
+            then: (resolve: (value: unknown) => void) => resolve(noSlotRows),
+          }),
+        });
+
+        await RestService.takeLongRest(mockCharacterId, mockUserId);
+
+        // The sheet is healed through CharacterVitalsService (vitalState,
+        // isConscious and tallies move with the HP; dead are left alone).
+        expect(healMock).toHaveBeenCalledWith(mockCharacterId, mockUserId, 30);
+        // Each participant is healed through CombatHPService (HP to max,
+        // conscious, tallies 0/0 via the write-through; dead are left alone).
+        expect(healDamageMock).toHaveBeenCalledWith('part-1', 'enc-1', 30, 'long rest', mockUserId);
+      } finally {
+        healMock.mockReset();
+        healDamageMock.mockReset();
+      }
     });
   });
 

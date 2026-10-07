@@ -153,7 +153,158 @@ describe('rest API state application', () => {
 
     expect(updated.currentHitPoints).toBe(30);
     expect(updated.actionTaken).toBe(false);
-    expect(updated.conditions).toEqual([]);
+    // #2600: the allow-list ends only rest-resolved conditions — a timed
+    // poisoned survives the rest.
+    expect(updated.conditions).toEqual([{ name: 'poisoned', description: 'Poisoned', duration: 1 }]);
     expect(updated.spellSlots?.[2]).toEqual({ max: 1, current: 1 });
+  });
+
+  it('sheet long rest ends only rest-resolved conditions and ends concentration (#2600)', () => {
+    const character: Character = {
+      id: 'char-1',
+      name: 'Mira',
+      hitPoints: { maximum: 30, current: 10, temporary: 0 },
+      conditions: [
+        { name: 'Poisoned', duration: 10 } as any,
+        { name: 'Unconscious', duration: 10 } as any,
+        { name: 'Blessed', duration: -1 } as any,
+      ],
+      activeConcentration: 'bless',
+    };
+
+    const updated = applyRestResultToCharacter(character, {
+      ...serverShortRest,
+      restType: 'long',
+      hpRestored: 20,
+      restEventId: 'rest-3',
+    });
+
+    // Unconscious ends (HP restored); lasting conditions survive regardless of
+    // duration; concentration ends.
+    expect(updated.conditions).toEqual([
+      { name: 'Poisoned', duration: 10 },
+      { name: 'Blessed', duration: -1 },
+    ]);
+    expect(updated.activeConcentration).toBeNull();
+    expect(updated.hitPoints?.current).toBe(30);
+  });
+
+  it('sheet short rest keeps conditions and concentration (#2600)', () => {
+    const character: Character = {
+      id: 'char-1',
+      name: 'Mira',
+      hitPoints: { maximum: 30, current: 10, temporary: 0 },
+      conditions: [{ name: 'Poisoned', duration: 10 } as any],
+      activeConcentration: 'bless',
+    };
+
+    const updated = applyRestResultToCharacter(character, serverShortRest);
+
+    expect(updated.conditions).toEqual([{ name: 'Poisoned', duration: 10 }]);
+    expect(updated.activeConcentration).toBe('bless');
+  });
+
+  it('parity: sheet and combat appliers apply the same long-rest semantics (#2600)', () => {
+    const conditions = [
+      { name: 'Unconscious', duration: 5 } as any,
+      { name: 'Prone', duration: 5 } as any,
+      { name: 'Poisoned', duration: 10 } as any,
+      { name: 'Cursed', duration: 10 } as any,
+    ];
+    const longRest: RestApiResult = {
+      ...serverShortRest,
+      restType: 'long',
+      hpRestored: 20,
+      restEventId: 'rest-parity',
+    };
+
+    const character: Character = {
+      id: 'char-1',
+      name: 'Mira',
+      hitPoints: { maximum: 30, current: 10, temporary: 0 },
+      conditions: [...conditions],
+      activeConcentration: 'bless',
+    };
+    const participant: CombatParticipant = {
+      id: 'participant-1',
+      characterId: 'char-1',
+      name: 'Mira',
+      participantType: 'player',
+      maxHitPoints: 30,
+      currentHitPoints: 10,
+      temporaryHitPoints: 0,
+      armorClass: 15,
+      initiative: 12,
+      speed: 30,
+      actionTaken: true,
+      bonusActionTaken: true,
+      reactionTaken: true,
+      movementUsed: 15,
+      movementRemaining: 15,
+      reactionOpportunities: [],
+      conditions: [...conditions],
+      deathSaves: { successes: 2, failures: 1 },
+      damageResistances: [],
+      damageImmunities: [],
+      damageVulnerabilities: [],
+      activeConcentration: 'bless',
+    };
+
+    const updatedCharacter = applyRestResultToCharacter(character, longRest);
+    const updatedParticipant = applyRestResultToCombatParticipant(participant, longRest);
+
+    // Same input through both appliers gives the same rest semantics — this
+    // catches drift between the two paths.
+    expect(updatedCharacter.conditions).toEqual(updatedParticipant.conditions);
+    // The allow-list ends unconscious and prone; timed poisoned and cursed stay.
+    expect(updatedCharacter.conditions).toEqual([
+      { name: 'Poisoned', duration: 10 },
+      { name: 'Cursed', duration: 10 },
+    ]);
+    expect(updatedCharacter.activeConcentration).toBeNull();
+    expect(updatedParticipant.activeConcentration).toBeNull();
+    // Death-save tallies are server-owned (#2618): the applier passes the
+    // local value through untouched; the reset happens in
+    // RestService.takeLongRest and arrives on the participant wire.
+    expect(updatedParticipant.deathSaves).toEqual({ successes: 2, failures: 1 });
+  });
+
+  it('long rest leaves death-save counters to the server (#2600)', () => {
+    const updated = applyRestResultToCombatParticipant(
+      {
+        id: 'participant-1',
+        characterId: 'char-1',
+        name: 'Mira',
+        participantType: 'player',
+        maxHitPoints: 30,
+        currentHitPoints: 10,
+        temporaryHitPoints: 0,
+        armorClass: 15,
+        initiative: 12,
+        speed: 30,
+        actionTaken: false,
+        bonusActionTaken: false,
+        reactionTaken: false,
+        movementUsed: 0,
+        movementRemaining: 30,
+        reactionOpportunities: [],
+        conditions: [],
+        deathSaves: { successes: 2, failures: 1 },
+        damageResistances: [],
+        damageImmunities: [],
+        damageVulnerabilities: [],
+      },
+      {
+        ...serverShortRest,
+        restType: 'long',
+        hpRestored: 20,
+        restEventId: 'rest-deathsaves',
+      },
+    );
+
+    // The applier does not reset death saves: tallies are server-owned
+    // (#2618), reset in RestService.takeLongRest. The local value passes
+    // through until the participant wire refresh brings the server's 0/0.
+    expect(updated.deathSaves).toEqual({ successes: 2, failures: 1 });
   });
 });

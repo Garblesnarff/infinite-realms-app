@@ -10,12 +10,14 @@
 /* eslint-disable max-lines */
 import { and, desc, eq, exists, or } from 'drizzle-orm';
 
+import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
+import { CombatHPService } from './combat-hp-service.js';
 import { ExhaustionService } from './exhaustion-service.js';
+import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { db } from '../../../db/client';
 import {
   characters,
-  characterStats,
   combatParticipants,
   restEvents,
   type Character,
@@ -24,7 +26,6 @@ import {
   type RestEvent,
 } from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
-import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
 import { SpellSlotsService } from './spell-slots-service.js';
 
@@ -323,10 +324,11 @@ export class RestService {
       : 0;
 
     if (character.stats) {
-      await db
-        .update(characterStats)
-        .set({ currentHitPoints: character.stats.maxHitPoints, updatedAt: new Date() })
-        .where(eq(characterStats.characterId, characterId));
+      // #2600: heal through CharacterVitalsService so vitalState, isConscious
+      // and the death-save tallies move with the HP (#2618) instead of a raw
+      // currentHitPoints update that left the sheet saying "dying" at full HP.
+      // Dead characters are left alone by heal.
+      await CharacterVitalsService.heal(characterId, userId, hpRestored);
     }
 
     // Restore hit dice (half total, minimum 1)
@@ -372,13 +374,58 @@ export class RestService {
 
     const participants = await db.query.combatParticipants.findMany({
       where: eq(combatParticipants.characterId, characterId),
-      columns: { id: true },
+      columns: { id: true, encounterId: true },
+      with: {
+        status: {
+          columns: { maxHp: true },
+        },
+        encounter: {
+          columns: { status: true },
+        },
+      },
     });
+    // #2600: only heal participants in ACTIVE encounters. Ended encounters
+    // have stale status.maxHp (e.g., from before a level-up); healing them
+    // would mirror the stale HP onto the sheet via CharacterVitalsService.
+    // The sheet is the source of truth for ended encounters.
+    const activeParticipants = participants.filter(
+      (participant) => participant.encounter?.status === 'active',
+    );
     await Promise.all(
-      participants.map((participant) =>
-        ExhaustionService.reduceExhaustion(participant.id, userId).catch(() => undefined),
+      activeParticipants.map((participant) =>
+        ExhaustionService.reduceExhaustion(participant.id, userId).catch((error: unknown) => {
+          console.warn(
+            `[rest-service] reduceExhaustion failed for participant ${participant.id}:`,
+            error,
+          );
+        }),
       ),
     );
+
+    // #2600: heal each active participant through CombatHPService so HP,
+    // isConscious and death-save tallies move together (#2618) instead of a
+    // raw tally reset that left the participant "dying" at 0 HP. Dead
+    // participants are left alone by the heal. Ended encounters are skipped
+    // (see above) — healing them is not harmless, because the write-through
+    // mirror would overwrite the sheet HP with the stale encounter max.
+    // Healed sequentially (not in Promise.all) so the sheet write order is
+    // fixed and does not depend on which heal lands last.
+    for (const participant of activeParticipants) {
+      try {
+        await CombatHPService.healDamage(
+          participant.id,
+          participant.encounterId,
+          participant.status?.maxHp ?? 0,
+          'long rest',
+          userId,
+        );
+      } catch (error: unknown) {
+        console.warn(
+          `[rest-service] healDamage failed for participant ${participant.id}:`,
+          error,
+        );
+      }
+    }
 
     // Create rest event. Same conversion as takeShortRest above: ownership is
     // established by the character lookup at the top of this method.
