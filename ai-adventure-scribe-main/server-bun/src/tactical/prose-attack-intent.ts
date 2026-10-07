@@ -19,6 +19,7 @@
 import { collectEntityMentions } from './attack-pair.js';
 import { parseTacticalDigest } from './digest-parse.js';
 import { actionFromPurpose } from './legacy-attack-translation.js';
+import { readPlayerAttack, WEAPON_NOUN } from './player-attack-input.js';
 import { combatLogger } from '../lib/logger.js';
 import { isCombatDeescalationSpeech } from '../services/combat/combat-intent-gate.js';
 
@@ -33,9 +34,6 @@ import type { DMResponse, DMTargetedCombatAction } from '../services/dm/dm-respo
  */
 const ATTACK_VERBS =
   /\b(?:attacks?|attacking|strikes?|striking|swings?|swinging|slash(?:es|ing)?|stabs?|stabbing|lunges?|lunging|thrusts?|thrusting|hacks?|hacking|slices?|slicing|cleaves?|cleaving|bites?|biting|claws?|clawing|mauls?|mauling|charges?|charging|pounces?|pouncing|snaps? at|swipes?|swiping|parr(?:y|ies|ying)|shoots?|shooting|fires?|firing|looses?|loosing|hurls?|hurling|blasts?|blasting|smash(?:es|ing)?|bashes|bashing|punch(?:es|ing|ed)?|kicks?|kicking|drives? .{0,20}\binto\b|wield(?:s|ing)?|brandish(?:es|ing)?)\b/i;
-
-const WEAPON_NOUN =
-  'blade|sword|longsword|shortsword|greatsword|rapier|scimitar|dagger|axe|greataxe|handaxe|mace|hammer|warhammer|maul|spear|glaive|halberd|pike|quarterstaff|staff|club|flail|whip|bow|longbow|shortbow|crossbow|sling|javelin|dart|bolt|arrow|fangs?|talons?|claws?|mandibles?|pincers?|stinger|weapon';
 
 const ATTACK_NOUNS = new RegExp(`\\b(?:${WEAPON_NOUN})\\b`, 'i');
 
@@ -121,27 +119,47 @@ function targetFromProse(
   digest: TacticalDigest,
   actor: DigestEntity,
   text: string,
-): DigestEntity | null {
+  strictTies = false,
+): DigestEntity | 'tie' | null {
   const hostileOf = (id: string): DigestEntity | null => {
     if (!actor.relations.has(id)) return null;
     return digest.entities.get(id) ?? null;
   };
-  let chosen: DigestEntity | null = null;
+  let chosen: DigestEntity | 'tie' | null = null;
   for (const mention of collectEntityMentions(digest, text)) {
     const candidates = mention.ids
       .map(hostileOf)
       .filter((entity): entity is DigestEntity => !!entity);
     if (!candidates.length) continue;
     // A shared display name ("the Shadow Roach", three on the board) resolves the same way the
-    // spatial contract resolves it: to the nearest one, never to an arbitrary one.
-    chosen = candidates.reduce((best, entity) =>
-      (actor.relations.get(entity.id)?.distanceFeet ?? Infinity) <
-      (actor.relations.get(best.id)?.distanceFeet ?? Infinity)
-        ? entity
-        : best,
-    );
+    // spatial contract resolves it: to the nearest one, never to an arbitrary one. For a
+    // player's words a tie is not resolved at all: a wrong-target attack is worse than no prompt.
+    chosen = nearestOf(actor, candidates, strictTies);
   }
   return chosen;
+}
+
+/** The nearest of `candidates`; on equal distance the first, or `'tie'` when ties are not allowed. */
+function nearestOf(
+  actor: DigestEntity,
+  candidates: DigestEntity[],
+  strictTies: boolean,
+): DigestEntity | 'tie' {
+  const distance = (entity: DigestEntity): number =>
+    actor.relations.get(entity.id)?.distanceFeet ?? Infinity;
+  const best = candidates.reduce((nearest, entity) =>
+    distance(entity) < distance(nearest) ? entity : nearest,
+  );
+  const tied = candidates.filter((entity) => distance(entity) === distance(best));
+  return strictTies && tied.length > 1 ? 'tie' : best;
+}
+
+/** The player named no creature ("I finish it off"): the nearest hostile on the board. */
+function nearestHostile(digest: TacticalDigest, actor: DigestEntity): DigestEntity | 'tie' | null {
+  const hostiles = [...actor.relations.keys()]
+    .map((id) => digest.entities.get(id))
+    .filter((entity): entity is DigestEntity => !!entity);
+  return hostiles.length ? nearestOf(actor, hostiles, true) : null;
 }
 
 /**
@@ -153,23 +171,48 @@ export function inferProseAttackIntent(
   response: DMResponse,
   prompt: string,
   combatActive: boolean,
+  playerInput?: string,
 ): ProseAttackInference | null {
   if (!combatActive) return null;
   if (declaresAnAttack(response)) return null;
   const text = response.text ?? '';
-  if (!text.trim() || !hasAttackLanguage(text)) return null;
-
   const digest = parseTacticalDigest(prompt);
   if (!digest?.activeId) return null;
   const actor = digest.entities.get(digest.activeId);
   if (!actor) return null;
 
-  const target = targetFromProse(digest, actor, text);
+  // With player input the turn's attack is read from what the player affirmed (their target,
+  // their weapon, their spell), never from the narration and never from what they refused. Without
+  // input, narration is all there is.
+  const playerWords = playerInput?.trim() ? playerInput : null;
+  let source = text;
+  if (playerWords) {
+    const read = readPlayerAttack(playerWords, {
+      namesHostile: (clause) => targetFromProse(digest, actor, clause) !== null,
+      namesWeapon: (clause) => weaponIdFromProse(clause) !== null,
+    });
+    if (!read.declared) return null;
+    source = read.source;
+  } else if (!text.trim() || !hasAttackLanguage(text)) {
+    return null;
+  }
+
+  // A player who names no creature ("I finish it off") means the nearest hostile on the board,
+  // which is the engine's geometry; narration never picks the target for a player's words.
+  let target = targetFromProse(digest, actor, source, Boolean(playerWords));
+  if (target === null && playerWords) target = nearestHostile(digest, actor);
+  if (target === 'tie') {
+    combatLogger.info(
+      { actorId: actor.id },
+      '[tactical] prose floor: equidistant hostiles and no creature named by the player; no target inferred',
+    );
+    return null;
+  }
   if (!target || target.id === actor.id) return null;
 
   // Narration of a spell is read as that spell or not at all (#2233): the same reader as the
   // roll-request translation, so prose about Chill Touch never becomes an Unarmed Strike.
-  const spellAction = actionFromPurpose(text, actor.id, target.id);
+  const spellAction = actionFromPurpose(source, actor.id, target.id);
   if (!spellAction) return null;
   const action: DMTargetedCombatAction =
     spellAction.action_type === 'cast_spell'
@@ -178,7 +221,7 @@ export function inferProseAttackIntent(
           actor_id: actor.id,
           action_type: 'attack',
           target_ids: [target.id],
-          weapon_id: weaponIdFromProse(text),
+          weapon_id: weaponIdFromProse(source),
           spell_id: null,
           slot_level: null,
           // Approach is the engine's job here for the same reason it is in the legacy

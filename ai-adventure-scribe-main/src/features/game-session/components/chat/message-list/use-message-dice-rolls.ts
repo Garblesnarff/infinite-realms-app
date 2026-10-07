@@ -139,6 +139,7 @@ export function useMessageDiceRolls({
         ? `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}+${currentRoll.rollConfig.abilityModifier}`
         : `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}${currentRoll.rollConfig.modifier >= 0 ? '+' : ''}${currentRoll.rollConfig.modifier}`,
       purpose: currentRoll.description,
+      ...(isEngineTaggedRoll(currentRoll) ? { engineOwned: true } : {}),
       advantage: currentRoll.rollConfig.advantage,
       disadvantage: currentRoll.rollConfig.disadvantage,
       ...(currentRoll.dc !== undefined ? { dc: currentRoll.dc } : {}),

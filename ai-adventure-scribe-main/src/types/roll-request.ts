@@ -7,6 +7,8 @@ export interface RollRequest {
   advantage?: boolean;
   disadvantage?: boolean;
   modifier?: number; // Base modifier if not in formula
+  // The engine proposed this roll and adds its own bonus to the die; the dialog must not recompute it
+  engineOwned?: boolean;
   // NEW: Flag for auto-executing NPC rolls (DM rolling "behind the screen")
   autoExecute?: boolean;
   actorName?: string; // Name of who's rolling (e.g., "Goblin Archer", "Orc Warrior")

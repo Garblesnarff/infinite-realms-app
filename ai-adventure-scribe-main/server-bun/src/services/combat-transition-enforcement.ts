@@ -237,6 +237,8 @@ export async function enforceCombatTransitionContract(params: {
   history?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   provider: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
+  /** What the player typed this turn; the prose attack floor only reads an attack the player declared. */
+  playerInput?: string;
   /**
    * Records an engine fact for the DM's next read (#2563). A deferred scene end must
    * tell the DM the fight is not over, or it keeps narrating the fight as finished
@@ -265,7 +267,7 @@ export async function enforceCombatTransitionContract(params: {
   // Acceptance before judgement: the response is rewritten into the engine's dialect first,
   // and everything downstream — validation, correction, the text handed back to the client —
   // sees the rewritten form. An attack can no longer fail to resolve because of its envelope.
-  const acceptance = acceptWhateverWasEmitted(parsed, prompt, combatActive);
+  const acceptance = acceptWhateverWasEmitted(parsed, prompt, combatActive, params.playerInput);
   let accepted = withAcceptance(result, acceptance);
   const { translation, inference } = acceptance;
   // Declared actions resolve BEFORE the end-of-combat transition is evaluated (#2524).
@@ -388,7 +390,7 @@ export async function enforceCombatTransitionContract(params: {
   // writing the old dialect again is translated again, silently; one that answers in prose is
   // read out of its prose again.
   const retryAcceptance = retryParsed
-    ? acceptWhateverWasEmitted(retryParsed, prompt, combatActive)
+    ? acceptWhateverWasEmitted(retryParsed, prompt, combatActive, params.playerInput)
     : null;
   let retryAccepted = retryAcceptance ? withAcceptance(retry, retryAcceptance) : retry;
   if (

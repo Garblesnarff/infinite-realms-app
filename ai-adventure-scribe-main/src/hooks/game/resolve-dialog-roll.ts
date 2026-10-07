@@ -42,7 +42,9 @@ export function resolveDialogRollFormula(
   request: RollRequest,
   character: Character | null,
 ): DialogRollFormula {
-  if (!CHARACTER_MODIFIER_TYPES.has(request.type)) {
+  // An engine prompt carries the bonus the engine itself proposed (a DEX crossbow is +3, not the
+  // STR +5 recomputed here) and the engine adds it to the natural die (#2641).
+  if (request.engineOwned || !CHARACTER_MODIFIER_TYPES.has(request.type)) {
     return rawFormula(request.formula);
   }
 

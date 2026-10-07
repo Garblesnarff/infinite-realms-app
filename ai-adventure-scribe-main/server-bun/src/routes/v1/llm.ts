@@ -551,6 +551,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         history,
         provider,
         responseSchema,
+        playerInput,
         // #2563: a scene end deferred at generation time writes the refusal fact the
         // end route writes on a 409, so the DM's next read knows the fight is not over.
         // Loaded lazily: the tactical-action graph reaches the db client, and this

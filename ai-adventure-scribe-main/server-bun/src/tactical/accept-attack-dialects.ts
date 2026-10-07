@@ -37,10 +37,11 @@ export function acceptWhateverWasEmitted(
   parsed: DMResponse,
   prompt: string,
   combatActive: boolean,
+  playerInput?: string,
 ): AcceptedResponse {
   const translation = translateLegacyAttackRolls(parsed, prompt, combatActive);
   const translated = translation?.response ?? parsed;
-  const inference = inferProseAttackIntent(translated, prompt, combatActive);
+  const inference = inferProseAttackIntent(translated, prompt, combatActive, playerInput);
   return {
     response: inference ? applyProseAttackIntent(translated, inference) : translated,
     translation,
