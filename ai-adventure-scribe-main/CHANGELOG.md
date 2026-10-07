@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.29.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.29.1...v0.29.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **combat:** write action-bar combat results to the chat as engine rows ([#2622](https://github.com/Garblesnarff/infinite-realms-production/issues/2622)) ([#2630](https://github.com/Garblesnarff/infinite-realms-production/issues/2630)) ([6e454a4](https://github.com/Garblesnarff/infinite-realms-production/commit/6e454a449c1c30361ceba1c8f90cf5db8151d703))
+
 ## [0.29.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.29.0...v0.29.1) (2026-10-06)
 
 
