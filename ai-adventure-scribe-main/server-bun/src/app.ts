@@ -18,7 +18,6 @@ import { authRoutes } from './routes/v1/auth';
 import { charactersRoutes } from './routes/v1/characters';
 import { llmRoutes } from './routes/v1/llm';
 import { imageRoutes } from './routes/v1/images';
-import { aiProxyRoutes } from './routes/v1/ai-proxy';
 import { ttsRoutes } from './routes/v1/tts';
 import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 import { billingRoutes } from './routes/v1/billing';
@@ -270,7 +269,6 @@ export function createApp() {
 
   // Image routes (AI image generation)
   app.use(imageRoutes);
-  app.use(aiProxyRoutes);
   app.use(ttsRoutes);
 
   // Blog admin auth routes (separate from WorkOS)

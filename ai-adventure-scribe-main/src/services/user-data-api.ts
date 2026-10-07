@@ -585,12 +585,6 @@ export const userDataApi = {
     request(
       `/v1/sessions/${encodeURIComponent(sessionId)}/messages?offset=${offset}&limit=${limit}`,
     ),
-  sessionMessageExists: async (sessionId: string, messageId: string): Promise<boolean> => {
-    const result = await request<{ exists: boolean }>(
-      `/v1/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`,
-    );
-    return result.exists;
-  },
   saveSessionMessages: (
     sessionId: string,
     messages: SessionMessagePayload | SessionMessagePayload[],

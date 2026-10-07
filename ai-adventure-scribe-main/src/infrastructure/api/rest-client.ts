@@ -332,7 +332,6 @@ export interface GenerateTextParams {
   history?: LLMHistoryMessage[];
   provider?: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
-  onStream?: (chunk: string) => void;
   /** Aborts the request; the caller treats the resulting AbortError as a cancel. */
   signal?: AbortSignal;
   requestType?: 'user' | 'system';
@@ -529,7 +528,7 @@ class LlmApiClient {
       'openrouter';
 
     const makeReq = async (provider: 'openrouter' | 'gemini', model?: string) =>
-      this.fetchWithAuth(params.onStream ? '/v1/llm/generate/stream' : '/v1/llm/generate', {
+      this.fetchWithAuth('/v1/llm/generate', {
         method: 'POST',
         retryBudgetMs: BACKGROUND_LLM_RETRY_BUDGET_MS,
         ...(params.signal ? { signal: params.signal } : {}),
@@ -552,44 +551,6 @@ class LlmApiClient {
 
     try {
       const res = await makeReq(preferredProvider);
-      if (params.onStream && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let raw = '';
-        let emittedText = '';
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          raw += chunk;
-          if (params.responseSchema) {
-            const startMatch = /"text"\s*:\s*"/.exec(raw);
-            if (startMatch?.index !== undefined) {
-              const start = startMatch.index + startMatch[0].length;
-              let end = start;
-              let escaped = false;
-              for (; end < raw.length; end += 1) {
-                const char = raw[end];
-                if (char === '"' && !escaped) break;
-                escaped = char === '\\' && !escaped;
-                if (char !== '\\') escaped = false;
-              }
-              try {
-                const decoded = JSON.parse(`"${raw.slice(start, end)}"`) as string;
-                const delta = decoded.slice(emittedText.length);
-                if (delta) params.onStream(delta);
-                emittedText = decoded;
-              } catch {
-                // Wait for the remainder of an escape sequence in the next chunk.
-              }
-            }
-          } else {
-            params.onStream(chunk);
-          }
-        }
-        this.lastGenerateRequestId = this.lastRequestId;
-        return raw;
-      }
       const data = (await res.json()) as {
         text?: string;
         provider?: 'openrouter' | 'gemini';

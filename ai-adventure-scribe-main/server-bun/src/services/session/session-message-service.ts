@@ -268,25 +268,6 @@ export class SessionMessageService {
     });
   }
 
-  static async messageExists(
-    sessionId: string,
-    messageId: string,
-    userId: string,
-  ): Promise<boolean> {
-    const session = await db.query.gameSessions.findFirst({
-      where: (session, { and, eq }) =>
-        and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
-      columns: { id: true },
-    });
-    if (!session) throw new NotFoundError('Session', sessionId);
-
-    const message = await db.query.dialogueHistory.findFirst({
-      where: and(eq(dialogueHistory.id, messageId), eq(dialogueHistory.sessionId, sessionId)),
-      columns: { id: true },
-    });
-    return Boolean(message);
-  }
-
   /**
    * Get recent messages for session (paginated)
    */

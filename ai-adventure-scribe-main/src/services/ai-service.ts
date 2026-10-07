@@ -130,7 +130,7 @@ export class AIService {
   }
 
   /**
-   * Simplified chat with AI DM for MVP with fallback and streaming support
+   * Simplified chat with AI DM for MVP with fallback
    * Uses a single AI call instead of complex agent system
    * Now includes voice segmentation for multi-voice narration
    */
@@ -138,7 +138,6 @@ export class AIService {
     message: string;
     context: GameContext;
     conversationHistory?: ChatMessage[];
-    onStream?: (chunk: string) => void;
     userPlan?: 'free' | 'pro' | 'enterprise' | 'tester';
     turnCount?: number;
     relevantMemories?: Memory[];
@@ -509,7 +508,6 @@ export class AIService {
           temperature: 0.9,
           maxTokens: 8192,
           responseSchema: dmResponseSchema,
-          onStream: params.onStream,
           onResponseMetadata: params.onProviderResponse,
           metrics: promptMetrics,
           combatEntry,

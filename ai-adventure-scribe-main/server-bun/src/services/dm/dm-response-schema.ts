@@ -618,7 +618,3 @@ export function rewriteNarrationSegmentsFromEnvelope(
   const parsed = parseDmResponse(envelope);
   return parsed.success ? JSON.stringify(parsed.data) : originalText;
 }
-
-export function rewriteNarrationSegmentsInLlmText(text: string): string {
-  return rewriteNarrationSegmentsFromEnvelope(parseLlmEnvelope(text), text);
-}

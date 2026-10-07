@@ -102,25 +102,6 @@ export function createNarrativeFactRoutes({
         }),
       },
     )
-    .get(
-      '/history',
-      async ({ query, user }) => {
-        const facts = await ledger.history(
-          query.session_id,
-          user!.userId,
-          query.subject_name,
-          query.predicate,
-        );
-        return facts.map(mapFact);
-      },
-      {
-        query: t.Object({
-          session_id: t.String(),
-          subject_name: t.String({ minLength: 1, maxLength: 200 }),
-          predicate: t.String({ minLength: 1, maxLength: 200 }),
-        }),
-      },
-    )
     .post(
       '/',
       async ({ body, user }) => {

@@ -79,9 +79,6 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
       }),
     },
   )
-  .get('/:id/messages/:messageId', async ({ params, user }) => ({
-    exists: await SessionMessageService.messageExists(params.id, params.messageId, user!.userId),
-  }))
   .post(
     '/:id/messages',
     async ({ params, body, user, set }) => {
@@ -97,9 +94,8 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
           // Dynamic import on purpose (same pattern as llm.ts): a static
           // import pulls the vitals service's db client into every route-test
           // module load, which the isolated harness cannot load.
-          const { CharacterVitalsService } = await import(
-            '../../services/character-vitals-service.js'
-          );
+          const { CharacterVitalsService } =
+            await import('../../services/character-vitals-service.js');
           const session = await SessionService.getSessionById(params.id, user!.userId);
           if (session.characterId) {
             const vitals = await CharacterVitalsService.getVitals(

@@ -2,7 +2,7 @@
 import { useRef, useCallback, useState } from 'react';
 
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
-import type { ImageRequest, LocalNotice } from '@/hooks/ai/types';
+import type { LocalNotice } from '@/hooks/ai/types';
 import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import type { AIResponse } from '@/services/ai-service';
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
@@ -87,13 +87,6 @@ export interface DiceRoll {
   context: string; // Description of what the roll is for
 }
 
-export interface StructuredAIResponse {
-  response: string;
-  narration_segments?: NarrationSegment[];
-  dice_rolls?: DiceRoll[];
-  roll_requests?: RollRequest[];
-}
-
 /**
  * Render guidance handed to the early-text callback.
  *
@@ -123,7 +116,6 @@ export interface EnhancedChatMessage extends ChatMessage {
   narrationSegments?: NarrationSegment[];
   diceRolls?: DiceRoll[];
   rollRequests?: RollRequest[];
-  imageRequests?: ImageRequest[];
   /** Backwards-compatible newline-delimited engine notice text. */
   localNotice?: string;
   /** Engine-authored notices with per-message persistence ownership. */
@@ -1034,7 +1026,6 @@ export const useAIResponse = (): {
         let responseText = result.text;
         let narrationSegments = result.narrationSegments;
         const diceRolls = (result.dice_rolls || []) as DiceRoll[];
-        const imageRequests: ImageRequest[] | undefined = undefined;
 
         // Process DM Actions and transitions
         const dmActionsResult = await handleDmActionsAndTransitions({
@@ -1267,7 +1258,6 @@ export const useAIResponse = (): {
           narrationSegments,
           diceRolls,
           rollRequests: processedRolls.playerRollRequests,
-          imageRequests,
           localNotice,
           localNotices,
           sceneSpec: (result.scene_spec as SceneSpec | null | undefined) ?? null,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseDmResponse, rewriteNarrationSegmentsInLlmText } from '../dm-response-schema.js';
+import { parseDmResponse } from '../dm-response-schema.js';
 import {
   deriveNarrationSegments,
   normalizeNarrationWhitespace,
@@ -155,22 +155,6 @@ describe('deriveNarrationSegments', () => {
     expect(prose).toContain("you've");
     expect(prose).toContain("don't");
     concatEqualsSource(text, segments);
-  });
-
-  test('canonicalizes a breathless hint to goblin on the generate rewrite path', () => {
-    const payload = envelope('The goblin squeaks. "Please, no."', [
-      {
-        type: 'character',
-        text: 'Please, no.',
-        character: 'Goblin Runner',
-        voice_category: 'breathless',
-      },
-    ]);
-    const rewritten = JSON.parse(rewriteNarrationSegmentsInLlmText(JSON.stringify(payload))) as {
-      narration_segments: Array<{ type: string; voice_category: string | null }>;
-    };
-    const spoken = rewritten.narration_segments.find((segment) => segment.type === 'character');
-    expect(spoken?.voice_category).toBe('goblin');
   });
 
   test('coverage mismatch logs and falls back to one narrator segment', () => {

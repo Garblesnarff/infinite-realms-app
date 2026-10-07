@@ -330,39 +330,12 @@ export const useMessageQueue = (sessionId: string | null) => {
     [sessionId],
   );
 
-  /**
-   * Retry all queued messages
-   */
-  const retryQueuedMessages = useCallback(async () => {
-    if (messageQueue.length > 0 && queueStatus !== 'processing') {
-      try {
-        const batch = messageQueue.slice(0, MAX_BATCH_SIZE);
-        await processMessageBatch(batch);
-        setMessageQueue((prev) => prev.slice(MAX_BATCH_SIZE));
-
-        if (messageQueue.length > 0) {
-          // Schedule next batch
-          setTimeout(retryQueuedMessages, INITIAL_RETRY_DELAY);
-        }
-      } catch (error) {
-        logger.error('Error processing message batch:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to process message batch. Will retry later.',
-          variant: 'destructive',
-        });
-      }
-    }
-  }, [messageQueue, queueStatus, processMessageBatch, toast]);
-
   return useMemo(
     () => ({
       messageMutation,
       queueStatus,
-      queueLength: messageQueue.length,
-      retryQueuedMessages,
       updateMessage,
     }),
-    [messageMutation, queueStatus, messageQueue.length, retryQueuedMessages, updateMessage],
+    [messageMutation, queueStatus, updateMessage],
   );
 };

@@ -228,68 +228,6 @@ describe('useMessages', () => {
     expect(result.current.data).toEqual([]);
   });
 
-  it('should add a message successfully', async () => {
-    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
-      messages: [],
-      total: 0,
-      hasMore: false,
-    });
-    vi.mocked(userDataApi.saveSessionMessages).mockResolvedValue({});
-
-    const { result } = renderHook(() => useMessages(sessionId), { wrapper });
-
-    const newMessage = {
-      id: 'new-msg',
-      text: 'New message',
-      sender: 'player' as const,
-      timestamp: new Date().toISOString(),
-      context: {
-        location: 'Forest',
-        emotion: 'Happy',
-        intent: 'Explore',
-      },
-    };
-
-    await act(async () => {
-      await result.current.addMessage(newMessage);
-    });
-
-    expect(userDataApi.saveSessionMessages).toHaveBeenCalledWith(
-      sessionId,
-      expect.objectContaining({
-        id: 'new-msg',
-        message: 'New message',
-        context: expect.objectContaining({
-          location: 'Forest',
-          emotion: 'Happy',
-          intent: 'Explore',
-        }),
-      }),
-    );
-  });
-
-  it('should handle error when adding a message', async () => {
-    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
-      messages: [],
-      total: 0,
-      hasMore: false,
-    });
-    const mockError = { message: 'Insert failed' };
-    vi.mocked(userDataApi.saveSessionMessages).mockRejectedValue(mockError);
-
-    const { result } = renderHook(() => useMessages(sessionId), { wrapper });
-
-    const newMessage = {
-      id: 'fail-msg',
-      text: 'Failed message',
-      sender: 'player' as const,
-      timestamp: new Date().toISOString(),
-    };
-
-    // addMessage() rethrows whatever userDataApi.saveSessionMessages() rejects with verbatim.
-    await expect(result.current.addMessage(newMessage)).rejects.toEqual(mockError);
-  });
-
   it('should reset pagination', async () => {
     vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
       messages: [

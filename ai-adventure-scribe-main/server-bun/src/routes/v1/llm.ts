@@ -10,7 +10,6 @@
 
 import { Elysia, t } from 'elysia';
 
-import { alert } from '../../lib/alerting.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { isAdmin } from '../../middleware/admin.js';
@@ -142,7 +141,6 @@ function rollRequestDcsOf(envelope: Record<string, unknown> | null): Array<numbe
   });
 }
 
-const MEMORY_EXTRACTION_DEGRADED_REASON = 'memory_extraction_unavailable';
 const LLM_GENERATE_DEGRADED_REASON = 'llm_generate_unavailable';
 const LLM_GENERATE_DEGRADED_TEXT =
   'The Dungeon Master pauses. The storyteller service did not answer; try your action again.';
@@ -187,9 +185,8 @@ function logPromptSections(
 }
 
 // #2158: the browser must not choose the model or the output size. The DM turn asks for 8192
-// (src/services/ai-service.ts), so that is the generate ceiling; extraction asks for 1000-1200.
+// (src/services/ai-service.ts), so that is the generate ceiling.
 const MAX_GENERATE_TOKENS = 8192;
-const MAX_EXTRACT_TOKENS = 1500;
 
 const clampMaxTokens = (value: unknown, fallback: number, max: number): number => {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
@@ -714,179 +711,6 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             }),
           }),
         ),
-      }),
-    },
-  )
-
-  .post(
-    '/generate/stream',
-    async ({ request, body, set }) => {
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
-      const {
-        prompt,
-        model,
-        maxTokens = 1000,
-        temperature = 0.8,
-        history,
-        provider = 'openrouter',
-        responseSchema,
-        sessionId,
-        dmReply,
-      } = body || {};
-      const safeModel = allowlistedModel(model);
-      const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_GENERATE_TOKENS);
-      warnIfClientInputReplaced(
-        'generate/stream',
-        user.userId,
-        { model, maxTokens: body?.maxTokens },
-        { model: safeModel, maxTokens: safeMaxTokens },
-      );
-      const quota = await AIUsageService.checkQuotaAndConsume({
-        userId: user.userId,
-        plan: user.plan,
-        type: 'llm',
-        units: 1,
-      });
-      if (!quota.allowed) {
-        set.status = 402;
-        return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
-      }
-      // #2533: streamed generates get the same one-line section count,
-      // only once quota has been consumed for an actual provider call.
-      logPromptSections(prompt, history, sessionId, Boolean(dmReply));
-      try {
-        const stream = await LLMProviderService.stream({
-          prompt,
-          model: safeModel,
-          maxTokens: safeMaxTokens,
-          temperature,
-          history,
-          provider,
-          responseSchema,
-        });
-        return new Response(stream, {
-          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' },
-        });
-      } catch (error) {
-        logger.error({ msg: 'LLM_STREAM_ERROR', error });
-        set.status = 200;
-        return degradedGenerateEnvelope();
-      }
-    },
-    {
-      body: t.Object({
-        prompt: t.String(),
-        // #2533: correlates the stream route's [PromptSections] line to a
-        // session, as /generate already does (#2050 C). Sent by
-        // LlmApiClient.generateText on every call.
-        sessionId: t.Optional(t.String({ maxLength: 255 })),
-        // #2533: present only on the main DM turn (same shape as
-        // /generate), so the [PromptSections] line can label it dm:true.
-        dmReply: t.Optional(
-          t.Object({
-            messageId: t.String({
-              pattern:
-                '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-            }),
-            inCombat: t.Optional(t.Boolean()),
-            narrationGated: t.Optional(t.Boolean()),
-          }),
-        ),
-        player_input: t.Optional(t.String({ maxLength: 20_000 })),
-        model: t.Optional(t.String()),
-        maxTokens: t.Optional(t.Number()),
-        temperature: t.Optional(t.Number()),
-        history: t.Optional(
-          t.Array(
-            t.Object({
-              role: t.Union([t.Literal('user'), t.Literal('assistant'), t.Literal('system')]),
-              content: t.String(),
-            }),
-          ),
-        ),
-        provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
-        responseSchema: t.Optional(t.Any()),
-      }),
-    },
-  )
-
-  /**
-   * Extract memories via LLM (uses a live-verified primary with a live-verified fallback)
-   * POST /v1/llm/extract
-   *
-   * Uses OPENROUTER_EXTRACTION_MODEL as primary,
-   * falls back to OPENROUTER_EXTRACTION_FALLBACK_MODEL on error.
-   */
-  .post(
-    '/extract',
-    async ({ request, body, set }) => {
-      // Direct auth check
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
-
-      const { prompt, maxTokens = 1000 } = body || {};
-
-      if (!prompt || typeof prompt !== 'string') {
-        set.status = 400;
-        return { error: 'Missing prompt' };
-      }
-
-      // Use system quota for extraction (doesn't count against user's chat quota)
-      const quota = await AIUsageService.checkQuotaAndConsume({
-        userId: user.userId,
-        plan: user.plan,
-        type: 'llm_system',
-        units: 1,
-      });
-      if (!quota.allowed) {
-        set.status = 402;
-        return { error: 'AI quota exceeded', resetAt: quota.resetAt };
-      }
-
-      const safeMaxTokens = clampMaxTokens(maxTokens, 1000, MAX_EXTRACT_TOKENS);
-      warnIfClientInputReplaced(
-        'extract',
-        user.userId,
-        { maxTokens: body?.maxTokens },
-        { maxTokens: safeMaxTokens },
-      );
-
-      const result = await LLMProviderService.extract({
-        prompt,
-        maxTokens: safeMaxTokens,
-      });
-
-      if (result.error) {
-        alert('llm_extraction_degraded', { error: result.error });
-        set.status = 200;
-        return { memories: [], degraded: true, reason: MEMORY_EXTRACTION_DEGRADED_REASON };
-      }
-
-      if (result.usage && result.provider) {
-        await AIUsageService.recordProviderUsage({
-          userId: user.userId,
-          plan: user.plan,
-          type: 'llm_system',
-          provider: result.provider,
-          model: result.model,
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-        });
-      }
-
-      return { text: result.text, model: result.model };
-    },
-    {
-      body: t.Object({
-        prompt: t.String(),
-        maxTokens: t.Optional(t.Number()),
       }),
     },
   );

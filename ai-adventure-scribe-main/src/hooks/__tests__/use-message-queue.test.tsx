@@ -292,7 +292,6 @@ describe('useMessageQueue', () => {
 
     expect(mockSaveSessionMessages).toHaveBeenCalledTimes(1);
     expect(result.current.queueStatus).toBe('error');
-    expect(result.current.queueLength).toBe(0);
   });
 
   it('should add to queue and set error status after max retries', async () => {
@@ -315,7 +314,6 @@ describe('useMessageQueue', () => {
 
     expect(mockInsert).toHaveBeenCalledTimes(3);
     expect(result.current.queueStatus).toBe('error');
-    expect(result.current.queueLength).toBe(1);
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
         variant: 'destructive',
@@ -351,8 +349,6 @@ describe('useMessageQueue', () => {
       await handled;
     });
 
-    expect(result.current.queueLength).toBe(1);
-
     // 2. Send a new message that succeeds
     (uuidv4 as any).mockReturnValue('new-uuid');
     await act(async () => {
@@ -364,7 +360,6 @@ describe('useMessageQueue', () => {
 
     // 5 calls: 3 for failed message, 1 for successful message, 1 for batch
     expect(mockInsert).toHaveBeenCalledTimes(5);
-    expect(result.current.queueLength).toBe(0);
     // Verify batch insert had the context
     expect(mockInsert).toHaveBeenLastCalledWith(
       expect.arrayContaining([
@@ -380,75 +375,6 @@ describe('useMessageQueue', () => {
     );
   });
 
-  it('should manually retry queued messages', async () => {
-    mockInsert
-      // 3 fails for the first message
-      .mockResolvedValueOnce({ error: { message: 'Fail' } })
-      .mockResolvedValueOnce({ error: { message: 'Fail' } })
-      .mockResolvedValueOnce({ error: { message: 'Fail' } })
-      // success for manual retry
-      .mockResolvedValue({ error: null });
-
-    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
-
-    await act(async () => {
-      const p = result.current.messageMutation.mutateAsync({
-        text: 'Queued',
-        sender: 'player',
-      } as any);
-      const handled = p.catch(() => undefined);
-      await vi.runAllTimersAsync();
-      await handled;
-    });
-
-    expect(result.current.queueLength).toBe(1);
-
-    // Manually retry
-    await act(async () => {
-      await result.current.retryQueuedMessages();
-    });
-
-    expect(mockInsert).toHaveBeenCalledTimes(4); // 3 fails + 1 batch success
-    expect(result.current.queueLength).toBe(0);
-  });
-
-  it('should handle failure in manual retry', async () => {
-    mockInsert
-      // 3 fails for the first message
-      .mockResolvedValueOnce({ error: { message: 'Fail' } })
-      .mockResolvedValueOnce({ error: { message: 'Fail' } })
-      .mockResolvedValueOnce({ error: { message: 'Fail' } })
-      // failure for manual retry
-      .mockResolvedValue({ error: { message: 'Manual retry failed' } });
-
-    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
-
-    await act(async () => {
-      const p = result.current.messageMutation.mutateAsync({
-        text: 'Queued',
-        sender: 'player',
-      } as any);
-      const handled = p.catch(() => undefined);
-      await vi.runAllTimersAsync();
-      await handled;
-    });
-
-    expect(result.current.queueLength).toBe(1);
-
-    // Manually retry
-    await act(async () => {
-      await result.current.retryQueuedMessages();
-    });
-
-    expect(mockInsert).toHaveBeenCalledTimes(4);
-    expect(result.current.queueLength).toBe(1); // Still 1 because it failed
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Error',
-        description: 'Failed to process message batch. Will retry later.',
-      }),
-    );
-  });
   describe('opening scene (#2379)', () => {
     it('marks the greeting so the server keeps one per session, and sends exactly the body the route tests post', async () => {
       const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
@@ -500,8 +426,14 @@ describe('useMessageQueue', () => {
         await vi.runAllTimersAsync();
         await handled;
       });
+      // A later successful save flushes the retry queue (the manual
+      // retryQueuedMessages trigger was deleted in #2664 step 1; the queue
+      // now flushes only on the next success).
       await act(async () => {
-        await result.current.retryQueuedMessages();
+        await result.current.messageMutation.mutateAsync({
+          text: 'After',
+          sender: 'player',
+        } as any);
       });
 
       expect(mockSaveSessionMessages).toHaveBeenLastCalledWith(sessionId, [
@@ -550,7 +482,6 @@ describe('useMessageQueue', () => {
       });
       // A 4xx is the same answer every time: one attempt, nothing parked for later.
       expect(mockInsert).toHaveBeenCalledTimes(1);
-      expect(result.current.queueLength).toBe(0);
 
       await act(async () => {
         await result.current.messageMutation.mutateAsync({
@@ -580,7 +511,6 @@ describe('useMessageQueue', () => {
         await vi.runAllTimersAsync();
         await p;
       });
-      expect(result.current.queueLength).toBe(1);
 
       (uuidv4 as any).mockReturnValue('roll-uuid');
       await act(async () => {
@@ -593,7 +523,6 @@ describe('useMessageQueue', () => {
         await vi.runAllTimersAsync();
       });
       expect(mockInsert).toHaveBeenCalledTimes(5);
-      expect(result.current.queueLength).toBe(1);
     });
   });
 
@@ -639,7 +568,6 @@ describe('useMessageQueue', () => {
       // it is the generic error the round-1 FIX review forbade.
       expect(mockToast).not.toHaveBeenCalled();
       // A refusal is never parked for a later flush either.
-      expect(result.current.queueLength).toBe(0);
     });
 
     it('still toasts for a refusal that is not the fallen-character one', async () => {

@@ -10,8 +10,6 @@ let generatedResult: Record<string, unknown> = {
   provider: 'openrouter',
   model: 'test/model',
 };
-let streamedInputs: Record<string, unknown>[] = [];
-let streamError: unknown = new Error('upstream stream failed');
 let quotaAllowed = true;
 
 // Captures for the #1688 prompt-metrics log lines. Unlike the other logger
@@ -73,11 +71,6 @@ mock.module('../../../services/llm-provider-service.js', () => ({
       generatedInput = input;
       generatedInputs.push(input);
       return generatedQueue.shift() || generatedResult;
-    },
-    stream: async (input: Record<string, unknown>) => {
-      streamedInputs.push(input);
-      if (streamError) throw streamError;
-      return new ReadableStream<Uint8Array>();
     },
   },
 }));
@@ -155,7 +148,6 @@ describe('#2158 client model and maxTokens guard', () => {
       clientBody({ model: 'anthropic/claude-opus-4', maxTokens: 1_000_000 }),
     );
     await postLlm('generate', clientBody({ maxTokens: 8192 }));
-    await postLlm('generate/stream', clientBody({ model: 'anthropic/claude-opus-4' }));
     const replaced = loggedWarnEntries.filter((e) => e.msg === 'LLM_CLIENT_INPUT_REPLACED');
     expect(replaced).toEqual([
       {
@@ -165,25 +157,15 @@ describe('#2158 client model and maxTokens guard', () => {
         modelDropped: true,
         clamped: true,
       },
-      {
-        msg: 'LLM_CLIENT_INPUT_REPLACED',
-        route: 'generate/stream',
-        userId: 'smoke-user',
-        modelDropped: true,
-        clamped: false,
-      },
     ]);
   });
 
-  it('applies the same guard on the stream route', async () => {
-    streamedInputs = [];
-    await postLlm(
+  it('the deleted stream route now 404s through the real pipeline app (#2664 step 1)', async () => {
+    const response = await postLlm(
       'generate/stream',
       clientBody({ model: 'anthropic/claude-opus-4', maxTokens: 1_000_000 }),
     );
-    expect(streamedInputs).toHaveLength(1);
-    expect(streamedInputs[0].model).toBeUndefined();
-    expect(streamedInputs[0].maxTokens).toBe(8192);
+    expect(response.status).toBe(404);
   });
 });
 
@@ -302,28 +284,16 @@ describe('POST /v1/llm/generate HTTP contract', () => {
     }
   });
 
-  it('returns the same degraded 200 envelope when streaming fails upstream', async () => {
-    streamError = new Error('upstream stream failed');
-    try {
-      const response = await app.handle(
-        new Request('http://localhost/v1/llm/generate/stream', {
-          method: 'POST',
-          headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
-          body: JSON.stringify({ prompt: 'hello' }),
-        }),
-      );
+  it('the deleted stream route 404s instead of returning the degraded envelope (#2664 step 1)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate/stream', {
+        method: 'POST',
+        headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: 'hello' }),
+      }),
+    );
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/json');
-      expect(await response.json()).toEqual({
-        parsed: false,
-        degraded: true,
-        reason: 'llm_generate_unavailable',
-        text: 'The Dungeon Master pauses. The storyteller service did not answer; try your action again.',
-      });
-    } finally {
-      streamError = new Error('upstream stream failed');
-    }
+    expect(response.status).toBe(404);
   });
 
   it('issues exactly one corrective re-prompt for an inactive combat-signaling roll', async () => {
@@ -723,7 +693,7 @@ describe('POST /v1/llm/generate HTTP contract', () => {
       }
     });
 
-    it('logs the stream route [PromptSections] line with its session id', async () => {
+    it('the deleted stream route logs no [PromptSections] line and 404s (#2664 step 1)', async () => {
       loggedInfoLines = [];
       const response = await postLlm(
         'generate/stream',
@@ -734,14 +704,8 @@ describe('POST /v1/llm/generate HTTP contract', () => {
         }),
       );
 
-      expect(response.status).toBe(200);
-      const lines = loggedInfoLines.filter((entry) => entry.startsWith('[PromptSections] '));
-      expect(lines).toHaveLength(1);
-      const parsed = JSON.parse(lines[0].slice('[PromptSections] '.length));
-      expect(parsed.sessionId).toBe('stream-session-1');
-      expect(parsed.dm).toBe(true);
-      expect(parsed.campaign_and_canon).toBeGreaterThan(0);
-      expect(lines[0]).not.toContain('SENTINEL');
+      expect(response.status).toBe(404);
+      expect(loggedInfoLines.filter((entry) => entry.startsWith('[PromptSections] '))).toEqual([]);
     });
   });
 });

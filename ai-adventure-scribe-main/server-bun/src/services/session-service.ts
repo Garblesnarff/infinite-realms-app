@@ -477,24 +477,6 @@ export class SessionService {
   }
 
   /**
-   * Add message to session
-   * Delegates to SessionMessageService.
-   */
-  static async addMessage(
-    data: {
-      sessionId: string;
-      speakerType: string;
-      speakerId?: string;
-      message: string;
-      context?: Record<string, unknown>;
-      images?: unknown[];
-    },
-    userId: string,
-  ): Promise<DialogueHistory> {
-    return SessionMessageService.addMessage(data, userId);
-  }
-
-  /**
    * Get recent messages for session (paginated)
    * Delegates to SessionMessageService.
    */

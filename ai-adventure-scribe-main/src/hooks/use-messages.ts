@@ -1,14 +1,11 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 
 import type { ChatMessage, MessageContext } from '@/types/game';
 
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
-import {
-  narrationSegmentsFromPersistedContext,
-  persistableNarrationSegments,
-} from '@/utils/narration-segments';
+import { narrationSegmentsFromPersistedContext } from '@/utils/narration-segments';
 
 const PAGE_SIZE = 50;
 
@@ -38,7 +35,6 @@ export interface UseMessagesReturn {
   hasMore: boolean;
   loadMore: () => void;
   resetPagination: () => void;
-  addMessage: (message: ChatMessage) => Promise<void>;
 }
 
 export interface UseMessagesOptions {
@@ -55,7 +51,6 @@ export const useMessages = (
   sessionId: string | null,
   options: UseMessagesOptions = {},
 ): UseMessagesReturn => {
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
@@ -202,62 +197,6 @@ export const useMessages = (
     }
   }, [hasMore, query.isFetching, page]);
 
-  // ⚡ Bolt: Wrap addMessage in useCallback to ensure stable identity across renders,
-  // preventing unnecessary re-renders of memoized child components that receive this callback.
-  const addMessage = useCallback(
-    async (message: ChatMessage) => {
-      if (!sessionId) return;
-
-      // ⚡ Bolt: Optimistically add the message to the local state for zero-latency UI feedback.
-      // This ensures the message appears instantly in the chat list before the DB insert completes.
-      setAllMessages((prev) => {
-        const currentMessages = messagesSessionId === sessionId ? prev : [];
-        if (currentMessages.some((m) => m.id === message.id)) return currentMessages;
-        return [...currentMessages, message];
-      });
-      setMessagesSessionId(sessionId);
-
-      try {
-        const narrationSegments = persistableNarrationSegments(message);
-        const rollRequests = message.rollRequests ?? message.context?.rollRequests;
-        const contextData = message.context
-          ? {
-              location: message.context.location || null,
-              emotion: message.context.emotion || null,
-              intent: message.context.intent || null,
-              handouts: message.context.handouts || null,
-              narration_segments: narrationSegments,
-              ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
-            }
-          : narrationSegments
-            ? {
-                narration_segments: narrationSegments,
-                ...(Array.isArray(rollRequests) ? { rollRequests } : {}),
-              }
-            : Array.isArray(rollRequests)
-              ? { rollRequests }
-              : {};
-
-        await userDataApi.saveSessionMessages(sessionId, {
-          id: message.id,
-          message: message.text,
-          speaker_type: message.sender,
-          context: contextData,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Invalidate all message queries to refetch and sync with DB sequence numbers
-        await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
-      } catch (error) {
-        // ⚡ Bolt: Rollback optimistic update on error to keep UI in sync with source of truth
-        setAllMessages((prev) => prev.filter((m) => m.id !== message.id));
-        logger.error('Failed to add message:', error);
-        throw error;
-      }
-    },
-    [sessionId, messagesSessionId, queryClient],
-  );
-
   const messagesReady =
     !!sessionId &&
     page === 0 &&
@@ -276,7 +215,6 @@ export const useMessages = (
       hasMore,
       loadMore,
       resetPagination,
-      addMessage,
     }),
     [
       allMessages,
@@ -289,7 +227,6 @@ export const useMessages = (
       hasMore,
       loadMore,
       resetPagination,
-      addMessage,
     ],
   );
 };
