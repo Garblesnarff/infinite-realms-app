@@ -22,6 +22,7 @@ import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { advanceNpcTurnsToPlayer } from '@/services/combat/advance-npc-turns-to-player';
 import {
   AOE_AWAITING_CONFIRMATION,
   executeAoECombatAction,
@@ -70,7 +71,6 @@ import {
   reportSheetCastResult,
 } from '@/services/combat/sheet-cast-progress';
 import { standingHostiles } from '@/services/combat/sheet-cast-save-hold';
-import { userDataApi } from '@/services/user-data-api';
 import {
   combatRoundFrom,
   combatSequenceFrom,
@@ -796,9 +796,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
     if (sessionId && isPlayerActor(actorId, participants)) {
-      const advanced = signal
-        ? await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id, signal)
-        : await userDataApi.advanceNpcTurns(sessionId, turnHolder?.id);
+      const advanced = await advanceNpcTurnsToPlayer(sessionId, turnHolder?.id, signal);
       return appendAutonomousNpcResults(advanced, true);
     }
     return 'turn_ended';
@@ -922,9 +920,11 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ) {
         npcTurnRecoverySpent = true;
         const refusalIndex = refusedActions.length - 1;
-        const advanced = signal
-          ? await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId, signal)
-          : await userDataApi.advanceNpcTurns(sessionId, refusedCurrentParticipantId);
+        const advanced = await advanceNpcTurnsToPlayer(
+          sessionId,
+          refusedCurrentParticipantId,
+          signal,
+        );
         const recoveryBoundary = appendAutonomousNpcResults(advanced, true);
         playerRound = advanced.round ?? playerRound;
         if (recoveryBoundary === 'combat_ended') break;
@@ -1363,6 +1363,20 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         ...narration,
         combatEngineBlocks: orderedEngineBlocks,
         text: `${narratedText}\n\n${repairNotice}`.trim(),
+      };
+    }
+    // The engine paused with a creature up and the DM said nothing: the reply must still say whose
+    // turn it is, or it goes out empty and the player has nothing to act on (#2641).
+    if (
+      !narratedText.trim() &&
+      turnHolder &&
+      !isPlayerActor(turnHolder.id ?? '', participants) &&
+      !combatOver
+    ) {
+      return {
+        ...narration,
+        text: repairedTurnNotice(turnHolder),
+        combatEngineBlocks: orderedEngineBlocks,
       };
     }
     return orderedEngineTranscriptLines.length || handedOffText !== narratedText

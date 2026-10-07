@@ -548,9 +548,11 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     expect(end).toBeEnabled();
     fireEvent.click(end);
     await waitFor(() => expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true));
-    await waitFor(() => expect(screen.queryByRole('button', { name: /End turn/ })).toBeNull());
-    expect(advances).toBe(0);
-    expect(held).toBe('emil-1');
+    // End turn used to stop at the boundary: the creature that was up waited for the player to
+    // type, and this test pinned that (advances 0, still held by Emil). The chip now runs the
+    // creatures that follow, as the attack chip does (#2641), and the turn comes back (round 2).
+    await waitFor(() => expect(advances).toBe(1));
+    expect(held).toBe('scholar-1');
     expect(round).toBe(2);
     expect(requests.filter((r) => r.intent?.type === 'end_turn')).toEqual([
       expect.objectContaining({ intent: { type: 'end_turn', actorId: 'scholar-1' } }),

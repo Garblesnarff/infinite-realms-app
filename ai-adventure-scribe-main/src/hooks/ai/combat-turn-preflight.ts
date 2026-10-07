@@ -1,6 +1,7 @@
 import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 
 import logger from '@/lib/logger';
+import { advanceNpcTurnsToPlayer } from '@/services/combat/advance-npc-turns-to-player';
 import { userDataApi } from '@/services/user-data-api';
 import { slugify } from '@/utils/slug';
 
@@ -181,9 +182,7 @@ export async function preflightNpcTurnsBeforePlayerDeclaration(params: {
   const expectedCurrentParticipantId = activeEncounter.currentTurnParticipantId;
   if (!expectedCurrentParticipantId) return { activeEncounter, isInCombat: true };
 
-  const npcTurns = signal
-    ? await userDataApi.advanceNpcTurns(sessionId, expectedCurrentParticipantId, signal)
-    : await userDataApi.advanceNpcTurns(sessionId, expectedCurrentParticipantId);
+  const npcTurns = await advanceNpcTurnsToPlayer(sessionId, expectedCurrentParticipantId, signal);
   const refreshedEncounter = await refreshCombatState(signal);
   if (refreshedEncounter?.phase === 'active') {
     const refreshedPlayer = playerParticipantForCharacter(refreshedEncounter, characterId);

@@ -6,6 +6,7 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
 import { getAuthHeaders } from '@/services/auth/TokenService';
+import { advanceNpcTurnsToPlayer } from '@/services/combat/advance-npc-turns-to-player';
 import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
@@ -22,7 +23,6 @@ import {
   npcTurnOptions,
 } from '@/services/combat/combat-outcome-transcript';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
-import { userDataApi } from '@/services/user-data-api';
 import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
@@ -146,6 +146,37 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       return null;
     }
 
+    /** The creatures that follow the player's turn: run them, and put each one's result in the chat. */
+    const advanceNpcsAndReport = async (currentParticipantId?: string | null): Promise<void> => {
+      if (!encounter?.sessionId) return;
+      const advanced = await advanceNpcTurnsToPlayer(
+        encounter.sessionId,
+        currentParticipantId ?? undefined,
+      );
+      const npcNotices = advanced.results.map((npcResult) =>
+        formatNpcTurnOutcome(
+          npcResult,
+          roster,
+          npcTurnOptions(encounter.participants, npcResult.action.target_ids?.[0]),
+        ),
+      );
+      for (const [index, notice] of npcNotices.entries()) {
+        const wake = formatWakeParts(advanced.results[index].engineResult);
+        await sendEngineNotice(onSendMessage, {
+          text: [...notice.lines, ...wake.map((part) => part.line)].join('\n\n'),
+          cards: [...notice.cards, ...wake.map((part) => part.card)],
+        });
+      }
+      const endLine = formatCombatEndLine(advanced.endedReason);
+      if (endLine) await sendEngineNotice(onSendMessage, { text: endLine, cards: [] });
+      if (advanced.capReached && advanced.transcriptLines.length) {
+        await sendEngineNotice(onSendMessage, {
+          text: advanced.transcriptLines.join('\n\n'),
+          cards: [],
+        });
+      }
+    };
+
     const handleSelection = async (option: ActionOption) => {
       if (!combatState.isInCombat || !encounter?.id) {
         await onOptionSelect(createPlayerMessageFromOption(option));
@@ -180,6 +211,13 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
               (result as { endedReason?: string | null } | null)?.endedReason,
             );
             if (endLine) await sendEngineNotice(onSendMessage, { text: endLine, cards: [] });
+          } else {
+            // The server has no auto-advance: without this the creature that is up waits for
+            // the player to type something (#2641).
+            await advanceNpcsAndReport(
+              (result as { currentParticipant?: { id?: string } | null } | null)?.currentParticipant
+                ?.id,
+            );
           }
           await refreshCombatState();
         } else if (
@@ -333,34 +371,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
               ].join('\n\n'),
               cards: turnParts.map((part) => part.card),
             });
-            if (encounter.sessionId && !turn?.combatEnded) {
-              const advanced = await userDataApi.advanceNpcTurns(
-                encounter.sessionId,
-                turn?.currentParticipant?.id ?? undefined,
-              );
-              const npcNotices = advanced.results.map((npcResult) =>
-                formatNpcTurnOutcome(
-                  npcResult,
-                  roster,
-                  npcTurnOptions(encounter.participants, npcResult.action.target_ids?.[0]),
-                ),
-              );
-              for (const [index, notice] of npcNotices.entries()) {
-                const wake = formatWakeParts(advanced.results[index].engineResult);
-                await sendEngineNotice(onSendMessage, {
-                  text: [...notice.lines, ...wake.map((part) => part.line)].join('\n\n'),
-                  cards: [...notice.cards, ...wake.map((part) => part.card)],
-                });
-              }
-              const endLine = formatCombatEndLine(advanced.endedReason);
-              if (endLine) await sendEngineNotice(onSendMessage, { text: endLine, cards: [] });
-              if (advanced.capReached && advanced.transcriptLines.length) {
-                await sendEngineNotice(onSendMessage, {
-                  text: advanced.transcriptLines.join('\n\n'),
-                  cards: [],
-                });
-              }
-            }
+            if (!turn?.combatEnded) await advanceNpcsAndReport(turn?.currentParticipant?.id);
           }
           await refreshCombatState();
         } else {
