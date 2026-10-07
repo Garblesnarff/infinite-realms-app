@@ -45,6 +45,15 @@ export interface CombatTranscriptAction {
   target_ids?: string[];
 }
 
+type PlayerExitOutcome = {
+  exit?: 'fled' | 'surrendered' | 'withdrew' | null;
+  opportunityAttack?: {
+    attackerName?: string;
+    hit?: boolean;
+    finalDamage?: number;
+  } | null;
+};
+
 export interface CombatEngineResult {
   resolvedAs?: string;
   actorName?: string;
@@ -306,6 +315,128 @@ export function formatCombatEngineParts(
   return parts;
 }
 
+function formatPlayerExitParts(
+  action: CombatTranscriptAction,
+  value: Record<string, unknown>,
+  roster: readonly EngineRosterEntry[],
+): EngineTranscriptPart[] | null {
+  if (action.action_type !== 'flee' && action.action_type !== 'yield') return null;
+  if (!('exit' in value) && !('opportunityAttack' in value)) return null;
+
+  const outcome = value as PlayerExitOutcome;
+  const actor = facingName(undefined, action.actor_id, roster);
+  const parts: EngineTranscriptPart[] = [];
+  const opportunityAttack = outcome.opportunityAttack;
+  if (
+    opportunityAttack &&
+    typeof opportunityAttack.attackerName === 'string' &&
+    typeof opportunityAttack.hit === 'boolean'
+  ) {
+    parts.push(
+      ...formatCombatEngineParts(
+        {
+          actor_id: opportunityAttack.attackerName,
+          action_type: 'attack',
+          target_ids: [actor],
+        },
+        {
+          actorName: opportunityAttack.attackerName,
+          targetName: actor,
+          hit: opportunityAttack.hit,
+          finalDamage: isFiniteNumber(opportunityAttack.finalDamage)
+            ? opportunityAttack.finalDamage
+            : 0,
+        },
+        roster,
+        { targetHp: true },
+      ),
+    );
+  }
+
+  const exitLine =
+    outcome.exit === 'fled'
+      ? `⚙️ Engine: ${actor} fled from combat.`
+      : outcome.exit === 'surrendered'
+        ? `⚙️ Engine: ${actor} yielded.`
+        : outcome.exit === 'withdrew'
+          ? `⚙️ Engine: ${actor} withdrew from combat.`
+          : `⚙️ Engine: ${actor} did not get away; they are downed.`;
+  parts.push({
+    line: exitLine,
+    card: {
+      kind: 'move',
+      side: 'party',
+      line: exitLine,
+      title:
+        outcome.exit === 'fled'
+          ? `${actor} fled from combat`
+          : outcome.exit === 'surrendered'
+            ? `${actor} yielded`
+            : outcome.exit === 'withdrew'
+              ? `${actor} withdrew from combat`
+              : `${actor} did not get away; downed`,
+    },
+  });
+  return parts;
+}
+
+/** Format any action-bar engine result, including tactical movement results. */
+export function formatCombatActionParts(
+  action: CombatTranscriptAction,
+  value: unknown,
+  roster: readonly EngineRosterEntry[] = [],
+  options: EngineOutcomeOptions = {},
+): EngineTranscriptPart[] {
+  const combatParts = formatCombatEngineParts(action, value, roster, options);
+  if (combatParts.length || !isRecord(value)) return combatParts;
+
+  const playerExitParts = formatPlayerExitParts(action, value, roster);
+  if (playerExitParts) return playerExitParts;
+
+  if (action.action_type === 'move') {
+    const path = Array.isArray(value.path) ? value.path : [];
+    const destination = path.at(-1);
+    if (isRecord(destination) && isFiniteNumber(destination.x) && isFiniteNumber(destination.y)) {
+      const actor = facingName(undefined, action.actor_id, roster);
+      const line = `⚙️ Engine: ${actor} moved to (${destination.x}, ${destination.y}).`;
+      return [
+        {
+          line,
+          card: {
+            kind: 'move',
+            side: engineCardSide(action.actor_id, roster, false),
+            line,
+            title: `${actor} moves to (${destination.x}, ${destination.y})`,
+          },
+        },
+      ];
+    }
+  }
+
+  const verb: Record<string, string> = {
+    dash: 'dashed',
+    dodge: 'dodged',
+    disengage: 'disengaged',
+    flee: 'fled from combat',
+    yield: 'yielded',
+  };
+  const actionVerb = verb[action.action_type ?? ''];
+  if (!actionVerb) return [];
+  const actor = facingName(undefined, action.actor_id, roster);
+  const line = `⚙️ Engine: ${actor} ${actionVerb}.`;
+  return [
+    {
+      line,
+      card: {
+        kind: 'move',
+        side: engineCardSide(action.actor_id, roster, false),
+        line,
+        title: `${actor} ${actionVerb}`,
+      },
+    },
+  ];
+}
+
 const joinedLines = (parts: readonly EngineTranscriptPart[]): string | null =>
   parts.length ? parts.map((part) => part.line).join('\n\n') : null;
 
@@ -422,13 +553,24 @@ export function formatWakeParts(value: unknown): EngineTranscriptPart[] {
   });
 }
 
+/** Explain the authoritative reason for a terminal combat boundary. */
+export function formatCombatEndLine(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  const explanation: Record<string, string> = {
+    last_hostile_defeated: 'the last hostile was defeated',
+    party_defeated: 'the party was defeated',
+    death_save_failed: 'a death save ended the fight',
+  };
+  return `⚙️ Engine: Combat ended — ${explanation[reason] ?? reason} (reason: ${reason}).`;
+}
+
 /** The engine lines one NPC turn printed (its own outcome, then the server's extra lines) and their cards. */
 export function formatNpcTurnOutcome(
   npcResult: { action: CombatTranscriptAction; engineResult?: unknown; transcriptLines?: string[] },
   roster: readonly EngineRosterEntry[],
   options: EngineOutcomeOptions = {},
 ): { lines: string[]; cards: EngineResultCard[] } {
-  const parts = formatCombatEngineParts(npcResult.action, npcResult.engineResult, roster, options);
+  const parts = formatCombatActionParts(npcResult.action, npcResult.engineResult, roster, options);
   const outcome = joinedLines(parts);
   const printed = npcResult.transcriptLines ?? [];
   return {

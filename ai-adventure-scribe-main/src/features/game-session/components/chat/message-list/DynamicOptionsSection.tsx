@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { ChatMessage } from '@/types/game';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
 import { ActionOptions } from '@/components/game/ActionOptions';
@@ -11,6 +12,15 @@ import {
   type ClientCombatIntent,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import {
+  engineRosterOf,
+  formatCombatActionParts,
+  formatCombatEndLine,
+  formatDeathSaveParts,
+  formatNpcTurnOutcome,
+  formatWakeParts,
+  npcTurnOptions,
+} from '@/services/combat/combat-outcome-transcript';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { userDataApi } from '@/services/user-data-api';
 import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
@@ -29,6 +39,35 @@ interface DynamicOptionsSectionProps {
   options: ActionOption[];
   onOptionSelect: (optionText: string) => Promise<void>;
   hasDynamicOverlay: boolean;
+  onSendMessage?: (message: ChatMessage) => Promise<void>;
+}
+
+type EngineNotice = {
+  text: string;
+  cards: ReturnType<typeof formatCombatActionParts>[number]['card'][];
+};
+
+async function sendEngineNotice(
+  onSendMessage: DynamicOptionsSectionProps['onSendMessage'],
+  notice: EngineNotice,
+): Promise<void> {
+  if (!onSendMessage || !notice.text) return;
+  const message: ChatMessage = {
+    text: notice.text,
+    sender: 'system',
+    timestamp: new Date().toISOString(),
+    persist: true,
+    context: {
+      intent: 'combat_pending_intent',
+      ...(notice.cards.length ? { engineCards: notice.cards } : {}),
+    },
+  };
+  try {
+    await onSendMessage(message);
+  } catch {
+    // The action already resolved authoritatively; a persistence failure must not turn it into a
+    // retryable combat action or leave the action bar stuck in its pending state.
+  }
 }
 
 /**
@@ -40,10 +79,14 @@ interface DynamicOptionsSectionProps {
  * section when unrelated message list state changes.
  */
 export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React.memo(
-  ({ options, onOptionSelect, hasDynamicOverlay }) => {
+  ({ options, onOptionSelect, hasDynamicOverlay, onSendMessage }) => {
     const { state: combatState, refreshCombatState } = useCombat();
     const [error, setError] = useState<string | null>(null);
     const encounter = combatState.activeEncounter;
+    const roster = useMemo(
+      () => engineRosterOf(encounter?.participants),
+      [encounter?.participants],
+    );
     const [legalState, setLegalState] = useState<{ actorId?: string; actions: LegalAction[] }>({
       actions: [],
     });
@@ -121,20 +164,44 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       setError(null);
       try {
         if (action.type === 'end_turn') {
-          await executeAuthoritativeCombatIntent(encounter.id, { type: 'end_turn', actorId });
+          const result = await executeAuthoritativeCombatIntent(encounter.id, {
+            type: 'end_turn',
+            actorId,
+          });
+          // A death save settled at the boundary, and a stable hero waking once the fight
+          // ended on them (#2518), are engine facts like any other: one row.
+          const turnParts = [...formatDeathSaveParts(result, roster), ...formatWakeParts(result)];
+          await sendEngineNotice(onSendMessage, {
+            text: turnParts.map((part) => part.line).join('\n\n'),
+            cards: turnParts.map((part) => part.card),
+          });
+          if ((result as { combatEnded?: boolean } | null)?.combatEnded) {
+            const endLine = formatCombatEndLine(
+              (result as { endedReason?: string | null } | null)?.endedReason,
+            );
+            if (endLine) await sendEngineNotice(onSendMessage, { text: endLine, cards: [] });
+          }
           await refreshCombatState();
         } else if (
           action.type === 'move' &&
           typeof action.x === 'number' &&
           typeof action.y === 'number'
         ) {
-          await executeAuthoritativeCombatIntent(
+          const result = await executeAuthoritativeCombatIntent(
             encounter.id,
             { type: 'move', actorId, x: action.x, y: action.y },
             'dm',
             Date.now(),
             'typed',
           );
+          const parts = [
+            ...formatCombatActionParts({ actor_id: actorId, action_type: 'move' }, result, roster),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
           await refreshCombatState();
         } else if (action.type === 'flee' || action.type === 'yield') {
           // #2580: the way out of a fight the end guard holds open. The one-line confirm names
@@ -148,24 +215,52 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             !window.confirm(`Flee? ${provoked} gets one attack as you turn.`)
           )
             return;
-          await executeAuthoritativeCombatIntent(
+          const result = await executeAuthoritativeCombatIntent(
             encounter.id,
             { type: action.type, actorId },
             'dm',
             Date.now(),
             'action_bar',
           );
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: action.type },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
           // No `end_turn` after it: the exit has already taken the player out of the turn order,
           // and a turn boundary for a participant who no longer has one is a second refusal.
           await refreshCombatState();
-        } else if (action.type === 'dash') {
-          await executeAuthoritativeCombatIntent(
+        } else if (
+          action.type === 'dash' ||
+          action.type === 'dodge' ||
+          action.type === 'disengage'
+        ) {
+          const result = await executeAuthoritativeCombatIntent(
             encounter.id,
-            { type: 'dash', actorId },
+            { type: action.type, actorId },
             'dm',
             Date.now(),
             'typed',
           );
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: action.type },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
           await refreshCombatState();
         } else if (action.type === 'attack' && action.targetIds?.[0]) {
           // #2563: an attack option runs the declare → dialog → commit pipeline
@@ -195,6 +290,24 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             die.d20,
             'action_bar',
           );
+          const playerParts = [
+            ...formatCombatActionParts(structuredAction, execution.result, roster),
+            ...formatDeathSaveParts(execution.result, roster),
+            ...formatWakeParts(execution.result),
+          ];
+          const playerEndLine =
+            execution.boundary === 'combat_ended'
+              ? formatCombatEndLine(
+                  (execution.result as { endedReason?: string | null } | null)?.endedReason,
+                )
+              : null;
+          await sendEngineNotice(onSendMessage, {
+            text: [
+              ...playerParts.map((part) => part.line),
+              ...(playerEndLine ? [playerEndLine] : []),
+            ].join('\n\n'),
+            cards: playerParts.map((part) => part.card),
+          });
           const movementOnly =
             die.movementOnly ||
             (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
@@ -205,12 +318,48 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             const turn = (await executeAuthoritativeCombatIntent(encounter.id, {
               type: 'end_turn',
               actorId,
-            })) as { currentParticipant?: { id?: string } | null } | null;
-            if (encounter.sessionId) {
-              await userDataApi.advanceNpcTurns(
+            })) as {
+              currentParticipant?: { id?: string } | null;
+              deathSaves?: unknown[];
+              combatEnded?: boolean;
+              endedReason?: string | null;
+            } | null;
+            const turnParts = [...formatDeathSaveParts(turn, roster), ...formatWakeParts(turn)];
+            const turnEndLine = turn?.combatEnded ? formatCombatEndLine(turn.endedReason) : null;
+            await sendEngineNotice(onSendMessage, {
+              text: [
+                ...turnParts.map((part) => part.line),
+                ...(turnEndLine ? [turnEndLine] : []),
+              ].join('\n\n'),
+              cards: turnParts.map((part) => part.card),
+            });
+            if (encounter.sessionId && !turn?.combatEnded) {
+              const advanced = await userDataApi.advanceNpcTurns(
                 encounter.sessionId,
                 turn?.currentParticipant?.id ?? undefined,
               );
+              const npcNotices = advanced.results.map((npcResult) =>
+                formatNpcTurnOutcome(
+                  npcResult,
+                  roster,
+                  npcTurnOptions(encounter.participants, npcResult.action.target_ids?.[0]),
+                ),
+              );
+              for (const [index, notice] of npcNotices.entries()) {
+                const wake = formatWakeParts(advanced.results[index].engineResult);
+                await sendEngineNotice(onSendMessage, {
+                  text: [...notice.lines, ...wake.map((part) => part.line)].join('\n\n'),
+                  cards: [...notice.cards, ...wake.map((part) => part.card)],
+                });
+              }
+              const endLine = formatCombatEndLine(advanced.endedReason);
+              if (endLine) await sendEngineNotice(onSendMessage, { text: endLine, cards: [] });
+              if (advanced.capReached && advanced.transcriptLines.length) {
+                await sendEngineNotice(onSendMessage, {
+                  text: advanced.transcriptLines.join('\n\n'),
+                  cards: [],
+                });
+              }
             }
           }
           await refreshCombatState();

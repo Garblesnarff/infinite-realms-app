@@ -196,6 +196,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
   let refuse: boolean;
   let requests: any[];
   let proposals: any[];
+  let persisted: any[];
   let advances: number;
   let round: number;
   let extraAction: { type: string; label: string } | undefined;
@@ -214,6 +215,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     response = undefined;
     requests = [];
     proposals = [];
+    persisted = [];
     advances = 0;
     round = 1;
     extraAction = undefined;
@@ -392,6 +394,9 @@ describe('D3: combat options use the real response hook (#2547)', () => {
           options={[]}
           hasDynamicOverlay={true}
           onOptionSelect={onOptionSelect}
+          onSendMessage={async (message) => {
+            persisted.push(message);
+          }}
         />
       </>
     );
@@ -577,20 +582,15 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     ['disengage', 'Disengage'],
   ])('submits %s through the authoritative intent path', async (type, label) => {
     extraAction = { type, label };
-    vi.mocked(AIService.chatWithDM)
-      .mockReset()
-      .mockImplementation(async () =>
-        type === 'dash'
-          ? (envelope() as any)
-          : (envelope([{ ...declaredSwing, action_type: type, target_ids: [] }]) as any),
-      );
     render(<Game />);
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(label) }));
     await waitFor(() =>
       expect(requests.some((request) => request.intent?.type === type)).toBe(true),
     );
-    if (type === 'dash') expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
-    else expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).toBe(label);
+    // #2622 changed expectation: Dodge and Disengage used to be sent to the DM as chat text. The
+    // engine resolves them like Dash, so the DM is never asked.
+    await waitFor(() => expect(persisted.length).toBe(type === 'dash' ? 0 : 1));
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
     expect(requests.filter((request) => request.intent?.type === type)).toEqual([
       expect.objectContaining({
         source: 'dm',
@@ -598,13 +598,28 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         intent: expect.objectContaining({ type, actorId: 'scholar-1' }),
       }),
     ]);
-    if (type === 'dash')
-      expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(false);
-    else {
-      expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(true);
-      expect(response.text).not.toContain('undefined');
-      expect(advances).toBe(1);
-      expect(round).toBe(2);
+    expect(requests.some((request) => request.intent?.type === 'end_turn')).toBe(false);
+    expect(response).toBeUndefined();
+    expect(advances).toBe(0);
+    expect(round).toBe(1);
+    if (type === 'dash') {
+      // The engine answers Dash with no result, so there is nothing to persist.
+      expect(persisted).toEqual([]);
+    } else {
+      // The engine's own row, persisted once, as a system message with its card.
+      expect(persisted).toEqual([
+        expect.objectContaining({
+          sender: 'system',
+          persist: true,
+          text: expect.stringMatching(
+            new RegExp(`⚙️ Engine: .* ${type === 'dodge' ? 'dodged' : 'disengaged'}\\.`),
+          ),
+          context: expect.objectContaining({
+            intent: 'combat_pending_intent',
+            engineCards: [expect.objectContaining({ kind: 'move' })],
+          }),
+        }),
+      ]);
     }
   });
 });

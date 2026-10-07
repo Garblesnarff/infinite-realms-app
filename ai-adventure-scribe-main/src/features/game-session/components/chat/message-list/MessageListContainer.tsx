@@ -249,6 +249,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       genErrorByMessage={genErrorByMessage}
                       onGenerateScene={onGenerateScene}
                       onOptionSelect={onOptionSelect}
+                      onSendMessage={onSendMessage}
                       combatOptionsVisible={combatOptionsVisible}
                       characterName={group.messages[0].characterName}
                       previousEngineKey={previousEngineKeys.get(message)}

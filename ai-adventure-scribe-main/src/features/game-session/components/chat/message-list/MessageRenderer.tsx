@@ -35,6 +35,7 @@ interface MessageRendererProps {
   genErrorByMessage: Record<string, string>;
   onGenerateScene: (message: ChatMessage & { id?: string; timestamp?: string }) => Promise<void>;
   onOptionSelect: (optionText: string) => Promise<void>;
+  onSendMessage?: (message: ChatMessage) => Promise<void>;
   characterName?: string;
   /** The divider key of the last engine block printed before this message (#2417). */
   previousEngineKey?: string;
@@ -63,6 +64,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     genErrorByMessage,
     onGenerateScene,
     onOptionSelect,
+    onSendMessage,
     characterName: _characterName,
     previousEngineKey,
     combatOptionsVisible = false,
@@ -193,6 +195,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             <DynamicOptionsSection
               options={parsedMessage?.options ?? []}
               onOptionSelect={onOptionSelect}
+              onSendMessage={onSendMessage}
               hasDynamicOverlay={false}
             />
           )}
@@ -214,6 +217,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       prev.previousEngineKey === next.previousEngineKey &&
       prev.onGenerateScene === next.onGenerateScene &&
       prev.onOptionSelect === next.onOptionSelect;
+
+    if (prev.onSendMessage !== next.onSendMessage) return false;
 
     if (!basicPropsMatch || prev.combatOptionsVisible !== next.combatOptionsVisible) return false;
 

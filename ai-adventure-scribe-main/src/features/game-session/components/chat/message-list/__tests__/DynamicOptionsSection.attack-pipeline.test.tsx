@@ -48,6 +48,13 @@ vi.mock('@/services/combat/combat-action-executor', () => ({
 }));
 vi.mock('@/services/combat/player-attack-roll', () => ({
   askPlayerForAttackDie: vi.fn(),
+  isPlayerActor: (
+    participantId: string,
+    participants: Array<{ id: string; participantType?: string }>,
+  ) =>
+    participants.some(
+      (participant) => participant.id === participantId && participant.participantType === 'player',
+    ),
 }));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { advanceNpcTurns: vi.fn() },
@@ -66,6 +73,7 @@ vi.mock('@/components/game/ActionOptions', () => ({
 
 describe('the attack option runs the declare pipeline, never DM text (#2563)', () => {
   const onOptionSelect = vi.fn().mockResolvedValue(undefined);
+  const onSendMessage = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -156,5 +164,253 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       expect.objectContaining({ type: 'end_turn' }),
     );
     expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
+  it('persists each player and NPC engine result exactly once, including zero damage and the end reason (#2622)', async () => {
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 0, newHp: 2 }],
+      boundary: null,
+      result: {
+        actorName: 'The Scholar',
+        targetName: 'Light-Eater Swarm 1',
+        d20: 15,
+        attackBonus: 4,
+        totalAttackRoll: 19,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 0,
+        targetNewHp: 2,
+        targetCondition: 'wounded',
+        weaponResolution: { resolved: 'Quarterstaff' },
+      },
+    } as any);
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+      currentParticipant: { id: SWARM_1_ID },
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+      results: [
+        {
+          action: {
+            actor_id: SWARM_1_ID,
+            action_type: 'attack',
+            target_ids: [SCHOLAR_ID],
+            weapon_id: null,
+            spell_id: null,
+            slot_level: null,
+            movement_feet: 0,
+          },
+          engineResult: {
+            actorName: 'Light-Eater Swarm 1',
+            targetName: 'The Scholar',
+            hit: true,
+            finalDamage: 2,
+            targetNewHp: 8,
+            targetIsConscious: true,
+          },
+          outcomes: [{ participantId: SCHOLAR_ID, hit: true, finalDamage: 2, newHp: 8 }],
+          actorIsPlayer: false,
+          transcriptLines: [],
+        },
+      ],
+      combatEnded: true,
+      endedReason: 'party_defeated',
+      capReached: false,
+      transcriptLines: [],
+    } as any);
+
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(3));
+    const rows = onSendMessage.mock.calls.map(
+      ([message]) => message as { text: string; persist?: boolean },
+    );
+    expect(rows.map((row) => row.text).join('\n')).toContain('0 damage');
+    expect(rows.map((row) => row.text).join('\n')).toContain('2 damage');
+    expect(rows.map((row) => row.text).join('\n')).toContain('party_defeated');
+    expect(rows.every((row) => row.persist === true)).toBe(true);
+    expect(new Set(rows.map((row) => row.text)).size).toBe(3);
+  });
+
+  it('persists the opportunity attack before the correct flee or yield result (#2580)', async () => {
+    const cases = [
+      {
+        action: { type: 'flee', label: 'Flee' },
+        result: {
+          exit: 'fled',
+          opportunityAttack: {
+            attackerName: 'Light-Eater Swarm 1',
+            hit: true,
+            finalDamage: 3,
+          },
+        },
+        expectRow: (text: string) => {
+          expect(text).toContain('Light-Eater Swarm 1');
+          expect(text).toContain('3 damage');
+          expect(text).toContain('fled');
+        },
+      },
+      {
+        action: { type: 'flee', label: 'Flee' },
+        result: {
+          exit: null,
+          opportunityAttack: {
+            attackerName: 'Light-Eater Swarm 1',
+            hit: true,
+            finalDamage: 7,
+          },
+        },
+        expectRow: (text: string) => {
+          expect(text).toContain('Light-Eater Swarm 1');
+          expect(text).toContain('7 damage');
+          expect(text).toContain('did not get away');
+          expect(text).not.toContain('fled');
+        },
+      },
+      {
+        action: { type: 'yield', label: 'Yield' },
+        result: { exit: 'surrendered', opportunityAttack: null },
+        expectRow: (text: string) => {
+          expect(text).toContain('yielded');
+          expect(text).not.toContain('fled');
+        },
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      vi.mocked(globalThis.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ actorId: SCHOLAR_ID, actions: [testCase.action] }),
+      } as Response);
+      vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue(testCase.result as any);
+
+      const view = render(
+        <DynamicOptionsSection
+          options={[]}
+          onOptionSelect={onOptionSelect}
+          onSendMessage={onSendMessage}
+          hasDynamicOverlay
+        />,
+      );
+      fireEvent.click(await screen.findByText(testCase.action.label));
+
+      await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+      const row = onSendMessage.mock.calls[0][0] as { text: string };
+      testCase.expectRow(row.text);
+      view.unmount();
+      onSendMessage.mockClear();
+    }
+  });
+
+  const rowsText = () =>
+    onSendMessage.mock.calls.map(([message]) => (message as { text: string }).text);
+
+  it('persists the attack, then one row for the death save, the DEAD line and the end reason when the turn boundary ends the fight (#2618)', async () => {
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 2, newHp: 2 }],
+      boundary: null,
+      result: {
+        actorName: 'The Scholar',
+        targetName: 'Light-Eater Swarm 1',
+        d20: 15,
+        attackBonus: 4,
+        totalAttackRoll: 19,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 2,
+        targetNewHp: 2,
+        targetCondition: 'wounded',
+        weaponResolution: { resolved: 'Quarterstaff' },
+      },
+    } as any);
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+      currentParticipant: { id: SWARM_1_ID },
+      deathSaves: [
+        {
+          participantId: SCHOLAR_ID,
+          roll: 3,
+          isSuccess: false,
+          successes: 0,
+          failures: 3,
+          isDead: true,
+        },
+      ],
+      combatEnded: true,
+      endedReason: 'death_save_failed',
+    } as any);
+
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(2));
+    const rows = rowsText();
+    expect(rows[0]).toContain('2 damage');
+    expect(rows[1]).toContain('The Scholar rolled 3 on their death saving throw');
+    expect(rows[1]).toContain('DEAD');
+    // The boundary's own result is one row: its death save, then the end reason.
+    expect(rows[1].match(/death saving throw/g)?.length).toBe(1);
+    expect(rows[1].match(/Combat ended/g)?.length).toBe(1);
+    expect(rows[1]).toContain('a death save ended the fight');
+    expect(new Set(rows).size).toBe(2);
+    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    const deathRow = onSendMessage.mock.calls[1][0] as { context: { engineCards: any[] } };
+    expect(deathRow.context.engineCards).toEqual([
+      expect.objectContaining({ kind: 'death_save', deathSave: { successes: 0, failures: 3 } }),
+    ]);
+  });
+
+  it("carries the stable hero's wake-up on the row of the result that ended the fight (#2518)", async () => {
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 4, newHp: 0 }],
+      boundary: 'combat_ended',
+      result: {
+        actorName: 'The Scholar',
+        targetName: 'Light-Eater Swarm 1',
+        d20: 15,
+        attackBonus: 4,
+        totalAttackRoll: 19,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 4,
+        targetNewHp: 0,
+        targetCondition: 'dead',
+        weaponResolution: { resolved: 'Quarterstaff' },
+        combatEnded: true,
+        endedReason: 'last_hostile_defeated',
+        wake: [{ name: 'The Scholar', hours: 3 }],
+      },
+    } as any);
+
+    render(
+      <DynamicOptionsSection
+        options={[]}
+        onOptionSelect={onOptionSelect}
+        onSendMessage={onSendMessage}
+        hasDynamicOverlay
+      />,
+    );
+    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+    const [row] = rowsText();
+    expect(row).toContain('4 damage');
+    expect(row).toContain('The Scholar');
+    expect(row.match(/wake/gi)?.length).toBe(1);
+    expect(row).toContain('the last hostile was defeated');
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
   });
 });
