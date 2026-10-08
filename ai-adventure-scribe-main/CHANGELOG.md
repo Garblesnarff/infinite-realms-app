@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.31.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.31.0...v0.31.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **combat:** spell-attack chips go through declare → roll → commit ([#2581](https://github.com/Garblesnarff/infinite-realms-production/issues/2581)) ([#2652](https://github.com/Garblesnarff/infinite-realms-production/issues/2652)) ([1ba0e1f](https://github.com/Garblesnarff/infinite-realms-production/commit/1ba0e1f7143facf92d350f2b005010866aa7c00a))
+
+
+### Tests
+
+* **auth:** record where tokens are stored today ([#2673](https://github.com/Garblesnarff/infinite-realms-production/issues/2673) step 2a) ([#2687](https://github.com/Garblesnarff/infinite-realms-production/issues/2687)) ([e62ec01](https://github.com/Garblesnarff/infinite-realms-production/commit/e62ec01d953b8adbe824d9f09804eb182a9d2871))
+* **map:** record map-route ownership today ([#2685](https://github.com/Garblesnarff/infinite-realms-production/issues/2685) step 2a) ([#2689](https://github.com/Garblesnarff/infinite-realms-production/issues/2689)) ([d004538](https://github.com/Garblesnarff/infinite-realms-production/commit/d004538fcc36f4c1608748d25e86f29a58acc9e5))
+
+
+### CI/CD
+
+* run the NPC engine-rows proving test in the real-DB job ([#2658](https://github.com/Garblesnarff/infinite-realms-production/issues/2658)) ([#2680](https://github.com/Garblesnarff/infinite-realms-production/issues/2680)) ([7abc243](https://github.com/Garblesnarff/infinite-realms-production/commit/7abc243d2f9fe6358046bd317ab71de22f0ed610))
+
 ## [0.31.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.3...v0.31.0) (2026-10-08)
 
 
