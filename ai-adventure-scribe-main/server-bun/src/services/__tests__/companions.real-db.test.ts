@@ -8,7 +8,16 @@
  * regressions crossed. It refuses every target except the dedicated local/CI Postgres because it
  * writes fixtures and performs startup cleanup.
  */
-import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from 'bun:test';
 import { and, eq, inArray, like } from 'drizzle-orm';
 
 import {
@@ -27,6 +36,7 @@ import {
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
+  dialogueHistory,
   gameSessions,
   sessionCompanions,
 } from '../../../../db/schema/index';
@@ -73,9 +83,19 @@ export async function preCleanCompanionFixtures(database: RealDb): Promise<void>
 
 if (hasRealDb) assertSafeCompanionDatabase(realDbUrl);
 
+if (hasRealDb) {
+  process.env.PORT ??= '8893';
+  process.env.CORS_ORIGIN ??= 'http://localhost:8891';
+  process.env.WORKOS_API_KEY ??= 'test-workos-key';
+  process.env.WORKOS_CLIENT_ID ??= 'test-workos-client';
+}
+
 const { CompanionService } = await importWithRealDb(
   () => import('../session/companion-service.js'),
 );
+const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
+const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
+const { companionRoutes } = await importWithRealDb(() => import('../../routes/v1/companions.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -201,6 +221,250 @@ describeWithDb('WebMCP companion membership and scene projections', () => {
       }
     } finally {
       await closeRealDb();
+    }
+  });
+
+  describe('companion-route ownership characterization (#2674 step 2a)', () => {
+    const otherUserId = `${COMPANION_FIXTURE_OWNER_PREFIX}other-${process.pid}`;
+    let privateSessionId: string;
+    let companionId: string;
+    let otherCampaignId: string;
+    let otherSessionId: string;
+    let previousFeatureFlag: string | undefined;
+    let restoreAuth: (() => void) | undefined;
+    let app: { handle: (request: Request) => Response | Promise<Response> };
+
+    const call = async (
+      method: string,
+      path: string,
+      caller: string,
+      body?: unknown,
+    ): Promise<{ status: number; json: Record<string, unknown> }> => {
+      const response = await app.handle(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { authorization: `Bearer ${caller}`, 'content-type': 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        }),
+      );
+      return { status: response.status, json: (await response.json()) as Record<string, unknown> };
+    };
+    const snapshot = async (): Promise<{
+      companions: (typeof sessionCompanions.$inferSelect)[];
+      dialogue: (typeof dialogueHistory.$inferSelect)[];
+      sessions: (typeof gameSessions.$inferSelect)[];
+      characters: (typeof characters.$inferSelect)[];
+      stats: (typeof characterStats.$inferSelect)[];
+    }> => ({
+      companions: await database
+        .select()
+        .from(sessionCompanions)
+        .where(eq(sessionCompanions.sessionId, privateSessionId))
+        .orderBy(sessionCompanions.id),
+      dialogue: await database
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, privateSessionId))
+        .orderBy(dialogueHistory.id),
+      sessions: await database
+        .select()
+        .from(gameSessions)
+        .where(eq(gameSessions.id, privateSessionId)),
+      characters: await database
+        .select()
+        .from(characters)
+        .where(inArray(characters.id, characterIds))
+        .orderBy(characters.id),
+      stats: await database
+        .select()
+        .from(characterStats)
+        .where(inArray(characterStats.characterId, characterIds))
+        .orderBy(characterStats.characterId),
+    });
+
+    beforeEach(async () => {
+      previousFeatureFlag = process.env.COMPANIONS_ENABLED;
+      process.env.COMPANIONS_ENABLED = 'true';
+      // Authentication alone is replaced. Keep the real auth middleware, ownership SQL,
+      // route-wide beforeHandle hook and CompanionService; restore the spy after each case
+      // because CI runs this file alongside other real-DB suites in one process.
+      const authSpy = spyOn(authModule, 'authenticateRequest').mockImplementation(
+        async (request) => {
+          const caller = request.headers.get('authorization')?.replace(/^Bearer /, '');
+          return caller === userId || caller === otherUserId
+            ? {
+                user: { userId: caller, email: 'companion@example.test', plan: 'free' },
+                error: null,
+              }
+            : { user: null, error: 'Unauthorized' };
+        },
+      );
+      restoreAuth = () => authSpy.mockRestore();
+      app = createRequestPipelineApp().use(companionRoutes);
+      [{ id: privateSessionId }] = await database
+        .insert(gameSessions)
+        .values({
+          campaignId,
+          characterId: mainCharacterId,
+          sessionNumber: 2,
+          status: 'active',
+          currentSceneDescription: "A's private gate",
+          summary: "A's private companion session",
+        })
+        .returning({ id: gameSessions.id });
+      const companion = await CompanionService.join(privateSessionId, companionOneId, userId);
+      companionId = companion.id;
+      await database.insert(dialogueHistory).values({
+        sessionId: privateSessionId,
+        speakerType: 'dm',
+        message: "A's private scene fact",
+      });
+      [{ id: otherCampaignId }] = await database
+        .insert(campaigns)
+        .values({
+          userId: otherUserId,
+          name: 'User B companion campaign',
+        })
+        .returning({ id: campaigns.id });
+      [{ id: otherSessionId }] = await database
+        .insert(gameSessions)
+        .values({
+          campaignId: otherCampaignId,
+          sessionNumber: 1,
+          status: 'active',
+        })
+        .returning({ id: gameSessions.id });
+      // This 200 proves B is authenticated and the feature is enabled, so B's 404 on A's
+      // session cannot be an invalid token, disabled feature or missing route.
+      expect(await call('GET', `/v1/sessions/${otherSessionId}/companions`, otherUserId)).toEqual({
+        status: 200,
+        json: { companions: [] },
+      });
+      expect((await snapshot()).companions).toEqual([
+        expect.objectContaining({ id: companionId, sessionId: privateSessionId, status: 'active' }),
+      ]);
+    });
+
+    afterEach(async () => {
+      try {
+        await database
+          .delete(gameSessions)
+          .where(inArray(gameSessions.id, [privateSessionId, otherSessionId].filter(Boolean)));
+        if (otherCampaignId)
+          await database.delete(campaigns).where(eq(campaigns.id, otherCampaignId));
+      } finally {
+        restoreAuth?.();
+        if (previousFeatureFlag === undefined) delete process.env.COMPANIONS_ENABLED;
+        else process.env.COMPANIONS_ENABLED = previousFeatureFlag;
+      }
+    });
+
+    test('documents #2674: another user CANNOT DELETE A’s companion today; A CAN mark it left', async () => {
+      const before = await snapshot();
+      const path = `/v1/sessions/${privateSessionId}/companions/${companionId}`;
+      expect(await call('DELETE', path, otherUserId)).toEqual({
+        status: 404,
+        json: { error: 'Session not found' },
+      });
+      expect(await snapshot()).toEqual(before);
+      const owned = await call('DELETE', path, userId);
+      expect(owned.status).toBe(200);
+      expect(owned.json.companion).toMatchObject({
+        id: companionId,
+        session_id: privateSessionId,
+        character_id: companionOneId,
+        status: 'left',
+      });
+      expect(await snapshot()).toEqual({
+        ...before,
+        companions: before.companions.map((row) => ({ ...row, status: 'left' })),
+      });
+    });
+
+    const siblings = [
+      {
+        method: 'POST',
+        suffix: '/companions',
+        label: 'join a companion',
+        body: () => ({ character_id: companionTwoId }),
+      },
+      { method: 'GET', suffix: '/companions', label: 'list A’s companions', body: () => undefined },
+      { method: 'GET', suffix: '/scene', label: 'read A’s companion scene', body: () => undefined },
+      {
+        method: 'POST',
+        suffix: '/companions/:companionId/say',
+        label: 'speak as A’s companion',
+        body: () => ({ text: 'I watch the gate.' }),
+      },
+      {
+        method: 'POST',
+        suffix: '/companions/:companionId/roll',
+        label: 'roll for A’s companion',
+        body: () => ({ kind: 'ability', name: 'wisdom', reason: 'Watch the gate' }),
+      },
+    ];
+    for (const sibling of siblings) {
+      test(`documents #2674: another user CANNOT ${sibling.label} today (${sibling.method} ${sibling.suffix})`, async () => {
+        const before = await snapshot();
+        const path = `/v1/sessions/${privateSessionId}${sibling.suffix.replace(':companionId', companionId)}`;
+        expect(await call(sibling.method, path, otherUserId, sibling.body())).toEqual({
+          status: 404,
+          json: { error: 'Session not found' },
+        });
+        expect(await snapshot()).toEqual(before);
+        const owned = await call(sibling.method, path, userId, sibling.body());
+        expect(owned.status).toBe(200);
+        const after = await snapshot();
+        if (sibling.suffix === '/companions' && sibling.method === 'POST') {
+          expect(owned.json.companion).toMatchObject({
+            character_id: companionTwoId,
+            status: 'active',
+          });
+          expect(after.companions).toHaveLength(2);
+          expect(after.companions).toContainEqual(
+            expect.objectContaining({
+              characterId: companionTwoId,
+              status: 'active',
+            }),
+          );
+        } else if (sibling.method === 'GET') {
+          expect(after).toEqual(before);
+          if (sibling.suffix === '/companions')
+            expect(owned.json.companions).toContainEqual(
+              expect.objectContaining({ id: companionId, characterId: companionOneId }),
+            );
+          else
+            expect(owned.json.dialogue_history).toContainEqual(
+              expect.objectContaining({
+                speaker_type: 'dm',
+                text: "A's private scene fact",
+              }),
+            );
+        } else {
+          expect(after.dialogue).toHaveLength(before.dialogue.length + 1);
+          expect(after.companions).toEqual(before.companions);
+          if (sibling.suffix.endsWith('/say'))
+            expect(after.dialogue).toContainEqual(
+              expect.objectContaining({ speakerType: 'companion', message: 'I watch the gate.' }),
+            );
+          else {
+            expect(owned.json).toMatchObject({
+              d20: expect.any(Number),
+              total: expect.any(Number),
+            });
+            expect(after.dialogue).toContainEqual(
+              expect.objectContaining({
+                context: expect.objectContaining({
+                  source: 'companion-roll',
+                  companion_id: companionId,
+                  d20: owned.json.d20,
+                  total: owned.json.total,
+                }),
+              }),
+            );
+          }
+        }
+      });
     }
   });
 
