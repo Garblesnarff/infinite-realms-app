@@ -50,15 +50,19 @@ export interface PlayerAttackDieParams {
 /**
  * Proposes the attack, asks the player for the die, and reports what came back.
  *
- * Returns `{ d20: undefined }` for every case where the engine should simply roll: a proposal
- * the engine refused on legality, an attack that resolved as movement because the target was
- * out of reach, a cancelled or abandoned popup, or any failure of the proposal itself. That
- * fallback is deliberate and total — the turn must always be resolvable, because a combat that
- * can wedge behind a modal is worse than a die the player did not personally throw.
+ * Returns `{ d20: undefined, autoRolled: true }` for every case where no player die was
+ * produced: a proposal the engine refused on legality, an attack that resolved as movement
+ * because the target was out of reach, a cancelled or abandoned popup, or any failure of the
+ * proposal itself.
  *
- * `autoRolled` is reported rather than left implicit so the transcript can say so out loud. A
- * player who closed the popup and came back must be able to see that the engine rolled for
- * them, and never wonder whether dice are being hidden.
+ * `autoRolled` is reported rather than left implicit so callers can decide. The action-bar
+ * caller (`DynamicOptionsSection`) treats it as a stop: the chip shows a menu alert and spends
+ * nothing, because committing an undefined die would let the engine roll for the player —
+ * the bug #2652 exists to close. Other callers (typed attacks, the DM pipeline) keep the old
+ * deliberate-and-total fallback: the turn must always be resolvable, because a combat that
+ * can wedge behind a modal is worse than a die the player did not personally throw. The
+ * transcript still says the engine rolled, so a player who closed the popup never wonders
+ * whether dice are being hidden.
  */
 export async function askPlayerForAttackDie(
   params: PlayerAttackDieParams,

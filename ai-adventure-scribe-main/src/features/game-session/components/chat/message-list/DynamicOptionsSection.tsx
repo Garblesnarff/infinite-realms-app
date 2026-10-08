@@ -21,6 +21,8 @@ import {
   formatWakeParts,
 } from '@/services/combat/combat-outcome-transcript';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
+import { resolvePlayerCombatSpell } from '@/services/combat/player-combat-spell';
+import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
@@ -28,6 +30,7 @@ type LegalAction = {
   type: ClientCombatIntent['type'];
   label: string;
   weaponId?: string;
+  spellId?: string;
   targetIds?: string[];
   x?: number;
   y?: number;
@@ -291,6 +294,13 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             action: structuredAction,
             actorLabel: actor?.name ?? 'You',
           });
+          // #2652 round 4: same gap as the spell branch — if the proposal was
+          // refused/failed or the popup did not produce a die, stop here.
+          // A movement-only approach needs no die.
+          if (!die.movementOnly && (die.autoRolled || die.d20 == null)) {
+            setError('The attack could not be made. Nothing was spent.');
+            return;
+          }
           const execution = await executeStructuredCombatActionWithBoundary(
             encounter.id,
             structuredAction,
@@ -343,6 +353,110 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
             if (!turn?.combatEnded) await advanceNpcs(turn?.currentParticipant?.id);
           }
           await refreshCombatState();
+        } else if (action.type === 'spell' && action.targetIds?.[0]) {
+          // #2581: an attack-roll spell chip runs the same declare → dialog → commit
+          // pipeline as a weapon attack. It used to send "Cast Fire Bolt" as chat text
+          // for the DM to declare, so a spell attack could be narrated as a hit before
+          // any roll (run M2's Chill Touch). Save-based and auto-hit spells keep the
+          // text path below.
+          const spell = resolvePlayerCombatSpell(action.spellId, action.spellId);
+          if (spell?.kind !== 'attack') {
+            await onOptionSelect(action.label);
+          } else {
+            const structuredAction: StructuredCombatAction = {
+              actor_id: actorId,
+              action_type: 'cast_spell',
+              target_ids: [action.targetIds[0]],
+              weapon_id: null,
+              spell_id: action.spellId ?? null,
+              slot_level: null,
+              movement_feet: 0,
+            };
+            const actor = encounter.participants.find(
+              (participant) => participant.id === actorId,
+            );
+            const cast = await askPlayerForSpellCast({
+              encounterId: encounter.id,
+              action: structuredAction,
+              actorLabel: actor?.name ?? 'You',
+              participants: encounter.participants,
+            });
+            // #2652 round 4: if the proposal was refused/failed or the popup did not
+            // produce a die, stop here. Committing with an undefined d20 would let the
+            // engine roll for the player — the bug this PR exists to close.
+            // A movement-only cast needs no die.
+            if (!cast.movementOnly && (cast.autoRolled || cast.d20 == null)) {
+              setError(
+                cast.cancelled
+                  ? 'The cast was cancelled. Nothing was spent.'
+                  : 'The spell could not be cast. Nothing was spent.',
+              );
+              return;
+            }
+            const execution = await executeStructuredCombatActionWithBoundary(
+              encounter.id,
+              structuredAction,
+              cast.d20,
+              'action_bar',
+            );
+            // The cast's engine result persists like a weapon attack's (#2622): one row.
+            const playerParts = [
+              ...formatCombatActionParts(structuredAction, execution.result, roster),
+              ...formatDeathSaveParts(execution.result, roster),
+              ...formatWakeParts(execution.result),
+            ];
+            const playerEndLine =
+              execution.boundary === 'combat_ended'
+                ? formatCombatEndLine(
+                    (execution.result as { endedReason?: string | null } | null)?.endedReason,
+                  )
+                : null;
+            await sendEngineNotice(onSendMessage, {
+              text: [
+                ...playerParts.map((part) => part.line),
+                ...(playerEndLine ? [playerEndLine] : []),
+              ].join('\n\n'),
+              cards: playerParts.map((part) => part.card),
+            });
+            const movementOnly =
+              (execution.result as { resolvedAs?: string } | null)?.resolvedAs ===
+              'movement_only';
+            // A resolved cast settles the turn, the same settlement the DM pipeline
+            // performs. A movement-only resolution spent no Action, so the turn stays
+            // open.
+            if (!movementOnly && execution.boundary === null) {
+              const turn = (await executeAuthoritativeCombatIntent(encounter.id, {
+                type: 'end_turn',
+                actorId,
+              })) as {
+                currentParticipant?: { id?: string } | null;
+                deathSaves?: unknown[];
+                combatEnded?: boolean;
+                endedReason?: string | null;
+              } | null;
+              const turnParts = [...formatDeathSaveParts(turn, roster), ...formatWakeParts(turn)];
+              const turnEndLine = turn?.combatEnded ? formatCombatEndLine(turn.endedReason) : null;
+              await sendEngineNotice(onSendMessage, {
+                text: [
+                  ...turnParts.map((part) => part.line),
+                  ...(turnEndLine ? [turnEndLine] : []),
+                ].join('\n\n'),
+                cards: turnParts.map((part) => part.card),
+              });
+              if (!turn?.combatEnded) await advanceNpcs(turn?.currentParticipant?.id);
+            }
+            await refreshCombatState();
+          }
+        } else if (action.type === 'spell' && action.spellId) {
+          // #2652 round 4: an attack-kind spell with no target must not be sent to
+          // the DM as chat text, even from a stale menu. The server withholds such
+          // chips, but the client refuses them too.
+          const spell = resolvePlayerCombatSpell(action.spellId, action.spellId);
+          if (spell?.kind === 'attack') {
+            setError('That spell needs a target. Nothing was spent.');
+            return;
+          }
+          await onOptionSelect(action.label);
         } else {
           await onOptionSelect(action.label);
         }

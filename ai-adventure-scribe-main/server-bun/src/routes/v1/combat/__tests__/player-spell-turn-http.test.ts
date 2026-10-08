@@ -527,6 +527,31 @@ describe('run M7 round 2: the player acts only on player input (#2305)', () => {
     expect(spellCommits).toHaveLength(1);
   });
 
+  it("accepts the player's own action-bar spell cast (#2581)", async () => {
+    // The exact body the "Cast Chill Touch" chip commits after the d20 dialog:
+    // the player's own die, declared with origin 'action_bar' rather than typed text.
+    const response = await postIntent({
+      intent: {
+        type: 'spell',
+        actorId: SCHOLAR_ID,
+        targetIds: [SPIDER_ID],
+        spellId: 'chill-touch',
+        spellName: 'Chill Touch',
+        d20: 8,
+      },
+      source: 'dm',
+      origin: 'action_bar',
+    });
+
+    expect(response.status).toBe(200);
+    expect(spellCommits).toEqual([
+      expect.objectContaining({ casterId: SCHOLAR_ID, targetIds: [SPIDER_ID], d20: 8 }),
+    ]);
+    expect(trackedEvents).toContainEqual(
+      expect.objectContaining({ name: 'action_accepted', action: 'spell', origin: 'action_bar' }),
+    );
+  });
+
   it('resolves no player action on a turn the player did not start', async () => {
     setPlayerRollHost(playerRolls(19));
 
@@ -549,3 +574,4 @@ describe('run M7 round 2: the player acts only on player input (#2305)', () => {
     expect(narrationCalls[0]?.authoritativeCombatResults).toEqual([]);
   });
 });
+

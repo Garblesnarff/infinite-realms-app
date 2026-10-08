@@ -1748,7 +1748,30 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
   for (const spell of spells) {
     const usesBonusAction = spell!.castingTime.toLowerCase().includes('bonus action');
     if (usesBonusAction ? actor.bonusActionUsed : actor.actionUsed) continue;
-    actions.push({ type: 'spell', label: `Cast ${spell!.name}`, spellId: spell!.id });
+    const action: Record<string, unknown> = {
+      type: 'spell',
+      label: `Cast ${spell!.name}`,
+      spellId: spell!.id,
+    };
+    // #2581: attack-roll spell chips are attack-shaped — they carry their targets so the
+    // client can run the declare → dialog → commit pipeline itself instead of sending chat
+    // text for the DM to declare (a Chill Touch narrated as a hit before any roll, run M2).
+    // Save-based and auto-hit spells keep today's text-to-DM behavior.
+    if (spell!.attackType) {
+      const targetIds = state.participants
+        .filter(
+          (participant) =>
+            participant.id !== actor.id &&
+            participant.isActive &&
+            participant.participantType !== actor.participantType,
+        )
+        .map((participant) => participant.id);
+      // No targets, no chip: an attack-shaped option without targets would fall back to
+      // chat text on the client — the M2 shape again. Weapons skip the same way.
+      if (!targetIds.length) continue;
+      action.targetIds = targetIds;
+    }
+    actions.push(action);
   }
   actions.push({ type: 'end_turn', label: 'End turn' });
   return { encounterId, version: state.encounter.version, actorId: actor.id, actions };

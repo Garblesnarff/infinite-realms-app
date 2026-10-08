@@ -9,6 +9,7 @@ import {
   executeStructuredCombatActionWithBoundary,
 } from '@/services/combat/combat-action-executor';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
+import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
 import { userDataApi } from '@/services/user-data-api';
 
 /**
@@ -56,6 +57,9 @@ vi.mock('@/services/combat/player-attack-roll', () => ({
     participants.some(
       (participant) => participant.id === participantId && participant.participantType === 'player',
     ),
+}));
+vi.mock('@/services/combat/player-spell-cast', () => ({
+  askPlayerForSpellCast: vi.fn(),
 }));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { advanceNpcTurns: vi.fn() },
@@ -461,5 +465,159 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     expect(row.match(/wake/gi)?.length).toBe(1);
     expect(row).toContain('the last hostile was defeated');
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+  });
+});
+
+describe('the spell-attack option runs the declare pipeline, never DM text (#2581)', () => {
+  const onOptionSelect = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: SCHOLAR_ID,
+        actions: [
+          {
+            type: 'spell',
+            label: 'Cast Chill Touch',
+            spellId: 'chill-touch',
+            targetIds: [SWARM_1_ID],
+          },
+        ],
+      }),
+    } as Response);
+    vi.mocked(askPlayerForSpellCast).mockResolvedValue({
+      d20: 15,
+      autoRolled: false,
+      movementOnly: false,
+    });
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 4, newHp: 1 }],
+      boundary: null,
+      result: { hit: true },
+    } as any);
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+      currentParticipant: { id: SWARM_1_ID },
+    } as any);
+    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ results: [] } as any);
+  });
+
+  it('opens the dialog and posts the declare intent with the engine ids', async () => {
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Cast Chill Touch'));
+
+    await waitFor(() => expect(askPlayerForSpellCast).toHaveBeenCalled());
+    expect(askPlayerForSpellCast).toHaveBeenCalledWith({
+      encounterId: 'encounter-d5',
+      action: {
+        actor_id: SCHOLAR_ID,
+        action_type: 'cast_spell',
+        target_ids: [SWARM_1_ID],
+        weapon_id: null,
+        spell_id: 'chill-touch',
+        slot_level: null,
+        movement_feet: 0,
+      },
+      actorLabel: 'The Scholar',
+      participants: combat.activeEncounter.participants,
+    });
+    // The commit carries the player's own die; the turn then settles and the NPCs run.
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
+      'encounter-d5',
+      expect.objectContaining({ action_type: 'cast_spell', target_ids: [SWARM_1_ID] }),
+      15,
+      'action_bar',
+    );
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', {
+      type: 'end_turn',
+      actorId: SCHOLAR_ID,
+    });
+    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-d5', SWARM_1_ID);
+    // The DM never sees this cast as text.
+    expect(onOptionSelect).not.toHaveBeenCalled();
+  });
+
+  it('a save spell still goes out as chat text', async () => {
+    // #2581: only attack-roll spells take the pipeline. A save spell keeps today's
+    // behavior: its label goes to the DM as text. `resolvePlayerCombatSpell` is the
+    // real one here — the save classification is what the chip contract depends on.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: SCHOLAR_ID,
+        // Attack-shaped on purpose: with targets present the component reaches the kind
+        // gate, so this test pins the gate itself rather than the missing-targets fallthrough.
+        actions: [
+          {
+            type: 'spell',
+            label: 'Cast Sacred Flame',
+            spellId: 'sacred-flame',
+            targetIds: [SWARM_1_ID],
+          },
+        ],
+      }),
+    } as Response);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Cast Sacred Flame'));
+
+    await waitFor(() => expect(onOptionSelect).toHaveBeenCalledWith('Cast Sacred Flame'));
+    expect(askPlayerForSpellCast).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+  });
+
+  it('stops with a menu alert when the spell proposal is refused (autoRolled, no d20)', async () => {
+    // #2652 round 4: when askPlayerForSpellCast returns autoRolled (proposal refused/
+    // failed, popup threw, or d20 null), the chip must stop, show the menu alert, and
+    // spend nothing — not commit with an undefined d20.
+    vi.mocked(askPlayerForSpellCast).mockResolvedValue({
+      autoRolled: true,
+      movementOnly: false,
+    });
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Cast Chill Touch'));
+
+    await waitFor(() => expect(askPlayerForSpellCast).toHaveBeenCalled());
+    // The commit never happens: no d20, no engine roll for the player.
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    expect(onOptionSelect).not.toHaveBeenCalled();
+    // The menu alert is shown.
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be cast');
+  });
+
+  it('refuses a stale attack-spell chip with no targets instead of sending it as chat text', async () => {
+    // #2652 round 5: a stale menu can hold an attack-kind spell chip whose targets are
+    // gone. The server withholds such chips, but the client refuses them too — the label
+    // must not go to the DM as chat text.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        actorId: SCHOLAR_ID,
+        actions: [
+          {
+            type: 'spell',
+            label: 'Cast Chill Touch',
+            spellId: 'chill-touch',
+            targetIds: [],
+          },
+        ],
+      }),
+    } as Response);
+    render(
+      <DynamicOptionsSection options={[]} onOptionSelect={onOptionSelect} hasDynamicOverlay />,
+    );
+    fireEvent.click(await screen.findByText('Cast Chill Touch'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('needs a target');
+    expect(askPlayerForSpellCast).not.toHaveBeenCalled();
+    expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
+    expect(onOptionSelect).not.toHaveBeenCalled();
   });
 });

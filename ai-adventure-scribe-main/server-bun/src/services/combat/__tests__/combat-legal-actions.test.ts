@@ -286,7 +286,15 @@ describe('getLegalCombatActions', () => {
 
     expect(result.actions.filter((action) => action.type === 'spell')).toEqual([
       { type: 'spell', label: 'Cast Acid Splash', spellId: 'acid-splash' },
-      { type: 'spell', label: 'Cast Chill Touch', spellId: 'chill-touch' },
+      {
+        type: 'spell',
+        label: 'Cast Chill Touch',
+        spellId: 'chill-touch',
+        // #2581: attack-roll spell chips are attack-shaped — they carry their targets so the
+        // client can run the declare → dialog → commit pipeline itself instead of sending
+        // chat text for the DM to declare.
+        targetIds: ['monster-1'],
+      },
       { type: 'spell', label: 'Cast Burning Hands', spellId: 'burning-hands' },
     ]);
     expect(labels).not.toContain('Cast a prepared spell');
@@ -391,3 +399,4 @@ describe('getLegalCombatActions', () => {
     expect(result.actions.some((action) => action.type === 'spell')).toBe(false);
   });
 });
+

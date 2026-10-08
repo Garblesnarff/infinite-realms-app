@@ -194,12 +194,18 @@ describe('D3: combat options use the real response hook (#2547)', () => {
   let spent: boolean;
   let response: any;
   let refuse: boolean;
+  let proposeSpell422: boolean;
+  let proposeSpellThrows: boolean;
+  let proposeWeapon422: boolean;
   let requests: any[];
   let proposals: any[];
   let persisted: any[];
   let advances: number;
   let round: number;
-  let extraAction: { type: string; label: string } | undefined;
+  let extraAction:
+    | { type: string; label: string; spellId?: string; targetIds?: string[] }
+    | undefined;
+  let presented: any[];
   let hintedAttack = false;
   let movementOnlyAttack = false;
   let moveDistanceFeet = 50;
@@ -212,6 +218,9 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     held = 'scholar-1';
     spent = false;
     refuse = false;
+    proposeSpell422 = false;
+    proposeSpellThrows = false;
+    proposeWeapon422 = false;
     response = undefined;
     requests = [];
     proposals = [];
@@ -219,6 +228,7 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     advances = 0;
     round = 1;
     extraAction = undefined;
+    presented = [];
     hintedAttack = false;
     movementOnlyAttack = false;
     moveDistanceFeet = 50;
@@ -251,7 +261,8 @@ describe('D3: combat options use the real response hook (#2547)', () => {
       .mockResolvedValueOnce(envelope([declaredSwing]) as any)
       .mockResolvedValue({ ...envelope(), text: 'The creature watches you.' } as any);
     setPlayerRollHost({
-      present: (_spec, settle) => {
+      present: (spec, settle) => {
+        presented.push(spec);
         queueMicrotask(() => settle({ d20: 8 }));
         return { rollId: 'roll-attack', dismiss: () => {} };
       },
@@ -297,18 +308,42 @@ describe('D3: combat options use the real response hook (#2547)', () => {
         if (url.endsWith('/status')) return reply({ encounter: { version: 3 } });
         if (body.phase === 'propose') {
           proposals.push(body);
-          return reply({
-            proposal: {
-              legal: true,
-              movementOnly: false,
-              weaponName: 'Quarterstaff',
-              attackBonus: 1,
-              targetAc: 13,
-              targetLabel: 'The Faceless Stalker',
-              advantage: false,
-              disadvantage: false,
-            },
-          });
+          // #2652 round 5: the proposal can be refused (422) or fail (throw); the real
+          // helper then returns autoRolled with no d20 and the chip must stop.
+          if (body.intent?.type === 'spell' && proposeSpellThrows)
+            throw new Error('propose failed');
+          if (body.intent?.type === 'spell' && proposeSpell422)
+            return reply({ error: 'Spell proposal refused' }, 422);
+          if (body.intent?.type === 'attack' && proposeWeapon422)
+            return reply({ error: 'Attack proposal refused' }, 422);
+          // The spell proposal carries the engine's spell name, bonus, and AC the same way
+          // the weapon proposal carries the weapon's (#2581).
+          const proposal =
+            body.intent?.type === 'spell'
+              ? {
+                  legal: true,
+                  movementOnly: false,
+                  spellId: 'chill-touch',
+                  spellName: 'Chill Touch',
+                  kind: 'attack',
+                  attackBonus: 1,
+                  saveDC: 9,
+                  targetAc: 13,
+                  advantage: false,
+                  disadvantage: false,
+                  targetLabel: 'The Faceless Stalker',
+                }
+              : {
+                  legal: true,
+                  movementOnly: false,
+                  weaponName: 'Quarterstaff',
+                  attackBonus: 1,
+                  targetAc: 13,
+                  targetLabel: 'The Faceless Stalker',
+                  advantage: false,
+                  disadvantage: false,
+                };
+          return reply({ proposal });
         }
         requests.push(body);
         if (body.intent?.type === 'move') {
@@ -356,6 +391,37 @@ describe('D3: combat options use the real response hook (#2547)', () => {
               targetCondition: 'healthy',
               combatEnded: false,
               autoRolled: body.intent.d20 === undefined,
+            },
+          });
+        }
+        if (body.intent?.type === 'spell') {
+          if (spent || (refuse && body.source === 'dm')) {
+            spent = true;
+            return reply({ error: 'Action already used this turn' }, 422);
+          }
+          spent = true;
+          // The commit answers with the `results` array the cast_spell branch of
+          // executeStructuredCombatActionWithBoundary reads — the shape the real
+          // route returns for a resolved spell attack.
+          return reply({
+            result: {
+              results: [
+                {
+                  spellName: 'Chill Touch',
+                  d20: body.intent.d20 ?? 3,
+                  attackBonus: 1,
+                  totalAttackRoll: (body.intent.d20 ?? 3) + 1,
+                  targetAC: 13,
+                  hit: false,
+                  finalDamage: 0,
+                  damageType: 'necrotic',
+                  targetName: 'The Faceless Stalker',
+                  targetNewHp: 10,
+                  targetIsDead: false,
+                  combatEnded: false,
+                  autoRolled: body.intent.d20 === undefined,
+                },
+              ],
             },
           });
         }
@@ -433,6 +499,177 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     ]);
     expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true);
     expect(round).toBe(2);
+  });
+
+  it('casts a spell-attack chip through declare → dialog → commit and advances the turn (#2581)', async () => {
+    // #2581: the "Cast Chill Touch" chip used to send its label as chat text for the DM to
+    // declare — the run M2 shape, where the spell was narrated as a hit before any roll.
+    // The chip now declares the cast itself (propose, d20 dialog, commit) and settles the
+    // turn, so the DM is never asked. The legal action follows getLegalCombatActions: the
+    // catalog spell id, and the targets the attack-shaped option carries.
+    extraAction = {
+      type: 'spell',
+      label: 'Cast Chill Touch',
+      spellId: 'chill-touch',
+      targetIds: ['emil-1'],
+    };
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Cast Chill Touch/ }));
+    await waitFor(() => expect(advances).toBe(1));
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(response).toBeUndefined();
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        source: 'dm',
+        phase: 'propose',
+        intent: expect.objectContaining({
+          type: 'spell',
+          actorId: 'scholar-1',
+          targetIds: ['emil-1'],
+          spellId: 'chill-touch',
+          spellName: 'Chill Touch',
+        }),
+      }),
+    ]);
+    // The d20 dialog opened as a spell-attack roll, and the commit carries the player's die.
+    expect(presented).toEqual([
+      expect.objectContaining({
+        kind: 'spell-attack',
+        weaponName: 'Chill Touch',
+        targetLabel: 'The Faceless Stalker',
+      }),
+    ]);
+    expect(requests.filter((r) => r.intent?.type === 'spell')).toEqual([
+      expect.objectContaining({
+        source: 'dm',
+        origin: 'action_bar',
+        intent: expect.objectContaining({
+          type: 'spell',
+          actorId: 'scholar-1',
+          targetIds: ['emil-1'],
+          spellId: 'chill-touch',
+          spellName: 'Chill Touch',
+          d20: 8,
+        }),
+      }),
+    ]);
+    expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true);
+    expect(round).toBe(2);
+  });
+
+  it('explains a refused spell commit in the menu alert (#2581)', async () => {
+    // #2581: the commit refusal surfaces in the menu's own alert, the way the weapon refusal
+    // does — the DM never narrates a cast it did not declare.
+    extraAction = {
+      type: 'spell',
+      label: 'Cast Chill Touch',
+      spellId: 'chill-touch',
+      targetIds: ['emil-1'],
+    };
+    refuse = true;
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Cast Chill Touch/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Action already used this turn');
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(response).toBeUndefined();
+    const end = screen.getByRole('button', { name: /End turn/ });
+    expect(end).toBeEnabled();
+    fireEvent.click(end);
+    await waitFor(() => expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true));
+    // Like the weapon refusal (#2641): End turn runs the creatures that follow and the turn
+    // comes back (round 2). The refusal left the turn the player's, so ending it advances.
+    await waitFor(() => expect(advances).toBe(1));
+    expect(held).toBe('scholar-1');
+    expect(round).toBe(2);
+  });
+
+  it('stops a spell-attack chip with a menu alert when the propose is refused (422) (#2652)', async () => {
+    // #2652 round 5: the propose 422s, so the real cast helper returns autoRolled with no
+    // d20. The chip must stop, show the alert, and spend nothing — no commit, no dialog,
+    // no DM call, and the turn stays the player's.
+    extraAction = {
+      type: 'spell',
+      label: 'Cast Chill Touch',
+      spellId: 'chill-touch',
+      targetIds: ['emil-1'],
+    };
+    proposeSpell422 = true;
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Cast Chill Touch/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('could not be cast');
+    expect(requests.filter((r) => r.intent?.type === 'spell')).toEqual([]);
+    expect(presented).toEqual([]);
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(advances).toBe(0);
+    expect(spent).toBe(false);
+    expect(screen.getByRole('button', { name: /End turn/ })).toBeEnabled();
+  });
+
+  it('stops a spell-attack chip with a menu alert when the propose throws (#2652)', async () => {
+    // Same as above, but the propose fails outright instead of refusing.
+    extraAction = {
+      type: 'spell',
+      label: 'Cast Chill Touch',
+      spellId: 'chill-touch',
+      targetIds: ['emil-1'],
+    };
+    proposeSpellThrows = true;
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Cast Chill Touch/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('could not be cast');
+    expect(requests.filter((r) => r.intent?.type === 'spell')).toEqual([]);
+    expect(presented).toEqual([]);
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(advances).toBe(0);
+    expect(spent).toBe(false);
+    expect(screen.getByRole('button', { name: /End turn/ })).toBeEnabled();
+  });
+
+  it('stops a spell-attack chip with a menu alert when the popup settles with d20 null (#2652)', async () => {
+    // The propose succeeds, but the roll dialog settles with no die: the real helper
+    // returns autoRolled, and the chip must stop the same way.
+    extraAction = {
+      type: 'spell',
+      label: 'Cast Chill Touch',
+      spellId: 'chill-touch',
+      targetIds: ['emil-1'],
+    };
+    setPlayerRollHost({
+      present: (spec, settle) => {
+        presented.push(spec);
+        queueMicrotask(() => settle({ d20: null }));
+        return { rollId: 'roll-attack', dismiss: () => {} };
+      },
+    });
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Cast Chill Touch/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('could not be cast');
+    expect(requests.filter((r) => r.intent?.type === 'spell')).toEqual([]);
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(advances).toBe(0);
+    expect(spent).toBe(false);
+    expect(screen.getByRole('button', { name: /End turn/ })).toBeEnabled();
+  });
+
+  it('stops a weapon attack chip with a menu alert when the propose is refused (422) (#2652)', async () => {
+    // #2652 round 5: the weapon branch had the same autoRolled gap as the spell branch.
+    // A refused weapon propose returns autoRolled with no d20; the chip must stop with
+    // its own alert instead of committing an undefined die.
+    proposeWeapon422 = true;
+    render(<Game />);
+    fireEvent.click(await screen.findByRole('button', { name: /Attack with Quarterstaff/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('could not be made');
+    expect(requests.filter((r) => r.intent?.type === 'attack')).toEqual([]);
+    expect(presented).toEqual([]);
+    expect(vi.mocked(AIService.chatWithDM)).not.toHaveBeenCalled();
+    expect(advances).toBe(0);
+    expect(spent).toBe(false);
+    expect(screen.getByRole('button', { name: /End turn/ })).toBeEnabled();
   });
 
   it('does not reopen combat entry for a menu action while the encounter is live (#2623)', async () => {
@@ -625,3 +862,4 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     }
   });
 });
+
