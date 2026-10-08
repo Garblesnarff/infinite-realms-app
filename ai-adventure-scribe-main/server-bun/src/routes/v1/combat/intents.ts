@@ -18,6 +18,7 @@ import {
   type SubmittedCombatIntent,
 } from '../../../services/combat/combat-intent-service.js';
 import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
+import { runNpcTurnsIfNpcHolds } from '../../../services/combat/npc-turn-drain.js';
 import { loadActiveTacticalMap } from '../../../services/combat/tactical-map-store.js';
 
 const encounterIdParams = t.Object({
@@ -222,6 +223,12 @@ export const intentRoutes = new Elysia()
           logIntentAccepted(context, request, params, payload);
           return { accepted: true, proposal };
         }
+        // A player acting while a creature still holds the turn gets the creature run first.
+        const npcTurnsBefore = await runNpcTurnsIfNpcHolds(
+          params.encounterId,
+          user.userId,
+          payload.intent.actorId,
+        );
         const result = await executeCombatIntent(
           params.encounterId,
           payload.intent,
@@ -230,11 +237,28 @@ export const intentRoutes = new Elysia()
           payload.dmStartedAt,
           payload.origin,
         );
+        // The turn never waits on a browser: whatever creatures now hold it act here (#2658).
+        const npcTurnsAfter = await runNpcTurnsIfNpcHolds(params.encounterId, user.userId);
+        const npcTurns =
+          npcTurnsBefore && npcTurnsAfter
+            ? {
+                ...npcTurnsAfter,
+                results: [...npcTurnsBefore.results, ...npcTurnsAfter.results],
+                engineRows: [
+                  ...(npcTurnsBefore.engineRows ?? []),
+                  ...(npcTurnsAfter.engineRows ?? []),
+                ],
+              }
+            : (npcTurnsAfter ?? npcTurnsBefore);
         logIntentAccepted(context, request, params, payload);
+        const engineRows = [
+          ...((result as { engineRows?: unknown[] }).engineRows ?? []),
+          ...(npcTurns?.engineRows ?? []),
+        ];
         return {
           accepted: true,
-          result,
-          engineRows: (result as { engineRows?: unknown }).engineRows ?? [],
+          result: npcTurns ? { ...(result as object), npcTurns, engineRows } : result,
+          engineRows,
         };
       } catch (cause) {
         return mapIntentError(set, cause, {

@@ -29,15 +29,11 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/services/combat/combat-repair', () => ({ repairRefusedCombatAction: vi.fn() }));
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
-const advanceNpcTurns = vi.fn();
 vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
   ...(await importOriginal<typeof CombatActionExecutor>()),
   executeStructuredCombatActionWithBoundary: (...args: any[]) =>
     executeStructuredCombatActionWithBoundary(...args),
   executeAuthoritativeCombatIntent: (...args: any[]) => executeAuthoritativeCombatIntent(...args),
-}));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args) },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -207,45 +203,52 @@ describe('the NPC loop stopping at its safety cap does not strand the turn (#264
     executeAuthoritativeCombatIntent.mockResolvedValue({ currentParticipant: MONK });
   });
 
-  it('asks the server again while a creature is still up, and stops at the player', async () => {
-    advanceNpcTurns
-      .mockResolvedValueOnce(
-        batch({
-          currentParticipant: MONK,
-          iterationCount: 6,
-          capReached: true,
-          transcriptLines: ['⚙️ Engine: NPC turn loop stopped after 6 iterations.'],
-        }),
-      )
-      .mockResolvedValueOnce(batch({}));
+  /** The End turn body: the boundary, plus the creatures the server ran before answering. */
+  const endTurnWith = (npcTurns: Record<string, unknown>) =>
+    executeAuthoritativeCombatIntent.mockResolvedValue({
+      currentParticipant: MONK,
+      engineRows: [],
+      npcTurns: { ...npcTurns, engineRows: [] },
+    });
+  const CAPPED = {
+    currentParticipant: MONK,
+    iterationCount: 24,
+    capReached: true,
+    transcriptLines: [
+      '⚙️ Engine: NPC turn loop stopped after 6 iterations; the encounter remains paused for safety.',
+    ],
+  };
 
-    await resolve();
+  // Migrated (#2658 step 3): was "asks the server again while a creature is still up, and stops at the player".
+  // The continuation is the server's now (npc-turn-drain.test.ts); the client sends one End turn.
+  it('sends one End turn and asks nothing more when the server drain stopped at its cap', async () => {
+    endTurnWith(batch(CAPPED));
 
-    expect(advanceNpcTurns).toHaveBeenCalledTimes(2);
-    expect(advanceNpcTurns).toHaveBeenNthCalledWith(1, 'session-1', MONK_ID);
-    expect(advanceNpcTurns).toHaveBeenNthCalledWith(2, 'session-1', MONK_ID);
+    const result = await resolve();
+
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    // A creature still holds the turn, so the player is not handed it.
+    expect(result.text).not.toContain('The Veteran, what do you do?');
   });
 
-  it('does not ask again when the first run reached the player', async () => {
-    advanceNpcTurns.mockResolvedValueOnce(batch({}));
+  // Migrated (#2658 step 3): was "does not ask again when the first run reached the player"
+  it('hands the player the turn from the End turn when the server drain reached them', async () => {
+    endTurnWith(batch({}));
 
-    await resolve();
+    const result = await resolve();
 
-    expect(advanceNpcTurns).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    expect(result.text.trimEnd().endsWith('The Veteran, what do you do?')).toBe(true);
   });
 
-  it('gives up after a few continuations rather than looping on a stuck loop', async () => {
-    advanceNpcTurns.mockResolvedValue(
-      batch({
-        currentParticipant: MONK,
-        iterationCount: 6,
-        capReached: true,
-        transcriptLines: ['⚙️ Engine: NPC turn loop stopped after 6 iterations.'],
-      }),
-    );
+  // Migrated (#2658 step 3): was "gives up after a few continuations rather than looping on a stuck loop".
+  // The bound and the cap line are the server's: the line is a persisted row, not reply text.
+  it('does not loop or print the cap line itself: the server wrote it as a row', async () => {
+    endTurnWith(batch(CAPPED));
 
-    await resolve();
+    const result = await resolve();
 
-    expect(advanceNpcTurns).toHaveBeenCalledTimes(4);
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    expect(result.text).not.toContain('NPC turn loop stopped after');
   });
 });

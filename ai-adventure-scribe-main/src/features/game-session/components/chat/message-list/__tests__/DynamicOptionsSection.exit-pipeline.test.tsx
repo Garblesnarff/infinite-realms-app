@@ -50,7 +50,6 @@ vi.mock('@/services/combat/combat-action-executor', () => ({
   executeStructuredCombatActionWithBoundary: vi.fn(),
 }));
 vi.mock('@/services/combat/player-attack-roll', () => ({ askPlayerForAttackDie: vi.fn() }));
-vi.mock('@/services/user-data-api', () => ({ userDataApi: { advanceNpcTurns: vi.fn() } }));
 vi.mock('@/components/game/ActionOptions', () => ({
   ActionOptions: ({ options, onOptionSelect }: { options: any[]; onOptionSelect: any }) => (
     <div data-testid="action-options">

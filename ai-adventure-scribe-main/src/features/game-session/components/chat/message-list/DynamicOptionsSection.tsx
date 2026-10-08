@@ -6,7 +6,6 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
 import { getAuthHeaders } from '@/services/auth/TokenService';
-import { advanceNpcTurnsToPlayer } from '@/services/combat/advance-npc-turns-to-player';
 import {
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
@@ -144,11 +143,6 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       return null;
     }
 
-    const advanceNpcs = async (currentParticipantId?: string | null): Promise<void> => {
-      if (!encounter?.sessionId) return;
-      await advanceNpcTurnsToPlayer(encounter.sessionId, currentParticipantId ?? undefined);
-    };
-
     const handleSelection = async (option: ActionOption) => {
       if (!showCombatMenu || !encounter?.id) {
         await onOptionSelect(createPlayerMessageFromOption(option));
@@ -167,30 +161,13 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
       setError(null);
       try {
         if (action.type === 'end_turn') {
-          const result = await executeAuthoritativeCombatIntent(encounter.id, {
+          // The server writes the boundary's row (death saves, a stable hero waking, the
+          // ending) and runs the creatures that follow before it answers (#2658).
+          await executeAuthoritativeCombatIntent(encounter.id, {
             type: 'end_turn',
             actorId,
+            actionId: crypto.randomUUID(),
           });
-          // A death save settled at the boundary, and a stable hero waking once the fight
-          // ended on them (#2518), are engine facts like any other: one row.
-          const turnParts = [...formatDeathSaveParts(result, roster), ...formatWakeParts(result)];
-          await sendEngineNotice(onSendMessage, {
-            text: turnParts.map((part) => part.line).join('\n\n'),
-            cards: turnParts.map((part) => part.card),
-          });
-          if ((result as { combatEnded?: boolean } | null)?.combatEnded) {
-            const endLine = formatCombatEndLine(
-              (result as { endedReason?: string | null } | null)?.endedReason,
-            );
-            if (endLine) await sendEngineNotice(onSendMessage, { text: endLine, cards: [] });
-          } else {
-            // The server has no auto-advance: without this the creature that is up waits for
-            // the player to type something (#2641).
-            await advanceNpcs(
-              (result as { currentParticipant?: { id?: string } | null } | null)?.currentParticipant
-                ?.id,
-            );
-          }
           await refreshCombatState();
         } else if (
           action.type === 'move' &&
@@ -332,25 +309,11 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
           // performs. A movement-only approach spent no Action, so the turn stays
           // open and the refreshed menu offers the attack again — now in reach.
           if (!movementOnly && execution.boundary === null) {
-            const turn = (await executeAuthoritativeCombatIntent(encounter.id, {
+            await executeAuthoritativeCombatIntent(encounter.id, {
               type: 'end_turn',
               actorId,
-            })) as {
-              currentParticipant?: { id?: string } | null;
-              deathSaves?: unknown[];
-              combatEnded?: boolean;
-              endedReason?: string | null;
-            } | null;
-            const turnParts = [...formatDeathSaveParts(turn, roster), ...formatWakeParts(turn)];
-            const turnEndLine = turn?.combatEnded ? formatCombatEndLine(turn.endedReason) : null;
-            await sendEngineNotice(onSendMessage, {
-              text: [
-                ...turnParts.map((part) => part.line),
-                ...(turnEndLine ? [turnEndLine] : []),
-              ].join('\n\n'),
-              cards: turnParts.map((part) => part.card),
+              actionId: crypto.randomUUID(),
             });
-            if (!turn?.combatEnded) await advanceNpcs(turn?.currentParticipant?.id);
           }
           await refreshCombatState();
         } else if (action.type === 'spell' && action.targetIds?.[0]) {
@@ -372,9 +335,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
               slot_level: null,
               movement_feet: 0,
             };
-            const actor = encounter.participants.find(
-              (participant) => participant.id === actorId,
-            );
+            const actor = encounter.participants.find((participant) => participant.id === actorId);
             const cast = await askPlayerForSpellCast({
               encounterId: encounter.id,
               action: structuredAction,
@@ -419,31 +380,16 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
               cards: playerParts.map((part) => part.card),
             });
             const movementOnly =
-              (execution.result as { resolvedAs?: string } | null)?.resolvedAs ===
-              'movement_only';
+              (execution.result as { resolvedAs?: string } | null)?.resolvedAs === 'movement_only';
             // A resolved cast settles the turn, the same settlement the DM pipeline
             // performs. A movement-only resolution spent no Action, so the turn stays
             // open.
             if (!movementOnly && execution.boundary === null) {
-              const turn = (await executeAuthoritativeCombatIntent(encounter.id, {
+              await executeAuthoritativeCombatIntent(encounter.id, {
                 type: 'end_turn',
                 actorId,
-              })) as {
-                currentParticipant?: { id?: string } | null;
-                deathSaves?: unknown[];
-                combatEnded?: boolean;
-                endedReason?: string | null;
-              } | null;
-              const turnParts = [...formatDeathSaveParts(turn, roster), ...formatWakeParts(turn)];
-              const turnEndLine = turn?.combatEnded ? formatCombatEndLine(turn.endedReason) : null;
-              await sendEngineNotice(onSendMessage, {
-                text: [
-                  ...turnParts.map((part) => part.line),
-                  ...(turnEndLine ? [turnEndLine] : []),
-                ].join('\n\n'),
-                cards: turnParts.map((part) => part.card),
+                actionId: crypto.randomUUID(),
               });
-              if (!turn?.combatEnded) await advanceNpcs(turn?.currentParticipant?.id);
             }
             await refreshCombatState();
           }

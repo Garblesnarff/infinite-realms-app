@@ -62,7 +62,6 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn().mockResolvedValue({ ok: true }),
     applyDmHandoutActions: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     resolveAoECast: vi.fn().mockResolvedValue({ ok: true }),
-    advanceNpcTurns: vi.fn(),
     enterCombat: vi.fn(),
     setPendingCombatIntent: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
@@ -127,6 +126,27 @@ const PENDING_ENTRY = {
   combatants: [{ name: 'Vance', count: 1 }],
   sceneSpec: { environment: 'dungeon_room' },
   sceneSpecSynthesized: true,
+};
+
+/**
+ * The creatures that won initiative, run by `/enter` before it answered (#2658 step 3), in the
+ * shape the server's drain returns (`NpcTurnsDrained` = the runner's AdvanceNpcTurnsResult).
+ */
+const ENTRY_NPC_TURNS = {
+  results: [],
+  currentParticipant: {
+    id: 'storyteller-1',
+    name: 'The Storyteller',
+    participantType: 'player',
+    vitalState: 'standing',
+  },
+  round: 1,
+  combatEnded: false,
+  iterationCount: 1,
+  iterationCap: 4,
+  capReached: false,
+  transcriptLines: ['⚙️ Engine: Vance misses.'],
+  engineRows: [],
 };
 
 const PLAYER_ACTION = {
@@ -244,26 +264,12 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     // clearAllMocks keeps queued once-implementations; a test that queues one and never calls
     // the guard (#2380) must not hand it to the next test.
     vi.mocked(enforceCombatActionOnAttempt).mockReset().mockResolvedValue(null);
-    vi.mocked(userDataApi.advanceNpcTurns).mockReset();
     vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 16 });
     vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' } }) as any,
     );
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [],
-      currentParticipant: {
-        id: 'storyteller-1',
-        name: 'The Storyteller',
-        participantType: 'player',
-      },
-      combatEnded: false,
-      iterationCount: 1,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: ['⚙️ Engine: Vance misses.'],
-    });
     vi.mocked(userDataApi.setPendingCombatIntent).mockResolvedValue(response() as any);
     vi.mocked(userDataApi.clearPendingCombatIntent).mockResolvedValue(response() as any);
     vi.mocked(resolveDeclaredCombatActions).mockResolvedValue({
@@ -276,7 +282,8 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     await invoke({ combat_transition: 'start', scene_spec: { environment: 'tavern' } });
   });
 
-  it('confirms before initiative, drains the NPC turn, then resolves the queued player action', async () => {
+  // Migrated (#2658 step 3): was "confirms before initiative, drains the NPC turn, then resolves the queued player action"
+  it('confirms before initiative, takes the creatures /enter already ran, then resolves the queued player action', async () => {
     const order: string[] = [];
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(async () => {
       order.push('confirmation');
@@ -287,12 +294,14 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       return { d20: 16 };
     });
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
-      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+      response({
+        encounter: { id: 'encounter-1' },
+        first_action: FIRST_ACTION,
+        npcTurns: ENTRY_NPC_TURNS,
+      }) as any,
     );
-    const refresh = vi
-      .fn()
-      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
-      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+    // The server ran Vance inside `/enter`: the one refresh already reads the player's turn.
+    const refresh = vi.fn().mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
     const outcome = await invoke(
       {
         combat_transition: 'none',
@@ -325,20 +334,13 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       },
       playerInitiativeRoll: 16,
     });
-    expect(refresh).toHaveBeenCalledTimes(2);
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-1', 'vance-1');
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
       expect.objectContaining({
         encounterId: 'encounter-1',
         combatActions: [FIRST_ACTION_COMBAT_ACTION],
         participants: PLAYER_TURN_ENCOUNTER.participants,
-        preResolvedNpcTurns: expect.objectContaining({
-          currentParticipant: {
-            id: 'storyteller-1',
-            name: 'The Storyteller',
-            participantType: 'player',
-          },
-        }),
+        preResolvedNpcTurns: ENTRY_NPC_TURNS,
       }),
     );
     expect(userDataApi.setPendingCombatIntent).not.toHaveBeenCalled();
@@ -392,12 +394,12 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
   });
 
-  it('fails closed when the entry pre-flight rejects', async () => {
+  // Migrated (#2658 step 3): was "fails closed when the entry pre-flight rejects"
+  it('a creature still holding the turn after /enter does not block the first action: the server runs it first', async () => {
+    // A failed server drain leaves no `npcTurns` on the body and the creature still up; the
+    // intent route runs it before the player's action, so the client neither stalls nor advances.
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
-    );
-    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValueOnce(
-      Object.assign(new Error('NPC runner unavailable'), { status: 503 }),
     );
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
 
@@ -410,36 +412,37 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       refresh,
     );
 
-    expect(outcome.localNotice).toBe(
-      'The other combatants are still acting — try again in a moment.',
-    );
-    expect(outcome.result.combat_actions).toEqual([]);
+    // No fail-closed notice of any kind: nothing failed on the client, it just hands the action on.
+    expect(outcome.localNotice).toBeUndefined();
+    expect(outcome.localNotices).toBeUndefined();
+    // Not yet the player's turn on this board, so no die is asked for here; the action still
+    // goes to the engine, which runs the creature first.
     expect(requestPlayerAttackRoll).not.toHaveBeenCalled();
-    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED', {
-      sessionId: 'session-1',
-      encounterId: 'encounter-1',
-      status: 503,
-    });
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        combatActions: [FIRST_ACTION_COMBAT_ACTION],
+        preResolvedNpcTurns: undefined,
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('does not open the entry attack popup or execute when pre-flight ends combat', async () => {
+  // Migrated (#2658 step 3): was "does not open the entry attack popup or execute when pre-flight ends combat"
+  it('does not open the entry attack popup or execute when the creatures /enter ran ended combat', async () => {
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
-      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
+      response({
+        encounter: { id: 'encounter-1' },
+        first_action: FIRST_ACTION,
+        npcTurns: {
+          ...ENTRY_NPC_TURNS,
+          currentParticipant: null,
+          combatEnded: true,
+          endedReason: 'party_defeated',
+          transcriptLines: ['⚙️ Engine: Vance falls.'],
+        },
+      }) as any,
     );
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValueOnce({
-      results: [],
-      currentParticipant: null,
-      combatEnded: true,
-      iterationCount: 1,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: ['⚙️ Engine: Vance falls.'],
-    });
-    const refresh = vi
-      .fn()
-      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
-      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+    const refresh = vi.fn().mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
 
     const outcome = await invoke(
       {
@@ -455,7 +458,8 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.result.combat_actions).toEqual([]);
   });
 
-  it('clears a legacy pending intent before resolving exactly one entry action', async () => {
+  // Migrated (#2658 step 3): was "clears a legacy pending intent before resolving exactly one entry action"
+  it('leaves a pending intent to its confirmation and resolves exactly one entry action', async () => {
     const pendingIntent = {
       actorId: 'storyteller-1',
       actionType: 'attack',
@@ -467,10 +471,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
     );
-    const refresh = vi
-      .fn()
-      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
-      .mockResolvedValueOnce({ ...PLAYER_TURN_ENCOUNTER, pendingIntent });
+    const refresh = vi.fn().mockResolvedValueOnce({ ...PLAYER_TURN_ENCOUNTER, pendingIntent });
 
     await invoke(
       {
@@ -481,10 +482,11 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       refresh,
     );
 
-    expect(userDataApi.clearPendingCombatIntent).toHaveBeenCalledTimes(1);
+    // The client no longer discards it: that was the preflight's job, and the preflight is gone.
+    expect(userDataApi.clearPendingCombatIntent).not.toHaveBeenCalled();
     expect(resolveDeclaredCombatActions).toHaveBeenCalledTimes(1);
     expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
-      expect.objectContaining({ queuedIntentActorIds: [] }),
+      expect.objectContaining({ queuedIntentActorIds: ['storyteller-1'] }),
     );
   });
 
@@ -748,7 +750,8 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     expect(outcome.result.combat_actions).toEqual([]);
   });
 
-  it('keeps the declared first_action when the player wins initiative: explicit roll, no NPC drain (#2551)', async () => {
+  // Migrated (#2658 step 3): was "keeps the declared first_action when the player wins initiative: explicit roll, no NPC drain (#2551)"
+  it('keeps the declared first_action when the player wins initiative: explicit roll, no creature turns (#2551)', async () => {
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
     );
@@ -771,7 +774,9 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       refresh,
     );
 
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
+      expect.objectContaining({ preResolvedNpcTurns: undefined }),
+    );
     expect(requestPlayerAttackRoll).toHaveBeenCalledWith(
       expect.objectContaining({ weaponName: 'Unarmed Strike', attackBonus: 5 }),
     );
@@ -787,35 +792,22 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
   });
 
-  it('keeps the declared first_action when the monster acts first: NPC drains, then the explicit roll (#2551)', async () => {
+  // Migrated (#2658 step 3): was "keeps the declared first_action when the monster acts first: NPC drains, then the explicit roll (#2551)"
+  it('keeps the declared first_action when the monster acts first: /enter ran it, then the explicit roll (#2551)', async () => {
     const order: string[] = [];
-    vi.mocked(userDataApi.enterCombat).mockResolvedValue(
-      response({ encounter: { id: 'encounter-1' }, first_action: FIRST_ACTION }) as any,
-    );
-    vi.mocked(userDataApi.advanceNpcTurns).mockImplementation(async () => {
-      order.push('npc-drain');
-      return {
-        results: [],
-        currentParticipant: {
-          id: 'storyteller-1',
-          name: 'The Storyteller',
-          participantType: 'player',
-        },
-        combatEnded: false,
-        iterationCount: 1,
-        iterationCap: 4,
-        capReached: false,
-        transcriptLines: ['⚙️ Engine: Vance misses.'],
-      } as any;
+    vi.mocked(userDataApi.enterCombat).mockImplementation(async () => {
+      order.push('enter-with-npc-turns');
+      return response({
+        encounter: { id: 'encounter-1' },
+        first_action: FIRST_ACTION,
+        npcTurns: ENTRY_NPC_TURNS,
+      }) as any;
     });
     vi.mocked(requestPlayerAttackRoll).mockImplementation(async () => {
       order.push('attack-roll');
       return { d20: 17 } as any;
     });
-    const refresh = vi
-      .fn()
-      .mockResolvedValueOnce(NPC_TURN_ENCOUNTER)
-      .mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
+    const refresh = vi.fn().mockResolvedValueOnce(PLAYER_TURN_ENCOUNTER);
 
     await invoke(
       {
@@ -834,9 +826,10 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
       refresh,
     );
 
-    expect(order).toEqual(['npc-drain', 'attack-roll']);
+    expect(order).toEqual(['enter-with-npc-turns', 'attack-roll']);
     expect(resolveDeclaredCombatActions).toHaveBeenCalledWith(
       expect.objectContaining({
+        preResolvedNpcTurns: ENTRY_NPC_TURNS,
         combatActions: [FIRST_ACTION_COMBAT_ACTION],
         playerAttackRoll: { action: FIRST_ACTION_COMBAT_ACTION, d20: 17, autoRolled: false },
       }),

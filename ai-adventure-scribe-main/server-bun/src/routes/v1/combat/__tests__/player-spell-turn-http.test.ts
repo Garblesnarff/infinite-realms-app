@@ -62,7 +62,18 @@ let proposeThrows: Error | null = null;
 const serverLog = (level: string) => (data: unknown, msg?: unknown) => {
   serverLogs.push({ level, data, msg });
 };
-mock.module('../../../../../../db/client', () => ({ db: {} }));
+mock.module('../../../../../../db/client', () => ({
+  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),
+  db: {},
+}));
+mock.module('../../../../services/combat/npc-engine-row.js', () => ({
+  writeNpcEngineRow: async () => [],
+  readNpcEngineResult: async () => undefined,
+}));
+// The spider's next turn is out of scope: the server hands the turn straight back to the player.
+mock.module('../../../../services/combat/npc-turn-drain.js', () => ({
+  runNpcTurnsIfNpcHolds: async () => null,
+}));
 mock.module('../../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
 }));
@@ -218,20 +229,7 @@ mock.module(`${CLIENT}/services/combat/combat-repair`, () => ({
     return null;
   },
 }));
-mock.module(`${CLIENT}/services/user-data-api`, () => ({
-  userDataApi: {
-    // The spider's next turn is out of scope: hand the turn straight back to the player.
-    advanceNpcTurns: async () => ({
-      results: [],
-      currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
-    }),
-  },
-}));
+mock.module(`${CLIENT}/services/user-data-api`, () => ({ userDataApi: {} }));
 
 const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');
 const { intentRoutes } = await import('../intents.js');

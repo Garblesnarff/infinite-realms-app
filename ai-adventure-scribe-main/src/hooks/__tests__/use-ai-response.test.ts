@@ -47,7 +47,6 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyTacticalMapAction: vi.fn(),
     applyDmTacticalActions: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
     fetchSessionFallenState: vi.fn(),
   },
@@ -140,7 +139,6 @@ describe('useAIResponse', () => {
       state: { isInCombat: false, activeEncounter: null },
       refreshCombatState: vi.fn(async () => null),
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockReset();
     vi.mocked(userDataApi.fetchSessionFallenState).mockReset();
     vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
   });
@@ -208,7 +206,12 @@ describe('useAIResponse', () => {
     });
   });
 
-  it('#2517/#2518: NPC preflight that defeats the party shows the death state at once, then asks the DM for the killing round', async () => {
+  // Migrated (#2658 step 3): was "#2517/#2518: NPC preflight that defeats the party shows the death state at once, then asks the DM for the killing round"
+  // The client no longer runs the creatures before the DM call: the server ran them on the
+  // previous End turn, and their killing round was narrated there. A turn that starts in a live
+  // fight and finds it concluded by the time it resolves still shows the end state from the
+  // resolution itself, without waiting for another message.
+  it('#2517 (step 3): a turn that began in a fight the server has since concluded in defeat shows the death state from the resolution, and runs no creature', async () => {
     const { AIService } = await import('@/services/ai-service');
 
     const mockSessionData = {
@@ -220,8 +223,8 @@ describe('useAIResponse', () => {
     };
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue(mockSessionData as any);
 
-    // Combat truth as refreshCombatState returns it: an active encounter held
-    // by the NPC. After the advance the encounter is gone (combat concluded).
+    // Combat truth as refreshCombatState returns it: an active encounter at turn start, gone by
+    // the time the turn resolves (combat concluded).
     const activeEncounter = {
       id: 'encounter-789',
       phase: 'active',
@@ -240,72 +243,29 @@ describe('useAIResponse', () => {
       state: { isInCombat: true, activeEncounter },
       refreshCombatState,
     } as any);
-
-    // Fixture follows the real producer: POST /v1/combat/sessions/:id/advance-npc-turns
-    // returning the npc-turn-runner's AdvanceNpcTurnsResult plus the route's
-    // #2517 endedReason. Lines are the engine's own, as in run D2 (#2516).
-    const deathLines = [
-      '⚙️ Engine: Vitruvian Spider rolled 11 + 3 = 14 vs AC 11 against Char with strike — HIT. 3 piercing damage. Char is now at 0 HP and is unconscious.',
-      '⚙️ Engine: Rolled 2: the third failure. Char is dead.',
-    ];
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [
-        {
-          action: {
-            actor_id: 'npc-spider',
-            action_type: 'attack',
-            target_ids: ['player-1'],
-            weapon_id: null,
-            spell_id: null,
-            slot_level: null,
-            movement_feet: 0,
-          },
-          round: 4,
-          outcomes: [],
-          actorIsPlayer: false,
-          transcriptLines: deathLines,
-        },
-      ],
-      currentParticipant: null,
-      round: 4,
-      combatEnded: true,
-      endedReason: 'party_defeated',
-      iterationCount: 1,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: deathLines,
+    // Follows the real producer: fetchSessionFallenState reads character_stats.vital_state.
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue({
+      characterId: 'char-1',
+      characterName: 'Char',
+      campaignId: 'camp-1',
+      campaignName: 'Camp',
+      starterCampaignId: null,
+      diedAt: '2026-10-05T23:00:00.000Z',
     } as any);
-
-    // #2518: the killing round gets its narration paragraph (run D2 had none). The DM is asked
-    // from the engine's results alone and told the fight is over.
     vi.mocked(AIService.chatWithDM).mockResolvedValue({
-      text: 'The spider’s fangs find the Scholar a last time, and the Membrane goes quiet.',
+      text: 'The Membrane goes quiet.',
     } as any);
 
     const { result } = renderHook(() => useAIResponse());
-    let response: EnhancedChatMessage | null = null;
     await act(async () => {
-      response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
+      await result.current.getAIResponse(mockMessages as any, mockSessionId);
     });
 
-    // The death screen state came from the combat resolution, not from the DM's words…
-    expect(response!.context?.terminalState).toBe('party_defeated');
-    // …and the DM is called exactly once, for the narration: no declaration, a concluded fight.
-    expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
-    const asked = vi.mocked(AIService.chatWithDM).mock.calls[0][0] as {
-      message: string;
-      context: any;
-    };
-    expect(JSON.parse(asked.message)).toMatchObject({ encounterAlreadyConcluded: true });
-    expect(asked.context.gameState.resolutionOnly).toBe(true);
-    // The paragraph rides on the terminal reply for the handler to save beside the story.
-    expect(response!.text).toContain('the Membrane goes quiet');
+    // The player's message went to the DM first: there is no client creature run to do before it.
+    expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).toBe('Hello');
+    expect(userDataApi.fetchSessionFallenState).toHaveBeenCalledWith(mockSessionId);
     await waitFor(() => {
-      expect(result.current.terminalDeathState).toMatchObject({
-        state: 'party_defeated',
-        encounterId: 'encounter-789',
-        finalLines: deathLines,
-      });
+      expect(result.current.terminalDeathState).toMatchObject({ state: 'party_defeated' });
     });
   });
 
@@ -800,7 +760,12 @@ describe('useAIResponse', () => {
     );
   });
 
-  it('returns the retry notice and skips chatWithDM when NPC pre-flight rejects', async () => {
+  // Migrated (#2658 step 3): was "returns the retry notice and skips chatWithDM when NPC pre-flight rejects"
+  // There is no client pre-flight to reject any more: the creatures holding the turn are the
+  // server's to run (on the End turn, at `/enter`, before the next player intent, and at boot), and
+  // a failed server run is logged without failing the request (npc-turn-drain.test.ts). The
+  // client sends the turn to the DM; it neither shows the retry notice nor withholds the turn.
+  it('sends the turn to the DM while a creature holds the turn: no client pre-flight, no retry notice', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { useCombat } = await import('@/contexts/CombatContext');
     const liveEncounter = {
@@ -825,32 +790,27 @@ describe('useAIResponse', () => {
       campaign: {},
       character: { id: 'char-1' },
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValue(
-      Object.assign(new Error('runner unavailable'), { status: 503 }),
-    );
+    (AIService.chatWithDM as any).mockResolvedValue({ text: 'The professor eyes you.' });
 
     const { result } = renderHook(() => useAIResponse());
+    let response: EnhancedChatMessage | undefined;
     await act(async () => {
-      const response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
-
-      expect(response.text).toBe('');
-      expect(response.localNotice).toBe(
-        'The other combatants are still acting — try again in a moment.',
-      );
+      response = await result.current.getAIResponse(mockMessages as any, mockSessionId);
     });
-    expect(AIService.chatWithDM).not.toHaveBeenCalled();
-    expect(result.current.combatTurnUiState).toMatchObject({
-      holder: 'npc-1',
-      preflight: 'unknown',
-    });
-    expect(logger.warn).toHaveBeenCalledWith('COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED', {
-      sessionId: mockSessionId,
-      encounterId: 'encounter-1',
-      status: 503,
-    });
+    // The player's declaration is what the DM is asked first; nothing ran ahead of it.
+    expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0].message).toBe('Hello');
+    // The turn is answered, not withheld: the old pre-flight failure returned an empty reply
+    // with only a notice, and never reached the DM.
+    expect(response?.text).toContain('The professor eyes you.');
+    expect(response?.localNotice).toBeUndefined();
+    expect(result.current.combatTurnUiState.preflight).not.toBe('failed');
   });
 
-  it('runs resumeCombatTurn after a preflight catch transitions the UI back to ready', async () => {
+  // Migrated (#2658 step 3): was "runs resumeCombatTurn after a preflight catch transitions the UI back to ready"
+  // A turn now ends with the UI showing whoever holds the turn (`unknown` while it is not the
+  // player's), and resumeCombatTurn re-reads the server's turn, which the server has run back to
+  // the player, without asking for any creature run itself.
+  it('runs resumeCombatTurn after a turn that left a creature holding the turn, and the UI goes back to ready', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { useCombat } = await import('@/contexts/CombatContext');
 
@@ -867,6 +827,8 @@ describe('useAIResponse', () => {
     let resolveResumeRefresh: ((encounter: typeof playerEncounter) => void) | undefined;
     const refreshCombatState = vi
       .fn()
+      // Turn start, then the post-action reconcile: a creature still holds the turn.
+      .mockResolvedValueOnce(npcEncounter)
       .mockResolvedValueOnce(npcEncounter)
       .mockImplementationOnce(
         () =>
@@ -886,9 +848,7 @@ describe('useAIResponse', () => {
       campaign: {},
       character: { id: 'char-1' },
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockRejectedValueOnce(
-      Object.assign(new Error('runner unavailable'), { status: 503 }),
-    );
+    (AIService.chatWithDM as any).mockResolvedValue({ text: 'The professor eyes you.' });
 
     const { result } = renderHook(() => useAIResponse());
     await act(async () => {
@@ -899,7 +859,6 @@ describe('useAIResponse', () => {
       holder: 'npc-1',
       preflight: 'unknown',
     });
-    expect(AIService.chatWithDM).not.toHaveBeenCalled();
 
     const resumePromise = result.current.resumeCombatTurn();
     await waitFor(() => expect(result.current.combatTurnUiState.preflight).toBe('running'));
@@ -913,7 +872,7 @@ describe('useAIResponse', () => {
       pendingIntent: null,
       preflight: 'ready',
     });
-    expect(refreshCombatState).toHaveBeenCalledTimes(2);
+    expect(refreshCombatState).toHaveBeenCalledTimes(3);
   });
 
   /**
@@ -1031,8 +990,6 @@ describe('useAIResponse', () => {
       campaign: {},
       character: { id: 'char-1' },
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ turns: [] } as any);
-
     const parsed = {
       text: 'Terra swings her longsword at Click.',
       roll_requests: [],
@@ -1063,11 +1020,12 @@ describe('useAIResponse', () => {
   });
 
   /**
-   * #2127: a preflight that ends combat clears `isInCombat`, but its NPC turns still belong
-   * ahead of this turn's DM text. The early render must stay suppressed so the transcript
-   * cannot show the speculative narration before the engine's NPC blocks.
+   * #2127: a turn that began in combat keeps the early render suppressed even when the fight is
+   * over by the time the turn resolves, so the transcript cannot show the speculative narration
+   * before the engine's rows.
    */
-  it('suppresses the early render when preflight NPC turns ended combat', async () => {
+  // Migrated (#2658 step 3): was "suppresses the early render when preflight NPC turns ended combat"
+  it('suppresses the early render on a turn that began in combat while a creature held the turn, even when the fight is over by its end', async () => {
     const { AIService } = await import('@/services/ai-service');
     const { useCombat } = await import('@/contexts/CombatContext');
     const liveEncounter = {
@@ -1083,7 +1041,7 @@ describe('useAIResponse', () => {
 
     vi.mocked(useCombat).mockReturnValue({
       state: { isInCombat: true, activeEncounter: liveEncounter },
-      // Turn start sees the live fight; the post-preflight refresh sees it ended.
+      // Turn start sees the live fight; the refresh after resolution sees it ended.
       refreshCombatState: vi.fn().mockResolvedValueOnce(liveEncounter).mockResolvedValue(null),
     } as any);
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
@@ -1092,26 +1050,6 @@ describe('useAIResponse', () => {
       character_id: 'char-1',
       campaign: {},
       character: { id: 'char-1' },
-    } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [
-        {
-          action: {
-            actor_id: 'npc-1',
-            action_type: 'attack',
-            target_ids: ['player-1'],
-            weapon_id: null,
-            spell_id: null,
-            slot_level: null,
-            movement_feet: 0,
-          },
-          outcomes: [],
-          actorIsPlayer: false,
-          transcriptLines: ['Click attacks Terra.'],
-        },
-      ],
-      currentParticipant: null,
-      combatEnded: true,
     } as any);
 
     const parsed = { text: 'The dust settles.', roll_requests: [] };
@@ -1132,7 +1070,6 @@ describe('useAIResponse', () => {
       );
     });
 
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalled();
     expect(onTextReady).toHaveBeenCalledTimes(1);
     expect(onTextReady.mock.calls[0][1]).toEqual({
       suppressRender: true,
@@ -1454,7 +1391,8 @@ describe('useAIResponse', () => {
       });
     });
 
-    it('stands down when the pre-flight NPC turns ended the fight: the DM is describing the engine’s own hit', async () => {
+    // Migrated (#2658 step 3): was "stands down when the pre-flight NPC turns ended the fight: the DM is describing the engine’s own hit"
+    it('stands down for a turn that began in combat and ends with the fight over: the DM is describing the engine’s own hit', async () => {
       const { useCombat } = await import('@/contexts/CombatContext');
       const liveEncounter = {
         id: 'encounter-1',
@@ -1468,39 +1406,22 @@ describe('useAIResponse', () => {
       };
       vi.mocked(useCombat).mockReturnValue({
         state: { isInCombat: true, activeEncounter: liveEncounter },
-        // Turn start sees the live fight; the post-preflight refresh sees it ended.
+        // Turn start sees the live fight; the refresh after resolution sees it ended.
         refreshCombatState: vi.fn().mockResolvedValueOnce(liveEncounter).mockResolvedValue(null),
-      } as any);
-      vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-        results: [
-          {
-            action: {
-              actor_id: 'npc-1',
-              action_type: 'attack',
-              target_ids: ['player-1'],
-              weapon_id: null,
-              spell_id: null,
-              slot_level: null,
-              movement_feet: 0,
-            },
-            outcomes: [],
-            actorIsPlayer: false,
-            transcriptLines: ['Click hits Terra for 3 damage.'],
-          },
-        ],
-        currentParticipant: null,
-        combatEnded: true,
       } as any);
       const account = 'Click’s last lash strikes you down, and the fight is over.';
       const kept = { heldSideEffects: vi.fn().mockResolvedValue(undefined) };
+      // With no client pre-flight the turn is still a live combat turn when the DM answers, so
+      // the combat resolution narrates it in a second pass; that pass's text is the reply.
+      const aftermath = 'The dust settles over the study.';
 
-      const { chat, response } = await play([{ text: account, ...kept }]);
+      const { chat, response } = await play([{ text: account, ...kept }, { text: aftermath }]);
 
-      expect(userDataApi.advanceNpcTurns).toHaveBeenCalled();
-      expect(chat).toHaveBeenCalledTimes(1);
+      expect(chat).toHaveBeenCalledTimes(2);
+      // The narrative gate stands down for a combat turn: the first ask parks nothing.
       expect(chat.mock.calls[0][0]).not.toHaveProperty('holdSideEffects');
       expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
-      expect(response.text).toContain(account);
+      expect(response.text).toContain(aftermath);
       expect(response.text).not.toContain(NEUTRAL_NO_EFFECT_LINE);
     });
 

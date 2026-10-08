@@ -10,7 +10,6 @@ import {
 } from '../../../../shared/test-fixtures/advance-npc-turns-rounds';
 import { receivedNpcMessages } from '../../../../shared/test-fixtures/npc-engine-messages';
 
-
 import type * as CombatActionExecutor from '@/services/combat/combat-action-executor';
 import type * as PlayerAttackRoll from '@/services/combat/player-attack-roll';
 import type { ChatMessage } from '@/types/game';
@@ -25,9 +24,11 @@ import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
 /**
  * #2417, acceptance tests 1 and 2: the chat dividers and the turn bar read the same rounds.
  *
- * The blocks come out of the real resolution step, fed the `advance-npc-turns` bodies the real
- * runner produces (`advance-npc-turns-rounds`, asserted against it in `npc-turn-runner.test.ts`)
- * and the engine result shape the server sends. The bar is read from encounters that
+ * The blocks come out of the real resolution step. The creature turns arrive the way the server
+ * sends them since #2658 step 3: as `npcTurns` on the End turn body, holding the runner bodies the
+ * real runner produces (`advance-npc-turns-rounds`, asserted against it in
+ * `npc-turn-runner.test.ts`), and the NPC rows the chat shows are built from what that End turn
+ * returned — no End turn, no creature rows. The bar is read from encounters that
  * `mapAuthoritativeCombat`, the client's only producer of one, builds for each turn.
  */
 
@@ -35,7 +36,6 @@ const chatWithDM = vi.fn();
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const askPlayerForAttackDie = vi.fn();
-const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -53,9 +53,6 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
   ...(await importOriginal<typeof PlayerAttackRoll>()),
   askPlayerForAttackDie: (...args: any[]) => askPlayerForAttackDie(...args),
-}));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args) },
 }));
 vi.mock('@/contexts/CampaignAssetsContext', () => ({
   useCampaignAssetsContext: () => ({ getAsset: vi.fn() }),
@@ -147,11 +144,17 @@ const playerTurn = async (params: {
   order: Seat[];
   turnIndex: number;
   target: string;
-  advance: unknown[];
+  /** The runner body the server's drain answers the End turn with (its `npcTurns`). */
+  advance: [unknown];
   preflight?: unknown;
 }): Promise<ChatMessage[]> => {
   const encounter = encounterAt(params.round, params.order, params.turnIndex);
-  for (const body of params.advance) advanceNpcTurns.mockResolvedValueOnce(body);
+  const callsBefore = executeAuthoritativeCombatIntent.mock.results.length;
+  executeAuthoritativeCombatIntent.mockResolvedValueOnce({
+    currentParticipant: { id: 'npc1', name: 'Balthazar' },
+    engineRows: [],
+    npcTurns: params.advance[0],
+  });
   const result = await resolveDeclaredCombatActions({
     encounterId: 'enc-1',
     sessionId: 'session-1',
@@ -163,10 +166,19 @@ const playerTurn = async (params: {
     combatRound: encounter.currentRound,
     ...(params.preflight ? { preResolvedNpcTurns: params.preflight as any } : {}),
   });
+  // The creature turns the End turn this turn actually sent came back with.
+  const served = await Promise.all(
+    executeAuthoritativeCombatIntent.mock.results.slice(callsBefore).map((call) => call.value),
+  );
+  const endTurnNpcTurns = served.flatMap((body) => (body?.npcTurns ? [body.npcTurns] : []));
   return [
     ...receivedNpcMessages(params.preflight, encounter.participants),
-    { sender: 'dm', text: 'Steel rings.', context: { combatEngineBlocks: result.combatEngineBlocks } },
-    ...params.advance.flatMap((batch) => receivedNpcMessages(batch, encounter.participants)),
+    {
+      sender: 'dm',
+      text: 'Steel rings.',
+      context: { combatEngineBlocks: result.combatEngineBlocks },
+    },
+    ...endTurnNpcTurns.flatMap((batch) => receivedNpcMessages(batch, encounter.participants)),
   ] as ChatMessage[];
 };
 
@@ -176,18 +188,28 @@ const dividersOf = (input: Array<ChatMessage | ChatMessage[]>): string[] => {
   const previous = previousEngineDividerKeys(messages);
   return messages.flatMap((message, index) => {
     const { container, unmount } = render(
-      message.sender === 'system' ? <SystemMessage message={message} isFirstInGroup isLastInGroup displayText={message.text} previousEngineKey={previous.get(message)} /> : <DMMessage
-        message={message}
-        messageId={`dm-${index}`}
-        isFirstInGroup
-        isLastInGroup
-        displayContent={message.text}
-        isExpanded={false}
-        onToggleExpanded={vi.fn()}
-        isGeneratingImage={false}
-        onGenerateImage={vi.fn()}
-        previousEngineKey={previous.get(message)}
-      />,
+      message.sender === 'system' ? (
+        <SystemMessage
+          message={message}
+          isFirstInGroup
+          isLastInGroup
+          displayText={message.text}
+          previousEngineKey={previous.get(message)}
+        />
+      ) : (
+        <DMMessage
+          message={message}
+          messageId={`dm-${index}`}
+          isFirstInGroup
+          isLastInGroup
+          displayContent={message.text}
+          isExpanded={false}
+          onToggleExpanded={vi.fn()}
+          isGeneratingImage={false}
+          onGenerateImage={vi.fn()}
+          previousEngineKey={previous.get(message)}
+        />
+      ),
     );
     const found = Array.from(
       container.querySelectorAll('[data-testid="combat-round-divider"]'),

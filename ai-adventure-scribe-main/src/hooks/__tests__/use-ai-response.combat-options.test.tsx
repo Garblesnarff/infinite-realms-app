@@ -34,7 +34,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
@@ -250,13 +249,6 @@ describe('D3: combat options use the real response hook (#2547)', () => {
       character: declaredAttackCharacter,
     } as any);
     vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockImplementation(async () => {
-      advances++;
-      round = 2;
-      held = 'scholar-1';
-      spent = false;
-      return { ...noNpcTurns, currentParticipant: participants[1], currentRound: 2 } as any;
-    });
     vi.mocked(AIService.chatWithDM)
       .mockResolvedValueOnce(envelope([declaredSwing]) as any)
       .mockResolvedValue({ ...envelope(), text: 'The creature watches you.' } as any);
@@ -432,9 +424,23 @@ describe('D3: combat options use the real response hook (#2547)', () => {
               body.intent.type === 'dash' ? null : { applied: true, action: body.intent.type },
           });
         }
-        held = 'emil-1';
+        // The player's End turn: the intent route (#2658 step 3) runs Emil before it answers, so
+        // the body carries his turn and the turn is the player's again, in round 2.
+        advances++;
         round = 2;
-        return reply({ result: { currentParticipant: participants[0] } });
+        held = 'scholar-1';
+        spent = false;
+        const npcTurns = {
+          ...noNpcTurns,
+          currentParticipant: participants[1],
+          round: 2,
+          engineRows: [],
+        };
+        return reply({
+          accepted: true,
+          result: { currentParticipant: participants[0], npcTurns, engineRows: [] },
+          engineRows: [],
+        });
       }),
     );
   });
@@ -786,13 +792,16 @@ describe('D3: combat options use the real response hook (#2547)', () => {
     fireEvent.click(end);
     await waitFor(() => expect(requests.some((r) => r.intent?.type === 'end_turn')).toBe(true));
     // End turn used to stop at the boundary: the creature that was up waited for the player to
-    // type, and this test pinned that (advances 0, still held by Emil). The chip now runs the
-    // creatures that follow, as the attack chip does (#2641), and the turn comes back (round 2).
+    // type, and this test pinned that (advances 0, still held by Emil). The server now runs the
+    // creatures that follow on that one End turn (#2658 step 3), and the turn comes back (round 2).
     await waitFor(() => expect(advances).toBe(1));
     expect(held).toBe('scholar-1');
     expect(round).toBe(2);
     expect(requests.filter((r) => r.intent?.type === 'end_turn')).toEqual([
-      expect.objectContaining({ intent: { type: 'end_turn', actorId: 'scholar-1' } }),
+      // Keyed (#2658 step 3): a replay of this End turn takes no second turn.
+      expect.objectContaining({
+        intent: { type: 'end_turn', actorId: 'scholar-1', actionId: expect.any(String) },
+      }),
     ]);
   });
 

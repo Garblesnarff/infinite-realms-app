@@ -22,7 +22,6 @@ import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import { advanceNpcTurnsToPlayer } from '@/services/combat/advance-npc-turns-to-player';
 import {
   AOE_AWAITING_CONFIRMATION,
   executeAoECombatAction,
@@ -265,7 +264,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     }
   };
 
-  /** The round the player is acting in: recovering a stale NPC holder can wrap the order first. */
+  /** The round the player is acting in: the server's pre-drain can wrap the order first. */
   let playerRound = combatRound;
   const resolvedActions: Array<Record<string, unknown>> = [];
   const engineBlocks: CombatEngineBlock[] = [];
@@ -350,7 +349,6 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   // One repair attempt per turn, not per action: the budget belongs to the turn, and a DM
   // that got the actor wrong once will get it wrong for every action in the same batch.
   let repairSpent = false;
-  let npcTurnRecoverySpent = false;
   type PlayerAttackRoll =
     | (Omit<Awaited<ReturnType<typeof askPlayerForAttackDie>>, 'movementOnly'> & {
         cancelled?: boolean;
@@ -713,6 +711,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     turnEndedByAction?: unknown,
   ): Promise<BatchBoundary> => {
     const endedWithAction = turnEndedByAction !== undefined;
+    // Keyed, so the server writes the boundary's row once and a replay takes no second turn.
+    const boundaryActionId = crypto.randomUUID();
     // The engine ends an NPC's turn itself now (#1744), so this either performs the boundary or
     // is told the boundary already happened. Both answers name whoever is up, which is what the
     // player has to be told when their own declaration was refused.
@@ -721,36 +721,24 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       : signal
         ? await executeAuthoritativeCombatIntent(
             encounterId,
-            { type: 'end_turn', actorId },
+            { type: 'end_turn', actorId, actionId: boundaryActionId },
             'dm',
             undefined,
             undefined,
             signal,
           )
-        : await executeAuthoritativeCombatIntent(encounterId, { type: 'end_turn', actorId }, 'dm');
-    // Death saves settled by the explicit end_turn boundary get their own engine lines and
-    // cards too (#2457) — they are not part of the action's result. Print BEFORE the
-    // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
-    // must still be visible.
-    const turnDeathSaveParts = endedWithAction || !isPlayerActor(actorId, participants) ? [] : formatDeathSaveParts(turn, roster);
-    if (turnDeathSaveParts.length) {
-      appendEngineBlock({
-        source: isPlayerActor(actorId, participants) ? 'player' : 'npc',
-        actorId,
-        lines: [turnDeathSaveParts.map((part) => part.line).join('\n\n')],
-        cards: turnDeathSaveParts.map((part) => part.card),
-        round: combatRoundFrom(turn, playerRound ?? 1),
-        serverSequence: combatSequenceFrom(turn),
-      });
-    }
+        : await executeAuthoritativeCombatIntent(
+            encounterId,
+            { type: 'end_turn', actorId, actionId: boundaryActionId },
+            'dm',
+          );
+    // The boundary's death saves, wake and ending are in the row the server wrote for it.
     if (combatBoundaryFromResult(turn)) return 'combat_ended';
     const turnState = turn as { currentParticipant?: { id?: string; name?: string } | null } | null;
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
-    if (sessionId && isPlayerActor(actorId, participants)) {
-      const advanced = await advanceNpcTurnsToPlayer(sessionId, turnHolder?.id, signal);
-      return retainNpcResults(advanced);
-    }
-    return 'turn_ended';
+    // The server ran the creatures that followed before it answered (#2658).
+    const npcTurns = (turn as { npcTurns?: AdvanceNpcTurnsResponse } | null)?.npcTurns;
+    return npcTurns ? retainNpcResults(npcTurns) : 'turn_ended';
   };
 
   /** Print the engine line, report the result, and cross the turn boundary it produced. */
@@ -760,10 +748,25 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     autoRolled: boolean,
   ): Promise<BatchBoundary> => {
     if (!isPlayerActor(action.actor_id, participants)) {
-      resolvedActions.push({ action, outcomes: execution.outcomes, engineResult: execution.result, actorIsPlayer: false });
-      return execution.boundary === 'combat_ended' ? 'combat_ended' : crossTurnBoundary(action.actor_id);
+      resolvedActions.push({
+        action,
+        outcomes: execution.outcomes,
+        engineResult: execution.result,
+        actorIsPlayer: false,
+      });
+      return execution.boundary === 'combat_ended'
+        ? 'combat_ended'
+        : crossTurnBoundary(action.actor_id);
     }
     notePlayerSpell(action);
+    // Creatures still holding the turn are run by the server before the player's action (its
+    // pre-drain). A death save's own `npcTurns` are the turn it ended, read by the boundary.
+    const preDrained = (execution.result as { npcTurns?: AdvanceNpcTurnsResponse } | null)
+      ?.npcTurns;
+    if (preDrained && action.action_type !== 'death_save') {
+      retainNpcResults(preDrained);
+      playerRound = preDrained.round ?? playerRound;
+    }
     // Death saves on a single executed action get their own engine lines and cards (#2457).
     const engineParts = [
       ...formatCombatEngineParts(action, execution.result, roster),
@@ -869,37 +872,6 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         continue;
       }
       const refusedCurrentParticipantId = error.details?.currentParticipantId;
-      if (
-        sessionId &&
-        !npcTurnRecoverySpent &&
-        isPlayerActor(action.actor_id, participants) &&
-        refusedCurrentParticipantId &&
-        !isPlayerActor(refusedCurrentParticipantId, participants)
-      ) {
-        npcTurnRecoverySpent = true;
-        const refusalIndex = refusedActions.length - 1;
-        const advanced = await advanceNpcTurnsToPlayer(
-          sessionId,
-          refusedCurrentParticipantId,
-          signal,
-        );
-        const recoveryBoundary = retainNpcResults(advanced);
-        playerRound = advanced.round ?? playerRound;
-        if (recoveryBoundary === 'combat_ended') break;
-        try {
-          const retryBoundary = await runAction(action);
-          // The first refusal was transient: the same player action was accepted after the
-          // stale NPC turn was settled, so do not ask narration to report it as unresolved.
-          withdrawRefusalAt(refusalIndex);
-          if (retryBoundary) break;
-          continue;
-        } catch (retryError) {
-          if (!(retryError instanceof CombatIntentRefusedError)) throw retryError;
-          recordRefusal(action, retryError);
-          logger.warn('[CombatRepair] NPC-turn recovery retry was refused');
-          continue;
-        }
-      }
       if (isQueuedIntentActor(action.actor_id)) {
         // A pending declaration is deliberately not re-declared as whoever owns the current
         // turn. PR2 will confirm it when this actor becomes current; it must not consume the
@@ -1188,7 +1160,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const orderedEngineBlocks = orderCombatEngineBlocks(engineBlocks);
   const orderedEngineTranscriptLines = orderedEngineBlocks.flatMap((block) => block.lines);
   const hadEngineLines =
-    orderedEngineTranscriptLines.length > 0 || resolvedActions.some((entry) => !entry.actorIsPlayer);
+    orderedEngineTranscriptLines.length > 0 ||
+    resolvedActions.some((entry) => !entry.actorIsPlayer);
   const narrationGated = silentTurn && !hadEngineLines;
   const narrate = (violation?: string): Promise<any> =>
     AIService.chatWithDM({

@@ -66,7 +66,6 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyTacticalMapAction: vi.fn(),
     applyDmTacticalActions: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
   },
 }));

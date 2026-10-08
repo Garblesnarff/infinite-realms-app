@@ -113,9 +113,17 @@ const equippedByActor: Record<string, typeof SEEKER_WEAPONS> = {
   'the-void-maw': [CLAWS],
 };
 
-mock.module('../../../../services/combat/npc-engine-row.js', () => ({ writeNpcEngineRow: async () => [], readNpcEngineResult: async () => undefined }));
+mock.module('../../../../services/combat/npc-engine-row.js', () => ({
+  writeNpcEngineRow: async () => [],
+  readNpcEngineResult: async () => undefined,
+}));
+mock.module('../../../../services/combat/npc-turn-drain.js', () => ({
+  runNpcTurnsIfNpcHolds: async () => null,
+}));
 mock.module('../../../../../../db/client', () => ({
-  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(), db: {} }));
+  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),
+  db: {},
+}));
 mock.module('../../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
 }));

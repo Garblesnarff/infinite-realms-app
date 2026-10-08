@@ -25,6 +25,7 @@ import {
 } from '../../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster as defaultLoadCombatIntentActorRoster } from '../../../services/combat/combat-intent-roster.js';
 import { buildInitiativeOrder as defaultBuildInitiativeOrder } from '../../../services/combat/initiative-order.js';
+import { runNpcTurnsIfNpcHolds as defaultRunNpcTurns } from '../../../services/combat/npc-turn-drain.js';
 import { sanitizeSceneSpec as defaultSanitizeSceneSpec } from '../../../services/combat/scene-spec-sanitizer.js';
 import { applyCombatEntryGate } from '../../../services/combat-entry-pipeline.js';
 
@@ -171,6 +172,7 @@ export interface CombatEntryRouteOptions {
   sanitizeSceneSpec?: typeof defaultSanitizeSceneSpec;
   buildInitiativeOrder?: typeof defaultBuildInitiativeOrder;
   loadSessionCampaignMonsterIndex?: typeof defaultLoadSessionCampaignMonsterIndex;
+  runNpcTurns?: typeof defaultRunNpcTurns;
 }
 
 export function createCombatEntryRoutes({
@@ -180,6 +182,7 @@ export function createCombatEntryRoutes({
   sanitizeSceneSpec = defaultSanitizeSceneSpec,
   buildInitiativeOrder = defaultBuildInitiativeOrder,
   loadSessionCampaignMonsterIndex = defaultLoadSessionCampaignMonsterIndex,
+  runNpcTurns = defaultRunNpcTurns,
 }: CombatEntryRouteOptions = {}) {
   return new Elysia().post(
     '/sessions/:sessionId/enter',
@@ -254,8 +257,13 @@ export function createCombatEntryRoutes({
           return { error: 'Combat entry is no longer available' };
         }
 
+        // Creatures that won initiative act now, before the player's first action (#2658).
+        const npcTurns = await runNpcTurns(outcome.combatState.encounter.id, user.userId);
         set.status = 201;
-        return enterResponse(outcome, buildInitiativeOrder);
+        return {
+          ...enterResponse(outcome, buildInitiativeOrder),
+          ...(npcTurns ? { npcTurns } : {}),
+        };
       } catch (error) {
         return mapEntryError(set, error);
       }

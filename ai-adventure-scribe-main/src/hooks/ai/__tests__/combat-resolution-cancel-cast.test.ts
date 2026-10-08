@@ -32,7 +32,6 @@ const chatWithDM = vi.fn();
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
-const advanceNpcTurns = vi.fn();
 const resolveAoECast = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
@@ -52,12 +51,17 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 }));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
     resolveAoECast: (...args: any[]) => resolveAoECast(...args),
   },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
+
+/** The End turn intents this layer sent: the one request behind which the server runs NPC turns. */
+const endTurnIntents = () =>
+  executeAuthoritativeCombatIntent.mock.calls.filter(
+    ([, intent]: any[]) => intent?.type === 'end_turn',
+  );
 
 const APPRENTICE_ID = '1bc3932f-da2d-4525-84e5-77a31a4b3bef';
 const SHARD_ID = '5d1e0a44-1111-4222-8333-444444444444';
@@ -124,22 +128,31 @@ describe('Cancel cast (#2418)', () => {
     });
     chatWithDM.mockResolvedValue({ text: 'The acid hisses.', narrationSegments: [] });
     repairRefusedCombatAction.mockResolvedValue(null);
+    // The End turn body: the boundary hands the turn to the shard, and the server runs it before
+    // answering (`npcTurns`, the drain's AdvanceNpcTurnsResult shape) — #2658 step 3.
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: SHARD_ID, name: 'Corrupted Shard' },
+      engineRows: [],
+      npcTurns: {
+        results: [],
+        currentParticipant: {
+          id: APPRENTICE_ID,
+          name: 'The Apprentice',
+          participantType: 'player',
+        },
+        round: 1,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
     });
     executeStructuredCombatActionWithBoundary.mockResolvedValue({
       outcomes: [],
       result: ACID_SPLASH_RESULT,
       boundary: null,
-    });
-    advanceNpcTurns.mockResolvedValue({
-      results: [],
-      currentParticipant: { id: APPRENTICE_ID, name: 'The Apprentice' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
     });
   });
 
@@ -154,7 +167,7 @@ describe('Cancel cast (#2418)', () => {
 
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    expect(advanceNpcTurns).not.toHaveBeenCalled();
+    expect(endTurnIntents()).toEqual([]);
     expect(result.text).toContain('You cancelled the cast');
     expect(result.text).toContain('no spell slot was used');
     expect(result.text).toContain('It is still your turn');

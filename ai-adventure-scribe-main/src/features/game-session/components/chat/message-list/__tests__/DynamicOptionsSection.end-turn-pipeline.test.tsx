@@ -4,12 +4,12 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { DynamicOptionsSection } from '../DynamicOptionsSection';
 
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
-import { userDataApi } from '@/services/user-data-api';
 
 /**
- * #2641 items 3 and 5 (run D9): "End turn" ended the player's turn and stopped. The server has no
- * auto-advance, so the creature that was up waited until the player typed something. The attack
- * chip beside it ran the NPC turns; this one did not.
+ * #2641 items 3 and 5 (run D9): "End turn" ended the player's turn and stopped, and the creature
+ * that was up waited until the player typed something. Since #2658 step 3 the server runs those
+ * creatures inside the End turn request itself: the chip sends one keyed end_turn and makes no
+ * second call, and every row (the boundary's and each creature's) is the server's.
  */
 const SCHOLAR_ID = 'e7e569df-0000-4000-8000-000000000001';
 const SWARM_1_ID = 'faea28f4-0000-4000-8000-000000000002';
@@ -31,17 +31,15 @@ const combat = vi.hoisted(() => {
         { id: SWARM_2_ID, name: 'Light-Eater Swarm 2', participantType: 'monster' },
       ],
     } as any,
+    refreshCombatState: null as any,
   };
 });
 vi.mock('@/contexts/CombatContext', () => ({
-  useCombat: () => ({ state: combat, refreshCombatState: vi.fn().mockResolvedValue(null) }),
+  useCombat: () => ({ state: combat, refreshCombatState: combat.refreshCombatState }),
 }));
 vi.mock('@/services/combat/combat-action-executor', () => ({
   executeAuthoritativeCombatIntent: vi.fn(),
   executeStructuredCombatActionWithBoundary: vi.fn(),
-}));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { advanceNpcTurns: vi.fn() },
 }));
 vi.mock('@/components/game/ActionOptions', () => ({
   ActionOptions: ({ options, onOptionSelect }: { options: any[]; onOptionSelect: any }) => (
@@ -55,7 +53,7 @@ vi.mock('@/components/game/ActionOptions', () => ({
   ),
 }));
 
-/** One NPC attack as `advance-npc-turns` returns it (see the #2622 attack-pipeline fixture). */
+/** One NPC attack as the server's drain reports it (the AdvanceNpcTurnsResult `results` entry). */
 const swarmHitsScholar = {
   action: {
     actor_id: SWARM_1_ID,
@@ -66,6 +64,7 @@ const swarmHitsScholar = {
     slot_level: null,
     movement_feet: 0,
   },
+  round: 2,
   engineResult: {
     actorName: 'Light-Eater Swarm 1',
     targetName: 'The Scholar',
@@ -79,12 +78,35 @@ const swarmHitsScholar = {
   transcriptLines: [],
 };
 
-describe('the End turn option runs the NPC turns that follow (#2641)', () => {
+/**
+ * `payload.result` of the intent route for a player's End turn: the boundary's own result, the
+ * creatures the server ran after it (`npcTurns`), and every row it wrote (`engineRows`).
+ */
+const endTurnResult = (npcTurns: Record<string, unknown> | undefined, extra = {}) => ({
+  newRound: false,
+  roundNumber: 2,
+  currentParticipant: { id: SWARM_1_ID },
+  previousParticipant: { id: SCHOLAR_ID },
+  actionId: 'end-turn-action',
+  engineRows: [],
+  sessionId: 'session-d5',
+  ...(npcTurns ? { npcTurns } : {}),
+  ...extra,
+});
+
+const keyedEndTurn = {
+  type: 'end_turn',
+  actorId: SCHOLAR_ID,
+  actionId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+};
+
+describe('the End turn option leaves the NPC turns to the server (#2641, #2658 step 3)', () => {
   const onOptionSelect = vi.fn().mockResolvedValue(undefined);
   const onSendMessage = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     vi.clearAllMocks();
+    combat.refreshCombatState = vi.fn().mockResolvedValue(null);
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -92,19 +114,19 @@ describe('the End turn option runs the NPC turns that follow (#2641)', () => {
         actions: [{ type: 'end_turn', label: 'End turn' }],
       }),
     } as Response);
-    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
-      currentParticipant: { id: SWARM_1_ID },
-      combatEnded: false,
-    } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [swarmHitsScholar],
-      currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player' },
-      combatEnded: false,
-      iterationCount: 1,
-      iterationCap: 6,
-      capReached: false,
-      transcriptLines: [],
-    } as any);
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue(
+      endTurnResult({
+        results: [swarmHitsScholar],
+        currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player' },
+        round: 2,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 6,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      }) as any,
+    );
   });
 
   const clickEndTurn = async () => {
@@ -119,62 +141,57 @@ describe('the End turn option runs the NPC turns that follow (#2641)', () => {
     fireEvent.click(await screen.findByText('End turn'));
   };
 
-  it('advances the creature that is up without writing the server-owned NPC row', async () => {
+  // Migrated (#2658 step 3): was "advances the creature that is up without writing the server-owned NPC row"
+  it('sends one keyed End turn and no second call: the server ran the creature that was up', async () => {
     await clickEndTurn();
 
-    await waitFor(() => expect(userDataApi.advanceNpcTurns).toHaveBeenCalledTimes(1));
-    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', {
-      type: 'end_turn',
-      actorId: SCHOLAR_ID,
-    });
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-d5', SWARM_1_ID);
+    await waitFor(() => expect(combat.refreshCombatState).toHaveBeenCalled());
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', keyedEndTurn);
     expect(onSendMessage).not.toHaveBeenCalled();
     // The chip never sends the label to the DM as typed text.
     expect(onOptionSelect).not.toHaveBeenCalled();
   });
 
-  it('does not advance anyone when the end of the turn ended the fight', async () => {
-    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
-      currentParticipant: null,
-      combatEnded: true,
-      endedReason: 'party_defeated',
-    } as any);
+  // Migrated (#2658 step 3): was "does not advance anyone when the end of the turn ended the fight"
+  it('writes no client line when the end of the turn ended the fight: the end reason is in the server row', async () => {
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue(
+      endTurnResult(undefined, {
+        currentParticipant: null,
+        combatEnded: true,
+        endedReason: 'party_defeated',
+      }) as any,
+    );
 
     await clickEndTurn();
 
-    await waitFor(() => expect(onSendMessage).toHaveBeenCalled());
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    await waitFor(() => expect(combat.refreshCombatState).toHaveBeenCalled());
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    expect(onSendMessage).not.toHaveBeenCalled();
   });
 
-  it('runs the creatures again when the server stopped at its safety cap with one still up', async () => {
-    vi.mocked(userDataApi.advanceNpcTurns)
-      .mockResolvedValueOnce({
+  // Migrated (#2658 step 3): was "runs the creatures again when the server stopped at its safety cap with one still up"
+  it('asks for no continuation when the server had to continue past its safety cap', async () => {
+    // The server's drain continued past the per-call cap and handed the turn back: one response
+    // with both batches' iterations, and no cap line, because the fight is not paused.
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue(
+      endTurnResult({
         results: [swarmHitsScholar],
-        currentParticipant: {
-          id: SWARM_1_ID,
-          name: 'Light-Eater Swarm 1',
-          participantType: 'monster',
-        },
-        combatEnded: false,
-        iterationCount: 6,
-        iterationCap: 6,
-        capReached: true,
-        transcriptLines: ['⚙️ Engine: NPC turn loop stopped after 6 iterations.'],
-      } as any)
-      .mockResolvedValueOnce({
-        results: [],
         currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player' },
+        round: 3,
         combatEnded: false,
-        iterationCount: 1,
+        iterationCount: 7,
         iterationCap: 6,
         capReached: false,
         transcriptLines: [],
-      } as any);
+        engineRows: [],
+      }) as any,
+    );
 
     await clickEndTurn();
 
-    await waitFor(() => expect(userDataApi.advanceNpcTurns).toHaveBeenCalledTimes(2));
-    expect(userDataApi.advanceNpcTurns).toHaveBeenLastCalledWith('session-d5', SWARM_1_ID);
+    await waitFor(() => expect(combat.refreshCombatState).toHaveBeenCalled());
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
     const text = onSendMessage.mock.calls.map(([message]) => (message as { text: string }).text);
     // The fight is not paused any more, so the "stopped after" line is not left on screen.
     expect(text.join('\n')).not.toContain('stopped after');

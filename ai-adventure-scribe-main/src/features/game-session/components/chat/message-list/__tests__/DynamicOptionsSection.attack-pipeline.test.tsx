@@ -10,7 +10,6 @@ import {
 } from '@/services/combat/combat-action-executor';
 import { askPlayerForAttackDie } from '@/services/combat/player-attack-roll';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
-import { userDataApi } from '@/services/user-data-api';
 
 /**
  * #2563, run D5 round 2: the "Attack with Quarterstaff" chip used to send
@@ -61,9 +60,6 @@ vi.mock('@/services/combat/player-attack-roll', () => ({
 vi.mock('@/services/combat/player-spell-cast', () => ({
   askPlayerForSpellCast: vi.fn(),
 }));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { advanceNpcTurns: vi.fn() },
-}));
 vi.mock('@/components/game/ActionOptions', () => ({
   ActionOptions: ({ options, onOptionSelect }: { options: any[]; onOptionSelect: any }) => (
     <div data-testid="action-options">
@@ -109,8 +105,51 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
       currentParticipant: { id: SWARM_1_ID },
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ results: [] } as any);
   });
+
+  const PARTICIPANTS = [
+    { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player', maxHp: 10 },
+    { id: SWARM_1_ID, name: 'Light-Eater Swarm 1', participantType: 'monster' },
+  ];
+  /** A row as the server's writeNpcEngineRow stores and sends it (npc-engine-row.ts). */
+  const serverRow = (
+    id: string,
+    actionId: string,
+    intent: { type: string; actorId: string; targetIds?: string[] },
+    result: unknown,
+  ) => {
+    const message = buildNpcEngineMessage(PARTICIPANTS, 2, intent, result);
+    return {
+      id,
+      sequence: 100,
+      text: message.text,
+      kind: 'npc',
+      actionId,
+      sessionId: 'session-d5',
+      timestamp: new Date().toISOString(),
+      context: {
+        ...message.context,
+        npcResult: result,
+        combatEncounterId: 'encounter-d5',
+        actionId,
+      },
+    };
+  };
+  /**
+   * The intent route's End turn as executeAuthoritativeCombatIntent hands it back: `payload.result`
+   * with the creatures the server ran after it and every row it wrote, which the real executor
+   * dispatches as `session-engine-rows`.
+   */
+  const serverEndTurn = (result: Record<string, unknown>, rows: unknown[], npcTurns?: unknown) =>
+    (async () => {
+      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: rows }));
+      return { ...result, ...(npcTurns ? { npcTurns } : {}), engineRows: rows };
+    }) as any;
+  const keyedEndTurn = {
+    type: 'end_turn',
+    actorId: SCHOLAR_ID,
+    actionId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+  };
 
   it('opens the dialog and posts the declare intent with the engine id', async () => {
     render(
@@ -132,18 +171,18 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       },
       actorLabel: 'The Scholar',
     });
-    // The commit carries the player's own die; the turn then settles and the NPCs run.
+    // The commit carries the player's own die; the turn then settles, keyed, and the server runs
+    // the NPCs inside that one request (#2658 step 3): there is no second call.
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'encounter-d5',
       expect.objectContaining({ target_ids: [SWARM_1_ID], weapon_id: 'quarterstaff' }),
       15,
       'action_bar',
     );
-    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', {
-      type: 'end_turn',
-      actorId: SCHOLAR_ID,
-    });
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-d5', SWARM_1_ID);
+    await waitFor(() =>
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', keyedEndTurn),
+    );
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
     // The DM never sees this attack as text.
     expect(onOptionSelect).not.toHaveBeenCalled();
   });
@@ -171,6 +210,8 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     expect(onOptionSelect).not.toHaveBeenCalled();
   });
 
+  // Migrated (#2658 step 3): the NPC row used to come from the client's advance-npc-turns call;
+  // it now arrives with the End turn response the server answered after running the swarm.
   it('persists each player and NPC engine result exactly once, including zero damage and the end reason (#2622)', async () => {
     vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
       outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 0, newHp: 2 }],
@@ -223,36 +264,25 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       capReached: false,
       transcriptLines: [],
     };
-    vi.mocked(userDataApi.advanceNpcTurns).mockImplementation((async () => {
-      // The server now delivers NPC results as system message rows (via buildNpcEngineMessage),
-      // not as client-assembled onSendMessage calls. Simulate the server + request() dispatch.
-      const npcResult = npcTurn.results[0];
-      const message = buildNpcEngineMessage(
-        [
-          { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player', maxHp: 10 },
-          { id: SWARM_1_ID, name: 'Light-Eater Swarm 1', participantType: 'monster' },
-        ],
-        2,
-        {
-          type: npcResult.action.action_type,
-          actorId: npcResult.action.actor_id,
-          targetIds: npcResult.action.target_ids,
-        },
-        npcResult.engineResult,
-      );
-      const row = {
-        id: 'npc-row-swarm-attack',
-        sequence: 100,
-        text: message.text,
-        kind: 'npc',
-        actionId: 'swarm-attack-action',
-        sessionId: 'session-d5',
-        timestamp: new Date().toISOString(),
-        context: message.context,
-      };
-      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [row] }));
-      return { ...npcTurn, engineRows: [row] };
-    }) as any);
+    // The server runs the swarm inside the End turn and writes its row (buildNpcEngineMessage);
+    // the executor dispatches the response's engineRows.
+    const npcResult = npcTurn.results[0];
+    const npcRow = serverRow(
+      'npc-row-swarm-attack',
+      'swarm-attack-action',
+      {
+        type: npcResult.action.action_type,
+        actorId: npcResult.action.actor_id,
+        targetIds: npcResult.action.target_ids,
+      },
+      npcResult.engineResult,
+    );
+    vi.mocked(executeAuthoritativeCombatIntent).mockImplementation(
+      serverEndTurn({ currentParticipant: { id: SWARM_1_ID } }, [npcRow], {
+        ...npcTurn,
+        engineRows: [npcRow],
+      }),
+    );
 
     // Capture the server-delivered NPC row.
     const npcRows: Array<{ text: string; context: any }> = [];
@@ -365,7 +395,10 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
   const rowsText = () =>
     onSendMessage.mock.calls.map(([message]) => (message as { text: string }).text);
 
-  it('persists the attack, then one row for the death save, the DEAD line and the end reason when the turn boundary ends the fight (#2618)', async () => {
+  // Migrated (#2658 step 3): was "persists the attack, then one row for the death save, the DEAD
+  // line and the end reason when the turn boundary ends the fight (#2618)". The boundary's row is
+  // now the server's (the keyed End turn writes it); the client writes only the attack.
+  it('persists the attack; the keyed End turn brings one server row with the death save, the DEAD line and the end reason (#2618)', async () => {
     vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
       outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 2, newHp: 2 }],
       boundary: null,
@@ -383,7 +416,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
         weaponResolution: { resolved: 'Quarterstaff' },
       },
     } as any);
-    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+    const boundary = {
       currentParticipant: { id: SWARM_1_ID },
       deathSaves: [
         {
@@ -397,33 +430,51 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       ],
       combatEnded: true,
       endedReason: 'death_save_failed',
-    } as any);
-
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
+    };
+    const boundaryRow = serverRow(
+      'end-turn-row',
+      'end-turn-action',
+      { type: 'end_turn', actorId: SCHOLAR_ID },
+      boundary,
     );
-    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+    vi.mocked(executeAuthoritativeCombatIntent).mockImplementation(
+      serverEndTurn(boundary, [boundaryRow]),
+    );
+    const delivered: Array<{ text: string; context: any }> = [];
+    const capture = (event: Event) => {
+      delivered.push(...((event as CustomEvent).detail as Array<{ text: string; context: any }>));
+    };
+    window.addEventListener('session-engine-rows', capture);
+    try {
+      render(
+        <DynamicOptionsSection
+          options={[]}
+          onOptionSelect={onOptionSelect}
+          onSendMessage={onSendMessage}
+          hasDynamicOverlay
+        />,
+      );
+      fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
-    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(2));
-    const rows = rowsText();
-    expect(rows[0]).toContain('2 damage');
-    expect(rows[1]).toContain('The Scholar rolled 3 on their death saving throw');
-    expect(rows[1]).toContain('DEAD');
-    // The boundary's own result is one row: its death save, then the end reason.
-    expect(rows[1].match(/death saving throw/g)?.length).toBe(1);
-    expect(rows[1].match(/Combat ended/g)?.length).toBe(1);
-    expect(rows[1]).toContain('a death save ended the fight');
-    expect(new Set(rows).size).toBe(2);
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
-    const deathRow = onSendMessage.mock.calls[1][0] as { context: { engineCards: any[] } };
-    expect(deathRow.context.engineCards).toEqual([
-      expect.objectContaining({ kind: 'death_save', deathSave: { successes: 0, failures: 3 } }),
-    ]);
+      await waitFor(() => expect(delivered).toHaveLength(1));
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', keyedEndTurn);
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+      const rows = rowsText();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toContain('2 damage');
+      const deathRow = delivered[0];
+      expect(deathRow.text).toContain('The Scholar rolled 3 on their death saving throw');
+      expect(deathRow.text).toContain('DEAD');
+      // The boundary's own result is one row: its death save, then the end reason.
+      expect(deathRow.text.match(/death saving throw/g)?.length).toBe(1);
+      expect(deathRow.text.match(/Combat ended/g)?.length).toBe(1);
+      expect(deathRow.text).toContain('a death save ended the fight');
+      expect(deathRow.context.engineCards).toEqual([
+        expect.objectContaining({ kind: 'death_save', deathSave: { successes: 0, failures: 3 } }),
+      ]);
+    } finally {
+      window.removeEventListener('session-engine-rows', capture);
+    }
   });
 
   it("carries the stable hero's wake-up on the row of the result that ended the fight (#2518)", async () => {
@@ -497,10 +548,22 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
       boundary: null,
       result: { hit: true },
     } as any);
+    // The intent route's `payload.result` for the End turn: the server ran the swarm inside it.
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
       currentParticipant: { id: SWARM_1_ID },
+      npcTurns: {
+        results: [],
+        currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player' },
+        round: 2,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 6,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
+      engineRows: [],
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ results: [] } as any);
   });
 
   it('opens the dialog and posts the declare intent with the engine ids', async () => {
@@ -524,18 +587,22 @@ describe('the spell-attack option runs the declare pipeline, never DM text (#258
       actorLabel: 'The Scholar',
       participants: combat.activeEncounter.participants,
     });
-    // The commit carries the player's own die; the turn then settles and the NPCs run.
+    // The commit carries the player's own die; the turn then settles, keyed, and the server runs
+    // the NPCs inside that one request (#2658 step 3): there is no second call.
     expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledWith(
       'encounter-d5',
       expect.objectContaining({ action_type: 'cast_spell', target_ids: [SWARM_1_ID] }),
       15,
       'action_bar',
     );
-    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', {
-      type: 'end_turn',
-      actorId: SCHOLAR_ID,
-    });
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-d5', SWARM_1_ID);
+    await waitFor(() =>
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith('encounter-d5', {
+        type: 'end_turn',
+        actorId: SCHOLAR_ID,
+        actionId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      }),
+    );
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
     // The DM never sees this cast as text.
     expect(onOptionSelect).not.toHaveBeenCalled();
   });

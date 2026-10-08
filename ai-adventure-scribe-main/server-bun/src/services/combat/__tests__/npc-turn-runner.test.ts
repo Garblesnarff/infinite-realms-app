@@ -157,7 +157,9 @@ describe('advanceNpcTurns', () => {
     const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
 
     expect(result.iterationCount).toBe(1);
-    expect(intents).toEqual([{ type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:end_turn' }]);
+    expect(intents).toEqual([
+      { type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:end_turn' },
+    ]);
     expect(result.results[0].action.action_type).toBe('end_turn');
     expect(state.currentParticipant.id).toBe('p1');
   });
@@ -188,10 +190,22 @@ describe('advanceNpcTurns', () => {
       const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
 
       expect(intents).toEqual([
-        { type: 'check', actorId: 'npc1', checkKind: 'escape', actionId: 'encounter-1:undefined:npc1:check' },
-        { type: 'end_turn', actorId: 'npc1' },
+        {
+          type: 'check',
+          actorId: 'npc1',
+          checkKind: 'escape',
+          actionId: 'encounter-1:undefined:npc1:check',
+        },
+        { type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:boundary' },
       ]);
-      expect(buildNpcEngineMessage([npc, player], 1, { type: 'check', actorId: npc.id }, result.results[0].engineResult).context.combatEngineBlocks[0].lines).toEqual([
+      expect(
+        buildNpcEngineMessage(
+          [npc, player],
+          1,
+          { type: 'check', actorId: npc.id },
+          result.results[0].engineResult,
+        ).context.combatEngineBlocks[0].lines,
+      ).toEqual([
         "⚙️ Engine: Escape: 19 (nat 20-1) vs Athletics 4 — success, npc1 breaks free of The Seeker's grapple",
       ]);
     });
@@ -240,7 +254,7 @@ describe('advanceNpcTurns', () => {
     await advanceNpcTurns('encounter-1', 'user-1', unprovoked.dependencies);
     expect(unprovoked.intents).toEqual([
       { type: 'dodge', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:dodge' },
-      { type: 'end_turn', actorId: 'npc1' },
+      { type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:boundary' },
     ]);
 
     neutral.provoked = true;
@@ -251,8 +265,14 @@ describe('advanceNpcTurns', () => {
 
     await advanceNpcTurns('encounter-1', 'user-1', provoked.dependencies);
     expect(provoked.intents).toEqual([
-      { type: 'attack', actorId: 'npc1', targetId: 'p1', weaponId: 'unarmed-strike', actionId: 'encounter-1:undefined:npc1:attack' },
-      { type: 'end_turn', actorId: 'npc1' },
+      {
+        type: 'attack',
+        actorId: 'npc1',
+        targetId: 'p1',
+        weaponId: 'unarmed-strike',
+        actionId: 'encounter-1:undefined:npc1:attack',
+      },
+      { type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:boundary' },
     ]);
   });
 
@@ -328,7 +348,9 @@ describe('advanceNpcTurns', () => {
 
     expect(result.combatEnded).toBe(true);
     expect(result.iterationCount).toBe(1);
-    expect(intents).toEqual([{ type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:end_turn' }]);
+    expect(intents).toEqual([
+      { type: 'end_turn', actorId: 'npc1', actionId: 'encounter-1:undefined:npc1:end_turn' },
+    ]);
   });
 
   describe('a downed player (#2518)', () => {
@@ -493,7 +515,12 @@ describe('advanceNpcTurns', () => {
 
     const result = await advanceNpcTurns('encounter-1', 'user-1', dependencies);
 
-    const transcript = buildNpcEngineMessage([npc, player], 1, { type: 'attack', actorId: npc.id, targetId: player.id }, result.results[0].engineResult).text;
+    const transcript = buildNpcEngineMessage(
+      [npc, player],
+      1,
+      { type: 'attack', actorId: npc.id, targetId: player.id },
+      result.results[0].engineResult,
+    ).text;
     // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
     expect(transcript).toContain('⚙️ Engine:');
     expect(transcript).toContain('death saving throw');

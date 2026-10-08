@@ -13,7 +13,6 @@ import type * as CombatActionExecutor from '@/services/combat/combat-action-exec
 import type * as PlayerAttackRoll from '@/services/combat/player-attack-roll';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
-import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 
 /**
  * #2393: run 16 read `ROUND 1 · PLAYER`, `ROUND 2 · NPC`, `ROUND 2 · PLAYER`, `ROUND 3 · NPC` in
@@ -31,7 +30,6 @@ const chatWithDM = vi.fn();
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const askPlayerForAttackDie = vi.fn();
-const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -49,9 +47,6 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
   ...(await importOriginal<typeof PlayerAttackRoll>()),
   askPlayerForAttackDie: (...args: any[]) => askPlayerForAttackDie(...args),
-}));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args) },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -102,19 +97,24 @@ const label = (block: { round: number; source: string }) =>
 
 /**
  * One player turn as the hook runs it: the round comes from the freshly mapped encounter, the
- * pre-flight body (if any) is handed in already resolved, and the body after the player's turn
- * comes from `advanceNpcTurns`.
+ * entry's creature turns (if any) are handed in already resolved, and the creatures after the
+ * player's turn arrive on the End turn body as `npcTurns`: the server ran them inside it (#2658
+ * step 3). The runner bodies themselves are the same real ones.
  */
 const playerTurn = async (params: {
   round: number;
   order: Array<'player' | string>;
   target: string;
-  /** The `advanceNpcTurns` bodies the turn consumes, in call order. */
+  /** The runner bodies the turn's server requests carried, in order; the last is the End turn's. */
   advance: unknown[];
   preflight?: unknown;
 }) => {
   const encounter = encounterInRound(params.round, params.order);
-  for (const body of params.advance) advanceNpcTurns.mockResolvedValueOnce(body);
+  executeAuthoritativeCombatIntent.mockResolvedValueOnce({
+    currentParticipant: { id: 'npc1', name: 'Balthazar' },
+    engineRows: [],
+    npcTurns: params.advance.at(-1),
+  });
   const result = await resolveDeclaredCombatActions({
     encounterId: 'enc-1',
     sessionId: 'session-1',
@@ -126,10 +126,15 @@ const playerTurn = async (params: {
     combatRound: encounter.currentRound,
     ...(params.preflight ? { preResolvedNpcTurns: params.preflight as any } : {}),
   });
-  const npcBlocks = (batch: unknown) => receivedNpcMessages(batch, encounter.participants).flatMap((message) => message.context.combatEngineBlocks);
+  const npcBlocks = (batch: unknown) =>
+    receivedNpcMessages(batch, encounter.participants).flatMap(
+      (message) => message.context.combatEngineBlocks,
+    );
   return [
-    ...npcBlocks(params.preflight), ...params.advance.slice(0, -1).flatMap(npcBlocks),
-    ...(result.combatEngineBlocks ?? []), ...npcBlocks(params.advance.at(-1)),
+    ...npcBlocks(params.preflight),
+    ...params.advance.slice(0, -1).flatMap(npcBlocks),
+    ...(result.combatEngineBlocks ?? []),
+    ...npcBlocks(params.advance.at(-1)),
   ].map(label);
 };
 
@@ -195,17 +200,32 @@ describe('engine line round labels (#2393)', () => {
     ]);
   });
 
-  it('a player action refused behind a stale NPC holder is labelled with the round the recovery reaches', async () => {
+  // Migrated (#2658 step 3): was "a player action refused behind a stale NPC holder is labelled with
+  // the round the recovery reaches". The client recovery is gone: the server runs the stale holder
+  // before the player's action (the intent route's pre-drain) and returns those creatures on the
+  // action's own result as `npcTurns`. The player's action is then a round 2 action.
+  it('a player action behind a stale NPC holder is labelled with the round the server pre-drain reaches', async () => {
     const order = ['npc0', 'player', 'npc2'];
     const [, recovery, afterAction] = THREE_ACTOR_PLAYER_MIDDLE_NPC_BATCHES;
-    // The encounter was read with `npc2` still holding the turn in round 1; settling it wraps the
-    // order, so the player's retried action is a round 2 action.
-    executeStructuredCombatActionWithBoundary.mockRejectedValueOnce(
-      new CombatIntentRefusedError('Actor is not the current-turn participant', 422, {
-        currentParticipantId: 'npc2',
-        currentParticipantSlug: 'npc2',
-      }),
-    );
+    // The encounter was read with `npc2` still holding the turn in round 1; the server settles it
+    // inside the attack request, wrapping the order, and answers with the attack plus that batch.
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce({
+      outcomes: [{ participantId: 'npc0', hit: true, finalDamage: 6, newHp: 14 }],
+      result: {
+        actorName: ROUND_FIGHT_PLAYER_NAME,
+        targetName: 'Monster npc0',
+        d20: 16,
+        attackBonus: 5,
+        totalAttackRoll: 21,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 6,
+        damageType: 'slashing',
+        npcTurns: recovery,
+        engineRows: [],
+      },
+      boundary: null,
+    });
 
     const labels = await playerTurn({
       round: 1,

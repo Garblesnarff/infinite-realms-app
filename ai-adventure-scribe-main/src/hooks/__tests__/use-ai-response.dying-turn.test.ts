@@ -61,7 +61,6 @@ vi.mock('@/services/user-data-api', () => ({
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
     enterCombat: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
@@ -200,6 +199,43 @@ const spiderStrikesTheBody = {
   transcriptLines: [],
 };
 
+/**
+ * The spider's row as the server writes it: `buildNpcEngineMessage` over the runner's result, keyed
+ * by the runner's actionId (`encounterId:round:actorId:actionType`).
+ */
+const spiderRow = (() => {
+  const npcResult = spiderStrikesTheBody.results[0];
+  const message = buildNpcEngineMessage(
+    [
+      { id: SCHOLAR.id, name: 'The Scholar', participantType: 'player', maxHp: 7 },
+      { id: SPIDER_ID, name: 'Vitruvian Spider', participantType: 'monster', maxHp: 40 },
+    ],
+    npcResult.round,
+    {
+      type: npcResult.action.action_type,
+      actorId: npcResult.action.actor_id,
+      targetIds: npcResult.action.target_ids,
+    },
+    npcResult.engineResult,
+  );
+  const actionId = `enc-1:${npcResult.round}:${SPIDER_ID}:attack`;
+  return {
+    id: 'npc-row-spider-strike',
+    sequence: 100,
+    text: message.text,
+    kind: 'npc',
+    actionId,
+    sessionId: SESSION_ID,
+    timestamp: new Date().toISOString(),
+    context: {
+      ...message.context,
+      npcResult: npcResult.engineResult,
+      combatEncounterId: 'enc-1',
+      actionId,
+    },
+  };
+})();
+
 describe('useAIResponse: the dying player’s turn (#2518)', () => {
   let order: string[];
   let intentBodies: Array<Record<string, any>>;
@@ -232,37 +268,6 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
       character: { id: SCHOLAR.characterId, name: 'The Scholar' },
     } as any);
     vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockImplementation((async () => {
-      order.push('npc turns');
-      // The server now delivers NPC results as system message rows (via buildNpcEngineMessage),
-      // not as client-assembled combatEngineBlocks. Simulate the server + request() dispatch.
-      const npcResult = spiderStrikesTheBody.results[0];
-      const message = buildNpcEngineMessage(
-        [
-          { id: SCHOLAR.id, name: 'The Scholar', participantType: 'player', maxHp: 7 },
-          { id: SPIDER_ID, name: 'Vitruvian Spider', participantType: 'monster', maxHp: 40 },
-        ],
-        npcResult.round,
-        {
-          type: npcResult.action.action_type,
-          actorId: npcResult.action.actor_id,
-          targetIds: npcResult.action.target_ids,
-        },
-        npcResult.engineResult,
-      );
-      const row = {
-        id: 'npc-row-spider-strike',
-        sequence: 100,
-        text: message.text,
-        kind: 'npc',
-        actionId: 'spider-strike-action',
-        sessionId: SESSION_ID,
-        timestamp: new Date().toISOString(),
-        context: message.context,
-      };
-      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [row] }));
-      return { ...spiderStrikesTheBody, engineRows: [row] };
-    }) as any);
     vi.mocked(AIService.chatWithDM).mockImplementation((async () => {
       order.push('narration');
       return { text: 'The spider’s fangs close on the body. The Scholar does not move.' };
@@ -273,10 +278,16 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
         const body = JSON.parse(String(init?.body ?? '{}'));
         intentBodies.push(body);
         order.push(`intent: ${body.intent?.type}`);
-        return new Response(
-          JSON.stringify({ result: deathSaveIntentResult(body.intent?.d20 ?? 11) }),
-          { status: 200 },
-        );
+        // #2658 step 3: the intent route runs the creatures that now hold the turn before it
+        // answers, so the save's response carries the spider's turn and its server-written row.
+        const result = {
+          ...deathSaveIntentResult(body.intent?.d20 ?? 11),
+          npcTurns: { ...spiderStrikesTheBody, engineRows: [spiderRow] },
+          engineRows: [spiderRow],
+        };
+        return new Response(JSON.stringify({ accepted: true, result, engineRows: [spiderRow] }), {
+          status: 200,
+        });
       }),
     );
   });
@@ -306,7 +317,8 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     );
   };
 
-  it('asks the player for ONE d20 through the roll prompt, sends the save with that die, and ends the turn there', async () => {
+  // Migrated (#2658 step 3): was "asks the player for ONE d20 through the roll prompt, sends the save with that die, and ends the turn there"
+  it('asks the player for ONE d20 through the roll prompt, sends the save with that die, and the creatures that follow come back on the same response', async () => {
     await playDyingTurn(() => {});
 
     // The prompt opens first and the player's die (14) is what the engine is handed — the exact
@@ -318,9 +330,9 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(sent).toEqual(deathSaveIntentWire(SCHOLAR.id, 14));
     // No `end_turn`: the save is the whole turn and the server already moved the order on.
     expect(intentBodies.some((body) => body.intent?.type === 'end_turn')).toBe(false);
-    // The monsters act BETWEEN saves, after this one, never inside it.
-    expect(order).toEqual(['prompt: death save', 'intent: death_save', 'npc turns', 'narration']);
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith(SESSION_ID, SPIDER_ID);
+    // The monsters act BETWEEN saves, after this one, never inside it: the server ran them
+    // before it answered the save, so the client makes no second request for them.
+    expect(order).toEqual(['prompt: death save', 'intent: death_save', 'narration']);
   });
 
   it('prints the save and the strike on the body as engine lines with cards, under the player’s turn', async () => {
@@ -422,7 +434,6 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(response.text).toBe('');
     expect(AIService.chatWithDM).not.toHaveBeenCalled();
     expect(intentBodies).toHaveLength(0);
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
     expect(order).toEqual([]);
   });
 
@@ -501,8 +512,12 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     expect(lines).toContain(
       'The Scholar is stable and unconscious for 3 hours (1d4). The Scholar wakes with 1 HP.',
     );
-    // No NPC turn after a fight that is over, and the DM is asked once, for the aftermath.
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    // No NPC turn after a fight that is over (the save's answer carries none, and nothing else
+    // is asked of the server), and the DM is asked once, for the aftermath.
+    expect(intentBodies.map((body) => body.intent?.type)).toEqual(['death_save']);
+    expect(response.context?.combatEngineBlocks).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'npc' })]),
+    );
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
     // A story beat, not a death: the end state does not replace the game.
     await waitFor(() => expect(result.current.terminalDeathState).toBeNull());

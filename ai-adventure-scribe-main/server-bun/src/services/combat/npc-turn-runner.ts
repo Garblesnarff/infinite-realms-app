@@ -386,12 +386,10 @@ export async function advanceNpcTurns(
       combatLogger.info({ msg: 'NPC_TURN_HELD_BY_PARLEY', encounterId, actorId: actor.id });
     }
     const action = chooseAction(state, actor, weapon, canAct, downedTarget, parleyHeld);
+    const turnKey = `${encounterId}:${state.encounter.currentRound}:${actor.id}`;
     const resolved = await dependencies.executeIntent(
       encounterId,
-      {
-        ...toIntent(action),
-        actionId: `${encounterId}:${state.encounter.currentRound}:${actor.id}:${action.action_type}`,
-      },
+      { ...toIntent(action), actionId: `${turnKey}:${action.action_type}` },
       userId,
       'dm',
       Date.now(),
@@ -402,7 +400,7 @@ export async function advanceNpcTurns(
     if (!ended && action.action_type !== 'end_turn') {
       const boundary = await dependencies.executeIntent(
         encounterId,
-        { type: 'end_turn', actorId: action.actor_id },
+        { type: 'end_turn', actorId: action.actor_id, actionId: `${turnKey}:boundary` },
         userId,
         'dm',
         Date.now(),

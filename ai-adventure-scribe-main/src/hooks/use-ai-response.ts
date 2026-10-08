@@ -5,7 +5,6 @@ import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { LocalNotice } from '@/hooks/ai/types';
 import type { TurnPhaseReporter } from '@/infrastructure/api/rest-client';
 import type { AIResponse } from '@/services/ai-service';
-import type { AdvanceNpcTurnsResponse } from '@/services/user-data-api';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
@@ -22,15 +21,12 @@ import {
   recentNarrationFrom,
 } from '@/hooks/ai/combat-entry-hold';
 import {
-  COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
-  NPC_FIRST_ADVANCE_FAILED_NOTICE,
   SPELL_CAST_CANCELLED_NOTICE,
   combatTurnErrorMessage,
   combatTurnUiStateForEncounter,
   INITIAL_COMBAT_TURN_UI_STATE,
   playerParticipantForCharacter,
   preflightErrorStatus,
-  preflightNpcTurnsBeforePlayerDeclaration,
   reconcileCombatTurnAfterAction,
   type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
@@ -38,7 +34,6 @@ import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dying-turn';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
-import { narrateKillingRound } from '@/hooks/ai/killing-round-narration';
 import {
   enforceNarrationGate,
   narrativeTurnHasNoEngineEvent,
@@ -557,97 +552,6 @@ export const useAIResponse = (): {
         );
 
         const combatWasActiveAtRequestStart = isInCombat;
-        let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
-        if (isInCombat && !isDiceRollMessage) {
-          // Read before the pre-flight: one that ends combat leaves no encounter to read after.
-          const preflightParticipants = activeEncounter?.participants;
-          const preflightEncounterId = activeEncounter?.id;
-          try {
-            const preflight = await rejectWhenAborted(
-              preflightNpcTurnsBeforePlayerDeclaration({
-                sessionId,
-                activeEncounter,
-                characterId,
-                refreshCombatState,
-                signal,
-              }),
-              signal,
-            );
-            activeEncounter = preflight.activeEncounter as typeof activeEncounter;
-            isInCombat = preflight.isInCombat;
-            preflightNpcTurns = preflight.npcTurns;
-            lastCombatEncounterRef.current = activeEncounter;
-            setCombatTurnUiState(
-              combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
-            );
-          } catch (error) {
-            logger.warn(COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED, {
-              sessionId,
-              encounterId: activeEncounter?.id ?? null,
-              status: preflightErrorStatus(error),
-            });
-            // A failed pre-flight cannot safely send the declaration to the DM. Clear the
-            // duplicate guard so the player can retry the same message after the NPC batch settles.
-            lastSigRef.current = '';
-            setCombatTurnUiState(
-              combatTurnUiStateForEncounter(activeEncounter, true, characterId, 'unknown'),
-            );
-            return {
-              text: '',
-              sender: 'dm',
-              timestamp: new Date().toISOString(),
-              context: { emotion: 'neutral', intent: 'response' },
-              localNotice: NPC_FIRST_ADVANCE_FAILED_NOTICE,
-              localNotices: [{ text: NPC_FIRST_ADVANCE_FAILED_NOTICE, persist: true }],
-            };
-          }
-          // #2517: the NPCs' own turns just defeated the party. Show the death
-          // screen from the combat resolution itself — the player's pending
-          // declaration must not be sent to the DM first (run D2: the screen
-          // only appeared after the dead character's next message).
-          if (
-            preflightNpcTurns?.combatEnded &&
-            preflightNpcTurns.endedReason === 'party_defeated'
-          ) {
-            setCombatTurnUiState(combatTurnUiStateForEncounter(null, false, characterId));
-            // The end state shows at once, from the engine's own lines; it never waits on the
-            // DM. The killing round still gets its paragraph (#2518): the DM is asked for it
-            // now, and the handler saves it with the story the end state links to.
-            setTerminalDeathState({
-              state: 'party_defeated',
-              encounterId: preflightEncounterId ?? null,
-              receivedAt: Date.now(),
-              finalLines: preflightNpcTurns.transcriptLines,
-            });
-            const killingRoundText = await narrateKillingRound({
-              npcTurns: preflightNpcTurns,
-              participants: preflightParticipants,
-              sessionId,
-              gameContext,
-              messages,
-              userId: user?.id,
-              userPlan: userPlan || undefined,
-              turnCount,
-              signal,
-            });
-            return {
-              text: killingRoundText,
-              sender: 'dm',
-              timestamp: new Date().toISOString(),
-              context: {
-                intent: 'terminal',
-                terminalState: 'party_defeated',
-              },
-            };
-          }
-        }
-
-        logger.info('TURN_PREFLIGHT_TIMING', {
-          sessionId,
-          stage: 'npc-turns',
-          ms: Math.round(performance.now() - timingCheckpoint),
-        });
-        timingCheckpoint = performance.now();
 
         /** The turn is withdrawn: no DM text, one notice, and the turn state reads as settled. */
         const castCancelledReply = (notice: string): EnhancedChatMessage => {
@@ -776,14 +680,11 @@ export const useAIResponse = (): {
         }
         const playerInputOrigin = playerInputOriginOf(latestMessage);
         // A declined entry's reply is checked as a plain narrative turn: its combat fields are
-        // blanked below, whatever the model asked for. A turn that began in combat, or whose
-        // pre-flight ran NPC turns, is never narrative: the pre-flight can end the fight and
-        // clear `isInCombat`, and the DM is then describing the engine's own hits.
+        // blanked below, whatever the model asked for. A turn that began in combat is never
+        // narrative: its resolution can end the fight and clear `isInCombat`, and the DM is then
+        // describing the engine's own hits.
         const narrativeTurnOf = (reply: AIResponse): NarrativeTurn => ({
-          isInCombat:
-            isInCombat ||
-            combatWasActiveAtRequestStart ||
-            Boolean(preflightNpcTurns?.results?.length || preflightNpcTurns?.combatEnded),
+          isInCombat: isInCombat || combatWasActiveAtRequestStart,
           isDiceRollMessage: !!isDiceRollMessage,
           playerInputOrigin,
           result: entryDeclined ? { text: reply.text } : reply,
@@ -793,7 +694,7 @@ export const useAIResponse = (): {
         const holdSideEffects = narrativeTurnHasNoEngineEvent(narrativeTurnOf({ text: '' }));
         // The dying player's turn has no declaration for the DM to write: the action is the
         // death save, built here from the engine's own state, and the DM is called once, after
-        // the engine resolves it, to narrate (#2518). Read from the board the pre-flight left.
+        // the engine resolves it, to narrate (#2518).
         const dyingTurnPlayer =
           isDyingTurn && activeEncounter?.phase === 'active'
             ? playerParticipantForCharacter(activeEncounter, characterId)
@@ -848,12 +749,7 @@ export const useAIResponse = (): {
                   messageId: dmMessageId,
                   // A cast that can still be cancelled keeps its prose off the server too: a
                   // provisional row would narrate a cast the player gave up after a reload.
-                  inCombat: Boolean(
-                    isInCombat ||
-                    preflightNpcTurns?.results?.length ||
-                    preflightNpcTurns?.combatEnded ||
-                    castSignal,
-                  ),
+                  inCombat: Boolean(isInCombat || castSignal),
                   // The client's own gate predicate, so the server's harm check stands down on
                   // exactly the turns the client gate does (a dice-roll message, say).
                   narrationGated: holdSideEffects,
@@ -865,14 +761,8 @@ export const useAIResponse = (): {
                 onTextReady: async (parsedResult: AIResponse) => {
                   // A combat response is not display-ready until the authoritative player and
                   // NPC sequence has been resolved. Rendering this speculative DM text early lets
-                  // the delayed `/advance-npc-turns` response land after it in the transcript
-                  // (#2127). Preflight can end combat and clear `isInCombat`, so its NPC turns
-                  // are checked on their own.
-                  const combatSequencePending = Boolean(
-                    isInCombat ||
-                    preflightNpcTurns?.results?.length ||
-                    preflightNpcTurns?.combatEnded,
-                  );
+                  // the NPC rows land after it in the transcript (#2127).
+                  const combatSequencePending = isInCombat;
                   // A declined entry is not a combat turn: whatever the model asked for, no roll
                   // is prompted and no fight starts (#2341).
                   const earlyRollRequests = (
@@ -1019,6 +909,15 @@ export const useAIResponse = (): {
         let narrationSegments = result.narrationSegments;
         const diceRolls = (result.dice_rolls || []) as DiceRoll[];
 
+        // The rows the server wrote this turn. When its creatures end the fight on the player,
+        // the killing row (with its DEAD and ending lines) is what the end state shows (#2518).
+        const turnEngineRows: string[] = [];
+        const collectEngineRows = (event: Event): void => {
+          for (const row of (event as CustomEvent<Array<{ text?: string }>>).detail ?? []) {
+            if (row.text) turnEngineRows.push(row.text);
+          }
+        };
+        window.addEventListener('session-engine-rows', collectEngineRows);
         // Process DM Actions and transitions
         const dmActionsResult = await handleDmActionsAndTransitions({
           sessionId,
@@ -1029,7 +928,6 @@ export const useAIResponse = (): {
           refreshCombatState,
           aiContext,
           conversationHistory,
-          preflightNpcTurns,
           combatRound: activeEncounter?.currentRound,
           userPlan: userPlan || undefined,
           turnCount,
@@ -1040,7 +938,7 @@ export const useAIResponse = (): {
           onEngineNotice,
           signal,
           onPlayerWaitChange: turnSignal?.onPlayerWaitChange,
-        });
+        }).finally(() => window.removeEventListener('session-engine-rows', collectEngineRows));
         throwIfAborted();
 
         result = dmActionsResult.result;
@@ -1086,12 +984,14 @@ export const useAIResponse = (): {
           try {
             const fallen = await userDataApi.fetchSessionFallenState(sessionId);
             if (fallen) {
-              const finalBlock = combatEngineBlocks?.[combatEngineBlocks.length - 1];
+              const finalLines = turnEngineRows.length
+                ? turnEngineRows.slice(-1)
+                : combatEngineBlocks?.[combatEngineBlocks.length - 1]?.lines;
               setTerminalDeathState({
                 state: 'party_defeated',
                 encounterId: null,
                 receivedAt: Date.now(),
-                ...(finalBlock?.lines?.length ? { finalLines: finalBlock.lines } : {}),
+                ...(finalLines?.length ? { finalLines } : {}),
               });
             }
           } catch (error) {

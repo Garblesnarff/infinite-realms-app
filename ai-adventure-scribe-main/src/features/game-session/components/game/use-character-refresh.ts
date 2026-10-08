@@ -12,7 +12,7 @@ import { characterLoaderService } from '@/services/character-loader';
  * The combat tracker is reconciled from the engine's state, but the header and sheet read
  * CharacterContext. Every `combat-state-updated` event refetches that snapshot so persisted HP and
  * spell slots stay aligned with the tracker. The event comes from the session socket and from
- * `refreshCombatState` (the pull after `advanceNpcTurns`, and the read that ends a fight), so a hit
+ * `refreshCombatState` (the pull after an End turn, and the read that ends a fight), so a hit
  * that arrives by either route lands in the header too (#2641).
  */
 export function useCharacterRefreshOnCombatUpdate(

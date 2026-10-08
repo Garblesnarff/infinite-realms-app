@@ -7,12 +7,14 @@
  * error and no generic toast for a message that can never send.
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
 import { useMessageHandlerLogic } from '../use-message-handler-logic';
 
 import { useCombat } from '@/contexts/CombatContext';
 import { AIService } from '@/services/ai-service';
+import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
 import { userDataApi } from '@/services/user-data-api';
 
 const net = vi.hoisted(() => ({
@@ -87,8 +89,14 @@ vi.mock('@/infrastructure/api/rest-client', () => ({
     return () => {};
   },
 }));
-vi.mock('@/services/combat/combat-action-executor', () => ({
-  CombatIntentRefusedError: class CombatIntentRefusedError extends Error {},
+// The executor is real: the #2518 test drives it through `fetch`, as the browser does.
+vi.mock('@/services/auth/TokenService', () => ({
+  getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
+  getAccessToken: vi.fn(() => 'test'),
+}));
+vi.mock('@/services/combat/combat-zero-action-guard', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  enforceCombatActionOnAttempt: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
   settlePendingCombatEntryConfirmation: () => {},
@@ -116,7 +124,8 @@ vi.mock('@/services/user-data-api', async (importOriginal) => {
       endTacticalMap: vi.fn(),
       applyTacticalMapAction: vi.fn(),
       applyDmTacticalActions: vi.fn(),
-      advanceNpcTurns: vi.fn(),
+      detectDeclaredAttack: vi.fn(),
+      applyDmHandoutActions: vi.fn(),
       clearPendingCombatIntent: vi.fn(),
       fetchSessionFallenState: vi.fn(),
     },
@@ -289,64 +298,218 @@ describe('useMessageHandlerLogic fallen end state (#2517)', () => {
     expect(fetchFallen.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('#2518: the round that killed the character is saved as the DM’s paragraph beside the story', async () => {
-    // The NPC turns ahead of the player's declaration kill the Scholar: the end state shows from
-    // the engine's lines at once, and the DM is asked for the death's narration (run D2 had none).
-    const activeEncounter = {
+  afterEach(() => {
+    setPlayerRollHost(null);
+    vi.unstubAllGlobals();
+  });
+
+  // Migrated (#2658 step 3): was "#2518: the round that killed the character is saved as the DM’s paragraph beside the story"
+  it('#2518: the creatures the server runs on the player’s End turn kill the Scholar; that round is saved as the DM’s paragraph beside the story', async () => {
+    // The player swings at the spider and it survives; the keyed End turn that closes the
+    // player's turn is answered after the server ran the spider, and its blow kills the Scholar.
+    // The end state shows the server's killing row at once, and the DM's narration of that round
+    // is saved as the turn's one DM row (run D2 had none).
+    let held = 'player-1';
+    const encounterHeldBy = (participantId: string) => ({
       id: 'encounter-789',
       phase: 'active',
       currentRound: 4,
-      currentTurnParticipantId: 'npc-spider',
+      currentTurnParticipantId: participantId,
       participants: [
-        { id: 'player-1', characterId: 'char-1', name: 'The Scholar', participantType: 'player' },
+        {
+          id: 'player-1',
+          characterId: 'char-1',
+          name: 'The Scholar',
+          participantType: 'player',
+          isActive: true,
+        },
+        { id: 'npc-spider', name: 'Vitruvian Spider', participantType: 'monster', isActive: true },
+      ],
+    });
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: true, activeEncounter: encounterHeldBy('player-1') },
+      // The board is gone once the spider's blow ends the fight.
+      refreshCombatState: vi.fn(async () => (held ? encounterHeldBy(held) : null)),
+    } as any);
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
+    setPlayerRollHost({
+      present: (_spec, settle) => {
+        queueMicrotask(() => settle({ d20: 12 }));
+        return { rollId: 'roll-attack', dismiss: () => {} };
+      },
+    });
+    // The spider's killing blow as the server's runner reports it (an AdvanceNpcTurnsResult entry),
+    // and the row writeNpcEngineRow stores for it: buildNpcEngineMessage over that result.
+    const spiderKills = {
+      action: {
+        actor_id: 'npc-spider',
+        action_type: 'attack',
+        target_ids: ['player-1'],
+        weapon_id: null,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+      },
+      round: 4,
+      outcomes: [{ participantId: 'player-1', hit: true, finalDamage: 18, newHp: 0 }],
+      engineResult: {
+        actorName: 'Vitruvian Spider',
+        targetName: 'The Scholar',
+        d20: 19,
+        attackBonus: 4,
+        totalAttackRoll: 23,
+        targetAC: 11,
+        hit: true,
+        finalDamage: 18,
+        damageType: 'piercing',
+        targetNewHp: 0,
+        targetIsConscious: false,
+        targetIsDead: true,
+        targetCondition: 'dead',
+        // Massive damage (SRD 5.1): 9 left after 0 HP equals the 9 HP maximum.
+        instantDeath: true,
+        damageOverflow: 9,
+        hpMaximum: 9,
+        combatEnded: true,
+        endedReason: 'party_defeated',
+      },
+      actorIsPlayer: false,
+      transcriptLines: [],
+    };
+    const actionId = 'encounter-789:4:npc-spider:attack';
+    const message = buildNpcEngineMessage(
+      [
+        { id: 'player-1', name: 'The Scholar', participantType: 'player', maxHp: 9 },
         { id: 'npc-spider', name: 'Vitruvian Spider', participantType: 'monster' },
       ],
+      4,
+      { type: 'attack', actorId: 'npc-spider', targetIds: ['player-1'] },
+      spiderKills.engineResult,
+    );
+    const killingRow = {
+      id: 'npc-row-spider',
+      sequence: 41,
+      text: message.text,
+      kind: 'npc',
+      actionId,
+      sessionId: 'session-1',
+      timestamp: new Date().toISOString(),
+      context: {
+        ...message.context,
+        npcResult: spiderKills.engineResult,
+        combatEncounterId: 'encounter-789',
+        actionId,
+      },
     };
-    vi.mocked(useCombat).mockReturnValue({
-      state: { isInCombat: true, activeEncounter },
-      refreshCombatState: vi.fn().mockResolvedValueOnce(activeEncounter).mockResolvedValue(null),
-    } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [
-        {
-          action: {
-            actor_id: 'npc-spider',
+    const sent: Array<Record<string, any>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        sent.push(body);
+        if (body.phase === 'propose') {
+          return new Response(
+            JSON.stringify({
+              proposal: {
+                movementOnly: false,
+                legal: true,
+                weaponName: 'Quarterstaff',
+                attackBonus: 5,
+                targetAc: 15,
+                advantage: false,
+                disadvantage: false,
+                targetLabel: 'Vitruvian Spider',
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (body.intent?.type === 'attack') {
+          return new Response(
+            JSON.stringify({
+              result: {
+                actorName: 'The Scholar',
+                targetName: 'Vitruvian Spider',
+                d20: 12,
+                attackBonus: 5,
+                totalAttackRoll: 17,
+                targetAC: 15,
+                hit: true,
+                finalDamage: 3,
+                damageType: 'bludgeoning',
+                targetNewHp: 9,
+                targetCondition: 'wounded',
+                weaponResolution: { resolved: 'Quarterstaff', substituted: false },
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (body.intent?.type === 'end_turn') {
+          // The intent route's body (#2658 step 3): the server ran the spider before answering.
+          held = '';
+          const npcTurns = {
+            results: [spiderKills],
+            currentParticipant: null,
+            round: 4,
+            combatEnded: true,
+            endedReason: 'party_defeated',
+            iterationCount: 1,
+            iterationCap: 4,
+            capReached: false,
+            transcriptLines: [],
+            engineRows: [killingRow],
+          };
+          return new Response(
+            JSON.stringify({
+              accepted: true,
+              result: {
+                currentParticipant: { id: 'npc-spider', name: 'Vitruvian Spider' },
+                npcTurns,
+                engineRows: [killingRow],
+              },
+              engineRows: [killingRow],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ result: {} }), { status: 200 });
+      }),
+    );
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce({
+        text: 'You swing your staff at the spider.',
+        roll_requests: [],
+        combat_actions: [
+          {
+            actor_id: 'player-1',
             action_type: 'attack',
-            target_ids: ['player-1'],
+            target_ids: ['npc-spider'],
             weapon_id: null,
             spell_id: null,
             slot_level: null,
             movement_feet: 0,
           },
-          round: 4,
-          outcomes: [],
-          actorIsPlayer: false,
-          transcriptLines: ['⚙️ Engine: The Scholar is DEAD.'],
-        },
-      ],
-      currentParticipant: null,
-      round: 4,
-      combatEnded: true,
-      endedReason: 'party_defeated',
-      iterationCount: 1,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: ['⚙️ Engine: The Scholar is DEAD.'],
-    } as any);
-    vi.mocked(AIService.chatWithDM).mockResolvedValue({
-      text: 'The Membrane takes the Scholar into its quiet.',
-    } as any);
+        ],
+      } as any)
+      .mockResolvedValue({ text: 'The Membrane takes the Scholar into its quiet.' } as any);
 
     const { result } = renderHandler();
     await waitFor(() => expect(vi.mocked(userDataApi.fetchSessionFallenState)).toHaveBeenCalled());
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(fallenState);
     await act(async () => {
-      await result.current.handleSendMessage('I step back from the spider');
+      await result.current.handleSendMessage('I swing my staff at the spider');
     });
 
+    // The keyed End turn is the one request that ran the spider: nothing asked for it after.
+    const endTurn = sent.find((body) => body.intent?.type === 'end_turn');
+    expect(typeof endTurn?.intent.actionId).toBe('string');
+    expect(sent.at(-1)).toBe(endTurn);
+    expect(killingRow.text).toContain('DEAD');
     await waitFor(() => {
       expect(result.current.terminalDeathState).toMatchObject({
         state: 'party_defeated',
-        finalLines: ['⚙️ Engine: The Scholar is DEAD.'],
+        finalLines: [killingRow.text],
       });
     });
     // The paragraph is saved as the DM's row, so "Read the story so far" ends on the death.

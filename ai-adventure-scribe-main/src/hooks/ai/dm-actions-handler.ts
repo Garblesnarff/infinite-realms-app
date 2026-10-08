@@ -13,13 +13,7 @@ import type {
 
 import { confirmCombatEntry } from '@/hooks/ai/combat-entry-hold';
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
-import {
-  COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED,
-  NPC_FIRST_ADVANCE_FAILED_NOTICE,
-  isAbortError,
-  preflightErrorStatus,
-  preflightNpcTurnsBeforePlayerDeclaration,
-} from '@/hooks/ai/combat-turn-preflight';
+import { isAbortError } from '@/hooks/ai/combat-turn-preflight';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
@@ -57,8 +51,6 @@ export interface HandleDmActionsParams {
   refreshCombatState: (signal?: AbortSignal) => Promise<any>;
   aiContext: any;
   conversationHistory: any[];
-  /** NPC turns drained before the player's declaration was sent to chatWithDM. */
-  preflightNpcTurns?: AdvanceNpcTurnsResponse;
   /** Round captured before preflight advances the authoritative encounter. */
   combatRound?: number;
   userPlan?: string;
@@ -77,10 +69,6 @@ export interface HandleDmActionsParams {
    * and HP changes on screen with nothing said (#2378).
    */
   onEngineNotice?: (notice: LocalNotice) => void;
-  /**
-   * The caller already put `preflightNpcTurns`' lines on screen (#2386), so the resolution pass
-   * must not print them a second time.
-   */
   signal?: AbortSignal;
   onPlayerWaitChange?: (waiting: boolean) => void;
 }
@@ -197,7 +185,6 @@ export async function handleDmActionsAndTransitions(
     playerMessage,
     isDiceRollMessage,
     playerInputOrigin,
-    preflightNpcTurns: initialPreflightNpcTurns,
     combatRound,
     signal,
   } = params;
@@ -225,7 +212,8 @@ export async function handleDmActionsAndTransitions(
   };
 
   let { result, activeEncounter, isInCombat } = params;
-  let preflightNpcTurns = initialPreflightNpcTurns;
+  /** The creatures that won initiative, run by `/enter` before the player's first action. */
+  let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
   let responseText = result.text;
   let narrationSegments = result.narrationSegments;
   let deliveredHandouts: JournalHandoutEntry[] | undefined;
@@ -359,6 +347,7 @@ export async function handleDmActionsAndTransitions(
               'first_action',
             );
             entryFirstActionPayload = (entryPayload as any)?.first_action;
+            preflightNpcTurns = (entryPayload as any)?.npcTurns;
             entryFirstAction = asEntryAction(entryFirstActionPayload);
             // #2569: compute the status here, where the payload is read, so every
             // downstream notice path can name the reason without re-deriving it.
@@ -488,58 +477,6 @@ export async function handleDmActionsAndTransitions(
     aiContext.gameState.encounterId = activeEncounter?.id;
     aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
     aiContext.gameState.round = activeEncounter?.currentRound;
-  }
-
-  // Entry is the one path that seats the board during this turn. It must use the same pre-flight
-  // as an ordinary player declaration: drain every NPC now holding initiative before the queued
-  // first_action reaches the combat engine.
-  if (entryWasSeated && isInCombat && sessionId) {
-    try {
-      const preflight = await preflightNpcTurnsBeforePlayerDeclaration({
-        sessionId,
-        activeEncounter,
-        characterId:
-          typeof params.characterRecord?.id === 'string' ? params.characterRecord.id : '',
-        refreshCombatState,
-        signal,
-      });
-      activeEncounter = preflight.activeEncounter;
-      isInCombat = preflight.isInCombat;
-      preflightNpcTurns = preflight.npcTurns;
-      aiContext.gameState.isInCombat = isInCombat;
-      aiContext.gameState.encounterId = activeEncounter?.id;
-      aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
-      aiContext.gameState.round = activeEncounter?.currentRound;
-    } catch (error) {
-      if (isAbortError(error)) throw error;
-      logger.warn(COMBAT_ENTRY_NPC_FIRST_ADVANCE_FAILED, {
-        sessionId,
-        encounterId: activeEncounter?.id ?? null,
-        status: preflightErrorStatus(error),
-      });
-      responseText = '';
-      narrationSegments = undefined;
-      logClearedRollRequests('entry_npc_advance_failed');
-      result = {
-        ...result,
-        text: '',
-        combat_actions: [],
-        map_actions: [],
-        handout_actions: [],
-        roll_requests: [],
-      };
-      appendLocalNotice(NPC_FIRST_ADVANCE_FAILED_NOTICE);
-      return {
-        result,
-        responseText,
-        narrationSegments,
-        deliveredHandouts,
-        isInCombat,
-        activeEncounter,
-        localNotice,
-        localNotices: localNotices.length > 0 ? localNotices : undefined,
-      };
-    }
   }
 
   const filterNpcCombatActions = (): void => {

@@ -1047,8 +1047,13 @@ export async function executeCombatIntent(
       resolved.type,
       source,
     );
+    // A creature's result, and a keyed End turn whoever ends it, is one persisted row: replaying
+    // its actionId returns the stored result instead of taking another turn (#2658).
+    const writesEngineRow =
+      actor.participantType !== 'player' ||
+      (resolved.type === 'end_turn' && submitted.actionId !== undefined);
     // After the turn gate, not before: an absorbed advance that then refuses must stand (#2666).
-    if (!inNpcTransaction && actor.participantType !== 'player') {
+    if (!inNpcTransaction && writesEngineRow) {
       const { withNpcActionTransaction } = await import('../../../../db/client');
       return await withNpcActionTransaction(encounterId, () =>
         executeCombatIntent(encounterId, submitted, userId, source, dmStartedAt, origin, true),
@@ -1527,7 +1532,7 @@ export async function executeCombatIntent(
       if (!ending) await publishCombatState(encounterId, userId, intent.type);
     }
     const settled = combatBoundary ? markCombatEnded(result, ending) : result;
-    if (actor.participantType !== 'player') {
+    if (writesEngineRow) {
       const { writeNpcEngineRow } = await import('./npc-engine-row.js');
       const actionId = submitted.actionId ?? randomUUID();
       const npcResult = { ...(settled as Record<string, unknown>), actionId };

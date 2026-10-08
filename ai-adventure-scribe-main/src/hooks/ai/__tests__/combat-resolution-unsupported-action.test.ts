@@ -19,7 +19,8 @@ import { ACTION_NOT_SUPPORTED_REASON } from '@/services/combat/combat-action-exe
  * That silent settle is what these tests pin shut:
  *
  *   1. No `end_turn` intent is posted for the refused actor.
- *   2. `advanceNpcTurns` is never called.
+ *   2. No creature runs either: the server runs NPC turns only behind an accepted End turn
+ *      (#2658 step 3), and none is sent.
  *   3. The refusal reaches the narration pass named as a refusal, and the reply the
  *      player reads says the action is not supported yet and it is still their turn.
  *   4. No repair is spent on it: no re-declaration can make the engine support a type
@@ -30,7 +31,6 @@ const chatWithDM = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const askPlayerForAttackDie = vi.fn();
-const advanceNpcTurns = vi.fn();
 const fetchMock = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
@@ -56,11 +56,6 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
   ...(await importOriginal<typeof PlayerAttackRoll>()),
   askPlayerForAttackDie: (...args: any[]) => askPlayerForAttackDie(...args),
 }));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: {
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
-  },
-}));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
 
@@ -82,6 +77,12 @@ const unsupportedAction = (actorId: string, actionType: string, targetId?: strin
   movement_feet: 0,
 });
 
+/** The End turn intents this layer sent: the one request behind which the server runs NPC turns. */
+const endTurnIntents = () =>
+  executeAuthoritativeCombatIntent.mock.calls.filter(
+    ([, intent]: any[]) => intent?.type === 'end_turn',
+  );
+
 const resolutionPayload = () => JSON.parse(chatWithDM.mock.calls[0][0].message);
 
 const run = (combatActions: any[], overrides: Record<string, unknown> = {}) =>
@@ -102,7 +103,6 @@ describe('a declared action type the engine has no owner for', () => {
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: PLAYER_ID, name: 'The Reveler' },
     });
-    advanceNpcTurns.mockResolvedValue({ results: [], currentParticipant: null });
     chatWithDM.mockResolvedValue({ text: 'The moment hangs.', narrationSegments: [] });
   });
 
@@ -113,7 +113,7 @@ describe('a declared action type the engine has no owner for', () => {
 
       // Not settled as acted: the turn never ends and no NPC turn advances.
       expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-      expect(advanceNpcTurns).not.toHaveBeenCalled();
+      expect(endTurnIntents()).toEqual([]);
       // No repair is spent re-declaring a type the engine cannot own.
       expect(repairRefusedCombatAction).not.toHaveBeenCalled();
       // The real executor refused before any fetch: no intent ever reached the server.
@@ -139,7 +139,7 @@ describe('a declared action type the engine has no owner for', () => {
     await run([unsupportedAction(NPC_ID, 'help', PLAYER_ID)]);
 
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    expect(advanceNpcTurns).not.toHaveBeenCalled();
+    expect(endTurnIntents()).toEqual([]);
     expect(repairRefusedCombatAction).not.toHaveBeenCalled();
 
     const payload = resolutionPayload();
@@ -160,14 +160,22 @@ describe('a declared action type the engine has no owner for', () => {
     'still names a player %s as unsupported after an NPC pre-flight, on the player\u2019s own turn',
     async (actionType) => {
       const result = await run([unsupportedAction(PLAYER_ID, actionType, NPC_ID)], {
+        // The server drain's shape (npc-turn-runner AdvanceNpcTurnsResult).
         preResolvedNpcTurns: {
           results: [],
-          currentParticipant: { id: PLAYER_ID, name: 'The Reveler' },
+          currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+          round: 1,
+          combatEnded: false,
+          iterationCount: 1,
+          iterationCap: 4,
+          capReached: false,
+          transcriptLines: [],
+          engineRows: [],
         },
       });
 
       expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-      expect(advanceNpcTurns).not.toHaveBeenCalled();
+      expect(endTurnIntents()).toEqual([]);
       expect(repairRefusedCombatAction).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
 

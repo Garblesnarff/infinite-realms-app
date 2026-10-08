@@ -43,7 +43,6 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
     resolveAoECast: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 
@@ -132,10 +131,23 @@ describe('run D5 round 2 through the handler (#2563)', () => {
       outcomes: [{ participantId: SWARM_1_ID, hit: true, finalDamage: 2, newHp: 2 }],
       boundary: null,
     } as any);
+    // The End turn body: the boundary, plus the swarm's turn the server ran before answering
+    // (`npcTurns`, the drain's AdvanceNpcTurnsResult shape) — #2658 step 3.
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
       currentParticipant: { id: SWARM_1_ID },
+      engineRows: [],
+      npcTurns: {
+        results: [],
+        currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player' },
+        round: 1,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ results: [] } as any);
     vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({
       ok: false,
       status: 409,
@@ -168,6 +180,19 @@ describe('run D5 round 2 through the handler (#2563)', () => {
       .invocationCallOrder[0];
     const endOrder = vi.mocked(userDataApi.endTacticalMap).mock.invocationCallOrder[0];
     expect(commitOrder).toBeLessThan(endOrder);
+    // The attack settled the turn with one keyed End turn, inside which the server ran the swarm.
+    const endTurns = vi
+      .mocked(executeAuthoritativeCombatIntent)
+      .mock.calls.filter(([, intent]: any[]) => intent.type === 'end_turn');
+    expect(endTurns).toEqual([
+      [
+        'encounter-d5',
+        { type: 'end_turn', actorId: SCHOLAR_ID, actionId: expect.any(String) },
+        'dm',
+      ],
+    ]);
+    // That drain handed the turn back: the narration ends on the player's handoff.
+    expect(outcome.responseText).toContain('The Scholar, what do you do?');
     expect(userDataApi.endTacticalMap).toHaveBeenCalledWith('session-d5', undefined, undefined);
     expect(outcome.result.combat_transition).toBe('none');
     expect(outcome.isInCombat).toBe(true);

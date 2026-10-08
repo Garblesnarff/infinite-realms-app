@@ -24,7 +24,6 @@ const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const resolveAoECast = vi.fn();
-const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -44,7 +43,6 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     resolveAoECast: (...args: any[]) => resolveAoECast(...args),
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
   },
 }));
 
@@ -120,17 +118,26 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
     });
     chatWithDM.mockResolvedValue({ text: 'The acid hisses.', narrationSegments: [] });
     repairRefusedCombatAction.mockResolvedValue(null);
+    // The End turn body: the boundary hands the turn to the shard, and the server runs it before
+    // answering (`npcTurns`, the drain's AdvanceNpcTurnsResult shape) — #2658 step 3.
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: SHARD_ID, name: 'Corrupted Shard' },
-    });
-    advanceNpcTurns.mockResolvedValue({
-      results: [],
-      currentParticipant: { id: APPRENTICE_ID, name: 'The Apprentice' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
+      engineRows: [],
+      npcTurns: {
+        results: [],
+        currentParticipant: {
+          id: APPRENTICE_ID,
+          name: 'The Apprentice',
+          participantType: 'player',
+        },
+        round: 1,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
     });
   });
 
@@ -185,6 +192,13 @@ describe('the sheet-Cast Acid Splash in a fight (#2374, #2375)', () => {
       '⚙️ Engine: The Apprentice cast Acid Splash at Corrupted Shard — DEX save 12 vs DC 13 — FAIL. 2 acid damage. Corrupted Shard is now at 5 HP.',
     ]);
     expect(engineLines(result).join('\n')).not.toContain('refused');
+    // One keyed End turn; the creature turn the server ran inside it hands the player back the turn.
+    expect(
+      executeAuthoritativeCombatIntent.mock.calls.filter(([, i]: any[]) => i?.type === 'end_turn'),
+    ).toEqual([
+      [expect.any(String), expect.objectContaining({ actionId: expect.any(String) }), 'dm'],
+    ]);
+    expect(result.text.trimEnd().endsWith('The Apprentice, what do you do?')).toBe(true);
   });
 
   it('asks once when the card was already shown before the DM call (#2392)', async () => {

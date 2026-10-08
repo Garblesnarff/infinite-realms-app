@@ -52,7 +52,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     enterCombat: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     endTacticalMap: vi.fn().mockResolvedValue({ ok: true }),
     applyDmTacticalActions: vi.fn().mockResolvedValue({ ok: true }),
     applyDmHandoutActions: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
@@ -190,15 +189,6 @@ describe('initiative rolled while a narrative roll turn is still running (#2587,
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       enterResponse({ encounter: { id: 'encounter-1' } }) as any,
     );
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [],
-      currentParticipant: { id: 'scholar-1', name: 'The Scholar', participantType: 'player' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
-    } as any);
   });
 
   afterEach(() => {

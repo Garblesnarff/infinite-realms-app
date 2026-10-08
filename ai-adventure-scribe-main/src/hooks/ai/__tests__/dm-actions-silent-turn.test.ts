@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveDeclaredCombatActions } from '../combat-resolution-step';
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 import { NEUTRAL_NO_EFFECT_LINE } from '../narration-gate';
 import {
@@ -40,7 +41,6 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 
@@ -135,8 +135,12 @@ const noteCalls = (): string[] =>
     .mock.calls.map(([params]) => params.message)
     .filter((message) => message.includes('silentPlayerTurnNote'));
 
-/** A pre-flight that resolved one NPC attack before the player's message reached the DM. */
-const PREFLIGHT_NPC_ATTACK = {
+/**
+ * One NPC attack the server ran ahead of the player's pass, in the server drain's shape
+ * (npc-turn-runner AdvanceNpcTurnsResult: `round`, `outcomes`, `actorIsPlayer`, and the per-result
+ * `transcriptLines` the runner always leaves empty since #2658 step 2).
+ */
+const SERVER_NPC_ATTACK = {
   results: [
     {
       action: {
@@ -148,17 +152,46 @@ const PREFLIGHT_NPC_ATTACK = {
         slot_level: null,
         movement_feet: 0,
       },
+      round: 3,
+      outcomes: [{ participantId: APPRENTICE_ID, hit: true, finalDamage: 3, newHp: 4 }],
       engineResult: undefined,
-      transcriptLines: [NPC_LINE],
+      actorIsPlayer: false as const,
+      transcriptLines: [] as string[],
     },
   ],
   currentParticipant: PLAYER_TURN,
+  round: 3,
   combatEnded: false,
   iterationCount: 1,
   iterationCap: 4,
   capReached: false,
-  transcriptLines: [],
+  transcriptLines: [] as string[],
+  engineRows: [],
 };
+
+/**
+ * The resolution pass exactly as the handler builds it for a silent typed turn, with NPC turns
+ * the server already ran handed in as `preResolvedNpcTurns`.
+ */
+const resolveSilentTurnAfterNpcs = (
+  preResolvedNpcTurns: typeof SERVER_NPC_ATTACK,
+  declarationText = FABRICATED,
+) =>
+  resolveDeclaredCombatActions({
+    encounterId: ENCOUNTER.id,
+    sessionId: 'session-m8',
+    combatActions: [],
+    declarationText,
+    participants: PARTICIPANTS,
+    aiContext: { gameState: {} },
+    conversationHistory: [],
+    preResolvedNpcTurns,
+    queuedIntentActorIds: [],
+    combatRound: ENCOUNTER.currentRound,
+    playerInputOrigin: 'typed',
+    playerMessage: TALK,
+    silentPlayerTurn: { playerMessage: TALK },
+  } as Parameters<typeof resolveDeclaredCombatActions>[0]);
 
 describe('a combat turn the engine had no line for (#2342)', () => {
   beforeEach(() => {
@@ -174,13 +207,6 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       currentParticipant: { id: ELEMENTAL_ID, name: 'Spore Elemental' },
     } as never);
     vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({ ok: true } as never);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [],
-      transcriptLines: [],
-      capReached: false,
-      combatEnded: false,
-      currentParticipant: { id: ELEMENTAL_ID, name: 'Spore Elemental' },
-    } as never);
   });
 
   it('sends the DM the note, the player’s words, and no first-pass prose', async () => {
@@ -195,7 +221,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     expect(payload.turnHandoff).toContain(HANDOFF);
     expect(setup).not.toContain('Your spell connects');
     expect(setup).toContain("still the player's turn");
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    expect('advanceNpcTurns' in userDataApi).toBe(false);
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
   });
@@ -362,64 +388,69 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     });
   });
 
-  describe('with an NPC attack resolved in the pre-flight', () => {
+  // Migrated (#2658 step 3): the handler no longer receives `preflightNpcTurns` for a typed turn —
+  // the server runs the creatures inside the previous End turn, and an entry turn (the one path
+  // that still hands NPC turns in, from the /enter body) is never silent. The contract lives in
+  // the resolution pass, which still combines server-run NPC turns with a silent player pass.
+  describe('with an NPC attack the server ran ahead of the silent pass', () => {
+    // Migrated (#2658 step 3): was "scopes the note to the player’s action and leaves the engine line standing"
     it('scopes the note to the player’s action and leaves the engine line standing', async () => {
-      const outcome = await invoke({ preflightNpcTurns: PREFLIGHT_NPC_ATTACK });
+      const outcome = await resolveSilentTurnAfterNpcs(SERVER_NPC_ATTACK);
 
       const { payload } = narrationCall();
       expect(payload.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE_WITH_ENGINE_LINES);
       expect(payload.silentPlayerTurnNote).not.toMatch(/no damage was dealt or taken/i);
       expect(payload.authoritativeCombatResults).toHaveLength(1);
-      expect(outcome.responseText).not.toContain(NPC_LINE);
-      expect(outcome.responseText).toContain(NOTICE_WITH_ENGINE_LINES);
-      expect(outcome.responseText).not.toContain('nothing was rolled');
-      expect(outcome.responseText.trimEnd().endsWith(HANDOFF)).toBe(true);
+      expect(outcome.text).not.toContain(NPC_LINE);
+      expect(outcome.text).toContain(NOTICE_WITH_ENGINE_LINES);
+      expect(outcome.text).not.toContain('nothing was rolled');
+      expect(outcome.text.trimEnd().endsWith(HANDOFF)).toBe(true);
     });
 
-    it('does not gate a pass whose NPC lines are already on screen (#2388)', async () => {
+    // Migrated (#2658 step 3): was "does not gate a pass whose NPC lines are already on screen (#2388)"
+    it('does not gate a pass whose NPC lines are server rows already on screen (#2388)', async () => {
       vi.mocked(AIService.chatWithDM).mockResolvedValue({
         text: 'The elemental lashes out and hits you as you speak.',
       } as never);
 
-      const outcome = await invoke({
-        preflightNpcTurns: PREFLIGHT_NPC_ATTACK,
-          onEngineNotice: vi.fn(),
-      });
+      const outcome = await resolveSilentTurnAfterNpcs(SERVER_NPC_ATTACK);
 
       expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
       expect(vi.mocked(AIService.chatWithDM).mock.calls[0][0]).not.toHaveProperty(
         'holdSideEffects',
       );
       expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
-      expect(outcome.responseText).toContain('hits you as you speak');
+      expect(outcome.text).toContain('hits you as you speak');
     });
 
-    it('does not gate the DM’s account of a pre-flight hit that ended the fight', async () => {
+    // Migrated (#2658 step 3): was "does not gate the DM’s account of a pre-flight hit that ended the fight"
+    it('does not gate the DM’s account of a server-run NPC hit that ended the fight', async () => {
       const account = 'The elemental’s last lash strikes you down as the fight ends.';
       vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: account } as never);
 
-      const outcome = await invoke({
-        preflightNpcTurns: { ...PREFLIGHT_NPC_ATTACK, combatEnded: true },
-        result: { text: account },
-      });
+      const outcome = await resolveSilentTurnAfterNpcs(
+        { ...SERVER_NPC_ATTACK, combatEnded: true },
+        account,
+      );
 
       expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
-      expect(outcome.responseText).toContain(account);
-      expect(outcome.responseText).not.toContain(NEUTRAL_NO_EFFECT_LINE);
+      expect(outcome.text).toContain(account);
+      expect(outcome.text).not.toContain(NEUTRAL_NO_EFFECT_LINE);
     });
 
+    // Migrated (#2658 step 3): was "does not flag the NPC’s own hit as a fabrication"
     it('does not flag the NPC’s own hit as a fabrication', async () => {
       vi.mocked(AIService.chatWithDM).mockResolvedValue({
         text: 'The elemental lashes out and hits you as you speak.',
       } as never);
 
-      const outcome = await invoke({ preflightNpcTurns: PREFLIGHT_NPC_ATTACK });
+      const outcome = await resolveSilentTurnAfterNpcs(SERVER_NPC_ATTACK);
 
       expect(logger.info).not.toHaveBeenCalledWith('DM_FABRICATION_SUSPECT', expect.anything());
       // The engine has a line for this turn, so the gate is not consulted and nobody is re-asked.
       expect(logger.warn).not.toHaveBeenCalledWith('DM_NARRATION_REJECTED', expect.anything());
       expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
-      expect(outcome.responseText).toContain('hits you as you speak');
+      expect(outcome.text).toContain('hits you as you speak');
     });
   });
 

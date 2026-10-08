@@ -1,7 +1,6 @@
 import { Elysia } from 'elysia';
 
 import { actionRoutes } from './actions.js';
-import { advanceNpcTurnRoutes } from './advance-npc-turns.js';
 import { declaredAttackRoutes, entryRoutes } from './entry.js';
 import { initiativeRoutes } from './initiative.js';
 import { intentRoutes } from './intents.js';
@@ -16,7 +15,6 @@ import { statusRoutes } from './status.js';
 export const combatRoutes = new Elysia({ prefix: '/v1/combat' })
   .use(entryRoutes)
   .use(declaredAttackRoutes)
-  .use(advanceNpcTurnRoutes)
   .use(initiativeRoutes)
   .use(actionRoutes)
   .use(intentRoutes)

@@ -14,7 +14,7 @@ export type NpcEngineRow = {
   id: string;
   sequence: number | null;
   text: string;
-  kind: 'npc';
+  kind: 'npc' | 'player';
   actionId: string;
   sessionId: string;
   timestamp: string;
@@ -43,27 +43,65 @@ export async function readNpcEngineResult(
   return (stored?.context as { npcResult?: Record<string, unknown> } | null)?.npcResult;
 }
 
-export async function writeNpcEngineRow(
+export function writeNpcEngineRow(
   state: CombatState,
   intent: { type: string; actorId: string; targetId?: string; targetIds?: string[] },
   actionId: string,
   result: unknown,
   userId: string,
 ): Promise<NpcEngineRow[]> {
-  const message = buildNpcEngineMessage(state.participants, state.encounter.currentRound, intent, result);
+  const message = buildNpcEngineMessage(
+    state.participants,
+    state.encounter.currentRound,
+    intent,
+    result,
+  );
+  return storeEngineRow(
+    state,
+    actionId,
+    message.text,
+    { ...message.context, npcResult: result },
+    userId,
+    message.context.combatEngineBlocks[0].source,
+  );
+}
+
+/** The safety-cap line, one row per (round, holder): a drain that stops there again writes nothing. */
+export function writeNpcCapRow(
+  state: CombatState,
+  line: string,
+  userId: string,
+): Promise<NpcEngineRow[]> {
+  const round = state.encounter.currentRound;
+  return storeEngineRow(
+    state,
+    `cap:${round}:${state.currentParticipant?.id ?? 'none'}`,
+    line,
+    {
+      intent: 'combat_npc_result',
+      round,
+      combatEngineBlocks: [{ sequence: 0, round, source: 'npc', lines: [line], cards: [] }],
+    },
+    userId,
+  );
+}
+
+async function storeEngineRow(
+  state: CombatState,
+  actionId: string,
+  text: string,
+  context: Record<string, unknown>,
+  userId: string,
+  kind: NpcEngineRow['kind'] = 'npc',
+): Promise<NpcEngineRow[]> {
   const stored = await SessionMessageService.addMessages(
     [
       {
         id: messageId(state.encounter.id, actionId),
         sessionId: state.encounter.sessionId,
         speakerType: 'system',
-        message: message.text,
-        context: {
-          ...message.context,
-          combatEncounterId: state.encounter.id,
-          actionId,
-          npcResult: result,
-        },
+        message: text,
+        context: { ...context, combatEncounterId: state.encounter.id, actionId },
       },
     ],
     userId,
@@ -72,7 +110,7 @@ export async function writeNpcEngineRow(
     id: row.id,
     sequence: row.sequenceNumber,
     text: row.message,
-    kind: 'npc',
+    kind,
     actionId,
     sessionId: state.encounter.sessionId,
     timestamp: row.timestamp!.toISOString(),

@@ -588,9 +588,13 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       });
     }
 
-    test('documents #2685: a player CAN label a move source dm and absorb the preceding spent NPC turn today', async () => {
+    // Migrated (#2658 step 3): was "documents #2685: a player CAN label a move source dm and
+    // absorb the preceding spent NPC turn today". The intent route now runs a creature still
+    // holding the turn before a player's intent (its pre-drain), whatever the source label, so the
+    // spent turn is run, not absorbed, and the player-labelled move is no longer refused.
+    test('documents #2685: a move runs the preceding spent NPC turn first, under either source label', async () => {
       const before = await persistedCombat();
-      // DynamicOptionsSection's move body: source dm, typed origin, player actor and x/y.
+      // DynamicOptionsSection's move body: typed origin, player actor and x/y.
       const body = {
         intent: { type: 'move', actorId: heroId, x: 4, y: 3 },
         source: 'player',
@@ -598,20 +602,42 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
         origin: 'typed',
       };
       const player = await call('POST', `/v1/combat/${encounterId}/intent`, body);
-      expect(player.status).toBe(422);
-      expect(player.json.error).toBe('Actor is not the current-turn participant');
-      expect(await persistedCombat()).toEqual(before);
-      const dm = await call('POST', `/v1/combat/${encounterId}/intent`, { ...body, source: 'dm' });
-      expect(dm.status).toBe(200);
-      expect(dm.json.accepted).toBe(true);
-      const after = await persistedCombat();
-      expect(after.map.state).toMatchObject({
+      expect(player.status).toBe(200);
+      expect(player.json.accepted).toBe(true);
+      expect(
+        player.json.result.npcTurns.results.map(
+          (result: { action: { actor_id: string } }) => result.action.actor_id,
+        ),
+      ).toEqual([monsterId]);
+      const afterPlayer = await persistedCombat();
+      expect(afterPlayer.map.state).toMatchObject({
         entities: expect.arrayContaining([
           expect.objectContaining({ id: heroId, x: 4, y: 3, movementRemaining: 25 }),
         ]),
       });
-      expect(after.encounters[0]).toMatchObject({ currentTurnOrder: 1, currentRound: 1 });
-      expect(after.encounters[0].version).toBe(before.encounters[0].version);
+      expect(afterPlayer.encounters[0]).toMatchObject({ currentTurnOrder: 1, currentRound: 1 });
+      expect(afterPlayer.hp).toEqual(before.hp);
+
+      // The spent sentinel up again, as the order brings it round in round 2: the dm label gets
+      // the same run, not an absorb.
+      await database
+        .update(combatEncounters)
+        .set({ currentTurnOrder: 0, currentRound: 2 })
+        .where(eq(combatEncounters.id, encounterId));
+      const dm = await call('POST', `/v1/combat/${encounterId}/intent`, {
+        ...body,
+        intent: { type: 'move', actorId: heroId, x: 5, y: 3 },
+        source: 'dm',
+      });
+      expect(dm.status).toBe(200);
+      expect(dm.json.accepted).toBe(true);
+      expect(
+        dm.json.result.npcTurns.results.map(
+          (result: { action: { actor_id: string } }) => result.action.actor_id,
+        ),
+      ).toEqual([monsterId]);
+      const after = await persistedCombat();
+      expect(after.encounters[0]).toMatchObject({ currentTurnOrder: 1, currentRound: 2 });
       expect(after.hp).toEqual(before.hp);
     });
 

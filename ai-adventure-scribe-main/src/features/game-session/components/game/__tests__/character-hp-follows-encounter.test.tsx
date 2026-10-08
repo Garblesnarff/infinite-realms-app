@@ -2,8 +2,8 @@
  * #2641 item 1 (run D9): from round 3 the party/tracker rows read "The Veteran 1/12" while the
  * header read "HP 5/12". The tracker follows the encounter participant (the server wire value); the
  * header reads CharacterContext, which was refetched by one route only: the socket's
- * `combat-state-updated` event. A hit that arrived by a pull (`refreshCombatState`, after
- * `advanceNpcTurns`) reached the encounter and never the character, and a fight that ended in the
+ * `combat-state-updated` event. A hit that arrived by a pull (`refreshCombatState`, after the
+ * End turn response) reached the encounter and never the character, and a fight that ended in the
  * same read as its last hit cleared the encounter with the header still at the old value.
  *
  * One path now: the pull raises the same event the socket does, and the one character refetch
@@ -169,7 +169,7 @@ const server: { hp: number; vital: Vital; fight: 'active' | 'concluded' | 'none'
 };
 
 type Api = {
-  /** The pull: `refreshCombatState()`, as the turn pipeline calls it after `advanceNpcTurns`. */
+  /** The pull: `refreshCombatState()`, as the turn pipeline calls it after the End turn response. */
   pull: () => Promise<unknown>;
   encounterHp: () => number | undefined;
   inCombat: () => boolean;

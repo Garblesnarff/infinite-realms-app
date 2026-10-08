@@ -2,8 +2,9 @@
 /**
  * #2386 A1 and A2 — the two ordinary in-combat turns that #2378 (PR #2385) did not reach.
  *
- * A1: on a normal turn the NPC pre-flight runs before the DM call, so the tracker HP has already
- * moved; the NPC's line used to appear only after the DM call and the player's die prompt.
+ * A1: the NPC turns that follow the player's turn used to run in a client pre-flight before the
+ * DM call. Since #2658 step 3 the server runs them on the player's End turn and the response
+ * carries them; their rows are written by the server and shown once.
  * A2: the turn that kills the last enemy ends combat inside the engine call. The DM's narration
  * pass may ask for a post-combat check; that request must survive, and must not withhold the
  * kill line behind its popup.
@@ -25,7 +26,7 @@ import { useAIResponse } from '../use-ai-response';
 import type { LocalNotice } from '@/hooks/ai/types';
 
 import { useCombat } from '@/contexts/CombatContext';
-import { SILENT_PLAYER_TURN_NOTE_WITH_ENGINE_LINES } from '@/hooks/ai/silent-player-turn';
+import { SILENT_PLAYER_TURN_NOTE } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { setPlayerRollHost } from '@/services/combat/player-roll-bridge';
@@ -48,7 +49,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
@@ -157,28 +157,16 @@ const emilSwing = {
 const EMIL_LINE =
   '⚙️ Engine: Professor Emil Darkwater rolled 14 + 3 = 17 vs AC 11 against The Scholar with Quarterstaff — HIT. 4 bludgeoning damage. The Scholar is now at 3 HP and is bloodied.';
 
-const noNpcTurns = {
-  results: [],
-  currentParticipant: { id: 'emil-1', name: 'Professor Emil Darkwater', participantType: 'npc' },
-  combatEnded: false,
-  iterationCount: 0,
-  iterationCap: 4,
-  capReached: false,
-  transcriptLines: [],
-};
-
 /**
- * Simulates the server delivering an NPC turn result as a system message row.
- * The server builds rows via buildNpcEngineMessage (shared/npc-engine-message.ts) and the
- * client's request() dispatches them as session-engine-rows events. Returns the row for
- * inclusion in the mocked advanceNpcTurns response's engineRows.
+ * The NPC rows as the server writes them (#2658 step 3): `buildNpcEngineMessage` over each runner
+ * result, keyed by the runner's actionId. The End turn response carries them, and the client's
+ * executor dispatches them as `session-engine-rows` events.
  */
-const dispatchNpcRow = (
+const npcRowsFor = (
   npcTurns: { results: Array<{ action: any; engineResult: any; round?: number }> },
   round: number,
-  rowId: string = `npc-row-${Math.random().toString(36).slice(2)}`,
-) => {
-  const rows = npcTurns.results.map((npcResult, index) => {
+) =>
+  npcTurns.results.map((npcResult, index) => {
     const message = buildNpcEngineMessage(
       [
         { id: 'emil-1', name: 'Professor Emil Darkwater', participantType: 'npc' },
@@ -192,20 +180,23 @@ const dispatchNpcRow = (
       },
       npcResult.engineResult,
     );
+    const actionId = `enc-1:${npcResult.round ?? round}:${npcResult.action.actor_id}:${npcResult.action.action_type}`;
     return {
-      id: `${rowId}-${index}`,
+      id: `npc-row-${index}`,
       sequence: 100 + index,
       text: message.text,
       kind: 'npc',
-      actionId: `npc-action-${index}`,
+      actionId,
       sessionId: DECLARED_ATTACK_SESSION_ID,
       timestamp: new Date().toISOString(),
-      context: message.context,
+      context: {
+        ...message.context,
+        npcResult: npcResult.engineResult,
+        combatEncounterId: 'enc-1',
+        actionId,
+      },
     };
   });
-  window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: rows }));
-  return rows;
-};
 
 /** Captures server-delivered NPC rows dispatched via the session-engine-rows event. */
 const captureNpcRows = () => {
@@ -264,12 +255,17 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
   let order: string[];
   let held: string;
   let commitResult: Record<string, unknown>;
+  /** The creatures' turns the server runs on the player's End turn; null when it runs none. */
+  let endTurnNpcTurns: any;
+  let sent: Array<Record<string, any>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     order = [];
     held = 'emil-1';
     commitResult = {};
+    endTurnNpcTurns = null;
+    sent = [];
 
     setPlayerRollHost({
       present: (spec, settle) => {
@@ -296,6 +292,7 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body ?? '{}'));
+        sent.push(body);
         if (body.phase === 'propose') {
           return new Response(
             JSON.stringify({
@@ -317,12 +314,22 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
           if (commitResult.combatEnded) held = '';
           return new Response(JSON.stringify({ result: commitResult }), { status: 200 });
         }
-        return new Response(
-          JSON.stringify({
-            result: { currentParticipant: { id: 'emil-1', name: 'Professor Emil Darkwater' } },
-          }),
-          { status: 200 },
-        );
+        const turn = { currentParticipant: { id: 'emil-1', name: 'Professor Emil Darkwater' } };
+        if (body.intent?.type === 'end_turn' && endTurnNpcTurns) {
+          // The intent route's body (#2658 step 3): the server ran the creatures before answering.
+          const engineRows = npcRowsFor(endTurnNpcTurns, 2);
+          held = endTurnNpcTurns.combatEnded ? '' : (endTurnNpcTurns.currentParticipant?.id ?? '');
+          const npcTurns = { ...endTurnNpcTurns, engineRows };
+          return new Response(
+            JSON.stringify({
+              accepted: true,
+              result: { ...turn, npcTurns, engineRows },
+              engineRows,
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ result: turn }), { status: 200 });
       }),
     );
   });
@@ -348,14 +355,10 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     );
   };
 
-  it('A1: prints the NPC’s pre-flight swing, with the HP it left, before the player’s die prompt', async () => {
-    vi.mocked(userDataApi.advanceNpcTurns)
-      .mockImplementationOnce((async () => {
-        held = 'scholar-1';
-        const rows = dispatchNpcRow(emilSwing, 2, 'npc-row-emil-swing');
-        return { ...emilSwing, engineRows: rows };
-      }) as any)
-      .mockResolvedValue(noNpcTurns as any);
+  // Migrated (#2658 step 3): was "A1: prints the NPC’s pre-flight swing, with the HP it left, before the player’s die prompt"
+  it('A1: the NPC’s swing after the player’s turn arrives on the End turn response as one server row, with the HP it left', async () => {
+    held = 'scholar-1';
+    endTurnNpcTurns = emilSwing;
     commitResult = { ...killingBlow, combatEnded: false, targetNewHp: 1, targetIsDead: false };
     vi.mocked(AIService.chatWithDM)
       .mockResolvedValueOnce({
@@ -373,9 +376,12 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
         shown.push(notice);
       });
 
-      // HP moved in the pre-flight: the NPC line arrives as a server-delivered row before the
-      // die is asked for. The player has no engine notice of their own on this path.
+      // The player's die first; the creature acts only once the player's turn has ended. The
+      // client asks the server for nothing more: one End turn, keyed, and Emil came back on it.
       expect(order).toEqual(['prompt: attack Quarterstaff']);
+      const ends = sent.filter((body) => body.intent?.type === 'end_turn');
+      expect(ends).toHaveLength(1);
+      expect(typeof ends[0].intent.actionId).toBe('string');
       expect(shown).toEqual([]);
 
       // Emil's swing arrives as a server-delivered NPC row with the HP it left and cards.
@@ -394,14 +400,10 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     }
   });
 
-  it('A1: a caller that cannot show lines early still gets the NPC line once, in the reply', async () => {
-    vi.mocked(userDataApi.advanceNpcTurns)
-      .mockImplementationOnce((async () => {
-        held = 'scholar-1';
-        const rows = dispatchNpcRow(emilSwing, 2, 'npc-row-emil-swing');
-        return { ...emilSwing, engineRows: rows };
-      }) as any)
-      .mockResolvedValue(noNpcTurns as any);
+  // Migrated (#2658 step 3): was "A1: a caller that cannot show lines early still gets the NPC line once, in the reply"
+  it('A1: a caller that cannot show lines early still gets the End turn’s NPC row once, and not in the reply', async () => {
+    held = 'scholar-1';
+    endTurnNpcTurns = emilSwing;
     commitResult = { ...killingBlow, combatEnded: false, targetNewHp: 1, targetIsDead: false };
     vi.mocked(AIService.chatWithDM)
       .mockResolvedValueOnce({
@@ -482,20 +484,16 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     expect(response.text.match(/rolled 18 \+ 5 = 23/g)).toHaveLength(1);
   });
 
-  it('A1: a silent turn after a pre-flight NPC hit is not engine-free: right note, no false trailer, no fabrication flag', async () => {
-    vi.mocked(userDataApi.advanceNpcTurns)
-      .mockImplementationOnce((async () => {
-        held = 'scholar-1';
-        const rows = dispatchNpcRow(emilSwing, 2, 'npc-row-emil-swing');
-        return { ...emilSwing, engineRows: rows };
-      }) as any)
-      .mockResolvedValue(noNpcTurns as any);
+  // Migrated (#2658 step 3): was "A1: a silent turn after a pre-flight NPC hit is not engine-free: right note, no false trailer, no fabrication flag"
+  // The creatures now act on the End turn that precedes this message, never inside a silent turn
+  // (a silent turn sends no intent, and only `/enter` still hands the client NPC turns): the
+  // turn runs no creature, the narration is told plainly that nothing happened, and the NPC
+  // results that were already narrated are not re-sent as this turn's.
+  it('A1: a silent turn while the player holds the turn runs no creature and is engine-free: plain note, no NPC results re-narrated', async () => {
+    held = 'scholar-1';
     vi.mocked(AIService.chatWithDM)
       .mockResolvedValueOnce({ text: 'You look around the study.', roll_requests: [] } as any)
-      .mockResolvedValueOnce({
-        text: 'Emil’s staff caught you and you are wounded. You scan the shelves.',
-        roll_requests: [],
-      } as any);
+      .mockResolvedValueOnce({ text: 'You scan the shelves.', roll_requests: [] } as any);
 
     const { npcRows, stop } = captureNpcRows();
     let response: Awaited<ReturnType<typeof play>>;
@@ -503,40 +501,26 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
       const shown: LocalNotice[] = [];
       response = await play((notice) => shown.push(notice), 'I look around the study.');
 
-      // The pre-flight NPC hit arrives as a server-delivered row with the attack card.
-      expect(npcRows).toHaveLength(1);
-      expect(npcRows[0].text).toBe(EMIL_LINE);
-      const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
-      expect(npcBlock.cards[0]).toMatchObject({ kind: 'attack', line: EMIL_LINE });
-      // The player took no action, so there is no player engine notice on this path.
+      // No intent of any kind reached the engine, so no creature ran and no row arrived.
+      expect(sent).toEqual([]);
+      expect(npcRows).toEqual([]);
       expect(shown).toEqual([]);
     } finally {
       stop();
     }
-    // The narration pass is told the NPC results stand, not that nothing happened to anyone,
-    // and still carries them.
     const narrationCall = vi.mocked(AIService.chatWithDM).mock.calls[1][0];
     const payload = JSON.parse(narrationCall.message);
-    expect(payload.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE_WITH_ENGINE_LINES);
-    expect(payload.authoritativeCombatResults).toEqual([
-      expect.objectContaining({
-        action: expect.objectContaining({ actor_id: 'emil-1', target_ids: ['scholar-1'] }),
-        engineResult: expect.objectContaining({ finalDamage: 4, targetNewHp: 3 }),
-      }),
-    ]);
-    // The reply says the player took no action, and does not claim nothing was rolled.
-    expect(response.text).toContain('You took no combat action this turn');
-    expect(response.text).not.toContain('nothing was rolled');
-    expect(logger.info).not.toHaveBeenCalledWith(
-      'DM_FABRICATION_SUSPECT',
-      expect.objectContaining({ reason: 'silent_player_turn' }),
+    expect(payload.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE);
+    expect(payload.authoritativeCombatResults ?? []).toEqual([]);
+    // Nothing was rolled this turn, and the trailer says exactly that.
+    expect(response.text).toContain(
+      '*(That was not a combat action — nothing was rolled. It is still your turn.)*',
     );
   });
 
   it('A2: while combat goes on, the DM’s roll requests stay dropped under the fresh flag', async () => {
     held = 'scholar-1';
     commitResult = { ...killingBlow, combatEnded: false, targetNewHp: 1, targetIsDead: false };
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue(noNpcTurns as any);
     vi.mocked(AIService.chatWithDM)
       .mockResolvedValueOnce({
         text: 'You swing your staff.',
@@ -558,24 +542,25 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     });
   });
 
-  it('A1: a pre-flight that ends combat still shows its lines, once', async () => {
-    vi.mocked(userDataApi.advanceNpcTurns).mockImplementationOnce((async () => {
-      held = '';
-      const ended = { ...emilSwing, combatEnded: true, currentParticipant: null };
-      const rows = dispatchNpcRow(ended, 2, 'npc-row-emil-swing');
-      return { ...ended, engineRows: rows };
-    }) as any);
-    vi.mocked(AIService.chatWithDM).mockResolvedValueOnce({
-      text: 'The professor lowers his staff.',
-      roll_requests: [],
-    } as any);
+  // Migrated (#2658 step 3): was "A1: a pre-flight that ends combat still shows its lines, once"
+  it('A1: an End turn whose creatures end the fight still shows their line, once, and the turn reports it', async () => {
+    held = 'scholar-1';
+    commitResult = { ...killingBlow, combatEnded: false, targetNewHp: 1, targetIsDead: false };
+    endTurnNpcTurns = { ...emilSwing, combatEnded: true, currentParticipant: null };
+    vi.mocked(AIService.chatWithDM)
+      .mockResolvedValueOnce({
+        text: 'You swing your staff.',
+        roll_requests: [],
+        combat_actions: [declaredSwing],
+      } as any)
+      .mockResolvedValueOnce({ text: 'The professor lowers his staff.', roll_requests: [] } as any);
 
     const { npcRows, stop } = captureNpcRows();
     try {
       const shown: LocalNotice[] = [];
       const response = await play((notice) => shown.push(notice));
 
-      // The pre-flight NPC line arrives as a server-delivered row, once, with its card.
+      // The NPC line arrives on the End turn response as a server-written row, once, with its card.
       expect(npcRows).toHaveLength(1);
       expect(npcRows[0].text).toBe(EMIL_LINE);
       const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
@@ -616,15 +601,9 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
       combatEnded: true,
       endedReason: 'party_defeated',
     };
-    vi.mocked(userDataApi.advanceNpcTurns)
-      .mockImplementationOnce((async () => {
-        // The board is gone after the killing resolution.
-        held = '';
-        // The killing blow arrives as a server-delivered NPC row.
-        const rows = dispatchNpcRow(emilKillingSwing, 2, 'npc-row-emil-killing');
-        return { ...emilKillingSwing, engineRows: rows };
-      }) as any)
-      .mockResolvedValue(noNpcTurns as any);
+    // #2658 step 3: the server runs Emil on the player's End turn, and the killing blow comes
+    // back on that response (the board is gone after it).
+    endTurnNpcTurns = emilKillingSwing;
     // Follows the real producer: fetchSessionFallenState reads
     // character_stats.vital_state from the session load payload.
     vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue({
@@ -660,27 +639,34 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
       stop();
     }
 
-    // The DM path ran (this is not the NPC-preflight path)…
+    // The DM path ran…
     expect(AIService.chatWithDM).toHaveBeenCalled();
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalled();
+    // The End turn is the one request that ran the NPC loop: keyed, and nothing after it.
+    expect(
+      sent
+        .map((body) => body.intent?.type)
+        .filter(Boolean)
+        .at(-1),
+    ).toBe('end_turn');
+    expect(typeof sent.find((body) => body.intent?.type === 'end_turn')?.intent.actionId).toBe(
+      'string',
+    );
     expect(userDataApi.fetchSessionFallenState).toHaveBeenCalledWith(DECLARED_ATTACK_SESSION_ID);
     // …and the fallen state came out of the resolution itself: no further
     // message send was needed to surface it.
     await waitFor(() => {
       expect(result.current.terminalDeathState).toMatchObject({ state: 'party_defeated' });
     });
-    // Emil's killing blow arrives as a server-delivered NPC row, not in finalLines.
     // The row carries the killing blow: Emil's roll and the Scholar's death.
     expect(npcRows).toHaveLength(1);
     expect(npcRows[0].text).toMatch(/Professor Emil Darkwater rolled 18 \+ 3 = 21/);
     expect(npcRows[0].text).toMatch(/The Scholar is (dead|now at 0 HP)/);
     const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
     expect(npcBlock).toMatchObject({ source: 'npc' });
-    // finalLines now carries the player's own block (the last client-assembled block);
-    // the NPC killing blow is surfaced via the server-delivered row above.
-    expect(result.current.terminalDeathState?.finalLines?.join('\n')).toMatch(
-      /The Scholar rolled 18 \+ 5 = 23/,
-    );
+    // The end state shows the killing row the server wrote (#2518), not the player's own
+    // earlier line: step 2 moved NPC lines out of the client blocks, so the last block was
+    // the wrong source.
+    expect(result.current.terminalDeathState?.finalLines).toEqual([npcRows[0].text]);
     // The turn still completes whole (round 3): the DM narration comes back
     // for the handler to save, and the killing engine row is carried into
     // the end state via the server-delivered row — the swap replaces a finished turn,

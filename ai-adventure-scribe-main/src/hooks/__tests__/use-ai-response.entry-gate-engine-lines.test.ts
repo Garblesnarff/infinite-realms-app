@@ -46,7 +46,6 @@ vi.mock('@/services/user-data-api', () => ({
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
     enterCombat: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
@@ -189,6 +188,40 @@ const emilOpeningAttack = {
 const EMIL_LINE =
   '⚙️ Engine: Professor Emil Darkwater rolled 14 + 3 = 17 vs AC 11 against The Scholar with Quarterstaff — HIT. 6 bludgeoning damage. The Scholar is now at 1 HP and is near death.';
 
+/** Emil's row as the server writes it: `buildNpcEngineMessage` over the runner's result. */
+const emilOpeningRow = (() => {
+  const npcResult = emilOpeningAttack.results[0];
+  const message = buildNpcEngineMessage(
+    [
+      { id: 'emil-1', name: 'Professor Emil Darkwater', participantType: 'npc' },
+      { id: 'scholar-1', name: 'The Scholar', participantType: 'player', maxHp: 7 },
+    ],
+    1,
+    {
+      type: npcResult.action.action_type,
+      actorId: npcResult.action.actor_id,
+      targetIds: npcResult.action.target_ids,
+    },
+    npcResult.engineResult,
+  );
+  const actionId = 'enc-1:1:emil-1:attack';
+  return {
+    id: 'npc-row-emil-opening',
+    sequence: 100,
+    text: message.text,
+    kind: 'npc',
+    actionId,
+    sessionId: DECLARED_ATTACK_SESSION_ID,
+    timestamp: new Date().toISOString(),
+    context: {
+      ...message.context,
+      npcResult: npcResult.engineResult,
+      combatEncounterId: 'enc-1',
+      actionId,
+    },
+  };
+})();
+
 /** The engine's answer to the spell-attack intent: natural 7, +6, disadvantage already applied. */
 const chillTouchResult = {
   results: [
@@ -252,7 +285,7 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
 
     vi.mocked(useCombat).mockReturnValue({
       state: { isInCombat: false, activeEncounter: null },
-      // No encounter until `/enter` seats one; then Emil holds the turn until his turns are drained.
+      // No encounter until `/enter` seats one; `/enter` has already run Emil's opening turn.
       refreshCombatState: vi.fn(async () => (held ? encounterHeldBy(held) : null)),
     } as any);
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
@@ -270,13 +303,18 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
     } as any);
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
     vi.mocked(userDataApi.enterCombat).mockImplementation((async () => {
-      held = 'emil-1';
+      // #2658 step 3: `/enter` runs the creatures that won initiative before it answers. Their
+      // rows reach the page over the session socket (the server broadcasts each one as it is
+      // written), and the body carries the batch as `npcTurns`; Emil's turn is over by then.
+      held = 'scholar-1';
+      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [emilOpeningRow] }));
       return {
         ok: true,
         status: 201,
         json: async () => ({
           encounter: { id: 'enc-1' },
           seatingTranscript: SEATING_LINE,
+          npcTurns: { ...emilOpeningAttack, engineRows: [emilOpeningRow] },
           first_action: {
             type: 'spell',
             actor: 'scholar-1',
@@ -287,47 +325,6 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
         }),
       };
     }) as any);
-    vi.mocked(userDataApi.advanceNpcTurns)
-      .mockImplementationOnce((async () => {
-        held = 'scholar-1';
-        // The server now delivers NPC results as system message rows (via buildNpcEngineMessage),
-        // not as client-assembled engine lines. Simulate the server + request() dispatch.
-        const npcResult = emilOpeningAttack.results[0];
-        const message = buildNpcEngineMessage(
-          [
-            { id: 'emil-1', name: 'Professor Emil Darkwater', participantType: 'npc' },
-            { id: 'scholar-1', name: 'The Scholar', participantType: 'player', maxHp: 7 },
-          ],
-          1,
-          {
-            type: npcResult.action.action_type,
-            actorId: npcResult.action.actor_id,
-            targetIds: npcResult.action.target_ids,
-          },
-          npcResult.engineResult,
-        );
-        const row = {
-          id: 'npc-row-emil-opening',
-          sequence: 100,
-          text: message.text,
-          kind: 'npc',
-          actionId: 'emil-opening-action',
-          sessionId: DECLARED_ATTACK_SESSION_ID,
-          timestamp: new Date().toISOString(),
-          context: message.context,
-        };
-        window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [row] }));
-        return { ...emilOpeningAttack, engineRows: [row] };
-      }) as any)
-      .mockResolvedValue({
-        results: [],
-        currentParticipant: { id: 'scholar-1', name: 'The Scholar', participantType: 'player' },
-        combatEnded: false,
-        iterationCount: 0,
-        iterationCap: 4,
-        capReached: false,
-        transcriptLines: [],
-      } as any);
     vi.mocked(AIService.chatWithDM).mockResolvedValue({
       text: DM_TEXT,
       roll_requests: [],

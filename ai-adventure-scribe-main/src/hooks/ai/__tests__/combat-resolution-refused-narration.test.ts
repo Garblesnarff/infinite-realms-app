@@ -39,7 +39,6 @@ const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const askPlayerForAttackDie = vi.fn();
-const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -63,11 +62,6 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
   // `isPlayerActor` stays real — telling the player's actions apart is the thing under test.
   ...(await importOriginal<typeof PlayerAttackRoll>()),
   askPlayerForAttackDie: (...args: any[]) => askPlayerForAttackDie(...args),
-}));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: {
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
-  },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -306,38 +300,55 @@ describe('a player action the engine refused', () => {
     expect(resolutionPayload().refusedActions[0]).toMatchObject({ queued: true });
   });
 
-  describe('when the recovery retry is refused again', () => {
-    /** Balthazar's stale turn is settled, but the player's retried attack is still refused. */
-    const runFailedRecovery = (holder: {
+  // Migrated (#2658 step 3): the client's one-shot NPC-turn recovery is gone. The server runs a
+  // creature that holds the turn before the player's action (the intent route's pre-drain), so a
+  // refusal that still arrives is reported, not recovered: no client advance, no retry.
+  describe('when a player action is refused behind a creature the server could not run', () => {
+    /** The board the server last answered (here: the entry's own creature turns), then a refusal. */
+    const runRefusedBehindCreature = (holder: {
       id: string;
       name: string;
       participantType: string;
     }): ReturnType<typeof run> => {
-      advanceNpcTurns.mockResolvedValue({
-        results: [
-          {
-            action: action(NPC_ID, PLAYER_ID),
-            outcomes: [{ participantId: PLAYER_ID, hit: false }],
-            engineResult: { actorName: 'Balthazar', targetName: 'The Reveler', hit: false },
-            actorIsPlayer: false,
-            transcriptLines: [],
-          },
-        ],
-        currentParticipant: holder,
-        combatEnded: false,
-        iterationCount: 1,
-        iterationCap: 4,
-        capReached: false,
-        transcriptLines: [],
+      // The player's attack is refused, and so is the repair's turn for the creature (#2234).
+      executeStructuredCombatActionWithBoundary.mockImplementation(async () => {
+        throw outOfTurn();
       });
-      return run({ sessionId: 'session-2f420489' });
+      return run({
+        sessionId: 'session-2f420489',
+        preResolvedNpcTurns: {
+          results: [
+            {
+              action: action(NPC_ID, PLAYER_ID),
+              round: 1,
+              outcomes: [{ participantId: PLAYER_ID, hit: false }],
+              engineResult: { actorName: 'Balthazar', targetName: 'The Reveler', hit: false },
+              actorIsPlayer: false,
+              transcriptLines: [],
+            },
+          ],
+          currentParticipant: holder,
+          round: 1,
+          combatEnded: false,
+          iterationCount: 1,
+          iterationCap: 4,
+          capReached: false,
+          transcriptLines: [],
+        },
+      });
     };
 
-    it('reaches the narration pass named as a refusal, carrying no outcome', async () => {
-      await runFailedRecovery({ id: NPC_ID, name: 'Balthazar', participantType: 'monster' });
+    // Migrated (#2658 step 3): was "reaches the narration pass named as a refusal, carrying no outcome"
+    it('reaches the narration pass named as a refusal, carrying no outcome, tried once', async () => {
+      await runRefusedBehindCreature({ id: NPC_ID, name: 'Balthazar', participantType: 'monster' });
 
       const payload = resolutionPayload();
-      expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+      // The player's action once and the repaired creature turn once: no client retry of it.
+      expect(
+        executeStructuredCombatActionWithBoundary.mock.calls.filter(
+          ([, act]: any[]) => act.actor_id === PLAYER_ID,
+        ),
+      ).toHaveLength(1);
       expect(payload.refusedActions.length).toBeGreaterThan(0);
       expect(payload.refusedActions[0]).toMatchObject({
         resolved: false,
@@ -351,8 +362,9 @@ describe('a player action the engine refused', () => {
       expect(payload.refusedActionsNote).toContain('did not happen');
     });
 
-    it('tells the player it is their turn now when the turn came back to them', async () => {
-      const result = await runFailedRecovery({
+    // Migrated (#2658 step 3): was "tells the player it is their turn now when the turn came back to them"
+    it('tells the player it is their turn now when the server last handed the turn to them', async () => {
+      const result = await runRefusedBehindCreature({
         id: PLAYER_ID,
         name: 'The Reveler',
         participantType: 'player',
@@ -362,8 +374,9 @@ describe('a player action the engine refused', () => {
       expect(result.text).toContain('your turn now');
     });
 
+    // Migrated (#2658 step 3): was "names the creature the fight is waiting on when it is still not the player's turn"
     it("names the creature the fight is waiting on when it is still not the player's turn", async () => {
-      const result = await runFailedRecovery({
+      const result = await runRefusedBehindCreature({
         id: NPC_ID,
         name: 'Balthazar',
         participantType: 'monster',
@@ -385,15 +398,6 @@ describe('a turn the engine accepted in full', () => {
       currentParticipant: { id: NPC_ID, name: 'Balthazar' },
     });
     askPlayerForAttackDie.mockResolvedValue(null);
-    advanceNpcTurns.mockResolvedValue({
-      results: [],
-      currentParticipant: { id: NPC_ID, name: 'Balthazar', participantType: 'monster' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
-    });
     chatWithDM.mockImplementation(async ({ message, conversationHistory }: any) => ({
       text: `${conversationHistory[conversationHistory.length - 1]?.content ?? ''} ${message}`,
     }));
@@ -603,7 +607,8 @@ describe('a turn the engine accepted in full', () => {
     expect(setupMessage()).not.toContain('Balthazar swings after the fight is over');
   });
 
-  it('runs autonomous NPC turns after the player boundary and ends with the player handoff', async () => {
+  // Migrated (#2658 step 3): was "runs autonomous NPC turns after the player boundary and ends with the player handoff"
+  it('takes the NPC turns the server ran on the player boundary from its End turn, and ends with the player handoff', async () => {
     const npcEngineResult = {
       actorName: 'Balthazar',
       targetName: 'The Reveler',
@@ -633,29 +638,33 @@ describe('a turn the engine accepted in full', () => {
       },
       boundary: null,
     });
+    // The End turn body as the intent route sends it back: the boundary, plus the creatures the
+    // server ran before it answered (`npcTurns`, the drain's AdvanceNpcTurnsResult).
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: NPC_ID, name: 'Balthazar' },
-    });
-    advanceNpcTurns.mockResolvedValue({
-      results: [
-        {
-          action: action(NPC_ID, PLAYER_ID),
-          // The runner stamps the round the NPC acted in (#2393); a two-actor fight with the
-          // player first has the NPC answering in the player's own round.
-          round: 1,
-          outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }],
-          engineResult: npcEngineResult,
-          actorIsPlayer: false,
-          transcriptLines: [],
-        },
-      ],
-      currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
-      round: 2,
-      combatEnded: false,
-      iterationCount: 1,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
+      engineRows: [],
+      npcTurns: {
+        results: [
+          {
+            action: action(NPC_ID, PLAYER_ID),
+            // The runner stamps the round the NPC acted in (#2393); a two-actor fight with the
+            // player first has the NPC answering in the player's own round.
+            round: 1,
+            outcomes: [{ participantId: PLAYER_ID, hit: true, finalDamage: 4, newHp: 7 }],
+            engineResult: npcEngineResult,
+            actorIsPlayer: false,
+            transcriptLines: [],
+          },
+        ],
+        currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+        round: 2,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
     });
 
     const result = await resolveDeclaredCombatActions({
@@ -668,10 +677,13 @@ describe('a turn the engine accepted in full', () => {
       conversationHistory: [],
     });
 
-    expect(advanceNpcTurns).toHaveBeenCalledWith('session-2f420489', NPC_ID);
-    expect(executeAuthoritativeCombatIntent.mock.invocationCallOrder[0]).toBeLessThan(
-      advanceNpcTurns.mock.invocationCallOrder[0],
-    );
+    // One keyed End turn, and nothing after it: the server ran the creatures inside it.
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+    expect(executeAuthoritativeCombatIntent.mock.calls[0][1]).toEqual({
+      type: 'end_turn',
+      actorId: PLAYER_ID,
+      actionId: expect.any(String),
+    });
     const payload = resolutionPayload();
     expect(payload.authoritativeCombatResults).toHaveLength(2);
     expect(payload.authoritativeCombatResults[1]).toMatchObject({
@@ -683,41 +695,36 @@ describe('a turn the engine accepted in full', () => {
     expect(result.text).toContain('The Reveler');
     expect(result.text).toContain('Balthazar');
     expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
-    expect(result.combatEngineBlocks).toMatchObject([
-      { source: 'player', round: 1 },
-    ]);
+    expect(result.combatEngineBlocks).toMatchObject([{ source: 'player', round: 1 }]);
   });
 
-  it('settles a stale NPC holder and retries the refused player action once', async () => {
-    let refusePlayerOnce = true;
-    executeStructuredCombatActionWithBoundary.mockImplementation(
-      async (_encounterId: string, act: any) => {
-        if (act.actor_id === PLAYER_ID && refusePlayerOnce) {
-          refusePlayerOnce = false;
-          throw outOfTurn();
-        }
-        return {
-          outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 3, newHp: 6 }],
-          result: {
-            actorName: 'The Reveler',
-            targetName: 'Balthazar',
-            d20: 15,
-            attackBonus: 5,
-            totalAttackRoll: 20,
-            targetAC: 12,
-            hit: true,
-            finalDamage: 3,
-            damageType: 'slashing',
-          },
-          boundary: null,
-        };
+  // Migrated (#2658 step 3): was "settles a stale NPC holder and retries the refused player action once".
+  // The server settles a stale holder before the player's action (the intent route's pre-drain,
+  // pinned in server-bun npc-turn-drain.test.ts); the client sends the action once and narrates it.
+  it('sends the player action once: a stale NPC holder is the server pre-drain, not a client retry', async () => {
+    executeStructuredCombatActionWithBoundary.mockResolvedValue({
+      outcomes: [{ participantId: NPC_ID, hit: true, finalDamage: 3, newHp: 6 }],
+      result: {
+        actorName: 'The Reveler',
+        targetName: 'Balthazar',
+        d20: 15,
+        attackBonus: 5,
+        totalAttackRoll: 20,
+        targetAC: 12,
+        hit: true,
+        finalDamage: 3,
+        damageType: 'slashing',
       },
-    );
-    advanceNpcTurns
-      .mockResolvedValueOnce({
+      boundary: null,
+    });
+    executeAuthoritativeCombatIntent.mockResolvedValue({
+      currentParticipant: { id: NPC_ID, name: 'Balthazar' },
+      engineRows: [],
+      npcTurns: {
         results: [
           {
             action: action(NPC_ID, PLAYER_ID),
+            round: 1,
             outcomes: [{ participantId: PLAYER_ID, hit: false }],
             engineResult: { actorName: 'Balthazar', targetName: 'The Reveler', hit: false },
             actorIsPlayer: false,
@@ -725,21 +732,15 @@ describe('a turn the engine accepted in full', () => {
           },
         ],
         currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
+        round: 2,
         combatEnded: false,
         iterationCount: 1,
         iterationCap: 4,
         capReached: false,
         transcriptLines: [],
-      })
-      .mockResolvedValueOnce({
-        results: [],
-        currentParticipant: { id: PLAYER_ID, name: 'The Reveler', participantType: 'player' },
-        combatEnded: false,
-        iterationCount: 0,
-        iterationCap: 4,
-        capReached: false,
-        transcriptLines: [],
-      });
+        engineRows: [],
+      },
+    });
 
     const result = await resolveDeclaredCombatActions({
       encounterId: '10444307-0000-4000-8000-000000000003',
@@ -751,8 +752,7 @@ describe('a turn the engine accepted in full', () => {
       conversationHistory: [],
     });
 
-    expect(advanceNpcTurns).toHaveBeenNthCalledWith(1, 'session-2f420489', NPC_ID);
-    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(2);
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
     expect(repairRefusedCombatAction).not.toHaveBeenCalled();
     expect(chatWithDM).toHaveBeenCalledTimes(1);
     expect(resolutionPayload().refusedActions).toBeUndefined();

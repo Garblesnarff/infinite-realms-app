@@ -12,7 +12,6 @@ const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const askPlayerForAttackDie = vi.fn();
 const askPlayerForSpellCast = vi.fn();
-const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -35,11 +34,6 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
 }));
 vi.mock('@/services/combat/player-spell-cast', () => ({
   askPlayerForSpellCast: (...args: any[]) => askPlayerForSpellCast(...args),
-}));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: {
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
-  },
 }));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
@@ -69,15 +63,6 @@ describe('player spell resolution', () => {
     askPlayerForAttackDie.mockResolvedValue(null);
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: NPC_ID, name: 'Professor Umeboshi' },
-    });
-    advanceNpcTurns.mockResolvedValue({
-      results: [],
-      currentParticipant: { id: NPC_ID, name: 'Professor Umeboshi' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
     });
     chatWithDM.mockResolvedValue({ text: 'The mote of fire flies.', narrationSegments: [] });
   });
@@ -197,7 +182,12 @@ describe('player spell resolution', () => {
     expect(result.text).not.toContain('wounded');
   });
 
-  it('prints one line for one cast when a refused spell is retried and accepted (#2303)', async () => {
+  // Migrated (#2658 step 3): was "prints one line for one cast when a refused spell is retried and accepted (#2303)".
+  // The client's refuse-recover-retry is gone: the server runs the stale holder before the cast
+  // (the intent route's pre-drain, proven on the real route in npc-engine-rows.real-db.test.ts)
+  // and returns those creature turns as `npcTurns` on the cast's own result. This pins what the
+  // client does with them: the DM hears the creature's turn before the cast, and the cast once.
+  it('hands the DM the pre-drained creature turn before the one cast (#2303)', async () => {
     // Run 13 printed REFUSED and then HIT for one Chill Touch: the retry dropped the refusal
     // record but left its engine line in the transcript.
     const chillTouchHit = {
@@ -220,22 +210,45 @@ describe('player spell resolution', () => {
       },
       boundary: null,
     };
-    executeStructuredCombatActionWithBoundary
-      .mockRejectedValueOnce(
-        new CombatIntentRefusedError('Actor is not the current-turn participant', 422, {
-          currentParticipantId: NPC_ID,
-        }),
-      )
-      .mockResolvedValueOnce(chillTouchHit);
-    advanceNpcTurns.mockResolvedValueOnce({
-      results: [],
-      currentParticipant: { id: PLAYER_ID, name: 'Rook' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
-    });
+    // Shaped like the intent route's `result.npcTurns` (intents.ts, from runNpcTurnsIfNpcHolds):
+    // one NpcTurnOutcome as npc-turn-runner.ts pushes it, and the turn handed back to the player.
+    chillTouchHit.result = {
+      ...chillTouchHit.result,
+      npcTurns: {
+        results: [
+          {
+            action: {
+              actor_id: NPC_ID,
+              action_type: 'attack',
+              target_ids: [PLAYER_ID],
+              weapon_id: null,
+              spell_id: null,
+              slot_level: null,
+              movement_feet: 0,
+            },
+            round: 1,
+            outcomes: [{ participantId: PLAYER_ID, hit: false }],
+            engineResult: {
+              actorName: 'Professor Umeboshi',
+              targetName: 'Rook',
+              hit: false,
+              d20: 4,
+            },
+            actorIsPlayer: false,
+            transcriptLines: [],
+          },
+        ],
+        currentParticipant: { id: PLAYER_ID, name: 'Rook', participantType: 'player' },
+        round: 1,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
+    } as never;
+    executeStructuredCombatActionWithBoundary.mockResolvedValueOnce(chillTouchHit);
     chatWithDM.mockResolvedValue({ text: 'A cold hand closes.', narrationSegments: [] });
 
     const result = await resolveDeclaredCombatActions({
@@ -248,9 +261,16 @@ describe('player spell resolution', () => {
       conversationHistory: [],
     });
 
+    expect(executeStructuredCombatActionWithBoundary).toHaveBeenCalledTimes(1);
     expect(result.text).not.toContain('was refused');
     expect(result.text.match(/Chill Touch/g)).toHaveLength(1);
     expect(result.text).toContain('Rook cast Chill Touch at Professor Umeboshi');
     expect(repairRefusedCombatAction).not.toHaveBeenCalled();
+    const told = JSON.parse(chatWithDM.mock.calls[0][0].message);
+    expect(
+      told.authoritativeCombatResults.map(
+        (entry: { action: { actor_id: string } }) => entry.action.actor_id,
+      ),
+    ).toEqual([NPC_ID, PLAYER_ID]);
   });
 });

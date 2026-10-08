@@ -41,7 +41,6 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
     resolveAoECast: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 
@@ -146,14 +145,27 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     vi.mocked(AIService.chatWithDM).mockResolvedValue({
       text: 'Flame roars from your hands.',
     } as any);
+    // The End turn body as the intent route returns it: the boundary hands the turn to Goldwhisk,
+    // and the server runs Goldwhisk before answering (`npcTurns`, the drain's result shape).
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
       currentParticipant: { id: GOLDWHISK_ID, name: 'Headmaster Goldwhisk' },
+      engineRows: [],
+      npcTurns: {
+        results: [],
+        currentParticipant: {
+          id: APPRENTICE_ID,
+          name: 'The Apprentice',
+          participantType: 'player',
+        },
+        round: 2,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
     });
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [],
-      transcriptLines: [],
-      currentParticipant: { id: APPRENTICE_ID, name: 'The Apprentice' },
-    } as any);
     vi.mocked(repairRefusedCombatAction).mockResolvedValue(null as any);
   });
 
@@ -178,13 +190,15 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
       '⚙️ Engine: The Apprentice cast Burning Hands at Headmaster Goldwhisk — DEX save 11 vs DC 13 — FAIL. 12 fire damage. Headmaster Goldwhisk is now at 28 HP.',
     ]);
     expect(outcome.responseText.startsWith(lines[0])).toBe(true);
-    // The turn ends like any other resolved action, and the monsters take theirs.
+    // The turn ends like any other resolved action, and the monsters take theirs: the server runs
+    // them inside the keyed End turn (#2658 step 3), so that is the one call.
+    expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
     expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
       'encounter-m7',
-      { type: 'end_turn', actorId: APPRENTICE_ID },
+      { type: 'end_turn', actorId: APPRENTICE_ID, actionId: expect.any(String) },
       'dm',
     );
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledTimes(1);
+    expect(outcome.responseText.trimEnd().endsWith('The Apprentice, what do you do?')).toBe(true);
     const { payload } = narrationCall();
     expect(payload.authoritativeCombatResults).toHaveLength(1);
     expect(payload.authoritativeCombatResults[0].action).toMatchObject({
@@ -208,7 +222,6 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     ]);
     // Nothing resolved, so nothing ended the turn and no monster acted.
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
     const { payload, setup } = narrationCall();
     expect(payload.unresolvedPlayerAction).toContain(
       "The Apprentice's Burning Hands was NOT resolved by the engine",
@@ -224,25 +237,28 @@ describe('the sheet-Cast Burning Hands at level 1 (#2304)', () => {
     expect(outcome.responseText.trimEnd().endsWith('The Apprentice, what do you do?')).toBe(true);
   });
 
-  it('keeps exactly one engine line when a retry casts it after the area was refused', async () => {
-    // Refused out of turn with a stale NPC turn in front of the player: the NPC turn is settled
-    // and the same area spell is cast again, as the player's own input.
-    vi.mocked(userDataApi.resolveAoECast)
-      .mockResolvedValueOnce(
-        jsonResponse(422, {
-          error: 'Actor is not the current-turn participant',
-          details: { currentParticipantId: GOLDWHISK_ID },
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse(200, RESOLVED));
+  // Migrated (#2658 step 3): was "keeps exactly one engine line when a retry casts it after the area was refused".
+  // The client's stale-NPC recovery and its retry are gone (the server runs a creature holding the
+  // turn before the player's action), so an out-of-turn refusal is cast once and reported once.
+  it('keeps exactly one engine line for an area spell refused out of turn: cast once, no client retry', async () => {
+    vi.mocked(userDataApi.resolveAoECast).mockResolvedValueOnce(
+      jsonResponse(422, {
+        error: 'Actor is not the current-turn participant',
+        details: { currentParticipantId: GOLDWHISK_ID },
+      }),
+    );
 
     const outcome = await invoke();
 
-    expect(userDataApi.resolveAoECast).toHaveBeenCalledTimes(2);
+    expect(userDataApi.resolveAoECast).toHaveBeenCalledTimes(1);
     const lines = playerEngineLines(outcome);
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('DEX save 11 vs DC 13 — FAIL. 12 fire damage.');
-    expect(narrationCall().payload.unresolvedPlayerAction).toBeUndefined();
+    expect(lines[0]).toBe(
+      `⚙️ Engine: The Apprentice's spell "Burning Hands" was refused (it is not your turn — Headmaster Goldwhisk acts now). No roll, no damage, no wound.`,
+    );
+    expect(narrationCall().payload.unresolvedPlayerAction).toContain(
+      "The Apprentice's Burning Hands was NOT resolved",
+    );
   });
 
   it('does not ask the repair to re-declare a refused player area spell, and keeps the refusal line', async () => {

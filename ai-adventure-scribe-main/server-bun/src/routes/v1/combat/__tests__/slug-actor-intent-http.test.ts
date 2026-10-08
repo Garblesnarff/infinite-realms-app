@@ -62,9 +62,21 @@ let activeEncounter: { id: string; sessionId: string } | null = {
   sessionId: SESSION_ID,
 };
 
-mock.module('../../../../services/combat/npc-engine-row.js', () => ({ writeNpcEngineRow: async () => [], readNpcEngineResult: async () => undefined }));
+mock.module('../../../../services/combat/npc-engine-row.js', () => ({
+  writeNpcEngineRow: async () => [],
+  readNpcEngineResult: async () => undefined,
+}));
+const drainCalls: string[] = [];
+mock.module('../../../../services/combat/npc-turn-drain.js', () => ({
+  runNpcTurnsIfNpcHolds: async (encounterId: string) => {
+    drainCalls.push(encounterId);
+    return null;
+  },
+}));
 mock.module('../../../../../../db/client', () => ({
-  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(), db: {} }));
+  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),
+  db: {},
+}));
 mock.module('../../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
 }));
@@ -277,6 +289,34 @@ beforeEach(() => {
   spellInputs.length = 0;
   trackedEvents.length = 0;
   sentRequests.length = 0;
+});
+
+// Migrated from the retired advance-npc-turns route (advance-npc-turns-http.test.ts): the
+// creatures now run inside the intent route, and an unauthenticated request reaches none of it.
+describe('the server-run NPC turns behind the intent route (#2658)', () => {
+  it('rejects an unauthenticated intent before running any creature', async () => {
+    drainCalls.length = 0;
+    const response = await app.handle(
+      new Request(`http://localhost/v1/combat/${ENCOUNTER_ID}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer invalid-token' },
+        body: JSON.stringify({ intent: { type: 'end_turn', actorId: SEEKER_ID } }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(drainCalls).toEqual([]);
+  });
+
+  it('runs no creature for a proposal, which claims and resolves nothing', async () => {
+    drainCalls.length = 0;
+    await postIntent({
+      phase: 'propose',
+      intent: { type: 'attack', actorId: SEEKER_ID, targetId: VOID_MAW_ID },
+    });
+
+    expect(drainCalls).toEqual([]);
+  });
 });
 
 describe('the active combat read', () => {

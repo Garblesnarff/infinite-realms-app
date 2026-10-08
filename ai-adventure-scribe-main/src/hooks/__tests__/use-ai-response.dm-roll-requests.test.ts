@@ -56,7 +56,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
-    advanceNpcTurns: vi.fn(),
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
@@ -167,12 +166,14 @@ const dmEnvelope = (fields: Record<string, unknown>) =>
 describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () => {
   let prompts: Array<{ spec: PlayerRollSpec; settle: (outcome: PlayerRollOutcome) => void }>;
   let intentBodies: Array<Record<string, any>>;
+  let endTurnBodies: Array<Record<string, any>>;
   let held: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prompts = [];
     intentBodies = [];
+    endTurnBodies = [];
     held = 'veteran-1';
     rollStateManager.clearAllState();
 
@@ -193,7 +194,6 @@ describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () =
       character: VETERAN,
     } as any);
     vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue(noNpcTurns as any);
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) => {
@@ -285,8 +285,20 @@ describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () =
             { status: 200 },
           );
         }
+        // The player's End turn, as the intent route answers it (#2658 step 3): the server has
+        // already run the creatures and the turn is the player's again.
+        endTurnBodies.push(body);
+        const engineRows: unknown[] = [];
         return new Response(
-          JSON.stringify({ result: { currentParticipant: { id: 'goblin-1', name: 'Goblin' } } }),
+          JSON.stringify({
+            accepted: true,
+            result: {
+              currentParticipant: { id: 'goblin-1', name: 'Goblin' },
+              npcTurns: { ...noNpcTurns, engineRows },
+              engineRows,
+            },
+            engineRows,
+          }),
           { status: 200 },
         );
       }),
@@ -420,6 +432,13 @@ describe('useAIResponse: DM roll requests and the player’s turn (#2530)', () =
         expect.stringContaining(`timed out after ${PLAYER_ATTACK_ROLL_TIMEOUT_MS}ms`),
       );
       expect(hasPendingPlayerRoll()).toBe(false);
+      // #2658 step 3: one keyed End turn, and its response (npcTurns) is what hands the turn
+      // back: the narration names The Veteran as up, not the Goblin the boundary landed on.
+      expect(endTurnBodies).toHaveLength(1);
+      expect(typeof endTurnBodies[0].intent.actionId).toBe('string');
+      const narration = JSON.parse(vi.mocked(AIService.chatWithDM).mock.calls[1][0].message);
+      expect(narration.currentTurn).toBe('The Veteran');
+      expect(narration.turnHandoff).toContain('what do you do?');
     });
 
     it('a sheet-cast attack spell is asked for in the same turn, and the player’s die is the one used', async () => {

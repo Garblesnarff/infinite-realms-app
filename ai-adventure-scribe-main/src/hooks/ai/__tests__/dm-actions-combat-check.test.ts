@@ -51,7 +51,6 @@ vi.mock('@/services/user-data-api', () => ({
     endTacticalMap: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 
@@ -161,15 +160,23 @@ describe('a mid-combat check the engine resolved is the whole turn (#2420)', () 
     ) =>
       intent.type === 'check'
         ? checkResult
-        : { currentParticipant: { id: GOBLIN.id, name: GOBLIN.name } }) as never);
+        : // The End turn body: the boundary, and the goblin's turn the server ran before answering.
+          {
+            currentParticipant: { id: GOBLIN.id, name: GOBLIN.name },
+            engineRows: [],
+            npcTurns: {
+              results: [],
+              currentParticipant: { id: PLAYER.id, name: PLAYER.name, participantType: 'player' },
+              round: 1,
+              combatEnded: false,
+              iterationCount: 1,
+              iterationCap: 4,
+              capReached: false,
+              transcriptLines: [],
+              engineRows: [],
+            },
+          }) as never);
     vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({ ok: true } as never);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [],
-      transcriptLines: [],
-      capReached: false,
-      combatEnded: false,
-      currentParticipant: { id: PLAYER.id, name: PLAYER.name, participantType: 'player' },
-    } as never);
   });
 
   it('resolves "grapple it" against the one hostile, with the player on the roster', async () => {
@@ -216,15 +223,21 @@ describe('a mid-combat check the engine resolved is the whole turn (#2420)', () 
     },
   );
 
-  it('ends the player’s turn and runs the NPC turns, as after any accepted player action', async () => {
-    await invoke('shove the goblin');
+  // Migrated (#2658 step 3): was "ends the player’s turn and runs the NPC turns, as after any accepted player action"
+  it('ends the player’s turn with one keyed End turn, inside which the server runs the NPC turns', async () => {
+    const outcome = await invoke('shove the goblin');
 
     expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
       'encounter-1',
-      { type: 'end_turn', actorId: PLAYER.id },
+      { type: 'end_turn', actorId: PLAYER.id, actionId: expect.any(String) },
       'dm',
     );
-    expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-1', GOBLIN.id);
+    const endTurns = vi
+      .mocked(executeAuthoritativeCombatIntent)
+      .mock.calls.filter(([, intent]: any[]) => intent.type === 'end_turn');
+    expect(endTurns).toHaveLength(1);
+    // The server's drain handed the turn back, so the player is asked what they do.
+    expect(outcome.responseText.trimEnd().endsWith(`${PLAYER.name}, what do you do?`)).toBe(true);
   });
 
   it('on a Hard campaign the DM is sent the line without the DC; the player keeps theirs', async () => {
@@ -282,12 +295,11 @@ describe('a mid-combat check the engine resolved is the whole turn (#2420)', () 
     expect(enforceCombatActionOnAttempt).not.toHaveBeenCalled();
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     // The turn stays the player's: no end_turn, no NPC turns.
-    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalledWith(
-      'encounter-1',
-      { type: 'end_turn', actorId: PLAYER.id },
-      'dm',
-    );
-    expect(userDataApi.advanceNpcTurns).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(executeAuthoritativeCombatIntent)
+        .mock.calls.filter(([, intent]: any[]) => intent.type === 'end_turn'),
+    ).toEqual([]);
     // Narrated as a turn that resolved nothing, never from the first-pass prose.
     expect(narrationPayload()).toHaveProperty('silentPlayerTurnNote');
     expect(narrationPayload()).not.toHaveProperty('authoritativeCheckResult');

@@ -24,7 +24,6 @@ const chatWithDM = vi.fn();
 const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const proposeAuthoritativeAttack = vi.fn();
-const advanceNpcTurns = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
   AIService: { chatWithDM: (...args: any[]) => chatWithDM(...args) },
@@ -45,11 +44,14 @@ vi.mock('@/services/combat/combat-attack-proposal', () => ({
 vi.mock('@/services/combat/spell-target-save-bridge', () => ({
   requestSpellTargetSave: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args) },
-}));
 
 const { resolveDeclaredCombatActions } = await import('../combat-resolution-step');
+
+/** The End turn intents this layer sent: the one request behind which the server runs NPC turns. */
+const endTurnIntents = () =>
+  executeAuthoritativeCombatIntent.mock.calls.filter(
+    ([, intent]: any[]) => intent?.type === 'end_turn',
+  );
 
 const PLAYER_ID = 'the-apprentice-1';
 const NPC_ID = 'flavor-elemental-1';
@@ -105,8 +107,23 @@ describe('a dismissed engine attack prompt (#2234)', () => {
       outcomes: [],
       result: { hit: false },
     });
-    executeAuthoritativeCombatIntent.mockResolvedValue({ currentParticipant: { id: NPC_ID } });
-    advanceNpcTurns.mockResolvedValue({ results: [], transcriptLines: [] });
+    // The End turn body: the boundary, plus the creature the server ran before answering
+    // (`npcTurns`, the drain's AdvanceNpcTurnsResult shape) — #2658 step 3.
+    executeAuthoritativeCombatIntent.mockResolvedValue({
+      currentParticipant: { id: NPC_ID },
+      engineRows: [],
+      npcTurns: {
+        results: [],
+        currentParticipant: { id: PLAYER_ID, name: 'The Apprentice', participantType: 'player' },
+        round: 1,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
+    });
     chatWithDM.mockResolvedValue({ text: 'The elemental reels.' });
   });
 
@@ -122,7 +139,7 @@ describe('a dismissed engine attack prompt (#2234)', () => {
 
     expect(executeStructuredCombatActionWithBoundary).not.toHaveBeenCalled();
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    expect(advanceNpcTurns).not.toHaveBeenCalled();
+    expect(endTurnIntents()).toEqual([]);
     expect(chatWithDM).not.toHaveBeenCalled();
     expect(result.text).toBe(
       'You dismissed the roll, so that attack did not happen. It is still your turn — what do you do?',
@@ -163,7 +180,8 @@ describe('a dismissed engine attack prompt (#2234)', () => {
     expect(waits).toEqual([true, false]);
   });
 
-  it('aborting after the action stops end_turn and the NPC advance', async () => {
+  // Renamed (#2658 step 3): was "aborting after the action stops end_turn and the NPC advance"
+  it('aborting after the action sends no end_turn, so the server runs no NPC turn', async () => {
     const controller = new AbortController();
     setPlayerRollHost(hostThatAnswers({ d20: 15 }));
     executeStructuredCombatActionWithBoundary.mockImplementationOnce(async () => {
@@ -179,7 +197,7 @@ describe('a dismissed engine attack prompt (#2234)', () => {
       name: 'AbortError',
     });
     expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    expect(advanceNpcTurns).not.toHaveBeenCalled();
+    expect(endTurnIntents()).toEqual([]);
   });
 
   it('withdraws an entry action whose prompt was dismissed upstream', async () => {

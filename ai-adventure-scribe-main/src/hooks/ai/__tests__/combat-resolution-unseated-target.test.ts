@@ -30,7 +30,6 @@ import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-brid
 const chatWithDM = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const askPlayerForAttackDie = vi.fn();
-const advanceNpcTurns = vi.fn();
 const resolveAoECast = vi.fn();
 const fetchMock = vi.fn();
 
@@ -50,7 +49,6 @@ vi.mock('@/services/combat/player-attack-roll', async (importOriginal) => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     resolveAoECast: (...args: any[]) => resolveAoECast(...args),
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
   },
 }));
 
@@ -111,7 +109,6 @@ describe('a typed target that matches no combatant (#2438)', () => {
     });
     askPlayerForAttackDie.mockResolvedValue({ dismissed: false, value: { autoRolled: true } });
     chatWithDM.mockResolvedValue({ text: 'Nothing moves.', narrationSegments: [] });
-    advanceNpcTurns.mockResolvedValue({ results: [], combatEnded: false, transcriptLines: [] });
   });
 
   it('typed attack: the DM cannot repair the target, and the player is told, not errored', async () => {
@@ -185,7 +182,11 @@ describe('a typed target that matches no combatant (#2438)', () => {
   });
 
   describe('when creatures already acted in this reply (#2444)', () => {
-    /** The shape `advanceNpcTurns` returns (`AdvanceNpcTurnsResponse`): the mercenary struck first. */
+    /**
+     * The server drain's shape (npc-turn-runner AdvanceNpcTurnsResult; per-result transcriptLines
+     * are always empty since #2658 step 2, and the top level holds only a cap line): the mercenary
+     * struck first.
+     */
     const preflight = (currentParticipant: (typeof PARTICIPANTS)[number], capReached: boolean) =>
       ({
         results: [
@@ -199,17 +200,24 @@ describe('a typed target that matches no combatant (#2438)', () => {
               slot_level: null,
               movement_feet: 0,
             },
-            outcomes: [{ finalDamage: 5, hit: true }],
+            round: 1,
+            outcomes: [{ participantId: APPRENTICE_ID, finalDamage: 5, hit: true }],
             actorIsPlayer: false,
-            transcriptLines: ['Bitter End Mercenary HIT, 5 damage'],
+            transcriptLines: [],
           },
         ],
         currentParticipant,
+        round: 1,
         combatEnded: false,
         iterationCount: 1,
         iterationCap: 4,
         capReached,
-        transcriptLines: ['Bitter End Mercenary HIT, 5 damage'],
+        transcriptLines: capReached
+          ? [
+              '⚙️ Engine: NPC turn loop stopped after 4 iterations; the encounter remains paused for safety.',
+            ]
+          : [],
+        engineRows: [],
       }) as any;
     const runAfterPreflight = (response: any) =>
       resolveDeclaredCombatActions({

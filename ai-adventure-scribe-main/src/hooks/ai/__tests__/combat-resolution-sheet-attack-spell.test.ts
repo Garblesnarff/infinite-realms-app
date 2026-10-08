@@ -27,7 +27,6 @@ const executeStructuredCombatActionWithBoundary = vi.fn();
 const executeAuthoritativeCombatIntent = vi.fn();
 const repairRefusedCombatAction = vi.fn();
 const resolveAoECast = vi.fn();
-const advanceNpcTurns = vi.fn();
 const fetchMock = vi.fn();
 
 vi.mock('@/services/ai-service', () => ({
@@ -48,7 +47,6 @@ vi.mock('@/services/combat/combat-action-executor', async (importOriginal) => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     resolveAoECast: (...args: any[]) => resolveAoECast(...args),
-    advanceNpcTurns: (...args: any[]) => advanceNpcTurns(...args),
   },
 }));
 
@@ -153,22 +151,31 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
     );
     chatWithDM.mockResolvedValue({ text: 'The cold hand finds it.', narrationSegments: [] });
     repairRefusedCombatAction.mockResolvedValue(null);
+    // The End turn body: the boundary hands the turn to the shard, and the server runs it before
+    // answering (`npcTurns`, the drain's AdvanceNpcTurnsResult shape) — #2658 step 3.
     executeAuthoritativeCombatIntent.mockResolvedValue({
       currentParticipant: { id: SHARD_ID, name: 'Corrupted Shard' },
+      engineRows: [],
+      npcTurns: {
+        results: [],
+        currentParticipant: {
+          id: APPRENTICE_ID,
+          name: 'The Apprentice',
+          participantType: 'player',
+        },
+        round: 1,
+        combatEnded: false,
+        iterationCount: 1,
+        iterationCap: 4,
+        capReached: false,
+        transcriptLines: [],
+        engineRows: [],
+      },
     });
     executeStructuredCombatActionWithBoundary.mockResolvedValue({
       outcomes: [],
       result: CHILL_TOUCH_RESULT,
       boundary: null,
-    });
-    advanceNpcTurns.mockResolvedValue({
-      results: [],
-      currentParticipant: { id: APPRENTICE_ID, name: 'The Apprentice' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-      transcriptLines: [],
     });
   });
 
@@ -195,6 +202,13 @@ describe('the sheet Cast of an attack-roll spell in combat (#2343 A1)', () => {
     ]);
     expect(saveCards).toEqual([]);
     expect(result.text).toContain('spell attack 14 + 5 = 19 vs AC 12 — HIT');
+    // One keyed End turn; the creature turn the server ran inside it hands the player back the turn.
+    expect(
+      executeAuthoritativeCombatIntent.mock.calls.filter(([, i]: any[]) => i?.type === 'end_turn'),
+    ).toEqual([
+      [expect.any(String), expect.objectContaining({ actionId: expect.any(String) }), 'dm'],
+    ]);
+    expect(result.text.trimEnd().endsWith('The Apprentice, what do you do?')).toBe(true);
   });
 
   it('asks the engine for the spell proposal with the exact intent the typed cast sends', async () => {

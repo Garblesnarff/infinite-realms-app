@@ -6,7 +6,6 @@ import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 import { buildSpellCastMessage } from '@/features/game-session/components/game/overhaul/spell-view-model';
 import { AIService } from '@/services/ai-service';
 import { setSpellTargetSaveHost } from '@/services/combat/spell-target-save-bridge';
-import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Run 16 turn 7 (#2391): the sheet's Cast for Acid Splash at Captain Sarah Reeves. The engine
@@ -34,7 +33,6 @@ vi.mock('@/services/user-data-api', () => ({
     applyDmTacticalActions: vi.fn(),
     applyDmHandoutActions: vi.fn(),
     resolveAoECast: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 
@@ -120,16 +118,41 @@ const saveSpellResult = (overrides: Record<string, unknown> = {}): unknown => ({
 });
 
 /** The intent route: the spell answers with `result`, the turn boundary with the next holder. */
+/**
+ * The intent route's body (`{ accepted, result, engineRows }`). The End turn's result carries the
+ * creature turn the server ran before answering (`npcTurns`, the drain's shape) — #2658 step 3.
+ */
+const END_TURN_RESULT = {
+  currentParticipant: { id: REEVES_ID, name: 'Captain Sarah Reeves' },
+  engineRows: [],
+  npcTurns: {
+    results: [],
+    currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player' },
+    round: 1,
+    combatEnded: false,
+    iterationCount: 1,
+    iterationCap: 4,
+    capReached: false,
+    transcriptLines: [],
+    engineRows: [],
+  },
+};
+const sentIntents: any[] = [];
 const stubIntentRoute = (spellResult: unknown): void => {
+  sentIntents.length = 0;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (_url: string, init?: RequestInit) => {
       const intent = JSON.parse(String(init?.body)).intent;
-      const result =
-        intent.type === 'spell'
-          ? spellResult
-          : { currentParticipant: { id: REEVES_ID, name: 'Captain Sarah Reeves' } };
-      return { ok: true, status: 200, headers: new Headers(), json: async () => ({ result }) };
+      sentIntents.push(intent);
+      const result = intent.type === 'spell' ? spellResult : END_TURN_RESULT;
+      const engineRows = (result as { engineRows?: unknown[] }).engineRows ?? [];
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({ accepted: true, result, engineRows }),
+      };
     }),
   );
 };
@@ -164,15 +187,6 @@ describe('the sheet-Cast Acid Splash narration pass (#2391)', () => {
       },
     });
     vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'The acid burns.' } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
-      results: [],
-      transcriptLines: [],
-      currentParticipant: { id: SCHOLAR_ID, name: 'The Scholar' },
-      combatEnded: false,
-      iterationCount: 0,
-      iterationCap: 4,
-      capReached: false,
-    } as any);
   });
 
   afterEach(() => {
@@ -200,6 +214,11 @@ describe('the sheet-Cast Acid Splash narration pass (#2391)', () => {
     expect(payload.authoritativeCombatResultsNote).toContain(
       'not a fizzle, a miss, or "no effect"',
     );
+    // One keyed End turn; the creature turn the server ran inside it hands the player back the turn.
+    expect(sentIntents.filter((intent) => intent.type === 'end_turn')).toEqual([
+      { type: 'end_turn', actorId: SCHOLAR_ID, actionId: expect.any(String) },
+    ]);
+    expect(outcome.responseText.trimEnd().endsWith('The Scholar, what do you do?')).toBe(true);
   });
 
   it('sends no attack hit/miss wording for the save spell', async () => {

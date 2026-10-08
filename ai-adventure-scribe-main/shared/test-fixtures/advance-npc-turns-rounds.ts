@@ -1,5 +1,5 @@
 /**
- * The `POST /v1/combat/sessions/:id/advance-npc-turns` bodies of two fights (#2393).
+ * The server's NPC-turn results of two fights (#2393): `npcTurns` on the End turn response.
  *
  * Shared on purpose. The client labels every engine line `ROUND n · PLAYER|NPC`, and for the NPC
  * half it reads `n` from these bodies. It used to guess it, because they carried no round, and

@@ -43,7 +43,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));

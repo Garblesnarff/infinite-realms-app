@@ -26,8 +26,11 @@ export function buildNpcEngineMessage(
   const actor = facingName(undefined, intent.actorId, roster);
   if (!lines.length) lines.push(`⚙️ Engine: ${actor} ended their turn.`);
   const cards = parts.map((part) => part.card);
+  // A player's own keyed End turn is stored by the same writer; it is still the player's row.
+  const source = participants.find((participant) => participant.id === intent.actorId)?.participantType === 'player'
+    ? 'player' as const : 'npc' as const;
   return { text: lines.join('\n\n'), context: {
     intent: 'combat_npc_result', round, engineCards: cards,
-    combatEngineBlocks: [{ sequence: 0, round, source: 'npc' as const, actor, lines, cards }],
+    combatEngineBlocks: [{ sequence: 0, round, source, actor, lines, cards }],
   } };
 }

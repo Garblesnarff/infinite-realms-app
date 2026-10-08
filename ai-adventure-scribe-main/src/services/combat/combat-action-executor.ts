@@ -108,7 +108,7 @@ export type ClientCombatIntent =
       expectedVersion?: number;
       d20?: number;
     }
-  | { type: 'end_turn'; actorId: string }
+  | { type: 'end_turn'; actorId: string; actionId?: string }
   /** The dying player's save; `d20` is the die they rolled, absent when the prompt timed out. */
   | { type: 'death_save'; actorId: string; d20?: number }
   | { type: 'move'; actorId: string; x: number; y: number };
@@ -267,7 +267,11 @@ export async function executeAuthoritativeCombatIntent(
       );
     }
     if ((payload.result as { engineRows?: unknown[] })?.engineRows?.length) {
-      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: (payload.result as { engineRows: unknown[] }).engineRows }));
+      window.dispatchEvent(
+        new CustomEvent('session-engine-rows', {
+          detail: (payload.result as { engineRows: unknown[] }).engineRows,
+        }),
+      );
     }
     return payload.result;
   } catch (error) {

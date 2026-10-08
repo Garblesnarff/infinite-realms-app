@@ -50,7 +50,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
     detectDeclaredAttack: vi.fn(),
-    advanceNpcTurns: vi.fn(),
   },
 }));
 vi.mock('@/services/ai-service', () => ({ AIService: { chatWithDM: vi.fn() } }));
@@ -424,7 +423,6 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
       refreshCombatState: vi.fn(async () => liveEncounter),
     } as any);
     vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({ ok: false } as any);
 
     await play();
     expect(userDataApi.detectDeclaredAttack).not.toHaveBeenCalled();

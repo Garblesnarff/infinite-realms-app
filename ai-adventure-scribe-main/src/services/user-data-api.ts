@@ -161,17 +161,6 @@ export type AdvanceNpcTurnsResponse = {
   transcriptLines: string[];
 };
 
-type ActiveCombatSnapshot = {
-  combat?: {
-    encounter?: { status?: string };
-    currentParticipant?: {
-      id: string;
-      name: string;
-      participantType: string;
-    } | null;
-  } | null;
-};
-
 export type JournalHandoutEntry = {
   id: string;
   sessionId: string;
@@ -463,50 +452,6 @@ export const userDataApi = {
       starterCampaignId: context.starter_campaign_id ?? null,
       diedAt: stats.died_at ?? null,
     };
-  },
-  advanceNpcTurns: async (
-    sessionId: string,
-    expectedCurrentParticipantId?: string,
-    signal?: AbortSignal,
-  ): Promise<AdvanceNpcTurnsResponse> => {
-    try {
-      return await request(
-        `/v1/combat/sessions/${encodeURIComponent(sessionId)}/advance-npc-turns`,
-        {
-          method: 'POST',
-          body: JSON.stringify(
-            expectedCurrentParticipantId ? { expectedCurrentParticipantId } : {},
-          ),
-          ...(signal ? { signal } : {}),
-        },
-      );
-    } catch (error) {
-      if (
-        !(error instanceof UserDataApiRequestError) ||
-        error.status !== 409 ||
-        error.payload.reason !== 'turn_holder_mismatch'
-      ) {
-        throw error;
-      }
-
-      // Another tab/request already advanced the expected NPC. Re-read authoritative state and
-      // let the caller continue from the holder that won the race; never run a second loop.
-      const snapshot = await request<ActiveCombatSnapshot>(
-        `/v1/combat/sessions/${encodeURIComponent(sessionId)}/active`,
-        signal ? { signal } : undefined,
-      );
-      const currentParticipant = snapshot.combat?.currentParticipant ?? null;
-      return {
-        results: [],
-        currentParticipant,
-        combatEnded: snapshot.combat?.encounter?.status !== 'active',
-        endedReason: null,
-        iterationCount: 0,
-        iterationCap: 0,
-        capReached: false,
-        transcriptLines: [],
-      };
-    }
   },
   endTacticalMap: (
     sessionId: string,
