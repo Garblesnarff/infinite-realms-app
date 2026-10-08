@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.31.2...v0.32.0) (2026-10-08)
+
+
+### Features
+
+* **combat:** the server runs NPC turns when the player ends the turn ([#2658](https://github.com/Garblesnarff/infinite-realms-production/issues/2658) step 3) ([#2692](https://github.com/Garblesnarff/infinite-realms-production/issues/2692)) ([ba7e87f](https://github.com/Garblesnarff/infinite-realms-production/commit/ba7e87f3026a63e3515bc761e7c385306ce78a79))
+
 ## [0.31.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.31.1...v0.31.2) (2026-10-08)
 
 
