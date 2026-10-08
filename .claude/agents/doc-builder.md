@@ -133,7 +133,6 @@ Monitor progress through the 9 phases:
 - `docs/metrics/performance.md` - Performance metrics over time
 
 ### Automation Integration
-Work with `scripts/doc-generator.js` to:
 - Extract metrics from running system
 - Generate post suggestions from actual code changes
 - Track progress across roadmap phases
