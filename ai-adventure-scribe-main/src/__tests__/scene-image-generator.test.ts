@@ -31,7 +31,6 @@ describe('scene-image-generator', () => {
         background_image: null,
       },
       character: null,
-      quality: 'low',
       model: 'gpt-image-1-mini',
       storage: { entityType: 'campaign', entityId: '123', label: 'scene-test' },
     });

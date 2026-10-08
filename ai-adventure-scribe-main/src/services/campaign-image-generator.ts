@@ -29,7 +29,6 @@ interface ImageGenerationOptions {
   retryAttempts?: number;
   fallbackToDefault?: boolean;
   storage?: UploadOptions;
-  quality?: 'low' | 'medium' | 'high';
   model?: string;
 }
 
@@ -53,7 +52,6 @@ export class CampaignImageGenerator {
     const {
       retryAttempts = this.maxRetries,
       fallbackToDefault = true,
-      quality = 'medium',
       model = 'google/gemini-2.5-flash-image',
     } = options;
 
@@ -61,7 +59,7 @@ export class CampaignImageGenerator {
       const prompt = this.createImagePrompt(campaignData);
       logger.info('Generating campaign image with prompt:', prompt);
 
-      const base64Image = await this.generateWithRetry(prompt, retryAttempts, quality, model);
+      const base64Image = await this.generateWithRetry(prompt, retryAttempts, model);
       const imageUrl = await openRouterService.uploadImage(base64Image, options.storage);
 
       logger.info('Successfully generated campaign image');
@@ -283,7 +281,6 @@ export class CampaignImageGenerator {
   private async generateWithRetry(
     prompt: string,
     maxAttempts: number,
-    quality: 'low' | 'medium' | 'high',
     model: string,
   ): Promise<string> {
     let lastError: Error | null = null;
@@ -293,7 +290,6 @@ export class CampaignImageGenerator {
         logger.info(`Image generation attempt ${attempt}/${maxAttempts} using ${model}`);
         return await openRouterService.generateImage({
           prompt,
-          quality,
           model,
         });
       } catch (error) {

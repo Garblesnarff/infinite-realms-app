@@ -93,7 +93,6 @@ describe('scene images (#2269)', () => {
       prompt: COST_IMAGE_PROMPT,
       model: COST_IMAGE_MODEL,
       referenceImages: [COST_IMAGE_REFERENCE],
-      quality: 'low',
       sessionId: COST_SESSION_ID,
     });
 
@@ -107,7 +106,6 @@ describe('scene images (#2269)', () => {
       prompt: COST_IMAGE_PROMPT,
       model: COST_IMAGE_MODEL,
       referenceImages: [COST_IMAGE_REFERENCE],
-      quality: 'low',
     });
 
     expect(posted[0]?.body).toEqual(PORTRAIT_IMAGE_WITHOUT_SESSION.wireBody);
@@ -121,7 +119,6 @@ describe('scene images (#2269)', () => {
       sceneText: 'A lantern-lit corridor.',
       referenceImageUrl: AVATAR_URL,
       model: COST_IMAGE_MODEL,
-      quality: 'low',
       sessionId: COST_SESSION_ID,
     });
 
@@ -139,7 +136,6 @@ describe('scene images (#2269)', () => {
       character: null,
       assetUrls: [],
       label: 'scene',
-      quality: 'low' as const,
       model: COST_IMAGE_MODEL,
     };
 

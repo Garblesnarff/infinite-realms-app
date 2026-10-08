@@ -98,7 +98,6 @@ export const useImageGeneration = ({
             sessionId,
             assetUrls,
             label,
-            quality: (env.VITE_DM_IMAGE_QUALITY as 'low' | 'medium' | 'high' | undefined) || 'low',
             model: env.VITE_DM_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
           }),
         );
@@ -117,7 +116,7 @@ export const useImageGeneration = ({
 
             await llmApiClient.appendMessageImage({
               messageId: message.id,
-              image: { url: res.url, prompt: res.prompt, model: res.model, quality: res.quality },
+              image: { url: res.url, prompt: res.prompt, model: res.model },
             });
 
             logger.info(

@@ -20,7 +20,6 @@ interface BuildSceneImageRequestParams {
   sessionId?: string;
   assetUrls: AssetReference[];
   label: string;
-  quality: 'low' | 'medium' | 'high';
   model: string;
 }
 
@@ -32,7 +31,6 @@ export function buildSceneImageRequest({
   sessionId,
   assetUrls,
   label,
-  quality,
   model,
 }: BuildSceneImageRequestParams): SceneImageRequest {
   return {
@@ -58,7 +56,6 @@ export function buildSceneImageRequest({
         }
       : null,
     assetUrls: assetUrls.length > 0 ? assetUrls : undefined,
-    quality,
     model,
     sessionId,
     storage: routeCampaignId

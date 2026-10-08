@@ -47,7 +47,6 @@ const imageBody = {
   prompt: COST_IMAGE_PROMPT,
   model: COST_IMAGE_MODEL,
   referenceImages: [COST_IMAGE_REFERENCE],
-  quality: 'low',
 };
 
 export const VOICE_IN_SESSION: CostWireCase = {

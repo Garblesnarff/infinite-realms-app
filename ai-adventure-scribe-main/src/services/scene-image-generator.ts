@@ -4,8 +4,6 @@ import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
 
-type Quality = 'low' | 'medium' | 'high';
-
 export interface AssetReference {
   url: string;
   type: 'npc' | 'location' | 'item' | 'monster' | 'scene' | 'character';
@@ -36,7 +34,6 @@ export interface SceneImageRequest {
     | 'image_url'
     | 'theme'
   > | null;
-  quality?: Quality;
   model?: string;
   storage?: UploadOptions;
   referenceImageUrl?: string | null; // Optional explicit reference image URL
@@ -48,7 +45,6 @@ export interface SceneImageResult {
   url: string;
   prompt: string;
   model: string;
-  quality: Quality;
 }
 
 /**
@@ -56,8 +52,6 @@ export interface SceneImageResult {
  * Uses server-proxied image generation, then uploads to Supabase storage.
  */
 export async function generateSceneImage(req: SceneImageRequest): Promise<SceneImageResult> {
-  const quality: Quality =
-    req.quality || (import.meta.env.VITE_DM_IMAGE_QUALITY as Quality) || 'low';
   const model = req.model || 'google/gemini-2.5-flash-image';
 
   const prompt = buildPrompt(req);
@@ -115,7 +109,6 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
   const t0 = performance.now();
   logger.info('[SceneImage] Generating image', {
     model,
-    quality,
     promptLen: prompt.length,
     referenceCount: referenceBase64s.length,
   });
@@ -123,7 +116,6 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
     prompt,
     model,
     referenceImages: referenceBase64s.length > 0 ? referenceBase64s : undefined,
-    quality,
     sessionId: req.sessionId,
   });
 
@@ -133,7 +125,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
   );
   const ms = Math.round(performance.now() - t0);
   logger.info('[SceneImage] Uploaded image', { ms, urlPreview: uploadedUrl?.slice(0, 60) });
-  return { url: uploadedUrl, prompt, model, quality };
+  return { url: uploadedUrl, prompt, model };
 }
 
 function defaultStorage(req: SceneImageRequest): UploadOptions {

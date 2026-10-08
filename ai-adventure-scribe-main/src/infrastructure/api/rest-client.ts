@@ -372,14 +372,13 @@ export interface GenerateImageParams {
   model?: string;
   referenceImage?: string; // deprecated single-image form
   referenceImages?: string[];
-  quality?: 'low' | 'medium' | 'high';
   /** Game session the image belongs to; absent for portraits and campaign covers (#2269). */
   sessionId?: string;
 }
 
 export interface AppendMessageImageParams {
   messageId: string;
-  image: { url: string; prompt?: string; model?: string; quality?: 'low' | 'medium' | 'high' };
+  image: { url: string; prompt?: string; model?: string };
 }
 
 export interface ImageQuotaStatus {
@@ -609,7 +608,6 @@ class LlmApiClient {
         model: params.model,
         referenceImages:
           params.referenceImages || (params.referenceImage ? [params.referenceImage] : undefined),
-        quality: params.quality,
         sessionId: params.sessionId,
       }),
     });
@@ -630,7 +628,6 @@ class LlmApiClient {
               url: params.image.url,
               prompt: params.image.prompt,
               model: params.image.model,
-              quality: params.image.quality,
             }),
           },
         );

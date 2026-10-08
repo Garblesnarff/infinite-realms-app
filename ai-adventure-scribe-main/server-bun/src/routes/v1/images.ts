@@ -170,7 +170,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         return { error: authError || 'Unauthorized' };
       }
 
-      const { prompt, referenceImages, quality: _quality, sessionId } = body || {};
+      const { prompt, referenceImages, sessionId } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
@@ -376,7 +376,6 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         // Absent for portraits and covers that are not part of a game session.
         sessionId: t.Optional(t.String({ maxLength: 255 })),
         referenceImages: t.Optional(t.Array(t.String(), { maxItems: 4 })),
-        quality: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
       }),
     },
   )
@@ -402,7 +401,6 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         url: String(body?.url || ''),
         prompt: typeof body?.prompt === 'string' ? body.prompt : undefined,
         model: typeof body?.model === 'string' ? body.model : undefined,
-        quality: typeof body?.quality === 'string' ? body.quality : undefined,
         createdAt: new Date().toISOString(),
       } as any;
 
@@ -483,7 +481,6 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         url: t.String(),
         prompt: t.Optional(t.String()),
         model: t.Optional(t.String()),
-        quality: t.Optional(t.String()),
       }),
     },
   );

@@ -13,7 +13,6 @@ interface ImageGenerationRequest {
   prompt: string;
   model?: string;
   referenceImages?: string[];
-  quality?: 'low' | 'medium' | 'high';
   sessionId?: string;
 }
 interface TextGenerationRequest {
@@ -95,7 +94,6 @@ export class OpenRouterService {
       prompt: request.prompt,
       model: modelId,
       referenceImages: request.referenceImages,
-      quality: request.quality,
       sessionId: request.sessionId,
     });
     const cfg = this.models.find((m) => m.id === modelId);
