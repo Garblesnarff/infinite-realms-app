@@ -1,4 +1,3 @@
 {
-  "src/services/__tests__/npc-engine-rows.real-db.test.ts": "#2658 step 2 proving test: registering it in ci.yml (own bun test invocation, its mock.module calls leak) needs Rob's workflow line; see #2666 body",
   "src/services/__tests__/solo-survivability.real-db.test.ts": "blocked on #1999: 4 pass / 7 fail on the pgvector CI image, re-measured three times (see the ci.yml note above)"
 }
