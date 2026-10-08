@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.31.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.3...v0.31.0) (2026-10-08)
+
+
+### Features
+
+* **combat:** the server writes one engine row per NPC action ([#2658](https://github.com/Garblesnarff/infinite-realms-production/issues/2658) step 2) ([#2666](https://github.com/Garblesnarff/infinite-realms-production/issues/2666)) ([b2f83ba](https://github.com/Garblesnarff/infinite-realms-production/commit/b2f83ba18bf0459d02fe3eadfa5313d8af60fc21))
+
 ## [0.30.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.30.2...v0.30.3) (2026-10-07)
 
 
