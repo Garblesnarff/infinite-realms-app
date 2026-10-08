@@ -29,10 +29,6 @@ function readSessionId(body: unknown): string | null {
 export const wsTicketRoutes = new Elysia({ prefix: '/v1/ws' })
   .use(requireAuth)
   .post('/ticket', ({ user, body, set }) => {
-    if (!user) {
-      set.status = 401;
-      return { error: 'Unauthorized', code: 'unauthorized' };
-    }
     const sessionId = readSessionId(body);
     if (!sessionId) {
       set.status = 400;

@@ -43,8 +43,7 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { ok: false, error: 'Missing required fields' };
     }
 
-    const activeUser = user || { userId: '', email: '', plan: 'free' };
-    const verification = await verifySessionOwnership(sessionId, activeUser.userId);
+    const verification = await verifySessionOwnership(sessionId, user.userId);
     if (!verification.success) {
       set.status = verification.error?.status || 404;
       return { ok: false, error: verification.error?.message || 'Session not found' };
@@ -66,8 +65,7 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { ok: false, error: 'Missing query params' };
     }
 
-    const activeUser = user || { userId: '', email: '', plan: 'free' };
-    const verification = await verifySessionOwnership(sessionId, activeUser.userId);
+    const verification = await verifySessionOwnership(sessionId, user.userId);
     if (!verification.success) {
       set.status = verification.error?.status || 404;
       return { ok: false, error: verification.error?.message || 'Session not found' };

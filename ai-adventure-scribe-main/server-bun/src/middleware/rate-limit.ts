@@ -201,14 +201,7 @@ function getClientIp(request: Request): string {
   return 'unknown';
 }
 
-/**
- * Get user plan from context (set by auth middleware)
- */
-function getUserPlan(user: RateLimitUser | undefined, headers: Headers): PlanName {
-  // Allow overriding via header for tests
-  const hdr = headers.get('x-plan')?.toLowerCase();
-  if (hdr && process.env.NODE_ENV !== 'production') return hdr;
-
+function getUserPlan(user: RateLimitUser | undefined): PlanName {
   return (user?.plan || 'free').toLowerCase();
 }
 
@@ -260,7 +253,7 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
           const user = (context as unknown as { user?: RateLimitUser }).user;
           const ip = getClientIp(request);
           const userId = user?.userId || null;
-          const plan = getUserPlan(user, request.headers);
+          const plan = getUserPlan(user);
 
           // Per-IP rate limiting
           const ipKey = `${cfg.key}:ip:${ip}`;

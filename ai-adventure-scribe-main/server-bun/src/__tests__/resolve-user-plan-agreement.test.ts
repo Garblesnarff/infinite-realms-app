@@ -13,6 +13,7 @@ const { requireAuth } = await import('../middleware/auth.js');
 const { createContext } = await import('../trpc/context.js');
 const { protectedProcedure, router } = await import('../trpc/trpc.js');
 const { UserPlanCache } = await import('../lib/user-plan-cache.js');
+const { planRateLimit } = await import('../middleware/rate-limit.js');
 const rest = new Elysia().use(requireAuth).get('/me', ({ user }) => ({ plan: user.plan }));
 const api = router({ plan: protectedProcedure.query(({ ctx }) => ctx.user.plan) });
 async function both(xPlan: string) {
@@ -32,5 +33,15 @@ describe('one resolveUserPlan', () => {
       const plan = stored ? 'pro' : 'free';
       expect(await both('Enterprise')).toEqual({ restPlan: plan, trpcPlan: plan });
     }
+    UserPlanCache.clear();
+    row = { plan: 'free' };
+    const headers = { authorization: 'Bearer ok', 'x-plan': 'enterprise' };
+    const cap = { windowMs: 60_000, maxByPlan: { free: 1, enterprise: 5 } };
+    const limited = new Elysia()
+      .use(requireAuth)
+      .use(planRateLimit({ key: `xp${Date.now()}`, perIp: cap }))
+      .get('/q', () => 'ok');
+    const send = () => limited.handle(new Request('http://localhost/q', { headers }));
+    expect([(await send()).status, (await send()).status]).toEqual([200, 429]);
   });
 });

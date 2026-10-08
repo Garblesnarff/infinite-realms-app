@@ -89,13 +89,15 @@ const { observabilityRoutes } = await import('../observability.js');
 const { adminRoutes } = await import('../admin.js');
 const { internalRoutes } = await import('../internal.js');
 const { encountersRoutes } = await import('../encounters.js');
+const { wsTicketRoutes } = await import('../ws-ticket.js');
 
 const app = new Elysia()
   .use(waitlistRoutes)
   .use(observabilityRoutes)
   .use(adminRoutes)
   .use(internalRoutes)
-  .use(encountersRoutes);
+  .use(encountersRoutes)
+  .use(wsTicketRoutes);
 
 describe('v1 route API boundaries', () => {
   it('denies unauthenticated waitlist stats instead of falling through to 200', async () => {
@@ -145,6 +147,26 @@ describe('v1 route API boundaries', () => {
 
     expect(telemetryResponse.status).toBe(401);
     expect(adjustmentResponse.status).toBe(401);
+  });
+
+  it('returns 401 on each route that dropped a dead user check', async () => {
+    const json = { 'content-type': 'application/json' };
+    for (const line of [
+      'POST /v1/admin/archive-sessions {}',
+      'POST /v1/admin/restore-session/s1',
+      'GET /v1/admin/archive-statistics',
+      'GET /v1/admin/archivable-sessions',
+      'POST /v1/encounters/telemetry {"sessionId":"s","difficulty":"h","resourcesUsedEst":0.1}',
+      'GET /v1/encounters/adjustment?sessionId=s&difficulty=h',
+      'POST /v1/ws/ticket {"sessionId":"s"}',
+      'GET /v1/waitlist/stats',
+    ]) {
+      const [method, url, body] = line.split(' ');
+      const status = (
+        await app.handle(new Request(`http://localhost${url}`, { method, headers: json, body }))
+      ).status;
+      expect(status).toBe(401);
+    }
   });
 
   it('enforces session ownership for encounter telemetry and adjustment', async () => {

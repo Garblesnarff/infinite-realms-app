@@ -120,12 +120,7 @@ export const waitlistRoutes = new Elysia({ prefix: '/v1/waitlist' })
   .use(requireAuth)
   .use(requireAdmin)
   .use(createSimpleRateLimit({ windowMs: 60_000, max: 10, key: 'waitlist:stats' }))
-  .get('/stats', async ({ user, set }) => {
-    if (!user) {
-      set.status = 401;
-      return { error: 'Authentication required' };
-    }
-
+  .get('/stats', async ({ set }) => {
     try {
       // Use aggregate query instead of loading all rows into memory
       const rows = await db

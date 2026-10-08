@@ -1,22 +1,18 @@
-/**
- * #2474: a tester account gets the pro rate-limit bucket, not the free fallback.
- * The plan reaches the limiter the way production tests send it outside production: the
- * `x-plan` header (getUserPlan), so this runs the real route plugin and computeMax.
- */
 import { describe, expect, it } from 'bun:test';
 import { Elysia } from 'elysia';
 
 import { planRateLimit } from '../rate-limit.js';
 
-const post = (path: string, ip: string, plan: string) =>
+const post = (path: string, ip: string) =>
   new Request(`http://localhost${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip, 'x-plan': plan },
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip, 'x-plan': 'enterprise' },
     body: JSON.stringify({}),
   });
 
 const statuses = async (plan: string, ip: string, calls: number): Promise<number[]> => {
   const app = new Elysia({ prefix: '/t' })
+    .resolve(() => ({ user: { userId: `user-${plan}`, plan } }))
     .use(
       planRateLimit({
         key: `test-tester-plan-${plan}-${Date.now()}`,
@@ -25,7 +21,7 @@ const statuses = async (plan: string, ip: string, calls: number): Promise<number
     )
     .post('/', () => ({ ok: true }));
   const out: number[] = [];
-  for (let i = 0; i < calls; i += 1) out.push((await app.handle(post('/t/', ip, plan))).status);
+  for (let i = 0; i < calls; i += 1) out.push((await app.handle(post('/t/', ip))).status);
   return out;
 };
 
