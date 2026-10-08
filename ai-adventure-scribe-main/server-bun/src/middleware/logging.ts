@@ -217,11 +217,3 @@ function mapErrorCodeToStatus(code: string | number): number {
       return 500;
   }
 }
-
-/**
- * Child logger factory for specific modules
- * Preserves request ID context if available
- */
-export function createModuleLogger(moduleName: string) {
-  return logger.child({ module: moduleName });
-}
