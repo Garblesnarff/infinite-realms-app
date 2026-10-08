@@ -28,7 +28,7 @@ export interface AuthResult {
 /**
  * Resolve user's subscription plan from database
  */
-async function resolveUserPlan(userId: string): Promise<string> {
+export async function resolveUserPlan(userId: string): Promise<string> {
   // ⚡ Bolt: Check in-memory cache first to avoid redundant O(1) query per request
   const cachedPlan = UserPlanCache.get(userId);
   if (cachedPlan) return cachedPlan;
