@@ -54,14 +54,10 @@ interface CampaignState {
   campaign: Campaign | null;
 }
 
-type CampaignAction =
-  | {
-      type: 'UPDATE_CAMPAIGN';
-      payload: Partial<Campaign>;
-    }
-  | {
-      type: 'RESET_CAMPAIGN';
-    };
+type CampaignAction = {
+  type: 'UPDATE_CAMPAIGN';
+  payload: Partial<Campaign>;
+};
 
 const initialState: CampaignState = {
   campaign: null,
@@ -94,8 +90,6 @@ function campaignReducer(state: CampaignState, action: CampaignAction): Campaign
           ...action.payload,
         },
       };
-    case 'RESET_CAMPAIGN':
-      return initialState;
     default:
       return state;
   }

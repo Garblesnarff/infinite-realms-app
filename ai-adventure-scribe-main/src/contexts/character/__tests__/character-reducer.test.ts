@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { characterReducer, initialState } from '../character-reducer';
 
-import type { CharacterState } from '../character-reducer';
 import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
@@ -135,131 +134,6 @@ describe('characterReducer', () => {
     expect(state.isDirty).toBe(true);
   });
 
-  it('should handle SET_STEP', () => {
-    const action = { type: 'SET_STEP' as const, payload: 5 };
-    const state = characterReducer(initialState, action);
-
-    expect(state.currentStep).toBe(5);
-    expect(state.error).toBeNull();
-  });
-
-  it('should return error on invalid SET_STEP', () => {
-    const action = { type: 'SET_STEP' as const, payload: 25 };
-    const state = characterReducer(initialState, action);
-
-    expect(state.error).toBe('Invalid character creation step');
-  });
-
-  it('should handle SET_LOADING', () => {
-    const action = { type: 'SET_LOADING' as const, payload: true };
-    const state = characterReducer(initialState, action);
-
-    expect(state.isLoading).toBe(true);
-  });
-
-  it('should return error on invalid SET_LOADING payload', () => {
-    const action = { type: 'SET_LOADING' as const, payload: 123 as any };
-    const state = characterReducer(initialState, action);
-
-    expect(state.error).toBe('Invalid loading state');
-  });
-
-  it('should handle SET_ERROR', () => {
-    const action = { type: 'SET_ERROR' as const, payload: 'Test Error' };
-    const state = characterReducer(initialState, action);
-
-    expect(state.error).toBe('Test Error');
-  });
-
-  it('should return error on invalid SET_ERROR payload', () => {
-    const action = { type: 'SET_ERROR' as const, payload: 123 as any };
-    const state = characterReducer(initialState, action);
-
-    expect(state.error).toBe('Invalid error message format');
-  });
-
-  it('should handle UPDATE_SPELL_SLOTS', () => {
-    const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const spellSlots = {
-      1: { max: 4, current: 2 },
-      2: { max: 2, current: 2 },
-    };
-    const action = { type: 'UPDATE_SPELL_SLOTS' as const, payload: spellSlots };
-    const state = characterReducer(stateWithCharacter, action);
-
-    expect(state.character?.spellSlots).toEqual(spellSlots);
-    expect(state.isDirty).toBe(true);
-  });
-
-  it('should return error on invalid UPDATE_SPELL_SLOTS payload', () => {
-    const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = {
-      type: 'UPDATE_SPELL_SLOTS' as const,
-      payload: { 1: { max: -1, current: 0 } } as any,
-    };
-    const state = characterReducer(stateWithCharacter, action);
-
-    expect(state.error).toBe('Invalid spell slot structure');
-  });
-
-  it('should return error on invalid UPDATE_SPELL_SLOTS payload (not an object)', () => {
-    const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = { type: 'UPDATE_SPELL_SLOTS' as const, payload: 123 as any };
-    const state = characterReducer(stateWithCharacter, action);
-
-    expect(state.error).toBe('Invalid spell slot data');
-  });
-
-  it('should return error on invalid spell slot level in UPDATE_SPELL_SLOTS', () => {
-    const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = {
-      type: 'UPDATE_SPELL_SLOTS' as const,
-      payload: { invalid: { max: 4, current: 4 } } as any,
-    };
-    const state = characterReducer(stateWithCharacter, action);
-
-    expect(state.error).toBe('Invalid spell slot level');
-  });
-
-  it.each(['1slot', '1.5', '10', '9007199254740992'])(
-    'should reject the malformed spell slot level %j',
-    (level) => {
-      const action = {
-        type: 'UPDATE_SPELL_SLOTS' as const,
-        payload: { [level]: { max: 4, current: 4 } } as any,
-      };
-
-      const state = characterReducer(initialState, action);
-
-      expect(state.error).toBe('Invalid spell slot level');
-    },
-  );
-
-  it('should handle UPDATE_CONCENTRATION', () => {
-    const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = { type: 'UPDATE_CONCENTRATION' as const, payload: 'Haste' };
-    const state = characterReducer(stateWithCharacter, action);
-
-    expect(state.character?.activeConcentration).toBe('Haste');
-    expect(state.isDirty).toBe(true);
-  });
-
-  it('should return error on invalid UPDATE_CONCENTRATION payload', () => {
-    const stateWithCharacter = { ...initialState, character: mockCharacter };
-    const action = { type: 'UPDATE_CONCENTRATION' as const, payload: 123 as any };
-    const state = characterReducer(stateWithCharacter, action);
-
-    expect(state.error).toBe('Invalid concentration spell data');
-  });
-
-  it('should return error if UPDATE_CONCENTRATION is called with no character in state', () => {
-    const stateWithoutCharacter = { ...initialState, character: null };
-    const action = { type: 'UPDATE_CONCENTRATION' as const, payload: 'Haste' };
-    const state = characterReducer(stateWithoutCharacter, action);
-
-    expect(state.error).toBe('No character data to update');
-  });
-
   it('should return error if UPDATE_CHARACTER is called with invalid payload', () => {
     const stateWithCharacter = { ...initialState, character: mockCharacter };
     const action = { type: 'UPDATE_CHARACTER' as const, payload: null as any };
@@ -289,21 +163,8 @@ describe('characterReducer', () => {
     );
   });
 
-  it('should handle RESET', () => {
-    const dirtyState: CharacterState = {
-      ...initialState,
-      character: mockCharacter,
-      isDirty: true,
-      currentStep: 5,
-    };
-    const action = { type: 'RESET' as const };
-    const state = characterReducer(dirtyState, action);
-
-    expect(state).toEqual(initialState);
-  });
-
   it('should return current state for unknown action type', () => {
-    const action = { type: 'UNKNOWN' as any };
+    const action = { type: 'UNKNOWN' } as never;
     const state = characterReducer(initialState, action);
 
     expect(state).toEqual(initialState);
@@ -319,13 +180,5 @@ describe('characterReducer', () => {
     const state = characterReducer(initialState, action);
 
     expect(state.error).toBe('An unexpected error occurred while updating character data');
-  });
-
-  it('should return error if UPDATE_SPELL_SLOTS is called with no character in state', () => {
-    const stateWithoutCharacter = { ...initialState, character: null };
-    const action = { type: 'UPDATE_SPELL_SLOTS' as const, payload: { 1: { max: 4, current: 4 } } };
-    const state = characterReducer(stateWithoutCharacter, action);
-
-    expect(state.error).toBe('No character data to update');
   });
 });

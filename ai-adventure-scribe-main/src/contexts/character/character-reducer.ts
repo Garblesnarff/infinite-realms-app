@@ -1,8 +1,4 @@
-import {
-  handleUpdateCharacter,
-  handleUpdateSpellSlots,
-  handleUpdateConcentration,
-} from './character-updater';
+import { handleUpdateCharacter } from './character-updater';
 
 import type { CharacterState, CharacterAction } from './types';
 
@@ -136,70 +132,6 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
           character: { ...state.character!, hair: action.payload },
           isDirty: true,
         };
-      case 'SET_STEP': {
-        // Validate step number
-        const step = action.payload;
-        if (typeof step !== 'number' || step < 0 || step > 20) {
-          logger.error('Invalid step number:', step);
-          return {
-            ...state,
-            error: 'Invalid character creation step',
-          };
-        }
-
-        return {
-          ...state,
-          currentStep: step,
-          error: null,
-        };
-      }
-
-      case 'SET_LOADING': {
-        // Validate loading boolean
-        const loading = action.payload;
-        if (typeof loading !== 'boolean') {
-          logger.error('Invalid loading value:', loading);
-          return {
-            ...state,
-            error: 'Invalid loading state',
-          };
-        }
-
-        return {
-          ...state,
-          isLoading: loading,
-          error: null,
-        };
-      }
-
-      case 'SET_ERROR': {
-        // Validate error message
-        const error = action.payload;
-        if (error !== null && typeof error !== 'string') {
-          logger.error('Invalid error value:', error);
-          return {
-            ...state,
-            error: 'Invalid error message format',
-          };
-        }
-
-        return {
-          ...state,
-          error: error,
-        };
-      }
-
-      case 'UPDATE_SPELL_SLOTS':
-        return handleUpdateSpellSlots(state, action.payload);
-
-      case 'UPDATE_CONCENTRATION':
-        return handleUpdateConcentration(state, action.payload);
-
-      case 'RESET': {
-        logger.info('Resetting character state to initial state');
-        return initialState;
-      }
-
       default: {
         logger.warn('Unknown action type dispatched:', action);
         return state;

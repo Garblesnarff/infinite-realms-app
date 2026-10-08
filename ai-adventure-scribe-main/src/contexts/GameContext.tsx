@@ -60,9 +60,6 @@ export interface GameContextValue {
 
   // AI integration
   processAiResponse: (rollRequests: AiRollRequest[]) => void;
-
-  // Combat integration
-  updateCombatState: (isInCombat: boolean, currentTurnPlayerId?: string) => void;
 }
 
 // Create context
@@ -159,36 +156,9 @@ export const GameProvider: React.FC<{ children: ReactNode; characterId?: string 
   const { throttledProcessAiResponse } = useAiRollProcessor(dispatch, requestDiceRoll);
 
   /**
-   * Update combat state integration
-   *
-   * Fixed: Properly memoized with useCallback and empty dependencies.
-   * Only uses dispatch (stable) and function parameters.
-   * Change Detection: Uses stateRef to check combat state before dispatching.
-   * Comparison Strategy: Primitive comparison (===) for boolean and string values.
-   * Dependencies: [] - no external dependencies, uses stateRef and dispatch
-   */
-  const updateCombatState = useCallback((isInCombat: boolean, currentTurnPlayerId?: string) => {
-    // Change Detection: Only dispatch if combat state values actually change
-    // Uses stateRef to access current state without adding dependencies
-    const currentState = stateRef.current;
-    if (
-      currentState.isInCombat === isInCombat &&
-      currentState.currentTurnPlayerId === currentTurnPlayerId
-    ) {
-      logger.info('⚔️ Combat state unchanged, skipping dispatch:', {
-        isInCombat,
-        currentTurnPlayerId,
-      });
-      return; // Early return prevents unnecessary dispatch and re-render
-    }
-    dispatch({ type: 'SET_COMBAT_STATE', payload: { isInCombat, currentTurnPlayerId } });
-  }, []); // No dependencies - only uses dispatch and function parameters
-
-  /**
    * Throttled versions of frequently-called functions to prevent performance issues
    *
    * Throttle Strategy:
-   * - updateCombatState: 100ms - Combat state updates need near-instant feedback but can be throttled slightly
    * - setGamePhase: 250ms - Phase transitions are less frequent but can happen during rapid state changes
    * - processAiResponse: 500ms - AI responses are async and don't need immediate processing
    *
@@ -198,11 +168,6 @@ export const GameProvider: React.FC<{ children: ReactNode; characterId?: string 
    * - cancelDiceRoll: Must execute immediately for responsive user feedback
    * - getCurrentDiceRoll: Read-only getter, no state updates
    */
-  const throttledUpdateCombatState = useMemo(
-    () => throttle(updateCombatState, 100),
-    [updateCombatState],
-  ); // 100ms - Combat state updates should be near-instant but can be throttled slightly
-
   const throttledSetGamePhase = useMemo(() => throttle(setGamePhase, 250), [setGamePhase]); // 250ms - Phase transitions are less frequent but can happen during rapid state changes
 
   // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
@@ -221,7 +186,6 @@ export const GameProvider: React.FC<{ children: ReactNode; characterId?: string 
       clearBatch,
       setGamePhase: throttledSetGamePhase,
       processAiResponse: throttledProcessAiResponse,
-      updateCombatState: throttledUpdateCombatState,
     }),
     [
       state,
@@ -235,7 +199,6 @@ export const GameProvider: React.FC<{ children: ReactNode; characterId?: string 
       clearBatch,
       throttledSetGamePhase,
       throttledProcessAiResponse,
-      throttledUpdateCombatState,
     ],
   );
 

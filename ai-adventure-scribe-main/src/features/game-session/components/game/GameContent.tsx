@@ -130,8 +130,6 @@ const GameContent: React.FC = () => {
 
   const handleCombatToggle = useCallback(() => {
     setCombatMode((v) => !v);
-    sessionStorage.setItem('manualCombatToggle', 'true');
-    setTimeout(() => sessionStorage.removeItem('manualCombatToggle'), 30000);
   }, []);
 
   const handleAIResponse = useCallback(async (message: GameAIResponse) => {

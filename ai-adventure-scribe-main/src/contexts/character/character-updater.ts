@@ -2,7 +2,6 @@ import type { CharacterState } from './types';
 import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
-import { parseSpellSlotLevel } from '@/utils/spell-slot-level';
 
 /**
  * Handles the UPDATE_CHARACTER action logic.
@@ -89,104 +88,5 @@ export function handleUpdateCharacter(
     character: updatedCharacter,
     isDirty: state.isDirty || !!hasChanges,
     error: null, // Clear any previous errors on successful update
-  };
-}
-
-/**
- * Handles the UPDATE_SPELL_SLOTS action logic.
- */
-export function handleUpdateSpellSlots(
-  state: CharacterState,
-  payload: Record<number, { max: number; current: number }>,
-): CharacterState {
-  // Validate spell slots payload
-  if (!payload || typeof payload !== 'object') {
-    logger.error('Invalid spell slots payload:', payload);
-    return {
-      ...state,
-      error: 'Invalid spell slot data',
-    };
-  }
-
-  // Validate spell slot structure
-  for (const [level, slots] of Object.entries(payload)) {
-    if (parseSpellSlotLevel(level) === null) {
-      logger.error('Invalid spell slot level:', level);
-      return {
-        ...state,
-        error: 'Invalid spell slot level',
-      };
-    }
-
-    if (
-      !slots ||
-      typeof slots !== 'object' ||
-      typeof slots.max !== 'number' ||
-      typeof slots.current !== 'number' ||
-      slots.max < 0 ||
-      slots.current < 0 ||
-      slots.current > slots.max
-    ) {
-      logger.error('Invalid spell slot data for level', level, ':', slots);
-      return {
-        ...state,
-        error: 'Invalid spell slot structure',
-      };
-    }
-  }
-
-  // Validate character exists before updating
-  if (!state.character) {
-    logger.error('No character to update spell slots for');
-    return {
-      ...state,
-      error: 'No character data to update',
-    };
-  }
-
-  return {
-    ...state,
-    character: {
-      ...state.character,
-      spellSlots: payload,
-    },
-    isDirty: true,
-    error: null,
-  };
-}
-
-/**
- * Handles the UPDATE_CONCENTRATION action logic.
- */
-export function handleUpdateConcentration(
-  state: CharacterState,
-  payload: string | null,
-): CharacterState {
-  // Validate concentration payload
-  if (payload !== null && typeof payload !== 'string') {
-    logger.error('Invalid concentration payload:', payload);
-    return {
-      ...state,
-      error: 'Invalid concentration spell data',
-    };
-  }
-
-  // Validate character exists before updating
-  if (!state.character) {
-    logger.error('No character to update concentration for');
-    return {
-      ...state,
-      error: 'No character data to update',
-    };
-  }
-
-  return {
-    ...state,
-    character: {
-      ...state.character,
-      activeConcentration: payload,
-    },
-    isDirty: true,
-    error: null,
   };
 }

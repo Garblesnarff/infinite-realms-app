@@ -25,10 +25,4 @@ export type CharacterAction =
   | { type: 'SET_WEIGHT'; payload: number }
   | { type: 'SET_EYES'; payload: string | undefined }
   | { type: 'SET_SKIN'; payload: string | undefined }
-  | { type: 'SET_HAIR'; payload: string | undefined }
-  | { type: 'SET_STEP'; payload: number }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'RESET' }
-  | { type: 'UPDATE_SPELL_SLOTS'; payload: Record<number, { max: number; current: number }> }
-  | { type: 'UPDATE_CONCENTRATION'; payload: string | null };
+  | { type: 'SET_HAIR'; payload: string | undefined };

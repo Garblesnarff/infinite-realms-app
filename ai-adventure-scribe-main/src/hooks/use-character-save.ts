@@ -99,7 +99,6 @@ export const useCharacterSave = (): {
 
           // Invalidate specific queries to refresh the UI with the new image
           queryClient.invalidateQueries({ queryKey: ['characters'] });
-          queryClient.invalidateQueries({ queryKey: ['character', characterId] });
 
           // Show success notification
           toast({
@@ -300,7 +299,6 @@ export const useCharacterSave = (): {
             queryKey: ['campaign', effectiveCampaignId, 'characters'],
           });
         }
-        queryClient.invalidateQueries({ queryKey: ['character', characterData.id] });
 
         // Return the complete character data
         return savedCharacter;
