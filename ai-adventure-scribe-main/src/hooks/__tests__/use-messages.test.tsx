@@ -53,6 +53,24 @@ describe('useMessages', () => {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
+  it('renders a received NPC row while viewing older history, without formatting or saving it', async () => {
+    const page = (id: string, sequence: number) => ({ id, message: id, speaker_type: 'dm', timestamp: '2026-10-07T00:00:00Z', sequence_number: sequence });
+    vi.mocked(userDataApi.listSessionMessages)
+      .mockResolvedValueOnce({ messages: [page('latest', 51)], total: 51, hasMore: true })
+      .mockResolvedValueOnce({ messages: [page('old', 1)], total: 51, hasMore: false });
+    const { result } = renderHook(() => useMessages(sessionId), { wrapper });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    const received = { id: 'server-npc-row', sessionId, sequence: 52, text: 'Server supplied NPC account.', kind: 'npc', actionId: 'npc-action', timestamp: '2026-10-07T00:01:00Z', context: { intent: 'combat_npc_result', round: 2, engineCards: [] } };
+    act(() => window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [received] })));
+    await waitFor(() => expect(result.current.data.map((message) => message.id)).toEqual(['old', 'latest', 'server-npc-row']));
+    expect(result.current.data[2]).toMatchObject({ text: received.text, sender: 'system', sequenceNumber: 52, context: received.context });
+    expect(userDataApi.saveSessionMessages).not.toHaveBeenCalled();
+    act(() => window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [received] })));
+    expect(result.current.data).toHaveLength(3);
+  });
+
   it('should not fetch messages if sessionId is missing', () => {
     const { result } = renderHook(() => useMessages(null), { wrapper });
 

@@ -22,6 +22,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HPMechanics } from '../../../server-bun/src/services/combat/hp-mechanics';
+import { buildNpcEngineMessage } from '../../../shared/npc-engine-message';
 import {
   deathSaveIntentWire,
   deathSaveIntentWireAutoRolled,
@@ -233,7 +234,34 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({ ok: false } as any);
     vi.mocked(userDataApi.advanceNpcTurns).mockImplementation((async () => {
       order.push('npc turns');
-      return spiderStrikesTheBody;
+      // The server now delivers NPC results as system message rows (via buildNpcEngineMessage),
+      // not as client-assembled combatEngineBlocks. Simulate the server + request() dispatch.
+      const npcResult = spiderStrikesTheBody.results[0];
+      const message = buildNpcEngineMessage(
+        [
+          { id: SCHOLAR.id, name: 'The Scholar', participantType: 'player', maxHp: 7 },
+          { id: SPIDER_ID, name: 'Vitruvian Spider', participantType: 'monster', maxHp: 40 },
+        ],
+        npcResult.round,
+        {
+          type: npcResult.action.action_type,
+          actorId: npcResult.action.actor_id,
+          targetIds: npcResult.action.target_ids,
+        },
+        npcResult.engineResult,
+      );
+      const row = {
+        id: 'npc-row-spider-strike',
+        sequence: 100,
+        text: message.text,
+        kind: 'npc',
+        actionId: 'spider-strike-action',
+        sessionId: SESSION_ID,
+        timestamp: new Date().toISOString(),
+        context: message.context,
+      };
+      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [row] }));
+      return { ...spiderStrikesTheBody, engineRows: [row] };
     }) as any);
     vi.mocked(AIService.chatWithDM).mockImplementation((async () => {
       order.push('narration');
@@ -296,22 +324,48 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
   });
 
   it('prints the save and the strike on the body as engine lines with cards, under the player’s turn', async () => {
-    const response = await playDyingTurn(() => {});
+    // NPC results now arrive as server-delivered system message rows, not client-assembled
+    // combatEngineBlocks. Capture the row dispatched via the session-engine-rows event.
+    const npcRows: Array<{ text: string; context: any }> = [];
+    const capture = (event: Event) => {
+      npcRows.push(...((event as CustomEvent).detail as Array<{ text: string; context: any }>));
+    };
+    window.addEventListener('session-engine-rows', capture);
+    try {
+      const response = await playDyingTurn(() => {});
 
-    const blocks = response.context?.combatEngineBlocks as Array<{
-      source: string;
-      lines: string[];
-      cards?: Array<{ kind: string }>;
-    }>;
-    expect(blocks[0]).toMatchObject({ source: 'player' });
-    expect(blocks[0].lines.join('\n')).toContain(
-      'The Scholar rolled 14 on their death saving throw — SUCCESS (1 success, 2 failures).',
-    );
-    expect(blocks[0].cards?.[0]).toMatchObject({ kind: 'death_save' });
-    expect(blocks[1]).toMatchObject({ source: 'npc' });
-    expect(blocks[1].lines.join('\n')).toContain(
-      'Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
-    );
+      // The player's death save is still a client-assembled block in the response context.
+      const blocks = response.context?.combatEngineBlocks as Array<{
+        source: string;
+        lines: string[];
+        cards?: Array<{ kind: string }>;
+      }>;
+      expect(blocks[0]).toMatchObject({ source: 'player' });
+      expect(blocks[0].lines.join('\n')).toContain(
+        'The Scholar rolled 14 on their death saving throw — SUCCESS (1 success, 2 failures).',
+      );
+      expect(blocks[0].cards?.[0]).toMatchObject({ kind: 'death_save' });
+      // No NPC block in the response context anymore — the spider's strike arrives as a
+      // server-delivered row.
+      expect(blocks).toHaveLength(1);
+
+      // The spider's strike on the body arrives as a server-delivered NPC row.
+      expect(npcRows).toHaveLength(1);
+      expect(npcRows[0].text).toContain(
+        'Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
+      );
+      expect(npcRows[0].context).toMatchObject({
+        intent: 'combat_npc_result',
+        round: 3,
+      });
+      const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
+      expect(npcBlock).toMatchObject({ source: 'npc' });
+      expect(npcBlock.lines.join('\n')).toContain(
+        'Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
+      );
+    } finally {
+      window.removeEventListener('session-engine-rows', capture);
+    }
   });
 
   it('is narrated once, from the engine’s results, and does not hand a dying player the turn', async () => {

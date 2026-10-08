@@ -35,7 +35,7 @@ import {
   type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
-import { handleDmActionsAndTransitions, showNpcTurnLines } from '@/hooks/ai/dm-actions-handler';
+import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dying-turn';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { narrateKillingRound } from '@/hooks/ai/killing-round-narration';
@@ -558,7 +558,6 @@ export const useAIResponse = (): {
 
         const combatWasActiveAtRequestStart = isInCombat;
         let preflightNpcTurns: AdvanceNpcTurnsResponse | undefined;
-        let npcLinesShown = false;
         if (isInCombat && !isDiceRollMessage) {
           // Read before the pre-flight: one that ends combat leaves no encounter to read after.
           const preflightParticipants = activeEncounter?.participants;
@@ -601,13 +600,6 @@ export const useAIResponse = (): {
               localNotice: NPC_FIRST_ADVANCE_FAILED_NOTICE,
               localNotices: [{ text: NPC_FIRST_ADVANCE_FAILED_NOTICE, persist: true }],
             };
-          }
-          // The tracker HP has moved by now. Say why before the DM call and the player's die
-          // prompt, not after them in the reply (#2386). Outside the try: the server advanced the
-          // NPCs, so a failure here is not a failed advance.
-          if (preflightNpcTurns && onEngineNotice) {
-            showNpcTurnLines(preflightNpcTurns, preflightParticipants, onEngineNotice);
-            npcLinesShown = true;
           }
           // #2517: the NPCs' own turns just defeated the party. Show the death
           // screen from the combat resolution itself — the player's pending
@@ -1046,7 +1038,6 @@ export const useAIResponse = (): {
           playerInputOrigin,
           entryConfirmed: heldEntry?.decision === 'confirmed',
           onEngineNotice,
-          npcLinesShown,
           signal,
           onPlayerWaitChange: turnSignal?.onPlayerWaitChange,
         });

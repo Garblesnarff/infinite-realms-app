@@ -303,6 +303,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (payload && typeof payload === 'object' && typeof payload.error === 'string') {
     throw new Error(payload.error);
   }
+  const engineRows = (payload as { engineRows?: unknown[] })?.engineRows;
+  if (engineRows?.length && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: engineRows }));
+  }
   return payload;
 }
 

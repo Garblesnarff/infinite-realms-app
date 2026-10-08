@@ -1,6 +1,7 @@
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
 import { DynamicOptionsSection } from '../DynamicOptionsSection';
 
 import {
@@ -187,7 +188,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
     vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
       currentParticipant: { id: SWARM_1_ID },
     } as any);
-    vi.mocked(userDataApi.advanceNpcTurns).mockResolvedValue({
+    const npcTurn = {
       results: [
         {
           action: {
@@ -206,6 +207,7 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
             finalDamage: 2,
             targetNewHp: 8,
             targetIsConscious: true,
+            endedReason: 'party_defeated',
           },
           outcomes: [{ participantId: SCHOLAR_ID, hit: true, finalDamage: 2, newHp: 8 }],
           actorIsPlayer: false,
@@ -216,27 +218,74 @@ describe('the attack option runs the declare pipeline, never DM text (#2563)', (
       endedReason: 'party_defeated',
       capReached: false,
       transcriptLines: [],
-    } as any);
+    };
+    vi.mocked(userDataApi.advanceNpcTurns).mockImplementation((async () => {
+      // The server now delivers NPC results as system message rows (via buildNpcEngineMessage),
+      // not as client-assembled onSendMessage calls. Simulate the server + request() dispatch.
+      const npcResult = npcTurn.results[0];
+      const message = buildNpcEngineMessage(
+        [
+          { id: SCHOLAR_ID, name: 'The Scholar', participantType: 'player', maxHp: 10 },
+          { id: SWARM_1_ID, name: 'Light-Eater Swarm 1', participantType: 'monster' },
+        ],
+        2,
+        {
+          type: npcResult.action.action_type,
+          actorId: npcResult.action.actor_id,
+          targetIds: npcResult.action.target_ids,
+        },
+        npcResult.engineResult,
+      );
+      const row = {
+        id: 'npc-row-swarm-attack',
+        sequence: 100,
+        text: message.text,
+        kind: 'npc',
+        actionId: 'swarm-attack-action',
+        sessionId: 'session-d5',
+        timestamp: new Date().toISOString(),
+        context: message.context,
+      };
+      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [row] }));
+      return { ...npcTurn, engineRows: [row] };
+    }) as any);
 
-    render(
-      <DynamicOptionsSection
-        options={[]}
-        onOptionSelect={onOptionSelect}
-        onSendMessage={onSendMessage}
-        hasDynamicOverlay
-      />,
-    );
-    fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
+    // Capture the server-delivered NPC row.
+    const npcRows: Array<{ text: string; context: any }> = [];
+    const capture = (event: Event) => {
+      npcRows.push(...((event as CustomEvent).detail as Array<{ text: string; context: any }>));
+    };
+    window.addEventListener('session-engine-rows', capture);
+    try {
+      render(
+        <DynamicOptionsSection
+          options={[]}
+          onOptionSelect={onOptionSelect}
+          onSendMessage={onSendMessage}
+          hasDynamicOverlay
+        />,
+      );
+      fireEvent.click(await screen.findByText('Attack with Quarterstaff'));
 
-    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(3));
-    const rows = onSendMessage.mock.calls.map(
-      ([message]) => message as { text: string; persist?: boolean },
-    );
-    expect(rows.map((row) => row.text).join('\n')).toContain('0 damage');
-    expect(rows.map((row) => row.text).join('\n')).toContain('2 damage');
-    expect(rows.map((row) => row.text).join('\n')).toContain('party_defeated');
-    expect(rows.every((row) => row.persist === true)).toBe(true);
-    expect(new Set(rows.map((row) => row.text)).size).toBe(3);
+      // The player's attack (0 damage) goes via onSendMessage; the NPC's attack and the
+      // end reason arrive as a server-delivered row.
+      await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(npcRows).toHaveLength(1));
+
+      const playerRows = onSendMessage.mock.calls.map(
+        ([message]) => message as { text: string; persist?: boolean },
+      );
+      expect(playerRows[0].text).toContain('0 damage');
+      expect(playerRows[0].persist).toBe(true);
+
+      // The NPC row carries the 2-damage attack and the party_defeated end reason, exactly once.
+      expect(npcRows[0].text).toContain('2 damage');
+      expect(npcRows[0].text).toContain('party_defeated');
+      const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
+      expect(npcBlock).toMatchObject({ source: 'npc' });
+    } finally {
+      window.removeEventListener('session-engine-rows', capture);
+    }
   });
 
   it('persists the opportunity attack before the correct flee or yield result (#2580)', async () => {

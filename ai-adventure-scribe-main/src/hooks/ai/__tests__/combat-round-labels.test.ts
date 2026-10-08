@@ -7,6 +7,7 @@ import {
   THREE_ACTOR_PLAYER_MIDDLE_NPC_BATCHES,
   TWO_ACTOR_PLAYER_FIRST_NPC_BATCHES,
 } from '../../../../shared/test-fixtures/advance-npc-turns-rounds';
+import { receivedNpcMessages } from '../../../../shared/test-fixtures/npc-engine-messages';
 
 import type * as CombatActionExecutor from '@/services/combat/combat-action-executor';
 import type * as PlayerAttackRoll from '@/services/combat/player-attack-roll';
@@ -125,7 +126,11 @@ const playerTurn = async (params: {
     combatRound: encounter.currentRound,
     ...(params.preflight ? { preResolvedNpcTurns: params.preflight as any } : {}),
   });
-  return (result.combatEngineBlocks ?? []).map(label);
+  const npcBlocks = (batch: unknown) => receivedNpcMessages(batch, encounter.participants).flatMap((message) => message.context.combatEngineBlocks);
+  return [
+    ...npcBlocks(params.preflight), ...params.advance.slice(0, -1).flatMap(npcBlocks),
+    ...(result.combatEngineBlocks ?? []), ...npcBlocks(params.advance.at(-1)),
+  ].map(label);
 };
 
 describe('engine line round labels (#2393)', () => {

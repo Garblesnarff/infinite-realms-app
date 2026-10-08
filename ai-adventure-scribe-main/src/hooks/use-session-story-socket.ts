@@ -28,7 +28,10 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
         socket.onmessage = (event) => {
           try {
             const message = JSON.parse(String(event.data));
-            if (message.type === 'chat') callbackRef.current();
+            if (message.type === 'chat') {
+              if (message.engineRows?.length) window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: message.engineRows }));
+              else callbackRef.current();
+            }
             if (
               [
                 'map_created',

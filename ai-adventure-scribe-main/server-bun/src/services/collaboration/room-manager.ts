@@ -7,6 +7,8 @@
  * Extracted from ws.ts.
  */
 
+import { deferUntilCommit } from '../../../../db/transaction-context';
+
 export type RoomId = string;
 
 // Custom WebSocket data type with user info
@@ -85,6 +87,7 @@ export function broadcastToRoom(
   sender: WSConnection,
   message: any
 ) {
+  if (deferUntilCommit(() => broadcastToRoom(roomId, sender, message))) return;
   const clients = rooms.get(roomId);
   if (!clients) return;
 

@@ -27,7 +27,7 @@ import {
 } from '../../../../shared/test-fixtures/engine-results';
 import {
   formatCombatEngineParts,
-  formatNpcTurnOutcome,
+  formatDeathSaveParts,
   formatRefusedSpellPart,
   type EngineTranscriptPart,
 } from '../combat-outcome-transcript';
@@ -143,14 +143,8 @@ const BADGE_TABLE: Array<[string, () => EngineResultCard, EngineBadge]> = [
 ];
 
 function deathSaveCard(save: typeof DEATH_SAVE_FAILED): EngineResultCard {
-  const turn = {
-    action: attackAction(REEVES, SCHOLAR),
-    engineResult: { ...ENEMY_MISSES_PLAYER, deathSaves: [save] },
-    transcriptLines: ['The Scholar rolled 6 on their death saving throw — FAILURE.'],
-  };
-  const card = formatNpcTurnOutcome(turn, FIGHT_ROSTER, ON_YOU).cards.find(
-    (candidate) => candidate.kind === 'death_save',
-  );
+  const card = formatDeathSaveParts({ deathSaves: [save] }, FIGHT_ROSTER)
+    .map((part) => part.card).find((candidate) => candidate.kind === 'death_save');
   if (!card) throw new Error('no death save card');
   return card;
 }
@@ -264,21 +258,11 @@ describe('engine result card data (#2417)', () => {
   });
 
   it('builds a death save card from the result, and keeps the server line from printing twice', () => {
-    const printed =
-      'The Scholar rolled 6 on their death saving throw — FAILURE (0 successes, 2 failures).';
-    const { lines, cards } = formatNpcTurnOutcome(
-      {
-        action: attackAction(REEVES, SCHOLAR),
-        engineResult: { ...ENEMY_MISSES_PLAYER, deathSaves: [DEATH_SAVE_FAILED] },
-        transcriptLines: [printed],
-      },
-      FIGHT_ROSTER,
-      ON_YOU,
-    );
-    const card = cards.find((candidate) => candidate.kind === 'death_save')!;
-
-    expect(lines).toContain(printed);
-    expect(card.covers).toEqual([printed]);
+    const parts = formatDeathSaveParts({ deathSaves: [DEATH_SAVE_FAILED] }, FIGHT_ROSTER);
+    const card = parts[0].card;
+    expect(parts).toHaveLength(1);
+    expect(parts[0].line).toBe(card.line);
+    expect(card.line).toContain('death saving throw');
     expect(card.deathSave).toEqual({ successes: 0, failures: 2 });
     expect(card.title).toBe('The Scholar makes a death saving throw');
   });

@@ -370,7 +370,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       expect(payload.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE_WITH_ENGINE_LINES);
       expect(payload.silentPlayerTurnNote).not.toMatch(/no damage was dealt or taken/i);
       expect(payload.authoritativeCombatResults).toHaveLength(1);
-      expect(outcome.responseText).toContain(NPC_LINE);
+      expect(outcome.responseText).not.toContain(NPC_LINE);
       expect(outcome.responseText).toContain(NOTICE_WITH_ENGINE_LINES);
       expect(outcome.responseText).not.toContain('nothing was rolled');
       expect(outcome.responseText.trimEnd().endsWith(HANDOFF)).toBe(true);
@@ -383,8 +383,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
 
       const outcome = await invoke({
         preflightNpcTurns: PREFLIGHT_NPC_ATTACK,
-        npcLinesShown: true,
-        onEngineNotice: vi.fn(),
+          onEngineNotice: vi.fn(),
       });
 
       expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);

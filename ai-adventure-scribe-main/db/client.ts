@@ -14,10 +14,13 @@
  * ```
  */
 
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
 import * as schema from './schema/index';
+import { transactionContext } from './transaction-context';
+
 
 // Create postgres connection
 // Note: This connection is separate from Supabase's connection pool
@@ -36,7 +39,24 @@ const client = postgres(connectionString, {
 });
 
 // Create Drizzle instance with schema for relational queries
-export const db = drizzle(client, { schema });
+const database = drizzle(client, { schema });
+export const db: typeof database = new Proxy(database, {
+  get: (_target, property) => {
+    const current = (transactionContext.getStore()?.database ?? database) as typeof database;
+    const value = Reflect.get(current, property);
+    return typeof value === 'function' ? value.bind(current) : value;
+  },
+});
+
+export async function withNpcActionTransaction<T>(encounterId: string, work: () => Promise<T>): Promise<T> {
+  const afterCommit: Array<() => void> = [];
+  const result = await database.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM combat_encounters WHERE id = ${encounterId} FOR UPDATE`);
+    return transactionContext.run({ database: tx, afterCommit }, work);
+  });
+  for (const publish of afterCommit) publish();
+  return result;
+}
 
 // Export the client for raw SQL queries if needed
 export { client as pgClient };

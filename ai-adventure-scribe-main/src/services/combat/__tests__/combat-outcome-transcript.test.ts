@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
+import { DEATH_SAVE_FAILED } from '../../../../shared/test-fixtures/engine-results';
 import {
   formatCombatEngineOutcome,
-  formatNpcTurnLines,
   formatRefusedSpellOutcome,
   prependCombatEngineTranscript,
 } from '../combat-outcome-transcript';
@@ -325,13 +326,15 @@ describe('spell engine lines', () => {
     });
 
     it('returns an NPC turn as its engine line followed by the server lines', () => {
-      expect(
-        formatNpcTurnLines(
-          { action: npcSwing, engineResult: hit, transcriptLines: ['⚙️ Engine: death save'] },
-          [],
-          { targetHp: true },
-        ),
-      ).toEqual([expect.stringContaining('now at 1 HP'), '⚙️ Engine: death save']);
+      const row = buildNpcEngineMessage([
+        { id: npcSwing.actor_id, name: 'Captain Sarah Reeves', participantType: 'monster' },
+        { id: npcSwing.target_ids[0], name: 'The Scholar', participantType: 'player' },
+      ], 1, { type: 'attack', actorId: npcSwing.actor_id, targetId: npcSwing.target_ids[0] },
+      { ...hit, deathSaves: [{ ...DEATH_SAVE_FAILED, participantId: npcSwing.target_ids[0] }] });
+      expect(row.context.combatEngineBlocks[0].lines).toEqual([
+        expect.stringContaining('now at 1 HP'),
+        '⚙️ Engine: The Scholar rolled 6 on their death saving throw — FAILURE (0 successes, 2 failures).',
+      ]);
     });
   });
 });

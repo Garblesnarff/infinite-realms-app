@@ -119,7 +119,7 @@ export function previousEngineDividerKeys<
   const previous = new Map<M, string | undefined>();
   let last: string | undefined;
   for (const message of messages) {
-    if (message.sender !== 'dm') continue;
+    if (message.sender !== 'dm' && message.sender !== 'system') continue;
     const blocks = combatEngineBlocksFromContext(message.context);
     if (blocks.length) {
       previous.set(message, last);

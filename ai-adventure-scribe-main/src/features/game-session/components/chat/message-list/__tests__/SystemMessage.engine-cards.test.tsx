@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-message';
 import {
-  attackAction,
   ENEMY_HITS_PLAYER,
   FIGHT_ROSTER,
   REEVES,
@@ -10,7 +10,6 @@ import {
 } from '../../../../../../../shared/test-fixtures/engine-results';
 import { SystemMessage } from '../SystemMessage';
 
-import { formatNpcTurnOutcome } from '@/services/combat/combat-outcome-transcript';
 
 const campaign = vi.hoisted(() => ({ difficulty: 'medium' }));
 vi.mock('@/contexts/CampaignContext', () => ({
@@ -19,16 +18,12 @@ vi.mock('@/contexts/CampaignContext', () => ({
 vi.mock('../MessageMetadata', () => ({ MessageMetadata: () => null }));
 
 const KEPT = '⚙️ Engine: Captain Sarah Reeves turns hostile.';
-const { lines, cards } = formatNpcTurnOutcome(
-  {
-    action: attackAction(REEVES, SCHOLAR),
-    engineResult: ENEMY_HITS_PLAYER,
-    transcriptLines: [KEPT],
-  },
-  FIGHT_ROSTER,
-  { targetHp: true, targetMaxHp: 7 },
+const received = buildNpcEngineMessage(
+  FIGHT_ROSTER.map((participant) => ({ ...participant, maxHp: 7 })), 1,
+  { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id }, ENEMY_HITS_PLAYER,
 );
-const text = lines.join('\n\n');
+const cards = received.context.engineCards;
+const text = `${received.text}\n\n${KEPT}`;
 
 const renderRow = () =>
   render(

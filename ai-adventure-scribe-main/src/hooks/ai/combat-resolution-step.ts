@@ -49,8 +49,6 @@ import {
   formatCombatEngineParts,
   formatDeathSaveParts,
   formatWakeParts,
-  formatNpcTurnOutcome,
-  npcTurnOptions,
   formatRefusedSpellPart,
   prependCombatEngineTranscript,
 } from '@/services/combat/combat-outcome-transcript';
@@ -152,7 +150,6 @@ export interface CombatResolutionParams {
    * The pre-resolved NPC turns' engine lines were already on screen before the player's die was
    * asked for (#2378). The DM still narrates them; this pass must not print them a second time.
    */
-  npcLinesShown?: boolean;
   /** Encounter round at the start of this resolution, used for older server payloads. */
   combatRound?: number;
   /**
@@ -233,7 +230,6 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     queuedIntentActorIds,
     playerAttackRoll,
     preResolvedNpcTurns,
-    npcLinesShown,
     combatRound,
     playerInputOrigin,
     playerMessage,
@@ -480,77 +476,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   };
   type BatchBoundary = 'turn_ended' | 'combat_ended';
 
-  const appendAutonomousNpcResults = (
-    advanced: AdvanceNpcTurnsResponse,
-    afterPlayerAction = false,
-    linesShown = false,
-  ): BatchBoundary => {
-    const defaultRound = combatRoundFrom(advanced, combatRound ?? 1);
-    const playerOrder = participants?.find(
-      (participant) => participant.participantType === 'player',
-    )?.turnOrder;
-    for (const npcResult of advanced.results) {
-      const { transcriptLines: _printedLines, ...authoritativeResult } = npcResult;
-      resolvedActions.push({
-        ...authoritativeResult,
-        actorIsPlayer: false,
-      });
-      const { lines: engineLines, cards: engineCards } = formatNpcTurnOutcome(
-        npcResult,
-        roster,
-        npcTurnOptions(participants, npcResult.action.target_ids?.[0]),
-      );
-      const npcOrder = participants?.find(
-        (participant) => participant.id === npcResult.action.actor_id,
-      )?.turnOrder;
-      // Legacy payloads carry no round, so it is inferred from turn order. This assumes at most
-      // one round wrap per `advanceNpcTurns` batch: every NPC seated before the player is put
-      // in the next round, and nothing is put two rounds ahead. A batch that crosses more than
-      // one round boundary would be labelled short. Server round/sequence metadata (#2127
-      // follow-up) replaces this inference wherever it is present.
-      const wrapsRound =
-        afterPlayerAction &&
-        typeof playerOrder === 'number' &&
-        typeof npcOrder === 'number' &&
-        npcOrder < playerOrder;
-      const inferredRound =
-        afterPlayerAction &&
-        (wrapsRound || typeof playerOrder !== 'number' || typeof npcOrder !== 'number')
-          ? defaultRound + 1
-          : defaultRound;
-      if (!linesShown) {
-        appendEngineBlock({
-          source: 'npc',
-          actorId: npcResult.action.actor_id,
-          lines: engineLines,
-          cards: engineCards,
-          round: combatRoundFrom(npcResult, inferredRound),
-          serverSequence: combatSequenceFrom(npcResult),
-        });
-      }
-    }
-    // Death-save lines are attached to their result above. The top-level stream carries the
-    // safety-cap line, which has no individual action to attach to.
-    if (advanced.capReached && !linesShown) {
-      appendEngineBlock({
-        source: 'npc',
-        lines: advanced.transcriptLines.filter((line) =>
-          line.includes('NPC turn loop stopped after'),
-        ),
-        round: defaultRound,
-        serverSequence: combatSequenceFrom(advanced),
-      });
+  const retainNpcResults = (advanced: AdvanceNpcTurnsResponse): BatchBoundary => {
+    for (const { transcriptLines: _printedLines, ...result } of advanced.results) {
+      resolvedActions.push({ ...result, actorIsPlayer: false });
     }
     if (advanced.currentParticipant) turnHolder = advanced.currentParticipant;
     return advanced.combatEnded ? 'combat_ended' : 'turn_ended';
   };
-
-  // The pre-flight ran before the declaration was sent to the DM. Carry those already-authoritative
-  // NPC results into this same narration pass so the reply contains one ordered account of the
-  // NPC engine lines followed by the player's action.
-  const preflightBoundary = preResolvedNpcTurns
-    ? appendAutonomousNpcResults(preResolvedNpcTurns, false, npcLinesShown)
-    : null;
+  const preflightBoundary = preResolvedNpcTurns ? retainNpcResults(preResolvedNpcTurns) : null;
 
   /**
    * The sheet's cast is about to reach the engine. False means go on; true means the player
@@ -799,7 +732,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     // cards too (#2457) — they are not part of the action's result. Print BEFORE the
     // combat-ended early return: a lethal third failure ends the fight, and the DEAD line
     // must still be visible.
-    const turnDeathSaveParts = endedWithAction ? [] : formatDeathSaveParts(turn, roster);
+    const turnDeathSaveParts = endedWithAction || !isPlayerActor(actorId, participants) ? [] : formatDeathSaveParts(turn, roster);
     if (turnDeathSaveParts.length) {
       appendEngineBlock({
         source: isPlayerActor(actorId, participants) ? 'player' : 'npc',
@@ -815,7 +748,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     if (turnState?.currentParticipant) turnHolder = turnState.currentParticipant;
     if (sessionId && isPlayerActor(actorId, participants)) {
       const advanced = await advanceNpcTurnsToPlayer(sessionId, turnHolder?.id, signal);
-      return appendAutonomousNpcResults(advanced, true);
+      return retainNpcResults(advanced);
     }
     return 'turn_ended';
   };
@@ -826,6 +759,10 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     execution: Awaited<ReturnType<typeof executeStructuredCombatActionWithBoundary>>,
     autoRolled: boolean,
   ): Promise<BatchBoundary> => {
+    if (!isPlayerActor(action.actor_id, participants)) {
+      resolvedActions.push({ action, outcomes: execution.outcomes, engineResult: execution.result, actorIsPlayer: false });
+      return execution.boundary === 'combat_ended' ? 'combat_ended' : crossTurnBoundary(action.actor_id);
+    }
     notePlayerSpell(action);
     // Death saves on a single executed action get their own engine lines and cards (#2457).
     const engineParts = [
@@ -946,7 +883,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           refusedCurrentParticipantId,
           signal,
         );
-        const recoveryBoundary = appendAutonomousNpcResults(advanced, true);
+        const recoveryBoundary = retainNpcResults(advanced);
         playerRound = advanced.round ?? playerRound;
         if (recoveryBoundary === 'combat_ended') break;
         try {
@@ -1250,15 +1187,8 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     'Player';
   const orderedEngineBlocks = orderCombatEngineBlocks(engineBlocks);
   const orderedEngineTranscriptLines = orderedEngineBlocks.flatMap((block) => block.lines);
-  // Lines already on screen were not re-added to the blocks (`npcLinesShown`), but the pre-flight
-  // NPC turns they came from still happened, so a silent turn is not engine-free (#2386).
   const hadEngineLines =
-    orderedEngineTranscriptLines.length > 0 ||
-    Boolean(npcLinesShown && preResolvedNpcTurns?.results?.length);
-  // A silent turn resolved nothing for the player, so when the pass has no engine line at all
-  // (printed here or already on screen, `hadEngineLines`) the DM's words are the only account
-  // and the gate checks them. A pass with engine lines legitimately narrates hits and is not
-  // checked (#2373). The narration parks its memory writes until the gate has kept a reply.
+    orderedEngineTranscriptLines.length > 0 || resolvedActions.some((entry) => !entry.actorIsPlayer);
   const narrationGated = silentTurn && !hadEngineLines;
   const narrate = (violation?: string): Promise<any> =>
     AIService.chatWithDM({

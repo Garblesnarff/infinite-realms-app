@@ -8,6 +8,8 @@ import {
   THREE_ACTOR_PLAYER_MIDDLE_NPC_BATCHES,
   TWO_ACTOR_PLAYER_FIRST_NPC_BATCHES,
 } from '../../../../shared/test-fixtures/advance-npc-turns-rounds';
+import { receivedNpcMessages } from '../../../../shared/test-fixtures/npc-engine-messages';
+
 
 import type * as CombatActionExecutor from '@/services/combat/combat-action-executor';
 import type * as PlayerAttackRoll from '@/services/combat/player-attack-roll';
@@ -15,6 +17,7 @@ import type { ChatMessage } from '@/types/game';
 
 import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
 import { DMMessage } from '@/features/game-session/components/chat/message-list/DMMessage';
+import { SystemMessage } from '@/features/game-session/components/chat/message-list/SystemMessage';
 import { summarizeCombatTurn } from '@/features/game-session/components/game/overhaul/combat-turn-order';
 import { CombatTurnBar } from '@/features/game-session/components/game/overhaul/CombatTurnBar';
 import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
@@ -146,7 +149,7 @@ const playerTurn = async (params: {
   target: string;
   advance: unknown[];
   preflight?: unknown;
-}): Promise<ChatMessage> => {
+}): Promise<ChatMessage[]> => {
   const encounter = encounterAt(params.round, params.order, params.turnIndex);
   for (const body of params.advance) advanceNpcTurns.mockResolvedValueOnce(body);
   const result = await resolveDeclaredCombatActions({
@@ -160,19 +163,20 @@ const playerTurn = async (params: {
     combatRound: encounter.currentRound,
     ...(params.preflight ? { preResolvedNpcTurns: params.preflight as any } : {}),
   });
-  return {
-    sender: 'dm',
-    text: 'Steel rings.',
-    context: { combatEngineBlocks: result.combatEngineBlocks },
-  } as ChatMessage;
+  return [
+    ...receivedNpcMessages(params.preflight, encounter.participants),
+    { sender: 'dm', text: 'Steel rings.', context: { combatEngineBlocks: result.combatEngineBlocks } },
+    ...params.advance.flatMap((batch) => receivedNpcMessages(batch, encounter.participants)),
+  ] as ChatMessage[];
 };
 
 /** What the chat prints: one divider per message block, in feed order. */
-const dividersOf = (messages: ChatMessage[]): string[] => {
+const dividersOf = (input: Array<ChatMessage | ChatMessage[]>): string[] => {
+  const messages = input.flat();
   const previous = previousEngineDividerKeys(messages);
   return messages.flatMap((message, index) => {
     const { container, unmount } = render(
-      <DMMessage
+      message.sender === 'system' ? <SystemMessage message={message} isFirstInGroup isLastInGroup displayText={message.text} previousEngineKey={previous.get(message)} /> : <DMMessage
         message={message}
         messageId={`dm-${index}`}
         isFirstInGroup
@@ -342,8 +346,8 @@ describe('turn bar and chat dividers agree on the round (#2417)', () => {
     // A second message that repeats the last block of the first: same round, same actor, so it
     // opens without a divider.
     const repeated = {
-      ...first,
-      context: { combatEngineBlocks: [(first.context as any).combatEngineBlocks[1]] },
+      ...first.at(-1),
+      context: first.at(-1)!.context,
     } as ChatMessage;
 
     expect(dividersOf([first, repeated])).toEqual([
@@ -362,7 +366,7 @@ describe('turn bar and chat dividers agree on the round (#2417)', () => {
       advance: [TWO_ACTOR_PLAYER_FIRST_NPC_BATCHES[0]],
     });
 
-    const blocks = (message.context as any).combatEngineBlocks;
+    const blocks = message.flatMap((row) => (row.context as any).combatEngineBlocks);
     expect(blocks.map((block: any) => block.cards.map((card: any) => card.side))).toEqual([
       ['party'],
       ['enemy'],

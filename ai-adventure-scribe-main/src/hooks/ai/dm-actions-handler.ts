@@ -29,16 +29,11 @@ import {
   skillCheckModifierFor,
 } from '@/services/combat/combat-check-client';
 import {
-  engineRosterOf,
-  formatNpcTurnOutcome,
-  npcTurnOptions,
-} from '@/services/combat/combat-outcome-transcript';
-import {
   enforceCombatActionOnAttempt,
   looksLikeCombatActionAttempt,
 } from '@/services/combat/combat-zero-action-guard';
 import { declaredSheetSpell } from '@/services/combat/declared-player-spell';
-import { initiativeCard, type EngineResultCard } from '@/services/combat/engine-result-card';
+import { initiativeCard } from '@/services/combat/engine-result-card';
 import { isPlayerActor } from '@/services/combat/player-attack-roll';
 import {
   requestPlayerAttackRoll,
@@ -86,7 +81,6 @@ export interface HandleDmActionsParams {
    * The caller already put `preflightNpcTurns`' lines on screen (#2386), so the resolution pass
    * must not print them a second time.
    */
-  npcLinesShown?: boolean;
   signal?: AbortSignal;
   onPlayerWaitChange?: (waiting: boolean) => void;
 }
@@ -190,33 +184,6 @@ function isCombatEntryConfirmationNoHostError(error: unknown): boolean {
   );
 }
 
-/**
- * Puts the NPCs' turns on screen now, so the player's dice prompt cannot open while the tracker
- * shows HP that no line has explained (#2378, #2386). Persisted: the server did not save them.
- */
-export function showNpcTurnLines(
-  advanced: AdvanceNpcTurnsResponse,
-  participants: any[] | undefined,
-  onEngineNotice: (notice: LocalNotice) => void,
-): void {
-  const roster = engineRosterOf(participants);
-  const show = (lines: string[], cards?: EngineResultCard[]): void => {
-    const text = lines.join('\n\n').trim();
-    if (text) onEngineNotice({ text, persist: true, ...(cards?.length ? { cards } : {}) });
-  };
-  for (const npcResult of advanced.results) {
-    const { lines, cards } = formatNpcTurnOutcome(
-      npcResult,
-      roster,
-      npcTurnOptions(participants, npcResult.action.target_ids?.[0]),
-    );
-    show(lines, cards);
-  }
-  if (advanced.capReached) {
-    show(advanced.transcriptLines.filter((line) => line.includes('NPC turn loop stopped after')));
-  }
-}
-
 export async function handleDmActionsAndTransitions(
   params: HandleDmActionsParams,
 ): Promise<HandleDmActionsResult> {
@@ -275,7 +242,6 @@ export async function handleDmActionsAndTransitions(
     | { action: StructuredCombatAction; d20?: number; autoRolled: boolean; cancelled?: boolean }
     | undefined;
   let droppedNpcCombatActions = false;
-  let npcLinesShown = params.npcLinesShown === true;
 
   const appendLocalNotice = (notice: unknown, persist = true, immediate = false): void => {
     if (typeof notice !== 'string' || !notice.trim()) return;
@@ -296,16 +262,6 @@ export async function handleDmActionsAndTransitions(
     for (const request of (result.roll_requests ?? []) as Array<{ type?: string }>) {
       logger.warn('DM_ROLL_REQUEST_CLEARED', { reason, type: loggableRollType(request.type) });
     }
-  };
-
-  /** Puts the NPCs' opening turns on screen now, so they precede the player's dice prompt. */
-  const showNpcTurns = (
-    advanced: AdvanceNpcTurnsResponse,
-    participants: any[] | undefined,
-  ): void => {
-    if (!params.onEngineNotice) return;
-    showNpcTurnLines(advanced, participants, params.onEngineNotice);
-    npcLinesShown = true;
   };
 
   // The server has detected combat but has not seated it. Confirm the player's intent before
@@ -550,7 +506,6 @@ export async function handleDmActionsAndTransitions(
       activeEncounter = preflight.activeEncounter;
       isInCombat = preflight.isInCombat;
       preflightNpcTurns = preflight.npcTurns;
-      if (preflightNpcTurns) showNpcTurns(preflightNpcTurns, activeEncounter?.participants);
       aiContext.gameState.isInCombat = isInCombat;
       aiContext.gameState.encounterId = activeEncounter?.id;
       aiContext.gameState.currentTurnPlayerId = activeEncounter?.currentTurnParticipantId;
@@ -942,7 +897,6 @@ export async function handleDmActionsAndTransitions(
       userPlan,
       turnCount,
       preResolvedNpcTurns: preflightNpcTurns,
-      npcLinesShown,
       queuedIntentActorIds: activeEncounter?.pendingIntent?.actorId
         ? [activeEncounter.pendingIntent.actorId]
         : [],

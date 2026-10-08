@@ -62,7 +62,9 @@ let activeEncounter: { id: string; sessionId: string } | null = {
   sessionId: SESSION_ID,
 };
 
-mock.module('../../../../../../db/client', () => ({ db: {} }));
+mock.module('../../../../services/combat/npc-engine-row.js', () => ({ writeNpcEngineRow: async () => [], readNpcEngineResult: async () => undefined }));
+mock.module('../../../../../../db/client', () => ({
+  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(), db: {} }));
 mock.module('../../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
 }));

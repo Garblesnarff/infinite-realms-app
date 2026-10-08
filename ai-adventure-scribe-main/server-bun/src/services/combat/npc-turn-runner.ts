@@ -1,10 +1,10 @@
 import { grappleOf } from './grapple-source.js';
-import { describeDeathSave } from '../../../../shared/death-save-lines';
 import { combatLogger } from '../../lib/logger.js';
 
 import type { SubmittedCombatIntent } from './combat-intent-service.js';
 import type { WeaponRuleProfile } from './combat-rules.js';
-import type { CombatState, DeathSaveResult } from '../../types/combat.js';
+import type { NpcEngineRow } from './npc-engine-row.js';
+import type { CombatState } from '../../types/combat.js';
 
 /** The action shape returned to the browser so it can reuse its transcript formatter. */
 export type NpcTurnAction = {
@@ -50,6 +50,7 @@ export type AdvanceNpcTurnsResult = {
   iterationCap: number;
   capReached: boolean;
   transcriptLines: string[];
+  engineRows?: NpcEngineRow[];
 };
 
 type ExecuteNpcIntent = (
@@ -301,25 +302,6 @@ function outcomesFrom(action: NpcTurnAction, value: unknown): NpcTurnOutcome['ou
   ];
 }
 
-/** The engine line of a creature's own check (an escape), which the client cannot rebuild. */
-function checkLines(action: NpcTurnAction, value: unknown): string[] {
-  if (action.action_type !== 'check' || !isRecord(value)) return [];
-  return typeof value.engineLine === 'string' ? [`⚙️ Engine: ${value.engineLine}`] : [];
-}
-
-function deathSaveLines(value: unknown, state: CombatState): string[] {
-  if (!isRecord(value) || !Array.isArray(value.deathSaves)) return [];
-  return value.deathSaves.flatMap((save) => {
-    if (!isRecord(save) || typeof save.participantId !== 'string') return [];
-    const participant = state.participants.find((candidate) => candidate.id === save.participantId);
-    if (!participant) return [];
-    // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
-    return [
-      `⚙️ Engine: ${describeDeathSave(participant.name, save as unknown as DeathSaveResult)}`,
-    ];
-  });
-}
-
 function mergeBoundaryDeathSaves(resolution: unknown, boundary: unknown): unknown {
   if (!isRecord(boundary) || !Array.isArray(boundary.deathSaves) || !boundary.deathSaves.length) {
     return resolution;
@@ -406,7 +388,10 @@ export async function advanceNpcTurns(
     const action = chooseAction(state, actor, weapon, canAct, downedTarget, parleyHeld);
     const resolved = await dependencies.executeIntent(
       encounterId,
-      toIntent(action),
+      {
+        ...toIntent(action),
+        actionId: `${encounterId}:${state.encounter.currentRound}:${actor.id}:${action.action_type}`,
+      },
       userId,
       'dm',
       Date.now(),
@@ -426,18 +411,13 @@ export async function advanceNpcTurns(
       ended = combatEndedFrom(boundary);
     }
 
-    const resultTranscript = [
-      ...checkLines(action, engineResult),
-      ...deathSaveLines(engineResult, state),
-    ];
-    transcriptLines.push(...resultTranscript);
     results.push({
       action,
       round: state.encounter.currentRound,
       outcomes: outcomesFrom(action, engineResult),
       ...(engineResult !== undefined ? { engineResult } : {}),
       actorIsPlayer: false,
-      transcriptLines: resultTranscript,
+      transcriptLines: [],
     });
     combatEnded = ended;
   }
@@ -490,5 +470,9 @@ export async function advanceNpcTurns(
     iterationCap,
     capReached,
     transcriptLines,
+    engineRows: results.flatMap(
+      (result) =>
+        (result.engineResult as { engineRows?: NpcEngineRow[] } | undefined)?.engineRows ?? [],
+    ),
   };
 }

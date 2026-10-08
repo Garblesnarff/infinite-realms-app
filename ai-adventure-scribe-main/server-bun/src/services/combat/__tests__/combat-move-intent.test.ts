@@ -184,7 +184,9 @@ const db: any = {
   }),
   transaction: async (callback: (tx: any) => Promise<unknown>) => callback(db),
 };
-mock.module('../../../../../db/client', () => ({ db }));
+mock.module('../npc-engine-row.js', () => ({ writeNpcEngineRow: async () => [], readNpcEngineResult: async () => undefined }));
+mock.module('../../../../../db/client', () => ({
+  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(), db }));
 
 async function readState() {
   const [storedEncounter] = await db.select().from(combatEncounters);

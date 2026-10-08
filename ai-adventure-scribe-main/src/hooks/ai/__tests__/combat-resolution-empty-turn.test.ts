@@ -108,7 +108,6 @@ describe('a combat turn never goes out with nothing in it (#2641)', () => {
       participants: PARTICIPANTS,
       combatRound: 3,
       preResolvedNpcTurns: CAPPED_NPC_BATCH as any,
-      npcLinesShown: true,
     });
 
     expect(result.text.trim()).not.toBe('');
@@ -134,7 +133,6 @@ describe('a combat turn never goes out with nothing in it (#2641)', () => {
           vitalState: 'dying',
         },
       } as any,
-      npcLinesShown: true,
     });
 
     expect(result.text).not.toContain('acts next');
@@ -152,7 +150,6 @@ describe('a combat turn never goes out with nothing in it (#2641)', () => {
       participants: PARTICIPANTS,
       combatRound: 3,
       preResolvedNpcTurns: CAPPED_NPC_BATCH as any,
-      npcLinesShown: true,
     });
 
     expect(result.text).toBe('The monk circles you.');

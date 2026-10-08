@@ -502,7 +502,7 @@ describe('a turn the engine accepted in full', () => {
       engineResult: npcEngineResult,
     });
     expect(payload.authoritativeCombatResults[1].action.actor_id).toBe(PLAYER_ID);
-    expect(result.text).toContain('Balthazar strikes before your turn.');
+    expect(result.text).not.toContain('Balthazar strikes before your turn.');
   });
 
   it('prepends the engine result to the player transcript and forwards the raw payload', async () => {
@@ -535,7 +535,7 @@ describe('a turn the engine accepted in full', () => {
       conversationHistory: [],
     });
 
-    expect(result.text.startsWith('⚙️ Engine:')).toBe(true);
+    expect(result.text.startsWith('⚙️ Engine:')).toBe(false);
     expect(result.text).toContain('12 + 4 = 16 vs AC 12');
     expect(result.text).toContain('3 slashing damage');
     expect(result.text).toContain('The Reveler is wounded');
@@ -685,7 +685,6 @@ describe('a turn the engine accepted in full', () => {
     expect(result.text.trimEnd().endsWith('The Reveler, what do you do?')).toBe(true);
     expect(result.combatEngineBlocks).toMatchObject([
       { source: 'player', round: 1 },
-      { source: 'npc', round: 1 },
     ]);
   });
 

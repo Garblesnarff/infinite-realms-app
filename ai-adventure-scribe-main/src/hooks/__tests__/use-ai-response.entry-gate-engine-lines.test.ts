@@ -12,6 +12,7 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildNpcEngineMessage } from '../../../shared/npc-engine-message';
 import {
   DECLARED_ATTACK_SESSION_ID,
   declaredAttackCharacter,
@@ -289,7 +290,34 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
     vi.mocked(userDataApi.advanceNpcTurns)
       .mockImplementationOnce((async () => {
         held = 'scholar-1';
-        return emilOpeningAttack;
+        // The server now delivers NPC results as system message rows (via buildNpcEngineMessage),
+        // not as client-assembled engine lines. Simulate the server + request() dispatch.
+        const npcResult = emilOpeningAttack.results[0];
+        const message = buildNpcEngineMessage(
+          [
+            { id: 'emil-1', name: 'Professor Emil Darkwater', participantType: 'npc' },
+            { id: 'scholar-1', name: 'The Scholar', participantType: 'player', maxHp: 7 },
+          ],
+          1,
+          {
+            type: npcResult.action.action_type,
+            actorId: npcResult.action.actor_id,
+            targetIds: npcResult.action.target_ids,
+          },
+          npcResult.engineResult,
+        );
+        const row = {
+          id: 'npc-row-emil-opening',
+          sequence: 100,
+          text: message.text,
+          kind: 'npc',
+          actionId: 'emil-opening-action',
+          sessionId: DECLARED_ATTACK_SESSION_ID,
+          timestamp: new Date().toISOString(),
+          context: message.context,
+        };
+        window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: [row] }));
+        return { ...emilOpeningAttack, engineRows: [row] };
       }) as any)
       .mockResolvedValue({
         results: [],
@@ -339,31 +367,45 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
   };
 
   it('prints Emil’s opening swing, with the HP it left, before the player is asked for the spell die', async () => {
-    const shown: LocalNotice[] = [];
-    await play((notice) => {
-      order.push(`line: ${notice.text}`);
-      shown.push(notice);
-    });
+    // NPC results now arrive as server-delivered system message rows, not via onEngineNotice.
+    // Capture the row dispatched via the session-engine-rows event.
+    const npcRows: Array<{ text: string; context: any }> = [];
+    const capture = (event: Event) => {
+      npcRows.push(...((event as CustomEvent).detail as Array<{ text: string; context: any }>));
+    };
+    window.addEventListener('session-engine-rows', capture);
+    try {
+      const shown: LocalNotice[] = [];
+      await play((notice) => {
+        order.push(`line: ${notice.text}`);
+        shown.push(notice);
+      });
 
-    // Initiative is asked, the seating line and Emil's swing are on screen, and only then does
-    // the spell-attack prompt open. Before this, HP dropped with nothing said until the whole
-    // resolution finished.
-    expect(order).toEqual([
-      'prompt: initiative',
-      `line: ${SEATING_LINE}`,
-      `line: ${EMIL_LINE}`,
-      'prompt: attack Chill Touch',
-    ]);
-    // The seating transcript was persisted by the server; Emil's line was not, so the client
-    // saves it.
-    expect(shown).toEqual([
-      { text: SEATING_LINE, persist: false },
-      {
-        text: EMIL_LINE,
-        persist: true,
-        cards: [expect.objectContaining({ kind: 'attack', line: EMIL_LINE })],
-      },
-    ]);
+      // Initiative is asked, the seating line is on screen via onEngineNotice, Emil's swing
+      // arrives as a server-delivered row, and only then does the spell-attack prompt open.
+      // Before this, HP dropped with nothing said until the whole resolution finished.
+      expect(order).toEqual([
+        'prompt: initiative',
+        `line: ${SEATING_LINE}`,
+        'prompt: attack Chill Touch',
+      ]);
+      // The seating transcript was persisted by the server and still comes via onEngineNotice.
+      expect(shown).toEqual([{ text: SEATING_LINE, persist: false }]);
+
+      // Emil's opening swing arrives as a server-delivered NPC row with the HP it left and cards.
+      expect(npcRows).toHaveLength(1);
+      expect(npcRows[0].text).toBe(EMIL_LINE);
+      expect(npcRows[0].context).toMatchObject({
+        intent: 'combat_npc_result',
+        round: 1,
+      });
+      const npcBlock = (npcRows[0].context as any).combatEngineBlocks[0];
+      expect(npcBlock).toMatchObject({ source: 'npc' });
+      expect(npcBlock.lines).toEqual([EMIL_LINE]);
+      expect(npcBlock.cards[0]).toMatchObject({ kind: 'attack', line: EMIL_LINE });
+    } finally {
+      window.removeEventListener('session-engine-rows', capture);
+    }
   });
 
   it('returns exactly one engine line for the spell, before the DM text, and no DM roll popup', async () => {
@@ -401,15 +443,31 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
   });
 
   it('a caller that cannot show lines early still gets Emil’s line, once, ahead of the spell line', async () => {
-    const response = await play();
+    // NPC results now arrive as server-delivered system message rows. A caller without
+    // onEngineNotice still gets Emil's line via the row, once, and it is not duplicated
+    // in the reply text.
+    const npcRows: Array<{ text: string; context: any }> = [];
+    const capture = (event: Event) => {
+      npcRows.push(...((event as CustomEvent).detail as Array<{ text: string; context: any }>));
+    };
+    window.addEventListener('session-engine-rows', capture);
+    try {
+      const response = await play();
 
-    expect(response.text.indexOf(EMIL_LINE)).toBeGreaterThanOrEqual(0);
-    expect(response.text.match(/rolled 14 \+ 3 = 17/g)).toHaveLength(1);
-    expect(response.text.indexOf(EMIL_LINE)).toBeLessThan(response.text.indexOf(CHILL_TOUCH_LINE));
-    expect(response.text.indexOf(CHILL_TOUCH_LINE)).toBeLessThan(
-      response.text.indexOf('Cold clings to the professor'),
-    );
-    expect(response.localNotices).toEqual([{ text: SEATING_LINE, persist: false }]);
-    expect(response.rollRequests).toEqual([]);
+      // Emil's line arrives as a server-delivered row, exactly once.
+      expect(npcRows).toHaveLength(1);
+      expect(npcRows[0].text).toBe(EMIL_LINE);
+      expect(npcRows[0].text.match(/rolled 14 \+ 3 = 17/g)).toHaveLength(1);
+
+      // It is not duplicated in the reply text — the spell line leads, then the DM narration.
+      expect(response.text).not.toContain(EMIL_LINE);
+      expect(response.text.indexOf(CHILL_TOUCH_LINE)).toBeLessThan(
+        response.text.indexOf('Cold clings to the professor'),
+      );
+      expect(response.localNotices).toEqual([{ text: SEATING_LINE, persist: false }]);
+      expect(response.rollRequests).toEqual([]);
+    } finally {
+      window.removeEventListener('session-engine-rows', capture);
+    }
   });
 });

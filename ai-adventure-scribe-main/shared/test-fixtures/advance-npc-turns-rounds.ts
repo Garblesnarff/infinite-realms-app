@@ -45,6 +45,7 @@ const npcBatch = (
   iterationCap: actors * 2,
   capReached: false,
   transcriptLines: [] as string[],
+  engineRows: [],
 });
 
 /**

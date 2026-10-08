@@ -231,7 +231,11 @@ export const intentRoutes = new Elysia()
           payload.origin,
         );
         logIntentAccepted(context, request, params, payload);
-        return { accepted: true, result };
+        return {
+          accepted: true,
+          result,
+          engineRows: (result as { engineRows?: unknown }).engineRows ?? [],
+        };
       } catch (cause) {
         return mapIntentError(set, cause, {
           requestId: requestIdOf(context, request),

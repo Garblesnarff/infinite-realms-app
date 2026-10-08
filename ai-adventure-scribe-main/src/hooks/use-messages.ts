@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 
 import type { ChatMessage, MessageContext } from '@/types/game';
@@ -51,6 +51,7 @@ export const useMessages = (
   sessionId: string | null,
   options: UseMessagesOptions = {},
 ): UseMessagesReturn => {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
@@ -163,6 +164,23 @@ export const useMessages = (
   useEffect(() => {
     resetPagination();
   }, [sessionId, resetPagination]);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const rows = (event as CustomEvent<Array<{ id: string; sessionId: string; sequence: number; text: string; timestamp: string; context: MessageContext }>>).detail;
+      const received: ChatMessage[] = (rows ?? []).filter((row) => row.sessionId === sessionId).map((row) => ({
+        id: row.id, text: row.text, timestamp: row.timestamp, sequenceNumber: row.sequence,
+        sender: 'system', context: row.context,
+      }));
+      if (!received.length) return;
+      setAllMessages((previous) => [...previous.filter((message) => !received.some((row) => row.id === message.id)), ...received].sort(compareMessages));
+      queryClient.setQueryData<{ messages: ChatMessage[] }>(['messages', sessionId, 0], (previous) => previous ? {
+        ...previous, messages: [...previous.messages.filter((message) => !received.some((row) => row.id === message.id)), ...received].sort(compareMessages),
+      } : previous);
+    };
+    window.addEventListener('session-engine-rows', receive);
+    return () => window.removeEventListener('session-engine-rows', receive);
+  }, [queryClient, sessionId]);
 
   // Update allMessages whenever query data changes
   useEffect(() => {

@@ -50,6 +50,7 @@ export const advanceNpcTurnRoutes = new Elysia().post(
       }
       return {
         results: [],
+        engineRows: [],
         currentParticipant: null,
         combatEnded: true,
         endedReason,

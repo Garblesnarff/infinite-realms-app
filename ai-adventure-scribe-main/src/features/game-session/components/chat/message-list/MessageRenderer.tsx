@@ -163,6 +163,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             isFirstInGroup={isFirstInGroup}
             isLastInGroup={isLastInGroup}
             displayText={displayText}
+            previousEngineKey={previousEngineKey}
           />
         ) : isDM ? (
           <DMMessage

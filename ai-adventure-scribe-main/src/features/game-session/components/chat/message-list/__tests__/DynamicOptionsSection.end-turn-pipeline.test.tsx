@@ -119,7 +119,7 @@ describe('the End turn option runs the NPC turns that follow (#2641)', () => {
     fireEvent.click(await screen.findByText('End turn'));
   };
 
-  it('advances the creature that is up and persists each NPC result as an engine row', async () => {
+  it('advances the creature that is up without writing the server-owned NPC row', async () => {
     await clickEndTurn();
 
     await waitFor(() => expect(userDataApi.advanceNpcTurns).toHaveBeenCalledTimes(1));
@@ -128,12 +128,7 @@ describe('the End turn option runs the NPC turns that follow (#2641)', () => {
       actorId: SCHOLAR_ID,
     });
     expect(userDataApi.advanceNpcTurns).toHaveBeenCalledWith('session-d5', SWARM_1_ID);
-    await waitFor(() => expect(onSendMessage).toHaveBeenCalled());
-    const rows = onSendMessage.mock.calls.map(
-      ([message]) => message as { text: string; persist?: boolean },
-    );
-    expect(rows.map((row) => row.text).join('\n')).toContain('2 damage');
-    expect(rows.every((row) => row.persist === true)).toBe(true);
+    expect(onSendMessage).not.toHaveBeenCalled();
     // The chip never sends the label to the DM as typed text.
     expect(onOptionSelect).not.toHaveBeenCalled();
   });

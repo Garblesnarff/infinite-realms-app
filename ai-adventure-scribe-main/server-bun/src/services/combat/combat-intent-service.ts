@@ -1,5 +1,7 @@
 /* eslint-disable max-lines -- the single mutation gateway for every combat intent; splitting
    the dispatch would put the turn's authorization, resolution, and reporting in three files. */
+import { randomUUID } from 'node:crypto';
+
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { executeCombatCheck } from './combat-check-service.js';
@@ -205,7 +207,7 @@ function assertPlayerInputOrigin(
 type VersionOptional<T> = T extends { expectedVersion: number }
   ? Omit<T, 'expectedVersion'> & { expectedVersion?: number }
   : T;
-export type SubmittedCombatIntent = VersionOptional<CombatIntent>;
+export type SubmittedCombatIntent = VersionOptional<CombatIntent> & { actionId?: string };
 
 export { assertActorTurn } from './combat-intent-turn.js';
 
@@ -959,6 +961,7 @@ export async function executeCombatIntent(
   source: CombatActionSource,
   dmStartedAt?: number,
   origin?: CombatActionOrigin,
+  inNpcTransaction = false,
 ): Promise<unknown> {
   let stateForUnresolved: CombatState | null = null;
   try {
@@ -968,6 +971,15 @@ export async function executeCombatIntent(
     // participant not found" that #1744 observed.
     let state = await CombatEncounterService.getCombatState(encounterId, userId);
     stateForUnresolved = state;
+    if (submitted.actionId) {
+      const { readNpcEngineResult } = await import('./npc-engine-row.js');
+      const replay = await readNpcEngineResult(
+        encounterId,
+        submitted.actionId,
+        state.encounter.sessionId,
+      );
+      if (replay) return { ...replay, engineRows: [] };
+    }
     if (state.encounter.status !== 'active') {
       logger.info({
         msg: 'COMBAT_INTENT_AFTER_CONCLUSION',
@@ -1035,6 +1047,13 @@ export async function executeCombatIntent(
       resolved.type,
       source,
     );
+    // After the turn gate, not before: an absorbed advance that then refuses must stand (#2666).
+    if (!inNpcTransaction && actor.participantType !== 'player') {
+      const { withNpcActionTransaction } = await import('../../../../db/client');
+      return await withNpcActionTransaction(encounterId, () =>
+        executeCombatIntent(encounterId, submitted, userId, source, dmStartedAt, origin, true),
+      );
+    }
     // An unconscious creature cannot act (SRD 5.1): the only thing a downed player's turn
     // holds is the death saving throw. Typed actions, spells and moves are refused here, at the
     // one gate every producer passes, so no client, DM or repair path can make a body act.
@@ -1507,8 +1526,18 @@ export async function executeCombatIntent(
       combatBoundary = ending !== null;
       if (!ending) await publishCombatState(encounterId, userId, intent.type);
     }
-    return combatBoundary ? markCombatEnded(result, ending) : result;
+    const settled = combatBoundary ? markCombatEnded(result, ending) : result;
+    if (actor.participantType !== 'player') {
+      const { writeNpcEngineRow } = await import('./npc-engine-row.js');
+      const actionId = submitted.actionId ?? randomUUID();
+      const npcResult = { ...(settled as Record<string, unknown>), actionId };
+      const engineRows = await writeNpcEngineRow(state, intent, actionId, npcResult, userId);
+      return { ...npcResult, engineRows, sessionId: encounter.sessionId };
+    }
+    return settled;
   } catch (error) {
+    // The outer call reports it once, after the rollback.
+    if (inNpcTransaction) throw error;
     trackCombatEvent('action_refused', {
       encounterId,
       actorId: submitted.actorId,

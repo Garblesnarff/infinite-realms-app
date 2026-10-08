@@ -266,6 +266,9 @@ export async function executeAuthoritativeCombatIntent(
         Object.keys(details).length > 0 ? details : undefined,
       );
     }
+    if ((payload.result as { engineRows?: unknown[] })?.engineRows?.length) {
+      window.dispatchEvent(new CustomEvent('session-engine-rows', { detail: (payload.result as { engineRows: unknown[] }).engineRows }));
+    }
     return payload.result;
   } catch (error) {
     // Repairable DM refusals are handled by the structured combat loop. Surface player-owned
@@ -377,11 +380,10 @@ export async function executeStructuredCombatActionWithBoundary(
       // A move with no destination square is malformed: settling it would end the turn
       // and advance NPCs on a move that never happened. Refuse instead — the resolution
       // step records it and keeps the turn open.
-      throw new CombatIntentRefusedError(
-        'No destination — pick a square on the map.',
-        422,
-        { reason: ACTION_MISSING_DESTINATION_REASON, intentType: 'move' },
-      );
+      throw new CombatIntentRefusedError('No destination — pick a square on the map.', 422, {
+        reason: ACTION_MISSING_DESTINATION_REASON,
+        intentType: 'move',
+      });
     }
     result = await executeAuthoritativeCombatIntent(
       encounterId,
