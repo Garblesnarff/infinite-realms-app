@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.31.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.31.1...v0.31.2) (2026-10-08)
+
+
+### Refactoring
+
+* **server:** one resolveUserPlan ([#2674](https://github.com/Garblesnarff/infinite-realms-production/issues/2674) step 3) ([#2696](https://github.com/Garblesnarff/infinite-realms-production/issues/2696)) ([a9bcf77](https://github.com/Garblesnarff/infinite-realms-production/commit/a9bcf775bb4d9808a3a12eb3ef8ad3e70d5849aa))
+
+
+### Tests
+
+* **billing:** record quota behaviour when the DB is down ([#2673](https://github.com/Garblesnarff/infinite-realms-production/issues/2673) step 3a) ([#2693](https://github.com/Garblesnarff/infinite-realms-production/issues/2693)) ([2d9fbab](https://github.com/Garblesnarff/infinite-realms-production/commit/2d9fbaba7d451091ceec1e56659e3a8f8c838fc0))
+* **companions:** record companion-removal ownership today ([#2674](https://github.com/Garblesnarff/infinite-realms-production/issues/2674) step 2a) ([#2695](https://github.com/Garblesnarff/infinite-realms-production/issues/2695)) ([32dd64c](https://github.com/Garblesnarff/infinite-realms-production/commit/32dd64cc007c13ab8894ec9f5de824920b303f88))
+
 ## [0.31.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.31.0...v0.31.1) (2026-10-08)
 
 
