@@ -20,10 +20,22 @@
  * fetches. Chronicle rows carry every column `POST /v1/sessions/:id/complete` writes on success.
  */
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
-import { inArray, like } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { eq, inArray, like } from 'drizzle-orm';
 
-import { campaigns, characters, sessionChronicles } from '../../../../../db/schema/index';
+import {
+  campaigns,
+  characters,
+  characterStats,
+  characterSpellSlots,
+  combatEncounters,
+  combatParticipants,
+  combatParticipantStatus,
+  gameSessions,
+  tacticalMaps,
+  sessionChronicles,
+  spellSlotUsageLog,
+} from '../../../../../db/schema/index';
 import { initialMemoryWireBodies } from '../../../../../shared/test-fixtures/continuation-session-init-save';
 import { initialGreetingWireBody } from '../../../../../shared/test-fixtures/initial-greeting-save';
 import {
@@ -35,6 +47,8 @@ import {
   realDbUrl,
   testId,
 } from '../../../services/__tests__/fixtures/real-db.js';
+
+import type { TacticalMap } from '../../../tactical/types.js';
 
 if (hasRealDb) {
   const target = new URL(realDbUrl);
@@ -71,6 +85,8 @@ const { sessionsRoutes } = await importWithRealDb(() => import('../sessions.js')
 const { sessionMessageRoutes } = await importWithRealDb(() => import('../session-messages.js'));
 const { memoryRoutes } = await importWithRealDb(() => import('../memories.js'));
 const { handoutRoutes } = await importWithRealDb(() => import('../handouts.js'));
+const { tacticalMapRoutes } = await importWithRealDb(() => import('../tactical-maps.js'));
+const { combatRoutes } = await importWithRealDb(() => import('../combat/index.js'));
 const { appRouter } = await importWithRealDb(() => import('../../../trpc/root.js'));
 const { db } = await importWithRealDb(() => import('../../../../../db/client.js'));
 
@@ -93,11 +109,11 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
   let aliceId = '';
   let bobId = '';
 
-  const call = async (method: string, path: string, body?: unknown) => {
+  const call = async (method: string, path: string, body?: unknown, caller = userId) => {
     const response = await app.handle(
       new Request(`http://localhost${path}`, {
         method,
-        headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+        headers: { authorization: `Bearer ${caller}`, 'content-type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
       }),
     );
@@ -251,6 +267,8 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       .use(sessionMessageRoutes)
       .use(memoryRoutes)
       .use(handoutRoutes)
+      .use(tacticalMapRoutes)
+      .use(combatRoutes)
       // The mount from app.ts, with the context WorkOS would have produced.
       .all('/api/trpc/*', ({ request }) =>
         fetchRequestHandler({
@@ -293,6 +311,342 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       else process.env[key] = value;
     }
     await closeRealDb();
+  });
+
+  describe('map-route ownership characterization (#2685 step 2a)', () => {
+    const otherUserId = `${USER_PREFIX}other-${process.pid}`;
+    let sessionId: string;
+    let encounterId: string;
+    let heroId: string;
+    let monsterId: string;
+    let mapId: string;
+
+    const mapRow = async (): Promise<typeof tacticalMaps.$inferSelect> => {
+      const [row] = await database.select().from(tacticalMaps).where(eq(tacticalMaps.id, mapId));
+      return row;
+    };
+    const persistedCombat = async (): Promise<{
+      map: typeof tacticalMaps.$inferSelect;
+      encounters: (typeof combatEncounters.$inferSelect)[];
+      participants: (typeof combatParticipants.$inferSelect)[];
+      hp: (typeof combatParticipantStatus.$inferSelect)[];
+      stats: (typeof characterStats.$inferSelect)[];
+      slots: (typeof characterSpellSlots.$inferSelect)[];
+      slotUsage: (typeof spellSlotUsageLog.$inferSelect)[];
+      session: (typeof gameSessions.$inferSelect)[];
+    }> => ({
+      map: await mapRow(),
+      encounters: await database
+        .select()
+        .from(combatEncounters)
+        .where(eq(combatEncounters.sessionId, sessionId)),
+      participants: await database
+        .select()
+        .from(combatParticipants)
+        .where(eq(combatParticipants.encounterId, encounterId))
+        .orderBy(combatParticipants.id),
+      hp: await database
+        .select()
+        .from(combatParticipantStatus)
+        .where(inArray(combatParticipantStatus.participantId, [heroId, monsterId]))
+        .orderBy(combatParticipantStatus.participantId),
+      stats: await database
+        .select()
+        .from(characterStats)
+        .where(eq(characterStats.characterId, aliceId)),
+      slots: await database
+        .select()
+        .from(characterSpellSlots)
+        .where(eq(characterSpellSlots.characterId, aliceId))
+        .orderBy(characterSpellSlots.spellLevel),
+      slotUsage: await database
+        .select()
+        .from(spellSlotUsageLog)
+        .where(eq(spellSlotUsageLog.sessionId, sessionId))
+        .orderBy(spellSlotUsageLog.id),
+      session: await database.select().from(gameSessions).where(eq(gameSessions.id, sessionId)),
+    });
+
+    beforeEach(async () => {
+      sessionId = await startFirstSession(aliceId);
+      await database
+        .update(characters)
+        .set({ class: 'Wizard', level: 5 })
+        .where(eq(characters.id, aliceId));
+      await database.insert(characterStats).values({
+        characterId: aliceId,
+        armorClass: 12,
+        speed: 30,
+        maxHitPoints: 20,
+        currentHitPoints: 20,
+      });
+      await database.insert(characterSpellSlots).values({
+        characterId: aliceId,
+        spellLevel: 3,
+        totalSlots: 2,
+        usedSlots: 0,
+      });
+      [{ id: encounterId }] = await database
+        .insert(combatEncounters)
+        .values({
+          sessionId,
+          status: 'active',
+          currentRound: 1,
+          currentTurnOrder: 0,
+          version: 1,
+        })
+        .returning({ id: combatEncounters.id });
+      const participants = await database
+        .insert(combatParticipants)
+        .values([
+          {
+            encounterId,
+            name: 'Spent Sentinel',
+            participantType: 'monster',
+            turnOrder: 0,
+            initiative: 20,
+            armorClass: 12,
+            maxHp: 20,
+            speed: 30,
+            actionUsed: true,
+          },
+          {
+            encounterId,
+            characterId: aliceId,
+            name: 'Alice',
+            participantType: 'player',
+            turnOrder: 1,
+            initiative: 10,
+            armorClass: 12,
+            maxHp: 20,
+            speed: 30,
+          },
+        ])
+        .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+      const monster = participants.find((row) => row.turnOrder === 0);
+      const hero = participants.find((row) => row.turnOrder === 1);
+      if (!monster || !hero) throw new Error('characterization participants missing');
+      monsterId = monster.id;
+      heroId = hero.id;
+      await database.insert(combatParticipantStatus).values([
+        { participantId: heroId, currentHp: 20, maxHp: 20, isConscious: true },
+        { participantId: monsterId, currentHp: 20, maxHp: 20, isConscious: true },
+      ]);
+      mapId = crypto.randomUUID();
+      const state: TacticalMap = {
+        id: mapId,
+        sessionId,
+        width: 12,
+        height: 10,
+        round: 1,
+        sceneDescription: "User A's private map",
+        cells: Array.from({ length: 10 }, () =>
+          Array.from({ length: 12 }, () => ({
+            terrain: 'floor',
+            blocksMovement: false,
+            blocksSight: false,
+            cover: 0,
+            elevation: 0,
+          })),
+        ),
+        entities: [
+          {
+            id: heroId,
+            slug: 'alice',
+            x: 3,
+            y: 3,
+            size: 'medium',
+            type: 'pc',
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+          {
+            id: monsterId,
+            slug: 'spent-sentinel',
+            x: 9,
+            y: 3,
+            size: 'medium',
+            type: 'monster',
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+        ],
+        pendingDmCorrection: 'Private correction for user A',
+        pendingDmFacts: ['Private engine fact for user A'],
+        pendingDmFactActions: [
+          { kind: 'move', actorSlug: 'alice', actorIsPlayer: true, timestamp: Date.now() },
+        ],
+        dmSilentTurns: 3,
+      };
+      await database.insert(tacticalMaps).values({ id: mapId, sessionId, state, active: true });
+      // B is a distinct authenticated owner, not a missing/invalid bearer. The same existing
+      // auth stub and request helper serve both identities; ownership remains real SQL.
+      const [otherCampaign] = await database
+        .insert(campaigns)
+        .values({
+          userId: otherUserId,
+          name: 'User B campaign',
+        })
+        .returning({ id: campaigns.id });
+      const [otherSession] = await database
+        .insert(gameSessions)
+        .values({
+          campaignId: otherCampaign.id,
+          sessionNumber: 1,
+          status: 'active',
+        })
+        .returning({ id: gameSessions.id });
+      expect(
+        await call('GET', `/v1/sessions/${otherSession.id}/tactical-map`, undefined, otherUserId),
+      ).toEqual({ status: 200, json: { map: null } });
+      expect((await call('GET', `/v1/sessions/${sessionId}/tactical-map`)).json).toMatchObject({
+        id: mapId,
+        sessionId,
+      });
+    });
+
+    test('documents #2685: another user CANNOT remove A’s entity via /dm-actions today', async () => {
+      const before = await persistedCombat();
+      const body = {
+        actions: [{ action: 'remove', entityId: monsterId, x: null, y: null, changes: null }],
+      };
+      expect(
+        await call('POST', `/v1/sessions/${sessionId}/tactical-map/dm-actions`, body, otherUserId),
+      ).toEqual({ status: 404, json: { error: 'Session not found' } });
+      expect(await persistedCombat()).toEqual(before);
+      // Positive control: this exact body is a valid mutation for A, not a schema refusal.
+      const owned = await call('POST', `/v1/sessions/${sessionId}/tactical-map/dm-actions`, body);
+      expect(owned.status).toBe(200);
+      expect(owned.json.results).toContainEqual(expect.objectContaining({ applied: true }));
+      expect((await mapRow()).state).toMatchObject({
+        entities: [expect.objectContaining({ id: heroId })],
+      });
+    });
+
+    test('documents #2685: another user CANNOT read or consume A’s /context today', async () => {
+      const before = await persistedCombat();
+      expect(
+        await call(
+          'GET',
+          `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`,
+          undefined,
+          otherUserId,
+        ),
+      ).toEqual({ status: 404, json: { error: 'Session not found' } });
+      expect(await persistedCombat()).toEqual(before);
+      const owned = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
+      expect(owned.status).toBe(200);
+      expect(owned.json.tacticalContext).toContain('Private engine fact for user A');
+      // A's real context path writes the row; the three concurrent clear-and-save cycles
+      // are characterized separately in step 4, so this control does not assert their winner.
+      expect((await mapRow()).updatedAt.getTime()).toBeGreaterThan(before.map.updatedAt.getTime());
+    });
+
+    test('documents #2685: another user CANNOT end A’s encounter or deactivate its map via /end today', async () => {
+      const before = await persistedCombat();
+      const body = { combat_exits: [{ participant_id: monsterId, exit: 'surrendered' }] };
+      expect(
+        await call('POST', `/v1/sessions/${sessionId}/tactical-map/end`, body, otherUserId),
+      ).toEqual({ status: 404, json: { error: 'Session not found' } });
+      expect(await persistedCombat()).toEqual(before);
+      expect(await call('POST', `/v1/sessions/${sessionId}/tactical-map/end`, body)).toEqual({
+        status: 200,
+        json: { ok: true, encounterEnded: true },
+      });
+      const after = await persistedCombat();
+      expect(after.map.active).toBe(false);
+      expect(after.encounters[0].status).toBe('completed');
+      expect(after.hp).toEqual(before.hp);
+    });
+
+    for (const phase of ['propose', 'resolve'] as const) {
+      test(`documents #2685: another user CANNOT ${phase} an /aoe-cast on A’s session today`, async () => {
+        const before = await persistedCombat();
+        const body = {
+          phase,
+          actorId: heroId,
+          spellId: 'fireball',
+          origin: { x: 9, y: 3 },
+          direction: null,
+          slotLevel: 3,
+          actionOrigin: 'typed',
+        };
+        expect(
+          await call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body, otherUserId),
+        ).toEqual({ status: 404, json: { error: 'Session not found' } });
+        expect(await persistedCombat()).toEqual(before);
+        if (phase === 'propose') {
+          const owned = await call('POST', `/v1/sessions/${sessionId}/tactical-map/aoe-cast`, body);
+          expect(owned.status).toBe(200);
+          expect(owned.json).toMatchObject({
+            autoConfirm: false,
+            hostile: false,
+            preview: { actorId: heroId, spellId: 'fireball', state: 'player-pending' },
+          });
+          expect(await persistedCombat()).toEqual(before);
+        }
+      });
+    }
+
+    test('documents #2685: a player CAN label a move source dm and absorb the preceding spent NPC turn today', async () => {
+      const before = await persistedCombat();
+      // DynamicOptionsSection's move body: source dm, typed origin, player actor and x/y.
+      const body = {
+        intent: { type: 'move', actorId: heroId, x: 4, y: 3 },
+        source: 'player',
+        dmStartedAt: Date.now(),
+        origin: 'typed',
+      };
+      const player = await call('POST', `/v1/combat/${encounterId}/intent`, body);
+      expect(player.status).toBe(422);
+      expect(player.json.error).toBe('Actor is not the current-turn participant');
+      expect(await persistedCombat()).toEqual(before);
+      const dm = await call('POST', `/v1/combat/${encounterId}/intent`, { ...body, source: 'dm' });
+      expect(dm.status).toBe(200);
+      expect(dm.json.accepted).toBe(true);
+      const after = await persistedCombat();
+      expect(after.map.state).toMatchObject({
+        entities: expect.arrayContaining([
+          expect.objectContaining({ id: heroId, x: 4, y: 3, movementRemaining: 25 }),
+        ]),
+      });
+      expect(after.encounters[0]).toMatchObject({ currentTurnOrder: 1, currentRound: 1 });
+      expect(after.encounters[0].version).toBe(before.encounters[0].version);
+      expect(after.hp).toEqual(before.hp);
+    });
+
+    test('documents #2685: a player CAN label a dodge source dm and omit the required player version today', async () => {
+      await database
+        .update(combatEncounters)
+        .set({ currentTurnOrder: 1 })
+        .where(eq(combatEncounters.id, encounterId));
+      const before = await persistedCombat();
+      const body = {
+        intent: { type: 'dodge', actorId: heroId },
+        source: 'player',
+        origin: 'action_bar',
+      };
+      const player = await call('POST', `/v1/combat/${encounterId}/intent`, body);
+      expect(player.status).toBe(422);
+      expect(player.json).toMatchObject({
+        error: 'Invalid combat intent',
+        stage: 'intent_schema',
+        dialect: 'player',
+        variant: 'dodge',
+        missing: ['expectedVersion'],
+      });
+      expect(await persistedCombat()).toEqual(before);
+      const dm = await call('POST', `/v1/combat/${encounterId}/intent`, { ...body, source: 'dm' });
+      expect(dm.status).toBe(200);
+      expect(dm.json.accepted).toBe(true);
+      const after = await persistedCombat();
+      expect(after.participants.find((row) => row.id === heroId)).toMatchObject({
+        isDodging: true,
+        actionUsed: true,
+      });
+      expect(after.encounters[0].version).toBe(before.encounters[0].version + 1);
+      expect(after.hp).toEqual(before.hp);
+    });
   });
 
   test('two characters in one campaign get two sessions, each listed under its own character', async () => {
