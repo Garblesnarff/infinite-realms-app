@@ -25,6 +25,7 @@ import {
   campaigns,
   characterFeatures,
   characterSpellSlots,
+  classFeaturesLibrary,
   characters,
   dialogueHistory,
   featureUsageLog,
@@ -740,7 +741,7 @@ ${playerInput}
     });
   });
 
-  test('a Wizard casting a spell on their sheet is allowed; "use" names a spell as well as "cast" (#2718)', async () => {
+  test('a Wizard casting a spell on their sheet is allowed (#2718)', async () => {
     const reply = envelopeOf({
       text: 'Frost curls from your fingertips and the brazier hisses out.',
       options: ['A. **Move on** in the dark.'],
@@ -752,7 +753,7 @@ ${playerInput}
       scores: 'STR 8(-1), DEX 14(+2), CON 12(+1), INT 16(+3), WIS 12(+1), CHA 10(+0)',
       dexterityModifier: 2,
       cantrips: 'ray-of-frost',
-      playerInput: 'I use Ray of Frost on the brazier.',
+      playerInput: 'I cast Ray of Frost on the brazier.',
       reply,
     });
 
@@ -766,9 +767,10 @@ ${playerInput}
     const info = spyOn(loggerModule.logger, 'info');
     let turn: Awaited<ReturnType<typeof dmTurn>>;
     try {
-      turn = await dmTurn({ ...fighter, characterClass: 'Bard' });
+      // The SRD seed covers all twelve SRD classes (#2718 step c); an Artificer is not SRD 5.1.
+      turn = await dmTurn({ ...fighter, characterClass: 'Artificer' });
       expect(info.mock.calls.map(([line]) => line)).toContainEqual(
-        expect.objectContaining({ msg: 'DM_FEATURE_CHECK_UNCOVERED', className: 'Bard' }),
+        expect.objectContaining({ msg: 'DM_FEATURE_CHECK_UNCOVERED', className: 'Artificer' }),
       );
     } finally {
       info.mockRestore();
@@ -883,5 +885,104 @@ ${playerInput}
       info.mockRestore();
     }
     expect(JSON.parse(String(turn.body.text)).text).toBe(actionSurgeReply.text);
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // #2718 step c: the SRD seed (supabase/migrations/20261009_seed_srd_class_features.sql).
+  // ---------------------------------------------------------------------------------------------
+
+  const quietReply = envelopeOf({
+    text: 'You slip into the crowd and the guard loses you.',
+    options: ['A. **Keep moving.**'],
+    roll_requests: [],
+  });
+
+  test('the SRD seed covers all twelve classes, subclass features tagged (#2718 step c)', async () => {
+    const rows = await database
+      .select({
+        className: classFeaturesLibrary.className,
+        subclassName: classFeaturesLibrary.subclassName,
+        featureName: classFeaturesLibrary.featureName,
+        levelAcquired: classFeaturesLibrary.levelAcquired,
+        usageType: classFeaturesLibrary.usageType,
+      })
+      .from(classFeaturesLibrary);
+    expect([...new Set(rows.map((row) => row.className))].sort()).toEqual([
+      'Barbarian',
+      'Bard',
+      'Cleric',
+      'Druid',
+      'Fighter',
+      'Monk',
+      'Paladin',
+      'Ranger',
+      'Rogue',
+      'Sorcerer',
+      'Warlock',
+      'Wizard',
+    ]);
+    // Monk was not in the 20251112_06 seed: these rows are the new migration's.
+    expect(rows).toContainEqual({
+      className: 'Monk',
+      subclassName: null,
+      featureName: 'Flurry of Blows',
+      levelAcquired: 2,
+      usageType: 'bonus_action',
+    });
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        className: 'Monk',
+        subclassName: 'Way of the Open Hand',
+        featureName: 'Wholeness of Body',
+        levelAcquired: 6,
+      }),
+    );
+  });
+
+  test('refuses #2718: a level-1 Rogue using Cunning Action (a level-2 feature)', async () => {
+    const turn = await dmTurn({
+      ...rogue,
+      playerInput: 'I use Cunning Action to hide behind the cart.',
+      reply: quietReply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(
+      `${turn.character.name} can't use Cunning Action: it isn't on their character sheet.`,
+    );
+  });
+
+  test("a level-1 Rogue using Thieves' Cant is allowed (#2718)", async () => {
+    const turn = await dmTurn({
+      ...rogue,
+      playerInput: "I use Thieves' Cant to signal the fence across the room.",
+      reply: quietReply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(quietReply.text);
+  });
+
+  test('a level-2 Monk using Flurry of Blows is allowed: the seed is the allowlist, not only the refusal (#2718)', async () => {
+    const turn = await dmTurn({
+      characterClass: 'Monk',
+      race: 'Human',
+      scores: 'STR 10(+0), DEX 16(+3), CON 12(+1), INT 10(+0), WIS 14(+2), CHA 8(-1)',
+      dexterityModifier: 3,
+      level: 2,
+      playerInput: 'I use Flurry of Blows on the guard.',
+      reply: quietReply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(quietReply.text);
+  });
+
+  test('refuses #2718: a level-1 Monk using Flurry of Blows — a class only the SRD seed covers', async () => {
+    const turn = await dmTurn({
+      characterClass: 'Monk',
+      race: 'Human',
+      scores: 'STR 10(+0), DEX 16(+3), CON 12(+1), INT 10(+0), WIS 14(+2), CHA 8(-1)',
+      dexterityModifier: 3,
+      playerInput: 'I use Flurry of Blows on the guard.',
+      reply: quietReply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(
+      `${turn.character.name} can't use Flurry of Blows: it isn't on their character sheet.`,
+    );
   });
 });
