@@ -30,13 +30,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { trpc } from '@/lib/trpc';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { trpc } from '@/infrastructure/api';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 // ===========================
@@ -58,7 +53,6 @@ export interface LayersPanelProps {
    */
   onOpenChange?: (open: boolean) => void;
 }
-
 
 // ===========================
 // Main LayersPanel Component
@@ -147,155 +141,151 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
 
           <SheetContent side={side} className="w-[350px] sm:w-[400px] overflow-y-auto">
             <SheetHeader>
-          <SheetTitle>Layer Controls</SheetTitle>
-          <SheetDescription>
-            Manage layer visibility, lock status, and opacity for the battle map.
-          </SheetDescription>
-        </SheetHeader>
+              <SheetTitle>Layer Controls</SheetTitle>
+              <SheetDescription>
+                Manage layer visibility, lock status, and opacity for the battle map.
+              </SheetDescription>
+            </SheetHeader>
 
-        <div className="mt-6 space-y-4">
-          {/* Instructions */}
-          <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">
-            <p className="mb-2 font-medium text-foreground">Layer Controls:</p>
-            <ul className="space-y-1 text-xs">
-              <li className="flex items-center gap-2">
-                <Eye className="h-3 w-3" aria-hidden="true" />
-                <span>Toggle layer visibility</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Lock className="h-3 w-3" aria-hidden="true" />
-                <span>Lock layer to prevent interactions</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-muted rounded-sm" aria-hidden="true" />
-                <span>Adjust opacity with slider</span>
-              </li>
-            </ul>
-          </div>
+            <div className="mt-6 space-y-4">
+              {/* Instructions */}
+              <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">
+                <p className="mb-2 font-medium text-foreground">Layer Controls:</p>
+                <ul className="space-y-1 text-xs">
+                  <li className="flex items-center gap-2">
+                    <Eye className="h-3 w-3" aria-hidden="true" />
+                    <span>Toggle layer visibility</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Lock className="h-3 w-3" aria-hidden="true" />
+                    <span>Lock layer to prevent interactions</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-muted rounded-sm" aria-hidden="true" />
+                    <span>Adjust opacity with slider</span>
+                  </li>
+                </ul>
+              </div>
 
-          <Separator />
+              <Separator />
 
-          {/* Layer List */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Layers
-            </h3>
+              {/* Layer List */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Layers
+                </h3>
 
-            {LAYER_CONFIGS.map((layer) => {
-              const layerId = layerIdMap[layer.type];
+                {LAYER_CONFIGS.map((layer) => {
+                  const layerId = layerIdMap[layer.type];
 
-              // Skip if layer doesn't exist in the scene yet
-              if (!layerId) {
-                return (
-                  <div
-                    key={layer.id}
-                    className="p-3 rounded-lg bg-muted/20 text-muted-foreground text-sm"
-                  >
-                    <div className="flex items-center gap-2">
+                  // Skip if layer doesn't exist in the scene yet
+                  if (!layerId) {
+                    return (
                       <div
-                        className="w-3 h-3 rounded-sm"
-                        aria-hidden="true"
-                        style={{
-                          backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.3)`,
-                        }}
-                      />
-                      <Tooltip delayDuration={300}>
-                        <TooltipTrigger asChild>
-                          <span
-                            className="truncate max-w-[150px] cursor-help outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
-                            tabIndex={0}
-                          >
-                            {layer.name}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>{layer.name}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                      <span className="text-xs text-muted-foreground">(Not initialized)</span>
-                    </div>
-                  </div>
-                );
-              }
+                        key={layer.id}
+                        className="p-3 rounded-lg bg-muted/20 text-muted-foreground text-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-sm"
+                            aria-hidden="true"
+                            style={{
+                              backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.3)`,
+                            }}
+                          />
+                          <Tooltip delayDuration={300}>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="truncate max-w-[150px] cursor-help outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                                tabIndex={0}
+                              >
+                                {layer.name}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p>{layer.name}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <span className="text-xs text-muted-foreground">(Not initialized)</span>
+                        </div>
+                      </div>
+                    );
+                  }
 
-              return (
-                <LayerControlItem
-                  key={layer.id}
-                  layer={layer}
-                  sceneId={sceneId}
-                  layerId={layerId}
-                />
-              );
-            })}
-          </div>
+                  return (
+                    <LayerControlItem
+                      key={layer.id}
+                      layer={layer}
+                      sceneId={sceneId}
+                      layerId={layerId}
+                    />
+                  );
+                })}
+              </div>
 
-          <Separator />
+              <Separator />
 
-          {/* Quick Actions */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Quick Actions
-            </h3>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Layer quick actions"
-            >
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleShowAll}
-                    aria-label="Show all map layers"
-                  >
-                    <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Show All
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Show all map layers</p>
-                </TooltipContent>
-              </Tooltip>
+              {/* Quick Actions */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Quick Actions
+                </h3>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Layer quick actions">
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleShowAll}
+                        aria-label="Show all map layers"
+                      >
+                        <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Show All
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Show all map layers</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleHideAll}
-                    aria-label="Hide all map layers"
-                  >
-                    <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Hide All
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Hide all map layers</p>
-                </TooltipContent>
-              </Tooltip>
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleHideAll}
+                        aria-label="Hide all map layers"
+                      >
+                        <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Hide All
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Hide all map layers</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleReset}
-                    aria-label="Reset layers to default visibility and opacity"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Reset
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  <p>Reset layers to default visibility and opacity</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleReset}
+                        aria-label="Reset layers to default visibility and opacity"
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Reset
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>Reset layers to default visibility and opacity</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
           </SheetContent>
         </TooltipProvider>

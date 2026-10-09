@@ -12,7 +12,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 // Mock trpc
-vi.mock('@/lib/trpc', () => ({
+vi.mock('@/infrastructure/api', () => ({
   trpc: {
     useUtils: () => ({
       scenes: {

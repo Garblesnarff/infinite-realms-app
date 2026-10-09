@@ -51,7 +51,7 @@ class RequestError extends Error {
   }
 }
 
-// Mirror the production QueryClient defaults (src/lib/trpc/Provider.tsx).
+// Mirror the production QueryClient defaults (src/infrastructure/api/trpc-provider.tsx).
 function makeClient(): QueryClient {
   return new QueryClient({
     defaultOptions: { queries: { staleTime: 5 * 60_000, retry: 1, retryDelay: 0 } },

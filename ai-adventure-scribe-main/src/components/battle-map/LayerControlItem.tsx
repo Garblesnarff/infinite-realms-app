@@ -7,12 +7,8 @@ import { type LayerConfig } from './LayerManager';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { trpc } from '@/lib/trpc';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { trpc } from '@/infrastructure/api';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 interface LayerControlItemProps {

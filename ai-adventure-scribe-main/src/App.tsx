@@ -7,7 +7,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
 import { useTelemetry } from './hooks/use-telemetry';
-import { TRPCProvider } from './lib/trpc/Provider';
 import { LEGAL_ROUTES } from './pages/legal/legal-routes';
 import { ProtectedAppRoutes } from './routes/ProtectedAppRoutes';
 import { withRouteSuspense } from './routes/route-suspense';
@@ -16,6 +15,7 @@ import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
+import { TRPCProvider } from '@/infrastructure/api';
 
 // Lazy load route page components for code splitting
 const LaunchPage = lazy(() => import('./pages/LaunchPage'));
