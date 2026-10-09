@@ -193,6 +193,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       const plan = user.plan;
 
       // Quota check before the provider call. The charge happens after a usable image (#2676).
+      await AIUsageService.assertUsageStoreAvailable();
       const quota = await AIUsageService.getQuotaStatus({ userId, plan, type: 'image' });
       if (quota.remaining < 1) {
         set.status = 402;

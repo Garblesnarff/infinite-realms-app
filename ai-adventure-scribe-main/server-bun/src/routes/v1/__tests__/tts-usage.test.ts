@@ -35,6 +35,7 @@ mock.module('../../../lib/auth.js', () => ({
 mock.module('../../../services/ai-usage-service.js', () => ({
   AIUsageService: {
     checkQuotaAndConsume: async () => ({ allowed: true }),
+    assertUsageStoreAvailable: async () => {},
     getQuotaStatus: async () => ({ remaining: 1000 }),
     recordProviderUsage: async () => {},
   },
@@ -80,6 +81,7 @@ const app = new Elysia().use(
       name: 'test-tts-usage-limit',
     }) as unknown as TtsRouteOptions['rateLimit'],
     usageService: {
+      assertUsageStoreAvailable: async () => {},
       getQuotaStatus: async () => ({ remaining: 1000 }),
       checkQuotaAndConsume: async (
         opts: Parameters<TtsUsageService['checkQuotaAndConsume']>[0],

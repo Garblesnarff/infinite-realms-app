@@ -4,6 +4,7 @@ import { Elysia } from 'elysia';
 
 import { logger } from './lib/logger.js';
 import { httpRequestCounter, httpRequestDuration } from './lib/metrics.js';
+import { QuotaUnavailableError } from './lib/quota-errors.js';
 
 /**
  * Global request lifecycle shared by the production app and HTTP contract tests.
@@ -266,7 +267,9 @@ export function createRequestPipelineApp() {
     .onError(({ error, request, set, code }) => {
       const requestId = resolveRequestId(request);
       set.headers['x-request-id'] = requestId;
-      const status = code === 'VALIDATION' ? 422 : code === 'NOT_FOUND' ? 404 : 500;
+      const quotaUnavailable = error instanceof QuotaUnavailableError;
+      const status =
+        code === 'VALIDATION' ? 422 : code === 'NOT_FOUND' ? 404 : quotaUnavailable ? 503 : 500;
       logDmTurnTiming(
         request,
         status,
@@ -301,6 +304,12 @@ export function createRequestPipelineApp() {
         // rule and the field. The submitted values are never echoed back.
         set.status = 422;
         return { error: 'Validation failed', issues: validationIssues(error) };
+      }
+
+      if (quotaUnavailable) {
+        // The usage DB is down, so the quota cannot be checked. Refuse the call (#2673).
+        set.status = 503;
+        return { error: 'AI quota unavailable' };
       }
 
       set.status = code === 'NOT_FOUND' ? 404 : 500;

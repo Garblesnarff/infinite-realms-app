@@ -47,6 +47,7 @@ mock.module('../../../services/ai-usage-service.js', () => ({
       remaining: 10,
       resetAt: new Date(Date.now() + 3_600_000).toISOString(),
     }),
+    assertUsageStoreAvailable: async () => {},
     getQuotaStatus: async () => ({ plan: 'pro', usage: 0, remaining: 10 }),
     recordProviderUsage: async () => {},
   },

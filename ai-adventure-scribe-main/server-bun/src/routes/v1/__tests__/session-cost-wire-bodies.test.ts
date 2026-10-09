@@ -50,12 +50,20 @@ const noopLogger = {
 type SqlCall = { text: string; values: unknown[] };
 const sqlCalls: SqlCall[] = [];
 
-// A tagged-template stand-in for postgres.js that records every statement. It has no `begin`, so
-// the quota check takes its in-memory path and only the usage INSERT reaches the recorded calls.
-const fakeSql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]> => {
-  sqlCalls.push({ text: strings.join('?'), values });
-  return [];
-};
+// A tagged-template stand-in for postgres.js that records every statement. The quota check's
+// guarded INSERT ... RETURNING reports the row as allowed, so these cases assert the usage row
+// and not the cap (the caps are asserted against a real database in media-quota-failure.real-db).
+const fakeSql = Object.assign(
+  async (strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]> => {
+    const text = strings.join('?');
+    sqlCalls.push({ text, values });
+    return text.includes('RETURNING') ? [{ total: 1 }] : [];
+  },
+  {
+    begin: async (work: (tx: (...args: never[]) => Promise<unknown>) => Promise<unknown>) =>
+      work(fakeSql as never),
+  },
+);
 
 mock.module('../../../lib/db.js', () => ({ sql: fakeSql }));
 mock.module('../../../lib/env.js', () => ({

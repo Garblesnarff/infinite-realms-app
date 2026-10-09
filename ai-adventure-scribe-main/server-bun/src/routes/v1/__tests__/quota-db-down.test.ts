@@ -1,10 +1,9 @@
 /**
- * Characterization of quota enforcement when the database is unreachable (#2673 step 3a).
+ * Quota enforcement when the database is unreachable (#2673).
  *
- * Documents current behavior, including the weakness the issue describes: when the DB
- * call inside checkQuotaAndConsume throws, the service falls back to a per-process memory
- * counter. These tests do not assert that the behavior is right; step 3b removes the
- * fallback and will flip the assertions.
+ * Step 3a recorded the fallback that let calls through while the DB was down. Step 3b removed
+ * the per-process memory counter, so these tests now assert that the quota fails closed: the
+ * request is refused with 503 and the provider is never called.
  *
  * What is real: AIUsageService (including checkQuotaAndConsume) and the images route.
  * What is injected: the DB client (lib/db.js), which can be made to throw, and the provider
@@ -74,9 +73,34 @@ mock.module('../../../lib/auth.js', () => ({
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { imageRoutes } = await import('../images.js');
-const { AIUsageService } = await import('../../../services/ai-usage-service.js');
+const { createTtsRoutes } = await import('../tts.js');
+const { Elysia } = await import('elysia');
+const { llmRoutes } = await import('../llm.js');
+const { AIUsageService, QuotaUnavailableError } =
+  await import('../../../services/ai-usage-service.js');
+
+type Handler = { handle: (request: Request) => Promise<Response> | Response };
 
 const app = createRequestPipelineApp().use(imageRoutes);
+const llmApp = createRequestPipelineApp().use(llmRoutes);
+
+// Voice: a stub auth plugin in place of requireAuth, and a counting stand-in for ElevenLabs.
+const voiceAuth = new Elysia({ name: 'quota-db-down-voice-auth' }).derive({ as: 'scoped' }, () => ({
+  user: { userId: 'free-user-voice', email: 'voice@example.test', plan: 'free' },
+}));
+let voiceProviderCalls = 0;
+const voiceApp = createRequestPipelineApp().use(
+  createTtsRoutes({
+    auth: voiceAuth as never,
+    fetchImpl: (async () => {
+      voiceProviderCalls += 1;
+      return new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+      });
+    }) as never,
+  }),
+);
 
 const providerImage = {
   choices: [{ message: { images: [{ image_url: { url: 'data:image/png;base64,aGVsbG8=' } }] } }],
@@ -90,6 +114,7 @@ beforeEach(() => {
   db.insertAllowed = true;
   db.usedUnits = 0;
   providerCalls = 0;
+  voiceProviderCalls = 0;
   resetCircuitBreakersForTests();
   globalThis.fetch = (async () => {
     providerCalls += 1;
@@ -108,8 +133,8 @@ function generateRequest(userId: string): Request {
   });
 }
 
-describe('quota when the DB is down (#2673 step 3a characterization)', () => {
-  it('documents #2673: free image user at the DB daily limit is denied while the DB is up (control)', async () => {
+describe('quota when the DB is down (#2673 step 3b)', () => {
+  it('free image user at the DB daily limit is denied while the DB is up (control)', async () => {
     db.usedUnits = 1; // free image limit is 1 per day
     db.insertAllowed = false;
 
@@ -119,62 +144,119 @@ describe('quota when the DB is down (#2673 step 3a characterization)', () => {
     expect(providerCalls).toBe(0);
   });
 
-  it('documents #2673: quota lets calls through when the DB is down today', async () => {
+  it('refuses with 503 when the DB is down, and never calls the provider (route)', async () => {
     db.down = true;
 
     const response = await app.handle(generateRequest('free-user-db-down'));
 
-    expect(response.status).toBe(200);
-    expect(providerCalls).toBe(1);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(providerCalls).toBe(0);
   });
 
-  it('documents #2673: a second image while the DB is down is denied by the per-process memory counter', async () => {
+  it('refuses every image with 503 while the DB is down: no per-process counter lets a second one through', async () => {
     db.down = true;
 
     const first = await app.handle(generateRequest('free-user-memory-counter'));
     const second = await app.handle(generateRequest('free-user-memory-counter'));
 
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(402);
-    expect(providerCalls).toBe(1);
+    expect(first.status).toBe(503);
+    expect(second.status).toBe(503);
+    expect(providerCalls).toBe(0);
   });
 
-  it('documents #2673: the memory counter starts at zero in a new process, so the limit resets', async () => {
+  it('refuses with 503 in every process while the DB is down: a fresh worker gets no fresh counter', async () => {
     db.down = true;
     const userId = 'free-user-new-process';
 
-    // A second module instance stands in for a second worker process: its static
-    // memTotals map starts empty.
+    // A second module instance stands in for a second worker process.
     // Loaded through a variable: TypeScript cannot resolve a query-string specifier.
     const workerSpecifier = '../../../services/ai-usage-service.js?worker=2';
     const freshWorker = (await import(workerSpecifier)).AIUsageService as typeof AIUsageService;
 
     const request = { userId, plan: 'free', type: 'image' as const, units: 1 };
-    const firstWorker = await AIUsageService.checkQuotaAndConsume(request);
-    const firstWorkerAgain = await AIUsageService.checkQuotaAndConsume(request);
-    const secondWorker = await freshWorker.checkQuotaAndConsume(request);
-
-    expect(firstWorker.allowed).toBe(true);
-    expect(firstWorkerAgain.allowed).toBe(false);
-    expect(secondWorker.allowed).toBe(true);
+    // Compare by message: the fresh worker's error class is from another module instance.
+    await expect(AIUsageService.checkQuotaAndConsume(request)).rejects.toThrow(
+      'AI quota unavailable',
+    );
+    await expect(freshWorker.checkQuotaAndConsume(request)).rejects.toThrow('AI quota unavailable');
   });
 
-  it('documents #2673: free LLM quota with the DB down allows 15 calls per process, then denies', async () => {
+  it('refuses with 503 on voice while the DB is down, and never calls ElevenLabs (route)', async () => {
     db.down = true;
-    const userId = 'free-user-llm-ceiling';
-    const outcomes: boolean[] = [];
 
-    for (let call = 0; call < 16; call += 1) {
-      const result = await AIUsageService.checkQuotaAndConsume({
-        userId,
+    const response = await (voiceApp as unknown as Handler).handle(
+      new Request('http://localhost/v1/ai-proxy/voice/voice-quota-test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer free-user-voice' },
+        body: JSON.stringify({ text: 'Hello there.' }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(voiceProviderCalls).toBe(0);
+  });
+
+  it('reaches the LLM provider once while the DB is up (positive control for the 503 case)', async () => {
+    db.insertAllowed = true;
+
+    await (llmApp as unknown as Handler).handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer free-user-llm-control',
+        },
+        body: JSON.stringify({ prompt: 'Hello there.' }),
+      }),
+    );
+
+    expect(providerCalls).toBe(1);
+  });
+
+  it('refuses with 503 on LLM generate while the DB is down, and never calls the provider (route)', async () => {
+    db.down = true;
+
+    const response = await (llmApp as unknown as Handler).handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer free-user-llm-route',
+        },
+        body: JSON.stringify({ prompt: 'Hello there.' }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'AI quota unavailable' });
+    expect(providerCalls).toBe(0);
+  });
+
+  it('refuses with 503 for LLM calls too while the DB is down', async () => {
+    db.down = true;
+
+    await expect(
+      AIUsageService.checkQuotaAndConsume({
+        userId: 'free-user-llm',
         plan: 'free',
         type: 'llm',
         units: 1,
-      });
-      outcomes.push(result.allowed);
-    }
+      }),
+    ).rejects.toBeInstanceOf(QuotaUnavailableError);
+  });
 
-    expect(outcomes.filter(Boolean)).toHaveLength(15);
-    expect(outcomes[15]).toBe(false);
+  it('still answers the quota status read while the DB is down (display only, no enforcement)', async () => {
+    db.down = true;
+
+    const status = await AIUsageService.getQuotaStatus({
+      userId: 'free-user-status',
+      plan: 'free',
+      type: 'llm',
+    });
+
+    expect(status.usage).toBe(0);
+    expect(status.remaining).toBe(15);
   });
 });

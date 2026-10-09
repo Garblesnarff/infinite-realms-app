@@ -35,7 +35,7 @@ export interface TtsRouteOptions {
   rateLimit?: ReturnType<typeof planRateLimit>;
   usageService?: Pick<
     typeof AIUsageService,
-    'checkQuotaAndConsume' | 'getQuotaStatus' | 'recordProviderUsage'
+    'assertUsageStoreAvailable' | 'checkQuotaAndConsume' | 'getQuotaStatus' | 'recordProviderUsage'
   >;
   fetchImpl?: TtsFetch;
 }
@@ -65,6 +65,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           const modelId = process.env.ELEVENLABS_MODEL?.trim() || DEFAULT_ELEVENLABS_MODEL;
           // Check before the provider call. The charge happens after a usable clip (#2676).
           const units = voiceQuotaUnits(characters);
+          await usageService.assertUsageStoreAvailable();
           const quota = await usageService.getQuotaStatus({
             userId: user.userId,
             plan: user.plan || 'free',

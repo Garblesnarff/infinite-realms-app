@@ -306,3 +306,210 @@ describeWithDb('fix #2676: media calls and quota today (real routes, real ai_usa
     expect(await chargedUnits(user, 'voice')).toBe(1);
   });
 });
+
+// Plan caps, moved here from the in-memory unit tests (#2673 step 3b). The memory store that
+// enforced them while the DB was down is gone, so the caps are asserted against the real
+// `ai_usage` table. Each case name is the name it had in the unit file it moved from.
+const { AIUsageService, voiceQuotaUnits } = await importWithRealDb(
+  () => import('../../../services/ai-usage-service.js'),
+);
+
+describeWithDb(
+  'plan caps against the real ai_usage table (moved from #2510, #2474, #2160, #2178)',
+  () => {
+    const capUserIds: string[] = [];
+    const capUser = (label: string): string => {
+      const id = testId(`cap-${label}`);
+      capUserIds.push(id);
+      return id;
+    };
+    const consume = (userId: string, plan: string, type: 'llm' | 'image' | 'voice', units = 1) =>
+      AIUsageService.checkQuotaAndConsume({ userId, plan, type, units });
+
+    afterAll(async () => {
+      const database = realDb();
+      for (const id of capUserIds) {
+        await database.execute(sql`DELETE FROM ai_usage WHERE user_id = ${id}`);
+      }
+      await closeRealDb();
+    });
+
+    // was ai-usage-service.test.ts
+    test("refuses a free user's 16th message of the day", async () => {
+      const userId = capUser('free-llm');
+      for (let i = 0; i < 15; i += 1) {
+        expect((await consume(userId, 'free', 'llm')).allowed).toBe(true);
+      }
+      const sixteenth = await consume(userId, 'free', 'llm');
+      expect(sixteenth.allowed).toBe(false);
+      expect(sixteenth.remaining).toBe(0);
+    });
+
+    test("refuses a pro user's 41st message of the day", async () => {
+      const userId = capUser('pro-llm');
+      for (let i = 0; i < 40; i += 1) {
+        expect((await consume(userId, 'pro', 'llm')).allowed).toBe(true);
+      }
+      const fortyFirst = await consume(userId, 'pro', 'llm');
+      expect(fortyFirst.allowed).toBe(false);
+      expect(fortyFirst.remaining).toBe(0);
+    });
+
+    test('hits the free image limit on call 2 (1 a day)', async () => {
+      const userId = capUser('free-image');
+
+      const first = await consume(userId, 'free', 'image');
+      const second = await consume(userId, 'free', 'image');
+
+      expect(first.allowed).toBe(true);
+      expect(second.allowed).toBe(false);
+      expect(second.remaining).toBe(0);
+    });
+
+    test("refuses a pro user's 3rd image of the day", async () => {
+      const userId = capUser('pro-image');
+
+      expect((await consume(userId, 'pro', 'image')).allowed).toBe(true);
+      expect((await consume(userId, 'pro', 'image')).allowed).toBe(true);
+      const third = await consume(userId, 'pro', 'image');
+      expect(third.allowed).toBe(false);
+      expect(third.remaining).toBe(0);
+    });
+
+    test('hits the voice limit on call 1 for free (voice stays 0)', async () => {
+      const result = await consume(capUser('free-voice'), 'free', 'voice');
+
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
+    });
+
+    test('reports remaining counts for messages, images and voice characters', async () => {
+      const userId = capUser('pro-display');
+      // Spend through the real producers' unit shapes: 1 per message/image
+      // (llm.ts / images.ts), voiceQuotaUnits per voice call (tts.ts).
+      await consume(userId, 'pro', 'llm');
+      await consume(userId, 'pro', 'llm');
+      await consume(userId, 'pro', 'image');
+      // 250 characters of premium narration, charged as ceil(250/100) units.
+      expect((await consume(userId, 'pro', 'voice', voiceQuotaUnits(250))).allowed).toBe(true);
+
+      const all = await AIUsageService.getAllQuotaStatuses({ userId, plan: 'pro' });
+
+      expect(all.quotas.llm).toEqual({ limit: 40, usage: 2, remaining: 38 });
+      expect(all.quotas.image).toEqual({ limit: 2, usage: 1, remaining: 1 });
+      // Voice displays in characters: stored units × VOICE_CHARS_PER_UNIT.
+      expect(all.quotas.voice).toEqual({ limit: 2_000, usage: 300, remaining: 1_700 });
+    });
+
+    // was ai-usage-tester-plan.test.ts
+    test('enforces the tester llm cap at 500 a day', async () => {
+      const within = await AIUsageService.checkQuotaAndConsume({
+        userId: capUser('tester-llm-within'),
+        plan: 'tester',
+        type: 'llm',
+        units: 500,
+      });
+      const over = await AIUsageService.checkQuotaAndConsume({
+        userId: capUser('tester-llm-over'),
+        plan: 'tester',
+        type: 'llm',
+        units: 501,
+      });
+
+      expect(within.allowed).toBe(true);
+      expect(within.remaining).toBe(0);
+      expect(over.allowed).toBe(false);
+    });
+
+    // was ai-usage-voice-quota.test.ts
+    test('sets pro and enterprise caps in units: pro 2,000 and enterprise 200,000 characters/day', async () => {
+      const cases = [
+        { plan: 'pro', limit: 20 },
+        { plan: 'enterprise', limit: 2000 },
+      ];
+
+      for (const { plan, limit } of cases) {
+        const within = await AIUsageService.checkQuotaAndConsume({
+          userId: capUser(`${plan}-within`),
+          plan,
+          type: 'voice',
+          units: limit,
+        });
+        const over = await AIUsageService.checkQuotaAndConsume({
+          userId: capUser(`${plan}-over`),
+          plan,
+          type: 'voice',
+          units: limit + 1,
+        });
+
+        expect(within.allowed).toBe(true);
+        expect(within.remaining).toBe(0);
+        expect(over.allowed).toBe(false);
+      }
+    });
+
+    test('lets a pro user at 1,900 characters send a 100-character line, then refuses at 2,000', async () => {
+      const userId = capUser('pro-chars-boundary');
+      const spend = (characters: number) =>
+        consume(userId, 'pro', 'voice', voiceQuotaUnits(characters));
+
+      // 19 lines of 100 characters = 1,900 characters used.
+      for (let i = 0; i < 19; i++) expect((await spend(100)).allowed).toBe(true);
+
+      const last = await spend(100);
+      expect(last.allowed).toBe(true);
+      expect(last.remaining).toBe(0);
+
+      const refused = await spend(100);
+      expect(refused.allowed).toBe(false);
+    });
+
+    test('reports remaining voice in characters', async () => {
+      const userId = capUser('pro-chars-display');
+      await consume(userId, 'pro', 'voice', voiceQuotaUnits(1_950));
+      // 1,950 characters in one call costs ceil(19.5) = 20 units: the whole day.
+      const spent = await AIUsageService.getQuotaStatus({ userId, plan: 'pro', type: 'voice' });
+      expect(spent.remainingCharacters).toBe(0);
+
+      const fresh = await AIUsageService.getQuotaStatus({
+        userId: capUser('pro-chars-display-fresh'),
+        plan: 'pro',
+        type: 'voice',
+      });
+      expect(fresh.remainingCharacters).toBe(2_000);
+
+      const partial = capUser('pro-chars-display-partial');
+      await consume(partial, 'pro', 'voice', voiceQuotaUnits(500));
+      const status = await AIUsageService.getQuotaStatus({
+        userId: partial,
+        plan: 'pro',
+        type: 'voice',
+      });
+      expect(status.remainingCharacters).toBe(1_500);
+      expect(status.usage).toBe(5);
+      expect(status.remaining).toBe(15);
+      expect(status.limits.daily.voice).toBe(20);
+
+      const image = await AIUsageService.getQuotaStatus({
+        userId: partial,
+        plan: 'pro',
+        type: 'image',
+      });
+      expect(image.remainingCharacters).toBeUndefined();
+    });
+
+    test('keeps free voice at 0 after the rebase onto #2178', async () => {
+      const userId = capUser('free-voice-zero');
+      const denied = await consume(userId, 'free', 'voice', 1);
+      expect(denied.allowed).toBe(false);
+      expect(denied.remaining).toBe(0);
+
+      const status = await AIUsageService.getQuotaStatus({
+        userId: capUser('free-voice-zero-status'),
+        plan: 'free',
+        type: 'voice',
+      });
+      expect(status.limits.daily.voice).toBe(0);
+    });
+  },
+);

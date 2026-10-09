@@ -10,6 +10,7 @@
 import { getModelPricing } from './model-pricing.js';
 import { sql } from '../lib/db.js';
 import { logger } from '../lib/logger.js';
+import { QuotaUnavailableError } from '../lib/quota-errors.js';
 
 export type UsageType = 'llm' | 'llm_system' | 'image' | 'voice';
 
@@ -38,6 +39,8 @@ export function voiceQuotaUnits(characters: number): number {
 export type QuotaConfig = {
   daily: Record<UsageType, number>;
 };
+
+export { QuotaUnavailableError } from '../lib/quota-errors.js';
 
 export class AIUsageService {
   static async recordProviderUsage(opts: {
@@ -171,7 +174,7 @@ export class AIUsageService {
     },
   };
 
-  // In-memory fallback store for development/tests
+  // Read only by getQuotaStatus's display fallback. Nothing writes it since #2673 step 3b.
   private static readonly memTotals = new Map<string, { units: number; period: string }>();
 
   // Track if DB table has been initialized in this process
@@ -249,7 +252,8 @@ export class AIUsageService {
   }
 
   /**
-   * Check quota availability and consume units if allowed
+   * Check quota availability and consume units if allowed.
+   * Throws QuotaUnavailableError when the DB is unreachable: the request is refused, not allowed.
    */
   static async checkQuotaAndConsume(opts: {
     orgId?: string | null;
@@ -263,8 +267,6 @@ export class AIUsageService {
     const quota = AIUsageService.getPlanQuota(plan);
     const limit = quota.daily[type];
     const pkey = AIUsageService.periodKey();
-    const scope = orgId || userId;
-    const key = `${scope}:${type}:${pkey}`;
     const resetAt = AIUsageService.getResetAt();
 
     // Try Postgres
@@ -308,7 +310,9 @@ export class AIUsageService {
         `;
 
         if (result.length > 0) {
-          const usedAfter = Number(result[0].total || 0);
+          // RETURNING's subquery reads the table before this INSERT, so it is usage before this
+          // call. Add this call's units to report what is left after it (#2673 step 3b).
+          const usedAfter = Number(result[0].total || 0) + units;
           return { allowed: true, remaining: Math.max(0, limit - usedAfter) };
         }
 
@@ -326,18 +330,11 @@ export class AIUsageService {
 
       return { ...outcome, resetAt };
     } catch (error) {
-      logger.error({ msg: 'AI_USAGE_DB_ERROR', error, fallback: 'memory' });
+      // Fail closed (#2673): a per-process memory counter let a free user past the
+      // daily limit while the DB was down, and limits multiplied by worker count.
+      logger.error({ msg: 'AI_USAGE_DB_ERROR', error, fallback: 'refuse' });
+      throw new QuotaUnavailableError();
     }
-
-    // Memory fallback
-    const cur = AIUsageService.memTotals.get(key);
-    const used = cur && cur.period === pkey ? cur.units : 0;
-    if (used + units > limit) {
-      return { allowed: false, remaining: Math.max(0, limit - used), resetAt };
-    }
-    AIUsageService.memTotals.set(key, { units: used + units, period: pkey });
-    const remaining = Math.max(0, limit - (used + units));
-    return { allowed: true, remaining, resetAt };
   }
 
   /**
@@ -393,6 +390,19 @@ export class AIUsageService {
       ...(type === 'voice' ? { remainingCharacters: remaining * VOICE_CHARS_PER_UNIT } : {}),
       resetAt,
     };
+  }
+
+  /**
+   * Fails closed before a provider call (#2673): the usage store must answer a probe. The status
+   * read below falls back to memory for display, so it cannot prove the store is reachable.
+   */
+  static async assertUsageStoreAvailable(): Promise<void> {
+    try {
+      await sql`SELECT 1`;
+    } catch (error) {
+      logger.error({ msg: 'AI_USAGE_DB_ERROR', error, fallback: 'refuse', stage: 'precheck' });
+      throw new QuotaUnavailableError();
+    }
   }
 
   /**
