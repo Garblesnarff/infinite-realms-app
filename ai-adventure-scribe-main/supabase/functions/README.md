@@ -14,7 +14,6 @@ Each subdirectory typically represents a distinct Edge Function with its own spe
 - **`generate-embedding/`**: Generates vector embeddings for text content (e.g., memories, dialogue) to support semantic search and similarity calculations, crucial for the memory system.
 - **`get-secret/`**: A utility function to securely retrieve sensitive secrets (like API keys) from environment variables within the Supabase environment, making them available to other functions.
 - **`rules-interpreter-execute/`**: (Likely) Executes logic related to interpreting and enforcing game rules, possibly interacting with an LLM or a predefined rules engine.
-- **`text-to-speech/`**: Provides text-to-speech (TTS) functionality, converting text (e.g., AI DM narration) into audible speech.
 
 Common files within each function's directory:
 - **`index.ts`**: The main entry point for the Edge Function.
