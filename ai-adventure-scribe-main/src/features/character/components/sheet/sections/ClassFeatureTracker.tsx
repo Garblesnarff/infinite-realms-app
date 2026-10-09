@@ -4,17 +4,17 @@ import { FeatureSection } from './class-feature-tracker/FeatureSection';
 import { ResourceSection } from './class-feature-tracker/ResourceSection';
 import { RestActionButtons } from './class-feature-tracker/RestActionButtons';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 import type { ClassFeature } from '@/types/combat';
 
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
-import { updateCharacterClassFeatures } from '@/services/class-features-api';
 import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 
 interface ClassFeatureTrackerProps {
   character: Character;
-  onUpdate: (updatedCharacter: Character) => void;
+  onUpdate: CharacterSheetUpdateFn;
 }
 
 /**
@@ -22,6 +22,7 @@ interface ClassFeatureTrackerProps {
  * including resources like spell slots, ki points, rages, etc.
  */
 const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate }) => {
+  const { toast } = useToast();
   // Get class features for the character
   const classFeatures = character.class
     ? getClassFeatures(character.class.name, character.level || 1)
@@ -48,10 +49,20 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
         restType === 'short'
           ? await restApi.shortRest(character.id)
           : await restApi.longRest(character.id);
-      onUpdate(applyRestResultToCharacter(character, result));
+      const saved = await onUpdate(applyRestResultToCharacter(character, result));
+      if (!saved) return;
+      toast({
+        title: restType === 'short' ? 'Short rest complete' : 'Long rest complete',
+      });
       logger.info(`Completed ${restType} rest`, result);
     } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
       logger.error(`Failed to complete ${restType} rest`, error);
+      toast({
+        title: 'Rest failed',
+        description: reason,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -69,14 +80,13 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     };
     const updatedCharacter = { ...character, classFeatures: classFeaturesState };
 
-    onUpdate(updatedCharacter);
-    try {
-      await updateCharacterClassFeatures(character.id, classFeaturesState);
-      logger.info(`Used class feature: ${feature.name}`, featureState);
-    } catch (error) {
-      onUpdate(character);
-      logger.error(`Failed to use class feature: ${feature.name}`, error);
-    }
+    const saved = await onUpdate(updatedCharacter);
+    if (!saved) return;
+    toast({
+      title: 'Feature used',
+      description: `${feature.name.replace(/_/g, ' ')}: ${featureState.currentUses} / ${feature.maxUses}`,
+    });
+    logger.info(`Used class feature: ${feature.name}`, featureState);
   };
 
   // If no class features or resources, don't render anything

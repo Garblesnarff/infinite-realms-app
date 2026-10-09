@@ -124,9 +124,9 @@ export class ClassFeatureUsageService {
 
     const feature = characterFeature.feature!;
 
-    // Check if feature has limited uses
-    if (feature.usageType !== 'limited_use' && feature.usesCount === null) {
-      // Passive or at-will features don't track uses, but we still log them
+    // A NULL uses_count is unlimited, including rows seeded as limited_use
+    // with no number (#224). Do not invent a count for those rows.
+    if (feature.usesCount === null) {
       await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
 
       return {

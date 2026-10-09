@@ -194,6 +194,46 @@ describe('ClassFeaturesService', () => {
   });
 
   describe('Security: useFeature', () => {
+    it('treats a NULL uses_count as unlimited and does not write a count', async () => {
+      (db.query.characterFeatures.findFirst as any).mockResolvedValue({
+        id: 'cf-123',
+        characterId: mockCharacterId,
+        featureId: mockFeatureId,
+        usesRemaining: null,
+        feature: {
+          id: mockFeatureId,
+          featureName: 'Second Wind',
+          usageType: 'limited_use',
+          usesCount: null,
+          description: 'Regain hit points.',
+        },
+      });
+      (db.update as any).mockClear();
+      (db.select as any).mockImplementation(() => {
+        const chain = {
+          from: () => chain,
+          where: () => chain,
+          limit: () => Promise.resolve([{ id: mockCharacterId }]),
+        };
+        return chain;
+      });
+      (db.insert as any).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'log-123' }]),
+        }),
+      });
+
+      const result = await ClassFeaturesService.useFeature({
+        characterId: mockCharacterId,
+        featureId: mockFeatureId,
+        userId: mockUserId,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.usesRemaining).toBe(-1);
+      expect(db.update).not.toHaveBeenCalled();
+    });
+
     it('should return failure if character feature not found (or not owned)', async () => {
       (db.query.characterFeatures.findFirst as any).mockResolvedValue(null);
 

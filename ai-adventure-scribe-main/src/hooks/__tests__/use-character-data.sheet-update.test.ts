@@ -94,6 +94,19 @@ describe('buildSheetUpdatePayload (#2701)', () => {
     expect(parsePersonalityEnvelope(payload.personality_notes as string)!.inspiration).toBe(true);
   });
 
+  it('a spent feature produces exactly { class_features }', () => {
+    const prev = baseCharacter();
+    const next = {
+      ...prev,
+      classFeatures: {
+        second_wind: { name: 'second_wind', currentUses: 0, maxUses: 1, usesPerRest: 'short' },
+      },
+    };
+    expect(buildSheetUpdatePayload(prev, next)).toEqual({
+      class_features: next.classFeatures,
+    });
+  });
+
   it('returns an empty payload when nothing sheet-managed changed', () => {
     const prev = baseCharacter();
     // A rest result touches vitals/resources the sheet never PUTs; its own
