@@ -32,6 +32,7 @@ import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
 import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
 interface MessageListContainerProps {
+  retryInFlight?: boolean;
   messages: ChatMessage[];
   messagesRef: React.RefObject<HTMLDivElement>;
   expandedMessages: Set<string>;
@@ -71,6 +72,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     onOptionSelect,
     onSendMessage,
     onSendFullMessage,
+    retryInFlight = false,
     sessionId,
     isFetchingMore,
     hasMore,
@@ -292,7 +294,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
               }
               onCancel={handleCancelRoll}
               onRetry={handleRetryRoll}
-              isRetrying={isRetrying}
+              isRetrying={isRetrying || retryInFlight}
             />
           </RollTray>
         )}
@@ -300,8 +302,12 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         {rollError && !currentRoll && (
           <div role="alert" className="px-3 py-2 text-sm text-red-300">
             {rollError}
-            <Button variant="outline" disabled={isRetrying} onClick={() => void handleRetryRoll()}>
-              {isRetrying ? 'Retrying…' : 'Retry'}
+            <Button
+              variant="outline"
+              disabled={isRetrying || retryInFlight}
+              onClick={() => void handleRetryRoll()}
+            >
+              {isRetrying || retryInFlight ? 'Retrying…' : 'Retry'}
             </Button>
           </div>
         )}

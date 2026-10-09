@@ -390,6 +390,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 attackWaitLabel,
                 sendError,
                 onRetry,
+                retryInFlight,
                 combatTurnUiState,
                 onResumeTurn,
               }) => (
@@ -404,6 +405,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     <CombatTurnBarLive turnInFlight={isProcessing} />
                     <MessageList
                       onSendFullMessage={handleSendMessage}
+                      retryInFlight={retryInFlight}
                       sessionId={sessionId}
                       containerRef={chatScrollRef}
                       suppressEmptyState={isGeneratingGreeting}
@@ -546,6 +548,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           attackWaitLabel={rollBlocksInput ? null : attackWaitLabel}
                           sendError={sendError ?? undefined}
                           onRetry={onRetry}
+                          retryInFlight={retryInFlight}
                           disabledReason={
                             rollBlocksInput && !isProcessing
                               ? 'Roll the dice above to continue'

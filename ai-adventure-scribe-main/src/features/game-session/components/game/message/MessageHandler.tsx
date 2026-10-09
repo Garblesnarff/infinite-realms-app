@@ -37,6 +37,7 @@ interface MessageHandlerProps {
     isStillThinking: boolean;
     attackWaitLabel: string | null;
     sendError: string | null;
+    retryInFlight: boolean;
     onRetry: (input: string) => Promise<void>;
     combatTurnUiState: CombatTurnUiState;
     onResumeTurn: () => Promise<void>;
@@ -59,6 +60,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     attackWaitLabel,
     sendError,
     retrySendMessage,
+    retryInFlight,
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,
@@ -96,6 +98,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = (props) => {
     attackWaitLabel,
     sendError,
     onRetry: retrySendMessage,
+    retryInFlight,
     combatTurnUiState,
     onResumeTurn: resumeCombatTurn,
     terminalDeathState,

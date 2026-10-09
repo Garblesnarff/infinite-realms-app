@@ -170,7 +170,8 @@ export const useMessageHandlerLogic = ({
   /** #2536: staged attack wait in the composer. Null once the prompt, engine line, or turn end replaces it. */
   attackWaitLabel: string | null;
   sendError: string | null;
-  retrySendMessage: () => Promise<void>;
+  retrySendMessage: (editedInput: string) => Promise<void>;
+  retryInFlight: boolean;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
   /** #2456: handled terminal death state; when set, the UI renders the death screen. */
@@ -204,7 +205,11 @@ export const useMessageHandlerLogic = ({
   });
 
   // Extract message queue and sending-state logic
-  const { handleSendMessage, isSending, actualSendMessageRef } = useMessageSendQueue();
+  const {
+    handleSendMessage: queuedHandleSendMessage,
+    isSending,
+    actualSendMessageRef,
+  } = useMessageSendQueue();
 
   // Refs to track current values for async operations
   const turnCountRef = React.useRef(turnCount);
@@ -219,6 +224,33 @@ export const useMessageHandlerLogic = ({
   const [sendError, setSendError] = React.useState<string | null>(null);
   const retryInputRef = React.useRef<string | null>(null);
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
+
+  const inFlightRollsRef = React.useRef(new Map<string, Promise<void>>());
+  const [retryInFlight, setRetryInFlight] = React.useState(false);
+  const handleSendMessage = React.useCallback(
+    (input: string, context?: MessageSendContext): Promise<void> => {
+      const saved = [...messagesRef.current]
+        .reverse()
+        .find((message) => message.sender === 'player');
+      const rollRequestId =
+        context?.intent === 'dice_roll'
+          ? context.rollRequestId
+          : context?.intent === 'resume_unanswered' && saved?.context?.intent === 'dice_roll'
+            ? (saved.context.rollRequestId ?? saved.id)
+            : undefined;
+      if (!rollRequestId) return queuedHandleSendMessage(input, context);
+      const existing = inFlightRollsRef.current.get(rollRequestId);
+      if (existing) return existing;
+      const sending = queuedHandleSendMessage(input, context).finally(() => {
+        inFlightRollsRef.current.delete(rollRequestId);
+        setRetryInFlight(inFlightRollsRef.current.size > 0);
+      });
+      inFlightRollsRef.current.set(rollRequestId, sending);
+      setRetryInFlight(true);
+      return sending;
+    },
+    [queuedHandleSendMessage],
+  );
 
   React.useEffect(() => subscribeToNetworkRetry(setIsReconnecting), []);
 
@@ -481,7 +513,11 @@ export const useMessageHandlerLogic = ({
             : -1;
       const savedMessage = savedMessageIndex >= 0 ? currentMessages[savedMessageIndex] : undefined;
 
-      if (resumingSavedMessage && providedContext?.intent === 'dice_roll' && savedMessage?.id) {
+      if (
+        resumingSavedMessage &&
+        savedMessage?.context?.intent === 'dice_roll' &&
+        savedMessage.id
+      ) {
         const stillUnanswered = await rejectWhenAborted(
           playerMessageIsStillNewest(sessionId, savedMessage.id),
           turnSignal,
@@ -1030,26 +1066,10 @@ export const useMessageHandlerLogic = ({
           ? { ...retryContextRef.current, retryInput }
           : retryContextRef.current;
       retryContextRef.current = retryContext;
-      if (retryContext?.intent === 'resume_unanswered') {
-        const saved = [...messagesRef.current]
-          .reverse()
-          .find((message) => message.sender === 'player');
-        if (saved?.context?.intent === 'dice_roll' && saved.id) {
-          try {
-            if (!(await playerMessageIsStillNewest(sessionId, saved.id))) {
-              setSendError(null);
-              return;
-            }
-          } catch (error) {
-            setSendError(DM_NETWORK_ERROR_MESSAGE);
-            throw error;
-          }
-        }
-      }
       setSendError(null);
       await handleSendMessage(retryInput, retryContext);
     },
-    [handleSendMessage, sessionId],
+    [handleSendMessage],
   );
 
   useHeldEntryRecovery({
@@ -1079,6 +1099,7 @@ export const useMessageHandlerLogic = ({
     attackWaitLabel,
     sendError,
     retrySendMessage,
+    retryInFlight,
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,
