@@ -13,11 +13,11 @@
 import { Elysia, t } from 'elysia';
 import Stripe from 'stripe';
 
-import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { logger } from '../../lib/logger.js';
 import { UserPlanCache } from '../../lib/user-plan-cache.js';
+import { authedUser } from '../../middleware/authed-user.js';
 import {
   claimStripeEvent,
   getPlanFromPriceId,
@@ -179,7 +179,8 @@ async function getOrCreateStripeCustomer(
   return customer.id;
 }
 
-export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
+const billingUserRoutes = new Elysia({ prefix: '/v1/billing' })
+  .use(authedUser)
 
   /**
    * Create Stripe Checkout session
@@ -187,13 +188,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
    */
   .post(
     '/create-checkout-session',
-    async ({ request, body, set }) => {
-      const { user, error } = await authenticateRequest(request);
-      if (error || !user) {
-        set.status = 401;
-        return { error: error || 'Unauthorized' };
-      }
-
+    async ({ user, body, set }) => {
       try {
         const stripeClient = getStripe();
         const { priceId, successUrl, cancelUrl } = body;
@@ -265,13 +260,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
    * Get current subscription status
    * GET /v1/billing/subscription
    */
-  .get('/subscription', async ({ request, set }) => {
-    const { user, error } = await authenticateRequest(request);
-    if (error || !user) {
-      set.status = 401;
-      return { error: error || 'Unauthorized' };
-    }
-
+  .get('/subscription', async ({ user, set }) => {
     try {
       // Get user's subscription info from database
       const rows = await sql`
@@ -300,13 +289,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
    * Create Stripe Customer Portal session
    * POST /v1/billing/portal-session
    */
-  .post('/portal-session', async ({ request, set }) => {
-    const { user, error } = await authenticateRequest(request);
-    if (error || !user) {
-      set.status = 401;
-      return { error: error || 'Unauthorized' };
-    }
-
+  .post('/portal-session', async ({ user, set }) => {
     try {
       const stripeClient = getStripe();
 
@@ -338,7 +321,13 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
       set.status = 500;
       return { error: 'Failed to create portal session' };
     }
-  })
+  });
+
+/**
+ * Stripe calls the webhook without a user token; the handler verifies the signature instead.
+ */
+export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
+  .use(billingUserRoutes)
 
   /**
    * Stripe Webhook Handler

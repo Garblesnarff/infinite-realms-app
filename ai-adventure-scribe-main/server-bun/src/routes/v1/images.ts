@@ -11,9 +11,9 @@
 
 import { Elysia, t } from 'elysia';
 
-import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
+import { authedUser } from '../../middleware/authed-user.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
 import { createUpstreamModelErrorBody } from '../../services/llm-errors.js';
@@ -128,20 +128,14 @@ const extractFromMessage = (msg: any): string | null => {
 };
 
 export const imageRoutes = new Elysia({ prefix: '/v1/images' })
+  .use(authedUser)
   .use(planRateLimit('images'))
 
   /**
    * Get image quota status
    * GET /v1/images/quota
    */
-  .get('/quota', async ({ request, set }) => {
-    // Direct auth check - bypasses Elysia plugin context issues
-    const { user, error } = await authenticateRequest(request);
-    if (error || !user) {
-      set.status = 401;
-      return { error: error || 'Unauthorized' };
-    }
-
+  .get('/quota', async ({ user, set }) => {
     try {
       const quotaStatus = await AIUsageService.getQuotaStatus({
         userId: user.userId,
@@ -162,14 +156,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
    */
   .post(
     '/generate',
-    async ({ request, body, set }) => {
-      // Direct auth check - bypasses Elysia plugin context issues
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
-
+    async ({ user, body, set }) => {
       const { prompt, referenceImages, sessionId } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
@@ -392,14 +379,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
    */
   .patch(
     '/message/:id/images',
-    async ({ request, params, body, set }) => {
-      // Direct auth check - bypasses Elysia plugin context issues
-      const { user, error: authError } = await authenticateRequest(request);
-      if (authError || !user) {
-        set.status = 401;
-        return { error: authError || 'Unauthorized' };
-      }
-
+    async ({ user, params, body, set }) => {
       const { id } = params;
       const userId = user.userId;
 
