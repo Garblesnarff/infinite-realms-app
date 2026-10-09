@@ -8,13 +8,13 @@ import { ExperienceQuickLevelSet } from './experience/ExperienceQuickLevelSet';
 import { ExperienceTableReference } from './experience/ExperienceTableReference';
 import { useExperienceManager } from './experience/useExperienceManager';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 
 interface ExperienceManagerProps {
   character: Character;
-  onUpdate: (updatedCharacter: Character) => void;
+  onUpdate: CharacterSheetUpdateFn;
 }
 
 /**

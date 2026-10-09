@@ -4,7 +4,7 @@ import React, { useId } from 'react';
 import { InspirationSection } from './sections/personality/InspirationSection';
 import { PersonalityElementSection } from './sections/personality/PersonalityElementSection';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -13,7 +13,7 @@ import { usePersonalityManager } from '@/features/character/hooks/use-personalit
 
 interface PersonalityManagerProps {
   character: Character;
-  onUpdate: (updatedCharacter: Character) => void;
+  onUpdate: CharacterSheetUpdateFn;
 }
 
 /**

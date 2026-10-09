@@ -21,7 +21,7 @@
  */
 
 // SDK Imports
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Project Imports
@@ -35,12 +35,60 @@ import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
 import {
   findUnresolvedCharacterData,
+  serializePersonalityEnvelope,
   transformCharacterData,
   type CharacterRow,
   type CharacterStatsRow,
   type CharacterEquipmentRow,
 } from '@/utils/character/data-transformers';
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
+
+/**
+ * #2701: builds the PUT payload for a character-sheet edit.
+ *
+ * The sheet's managers call `onUpdate(updatedCharacter)` with a full Character
+ * object, but the server only accepts its whitelisted columns (see
+ * prepareCharacterPayload). This maps exactly the fields the sheet edits —
+ * experience, level, notes, appearance, description, backstory, personality —
+ * from the client shape to the DB columns, and only the fields that actually
+ * changed. Anything else the caller changed (rest results, feature uses,
+ * inventory toggles) is persisted by its own API already, so an empty payload
+ * means "no write, just refresh".
+ *
+ * The trait/ideal/bond/flaw arrays and inspiration state have no dedicated
+ * columns; they travel as the JSON personality envelope in `personality_notes`.
+ */
+export const buildSheetUpdatePayload = (
+  prev: Character | null,
+  next: Character,
+): Record<string, unknown> => {
+  if (!prev) return {};
+  const payload: Record<string, unknown> = {};
+
+  const changedString = (
+    prevValue: string | null | undefined,
+    nextValue: string | null | undefined,
+  ): boolean => (prevValue ?? '') !== (nextValue ?? '');
+
+  if (prev.experience !== next.experience) payload.experience_points = next.experience ?? 0;
+  if (prev.level !== next.level) payload.level = next.level ?? 1;
+  if (changedString(prev.sessionNotes, next.sessionNotes))
+    payload.session_notes = next.sessionNotes ?? '';
+  if (changedString(prev.appearance, next.appearance)) payload.appearance = next.appearance ?? '';
+  if (changedString(prev.description, next.description))
+    payload.description = next.description ?? '';
+  if (changedString(prev.backstory_elements, next.backstory_elements))
+    payload.backstory_elements = next.backstory_elements ?? '';
+  if (changedString(prev.personality_traits, next.personality_traits))
+    payload.personality_traits = next.personality_traits ?? '';
+
+  // The envelope owns personality_notes: compare canonically serialized forms.
+  if (serializePersonalityEnvelope(prev) !== serializePersonalityEnvelope(next)) {
+    payload.personality_notes = serializePersonalityEnvelope(next);
+  }
+
+  return payload;
+};
 
 /**
  * Custom hook for fetching and managing character data
@@ -59,6 +107,12 @@ export const useCharacterData = (characterId: string | undefined) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  // Latest loaded character for the update diff; the managers hand back a new
+  // object, so the diff needs the pre-edit one, not a stale closure.
+  const characterRef = useRef<Character | null>(null);
+  useEffect(() => {
+    characterRef.current = character;
+  }, [character]);
 
   /**
    * Validates character ID and handles invalid cases
@@ -89,106 +143,176 @@ export const useCharacterData = (characterId: string | undefined) => {
    *
    * ⚡ Bolt: Wrapped in useCallback to stabilize identity and prevent unnecessary re-fetches
    * when parent components re-render or unrelated state changes.
+   *
+   * #2701: `silent` skips the loading flag so a post-save refresh does not
+   * show the skeleton — the skeleton unmounts the tabs and resets the active
+   * tab to Main.
    */
-  const fetchCharacter = useCallback(async () => {
-    if (!validateCharacterId(characterId)) return;
+  const fetchCharacter = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!validateCharacterId(characterId)) return;
 
-    // Which step threw, so the toast and the log say more than "failed" (#2150).
-    let stage = 'fetching the character';
-    try {
-      setLoading(true);
+      // Which step threw, so the toast and the log say more than "failed" (#2150).
+      let stage = 'fetching the character';
+      try {
+        if (!options?.silent) {
+          setLoading(true);
+        }
 
-      // Check WorkOS authentication
-      if (!user) {
+        // Check WorkOS authentication
+        if (!user) {
+          toast({
+            title: 'Not Authenticated',
+            description: 'Please log in to view your characters.',
+            variant: 'destructive',
+          });
+          navigate('/login');
+          return;
+        }
+
+        // Fetch the character and its ownership-checked equipment in parallel.
+        const [characterData, equipmentResult] = await Promise.all([
+          userDataApi.getCharacter(characterId!),
+          issue1784Api
+            .getCharacterEquipment(characterId!)
+            .then((data) => ({ data, error: null }))
+            .catch((error: unknown) => ({ data: null, error })),
+        ]);
+
+        // Equipment is supplementary to the character record. Throwing here discarded the
+        // character payload that had already been fetched successfully in the same
+        // Promise.all, so one bad column name took down the entire page. Degrade instead,
+        // matching use-character-save.ts which logs and continues. See #1859.
+        if (equipmentResult.error) {
+          logger.warn('Character equipment query failed; rendering without equipment', {
+            characterId,
+            error: equipmentResult.error,
+          });
+        }
+
+        if (!characterData) {
+          toast({
+            title: 'Character Not Found',
+            description:
+              'The requested character could not be found. Redirecting to characters page.',
+            variant: 'destructive',
+          });
+          navigate('/app/characters');
+          return;
+        }
+
+        stage = 'reading the character data';
+        // Extract character data and stats
+        const characterRecord = Array.isArray(characterData) ? characterData[0] : characterData;
+        const statsData = Array.isArray(characterRecord.character_stats)
+          ? characterRecord.character_stats[0]
+          : characterRecord.character_stats;
+
+        // Equipment is returned by the ownership-checked character route.
+        const equipmentData = equipmentResult.error
+          ? null
+          : (equipmentResult.data as unknown as CharacterEquipmentRow[]);
+
+        // Transform and set character data
+        const transformedCharacter = transformCharacterData(
+          characterRecord as CharacterRow,
+          statsData as CharacterStatsRow | null,
+          equipmentData as CharacterEquipmentRow[] | null,
+        );
+
+        const unresolved = findUnresolvedCharacterData(characterRecord as CharacterRow);
+        if (unresolved.length > 0) {
+          logger.warn('Character sheet rendering with unresolved character data', {
+            characterId,
+            unresolved,
+          });
+        }
+
+        setUnresolvedData(unresolved);
+        setEquipmentUnavailable(Boolean(equipmentResult.error));
+        setCharacter(transformedCharacter);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        logger.error(`Error ${stage}`, { characterId, stage, reason, error });
         toast({
-          title: 'Not Authenticated',
-          description: 'Please log in to view your characters.',
+          title: 'Failed to load character data',
+          description: `Error while ${stage}: ${reason}`,
           variant: 'destructive',
         });
-        navigate('/login');
-        return;
+        // #2701: a silent post-save refresh must not kick the user off the
+        // sheet; the save already landed and the sheet keeps its current state.
+        if (!options?.silent) {
+          navigate('/app/characters');
+        }
+      } finally {
+        setLoading(false);
       }
-
-      // Fetch the character and its ownership-checked equipment in parallel.
-      const [characterData, equipmentResult] = await Promise.all([
-        userDataApi.getCharacter(characterId!),
-        issue1784Api
-          .getCharacterEquipment(characterId!)
-          .then((data) => ({ data, error: null }))
-          .catch((error: unknown) => ({ data: null, error })),
-      ]);
-
-      // Equipment is supplementary to the character record. Throwing here discarded the
-      // character payload that had already been fetched successfully in the same
-      // Promise.all, so one bad column name took down the entire page. Degrade instead,
-      // matching use-character-save.ts which logs and continues. See #1859.
-      if (equipmentResult.error) {
-        logger.warn('Character equipment query failed; rendering without equipment', {
-          characterId,
-          error: equipmentResult.error,
-        });
-      }
-
-      if (!characterData) {
-        toast({
-          title: 'Character Not Found',
-          description:
-            'The requested character could not be found. Redirecting to characters page.',
-          variant: 'destructive',
-        });
-        navigate('/app/characters');
-        return;
-      }
-
-      stage = 'reading the character data';
-      // Extract character data and stats
-      const characterRecord = Array.isArray(characterData) ? characterData[0] : characterData;
-      const statsData = Array.isArray(characterRecord.character_stats)
-        ? characterRecord.character_stats[0]
-        : characterRecord.character_stats;
-
-      // Equipment is returned by the ownership-checked character route.
-      const equipmentData = equipmentResult.error
-        ? null
-        : (equipmentResult.data as unknown as CharacterEquipmentRow[]);
-
-      // Transform and set character data
-      const transformedCharacter = transformCharacterData(
-        characterRecord as CharacterRow,
-        statsData as CharacterStatsRow | null,
-        equipmentData as CharacterEquipmentRow[] | null,
-      );
-
-      const unresolved = findUnresolvedCharacterData(characterRecord as CharacterRow);
-      if (unresolved.length > 0) {
-        logger.warn('Character sheet rendering with unresolved character data', {
-          characterId,
-          unresolved,
-        });
-      }
-
-      setUnresolvedData(unresolved);
-      setEquipmentUnavailable(Boolean(equipmentResult.error));
-      setCharacter(transformedCharacter);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      logger.error(`Error ${stage}`, { characterId, stage, reason, error });
-      toast({
-        title: 'Failed to load character data',
-        description: `Error while ${stage}: ${reason}`,
-        variant: 'destructive',
-      });
-      navigate('/app/characters');
-    } finally {
-      setLoading(false);
-    }
-  }, [characterId, user, toast, navigate, validateCharacterId]);
+    },
+    [characterId, user, toast, navigate, validateCharacterId],
+  );
 
   // Fetch character data on mount or when dependencies change
   // ⚡ Bolt: Now only depends on the stable fetchCharacter callback.
   useEffect(() => {
     fetchCharacter();
   }, [fetchCharacter]);
+
+  /**
+   * #2701: the sheet's save path. The managers call this with the edited
+   * character; the changed fields are written through the existing character
+   * update API (PUT /v1/characters/:id, whitelisted by prepareCharacterPayload
+   * inside userDataApi.updateCharacter — no second writer), then the sheet
+   * refreshes silently so the tabs stay mounted and the active tab is kept.
+   * Resolves true when the write landed; the caller shows its success toast
+   * only then. On failure an error toast fires here and the sheet reloads the
+   * last saved state.
+   */
+  const persistCharacterUpdate = useCallback(
+    async (updatedCharacter: Character): Promise<boolean> => {
+      // Structural guarantee: this never rejects, so the fire-and-forget
+      // `void onUpdate(...)` call sites cannot produce unhandled rejections.
+      try {
+        if (!validateCharacterId(characterId)) return false;
+
+        const payload = buildSheetUpdatePayload(characterRef.current, updatedCharacter);
+        if (Object.keys(payload).length > 0) {
+          try {
+            await userDataApi.updateCharacter(characterId!, payload);
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            logger.error('Failed to save character sheet update', {
+              characterId,
+              reason,
+              error,
+            });
+            toast({
+              title: 'Save failed',
+              description: `Your changes could not be saved: ${reason}`,
+              variant: 'destructive',
+            });
+            // Reload the last saved state so the sheet does not show edits
+            // that never landed.
+            await fetchCharacter({ silent: true });
+            return false;
+          }
+        }
+        await fetchCharacter({ silent: true });
+        return true;
+      } catch (error) {
+        logger.error('Unexpected error saving character sheet update', {
+          characterId,
+          error,
+        });
+        toast({
+          title: 'Save failed',
+          description: 'Your changes could not be saved.',
+          variant: 'destructive',
+        });
+        return false;
+      }
+    },
+    [characterId, validateCharacterId, toast, fetchCharacter],
+  );
 
   return useMemo(
     () => ({
@@ -197,7 +321,15 @@ export const useCharacterData = (characterId: string | undefined) => {
       equipmentUnavailable,
       loading,
       refetch: fetchCharacter,
+      persistCharacterUpdate,
     }),
-    [character, unresolvedData, equipmentUnavailable, loading, fetchCharacter],
+    [
+      character,
+      unresolvedData,
+      equipmentUnavailable,
+      loading,
+      fetchCharacter,
+      persistCharacterUpdate,
+    ],
   );
 };

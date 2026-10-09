@@ -12,7 +12,8 @@ vi.mock('@/hooks/use-toast', () => ({
 
 describe('useExperienceManager', () => {
   const mockToast = vi.fn();
-  const mockOnUpdate = vi.fn();
+  // #2701: onUpdate persists and resolves true when the write landed.
+  const mockOnUpdate = vi.fn().mockResolvedValue(true);
 
   const mockCharacter: any = {
     id: 'char-123',
@@ -23,6 +24,7 @@ describe('useExperienceManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockOnUpdate.mockResolvedValue(true);
     (useToast as any).mockReturnValue({ toast: mockToast });
   });
 
@@ -66,7 +68,7 @@ describe('useExperienceManager', () => {
     expect(result.current.experienceNeeded).toBe(0);
   });
 
-  it('should award experience and call onUpdate', () => {
+  it('should award experience and call onUpdate', async () => {
     const { result } = renderHook(() =>
       useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
     );
@@ -76,8 +78,8 @@ describe('useExperienceManager', () => {
       result.current.setExperienceSource('Quest reward');
     });
 
-    act(() => {
-      result.current.awardExperience();
+    await act(async () => {
+      await result.current.awardExperience();
     });
 
     expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -98,7 +100,7 @@ describe('useExperienceManager', () => {
     expect(result.current.experienceSource).toBe('');
   });
 
-  it('should notify level up when awarding experience', () => {
+  it('should notify level up when awarding experience', async () => {
     const { result } = renderHook(() =>
       useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
     );
@@ -108,8 +110,8 @@ describe('useExperienceManager', () => {
       result.current.setExperienceSource('Big boss');
     });
 
-    act(() => {
-      result.current.awardExperience();
+    await act(async () => {
+      await result.current.awardExperience();
     });
 
     expect(mockToast).toHaveBeenCalledWith(
@@ -119,7 +121,7 @@ describe('useExperienceManager', () => {
     );
   });
 
-  it('should not award experience with invalid input', () => {
+  it('should not award experience with invalid input', async () => {
     const { result } = renderHook(() =>
       useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
     );
@@ -130,8 +132,8 @@ describe('useExperienceManager', () => {
       result.current.setExperienceSource('');
     });
 
-    act(() => {
-      result.current.awardExperience();
+    await act(async () => {
+      await result.current.awardExperience();
     });
 
     expect(mockOnUpdate).not.toHaveBeenCalled();
@@ -149,8 +151,8 @@ describe('useExperienceManager', () => {
       result.current.setExperienceSource('Source');
     });
 
-    act(() => {
-      result.current.awardExperience();
+    await act(async () => {
+      await result.current.awardExperience();
     });
 
     expect(mockOnUpdate).not.toHaveBeenCalled();
@@ -161,7 +163,7 @@ describe('useExperienceManager', () => {
     );
   });
 
-  it('should remove experience and call onUpdate', () => {
+  it('should remove experience and call onUpdate', async () => {
     const experiencedChar = { ...mockCharacter, experience: 500 };
     const { result } = renderHook(() =>
       useExperienceManager({ character: experiencedChar, onUpdate: mockOnUpdate }),
@@ -172,8 +174,8 @@ describe('useExperienceManager', () => {
       result.current.setExperienceSource('Penalty');
     });
 
-    act(() => {
-      result.current.removeExperience();
+    await act(async () => {
+      await result.current.removeExperience();
     });
 
     expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -189,7 +191,7 @@ describe('useExperienceManager', () => {
     );
   });
 
-  it('should floor experience at 0 when removing', () => {
+  it('should floor experience at 0 when removing', async () => {
     const { result } = renderHook(() =>
       useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
     );
@@ -199,8 +201,8 @@ describe('useExperienceManager', () => {
       result.current.setExperienceSource('Debt');
     });
 
-    act(() => {
-      result.current.removeExperience();
+    await act(async () => {
+      await result.current.removeExperience();
     });
 
     expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -210,13 +212,13 @@ describe('useExperienceManager', () => {
     );
   });
 
-  it('should set experience to a specific level', () => {
+  it('should set experience to a specific level', async () => {
     const { result } = renderHook(() =>
       useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
     );
 
-    act(() => {
-      result.current.setToLevel(5);
+    await act(async () => {
+      await result.current.setToLevel(5);
     });
 
     // Level 5 requires 6500 XP
@@ -232,6 +234,31 @@ describe('useExperienceManager', () => {
         description: expect.stringContaining('Level 5'),
       }),
     );
+  });
+
+  it('#2701: toasts nothing of its own when the save fails', async () => {
+    mockOnUpdate.mockResolvedValue(false);
+    const { result } = renderHook(() =>
+      useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
+    );
+
+    act(() => {
+      result.current.setExperienceAmount(100);
+      result.current.setExperienceSource('Quest reward');
+    });
+
+    await act(async () => {
+      await result.current.awardExperience();
+    });
+
+    // The single error toast is owned by the persistence layer
+    // (persistCharacterUpdate), not the manager — the manager must not add a
+    // second one, nor the success toast. The hook-level toast is covered by
+    // the sheet component test.
+    expect(mockToast).not.toHaveBeenCalled();
+    // Inputs stay so the user can retry.
+    expect(result.current.experienceAmount).toBe(100);
+    expect(result.current.experienceSource).toBe('Quest reward');
   });
 
   it('should toggle history view', () => {

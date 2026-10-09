@@ -3,14 +3,14 @@ import React from 'react';
 
 import EditableDescription from './EditableDescription';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface CharacterOverviewProps {
   character: Character;
-  onUpdate: (updatedCharacter: Character) => void;
+  onUpdate: CharacterSheetUpdateFn;
 }
 
 /**

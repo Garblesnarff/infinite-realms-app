@@ -21,14 +21,15 @@ import MainTab from './tabs/MainTab';
 import NotesTab from './tabs/NotesTab';
 import SpellsTab from './tabs/SpellsTab';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import CharacterGallery from '@/components/gallery/CharacterGallery';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface CharacterSheetTabsProps {
   character: Character;
-  onCharacterUpdate: () => void;
+  // #2701: the sheet save path — persists the edit, then refreshes silently.
+  onCharacterUpdate: CharacterSheetUpdateFn;
 }
 
 /**
@@ -128,35 +129,38 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
 
         <div className="mt-4">
           <TabsContent value="main" className="space-y-4">
-            <MainTab character={character} onUpdate={onCharacterUpdate} />
+            <MainTab
+              character={character}
+              onUpdate={() => {
+                void onCharacterUpdate(character);
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="abilities" className="space-y-4">
-            <AbilitiesTab character={character} onUpdate={onCharacterUpdate} />
+            <AbilitiesTab
+              character={character}
+              onUpdate={() => {
+                void onCharacterUpdate(character);
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="advancement" className="space-y-4">
             {character.classLevels && character.classLevels.length > 1 ? (
-              <MulticlassManager
-                character={character}
-                onUpdate={(_updatedCharacter) => {
-                  // Update character and trigger refresh
-                  onCharacterUpdate();
-                }}
-              />
+              <MulticlassManager character={character} onUpdate={onCharacterUpdate} />
             ) : (
-              <ExperienceManager
-                character={character}
-                onUpdate={(_updatedCharacter) => {
-                  // Update character and trigger refresh
-                  onCharacterUpdate();
-                }}
-              />
+              <ExperienceManager character={character} onUpdate={onCharacterUpdate} />
             )}
           </TabsContent>
 
           <TabsContent value="spells" className="space-y-4">
-            <SpellsTab character={character} onUpdate={onCharacterUpdate} />
+            <SpellsTab
+              character={character}
+              onUpdate={() => {
+                void onCharacterUpdate(character);
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-4">

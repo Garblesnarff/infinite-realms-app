@@ -80,7 +80,10 @@ function FallenSheetEndState({ character }: { character: Character }): React.JSX
  */
 const CharacterSheet: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { character, unresolvedData, equipmentUnavailable, loading, refetch } =
+  // #2701: sheet edits save through persistCharacterUpdate (write, then a
+  // silent refresh that keeps the tabs mounted). refetch stays for callers
+  // that need a full reload with the skeleton.
+  const { character, unresolvedData, equipmentUnavailable, loading, persistCharacterUpdate } =
     useCharacterData(id);
 
   // Show loading state while fetching data
@@ -121,7 +124,7 @@ const CharacterSheet: React.FC = () => {
         </Alert>
       )}
       <IRPanel className="p-6">
-        <CharacterSheetTabs character={character} onCharacterUpdate={refetch} />
+        <CharacterSheetTabs character={character} onCharacterUpdate={persistCharacterUpdate} />
       </IRPanel>
     </div>
   );

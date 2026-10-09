@@ -13,7 +13,8 @@ vi.mock('@/hooks/use-toast', () => ({
 import { usePersonalityManager } from '../use-personality-manager';
 
 describe('usePersonalityManager', () => {
-  const mockOnUpdate = vi.fn();
+  // #2701: onUpdate persists and resolves true when the write landed.
+  const mockOnUpdate = vi.fn().mockResolvedValue(true);
   const mockCharacter: any = {
     id: 'char-123',
     name: 'Test Character',
@@ -36,6 +37,7 @@ describe('usePersonalityManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockOnUpdate.mockResolvedValue(true);
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-02-20T12:00:00Z'));
   });
@@ -64,11 +66,11 @@ describe('usePersonalityManager', () => {
   });
 
   describe('toggleInspiration', () => {
-    it('should toggle inspiration on', () => {
+    it('should toggle inspiration on', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
 
-      act(() => {
-        result.current.toggleInspiration();
+      await act(async () => {
+        await result.current.toggleInspiration();
       });
 
       expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -86,12 +88,12 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should toggle inspiration off', () => {
+    it('should toggle inspiration off', async () => {
       const inspiredCharacter = { ...mockCharacter, inspiration: true };
       const { result } = renderHook(() => usePersonalityManager(inspiredCharacter, mockOnUpdate));
 
-      act(() => {
-        result.current.toggleInspiration();
+      await act(async () => {
+        await result.current.toggleInspiration();
       });
 
       expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -108,11 +110,11 @@ describe('usePersonalityManager', () => {
   });
 
   describe('awardInspiration', () => {
-    it('should award inspiration and add to history', () => {
+    it('should award inspiration and add to history', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
 
-      act(() => {
-        result.current.awardInspiration('New Trigger', 'ideal', 'New Description');
+      await act(async () => {
+        await result.current.awardInspiration('New Trigger', 'ideal', 'New Description');
       });
 
       expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -138,12 +140,12 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should not award inspiration if already present', () => {
+    it('should not award inspiration if already present', async () => {
       const inspiredCharacter = { ...mockCharacter, inspiration: true };
       const { result } = renderHook(() => usePersonalityManager(inspiredCharacter, mockOnUpdate));
 
-      act(() => {
-        result.current.awardInspiration('Trigger', 'trait', 'Description');
+      await act(async () => {
+        await result.current.awardInspiration('Trigger', 'trait', 'Description');
       });
 
       expect(mockOnUpdate).not.toHaveBeenCalled();
@@ -156,7 +158,7 @@ describe('usePersonalityManager', () => {
   });
 
   describe('addPersonalityElement', () => {
-    it('should add a trait and clear input', () => {
+    it('should add a trait and clear input', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
 
       act(() => {
@@ -164,8 +166,8 @@ describe('usePersonalityManager', () => {
       });
       expect(result.current.newTrait).toBe('New Trait');
 
-      act(() => {
-        result.current.addPersonalityElement('trait', 'New Trait');
+      await act(async () => {
+        await result.current.addPersonalityElement('trait', 'New Trait');
       });
 
       expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -177,10 +179,10 @@ describe('usePersonalityManager', () => {
       expect(mockToast).toHaveBeenCalled();
     });
 
-    it('should add an ideal and clear input', () => {
+    it('should add an ideal and clear input', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.addPersonalityElement('ideal', 'New Ideal');
+      await act(async () => {
+        await result.current.addPersonalityElement('ideal', 'New Ideal');
       });
       expect(mockOnUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -189,10 +191,10 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should add a bond and clear input', () => {
+    it('should add a bond and clear input', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.addPersonalityElement('bond', 'New Bond');
+      await act(async () => {
+        await result.current.addPersonalityElement('bond', 'New Bond');
       });
       expect(mockOnUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -201,10 +203,10 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should add a flaw and clear input', () => {
+    it('should add a flaw and clear input', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.addPersonalityElement('flaw', 'New Flaw');
+      await act(async () => {
+        await result.current.addPersonalityElement('flaw', 'New Flaw');
       });
       expect(mockOnUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -213,21 +215,41 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should not add empty elements', () => {
+    it('should not add empty elements', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.addPersonalityElement('trait', '  ');
+      await act(async () => {
+        await result.current.addPersonalityElement('trait', '  ');
       });
       expect(mockOnUpdate).not.toHaveBeenCalled();
+    });
+
+    it('#2701: keeps the input and toasts nothing of its own when the save fails', async () => {
+      mockOnUpdate.mockResolvedValue(false);
+      const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
+
+      act(() => {
+        result.current.setNewTrait('New Trait');
+      });
+
+      await act(async () => {
+        await result.current.addPersonalityElement('trait', 'New Trait');
+      });
+
+      // The single error toast is owned by the persistence layer
+      // (persistCharacterUpdate), not the manager — asserting here that the
+      // manager adds no second toast. The hook-level toast is covered by the
+      // sheet component test.
+      expect(mockToast).not.toHaveBeenCalled();
+      expect(result.current.newTrait).toBe('New Trait');
     });
   });
 
   describe('removePersonalityElement', () => {
-    it('should remove a trait', () => {
+    it('should remove a trait', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
 
-      act(() => {
-        result.current.removePersonalityElement('trait', 0);
+      await act(async () => {
+        await result.current.removePersonalityElement('trait', 0);
       });
 
       expect(mockOnUpdate).toHaveBeenCalledWith(
@@ -237,10 +259,10 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should remove an ideal', () => {
+    it('should remove an ideal', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.removePersonalityElement('ideal', 0);
+      await act(async () => {
+        await result.current.removePersonalityElement('ideal', 0);
       });
       expect(mockOnUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -249,10 +271,10 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should remove a bond', () => {
+    it('should remove a bond', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.removePersonalityElement('bond', 0);
+      await act(async () => {
+        await result.current.removePersonalityElement('bond', 0);
       });
       expect(mockOnUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -261,10 +283,10 @@ describe('usePersonalityManager', () => {
       );
     });
 
-    it('should remove a flaw', () => {
+    it('should remove a flaw', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-      act(() => {
-        result.current.removePersonalityElement('flaw', 0);
+      await act(async () => {
+        await result.current.removePersonalityElement('flaw', 0);
       });
       expect(mockOnUpdate).toHaveBeenCalledWith(
         expect.objectContaining({

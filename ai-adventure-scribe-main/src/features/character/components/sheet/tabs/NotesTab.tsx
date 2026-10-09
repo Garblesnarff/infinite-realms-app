@@ -1,34 +1,92 @@
 import { FileText } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import PersonalityManager from '../PersonalityManager';
 import CharacterOverview from './components/CharacterOverview';
 import EditableDescription from './components/EditableDescription';
 import EnhancementDetails from './components/EnhancementDetails';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 
 interface NotesTabProps {
   character: Character;
-  onUpdate: (updatedCharacter: Character) => void;
+  onUpdate: CharacterSheetUpdateFn;
 }
+
+/** #2701: session notes save debounced, so typing never triggers a save. */
+const SESSION_NOTES_DEBOUNCE_MS = 800;
 
 /**
  * Notes & Backstory tab for character roleplay information
  */
 const NotesTab: React.FC<NotesTabProps> = ({ character, onUpdate }) => {
   const [notes, setNotes] = useState(character.sessionNotes || '');
+  const { toast } = useToast();
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The save closures below capture the latest values across renders.
+  const latest = useRef({ character, notes, onUpdate });
+  latest.current = { character, notes, onUpdate };
+
+  useEffect(
+    () => () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
+    },
+    [],
+  );
+
+  const saveSessionNotes = async (newNotes: string): Promise<boolean> => {
+    const { character: currentCharacter, onUpdate: save } = latest.current;
+    // Skip the write when nothing changed since the last known server value.
+    if (newNotes === (currentCharacter.sessionNotes || '')) {
+      return true;
+    }
+    return save({
+      ...currentCharacter,
+      sessionNotes: newNotes,
+    });
+  };
 
   const handleSessionNotesChange = (newNotes: string) => {
     setNotes(newNotes);
-    onUpdate({
-      ...character,
-      sessionNotes: newNotes,
-    });
+    // #2701: debounce — every keystroke used to call onUpdate, which
+    // reloaded the sheet and kicked the user back to the Main tab.
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+    }
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      // Background autosave: silent. The persistence layer toasts on failure.
+      void saveSessionNotes(newNotes);
+    }, SESSION_NOTES_DEBOUNCE_MS);
+  };
+
+  const handleSessionNotesBlur = () => {
+    // Flush any pending debounced save immediately on blur.
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    // Blur is the explicit "I'm done" gesture, so confirm the save.
+    // Capture dirtiness first: the silent post-save refresh updates the
+    // server-known value before this resumes.
+    void (async () => {
+      const { notes: currentNotes, character: currentCharacter } = latest.current;
+      if (currentNotes === (currentCharacter.sessionNotes || '')) {
+        return;
+      }
+      const saved = await saveSessionNotes(currentNotes);
+      if (saved) {
+        toast({ title: 'Notes saved' });
+      }
+      // On failure the persistence layer already toasted; the text stays put.
+    })();
   };
 
   return (
@@ -144,6 +202,7 @@ const NotesTab: React.FC<NotesTabProps> = ({ character, onUpdate }) => {
               <Textarea
                 value={notes}
                 onChange={(e) => handleSessionNotesChange(e.target.value)}
+                onBlur={handleSessionNotesBlur}
                 placeholder="Keep track of important events, NPCs met, quests received, and other session notes..."
                 className="min-h-[300px] resize-none"
               />

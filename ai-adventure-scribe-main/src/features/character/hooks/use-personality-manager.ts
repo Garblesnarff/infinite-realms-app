@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,7 +45,7 @@ export interface UsePersonalityManagerReturn {
  */
 export function usePersonalityManager(
   character: Character,
-  onUpdate: (updatedCharacter: Character) => void,
+  onUpdate: CharacterSheetUpdateFn,
 ): UsePersonalityManagerReturn {
   const { toast } = useToast();
 
@@ -71,10 +71,10 @@ export function usePersonalityManager(
   /**
    * Toggle inspiration state
    */
-  const toggleInspiration = useCallback(() => {
+  const toggleInspiration = useCallback(async () => {
     const newInspirationState = !hasInspiration;
 
-    onUpdate({
+    const saved = await onUpdate({
       ...character,
       inspiration: newInspirationState,
       personalityIntegration: {
@@ -87,6 +87,10 @@ export function usePersonalityManager(
         inspirationHistory: character?.personalityIntegration?.inspirationHistory || [],
       },
     });
+    if (!saved) {
+      // The persistence layer already toasted the failure.
+      return;
+    }
 
     toast({
       title: newInspirationState ? 'Inspiration Gained!' : 'Inspiration Used',
@@ -98,7 +102,7 @@ export function usePersonalityManager(
    * Award inspiration with reason
    */
   const awardInspiration = useCallback(
-    (trigger: string, source: InspirationEntry['source'], description: string) => {
+    async (trigger: string, source: InspirationEntry['source'], description: string) => {
       if (hasInspiration) {
         toast({
           title: 'Already Have Inspiration',
@@ -117,7 +121,7 @@ export function usePersonalityManager(
 
       const newHistory = [...inspirationHistory, newEntry];
 
-      onUpdate({
+      const saved = await onUpdate({
         ...character,
         inspiration: true,
         personalityIntegration: {
@@ -128,6 +132,10 @@ export function usePersonalityManager(
           inspirationHistory: newHistory,
         },
       });
+      if (!saved) {
+        // The persistence layer already toasted the failure.
+        return;
+      }
 
       toast({
         title: 'Inspiration Awarded!',
@@ -143,34 +151,51 @@ export function usePersonalityManager(
    * Add new personality element
    */
   const addPersonalityElement = useCallback(
-    (type: 'trait' | 'ideal' | 'bond' | 'flaw', value: string) => {
+    async (type: 'trait' | 'ideal' | 'bond' | 'flaw', value: string) => {
       if (!value.trim()) return;
 
       const updates: Partial<Character> = {};
+      const clearInput = () => {
+        switch (type) {
+          case 'trait':
+            setNewTrait('');
+            break;
+          case 'ideal':
+            setNewIdeal('');
+            break;
+          case 'bond':
+            setNewBond('');
+            break;
+          case 'flaw':
+            setNewFlaw('');
+            break;
+        }
+      };
 
       switch (type) {
         case 'trait':
           updates.personalityTraits = [...personalityTraits, value];
-          setNewTrait('');
           break;
         case 'ideal':
           updates.ideals = [...ideals, value];
-          setNewIdeal('');
           break;
         case 'bond':
           updates.bonds = [...bonds, value];
-          setNewBond('');
           break;
         case 'flaw':
           updates.flaws = [...flaws, value];
-          setNewFlaw('');
           break;
       }
 
-      onUpdate({
+      const saved = await onUpdate({
         ...character,
         ...updates,
       });
+      if (!saved) {
+        // The persistence layer already toasted the failure.
+        return;
+      }
+      clearInput();
 
       toast({
         title: `${type.charAt(0).toUpperCase() + type.slice(1)} Added`,
@@ -184,7 +209,7 @@ export function usePersonalityManager(
    * Remove personality element
    */
   const removePersonalityElement = useCallback(
-    (type: 'trait' | 'ideal' | 'bond' | 'flaw', index: number) => {
+    async (type: 'trait' | 'ideal' | 'bond' | 'flaw', index: number) => {
       const updates: Partial<Character> = {};
 
       switch (type) {
@@ -202,10 +227,14 @@ export function usePersonalityManager(
           break;
       }
 
-      onUpdate({
+      const saved = await onUpdate({
         ...character,
         ...updates,
       });
+      if (!saved) {
+        // The persistence layer already toasted the failure.
+        return;
+      }
 
       toast({
         title: `${type.charAt(0).toUpperCase() + type.slice(1)} Removed`,

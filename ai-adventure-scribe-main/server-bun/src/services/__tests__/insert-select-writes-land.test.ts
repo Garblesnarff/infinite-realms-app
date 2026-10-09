@@ -15,10 +15,18 @@
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { and, eq, sql } from 'drizzle-orm';
+import { Elysia } from 'elysia';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   characterFeatures,
   characterSpells,
@@ -229,5 +237,100 @@ describeWithDb('converted insert-select writes actually land', () => {
         userId: testId('intruder'),
       }),
     ).rejects.toThrow();
+  });
+});
+
+// Only authentication is faked: a `Bearer <SHEET_USER_PREFIX>...` token is that
+// user, mirroring playthrough-scope.real-db.test.ts. Everything else — the real
+// charactersRoutes, the real CharacterService.update, the real Postgres — runs.
+const SHEET_USER_PREFIX = 'sheet-update-user-';
+mock.module('../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) => {
+    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/, '');
+    return token?.startsWith(SHEET_USER_PREFIX)
+      ? { user: { userId: token, email: 'player@example.test', plan: 'free' }, error: null }
+      : { user: null, error: 'Unauthorized' };
+  },
+}));
+
+describeWithDb('character-sheet updates persist through PUT /v1/characters/:id (#2701)', () => {
+  // Fresh client per block: the block above closes the shared one in its
+  // afterAll, and realDb() reconnects when the cached client is gone.
+  let db: ReturnType<typeof realDb>;
+  const userId = `${SHEET_USER_PREFIX}${testId('sheet')}`;
+  let characterId: string;
+  let app: { handle: (request: Request) => Promise<Response> };
+
+  const putCharacter = async (body: unknown) => {
+    const res = await app.handle(
+      new Request(`http://localhost/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    return { status: res.status };
+  };
+
+  const readRow = async () =>
+    (await db.select().from(characters).where(eq(characters.id, characterId)))[0];
+
+  beforeAll(async () => {
+    db = realDb();
+    const { charactersRoutes } = await importWithRealDb(
+      () => import('../../routes/v1/characters.js'),
+    );
+    app = new Elysia().use(charactersRoutes);
+
+    [{ id: characterId }] = await db
+      .insert(characters)
+      .values({ userId, name: testId('sheet-char'), level: 1 })
+      .returning({ id: characters.id });
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    try {
+      if (characterId) await db.delete(characters).where(eq(characters.id, characterId));
+    } catch {
+      /* fixture teardown is best-effort */
+    }
+    await closeRealDb();
+  });
+
+  it('award XP persists experience_points', async () => {
+    // The exact wire body the client sends for Award XP: buildSheetUpdatePayload
+    // produces { experience_points: 100 }, userDataApi.updateCharacter runs it
+    // through prepareCharacterPayload and PUTs it. Pinned by the client unit
+    // test in src/hooks/__tests__/use-character-data.sheet-update.test.ts.
+    const { status } = await putCharacter({ experience_points: 100 });
+    expect(status).toBe(200);
+    expect((await readRow()).experiencePoints).toBe(100);
+  });
+
+  it('adding a trait persists the personality envelope in personality_notes', async () => {
+    // The exact wire body for "add trait": the trait arrays have no dedicated
+    // columns, so the client serializes them as the JSON personality envelope
+    // (serializePersonalityEnvelope) into personality_notes.
+    const envelope = JSON.stringify({
+      traits: ['Brave'],
+      ideals: [],
+      bonds: [],
+      flaws: [],
+      inspiration: false,
+      lastInspiration: null,
+      inspirationHistory: [],
+    });
+    const { status } = await putCharacter({ personality_notes: envelope });
+    expect(status).toBe(200);
+    const row = await readRow();
+    expect(row.personalityNotes).toBe(envelope);
+    expect(JSON.parse(row.personalityNotes!).traits).toEqual(['Brave']);
+  });
+
+  it('saving appearance persists appearance', async () => {
+    const { status } = await putCharacter({ appearance: 'Tall, scarred, silver hair.' });
+    expect(status).toBe(200);
+    expect((await readRow()).appearance).toBe('Tall, scarred, silver hair.');
   });
 });

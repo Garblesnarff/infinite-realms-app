@@ -12,7 +12,9 @@ import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
 interface FeaturesTabProps {
   character: Character;
-  onUpdate: () => void;
+  // #2701: carries the edited character (ClassFeatureTracker passes its
+  // updated copy); callers that ignore the return treat it as a refresh.
+  onUpdate: (updatedCharacter: Character) => void;
 }
 
 interface Feature {

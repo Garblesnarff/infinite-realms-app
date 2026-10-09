@@ -1,13 +1,13 @@
 import { useState } from 'react';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { getLevelFromExperience, getExperienceForLevel } from '@/data/levelProgression';
 import { useToast } from '@/hooks/use-toast';
 
 interface UseExperienceManagerProps {
   character: Character;
-  onUpdate: (updatedCharacter: Character) => void;
+  onUpdate: CharacterSheetUpdateFn;
 }
 
 export interface ExperienceEntry {
@@ -64,7 +64,10 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
     },
   ];
 
-  const awardExperience = () => {
+  // #2701: the write happens inside onUpdate; the success toast fires only
+  // after it lands. On failure the inputs stay so the user can retry, and the
+  // persistence layer shows the single error toast.
+  const awardExperience = async () => {
     if (experienceAmount <= 0 || !experienceSource.trim()) {
       toast({
         title: 'Invalid Input',
@@ -75,12 +78,21 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
     }
 
     const newExperience = currentExperience + experienceAmount;
-    const newLevel = getLevelFromExperience(newExperience);
+    // #2701: awards never reduce the level — a character stored above its
+    // XP-derived level (manual set, migration) keeps it.
+    const newLevel = Math.max(currentLevel, getLevelFromExperience(newExperience));
 
-    onUpdate({
+    // #2701: persist the level together with XP — the toast announces the
+    // level-up, so the DB must reflect it.
+    const saved = await onUpdate({
       ...character,
       experience: newExperience,
+      level: newLevel,
     });
+    if (!saved) {
+      // The persistence layer already toasted the failure.
+      return;
+    }
 
     if (newLevel > currentLevel) {
       toast({
@@ -98,7 +110,7 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
     setExperienceSource('');
   };
 
-  const removeExperience = () => {
+  const removeExperience = async () => {
     if (experienceAmount <= 0 || !experienceSource.trim()) {
       toast({
         title: 'Invalid Input',
@@ -109,11 +121,20 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
     }
 
     const newExperience = Math.max(0, currentExperience - experienceAmount);
+    // #2701: XP removal never demotes — 5e has no level loss on XP drain.
+    // Level changes only via explicit setToLevel.
+    const newLevel = Math.max(currentLevel, getLevelFromExperience(newExperience));
 
-    onUpdate({
+    // #2701: keep level in sync when XP drops across a threshold too.
+    const saved = await onUpdate({
       ...character,
       experience: newExperience,
+      level: newLevel,
     });
+    if (!saved) {
+      // The persistence layer already toasted the failure.
+      return;
+    }
 
     toast({
       title: 'Experience Removed',
@@ -124,13 +145,19 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
     setExperienceSource('');
   };
 
-  const setToLevel = (targetLevel: number) => {
+  const setToLevel = async (targetLevel: number) => {
     const requiredXP = getExperienceForLevel(targetLevel);
 
-    onUpdate({
+    // #2701: the level is part of the update, not just implied by the XP.
+    const saved = await onUpdate({
       ...character,
       experience: requiredXP,
+      level: targetLevel,
     });
+    if (!saved) {
+      // The persistence layer already toasted the failure.
+      return;
+    }
 
     toast({
       title: 'Experience Set',

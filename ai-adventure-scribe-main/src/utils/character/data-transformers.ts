@@ -1,3 +1,5 @@
+import { parsePersonalityEnvelope } from './personality-envelope';
+
 import type {
   AbilityScores,
   Character,
@@ -70,7 +72,19 @@ export interface CharacterRow {
   background_image?: string | null;
   appearance?: string | null;
   personality_traits?: string | null;
+  /**
+   * #2701: carries the sheet's personality envelope (traits/ideals/bonds/flaws
+   * arrays plus inspiration state) as JSON. The column predates the envelope;
+   * a legacy plain-text value is preserved as `legacyNotes` inside the
+   * envelope and shown in the Personality Notes card.
+   */
+  personality_notes?: string | null;
   backstory_elements?: string | null;
+  /**
+   * #2701: session notes column. Hydrated into Character.sessionNotes so a
+   * post-save silent refresh does not wipe freshly saved notes.
+   */
+  session_notes?: string | null;
   vision_types?: string | null;
   obscurement?: string | null;
   is_hidden?: boolean | null;
@@ -250,6 +264,15 @@ export const parseSpellListField = (raw: string | null | undefined): string[] =>
     .filter((id: string) => id.length > 0);
 };
 
+// #2701: the envelope implementation lives in the leaf module
+// personality-envelope.ts (see top of file); re-exported here for
+// existing import sites.
+export {
+  parsePersonalityEnvelope,
+  serializePersonalityEnvelope,
+} from './personality-envelope';
+export type { SheetPersonalityEnvelope } from './personality-envelope';
+
 /**
  * Transforms database stats into Character ability scores format
  * @param statsData - Raw stats data from database
@@ -307,6 +330,8 @@ export const transformCharacterData = (
   equipmentData: CharacterEquipmentRow[] | null,
 ): Character => {
   const race = resolveRace(characterData.race);
+  // #2701: personality envelope (traits/ideals/bonds/flaws + inspiration).
+  const personalityEnvelope = parsePersonalityEnvelope(characterData.personality_notes);
 
   return {
     id: characterData.id,
@@ -390,12 +415,32 @@ export const transformCharacterData = (
     appearance: characterData.appearance,
     personality_traits: characterData.personality_traits,
     backstory_elements: characterData.backstory_elements,
+    // #2701: without this, a successful save followed by the silent refresh
+    // replaced freshly saved notes with undefined.
+    sessionNotes: characterData.session_notes ?? undefined,
     background_image: characterData.background_image || undefined,
-    // Legacy fields
-    personalityTraits: [],
-    ideals: [],
-    bonds: [],
-    flaws: [],
+    // #2701: the sheet's personality arrays live in the personality_notes
+    // envelope; without one they are empty (previous behavior). Legacy
+    // plain-text notes survive inside the envelope as legacyNotes and are
+    // surfaced here so the Personality Notes card shows them instead of
+    // losing them on the first edit.
+    personalityTraits: personalityEnvelope?.traits ?? [],
+    ideals: personalityEnvelope?.ideals ?? [],
+    bonds: personalityEnvelope?.bonds ?? [],
+    flaws: personalityEnvelope?.flaws ?? [],
+    inspiration: personalityEnvelope?.inspiration ?? false,
+    personality_notes: personalityEnvelope?.legacyNotes,
+    personalityIntegration: personalityEnvelope
+      ? {
+          activeTraits: [],
+          inspirationTriggers: [],
+          lastInspiration: personalityEnvelope.lastInspiration ?? undefined,
+          inspirationHistory: personalityEnvelope.inspirationHistory.map((e) => ({
+            ...e,
+            source: e.source as 'trait' | 'ideal' | 'bond' | 'flaw' | 'dm',
+          })),
+        }
+      : undefined,
     // Spell data supports both JSON arrays and legacy comma-separated strings.
     cantrips: parseSpellListField(characterData.cantrips),
     knownSpells: parseSpellListField(characterData.known_spells),

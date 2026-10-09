@@ -1,6 +1,8 @@
 import type { OptionSelection } from './enhancement-options';
 import type { Condition } from '@/types/combat';
 
+import { serializePersonalityEnvelope } from '@/utils/character/personality-envelope';
+
 export interface Ability {
   score: number;
   modifier: number;
@@ -198,6 +200,14 @@ export interface CharacterFolder {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * #2701: the character sheet's save callback. The sheet's managers call this
+ * with the edited character; it persists the changed fields through the
+ * character update API and resolves true when the write landed (false when it
+ * failed — the caller then shows the error instead of its success toast).
+ */
+export type CharacterSheetUpdateFn = (updatedCharacter: Character) => Promise<boolean>;
 
 export interface Character {
   id?: string;
@@ -444,7 +454,14 @@ export function transformCharacterForStorage(character: Character) {
     theme: character.theme || '',
     appearance: character.appearance || '',
     personality_traits: character.personality_traits || '',
-    personality_notes: character.personality_notes || '',
+    // #2701: the sheet persists the trait/ideal/bond/flaw arrays, inspiration
+    // state, and any legacy plain-text notes as a JSON envelope in this
+    // column. Both writers (this one and buildSheetUpdatePayload) serialize
+    // the same envelope — writing the raw `personality_notes` string here
+    // would drop the arrays on one path and the legacy text on the other.
+    // (No runtime import cycle: data-transformers imports only types from
+    // this module.)
+    personality_notes: serializePersonalityEnvelope(character),
     backstory_elements: character.backstory_elements || '',
     session_notes: character.sessionNotes || '',
     skill_proficiencies: (character.skillProficiencies || []).join(','),
