@@ -412,6 +412,10 @@ jobs:
           bun test \
             src/services/__tests__/npc-engine-rows.real-db.test.ts \
             2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
+          # media-quota-failure replaces lib/auth.js too (#2676 step 2a), so it gets its own process.
+          bun test \
+            src/routes/v1/__tests__/media-quota-failure.real-db.test.ts \
+            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
           if grep -qE '^ *[1-9][0-9]* skip' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
             echo "::error::a real-database suite SKIPPED. The database env did not reach the tests."
             exit 1

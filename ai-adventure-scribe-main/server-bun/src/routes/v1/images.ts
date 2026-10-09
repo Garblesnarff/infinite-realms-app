@@ -192,14 +192,9 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       const userId = user.userId;
       const plan = user.plan;
 
-      // Quota check
-      const quota = await AIUsageService.checkQuotaAndConsume({
-        userId,
-        plan,
-        type: 'image',
-        units: 1,
-      });
-      if (!quota.allowed) {
+      // Quota check before the provider call. The charge happens after a usable image (#2676).
+      const quota = await AIUsageService.getQuotaStatus({ userId, plan, type: 'image' });
+      if (quota.remaining < 1) {
         set.status = 402;
         set.headers['Retry-After'] = String(
           Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
@@ -344,6 +339,16 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         set.status = 500;
         return { error: 'Image generation failed' };
       }
+
+      // An empty image is not a usable result: no charge (#2676).
+      if (!image) {
+        set.status = 502;
+        return { error: 'No image data in provider response' };
+      }
+
+      // Charge only now that an image exists. Two calls at limit-1 can both pass the check above
+      // and both reach the provider; the second charge is then refused and that image is free.
+      await AIUsageService.checkQuotaAndConsume({ userId, plan, type: 'image', units: 1 });
 
       // Recording is not part of the provider try. A thrown insert must not turn a
       // successful image into a 500 (#2270, same as tts.ts in #2242).

@@ -35,6 +35,7 @@ mock.module('../../../lib/auth.js', () => ({
 mock.module('../../../services/ai-usage-service.js', () => ({
   AIUsageService: {
     checkQuotaAndConsume: async () => ({ allowed: true }),
+    getQuotaStatus: async () => ({ remaining: 1000 }),
     recordProviderUsage: async () => {},
   },
   elevenLabsCharacterCostUsd: (characters: number) => (characters * 0.05) / 1000,
@@ -79,6 +80,7 @@ const app = new Elysia().use(
       name: 'test-tts-usage-limit',
     }) as unknown as TtsRouteOptions['rateLimit'],
     usageService: {
+      getQuotaStatus: async () => ({ remaining: 1000 }),
       checkQuotaAndConsume: async (
         opts: Parameters<TtsUsageService['checkQuotaAndConsume']>[0],
       ) => {
@@ -225,7 +227,9 @@ describe('POST /v1/ai-proxy/voice usage', () => {
     const response = await app.handle(speak('tts-fail-user', 'The lantern flickers.'));
 
     expect(response.status).toBe(503);
-    expect(quotaConsumes[0]?.units).toBe(1);
+    // #2676 step 2b: the quota is charged only after a usable clip. This assertion used to expect
+    // one unit consumed before the provider call; a rejected call must now charge nothing.
+    expect(quotaConsumes).toEqual([]);
     expect(providerUsage).toEqual([]);
   });
 });

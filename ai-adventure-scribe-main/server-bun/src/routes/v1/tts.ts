@@ -33,7 +33,10 @@ const ttsRequestSchema = t.Object({
 export interface TtsRouteOptions {
   auth?: typeof requireAuth;
   rateLimit?: ReturnType<typeof planRateLimit>;
-  usageService?: Pick<typeof AIUsageService, 'checkQuotaAndConsume' | 'recordProviderUsage'>;
+  usageService?: Pick<
+    typeof AIUsageService,
+    'checkQuotaAndConsume' | 'getQuotaStatus' | 'recordProviderUsage'
+  >;
   fetchImpl?: TtsFetch;
 }
 
@@ -60,13 +63,14 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           const characters = body.text.length;
           const { sessionId, model_id: _clientModelId, ...providerBody } = body;
           const modelId = process.env.ELEVENLABS_MODEL?.trim() || DEFAULT_ELEVENLABS_MODEL;
-          const quota = await usageService.checkQuotaAndConsume({
+          // Check before the provider call. The charge happens after a usable clip (#2676).
+          const units = voiceQuotaUnits(characters);
+          const quota = await usageService.getQuotaStatus({
             userId: user.userId,
             plan: user.plan || 'free',
             type: 'voice',
-            units: voiceQuotaUnits(characters),
           });
-          if (!quota.allowed) {
+          if (quota.remaining < units) {
             set.status = 429;
             return { error: 'Voice quota exceeded' };
           }
@@ -101,6 +105,15 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
             set.status = upstream.status >= 500 ? 503 : 502;
             return { error: 'Voice request failed' };
           }
+
+          // The clip is usable: charge it now. A second call at limit-1 can pass the check above
+          // and still reach the provider; if its charge is refused, that clip is not billed.
+          await usageService.checkQuotaAndConsume({
+            userId: user.userId,
+            plan: user.plan || 'free',
+            type: 'voice',
+            units,
+          });
 
           // Recording is not part of the provider try. A thrown insert must not
           // turn a successful ElevenLabs response into a 503.
