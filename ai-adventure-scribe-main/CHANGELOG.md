@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.33.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.6...v0.33.0) (2026-10-09)
+
+
+### Features
+
+* **rules:** seed the SRD class features library ([#2718](https://github.com/Garblesnarff/infinite-realms-production/issues/2718) step c) ([#2746](https://github.com/Garblesnarff/infinite-realms-production/issues/2746)) ([a8feed4](https://github.com/Garblesnarff/infinite-realms-production/commit/a8feed4c6df46af2da5209e117aa12c45c089737))
+
 ## [0.32.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.5...v0.32.6) (2026-10-09)
 
 
