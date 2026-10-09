@@ -11,11 +11,11 @@
 
 import { Elysia } from 'elysia';
 
-import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { buildBackgroundOrFilter } from '../../lib/postgrest-filters.js';
 import { supabase } from '../../lib/supabase.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
+import { requireUserAuth, resolveUser } from '../../middleware/require-user-auth.js';
 
 // Valid personality types
 const VALID_TYPES = ['traits', 'ideals', 'bonds', 'flaws'] as const;
@@ -53,19 +53,15 @@ const COLUMN_MAP: Record<PersonalityType, string> = {
 };
 
 export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
+  .use(resolveUser)
+  .use(planRateLimit('default'))
+  .use(requireUserAuth)
 
   /**
    * GET /v1/personality/random/:type
    * Get a random personality element of the specified type
    */
-  .use(planRateLimit('default'))
-  .get('/random/:type', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/random/:type', async ({ params, query, set }) => {
     const { type } = params;
     const { background } = query as { background?: string };
 
@@ -140,13 +136,7 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
    * GET /v1/personality/batch/random
    * Get random personality elements for all types at once
    */
-  .get('/batch/random', async ({ request, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/batch/random', async ({ query, set }) => {
     const { background } = query as { background?: string };
     const backgroundFilter = background ? buildBackgroundOrFilter(background) : null;
 
@@ -242,13 +232,7 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
    * GET /v1/personality/:type
    * Get all personality elements of the specified type
    */
-  .get('/:type', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:type', async ({ params, query, set }) => {
     const { type } = params;
     const { background, limit = '100' } = query as { background?: string; limit?: string };
 
