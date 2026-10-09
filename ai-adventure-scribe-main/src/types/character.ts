@@ -278,6 +278,9 @@ export interface Character {
   cantrips?: string[];
   knownSpells?: string[];
   preparedSpells?: string[];
+  // #2710: kebab-case ids of prepared spells, for the save path.
+  // preparedSpells holds names (for GET); this holds ids (for UUID mapping).
+  preparedSpellIds?: string[];
   // Advanced Spellcasting Features
   metamagicOptions?: string[];
   sorceryPoints?: {

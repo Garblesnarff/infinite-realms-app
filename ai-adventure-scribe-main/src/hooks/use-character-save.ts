@@ -157,22 +157,34 @@ export const useCharacterSave = (): {
         const saveSpells = async (id: string): Promise<void> => {
           if (
             (!character.cantrips || character.cantrips.length === 0) &&
-            (!character.knownSpells || character.knownSpells.length === 0)
+            (!character.knownSpells || character.knownSpells.length === 0) &&
+            (!character.preparedSpellIds || character.preparedSpellIds.length === 0)
           ) {
             return;
           }
 
           try {
+            // #2710: include prepared spells (they may not be in cantrips/known).
             const frontendSpellIds = [
               ...(character.cantrips || []),
               ...(character.knownSpells || []),
+              ...(character.preparedSpellIds || []),
             ];
-            const databaseSpellIds = convertSpellIdsToDatabase(frontendSpellIds);
+            // Dedupe: a prepared spell is also in knownSpells.
+            const uniqueIds = [...new Set(frontendSpellIds)];
+            const databaseSpellIds = convertSpellIdsToDatabase(uniqueIds);
+
+            // #2710: send the prepared set as database UUIDs (no lossy
+            // name→kebab→UUID round trip; use the ids directly).
+            const preparedDatabaseIds = convertSpellIdsToDatabase(
+              character.preparedSpellIds || [],
+            );
 
             if (databaseSpellIds.length > 0) {
               await characterSpellService.saveCharacterSpells(id, {
                 spells: databaseSpellIds,
                 className: character.class?.name || '',
+                prepared: preparedDatabaseIds,
               });
               logger.info(`✅ Successfully saved spells for character ${id}`);
             }
@@ -199,9 +211,23 @@ export const useCharacterSave = (): {
           );
 
           // Transform equipment data if present
-          const equipmentData =
+          // #2710: the wizard writes equipment as string[] (never inventory).
+          // Map it to inventory form so the rows are saved.
+          const effectiveInventory =
             character.inventory && character.inventory.length > 0
-              ? transformEquipmentForStorage(character, '00000000-0000-0000-0000-000000000000')
+              ? character.inventory
+              : (character.equipment || []).map((name) => ({
+                  itemId: name,
+                  itemType: 'equipment',
+                  quantity: 1,
+                  equipped: false,
+                }));
+          const equipmentData =
+            effectiveInventory.length > 0
+              ? transformEquipmentForStorage(
+                  { ...character, inventory: effectiveInventory },
+                  '00000000-0000-0000-0000-000000000000',
+                )
               : null;
 
           const createdCharacter = await userDataApi.createCharacter({
@@ -259,9 +285,23 @@ export const useCharacterSave = (): {
             delete statsData.current_hit_points;
           }
 
-          const equipmentData =
+          // #2710: the wizard writes equipment as string[] (never inventory).
+          // Map it to inventory form so the rows are saved.
+          const effectiveInventory =
             character.inventory && character.inventory.length > 0
-              ? transformEquipmentForStorage(character, characterData.id)
+              ? character.inventory
+              : (character.equipment || []).map((name) => ({
+                  itemId: name,
+                  itemType: 'equipment',
+                  quantity: 1,
+                  equipped: false,
+                }));
+          const equipmentData =
+            effectiveInventory.length > 0
+              ? transformEquipmentForStorage(
+                  { ...character, inventory: effectiveInventory },
+                  characterData.id,
+                )
               : undefined;
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

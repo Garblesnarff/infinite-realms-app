@@ -351,7 +351,9 @@ describe('useAdvancedSpellcasting', () => {
         expect.objectContaining({
           type: 'UPDATE_CHARACTER',
           payload: expect.objectContaining({
-            preparedSpells: ['spell-1'],
+            // #2710: preparedSpells holds names (for GET), not ids
+            preparedSpells: ['Spell 1'],
+            preparedSpellIds: ['spell-1'],
             advancedSpellcastingComplete: true,
           }),
         }),

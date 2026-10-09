@@ -23,6 +23,8 @@ export interface CharacterSpellsResponse {
 export interface SaveSpellsRequest {
   spells: string[];
   className: string;
+  // #2710: spell ids the user prepared; server writes isPrepared per spell.
+  prepared?: string[];
 }
 
 export interface SaveSpellsResponse {

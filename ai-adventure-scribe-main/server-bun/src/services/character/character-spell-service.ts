@@ -131,6 +131,7 @@ export class CharacterSpellService {
     userId: string,
     spellIds: string[],
     className: string,
+    preparedSpellIds?: string[],
   ): Promise<{ success: boolean; message: string }> {
     // Get class ID
     const [classData] = await db
@@ -256,6 +257,11 @@ export class CharacterSpellService {
         .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
 
       if (grantable.length > 0) {
+        // #2710: when the caller sends an explicit prepared set, write
+        // isPrepared per spell. When omitted, keep the old behaviour
+        // (all true) so existing callers don't break.
+        const preparedSet =
+          preparedSpellIds !== undefined ? new Set(preparedSpellIds) : null;
         const inserted = await db
           .insert(characterSpells)
           .values(
@@ -263,7 +269,7 @@ export class CharacterSpellService {
               characterId,
               spellId: row.spellId,
               sourceClassId: classData.id,
-              isPrepared: true,
+              isPrepared: preparedSet ? preparedSet.has(row.spellId) : true,
               sourceFeature: 'base',
             })),
           )

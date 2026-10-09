@@ -28,6 +28,7 @@ import {
   testId,
 } from './fixtures/real-db.js';
 import {
+  characterEquipment,
   characterFeatures,
   characterSpells,
   characters,
@@ -332,5 +333,161 @@ describeWithDb('character-sheet updates persist through PUT /v1/characters/:id (
     const { status } = await putCharacter({ appearance: 'Tall, scarred, silver hair.' });
     expect(status).toBe(200);
     expect((await readRow()).appearance).toBe('Tall, scarred, silver hair.');
+  });
+});
+
+// #2710: the wizard saves equipment, gold, and prepared spells.
+// POSTs the exact bodies the wizard save sends through the real routes
+// (via createRequestPipelineApp), then reads the DB. Equipment rows,
+// gold, and exactly 2 prepared flags must be present.
+describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => {
+  let db: ReturnType<typeof realDb>;
+  const userId = `${SHEET_USER_PREFIX}${testId('wizard')}`;
+  const className = testId('Wizard2710');
+  let characterId: string;
+  let wizardClassId: string;
+  let magicMissileUuid: string;
+  let shieldUuid: string;
+  let fireBoltUuid: string;
+  let app: { handle: (request: Request) => Promise<Response> };
+
+  const postJson = async (path: string, body: unknown) => {
+    const res = await app.handle(
+      new Request(`http://localhost${path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+
+  beforeAll(async () => {
+    db = realDb();
+    const { createRequestPipelineApp } = await importWithRealDb(
+      () => import('../../http-pipeline.js'),
+    );
+    const { charactersRoutes } = await importWithRealDb(
+      () => import('../../routes/v1/characters.js'),
+    );
+    app = createRequestPipelineApp().use(charactersRoutes);
+
+    // Setup: wizard class and spells in the DB
+    [{ id: wizardClassId }] = await db
+      .insert(classes)
+      .values({ name: className, hitDie: 6 })
+      .returning({ id: classes.id });
+
+    const spellRows = await db
+      .insert(spells)
+      .values([
+        {
+          name: 'Magic Missile',
+          level: 1,
+          school: 'evocation',
+          castingTime: '1 action',
+          rangeText: '120 feet',
+          duration: 'Instantaneous',
+          description: 'Test.',
+        },
+        {
+          name: 'Shield',
+          level: 1,
+          school: 'abjuration',
+          castingTime: '1 reaction',
+          rangeText: 'Self',
+          duration: '1 round',
+          description: 'Test.',
+        },
+        {
+          name: 'Fire Bolt',
+          level: 0,
+          school: 'evocation',
+          castingTime: '1 action',
+          rangeText: '120 feet',
+          duration: 'Instantaneous',
+          description: 'Test.',
+        },
+      ])
+      .returning({ id: spells.id, name: spells.name });
+    magicMissileUuid = spellRows.find((s) => s.name === 'Magic Missile')!.id;
+    shieldUuid = spellRows.find((s) => s.name === 'Shield')!.id;
+    fireBoltUuid = spellRows.find((s) => s.name === 'Fire Bolt')!.id;
+
+    await db.insert(classSpells).values([
+      { classId: wizardClassId, spellId: magicMissileUuid, spellLevel: 1 },
+      { classId: wizardClassId, spellId: shieldUuid, spellLevel: 1 },
+      { classId: wizardClassId, spellId: fireBoltUuid, spellLevel: 0 },
+    ]);
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    try {
+      if (characterId) await db.delete(characters).where(eq(characters.id, characterId));
+    } catch {
+      /* best-effort */
+    }
+    await closeRealDb();
+  });
+
+  it('wizard completion persists equipment, gold, and 2 prepared spells', async () => {
+    // The exact body use-character-save sends: transformCharacterForStorage
+    // output plus the equipment rows from the mapped inventory.
+    const createBody = {
+      name: testId('Wizard'),
+      class: className,
+      level: 1,
+      gold_pieces: 50,
+      prepared_spells: 'Magic Missile,Shield',
+      cantrips: 'Fire Bolt',
+      known_spells: 'Magic Missile,Shield',
+      equipment: [
+        { item_name: 'Dagger', item_type: 'weapon', quantity: 1 },
+        { item_name: 'Quarterstaff', item_type: 'weapon', quantity: 1 },
+        { item_name: 'Holy Symbol', item_type: 'equipment', quantity: 1 },
+      ],
+    };
+    const { status: createStatus, json: created } = await postJson(
+      '/v1/characters',
+      createBody,
+    );
+    expect(createStatus).toBe(201);
+    characterId = (created as { id: string }).id;
+    expect(characterId).toBeDefined();
+
+    // The exact body saveSpells sends: database UUIDs + prepared set.
+    const { status: spellsStatus } = await postJson(`/v1/characters/${characterId}/spells`, {
+      spells: [magicMissileUuid, shieldUuid, fireBoltUuid],
+      className,
+      prepared: [magicMissileUuid, shieldUuid],
+    });
+    expect(spellsStatus).toBe(200);
+
+    // Equipment rows
+    const equipmentRows = await db
+      .select()
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, characterId));
+    expect(equipmentRows.map((r) => r.itemName).sort()).toEqual([
+      'Dagger',
+      'Holy Symbol',
+      'Quarterstaff',
+    ]);
+
+    // Gold
+    const [char] = await db
+      .select({ goldPieces: characters.goldPieces })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(char.goldPieces).toBe(50);
+
+    // Exactly 2 prepared, 1 not
+    const spellRows = await db
+      .select()
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(spellRows.filter((r) => r.isPrepared)).toHaveLength(2);
+    expect(spellRows.filter((r) => !r.isPrepared)).toHaveLength(1);
   });
 });

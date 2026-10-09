@@ -627,7 +627,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     '/:id/spells',
     async ({ params, body, user, set }) => {
       try {
-        const { spells, className } = body;
+        const { spells, className, prepared } = body;
 
         // 🛡️ Sentinel: Call the security-hardened service method which incorporates
         // ownership checks and masks existence.
@@ -636,6 +636,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           user!.userId,
           spells,
           className,
+          prepared ?? [],
         );
 
         return result;
@@ -660,6 +661,9 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       body: t.Object({
         spells: t.Array(t.String()),
         className: t.String(),
+        // #2710: the set of spell ids the user prepared. Written per-spell
+        // to character_spells.is_prepared.
+        prepared: t.Optional(t.Array(t.String())),
       }),
     },
   )
