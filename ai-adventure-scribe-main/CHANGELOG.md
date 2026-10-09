@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.6](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.5...v0.32.6) (2026-10-09)
+
+
+### Bug Fixes
+
+* **dm:** the server refuses features the character lacks ([#2718](https://github.com/Garblesnarff/infinite-realms-production/issues/2718) step b) ([#2743](https://github.com/Garblesnarff/infinite-realms-production/issues/2743)) ([91e6e9e](https://github.com/Garblesnarff/infinite-realms-production/commit/91e6e9ed030c40d3e26c0eca1c46aecf7a88a848))
+
 ## [0.32.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.4...v0.32.5) (2026-10-09)
 
 
