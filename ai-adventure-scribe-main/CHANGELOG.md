@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.1...v0.32.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **billing:** the quota fails closed when the DB is down ([#2673](https://github.com/Garblesnarff/infinite-realms-production/issues/2673) step 3b) ([#2727](https://github.com/Garblesnarff/infinite-realms-production/issues/2727)) ([c7a1ee8](https://github.com/Garblesnarff/infinite-realms-production/commit/c7a1ee847418cfe059e1204b8aaa56972abf8ffa))
+* **sheet:** character-sheet edits save and keep the active tab ([#2701](https://github.com/Garblesnarff/infinite-realms-production/issues/2701)) ([#2715](https://github.com/Garblesnarff/infinite-realms-production/issues/2715)) ([ee50aea](https://github.com/Garblesnarff/infinite-realms-production/commit/ee50aea811383e639e1409d84dc0e223c0f1c0aa))
+
 ## [0.32.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.0...v0.32.1) (2026-10-09)
 
 
