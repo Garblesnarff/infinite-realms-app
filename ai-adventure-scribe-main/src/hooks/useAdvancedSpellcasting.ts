@@ -111,7 +111,19 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
     const updates: Partial<Character> = {};
 
     if (canPrepareSpells) {
-      updates.preparedSpells = preparedSpells;
+      // #2710: preparedSpells holds names (for GET /v1/characters/:id/spells
+      // which checks preparedSet.has(name)). preparedSpellIds holds the
+      // kebab-case ids (for the save path which needs UUIDs).
+      // Fail loudly if a name is missing — silent fallback hides bugs.
+      const namesById = new Map(availableSpells.map((s) => [s.id, s.name]));
+      updates.preparedSpells = preparedSpells.map((id) => {
+        const name = namesById.get(id);
+        if (!name) {
+          throw new Error(`#2710: no spell name for prepared spell id: ${id}`);
+        }
+        return name;
+      });
+      updates.preparedSpellIds = [...preparedSpells];
     }
 
     if (usesMetamagic) {
@@ -150,6 +162,7 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
   }, [
     canPrepareSpells,
     preparedSpells,
+    availableSpells,
     usesMetamagic,
     selectedMetamagic,
     sorceryPoints,
