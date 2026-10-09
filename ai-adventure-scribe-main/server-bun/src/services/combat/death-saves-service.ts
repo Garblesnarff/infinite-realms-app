@@ -117,7 +117,9 @@ export async function settleDownedTurns(
  *
  * `d20` is the die the player rolled (or the client's auto-roll when the prompt ran out); with
  * none, the engine rolls it. The save is refused unless `actorId` is the current participant
- * and is dying: a roll for anyone else, or out of turn, is not a death save.
+ * and is dying: a roll for anyone else, or out of turn, is not a death save. With `from`, it
+ * is also refused unless the turn is still that one: a request that read an earlier turn does
+ * not spend a later turn's save (#2724).
  */
 export async function rollOwedDeathSave(
   encounterId: string,
@@ -125,12 +127,22 @@ export async function rollOwedDeathSave(
   userId: string,
   actorId: string,
   d20?: number,
+  from?: { round: number; turnOrder: number },
 ): Promise<DeathSaveResult | null> {
   const state = await CombatEncounterService.getCombatState(encounterId, userId);
   const actor = state.participants.find((participant) => participant.id === actorId) as
     | (VitalsInput & { id: string; name: string })
     | undefined;
-  if (!actor || state.currentParticipant?.id !== actorId || vitalStateOf(actor) !== 'dying') {
+  const turnMoved =
+    !!from &&
+    (state.encounter.currentRound !== from.round ||
+      state.encounter.currentTurnOrder !== from.turnOrder);
+  if (
+    !actor ||
+    turnMoved ||
+    state.currentParticipant?.id !== actorId ||
+    vitalStateOf(actor) !== 'dying'
+  ) {
     throw new BusinessLogicError('No death saving throw is owed by this participant right now', {
       reason: 'death_save_not_owed',
       actorId,

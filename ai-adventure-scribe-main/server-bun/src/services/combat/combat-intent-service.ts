@@ -489,8 +489,13 @@ type TurnResourceView = { id: string; actionUsed?: boolean | null } & VitalsInpu
  * kind of turn boundary from an explicit one, and the movement pool of whoever came next would
  * still hold last turn's remainder.
  */
-async function advanceOneTurn(encounterId: string, sessionId: string, userId: string) {
-  const turn = await CombatInitiativeService.advanceTurn(encounterId, userId);
+async function advanceOneTurn(
+  encounterId: string,
+  sessionId: string,
+  userId: string,
+  from?: { round: number; turnOrder: number },
+) {
+  const turn = await CombatInitiativeService.advanceTurn(encounterId, userId, from);
   await resetTacticalMovementForTurn(sessionId, turn.currentParticipant.id);
   return settleDownedTurns(encounterId, sessionId, userId, turn);
 }
@@ -1452,14 +1457,18 @@ export async function executeCombatIntent(
       // The dying player's whole turn: one save, rolled by the player (or auto-rolled by the
       // prompt's timer), then the turn ends. It runs before the board moves so the result and
       // the next holder of the turn reach the client together.
+      // The save and the advance key on the same turn: a second save for it that found this one
+      // recorded must not advance the order again and skip whoever is next (#2724).
+      const turn = { round: encounter.currentRound, turnOrder: encounter.currentTurnOrder };
       const save = await rollOwedDeathSave(
         encounterId,
         encounter.sessionId,
         userId,
         intent.actorId,
         intent.d20,
+        turn,
       );
-      const settled = await advanceOneTurn(encounterId, encounter.sessionId, userId);
+      const settled = await advanceOneTurn(encounterId, encounter.sessionId, userId, turn);
       result = { ...settled.turn, deathSaves: save ? [save] : [] };
     } else {
       // An `end_turn` for a dying player is not a turn: the save is owed and only a death_save

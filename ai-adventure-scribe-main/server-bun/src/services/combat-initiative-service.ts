@@ -204,9 +204,15 @@ export class CombatInitiativeService {
   /**
    * Advance to the next turn in combat
    * @param encounterId - Combat encounter ID
+   * @param from - The turn the caller acted on. When given, the turn moves only off that turn:
+   *   a second request that acted on the same turn is refused instead of advancing it again.
    * @returns Result with previous and current participants
    */
-  static async advanceTurn(encounterId: string, userId?: string): Promise<AdvanceTurnResult> {
+  static async advanceTurn(
+    encounterId: string,
+    userId?: string,
+    from?: { round: number; turnOrder: number },
+  ): Promise<AdvanceTurnResult> {
     // 🛡️ Sentinel: Combined authorization and retrieval into a single relational query.
     // This ensures atomic verification and masks resource existence for unauthorized users.
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
@@ -266,14 +272,32 @@ export class CombatInitiativeService {
     );
 
     // Update encounter
-    await db
+    const update = db
       .update(combatEncounters)
       .set({
         currentTurnOrder: nextTurnOrder,
         currentRound: newRoundNumber,
         updatedAt: new Date(),
       })
-      .where(and(eq(combatEncounters.id, encounterId), eq(combatEncounters.status, 'active')));
+      .where(
+        and(
+          eq(combatEncounters.id, encounterId),
+          eq(combatEncounters.status, 'active'),
+          from
+            ? and(
+                eq(combatEncounters.currentRound, from.round),
+                eq(combatEncounters.currentTurnOrder, from.turnOrder),
+              )
+            : sql`true`,
+        ),
+      );
+    if (!from) await update;
+    else if ((await update.returning({ id: combatEncounters.id })).length === 0) {
+      throw new BusinessLogicError('The turn has already moved on', {
+        reason: 'turn_conflict',
+        expected: from,
+      });
+    }
 
     // Get new current participant from memory
     const currentParticipant = participants[nextTurnOrder];

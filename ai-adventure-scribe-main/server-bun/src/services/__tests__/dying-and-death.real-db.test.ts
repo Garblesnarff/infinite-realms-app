@@ -98,6 +98,9 @@ const { updateCombatParticipantStatus } = await importWithRealDb(
   () => import('../combat/combat-persistence-service.js'),
 );
 const { advanceNpcTurns } = await importWithRealDb(() => import('../combat/npc-turn-runner.js'));
+const { rollOwedDeathSave } = await importWithRealDb(
+  () => import('../combat/death-saves-service.js'),
+);
 const { saveTacticalMap, loadActiveTacticalMap } = await importWithRealDb(
   () => import('../combat/tactical-map-store.js'),
 );
@@ -1011,12 +1014,40 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
 
   test('two death-save commits for the same turn: one is accepted, the other is refused, and one save is recorded', async () => {
     const scene = await dropHero();
+    const before = await encounterOf(scene.encounterId);
     const outcomes = await Promise.allSettled([deathSave(scene, 14), deathSave(scene, 3)]);
     expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
     expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
     const status = await statusOf(scene.heroId);
     expect(status.deathSavesSuccesses + status.deathSavesFailures).toBe(1);
     expect(deathSaveLogs).toHaveLength(1);
+    // One turn boundary, not two: the spider is up, its turn not skipped (#2724).
+    expect(await encounterOf(scene.encounterId)).toMatchObject({
+      currentRound: before.currentRound,
+      currentTurnOrder: before.currentTurnOrder + 1,
+    });
+    expect((await stateOf(scene.encounterId)).currentParticipant?.id).toBe(scene.spiderId);
+  });
+
+  test('a turn advance pinned to a turn that has moved on is refused and changes nothing (#2724)', async () => {
+    const scene = await dropHero();
+    const before = await encounterOf(scene.encounterId);
+    const stale = { round: before.currentRound - 1, turnOrder: before.currentTurnOrder };
+    await expect(
+      CombatInitiativeService.advanceTurn(scene.encounterId, userId, stale),
+    ).rejects.toThrow(/already moved on/);
+    await expect(
+      rollOwedDeathSave(scene.encounterId, scene.sessionId, userId, scene.heroId, 14, stale),
+    ).rejects.toThrow(/No death saving throw is owed/);
+    expect(await encounterOf(scene.encounterId)).toMatchObject({
+      currentRound: before.currentRound,
+      currentTurnOrder: before.currentTurnOrder,
+    });
+    expect(await statusOf(scene.heroId)).toMatchObject({
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+    expect(deathSaveLogs).toHaveLength(0);
   });
 
   test('the compare-and-set itself: a save that read stale tallies is refused', async () => {
@@ -1623,6 +1654,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       expect(committed.result.npcTurns).toBeUndefined();
       expect(committed.engineRows).toEqual([]);
       expect((await statusOf(scene.spiderId)).currentHp).toBe(37);
+      expect((await statusOf(scene.heroId)).currentHp).toBe(3);
       expect(await rows()).toEqual([]);
       expect(await encounterOf(scene.encounterId)).toMatchObject({
         currentRound: 1,
@@ -1648,6 +1680,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       expect(ended.result.npcTurns.results.map((result: any) => result.action.actor_id)).toEqual([
         scene.spiderId,
       ]);
+      expect((await statusOf(scene.spiderId)).currentHp).toBe(37);
 
       // 4) Downed: dying at 0 HP {0,0}, the turn back with the hero, and the death save is the
       //    only legal action.
