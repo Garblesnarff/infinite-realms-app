@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.3...v0.32.4) (2026-10-09)
+
+
+### Bug Fixes
+
+* **map:** one read-and-clear for the map context ([#2685](https://github.com/Garblesnarff/infinite-realms-production/issues/2685) step 4) ([#2737](https://github.com/Garblesnarff/infinite-realms-production/issues/2737)) ([31f033a](https://github.com/Garblesnarff/infinite-realms-production/commit/31f033af77ab0e1c0eb34c9e377db43209bb518d))
+
+
+### Tests
+
+* **dm:** record that the DM grants features the character lacks ([#2718](https://github.com/Garblesnarff/infinite-realms-production/issues/2718) step a) ([#2739](https://github.com/Garblesnarff/infinite-realms-production/issues/2739)) ([79a8582](https://github.com/Garblesnarff/infinite-realms-production/commit/79a858286f2d4cea0bcfc913665884af39dc32e0))
+
 ## [0.32.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.2...v0.32.3) (2026-10-09)
 
 
