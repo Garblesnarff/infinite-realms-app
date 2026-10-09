@@ -8,8 +8,9 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { transformCharacterForStorage } from '@/types/character';
 import type { Character } from '@/types/character';
+
+import { transformCharacterForStorage } from '@/types/character';
 import { transformEquipmentForStorage } from '@/utils/characterTransformations';
 
 /**
