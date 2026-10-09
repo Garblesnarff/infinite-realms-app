@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.5](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.4...v0.32.5) (2026-10-09)
+
+
+### Bug Fixes
+
+* **routing:** unknown URLs get a real 404, breadcrumbs link only to real routes ([#2706](https://github.com/Garblesnarff/infinite-realms-production/issues/2706)) ([#2742](https://github.com/Garblesnarff/infinite-realms-production/issues/2742)) ([35d5559](https://github.com/Garblesnarff/infinite-realms-production/commit/35d5559a8980c23c286967d608280cfc8a39aefd))
+
 ## [0.32.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.3...v0.32.4) (2026-10-09)
 
 
