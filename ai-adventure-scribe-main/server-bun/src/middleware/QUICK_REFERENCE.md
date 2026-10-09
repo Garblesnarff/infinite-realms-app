@@ -140,7 +140,7 @@ RATE_LIMIT_IMAGES_USER_FREE=5
 RATE_LIMIT_DEFAULT_USER_FREE=60
 
 # Auth
-WORKOS_API_KEY=sk_test_...
+WORKOS_API_KEY=your-workos-api-key
 WORKOS_CLIENT_ID=client_...
 DATABASE_URL=postgresql://...
 ```
@@ -183,7 +183,6 @@ app.get('/example', ({
 
 **Request**:
 - `Authorization: Bearer <token>` - WorkOS access token
-- `X-Plan: free|pro|enterprise` - Plan override (testing)
 
 **Response**:
 - `X-Request-Id: req_abc123_xyz789` - Unique request ID

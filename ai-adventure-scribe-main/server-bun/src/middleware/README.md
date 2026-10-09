@@ -17,7 +17,7 @@ WorkOS-based authentication middleware with two variants:
 
 **Features**:
 - JWT verification via WorkOS JWKS endpoint
-- User plan resolution from database or X-Plan header
+- User plan resolution from the database (`resolveUserPlan`)
 - Type-safe user context
 - Bearer token extraction
 
@@ -143,7 +143,7 @@ RATE_LIMIT_DEFAULT_IP_ENTERPRISE=2000
 ### Authentication
 
 ```bash
-WORKOS_API_KEY=sk_test_...
+WORKOS_API_KEY=your-workos-api-key
 WORKOS_CLIENT_ID=client_...
 DATABASE_URL=postgresql://...
 ```

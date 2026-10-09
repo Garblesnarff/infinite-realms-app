@@ -401,11 +401,6 @@ curl -H "Authorization: Bearer $TOKEN" \
 # Test with invalid token (should return 401)
 curl -H "Authorization: Bearer invalid" \
   http://localhost:3000/api/user/profile
-
-# Test plan override (for testing)
-curl -H "Authorization: Bearer $TOKEN" \
-  -H "X-Plan: enterprise" \
-  http://localhost:3000/api/llm/chat
 ```
 
 ## Migration from Express
@@ -451,7 +446,7 @@ app
 ### Rate limit not working
 
 - Make sure `optionalAuth` or `requireAuth` is used before `planRateLimit()` for per-user limits
-- Check that `X-Plan` header or database plan is set correctly
+- Check that the stored user plan is set correctly
 - Verify environment variables are loaded
 
 ### Metrics not showing

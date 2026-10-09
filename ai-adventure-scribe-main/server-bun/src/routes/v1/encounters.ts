@@ -28,8 +28,8 @@ const encounterAdjustmentQuery = t.Object({
 });
 
 export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
-  .use(planRateLimit('default'))
   .use(requireAuth)
+  .use(planRateLimit('default'))
 
   /**
    * POST /v1/encounters/telemetry

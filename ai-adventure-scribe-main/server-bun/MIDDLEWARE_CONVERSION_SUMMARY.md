@@ -10,14 +10,14 @@ Successfully converted all Express middleware from `/server/src/middleware/` to 
 - ✅ Converted `requireAuth` to Elysia plugin
 - ✅ Added `optionalAuth` variant for flexible authentication
 - ✅ WorkOS JWT verification via JWKS endpoint
-- ✅ User plan resolution from database or X-Plan header
+- ✅ User plan resolution from the database (`resolveUserPlan`)
 - ✅ Type-safe `AuthTokenPayload` context
 - ✅ Bearer token extraction and validation
 
 **Key Features**:
 - Required auth variant (returns 401 if missing/invalid)
 - Optional auth variant (continues without auth)
-- Plan resolution: X-Plan header → database → default 'free'
+- Plan resolution: database (`resolveUserPlan`), default `'free'`
 - Attaches user to request context for downstream use
 
 ### 2. Rate Limiting Middleware (`rate-limit.ts`)
@@ -295,7 +295,7 @@ The middleware maintain **functional compatibility** with Express versions:
 - ✅ Same rate limiting algorithm (sliding window)
 - ✅ Same metrics (Prometheus prom-client)
 - ✅ Same error responses (401, 429, etc.)
-- ✅ Same plan resolution (database → header → default)
+- ✅ Same plan resolution (database via `resolveUserPlan`, default `'free'`)
 
 The **API surface** differs due to Elysia's architecture (plugins vs functions).
 

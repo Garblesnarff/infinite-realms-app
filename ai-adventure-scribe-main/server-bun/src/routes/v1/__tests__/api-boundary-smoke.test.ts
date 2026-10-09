@@ -65,10 +65,6 @@ mock.module('../../../middleware/admin.js', () => ({
     }
   }),
 }));
-mock.module('../../../middleware/rate-limit.js', () => ({
-  createSimpleRateLimit: () => new Elysia({ name: 'test-simple-rate-limit' }),
-  planRateLimit: () => new Elysia({ name: 'test-plan-rate-limit' }),
-}));
 mock.module('../../../../../db/client', () => ({
   db: { query: { waitlist: { findFirst: async () => null } } },
 }));
@@ -167,6 +163,17 @@ describe('v1 route API boundaries', () => {
       ).status;
       expect(status).toBe(401);
     }
+    // Past the free IP cap. Auth runs first, so these stay 401 and never 429.
+    const cap = Number(process.env.RATE_LIMIT_DEFAULT_IP_FREE || 60);
+    const [method, url] = 'GET /v1/encounters/adjustment?sessionId=s&difficulty=h'.split(' ');
+    const seen = new Set<number>();
+    for (let n = 0; n <= cap; n += 1) {
+      const response = await app.handle(
+        new Request(`http://localhost${url}`, { method, headers: json }),
+      );
+      seen.add(response.status);
+    }
+    expect([...seen]).toEqual([401]);
   });
 
   it('enforces session ownership for encounter telemetry and adjustment', async () => {

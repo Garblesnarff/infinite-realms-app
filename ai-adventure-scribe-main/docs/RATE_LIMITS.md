@@ -315,23 +315,7 @@ If environment variables are not set, the middleware uses these defaults:
 
 ## Plan Detection
 
-The rate limiter detects user plans in two ways:
-
-1. **X-Plan Header** (for testing): Include `X-Plan: pro` or `X-Plan: enterprise` header
-2. **User Object** (production): The plan is read from `req.user.plan` (set by authentication middleware)
-
-### Testing with Different Plans
-
-```bash
-# Test as free tier (default)
-curl https://api.example.com/v1/campaigns
-
-# Test as pro tier
-curl -H "X-Plan: pro" https://api.example.com/v1/campaigns
-
-# Test as enterprise tier
-curl -H "X-Plan: enterprise" https://api.example.com/v1/campaigns
-```
+The limiter uses the authenticated user's plan from `resolveUserPlan`. A request header does not select the plan. On `admin`, `encounters`, and `tts`, `requireAuth` is mounted first, so a missing session is 401 before the IP bucket is spent.
 
 ## Exempt Endpoints
 

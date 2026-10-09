@@ -55,18 +55,9 @@ if (response.status === 429) {
 }
 ```
 
-## Testing Different Tiers
+## Plan
 
-```bash
-# Free tier
-curl http://localhost:4000/v1/campaigns
-
-# Pro tier
-curl -H "X-Plan: pro" http://localhost:4000/v1/campaigns
-
-# Enterprise tier
-curl -H "X-Plan: enterprise" http://localhost:4000/v1/campaigns
-```
+The limiter uses the signed-in user's stored plan.
 
 ## Environment Variables
 
