@@ -1,800 +1,471 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-import type { Character } from '@/types/character';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 
 import {
-  mockWizard,
-  mockFighter,
-  mockHuman,
-  createMockCharacter,
-} from '@/__tests__/helpers/spell-test-helpers';
+  renderSpellSelection,
+  buildWizardCharacter,
+  buildClericCharacter,
+  buildFighterCharacter,
+} from '@/__tests__/helpers/spell-selection-test-setup';
 
 /**
  * Spell Selection Accessibility Tests
  *
- * Comprehensive accessibility testing for spell selection interfaces to ensure
- * compliance with WCAG 2.1 guidelines and provide an inclusive experience.
+ * These tests render the REAL SpellSelection component
+ * (`src/components/character-creation/steps/SpellSelection.tsx`) — not a
+ * test-local reimplementation. Only the network transport is stubbed:
+ * `spellApi.getClassSpells` is backed by the real SRD spell catalog
+ * (`src/data/spells/api`), and `saveCharacterSpells` stays pending without
+ * touching the network. Characters use the real class catalog
+ * (`src/data/classes/*`).
  *
- * Accessibility areas covered:
- * - Keyboard navigation
- * - Screen reader compatibility
- * - ARIA labels and roles
- * - Focus management
- * - Color contrast compliance
- * - Error message accessibility
- * - Mobile/touch accessibility
+ * Assertion inventory vs the previous test-local copy (AccessibleSpellSelection):
+ * every assertion below either runs against the real component, or is named as
+ * dropped with a reason in the "Documented differences" tests.
  */
 
-// Mock accessible spell selection component
-const AccessibleSpellSelection: React.FC<{ character: Character }> = ({ character }) => {
-  const [selectedCantrips, setSelectedCantrips] = React.useState<string[]>([]);
-  const [selectedSpells, setSelectedSpells] = React.useState<string[]>([]);
-  const [focusedIndex, setFocusedIndex] = React.useState<number>(0);
-  const [errors, setErrors] = React.useState<string[]>([]);
-  const [announceMessage, setAnnounceMessage] = React.useState<string>('');
+// Stub only the transport: spell fetching returns the REAL catalog data,
+// character saves stay pending without a network round-trip.
+const { getClassSpellsMock, saveCharacterSpellsMock } = vi.hoisted(() => ({
+  getClassSpellsMock: vi.fn(),
+  saveCharacterSpellsMock: vi.fn(),
+}));
 
-  const cantripsData = [
-    {
-      id: 'mage-hand',
-      name: 'Mage Hand',
-      school: 'Conjuration',
-      description: 'A spectral, floating hand appears',
-    },
-    {
-      id: 'prestidigitation',
-      name: 'Prestidigitation',
-      school: 'Transmutation',
-      description: 'Minor magical trick',
-    },
-    { id: 'light', name: 'Light', school: 'Evocation', description: 'Object sheds bright light' },
-    {
-      id: 'minor-illusion',
-      name: 'Minor Illusion',
-      school: 'Illusion',
-      description: 'Create sound or image',
-    },
-  ];
+vi.mock('@/services/spellApi', () => ({
+  spellApi: { getClassSpells: getClassSpellsMock },
+}));
 
-  const spellsData = [
-    {
-      id: 'magic-missile',
-      name: 'Magic Missile',
-      school: 'Evocation',
-      description: 'Three glowing darts',
-    },
-    {
-      id: 'shield',
-      name: 'Shield',
-      school: 'Abjuration',
-      description: 'Invisible barrier protects you',
-    },
-    {
-      id: 'detect-magic',
-      name: 'Detect Magic',
-      school: 'Divination',
-      description: 'Sense presence of magic',
-    },
-    {
-      id: 'burning-hands',
-      name: 'Burning Hands',
-      school: 'Evocation',
-      description: 'Sheet of flames',
-    },
-  ];
+vi.mock('@/services/characterSpellApi', () => ({
+  characterSpellService: { saveCharacterSpells: saveCharacterSpellsMock },
+}));
 
-  if (!character.class?.spellcasting) {
-    return (
-      <div role="region" aria-label="Character information">
-        <h2 id="character-status">Non-spellcaster Character</h2>
-        <p aria-describedby="character-status">
-          {character.name} ({character.class.name}) cannot cast spells.
-        </p>
-      </div>
-    );
+/** The spell card (role="checkbox") for the named spell. */
+function spellCard(name: string): HTMLElement {
+  const heading = screen.getByRole('heading', { name });
+  const card = heading.closest('[role="checkbox"]');
+  if (!card) {
+    throw new Error(`no spell card found for "${name}"`);
   }
+  return card as HTMLElement;
+}
 
-  const maxCantrips = character.class.spellcasting.cantripsKnown || 0;
-  const maxSpells = character.class.spellcasting.spellsKnown || 1;
-
-  const handleCantripToggle = (cantripId: string) => {
-    setSelectedCantrips((prev) => {
-      let newSelection;
-      if (prev.includes(cantripId)) {
-        newSelection = prev.filter((id) => id !== cantripId);
-        setAnnounceMessage(
-          `${cantripsData.find((c) => c.id === cantripId)?.name} removed from selection`,
-        );
-      } else if (prev.length < maxCantrips) {
-        newSelection = [...prev, cantripId];
-        setAnnounceMessage(
-          `${cantripsData.find((c) => c.id === cantripId)?.name} added to selection`,
-        );
-      } else {
-        setErrors([`Cannot select more than ${maxCantrips} cantrips`]);
-        setAnnounceMessage(`Cannot select more than ${maxCantrips} cantrips`);
-        return prev;
-      }
-      setErrors([]);
-      return newSelection;
-    });
-  };
-
-  const handleSpellToggle = (spellId: string) => {
-    setSelectedSpells((prev) => {
-      let newSelection;
-      if (prev.includes(spellId)) {
-        newSelection = prev.filter((id) => id !== spellId);
-        setAnnounceMessage(
-          `${spellsData.find((s) => s.id === spellId)?.name} removed from selection`,
-        );
-      } else if (prev.length < maxSpells) {
-        newSelection = [...prev, spellId];
-        setAnnounceMessage(`${spellsData.find((s) => s.id === spellId)?.name} added to selection`);
-      } else {
-        setErrors([`Cannot select more than ${maxSpells} spells`]);
-        setAnnounceMessage(`Cannot select more than ${maxSpells} spells`);
-        return prev;
-      }
-      setErrors([]);
-      return newSelection;
-    });
-  };
-
-  // Roving tabindex: `tabIndex={focusedIndex === index ? 0 : -1}` only controls which
-  // element is reachable by Tab - changing React state does not itself move the browser's
-  // actual DOM focus. Each branch below both updates `focusedIndex` (so the right element
-  // becomes tabbable) AND imperatively calls .focus() on the target DOM node (scoped via
-  // `event.currentTarget.parentElement`, i.e. the enclosing listbox) so focus actually moves.
-  const focusOptionAt = (event: React.KeyboardEvent, newIndex: number) => {
-    setFocusedIndex(newIndex);
-    const container = (event.currentTarget as HTMLElement).parentElement;
-    const target = container?.children[newIndex] as HTMLElement | undefined;
-    target?.focus();
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent, type: 'cantrip' | 'spell', index: number) => {
-    const items = type === 'cantrip' ? cantripsData : spellsData;
-
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault();
-        focusOptionAt(event, Math.min(index + 1, items.length - 1));
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        focusOptionAt(event, Math.max(index - 1, 0));
-        break;
-      case 'Enter':
-      case ' ':
-        event.preventDefault();
-        if (type === 'cantrip') {
-          handleCantripToggle(items[index].id);
-        } else {
-          handleSpellToggle(items[index].id);
-        }
-        break;
-      case 'Home':
-        event.preventDefault();
-        focusOptionAt(event, 0);
-        break;
-      case 'End':
-        event.preventDefault();
-        focusOptionAt(event, items.length - 1);
-        break;
-    }
-  };
-
-  return (
-    <main role="main" aria-labelledby="spell-selection-title">
-      <h1 id="spell-selection-title">
-        Spell Selection for {character.name} ({character.class.name})
-      </h1>
-
-      {/* Live region for announcements */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-        data-testid="live-region"
-      >
-        {announceMessage}
-      </div>
-
-      {/* Error messages */}
-      {errors.length > 0 && (
-        <div
-          role="alert"
-          aria-labelledby="error-heading"
-          className="error-container"
-          data-testid="error-alert"
-        >
-          <h2 id="error-heading" className="error-title">
-            Validation Errors
-          </h2>
-          <ul>
-            {errors.map((error, index) => (
-              <li key={index} className="error-message">
-                {error}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Instructions */}
-      <div role="region" aria-labelledby="instructions-heading">
-        <h2 id="instructions-heading" className="sr-only">
-          Instructions
-        </h2>
-        <p id="spell-selection-instructions">
-          Use arrow keys to navigate, Enter or Space to select/deselect spells. You must select{' '}
-          {maxCantrips} cantrips and {maxSpells} {maxSpells === 1 ? 'spell' : 'spells'}.
-        </p>
-      </div>
-
-      {/* Cantrips section */}
-      <section
-        role="group"
-        aria-labelledby="cantrips-heading"
-        aria-describedby="cantrips-description spell-selection-instructions"
-      >
-        <h2 id="cantrips-heading">
-          Cantrips ({selectedCantrips.length}/{maxCantrips})
-        </h2>
-        <p id="cantrips-description">
-          Cantrips are simple spells that can be cast at will, without expending a spell slot.
-        </p>
-
-        <div role="listbox" aria-labelledby="cantrips-heading" aria-multiselectable="true">
-          {cantripsData.map((cantrip, index) => {
-            const isSelected = selectedCantrips.includes(cantrip.id);
-            return (
-              <div
-                key={cantrip.id}
-                role="option"
-                aria-selected={isSelected}
-                aria-describedby={`${cantrip.id}-description`}
-                tabIndex={focusedIndex === index ? 0 : -1}
-                className={`spell-option ${isSelected ? 'selected' : ''}`}
-                onClick={() => handleCantripToggle(cantrip.id)}
-                onKeyDown={(e) => handleKeyDown(e, 'cantrip', index)}
-                data-testid={`cantrip-option-${cantrip.id}`}
-              >
-                <div className="spell-header">
-                  <h3 className="spell-name">{cantrip.name}</h3>
-                  <span className="spell-school" aria-label={`School: ${cantrip.school}`}>
-                    {cantrip.school}
-                  </span>
-                </div>
-                <p id={`${cantrip.id}-description`} className="spell-description">
-                  {cantrip.description}
-                </p>
-                <div className="selection-indicator" aria-hidden="true">
-                  {isSelected ? '✓ Selected' : 'Not selected'}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Spells section */}
-      <section
-        role="group"
-        aria-labelledby="spells-heading"
-        aria-describedby="spells-description spell-selection-instructions"
-      >
-        <h2 id="spells-heading">
-          1st Level Spells ({selectedSpells.length}/{maxSpells})
-        </h2>
-        <p id="spells-description">
-          These are first-level spells that require a spell slot to cast.
-        </p>
-
-        <div role="listbox" aria-labelledby="spells-heading" aria-multiselectable="true">
-          {spellsData.map((spell, index) => {
-            const isSelected = selectedSpells.includes(spell.id);
-            return (
-              <div
-                key={spell.id}
-                role="option"
-                aria-selected={isSelected}
-                aria-describedby={`${spell.id}-description`}
-                tabIndex={focusedIndex === index ? 0 : -1}
-                className={`spell-option ${isSelected ? 'selected' : ''}`}
-                onClick={() => handleSpellToggle(spell.id)}
-                onKeyDown={(e) => handleKeyDown(e, 'spell', index)}
-                data-testid={`spell-option-${spell.id}`}
-              >
-                <div className="spell-header">
-                  <h3 className="spell-name">{spell.name}</h3>
-                  <span className="spell-school" aria-label={`School: ${spell.school}`}>
-                    {spell.school}
-                  </span>
-                </div>
-                <p id={`${spell.id}-description`} className="spell-description">
-                  {spell.description}
-                </p>
-                <div className="selection-indicator" aria-hidden="true">
-                  {isSelected ? '✓ Selected' : 'Not selected'}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Summary */}
-      <section role="group" aria-labelledby="summary-heading">
-        <h2 id="summary-heading">Selection Summary</h2>
-        <div aria-live="polite" aria-atomic="true">
-          <p>
-            Selected: {selectedCantrips.length} of {maxCantrips} cantrips, {selectedSpells.length}{' '}
-            of {maxSpells} spells
-          </p>
-          {selectedCantrips.length === maxCantrips && selectedSpells.length === maxSpells && (
-            <p role="status" className="success-message">
-              All required spells selected! You may proceed to the next step.
-            </p>
-          )}
-        </div>
-      </section>
-    </main>
-  );
-};
+/** Wait until the real component has loaded the wizard cantrip list. */
+async function waitForCantrips(): Promise<void> {
+  await screen.findByRole('heading', { name: 'Mage Hand' });
+}
 
 describe('Spell Selection Accessibility Tests', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeAll(() => {
+    // jsdom does not implement scrollIntoView; the real component calls it via
+    // useAutoScroll after a valid selection.
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  describe('Keyboard Navigation', () => {
-    it('should support arrow key navigation through spell options', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Accessible Wizard', mockWizard, mockHuman);
+  beforeEach(async () => {
+    getClassSpellsMock.mockReset();
+    saveCharacterSpellsMock.mockReset();
+    // Leave saves pending: the real component re-saves on every character
+    // change while the selection is valid, and the context reducer mints a new
+    // character object per dispatch, so a resolving save would spin forever.
+    saveCharacterSpellsMock.mockImplementation(() => new Promise(() => {}));
+    // Back the stubbed transport with the REAL spell catalog.
+    const { getClassSpells } = await import('@/data/spells/api');
+    getClassSpellsMock.mockImplementation((className: string) =>
+      Promise.resolve(getClassSpells(className)),
+    );
+  });
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      const firstCantrip = screen.getByTestId('cantrip-option-mage-hand');
-
-      // Focus should start on first item
-      firstCantrip.focus();
-      expect(firstCantrip).toHaveFocus();
-
-      // Arrow down should move focus
-      await user.keyboard('{ArrowDown}');
-      const secondCantrip = screen.getByTestId('cantrip-option-prestidigitation');
-      expect(secondCantrip).toHaveFocus();
-
-      // Arrow up should move focus back
-      await user.keyboard('{ArrowUp}');
-      expect(firstCantrip).toHaveFocus();
-    });
-
-    it('should support Home and End keys for navigation', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Accessible Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      const firstCantrip = screen.getByTestId('cantrip-option-mage-hand');
-      const lastCantrip = screen.getByTestId('cantrip-option-minor-illusion');
-
-      firstCantrip.focus();
-
-      // End key should go to last item
-      await user.keyboard('{End}');
-      expect(lastCantrip).toHaveFocus();
-
-      // Home key should go to first item
-      await user.keyboard('{Home}');
-      expect(firstCantrip).toHaveFocus();
-    });
-
+  describe('Keyboard Interaction', () => {
     it('should support Enter and Space for selection', async () => {
       const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Accessible Wizard', mockWizard, mockHuman);
+      renderSpellSelection(buildWizardCharacter('Accessible Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      const firstCantrip = screen.getByTestId('cantrip-option-mage-hand');
-      firstCantrip.focus();
+      const card = spellCard('Mage Hand');
+      card.focus();
+      expect(card).toHaveFocus();
 
       // Enter should select
       await user.keyboard('{Enter}');
-      expect(firstCantrip).toHaveAttribute('aria-selected', 'true');
+      expect(card).toHaveAttribute('aria-checked', 'true');
 
       // Space should deselect
       await user.keyboard(' ');
-      expect(firstCantrip).toHaveAttribute('aria-selected', 'false');
+      expect(card).toHaveAttribute('aria-checked', 'false');
     });
 
-    it('should trap focus within the spell selection area', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Accessible Wizard', mockWizard, mockHuman);
+    it('should make every spell card keyboard-focusable', async () => {
+      renderSpellSelection(buildWizardCharacter('Keyboard Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      const firstCantrip = screen.getByTestId('cantrip-option-mage-hand');
-      firstCantrip.focus();
-
-      // Arrow up from first item should stay on first item
-      await user.keyboard('{ArrowUp}');
-      expect(firstCantrip).toHaveFocus();
-
-      // Navigate to last item
-      await user.keyboard('{End}');
-      const lastCantrip = screen.getByTestId('cantrip-option-minor-illusion');
-      expect(lastCantrip).toHaveFocus();
-
-      // Arrow down from last item should stay on last item
-      await user.keyboard('{ArrowDown}');
-      expect(lastCantrip).toHaveFocus();
+      // The real component exposes each spell as a checkbox card in the tab
+      // order (no roving tabindex); every card must be reachable by keyboard.
+      const cards = screen.getAllByRole('checkbox');
+      expect(cards.length).toBeGreaterThan(0);
+      for (const card of cards) {
+        expect(card).toHaveAttribute('tabindex', '0');
+      }
     });
   });
 
   describe('Screen Reader Compatibility', () => {
-    it('should have proper ARIA labels and roles', () => {
-      const wizardCharacter = createMockCharacter('Screen Reader Wizard', mockWizard, mockHuman);
+    it('should have proper ARIA labels and roles', async () => {
+      renderSpellSelection(buildWizardCharacter('Screen Reader Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // Main structure
-      expect(screen.getByRole('main')).toBeInTheDocument();
-      // `getByLabelledBy` isn't a real Testing Library query; assert the aria-labelledby
-      // wiring directly on the landmark it's meant to label.
-      expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'spell-selection-title');
+      // Search control is labelled
+      expect(screen.getByLabelText('Search spells')).toBeInTheDocument();
 
-      // Sections
-      expect(screen.getAllByRole('group')).toHaveLength(3); // Cantrips, spells, summary
-      expect(screen.getAllByRole('listbox')).toHaveLength(2); // Cantrips and spells lists
+      // Tab interface exposes real tab roles
+      expect(screen.getByRole('tab', { name: /Cantrips/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /1st Level/ })).toBeInTheDocument();
 
-      // Options
-      const cantripOptions = screen.getAllByRole('option');
-      expect(cantripOptions.length).toBeGreaterThan(0);
-      cantripOptions.forEach((option) => {
-        expect(option).toHaveAttribute('aria-selected');
-        expect(option).toHaveAttribute('aria-describedby');
-      });
-    });
-
-    it('should provide descriptive labels for complex elements', () => {
-      const wizardCharacter = createMockCharacter('Descriptive Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      // Check school labels
-      const schoolElements = screen.getAllByLabelText(/School:/);
-      expect(schoolElements.length).toBeGreaterThan(0);
-
-      // Check descriptions are properly linked
-      const mageHandOption = screen.getByTestId('cantrip-option-mage-hand');
-      const describedBy = mageHandOption.getAttribute('aria-describedby');
-      expect(describedBy).toBeTruthy();
-      expect(screen.getByText('A spectral, floating hand appears')).toHaveAttribute(
-        'id',
-        describedBy,
-      );
-    });
-
-    it('should announce selections and changes', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Announcing Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      const liveRegion = screen.getByTestId('live-region');
-      expect(liveRegion).toHaveAttribute('aria-live', 'polite');
-
-      // Select a cantrip
-      const mageHandOption = screen.getByTestId('cantrip-option-mage-hand');
-      await user.click(mageHandOption);
-
-      await waitFor(() => {
-        expect(liveRegion).toHaveTextContent('Mage Hand added to selection');
-      });
-
-      // Deselect the cantrip
-      await user.click(mageHandOption);
-
-      await waitFor(() => {
-        expect(liveRegion).toHaveTextContent('Mage Hand removed from selection');
-      });
-    });
-
-    it('should provide clear error announcements', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Error Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      // Select maximum cantrips first
-      const cantrips = ['mage-hand', 'prestidigitation', 'light'];
-      for (const cantripId of cantrips) {
-        await user.click(screen.getByTestId(`cantrip-option-${cantripId}`));
+      // Spell options expose checkbox semantics with a checked state
+      const cards = screen.getAllByRole('checkbox');
+      expect(cards.length).toBeGreaterThan(0);
+      for (const card of cards) {
+        expect(card).toHaveAttribute('aria-checked');
       }
+    });
 
-      // Try to select one more
-      await user.click(screen.getByTestId('cantrip-option-minor-illusion'));
+    it('should label the school filter controls', async () => {
+      const user = userEvent.setup();
+      renderSpellSelection(buildWizardCharacter('Filter Wizard'));
 
-      // Should show error alert
-      const errorAlert = screen.getByTestId('error-alert');
-      expect(errorAlert).toHaveAttribute('role', 'alert');
-      expect(errorAlert).toHaveTextContent('Cannot select more than 3 cantrips');
+      await waitForCantrips();
 
-      // Should also announce the error
-      const liveRegion = screen.getByTestId('live-region');
+      await user.click(screen.getByRole('button', { name: /Filters/ }));
+
+      // Each school checkbox carries an accessible label in the real panel
+      expect(await screen.findByLabelText('Filter by Evocation')).toBeInTheDocument();
+      expect(screen.getByLabelText('Filter by Conjuration')).toBeInTheDocument();
+    });
+
+    it('should expose selection state via aria-checked', async () => {
+      const user = userEvent.setup();
+      renderSpellSelection(buildWizardCharacter('Announcing Wizard'));
+
+      await waitForCantrips();
+
+      // The real component has no live region; selection state is exposed
+      // through aria-checked on each spell card.
+      const card = spellCard('Mage Hand');
+      expect(card).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(card);
+      expect(card).toHaveAttribute('aria-checked', 'true');
+
+      await user.click(card);
+      expect(card).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('should announce errors via role="alert"', async () => {
+      renderSpellSelection(buildWizardCharacter('Error Wizard'));
+
+      await waitForCantrips();
+
+      // An incomplete selection is invalid per the real validator; the
+      // destructive Alert (implicit aria-live="assertive" via role="alert")
+      // is the real announcement mechanism.
       await waitFor(() => {
-        expect(liveRegion).toHaveTextContent('Cannot select more than 3 cantrips');
+        const alert = screen.getByText(/Expected 3 cantrips \(3 class \+ 0 racial\), but got 0/);
+        expect(alert.closest('[role="alert"]')).not.toBeNull();
       });
     });
   });
 
   describe('Focus Management', () => {
-    it('should maintain logical focus order', () => {
-      const wizardCharacter = createMockCharacter('Focus Wizard', mockWizard, mockHuman);
+    it('should keep every spell card in the tab order', async () => {
+      renderSpellSelection(buildWizardCharacter('Focus Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // The cantrips and spells sections are two independent listbox widgets, each with
-      // its own roving tabindex (per WAI-ARIA listbox authoring practices). So the first
-      // option *within each listbox* should be tabbable, not just the very first option
-      // on the page - checking a single flat list across both listboxes was the wrong
-      // assumption here.
-      const listboxes = screen.getAllByRole('listbox');
-      expect(listboxes).toHaveLength(2);
-
-      listboxes.forEach((listbox) => {
-        const options = within(listbox).getAllByRole('option');
-        options.forEach((element, index) => {
-          const tabIndex = element.getAttribute('tabindex');
-          if (index === 0) {
-            expect(tabIndex).toBe('0'); // First element in this listbox should be focusable
-          } else {
-            expect(tabIndex).toBe('-1'); // Others should not be in tab order
-          }
-        });
-      });
+      // The real SpellCard renders tabIndex={0} for every selectable card
+      // (tabIndex={-1} only once the selection limit disables the rest).
+      const cards = screen.getAllByRole('checkbox');
+      for (const card of cards) {
+        expect(card).toHaveAttribute('tabindex', '0');
+      }
     });
 
     it('should restore focus after interactions', async () => {
       const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Focus Restore Wizard', mockWizard, mockHuman);
+      renderSpellSelection(buildWizardCharacter('Focus Restore Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      const mageHandOption = screen.getByTestId('cantrip-option-mage-hand');
+      const card = spellCard('Mage Hand');
 
       // Focus and select
-      mageHandOption.focus();
-      expect(mageHandOption).toHaveFocus();
+      card.focus();
+      expect(card).toHaveFocus();
 
       await user.keyboard('{Enter}');
 
       // Focus should remain on the same element after selection
-      expect(mageHandOption).toHaveFocus();
+      expect(card).toHaveFocus();
     });
 
-    it('should provide visible focus indicators', () => {
-      const wizardCharacter = createMockCharacter('Focus Indicator Wizard', mockWizard, mockHuman);
+    it('should provide keyboard-focusable cards', async () => {
+      renderSpellSelection(buildWizardCharacter('Focus Indicator Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      const mageHandOption = screen.getByTestId('cantrip-option-mage-hand');
-      mageHandOption.focus();
+      const card = spellCard('Mage Hand');
+      card.focus();
 
-      // Element should be focused (this would typically be verified with CSS in a real app)
-      expect(mageHandOption).toHaveFocus();
-      expect(mageHandOption).toHaveAttribute('tabindex', '0');
+      expect(card).toHaveFocus();
+      expect(card).toHaveAttribute('tabindex', '0');
     });
   });
 
   describe('Error Accessibility', () => {
-    it('should associate error messages with relevant form controls', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter(
-        'Error Association Wizard',
-        mockWizard,
-        mockHuman,
-      );
+    it('should surface validation errors in an alert', async () => {
+      renderSpellSelection(buildWizardCharacter('Error Association Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // Trigger an error by selecting too many cantrips
-      const cantrips = ['mage-hand', 'prestidigitation', 'light'];
-      for (const cantripId of cantrips) {
-        await user.click(screen.getByTestId(`cantrip-option-${cantripId}`));
-      }
-
-      await user.click(screen.getByTestId('cantrip-option-minor-illusion'));
-
-      // Error should be announced via role="alert"
-      const errorAlert = screen.getByRole('alert');
-      expect(errorAlert).toBeInTheDocument();
-      expect(errorAlert).toHaveTextContent('Cannot select more than 3 cantrips');
-    });
-
-    it('should provide clear error messages', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Clear Error Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      // Trigger error
-      const cantrips = ['mage-hand', 'prestidigitation', 'light'];
-      for (const cantripId of cantrips) {
-        await user.click(screen.getByTestId(`cantrip-option-${cantripId}`));
-      }
-
-      await user.click(screen.getByTestId('cantrip-option-minor-illusion'));
-
-      // Error message should be specific and actionable. It legitimately appears twice -
-      // once in the visible error list, once in the sr-only live region announcement - so
-      // a single getByText would throw on the ambiguous match.
-      const errorMessages = screen.getAllByText('Cannot select more than 3 cantrips');
-      expect(errorMessages.length).toBeGreaterThanOrEqual(1);
-      expect(within(screen.getByTestId('error-alert')).getByText('Cannot select more than 3 cantrips')).toBeInTheDocument();
-      expect(screen.getByText('Validation Errors')).toBeInTheDocument();
-    });
-
-    it('should clear errors when they are resolved', async () => {
-      const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Error Clear Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      // Trigger error
-      const cantrips = ['mage-hand', 'prestidigitation', 'light'];
-      for (const cantripId of cantrips) {
-        await user.click(screen.getByTestId(`cantrip-option-${cantripId}`));
-      }
-
-      await user.click(screen.getByTestId('cantrip-option-minor-illusion'));
-
-      expect(screen.getByRole('alert')).toBeInTheDocument();
-
-      // Resolve error by deselecting a cantrip
-      await user.click(screen.getByTestId('cantrip-option-mage-hand'));
-
-      // Error should be cleared
+      // The real validator reports the incomplete selection; the message is
+      // specific and actionable.
       await waitFor(() => {
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(
+          screen.getByText(/Expected 3 cantrips \(3 class \+ 0 racial\), but got 0/),
+        ).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Expected 6 spells known, but got 0/)).toBeInTheDocument();
+    });
+
+    it('should clear the alert once the selection is valid', async () => {
+      const user = userEvent.setup();
+      renderSpellSelection(buildWizardCharacter('Error Clear Wizard'));
+
+      await waitForCantrips();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Expected 3 cantrips/)).toBeInTheDocument();
+      });
+
+      // Select a fully valid set: 3 cantrips + 6 first-level spells.
+      // Each 1st-level pick goes through the production search. The search
+      // term is set BEFORE opening the tab so the 191-card catalog is never
+      // mounted unfiltered (that path took ~16s against the 20s CI timeout).
+      for (const name of ['Mage Hand', 'Prestidigitation', 'Light']) {
+        await user.click(spellCard(name));
+      }
+      const search = screen.getByLabelText('Search spells');
+      const spells = [
+        'Magic Missile',
+        'Shield',
+        'Detect Magic',
+        'Burning Hands',
+        'Sleep',
+        'Charm Person',
+      ];
+      fireEvent.change(search, { target: { value: spells[0].toLowerCase() } });
+      await user.click(screen.getByRole('tab', { name: /1st Level/ }));
+      await user.click(await screen.findByRole('heading', { name: spells[0] }));
+      for (const name of spells.slice(1)) {
+        fireEvent.change(search, { target: { value: name.toLowerCase() } });
+        await user.click(await screen.findByRole('heading', { name }));
+      }
+      fireEvent.change(search, { target: { value: '' } });
+
+      // The validation alert clears once the selection satisfies the rules
+      await waitFor(() => {
+        expect(screen.queryByText(/Expected 3 cantrips/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Expected 6 spells/)).not.toBeInTheDocument();
       });
     });
   });
 
-  describe('Mobile and Touch Accessibility', () => {
-    it('should have adequate touch targets', () => {
-      const wizardCharacter = createMockCharacter('Touch Wizard', mockWizard, mockHuman);
-
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
-
-      const spellOptions = screen.getAllByRole('option');
-
-      // All spell options should be clickable (would need CSS checks in real implementation)
-      spellOptions.forEach((option) => {
-        expect(option).toBeInTheDocument();
-        expect(option).toHaveAttribute('role', 'option');
-      });
-    });
-
-    it('should support touch interactions', async () => {
+  describe('Touch Interaction', () => {
+    it('should toggle selection on click like on keyboard', async () => {
       const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter(
-        'Touch Interaction Wizard',
-        mockWizard,
-        mockHuman,
-      );
+      renderSpellSelection(buildWizardCharacter('Touch Interaction Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      const mageHandOption = screen.getByTestId('cantrip-option-mage-hand');
+      const card = spellCard('Mage Hand');
 
-      // Touch/click should work the same as keyboard interaction
-      await user.click(mageHandOption);
-      expect(mageHandOption).toHaveAttribute('aria-selected', 'true');
+      // Click should work the same as keyboard interaction
+      await user.click(card);
+      expect(card).toHaveAttribute('aria-checked', 'true');
 
-      await user.click(mageHandOption);
-      expect(mageHandOption).toHaveAttribute('aria-selected', 'false');
+      await user.click(card);
+      expect(card).toHaveAttribute('aria-checked', 'false');
     });
   });
 
   describe('Non-Spellcaster Accessibility', () => {
-    it('should provide accessible messaging for non-spellcasters', () => {
-      const fighterCharacter = createMockCharacter('Accessible Fighter', mockFighter, mockHuman);
+    it('should provide accessible messaging for non-spellcasters', async () => {
+      renderSpellSelection(buildFighterCharacter('Accessible Fighter'));
 
-      render(<AccessibleSpellSelection character={fighterCharacter} />);
-
-      // Should have proper semantic structure
-      expect(screen.getByRole('region')).toBeInTheDocument();
-      expect(screen.getByLabelText('Character information')).toBeInTheDocument();
-
-      // Should explain why no spells are available
-      expect(screen.getByText('Non-spellcaster Character')).toBeInTheDocument();
-      expect(screen.getByText(/cannot cast spells/)).toBeInTheDocument();
+      // The real non-spellcaster state: a clear heading plus an explanation
+      // of why no spells are available. Assert the class name so the test
+      // waits for the seeded fighter rather than the pre-seed null-character
+      // shell, which shows the same heading.
+      expect(
+        await screen.findByText(/Your Fighter class is not a spellcasting class/),
+      ).toBeInTheDocument();
     });
   });
 
-  describe('Comprehensive WCAG Compliance', () => {
-    it('should have proper heading hierarchy', () => {
-      const wizardCharacter = createMockCharacter('Heading Wizard', mockWizard, mockHuman);
+  describe('Headings and Status Updates', () => {
+    it('should have a proper heading hierarchy', async () => {
+      renderSpellSelection(buildWizardCharacter('Heading Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // Should have h1 for page title
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Spell Selection for');
-
-      // Should have h2 for major sections
-      const h2Headings = screen.getAllByRole('heading', { level: 2 });
-      expect(h2Headings.length).toBeGreaterThan(1);
-
-      // Should have h3 for spell names
-      const h3Headings = screen.getAllByRole('heading', { level: 3 });
-      expect(h3Headings.length).toBeGreaterThan(0);
+      // Page-level heading plus one heading per spell card
+      expect(screen.getByRole('heading', { level: 2, name: 'Choose Your Starting Spells' }))
+        .toBeInTheDocument();
+      const spellHeadings = screen.getAllByRole('heading', { level: 4 });
+      expect(spellHeadings.length).toBeGreaterThan(0);
     });
 
-    it('should provide status updates for dynamic content', async () => {
+    it('should update the selection counts as spells are chosen', async () => {
       const user = userEvent.setup();
-      const wizardCharacter = createMockCharacter('Status Wizard', mockWizard, mockHuman);
+      renderSpellSelection(buildWizardCharacter('Status Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // Selection counts should be announced
-      expect(screen.getByText('Cantrips (0/3)')).toBeInTheDocument();
-      expect(screen.getByText('1st Level Spells (0/6)')).toBeInTheDocument();
+      const cantripsTab = screen.getByRole('tab', { name: /Cantrips/ });
+      expect(cantripsTab).toHaveTextContent('0/3');
 
-      // Select a cantrip
-      await user.click(screen.getByTestId('cantrip-option-mage-hand'));
+      await user.click(spellCard('Mage Hand'));
 
-      // Count should update
-      expect(screen.getByText('Cantrips (1/3)')).toBeInTheDocument();
-
-      // Should announce completion
-      const cantrips = ['prestidigitation', 'light'];
-      for (const cantripId of cantrips) {
-        await user.click(screen.getByTestId(`cantrip-option-${cantripId}`));
-      }
-
-      const spells = ['magic-missile', 'shield', 'detect-magic', 'burning-hands'];
-      for (const spellId of spells) {
-        await user.click(screen.getByTestId(`spell-option-${spellId}`));
-      }
-
-      // Need to select 2 more spells to complete
-      await user.click(screen.getByTestId('spell-option-magic-missile')); // Already selected, so this deselects
-      await user.click(screen.getByTestId('spell-option-magic-missile')); // Select again
-
-      // This is getting complex - let's simplify and just check that status updates work
-      expect(screen.getByText('Cantrips (3/3)')).toBeInTheDocument();
+      await waitFor(() => expect(cantripsTab).toHaveTextContent('1/3'));
     });
 
-    it('should support high contrast mode', () => {
-      const wizardCharacter = createMockCharacter('High Contrast Wizard', mockWizard, mockHuman);
+    it('should not rely on color alone for selection state', async () => {
+      const user = userEvent.setup();
+      renderSpellSelection(buildWizardCharacter('Contrast Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // In a real implementation, this would test CSS custom properties for high contrast
-      // For now, we ensure the semantic structure supports it
-      const selectedOption = screen.getByTestId('cantrip-option-mage-hand');
-      expect(selectedOption).toHaveClass('spell-option');
+      // Selection is exposed programmatically (aria-checked), not just visually
+      const card = spellCard('Mage Hand');
+      await user.click(card);
+      expect(card).toHaveAttribute('aria-checked', 'true');
+    });
+  });
 
-      // Selection indicators should not rely solely on color
-      expect(screen.getAllByText(/Not selected/)).toHaveLength(8); // 4 cantrips + 4 spells
+  describe('Documented differences from the test-local copy', () => {
+    it('[characterization] arrow keys do not move focus between cards (feature missing)', async () => {
+      const user = userEvent.setup();
+      renderSpellSelection(buildWizardCharacter('Arrow Key Wizard'));
+
+      await waitForCantrips();
+
+      // The previous suite tested ArrowDown/ArrowUp/Home/End/focus-trapping on
+      // its own listbox copy. The real SpellCard only handles Enter/Space;
+      // arrow keys do not move focus between cards.
+      const card = spellCard('Mage Hand');
+      card.focus();
+      expect(card).toHaveFocus();
+
+      await user.keyboard('{ArrowDown}');
+      expect(card).toHaveFocus();
+
+      await user.keyboard('{End}');
+      expect(card).toHaveFocus();
     });
 
-    it('should work with reduced motion preferences', () => {
-      const wizardCharacter = createMockCharacter('Reduced Motion Wizard', mockWizard, mockHuman);
+    it('has no live region for selection announcements (test-local invention)', async () => {
+      renderSpellSelection(buildWizardCharacter('Live Region Wizard'));
 
-      render(<AccessibleSpellSelection character={wizardCharacter} />);
+      await waitForCantrips();
 
-      // Animation-related accessibility would be handled in CSS
-      // Here we ensure the component still functions without animations
-      expect(screen.getByRole('main')).toBeInTheDocument();
-      expect(screen.getAllByRole('option')).toHaveLength(8);
+      // The test-local copy announced selections via role="status". The real
+      // component exposes selection state through aria-checked instead.
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('documents dropped assertions from the old suites', async () => {
+      // #2669 step 3 requires every old assertion to be preserved against the
+      // real component or named as dropped with a reason. Each group below
+      // pins the real component's actual behavior that replaces it.
+
+      // 1. Cleric 1st-level selection (old: "Cure Wounds/Healing Word/Bless
+      //    shown", "Spells (0/1)" counts, over-select error). Dropped: the real
+      //    cleric prepares spells instead of knowing them, so SpellSelectionTabs
+      //    renders no 1st-level selection UI at creation (the tab trigger is
+      //    always present, but the "1st Level Spells" section never appears).
+      renderSpellSelection(buildClericCharacter('Dropped Cleric'));
+      await screen.findByRole('heading', { name: 'Guidance' });
+      expect(
+        screen.queryByRole('heading', { name: '1st Level Spells' }),
+      ).not.toBeInTheDocument();
+
+      // 2. "should handle validation errors gracefully" (old: mocked validator
+      //    throws -> "Failed to validate spell"). Dropped: that tested the
+      //    test-local copy's own try/catch around its mock; the real async
+      //    validator returns errors instead of throwing. The real component
+      //    never renders that test-local error text.
+      expect(screen.queryByText('Failed to validate spell')).not.toBeInTheDocument();
+
+      // 3. Per-card `aria-label="School: …"` + aria-describedby (old:
+      //    "should provide descriptive labels for complex elements"). Dropped:
+      //    the real SpellCard shows the school in a visual badge only — the
+      //    card has no aria-label at all.
+      const card = spellCard('Guidance');
+      expect(card.getAttribute('aria-label')).toBeNull();
+
+      // 4. Reduced-motion preference (old: "should work with reduced motion
+      //    preferences"). Dropped: a CSS-only concern with no real-component
+      //    equivalent to assert against.
+
+      // 5. Over-select message (old: "Cannot select more than 3 cantrips").
+      //    Dropped as text: the real component never renders that message.
+      //    Moved as behavior: the 4th card gets aria-disabled="true" and the
+      //    tab badge reads "3/3" (asserted in the component suite's
+      //    "should enforce cantrip count limits").
+      expect(screen.queryByText(/Cannot select more than/)).not.toBeInTheDocument();
+
+      // 6. Character name in the heading (old: "Spell Selection for Gandalf
+      //    (Wizard"). Dropped: the real heading is "Choose Your Starting
+      //    Spells" with "As a Wizard, you begin with magical knowledge" — the
+      //    character name is not rendered.
+      expect(screen.queryByText(/Gandalf/)).not.toBeInTheDocument();
+      expect(screen.getByText('Choose Your Starting Spells')).toBeInTheDocument();
+
+      // 7. Test-local structure (old: main[aria-labelledby], 3 groups,
+      //    2 listboxes, option aria-describedby, data-testids like
+      //    "spell-selection", "cantrip-mage-hand"). Dropped: that was the
+      //    test-local copy's own DOM. The real component uses tabs and
+      //    checkbox cards (asserted in "should have proper ARIA labels and roles").
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('spell-selection')).not.toBeInTheDocument();
+
+      // 8. "Selected: N cantrips" summary and "All required spells selected"
+      //    status (old). Dropped as text: the real component shows count
+      //    badges on the tabs ("0/3", "3/3") instead (asserted in the
+      //    component suite's count tests).
+      expect(screen.queryByText(/Selected: \d+ cantrips/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/All required spells selected/)).not.toBeInTheDocument();
+
+      // 9. "Not selected" text for high contrast (old). Dropped: the real
+      //    SpellCard renders no Selected/Not-selected text — selection state
+      //    is exposed only via aria-checked, so there is no non-color
+      //    indicator to assert. (Known gap in the real component, not a test
+      //    invention.)
+      expect(screen.queryByText(/Not selected/)).not.toBeInTheDocument();
+
+      // 10. Touch-target dimensions (old: "should have adequate touch
+      //     targets"). Dropped: the old test asserted on the test-local
+      //     copy's option elements and was vacuous — it never measured a
+      //     real target. No real-component equivalent was asserted.
+
+      // 11. Non-spellcaster region/label (old: role="region", labelled
+      //     "Character information", "Non-spellcaster Character"). Dropped as
+      //     structure: the real non-spellcaster state is a plain heading
+      //     ("No Spells to Select") plus the "Your <class> class is not a
+      //     spellcasting class" message (asserted in both suites' fighter
+      //     tests). The real component uses no region/label structure.
     });
   });
 });
