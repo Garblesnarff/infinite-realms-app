@@ -490,4 +490,42 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     expect(spellRows.filter((r) => r.isPrepared)).toHaveLength(2);
     expect(spellRows.filter((r) => !r.isPrepared)).toHaveLength(1);
   });
-});
+
+  it('omitting prepared keeps all rows prepared (no regression)', async () => {
+    // #2710: when the client omits `prepared`, the service must keep
+    // today's behaviour (all true). Sorcerers/bards don't prepare.
+    const createBody = {
+      name: testId('Sorcerer'),
+      class: className,
+      level: 1,
+      gold_pieces: 0,
+    };
+    const { status: createStatus, json: created } = await postJson(
+      '/v1/characters',
+      createBody,
+    );
+    expect(createStatus).toBe(201);
+    const sorcererId = (created as { id: string }).id;
+
+    // Omit `prepared` entirely.
+    const { status: spellsStatus } = await postJson(
+      `/v1/characters/${sorcererId}/spells`,
+      {
+        spells: [magicMissileUuid, fireBoltUuid],
+        className,
+      },
+    );
+    expect(spellsStatus).toBe(200);
+
+    const spellRows = await db
+      .select()
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, sorcererId));
+    expect(spellRows.length).toBeGreaterThan(0);
+    // All true — no regression from the prepared-set feature.
+    expect(spellRows.every((r) => r.isPrepared)).toBe(true);
+
+    // Cleanup
+    await db.delete(characters).where(eq(characters.id, sorcererId));
+  });
+  });

@@ -31,9 +31,11 @@ const EquipmentSelection: React.FC = () => {
   const startingEquipment = characterClass ? getStartingEquipment(characterClass.name) : [];
   const goldData = characterClass ? startingGoldByClass[characterClass.id] : undefined;
 
-  // #2710: the gold option is the card that doesn't select equipment.
-  // Derive from the selected index, not a hardcoded comparison elsewhere.
-  const GOLD_OPTION_INDEX = 1;
+  // #2710: the gold option is the card that carries goldData (not equipment).
+  // The UI renders one equipment package card (index 0) followed by the gold
+  // card. Derive the gold index from that structure, not a magic number.
+  const EQUIPMENT_PACKAGE_COUNT = 1;
+  const GOLD_OPTION_INDEX = EQUIPMENT_PACKAGE_COUNT;
   const isGoldSelected = state.character?.selectedEquipmentOptionIndex === GOLD_OPTION_INDEX;
 
   /**
@@ -171,12 +173,12 @@ const EquipmentSelection: React.FC = () => {
               ? 'border-primary bg-accent/10'
               : 'border-transparent'
           }`}
-          onClick={() => handleEquipmentSelect([], 1)}
+          onClick={() => handleEquipmentSelect([], GOLD_OPTION_INDEX)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
-              handleEquipmentSelect([], 1);
+              handleEquipmentSelect([], GOLD_OPTION_INDEX);
             }
           }}
         >

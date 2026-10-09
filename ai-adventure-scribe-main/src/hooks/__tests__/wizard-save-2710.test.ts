@@ -1,34 +1,21 @@
 /**
  * #2710: Verifies the wizard save mapping logic.
  *
- * The wizard writes equipment as string[], but the save expects inventory.
- * This test verifies the mapping in use-character-save.ts works correctly.
+ * Tests the exported mapWizardEquipmentToInventory that useCharacterSave
+ * itself calls (not a copy). Also verifies currency→gold and names→prepared
+ * via transformCharacterForStorage.
  *
  * Fails on main: the mapping doesn't exist, equipment is dropped.
  */
 import { describe, expect, it } from 'vitest';
+
+import { mapWizardEquipmentToInventory } from '../use-character-save';
 
 import type { Character } from '@/types/character';
 
 import { transformCharacterForStorage } from '@/types/character';
 import { transformEquipmentForStorage } from '@/utils/characterTransformations';
 
-/**
- * The exact mapping logic from use-character-save.ts (both create and update paths).
- * Duplicated here to verify the behavior without rendering the hook.
- */
-const getEffectiveInventory = (character: Character) => {
-  if (character.inventory && character.inventory.length > 0) {
-    return character.inventory;
-  }
-  // #2710: wizard writes equipment as string[]
-  return (character.equipment || []).map((name) => ({
-    itemId: name,
-    itemType: 'equipment',
-    quantity: 1,
-    equipped: false,
-  }));
-};
 
 describe('wizard save mapping (#2710)', () => {
   it('QA-040: maps wizard equipment string[] to inventory rows', () => {
@@ -36,7 +23,8 @@ describe('wizard save mapping (#2710)', () => {
       equipment: ['Dagger', 'Quarterstaff', 'Holy Symbol'],
     } as Character;
 
-    const inventory = getEffectiveInventory(wizardCharacter);
+    // The exact function useCharacterSave calls.
+    const inventory = mapWizardEquipmentToInventory(wizardCharacter);
     expect(inventory).toHaveLength(3);
 
     const rows = transformEquipmentForStorage(
@@ -56,7 +44,7 @@ describe('wizard save mapping (#2710)', () => {
       equipment: ['Dagger', 'Quarterstaff'],
     } as Character;
 
-    const inventory = getEffectiveInventory(character);
+    const inventory = mapWizardEquipmentToInventory(character);
     expect(inventory).toHaveLength(1);
     expect(inventory[0].itemId).toBe('Sword');
   });

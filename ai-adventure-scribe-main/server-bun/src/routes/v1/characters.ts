@@ -636,7 +636,10 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           user!.userId,
           spells,
           className,
-          prepared ?? [],
+          // #2710: pass prepared through unchanged. When omitted (undefined),
+          // the service keeps today's behaviour (all true). Only an explicit
+          // array changes it.
+          prepared,
         );
 
         return result;
