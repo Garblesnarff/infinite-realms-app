@@ -7,7 +7,7 @@ import { type AuthUser, authenticateRequest } from '../lib/auth.js';
  * planRateLimit runs, so the per-user bucket counts it (#193 step 4). A request without a valid
  * token gets 401 `{ error: 'Unauthorized' }` before the handler runs.
  */
-export const authedUser = new Elysia({ name: 'authed-user' })
+export const requireUserAuth = new Elysia({ name: 'require-user-auth' })
   .resolve({ as: 'scoped' }, async ({ request }) => {
     const { user, error } = await authenticateRequest(request);
     // The guard below rejects a missing user before any handler sees it.

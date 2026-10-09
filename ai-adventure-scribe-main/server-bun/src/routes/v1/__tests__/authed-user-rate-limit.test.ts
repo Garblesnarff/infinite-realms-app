@@ -3,7 +3,7 @@
  *
  * Before this change, spells authenticated inside each handler, so planRateLimit never saw
  * `user` and only the per-IP bucket ever filled. The control case reproduces that wiring. The
- * real route, mounted through the authedUser plugin, must fill the per-user bucket.
+ * real route, mounted through the requireUserAuth plugin, must fill the per-user bucket.
  *
  * Client IPs rotate through X-Forwarded-For, so the per-IP bucket never fills: a 429 with
  * `scope: 'user'` can only come from the per-user bucket.

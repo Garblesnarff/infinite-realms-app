@@ -17,7 +17,7 @@ import { sql } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { logger } from '../../lib/logger.js';
 import { UserPlanCache } from '../../lib/user-plan-cache.js';
-import { authedUser } from '../../middleware/authed-user.js';
+import { requireUserAuth } from '../../middleware/require-user-auth.js';
 import {
   claimStripeEvent,
   getPlanFromPriceId,
@@ -180,7 +180,7 @@ async function getOrCreateStripeCustomer(
 }
 
 const billingUserRoutes = new Elysia({ prefix: '/v1/billing' })
-  .use(authedUser)
+  .use(requireUserAuth)
 
   /**
    * Create Stripe Checkout session
