@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.1](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.0...v0.32.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **media:** charge image and voice quota only after a successful call ([#2676](https://github.com/Garblesnarff/infinite-realms-production/issues/2676) step 2b) ([#2694](https://github.com/Garblesnarff/infinite-realms-production/issues/2694)) ([f43910f](https://github.com/Garblesnarff/infinite-realms-production/commit/f43910f5d584ab65c4f0bed223d90436711ade04))
+
+
+### Tests
+
+* **combat:** scripted fight gate in real-DB CI ([#2658](https://github.com/Garblesnarff/infinite-realms-production/issues/2658) step 4) ([#2721](https://github.com/Garblesnarff/infinite-realms-production/issues/2721)) ([3ce277e](https://github.com/Garblesnarff/infinite-realms-production/commit/3ce277ed3050cd5d1397f17b9d3a1dd01a811056))
+* **spells:** test the real SpellSelection ([#2669](https://github.com/Garblesnarff/infinite-realms-production/issues/2669) step 3) ([#2697](https://github.com/Garblesnarff/infinite-realms-production/issues/2697)) ([8b56992](https://github.com/Garblesnarff/infinite-realms-production/commit/8b56992ea9a0ad77f86538020c01e13a4409cddf))
+
 ## [0.32.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.31.2...v0.32.0) (2026-10-08)
 
 
