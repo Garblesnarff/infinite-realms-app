@@ -75,6 +75,11 @@ describe('tactical map combat flow', () => {
     });
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
   });
+  it('names the missing provider instead of casting a null context (#2685 step 1)', () => {
+    expect(() => render(<TacticalMapBoard sessionId="s" />)).toThrow(
+      'TacticalMapBoard requires TacticalMapProvider',
+    );
+  });
   it('mounts, moves/refuses, receives deltas, and unmounts', async () => {
     let moveRequests = 0;
     const fetchMock = vi.fn((url: string) => {
@@ -103,7 +108,11 @@ describe('tactical map combat flow', () => {
       });
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<TacticalMapBoard sessionId="s" />);
+    render(
+      <TacticalMapProvider sessionId="s">
+        <TacticalMapBoard sessionId="s" />
+      </TacticalMapProvider>,
+    );
     await act(async () =>
       window.dispatchEvent(
         new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),
@@ -191,7 +200,11 @@ describe('tactical map combat flow', () => {
       'fetch',
       vi.fn(() => Promise.resolve({ ok: false, json: async () => null })),
     );
-    render(<TacticalMapBoard sessionId="s" />);
+    render(
+      <TacticalMapProvider sessionId="s">
+        <TacticalMapBoard sessionId="s" />
+      </TacticalMapProvider>,
+    );
     await act(async () =>
       window.dispatchEvent(
         new CustomEvent('tactical-map-delta', { detail: { type: 'map_created', map: map() } }),

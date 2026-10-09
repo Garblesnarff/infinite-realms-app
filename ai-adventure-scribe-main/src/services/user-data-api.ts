@@ -464,15 +464,6 @@ export const userDataApi = {
       body: JSON.stringify({ combat_exits: combatExits ?? [] }),
       ...(signal ? { signal } : {}),
     }),
-  applyTacticalMapAction: (
-    sessionId: string,
-    action: TacticalMapActionPayload,
-  ): Promise<Response> =>
-    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(action),
-    }),
   applyDmTacticalActions: (
     sessionId: string,
     actions: TacticalMapActionPayload[],

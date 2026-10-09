@@ -21,7 +21,6 @@ import {
 import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
-  applyTacticalMapAction,
   consumeDmFactActions,
   consumeDmTacticalCorrection,
   consumeDmTacticalFacts,
@@ -37,7 +36,6 @@ import { entitySlug, resolveEntityRef } from '../../tactical/identity.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { buildStallDirective, shouldBreakStall } from '../../tactical/stall-breaker.js';
 
-import type { MapAction } from '../../tactical/dispatch.js';
 import type { DmFactAction, TacticalMap } from '../../tactical/types.js';
 
 /**
@@ -263,66 +261,6 @@ export function createTacticalMapRoutes({
           }
         },
         { body: t.Object({ entityId: t.String(), x: t.Number(), y: t.Number() }) },
-      )
-      .post(
-        '/:id/tactical-map/action',
-        async ({ params, body, user, set }) => {
-          const access = await sessionOwnership(params.id, user.userId);
-          if (!access.success) {
-            set.status = access.error!.status;
-            return { error: access.error!.message };
-          }
-          if (body.action === 'move' && body.entityId && body.x != null && body.y != null) {
-            const encounter = await CombatEncounterService.getActiveEncounter(
-              params.id,
-              user.userId,
-            );
-            if (!encounter) {
-              set.status = 404;
-              return { error: 'No active combat encounter' };
-            }
-            try {
-              const actorId = await resolveSessionEntityId(params.id, body.entityId);
-              const result = await executeCombatIntent(
-                encounter.id,
-                { type: 'move', actorId, x: body.x, y: body.y },
-                user.userId,
-                'player',
-              );
-              return { result };
-            } catch (error) {
-              set.status = 422;
-              return { error: error instanceof Error ? error.message : 'Movement refused' };
-            }
-          }
-          const result = await applyTacticalMapAction(params.id, body as unknown as MapAction);
-          if (
-            !result.applied &&
-            (result.refusal as { reason?: string }).reason === 'no_active_map'
-          ) {
-            set.status = 404;
-            return { error: 'No active tactical map' };
-          }
-          if (!result.applied) {
-            set.status = 422;
-            return result;
-          }
-          return { result };
-        },
-        {
-          body: t.Object({
-            action: t.Union([
-              t.Literal('move'),
-              t.Literal('place'),
-              t.Literal('remove'),
-              t.Literal('update_cell'),
-            ]),
-            entityId: t.Optional(t.Nullable(t.String())),
-            x: t.Optional(t.Nullable(t.Number())),
-            y: t.Optional(t.Nullable(t.Number())),
-            changes: t.Optional(t.Nullable(t.Record(t.String(), t.Any()))),
-          }),
-        },
       )
       .post(
         '/:id/tactical-map/dm-actions',

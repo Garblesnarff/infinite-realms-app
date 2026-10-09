@@ -122,7 +122,6 @@ vi.mock('@/services/user-data-api', async (importOriginal) => {
       getSessionContext: vi.fn(),
       getTacticalMapContext: vi.fn(),
       endTacticalMap: vi.fn(),
-      applyTacticalMapAction: vi.fn(),
       applyDmTacticalActions: vi.fn(),
       detectDeclaredAttack: vi.fn(),
       applyDmHandoutActions: vi.fn(),

@@ -45,7 +45,6 @@ vi.mock('@/services/user-data-api', () => ({
     getSessionContext: vi.fn(),
     getTacticalMapContext: vi.fn(),
     endTacticalMap: vi.fn(),
-    applyTacticalMapAction: vi.fn(),
     applyDmTacticalActions: vi.fn(),
     clearPendingCombatIntent: vi.fn(),
     fetchSessionFallenState: vi.fn(),
@@ -956,7 +955,6 @@ describe('useAIResponse', () => {
     // submits the whole batch once and does not re-prompt on refusal.
     expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledTimes(1);
     expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledWith(mockSessionId, [mapAction]);
-    expect(userDataApi.applyTacticalMapAction).not.toHaveBeenCalled();
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
   });
   /**

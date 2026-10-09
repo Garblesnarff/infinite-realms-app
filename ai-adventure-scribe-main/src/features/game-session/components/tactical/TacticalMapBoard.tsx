@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { type Point, type TacticalEntity } from './tactical-map-state';
 import { TacticalMapCanvas } from './TacticalMapCanvas';
 import { useTacticalMapContext, type TacticalMapState } from './TacticalMapProvider';
-import { useTacticalMap } from './useTacticalMap';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,23 +25,10 @@ type MoveResponse = {
   };
 };
 
-/**
- * Reads the shared map from TacticalMapProvider when one is mounted (the game layout), so
- * moving the board between the rail and the sheet keeps its state. Without a provider it
- * owns the map itself.
- */
 export function TacticalMapBoard(props: Props): JSX.Element {
   const shared = useTacticalMapContext();
-  return shared ? (
-    <TacticalMapBoardView {...props} tactical={shared} />
-  ) : (
-    <StandaloneTacticalMapBoard {...props} />
-  );
-}
-
-function StandaloneTacticalMapBoard(props: Props): JSX.Element {
-  const tactical = useTacticalMap(props.sessionId);
-  return <TacticalMapBoardView {...props} tactical={tactical} />;
+  if (!shared) throw new Error('TacticalMapBoard requires TacticalMapProvider');
+  return <TacticalMapBoardView {...props} tactical={shared} />;
 }
 
 function TacticalMapBoardView({

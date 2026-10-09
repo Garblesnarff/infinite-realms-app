@@ -505,6 +505,77 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       });
     });
 
+    test('removed /tactical-map/action returns 404 through the real pipeline without DB changes (#2685 step 1)', async () => {
+      const before = await persistedCombat();
+      const response = await app.handle(
+        new Request(`http://localhost/v1/sessions/${sessionId}/tactical-map/action`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'move', entityId: heroId, x: 4, y: 3 }),
+        }),
+      );
+      expect(response.status).toBe(404);
+      expect(await persistedCombat()).toEqual(before);
+    });
+
+    test('live /move refuses an off-turn player without writes and persists a legal move (#2685 step 1)', async () => {
+      const [offTurn] = await database
+        .insert(combatParticipants)
+        .values({
+          encounterId,
+          characterId: bobId,
+          name: 'Bob',
+          participantType: 'player',
+          turnOrder: 2,
+          initiative: 5,
+          armorClass: 12,
+          maxHp: 20,
+          speed: 30,
+        })
+        .returning({ id: combatParticipants.id });
+      await database
+        .update(combatEncounters)
+        .set({ currentTurnOrder: 1 })
+        .where(eq(combatEncounters.id, encounterId));
+      const before = await persistedCombat();
+      const refused = await call('POST', `/v1/sessions/${sessionId}/tactical-map/move`, {
+        entityId: offTurn.id,
+        x: 4,
+        y: 3,
+      });
+      expect(refused).toEqual({
+        status: 422,
+        json: { error: 'Actor is not the current-turn participant' },
+      });
+      expect(await persistedCombat()).toEqual(before);
+
+      const accepted = await call('POST', `/v1/sessions/${sessionId}/tactical-map/move`, {
+        entityId: heroId,
+        x: 4,
+        y: 3,
+      });
+      expect(accepted.status).toBe(200);
+      expect(accepted.json.result).toMatchObject({ applied: true });
+      const after = await persistedCombat();
+      expect(
+        (after.map.state as TacticalMap).entities.find(
+          (entity: { id: string }) => entity.id === heroId,
+        ),
+      ).toMatchObject({ x: 4, y: 3, movementRemaining: 25 });
+      expect(
+        (after.map.state as TacticalMap).entities.find(
+          (entity: { id: string }) => entity.id === monsterId,
+        ),
+      ).toEqual(
+        (before.map.state as TacticalMap).entities.find(
+          (entity: { id: string }) => entity.id === monsterId,
+        ),
+      );
+      expect(after.hp).toEqual(before.hp);
+      expect(after.slots).toEqual(before.slots);
+      expect(after.slotUsage).toEqual(before.slotUsage);
+    });
+
     test('documents #2685: another user CANNOT remove A’s entity via /dm-actions today', async () => {
       const before = await persistedCombat();
       const body = {

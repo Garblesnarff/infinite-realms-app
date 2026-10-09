@@ -1,10 +1,8 @@
-import { Target, Move, Sword, Heart, Skull, Trash2, Shield, Eye } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 import type { ComponentType, MouseEvent as ReactMouseEvent } from 'react';
 
 import { useHotkeys, BATTLE_MAP_HOTKEYS } from '@/hooks/use-hotkeys';
-import logger from '@/lib/logger';
 
 // ===========================
 // Types
@@ -135,99 +133,4 @@ export function useQuickActionMenu(options: UseQuickActionMenuOptions): UseQuick
     closeMenu,
     onContextMenu,
   };
-}
-
-/**
- * Default quick actions for tokens
- */
-export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): QuickAction[] {
-  return [
-    {
-      id: 'target',
-      label: 'Target',
-      icon: Target,
-      shortcut: 'T',
-      description: 'Target this token',
-      onAction: () => {
-        logger.debug('Target token:', { tokenId });
-      },
-    },
-    {
-      id: 'move',
-      label: 'Move',
-      icon: Move,
-      shortcut: 'M',
-      description: 'Move this token',
-      onAction: () => {
-        logger.debug('Move token:', { tokenId });
-      },
-    },
-    {
-      id: 'attack',
-      label: 'Attack',
-      icon: Sword,
-      shortcut: 'A',
-      description: 'Attack with this token',
-      variant: 'danger',
-      onAction: () => {
-        logger.debug('Attack with token:', { tokenId });
-      },
-    },
-    {
-      id: 'heal',
-      label: 'Heal',
-      icon: Heart,
-      shortcut: 'H',
-      description: 'Heal this token',
-      variant: 'success',
-      onAction: () => {
-        logger.debug('Heal token:', { tokenId });
-      },
-    },
-    {
-      id: 'condition',
-      label: 'Condition',
-      icon: Shield,
-      shortcut: 'C',
-      description: 'Apply condition',
-      variant: 'warning',
-      onAction: () => {
-        logger.debug('Apply condition to token:', { tokenId });
-      },
-    },
-    {
-      id: 'visibility',
-      label: 'Hide',
-      icon: Eye,
-      shortcut: 'V',
-      description: 'Toggle visibility',
-      enabled: isGM,
-      onAction: () => {
-        logger.debug('Toggle visibility for token:', { tokenId });
-      },
-    },
-    {
-      id: 'damage',
-      label: 'Damage',
-      icon: Skull,
-      shortcut: 'D',
-      description: 'Apply damage',
-      variant: 'danger',
-      onAction: () => {
-        logger.debug('Apply damage to token:', { tokenId });
-      },
-    },
-    {
-      id: 'delete',
-      label: 'Delete',
-      icon: Trash2,
-      shortcut: 'Del',
-      description: 'Delete this token',
-      variant: 'danger',
-      enabled: isGM,
-      onAction: () => {
-        logger.debug('Delete token:', { tokenId });
-      },
-    },
-  ];
 }

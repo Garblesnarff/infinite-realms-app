@@ -39,16 +39,7 @@ describe('userDataApi tactical transport', () => {
       }),
     ).resolves.toBe(response);
     await expect(userDataApi.endTacticalMap('session id')).resolves.toBe(response);
-    await expect(
-      userDataApi.applyTacticalMapAction('session id', {
-        action: 'move',
-        entityId: 'entity/id',
-        x: 2,
-        y: 4,
-      }),
-    ).resolves.toBe(response);
-
-    expect(waitForAuth).toHaveBeenCalledTimes(4);
+    expect(waitForAuth).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       'http://localhost:8888/v1/sessions/session%20id/tactical-map/context/entity%2Fid',
@@ -74,15 +65,6 @@ describe('userDataApi tactical transport', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
         body: JSON.stringify({ combat_exits: [] }),
-      },
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
-      'http://localhost:8888/v1/sessions/session%20id/tactical-map/action',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer access-token' },
-        body: JSON.stringify({ action: 'move', entityId: 'entity/id', x: 2, y: 4 }),
       },
     );
   });

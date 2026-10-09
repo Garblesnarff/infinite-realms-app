@@ -33,15 +33,14 @@ const app = new Elysia().use(
   }),
 );
 
-describe('POST /v1/sessions/:id/tactical-map/action auth order', () => {
-  it('no bearer and no body currently returns 422 (desired 401)', async () => {
+describe('removed POST /v1/sessions/:id/tactical-map/action (#2685 step 1)', () => {
+  it('no bearer and no body returns 404 after route removal', async () => {
     const response = await app.handle(
       new Request('http://localhost/v1/sessions/session-1/tactical-map/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
       }),
     );
-    // Desired: 401. TypeBox body schema currently runs before requireAuth (#2120).
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(404);
   });
 });
