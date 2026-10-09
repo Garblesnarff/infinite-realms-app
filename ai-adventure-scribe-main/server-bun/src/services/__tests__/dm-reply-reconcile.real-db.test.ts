@@ -79,6 +79,10 @@ const { sql } = await importWithRealDb(() => import('../../lib/db.js'));
 // #2718: the DM turn is driven through the real route. Only the sign-in and the model are
 // replaced, by spies restored after each test (CI runs this file with other real-DB suites).
 const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
+const loggerModule = await importWithRealDb(() => import('../../lib/logger.js'));
+const { ClassFeaturesService } = await importWithRealDb(
+  () => import('../class-features-service.js'),
+);
 const { LLMProviderService } = await importWithRealDb(() => import('../llm-provider-service.js'));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
@@ -379,9 +383,9 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
   });
 
   // ---------------------------------------------------------------------------------------------
-  // #2718 step a: what the server does TODAY with a DM reply that grants a feature or a spell the
-  // character does not have. Nothing checks it: the reply passes through unchanged, and the turn
-  // has no side effect on the character either way.
+  // #2718: a DM reply that grants a feature or a spell the character does not have. Step a
+  // recorded that nothing checked it; step b's server check (dm-feature-gate.ts) refuses it with
+  // one standard line, and the turn has no side effect on the character either way.
   // ---------------------------------------------------------------------------------------------
 
   /**
@@ -431,6 +435,11 @@ ${playerInput}
     race: string;
     scores: string;
     dexterityModifier: number;
+    level?: number;
+    cantrips?: string;
+    classLevels?: Array<{ class: string; level: number }>;
+    /** False leaves the session without a character: only the client's id names one. */
+    linkSession?: boolean;
     playerInput: string;
     reply: Record<string, unknown>;
   }): Promise<{
@@ -448,13 +457,15 @@ ${playerInput}
         name: testId(`gp-${opts.characterClass.toLowerCase()}`),
         class: opts.characterClass,
         race: opts.race,
-        level: 1,
+        level: opts.level ?? 1,
+        cantrips: opts.cantrips ?? null,
+        classLevels: opts.classLevels ?? null,
       })
       .returning();
     if (!character) throw new Error('[dm-reply-reconcile] the character was not seeded');
     await database
       .update(gameSessions)
-      .set({ characterId: character.id })
+      .set({ characterId: opts.linkSession === false ? null : character.id })
       .where(eq(gameSessions.id, sessionId));
     const dmMessageId = crypto.randomUUID();
     const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
@@ -480,7 +491,7 @@ ${playerInput}
             headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
             body: JSON.stringify({
               prompt: promptFor(
-                `${character.name}, a level 1 ${opts.race} ${opts.characterClass}`,
+                `${character.name}, a level ${character.level} ${opts.race} ${opts.characterClass}`,
                 opts.scores,
                 opts.playerInput,
               ),
@@ -542,47 +553,61 @@ ${playerInput}
       .where(eq(spellSlotUsageLog.characterId, characterId)),
   });
 
-  test('documents #2718: a level-1 Fighter declares Action Surge (a level-2 feature) and the server keeps the DM granting it', async () => {
-    // GP-017 (Abyssal). The model's reply in the shape of DMResponse (dm-response-schema.ts:140).
-    const reply = {
-      text: 'You draw on a reserve you did not know you had. Action Surge! Your blade comes around a second time before the cultist can raise his guard, and he staggers back against the altar.',
-      options: [
-        'A. **Press the attack**, drive him off the dais.',
-        'B. **Hold**, and watch the doors.',
-      ],
-      narration_segments: [],
-      roll_requests: [],
-      combat_transition: 'none',
-      scene_spec: null,
-      map_actions: [],
-      handout_actions: [],
-      combatants: [],
-      combat_actions: [],
-    };
-    const turn = await dmTurn({
-      characterClass: 'Fighter',
-      race: 'Human',
-      scores: 'STR 16(+3), DEX 14(+2), CON 14(+2), INT 8(-1), WIS 10(+0), CHA 10(+0)',
-      dexterityModifier: 2,
-      playerInput: 'I use Action Surge and swing again before he recovers.',
-      reply,
-    });
+  const envelopeOf = <T extends Record<string, unknown>>(
+    reply: T,
+  ): Record<string, unknown> & T => ({
+    combat_transition: 'none',
+    scene_spec: null,
+    map_actions: [],
+    handout_actions: [],
+    combatants: [],
+    combat_actions: [],
+    narration_segments: [],
+    ...reply,
+  });
 
-    // Accepted: one generation, and the reply goes back exactly as the model wrote it. The only
-    // change is the narration segments the server derives from the text when the model sends none.
+  const actionSurgeReply = envelopeOf({
+    text: 'You draw on a reserve you did not know you had. Action Surge! Your blade comes around a second time before the cultist can raise his guard, and he staggers back against the altar.',
+    options: [
+      'A. **Press the attack**, drive him off the dais.',
+      'B. **Hold**, and watch the doors.',
+    ],
+    roll_requests: [],
+  });
+  const fighter = {
+    characterClass: 'Fighter',
+    race: 'Human',
+    scores: 'STR 16(+3), DEX 14(+2), CON 14(+2), INT 8(-1), WIS 10(+0), CHA 10(+0)',
+    dexterityModifier: 2,
+    playerInput: 'I use Action Surge and swing again before he recovers.',
+    reply: actionSurgeReply,
+  };
+  const rogue = {
+    characterClass: 'Rogue',
+    race: 'Half-Orc',
+    scores: 'STR 12(+1), DEX 16(+3), CON 12(+1), INT 8(-1), WIS 12(+1), CHA 10(+0)',
+    dexterityModifier: 3,
+  };
+
+  test('refuses #2718: a level-1 Fighter declaring Action Surge (a level-2 feature) gets the standard refusal, and nothing applies', async () => {
+    // GP-017 (Abyssal). The model's reply in the shape of DMResponse (dm-response-schema.ts:140).
+    const turn = await dmTurn(fighter);
+
+    // Refused: one generation, and the reply that leaves is the one standard line, with no rolls
+    // and no options. The segments are derived from that line.
     expect(turn.status).toBe(200);
     expect(turn.modelCalls).toBe(1);
+    const line = `${turn.character.name} can't use Action Surge: it isn't on their character sheet.`;
+    const refusal = envelopeOf({ text: line, options: [], roll_requests: [] });
     expect(JSON.parse(String(turn.body.text))).toEqual({
-      ...reply,
-      narration_segments: [expect.objectContaining({ type: 'dm', text: reply.text })],
+      ...refusal,
+      narration_segments: [expect.objectContaining({ type: 'dm', text: line })],
     });
-    // And it is kept: the server writes the turn as the session's DM row, Action Surge and all.
+    // The session keeps the refusal, not the granted surge.
     expect(turn.body.dmReplyPersisted).toBe(true);
     const [row] = await rowsFor([turn.dmMessageId]);
-    expect(row?.message).toBe(provisionalDmText(reply));
-    expect(row?.message).toContain('Action Surge!');
-    // Only narration: no feature is granted, used or spent. The reply schema has no "feature
-    // use" to apply or refuse, and nothing reads the text for one.
+    expect(row?.message).toBe(line);
+    // Nothing granted, used or spent.
     expect(await ledgersOf(turn.character.id)).toEqual({
       character: expect.objectContaining({ class: 'Fighter', level: 1, classFeatures: null }),
       features: [],
@@ -592,15 +617,28 @@ ${playerInput}
     });
   });
 
-  test("documents #2718: a Rogue (no spellcasting) casts Detect Thoughts and the server passes the DM's invented save through", async () => {
+  test('a level-2 Fighter declaring Action Surge is allowed: the reply passes through unchanged (#2718)', async () => {
+    const turn = await dmTurn({ ...fighter, level: 2 });
+
+    expect(turn.status).toBe(200);
+    expect(turn.modelCalls).toBe(1);
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...actionSurgeReply,
+      narration_segments: [expect.objectContaining({ type: 'dm', text: actionSurgeReply.text })],
+    });
+    expect(turn.body.dmReplyPersisted).toBe(true);
+    const [row] = await rowsFor([turn.dmMessageId]);
+    expect(row?.message).toBe(provisionalDmText(actionSurgeReply));
+  });
+
+  test("refuses #2718: a Rogue (no spellcasting) casting Detect Thoughts gets the standard refusal, and the DM's invented save is dropped", async () => {
     // GP-010 (The Eternal Feast): the DM invented an INT save at DC 16 and let it partly work.
-    const reply = {
+    const reply = envelopeOf({
       text: "You reach for the merchant's mind. For a heartbeat his surface thoughts brush yours: coin, fear, a name he will not say aloud. Hold on, if you can.",
       options: [
         'A. **Push deeper** into his thoughts.',
         'B. **Let go**, and ask him about the name.',
       ],
-      narration_segments: [],
       roll_requests: [
         {
           type: 'save',
@@ -612,38 +650,24 @@ ${playerInput}
           disadvantage: false,
         },
       ],
-      combat_transition: 'none',
-      scene_spec: null,
-      map_actions: [],
-      handout_actions: [],
-      combatants: [],
-      combat_actions: [],
-    };
+    });
     const turn = await dmTurn({
-      characterClass: 'Rogue',
-      race: 'Half-Orc',
-      scores: 'STR 12(+1), DEX 16(+3), CON 12(+1), INT 8(-1), WIS 12(+1), CHA 10(+0)',
-      dexterityModifier: 3,
+      ...rogue,
       playerInput: 'I cast Detect Thoughts on the merchant.',
       reply,
     });
 
-    // Accepted: one generation, and the invented save reaches the client unchanged, DC 16 and
-    // all; the client puts it in front of the player as a roll.
     expect(turn.status).toBe(200);
     expect(turn.modelCalls).toBe(1);
+    const line = `${turn.character.name} can't use Detect Thoughts: it isn't on their character sheet.`;
     expect(JSON.parse(String(turn.body.text))).toEqual({
-      ...reply,
-      narration_segments: [expect.objectContaining({ type: 'dm', text: reply.text })],
+      ...envelopeOf({ text: line, options: [], roll_requests: [] }),
+      narration_segments: [expect.objectContaining({ type: 'dm', text: line })],
     });
-    // Held only because it carries a roll (#2139): the client saves the row. A step b that strips
-    // the invented save would flip this.
-    expect(turn.body.dmReplyPersisted).toBe(false);
-    expect(await rowsFor([turn.dmMessageId])).toHaveLength(0);
-    // No slot is spent and no spell recorded: there are no slots, and nothing checks that a Rogue
-    // has none. The server's spell checks (combat-attack-service.ts and
-    // combat-entry-first-action.ts, `spell_not_known`) are combat-only; the reply schema's one
-    // spell field, `combat_actions` `cast_spell`, is too. An out-of-combat turn reaches neither.
+    // No roll is left to hold the turn back, so the server keeps the refusal as the DM row.
+    expect(turn.body.dmReplyPersisted).toBe(true);
+    const [row] = await rowsFor([turn.dmMessageId]);
+    expect(row?.message).toBe(line);
     expect(await ledgersOf(turn.character.id)).toEqual({
       character: expect.objectContaining({
         class: 'Rogue',
@@ -657,5 +681,207 @@ ${playerInput}
       slots: [],
       slotUses: [],
     });
+  });
+
+  test('an NPC casting Detect Thoughts in the narration is not refused: only the player claims (#2718)', async () => {
+    // The priest casts it on the player; the player resists. Named in the narration and in the
+    // save's purpose, neither of which is the player's claim.
+    const reply = envelopeOf({
+      text: "The priest's eyes go milky as he casts Detect Thoughts on you, and something cold presses at the edge of your mind.",
+      options: ['A. **Resist**, and fill your head with noise.', 'B. **Run** for the door.'],
+      roll_requests: [
+        {
+          type: 'save',
+          formula: '1d20-1',
+          purpose: "Intelligence save against the priest's Detect Thoughts",
+          dc: 13,
+          ac: null,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+    });
+    const turn = await dmTurn({
+      ...rogue,
+      playerInput: 'I keep my face still and watch the priest.',
+      reply,
+    });
+
+    expect(turn.status).toBe(200);
+    expect(turn.modelCalls).toBe(1);
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...reply,
+      narration_segments: [expect.objectContaining({ type: 'dm', text: reply.text })],
+    });
+    // A roll turn, held for the client to save, exactly as before step b.
+    expect(turn.body.dmReplyPersisted).toBe(false);
+  });
+
+  test('a character named only by the client (combatEntry.player.characterId) gets no check, and the skip is logged (#2718)', async () => {
+    const warn = spyOn(loggerModule.logger, 'warn');
+    let turn: Awaited<ReturnType<typeof dmTurn>>;
+    try {
+      turn = await dmTurn({ ...fighter, linkSession: false });
+      expect(warn.mock.calls.map(([line]) => line)).toContainEqual(
+        expect.objectContaining({
+          msg: 'DM_FEATURE_CHECK_SKIPPED',
+          reason: 'no_owned_session_character',
+          clientCharacterIdOffered: true,
+          claimedFeatures: ['Action Surge'],
+        }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+    // Unverified, so not ruled on: the reply passes through as the model wrote it.
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...actionSurgeReply,
+      narration_segments: [expect.objectContaining({ type: 'dm', text: actionSurgeReply.text })],
+    });
+  });
+
+  test('a Wizard casting a spell on their sheet is allowed; "use" names a spell as well as "cast" (#2718)', async () => {
+    const reply = envelopeOf({
+      text: 'Frost curls from your fingertips and the brazier hisses out.',
+      options: ['A. **Move on** in the dark.'],
+      roll_requests: [],
+    });
+    const turn = await dmTurn({
+      characterClass: 'Wizard',
+      race: 'Elf',
+      scores: 'STR 8(-1), DEX 14(+2), CON 12(+1), INT 16(+3), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 2,
+      cantrips: 'ray-of-frost',
+      playerInput: 'I use Ray of Frost on the brazier.',
+      reply,
+    });
+
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...reply,
+      narration_segments: [expect.objectContaining({ type: 'dm', text: reply.text })],
+    });
+  });
+
+  test('a class the feature library does not cover is not refused a feature, and the gap is logged (#2718)', async () => {
+    const info = spyOn(loggerModule.logger, 'info');
+    let turn: Awaited<ReturnType<typeof dmTurn>>;
+    try {
+      turn = await dmTurn({ ...fighter, characterClass: 'Bard' });
+      expect(info.mock.calls.map(([line]) => line)).toContainEqual(
+        expect.objectContaining({ msg: 'DM_FEATURE_CHECK_UNCOVERED', className: 'Bard' }),
+      );
+    } finally {
+      info.mockRestore();
+    }
+    expect(JSON.parse(String(turn.body.text)).text).toBe(actionSurgeReply.text);
+  });
+
+  test('a check that cannot run fails open: the paid-for reply goes through and the failure is logged (#2718)', async () => {
+    const warn = spyOn(loggerModule.logger, 'warn');
+    const features = spyOn(ClassFeaturesService, 'getCharacterFeatures').mockRejectedValue(
+      new Error('connection reset'),
+    );
+    let turn: Awaited<ReturnType<typeof dmTurn>>;
+    try {
+      turn = await dmTurn(fighter);
+      expect(warn.mock.calls.map(([line]) => line)).toContainEqual(
+        expect.objectContaining({ msg: 'DM_FEATURE_CHECK_FAILED' }),
+      );
+    } finally {
+      features.mockRestore();
+      warn.mockRestore();
+    }
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(actionSurgeReply.text);
+    expect(turn.body.dmReplyPersisted).toBe(true);
+  });
+
+  test('refuses #2718: a refusal does not start combat — the entry handoff is dropped with everything else', async () => {
+    // The model opens a fight on the refused turn; the entry gate turns that into a pending
+    // handoff (`combat_entry_pending`) before the check runs.
+    const reply = envelopeOf({
+      text: 'Action Surge! You lunge at the cultist twice before he can raise his dagger, and the fight is on.',
+      options: ['A. **Press** him against the altar.'],
+      roll_requests: [],
+      combat_transition: 'start',
+      combatants: [{ monster_id: 'cultist', name: 'Cultist', count: 1 }],
+    });
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput: 'I use Action Surge and attack the cultist.',
+      reply,
+    });
+
+    const body = JSON.parse(String(turn.body.text));
+    expect(body.text).toBe(
+      `${turn.character.name} can't use Action Surge: it isn't on their character sheet.`,
+    );
+    expect(body).not.toHaveProperty('combat_entry_pending');
+    expect(body).not.toHaveProperty('combat_exits');
+    expect(body).toMatchObject({ combat_transition: 'none', combatants: [], roll_requests: [] });
+  });
+
+  test('"use" never names a spell: a Fighter using a shield is not casting Shield, in the input or a roll purpose (#2718)', async () => {
+    const reply = envelopeOf({
+      text: 'The blow rings off your shield and you shove back.',
+      options: ['A. **Hold the line.**'],
+      roll_requests: [
+        {
+          type: 'check',
+          formula: '1d20+3',
+          purpose: 'Strength (Athletics) to use the shield as a ram',
+          dc: 12,
+          ac: null,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+    });
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput: 'I use my shield to block the blow.',
+      reply,
+    });
+
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...reply,
+      narration_segments: [expect.objectContaining({ type: 'dm', text: reply.text })],
+    });
+  });
+
+  test('an empty feature library is not silent: the claim is let through and the gap is logged (#2718)', async () => {
+    const info = spyOn(loggerModule.logger, 'info');
+    const library = spyOn(ClassFeaturesService, 'getFeaturesLibrary').mockResolvedValue([]);
+    let turn: Awaited<ReturnType<typeof dmTurn>>;
+    try {
+      turn = await dmTurn(fighter);
+      expect(info.mock.calls.map(([line]) => line)).toContainEqual(
+        expect.objectContaining({ msg: 'DM_FEATURE_CHECK_UNCOVERED', reason: 'library_empty' }),
+      );
+    } finally {
+      library.mockRestore();
+      info.mockRestore();
+    }
+    expect(JSON.parse(String(turn.body.text)).text).toBe(actionSurgeReply.text);
+  });
+
+  test('a multiclass character is not ruled on: only one class is read, so the check fails open and logs (#2718)', async () => {
+    const info = spyOn(loggerModule.logger, 'info');
+    let turn: Awaited<ReturnType<typeof dmTurn>>;
+    try {
+      turn = await dmTurn({
+        ...fighter,
+        classLevels: [
+          { class: 'Fighter', level: 1 },
+          { class: 'Wizard', level: 1 },
+        ],
+      });
+      expect(info.mock.calls.map(([line]) => line)).toContainEqual(
+        expect.objectContaining({ msg: 'DM_FEATURE_CHECK_SKIPPED', reason: 'multiclass' }),
+      );
+    } finally {
+      info.mockRestore();
+    }
+    expect(JSON.parse(String(turn.body.text)).text).toBe(actionSurgeReply.text);
   });
 });

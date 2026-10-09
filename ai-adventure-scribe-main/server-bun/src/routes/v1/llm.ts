@@ -32,6 +32,7 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
+import { refuseFeaturesCharacterLacks } from '../../services/dm/dm-feature-gate.js';
 import {
   persistGeneratedDmReply,
   scheduleDmReplyWatchdog,
@@ -577,6 +578,18 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           return combatEntryGateDeps.getActiveEncounter(sessionId, ownerId);
         },
       });
+      // #2718: a feature or spell the player claims and their character lacks is refused here,
+      // before the reply is persisted or returned, so it applies nothing and spends nothing.
+      if (dmReply) {
+        result = await refuseFeaturesCharacterLacks({
+          result,
+          userId,
+          sessionId: sessionId ?? combatEntry?.sessionId,
+          playerInput,
+          inCombat: dmReply.inCombat === true,
+          clientCharacterId: combatEntry?.player?.characterId ?? null,
+        });
+      }
 
       if (result.error) {
         logger.error({
