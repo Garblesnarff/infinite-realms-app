@@ -112,7 +112,7 @@ gh issue edit 1855 --body-file /tmp/board.md
 To recover a lost revision:
 
 ```bash
-gh api graphql -f query='query { repository(owner:"Garblesnarff", name:"infinite-realms-production") {
+gh api graphql -f query='query { repository(owner:"Garblesnarff", name:"infinite-realms-app") {
   issue(number:1855) { userContentEdits(last:100) { nodes { editedAt editor { login } diff } } } } }'
 ```
 

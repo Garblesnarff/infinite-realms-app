@@ -8,7 +8,7 @@ This repo uses [Matt Pocock's engineering skills](https://github.com/mattpocock/
 
 ### Issue tracker
 
-Issues live as GitHub Issues on `Garblesnarff/infinite-realms-production`, managed via the `gh` CLI. PRs are not treated as a triage request surface. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub Issues on `Garblesnarff/infinite-realms-app`, managed via the `gh` CLI. PRs are not treated as a triage request surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
