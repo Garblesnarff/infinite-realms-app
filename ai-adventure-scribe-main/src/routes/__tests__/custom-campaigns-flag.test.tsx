@@ -52,8 +52,6 @@ vi.mock('@/pages/CharacterCreateEntry', () => stub('character-create-entry'));
 vi.mock('@/pages/campaigns/CampaignHubWithErrorBoundary', () => ({
   default: () => <div data-testid="campaign-hub">Campaign hub</div>,
 }));
-vi.mock('@/pages/SceneManagementPage', () => stub('scene-management'));
-vi.mock('@/pages/BattleMapPage', () => stub('battle-map'));
 vi.mock('@/pages/BlogAdmin', () => stub('blog-admin'));
 vi.mock('@/pages/BlogEditor', () => stub('blog-editor'));
 vi.mock('@/pages/AccountPage', () => stub('account'));
@@ -86,7 +84,9 @@ describe('custom campaign wizard flag (#2192)', () => {
     renderAt('/app/campaigns/create');
 
     await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/app/', { normalizeWhitespace: false }),
+      expect(screen.getByTestId('location')).toHaveTextContent('/app/', {
+        normalizeWhitespace: false,
+      }),
     );
     expect(screen.queryByTestId('campaign-wizard')).not.toBeInTheDocument();
     // The redirect target is the home page, which renders the campaign list.

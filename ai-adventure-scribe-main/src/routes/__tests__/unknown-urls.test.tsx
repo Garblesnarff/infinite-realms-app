@@ -31,8 +31,6 @@ vi.mock('@/features/campaign/components/creation/campaign-wizard', () => stub('w
 vi.mock('@/features/game-session/components/game/GameContentWithErrorBoundary', () => stub('game'));
 vi.mock('@/pages/CharacterCreateEntry', () => stub('create character'));
 vi.mock('@/pages/campaigns/CampaignHubWithErrorBoundary', () => stub('campaign hub'));
-vi.mock('@/pages/SceneManagementPage', () => stub('scenes'));
-vi.mock('@/pages/BattleMapPage', () => stub('battle map'));
 vi.mock('@/pages/BlogAdmin', () => stub('blog'));
 vi.mock('@/pages/BlogEditor', () => stub('blog editor'));
 vi.mock('@/pages/AccountPage', () => stub('account'));
@@ -60,6 +58,21 @@ function renderApp(path: string) {
 }
 
 describe('unknown URLs (#2706)', () => {
+  it.each(['/app/campaigns/x/scenes/y', '/app/campaigns/x/scenes'])(
+    'shows AppNotFound for the retired scene URL %s (#199 step 3)',
+    (path) => {
+      renderApp(path);
+
+      expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Back to your campaigns' })).toHaveAttribute(
+        'href',
+        '/app',
+      );
+      expect(screen.getByTestId('location')).toHaveTextContent(path);
+      expect(screen.queryByText('campaign hub')).not.toBeInTheDocument();
+    },
+  );
+
   it('renders a public 404 with a link home', () => {
     render(
       <MemoryRouter initialEntries={['/nonsense']}>

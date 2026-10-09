@@ -21,8 +21,6 @@ const CharacterCreateEntry = lazy(() => import('@/pages/CharacterCreateEntry'));
 const CampaignHubWithErrorBoundary = lazy(
   () => import('@/pages/campaigns/CampaignHubWithErrorBoundary'),
 );
-const SceneManagementPage = lazy(() => import('@/pages/SceneManagementPage'));
-const BattleMapPage = lazy(() => import('@/pages/BattleMapPage'));
 const BlogAdmin = lazy(() => import('@/pages/BlogAdmin'));
 const BlogEditor = lazy(() => import('@/pages/BlogEditor'));
 const AccountPage = lazy(() => import('@/pages/AccountPage'));
@@ -34,6 +32,7 @@ function CampaignHubRoute() {
   const { id, '*': splat } = useParams();
   const location = useLocation();
   const tab = (splat ?? '').split('/').filter(Boolean)[0] ?? '';
+  if (tab === 'scenes') return <AppNotFound />;
   if (tab && !CAMPAIGN_HUB_TABS.has(tab)) {
     return <Navigate to={{ pathname: `/app/campaigns/${id}`, search: location.search }} replace />;
   }
@@ -69,14 +68,6 @@ export const getAppRoutes = (): RouteObject[] => [
     : { path: '/campaigns/create', element: <Navigate to="/app/" replace /> },
   // /campaigns/new is not the wizard. It used to match :id and show "Campaign not found" (#2706).
   { path: '/campaigns/new', element: <Navigate to="/app" replace /> },
-  {
-    path: '/campaigns/:campaignId/scenes/:sceneId',
-    element: withRouteSuspense(<BattleMapPage />),
-  },
-  {
-    path: '/campaigns/:campaignId/scenes',
-    element: withRouteSuspense(<SceneManagementPage />),
-  },
   { path: '/campaigns/:id/*', element: <CampaignHubRoute /> },
   { path: '/game/:id', element: withRouteSuspense(<GameContentWithErrorBoundary />) },
   // Blog Admin Panel

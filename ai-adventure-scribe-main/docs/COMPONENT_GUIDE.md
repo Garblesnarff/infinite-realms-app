@@ -26,7 +26,6 @@ BattleCanvas (Root)
 ├── BattleScene
 │   ├── BackgroundImage
 │   ├── GridPlane
-│   ├── LayerManager
 │   │   ├── Background Layer
 │   │   │   └── BackgroundImage
 │   │   ├── Grid Layer
@@ -45,7 +44,6 @@ BattleCanvas (Root)
 │   │   │       └── TokenParticles
 │   │   ├── Effects Layer
 │   │   │   ├── AoETemplate[]
-│   │   │   ├── VisionPolygon[]
 │   │   │   └── OpportunityAttackZones[]
 │   │   ├── Drawings Layer
 │   │   │   ├── FreehandDrawing[]
@@ -213,26 +211,6 @@ interface BackgroundImageProps {
 
 ---
 
-### LayerManager
-
-Manages rendering order and visibility of all layers.
-
-**Location:** `/src/components/battle-map/LayerManager.tsx`
-
-**Props:**
-```typescript
-interface LayerManagerProps {
-  sceneId: string;
-  className?: string;
-}
-```
-
-**Features:**
-- Layer ordering (z-index)
-- Layer visibility control
-- Layer opacity control
-- Layer locking
-- Reactive to store updates
 
 ## Token Components
 
@@ -595,26 +573,6 @@ interface LightSourceProps {
 
 ---
 
-### VisionPolygon
-
-Calculated vision polygon with wall occlusion.
-
-**Location:** `/src/components/battle-map/VisionPolygon.tsx`
-
-**Props:**
-```typescript
-interface VisionPolygonProps {
-  tokenId: string;
-  visionRange: number;
-  walls: Array<WallSegment>;
-}
-```
-
-**Features:**
-- Raycasting-based vision
-- Wall occlusion
-- Polygon rendering
-- Performance optimized
 
 ## Fog of War
 

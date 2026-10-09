@@ -646,6 +646,19 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       ]);
     });
 
+    test('the board valid-moves URL returns engine destinations through the real pipeline (#199 step 3)', async () => {
+      const before = await persistedCombat();
+      const response = await call(
+        'GET',
+        `/v1/sessions/${sessionId}/tactical-map/valid-moves/${encodeURIComponent(heroId)}`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.json.entityId).toBe(heroId);
+      expect(response.json.moves).toContainEqual({ x: 4, y: 3 });
+      expect(response.json.moves).not.toContainEqual({ x: 9, y: 3 });
+      expect(await persistedCombat()).toEqual(before);
+    });
+
     test('removed /tactical-map/action returns 404 through the real pipeline without DB changes (#2685 step 1)', async () => {
       const before = await persistedCombat();
       const response = await app.handle(
