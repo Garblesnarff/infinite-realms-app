@@ -4,6 +4,10 @@ import { resolve } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  apprenticeLevel2SpellLists,
+  apprenticeSpellLists,
+} from '../../../../shared/test-fixtures/apprentice-spell-lists';
 import { premadeWizardSpellSlotsWireValue } from '../../../../shared/test-fixtures/premade-wizard-spell-slots';
 import {
   buildStarterCharacterSeed,
@@ -433,5 +437,28 @@ describe('starter-character-seeding', () => {
 
       expect(seed).not.toHaveProperty('spell_slots');
     });
+  });
+
+  it("emits The Apprentice's cantrips, spellbook and prepared list exactly as the #217 gate tests seed them", () => {
+    const seed = buildStarterCharacterSeed(
+      academyTemplates[0] as unknown as StarterCharacterTemplateLike,
+      'academy-of-arcane-gastronomy',
+    );
+
+    expect({
+      cantrips: seed.cantrips,
+      known_spells: seed.known_spells,
+      prepared_spells: seed.prepared_spells,
+    }).toEqual(apprenticeSpellLists);
+
+    const level2 = buildStarterCharacterSeed(
+      { ...academyTemplates[0], level: 2 } as unknown as StarterCharacterTemplateLike,
+      'academy-of-arcane-gastronomy',
+    );
+    expect({
+      cantrips: level2.cantrips,
+      known_spells: level2.known_spells,
+      prepared_spells: level2.prepared_spells,
+    }).toEqual(apprenticeLevel2SpellLists);
   });
 });
