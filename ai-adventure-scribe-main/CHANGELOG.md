@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.32.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.2...v0.32.3) (2026-10-09)
+
+
+### Bug Fixes
+
+* **combat:** death-save double-commit is deterministic ([#2724](https://github.com/Garblesnarff/infinite-realms-production/issues/2724)) ([#2732](https://github.com/Garblesnarff/infinite-realms-production/issues/2732)) ([3d2815f](https://github.com/Garblesnarff/infinite-realms-production/commit/3d2815f7133ae63bf7483b86128beb62d89b8c50))
+
+
+### Tests
+
+* **voice:** prove voice sends the app token ([#2676](https://github.com/Garblesnarff/infinite-realms-production/issues/2676) step 5) ([#2734](https://github.com/Garblesnarff/infinite-realms-production/issues/2734)) ([6a23ece](https://github.com/Garblesnarff/infinite-realms-production/commit/6a23eceeb6a74de0388d351a25dded0505e75db0))
+
 ## [0.32.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.1...v0.32.2) (2026-10-09)
 
 
