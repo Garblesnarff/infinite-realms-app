@@ -25,7 +25,8 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { afterAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
-import { eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { Elysia } from 'elysia';
 
 import {
   closeRealDb,
@@ -43,9 +44,11 @@ import {
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
+  dialogueHistory,
   gameSessions,
   tacticalMaps,
 } from '../../../../db/schema/index';
+import { describeDeathSave } from '../../../../shared/death-save-lines';
 import {
   DYING_SCHOLAR_ENCOUNTER,
   DYING_SCHOLAR_PARTICIPANT,
@@ -104,6 +107,16 @@ const { consumeDmTacticalFacts } = await importWithRealDb(
 const { getActiveConditionNames } = await importWithRealDb(
   () => import('../combat/data-access.js'),
 );
+// The combat gate drives the real intent route; only authentication is replaced (a spy, restored
+// after the gate, because CI runs this file alongside other real-DB suites in one process).
+if (hasRealDb) {
+  process.env.PORT ??= '8894';
+  process.env.CORS_ORIGIN ??= 'http://localhost:8891';
+  process.env.WORKOS_API_KEY ??= 'test-workos-key';
+  process.env.WORKOS_CLIENT_ID ??= 'test-workos-client';
+}
+const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
+const { intentRoutes } = await importWithRealDb(() => import('../../routes/v1/combat/intents.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -166,6 +179,8 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     spiderRanged?: boolean;
     spiderDownedBehavior?: 'ignore';
     extraAlly?: boolean;
+    /** The hero's Strength (default 8): the gate's unarmed strike needs a positive modifier. */
+    heroStrength?: number;
   }) => {
     const [{ id: campaignId }] = await db
       .insert(campaigns)
@@ -179,7 +194,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     created.characters.push(characterId);
     await db.insert(characterStats).values({
       characterId,
-      strength: 8,
+      strength: options.heroStrength ?? 8,
       armorClass: 11,
       maxHitPoints: options.heroMax ?? HERO_MAX_HP,
       currentHitPoints: options.heroHp,
@@ -1521,5 +1536,185 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect((await consumeDmTacticalFacts(downToo.sessionId)).join('\n')).not.toContain(
       'the target is unconscious)',
     );
+  });
+
+  // -----------------------------------------------------------------------------------------
+  // The combat gate (#2658 step 4): one scripted fight, start to finish, through the real route
+  // -----------------------------------------------------------------------------------------
+  /**
+   * Every step is read back from the database, not from the response alone. The dice: the
+   * player's own d20s ride on the intents (the route's `d20` field); every other die (the
+   * player's damage, the spider's attack and its damage) comes from `Math.random`, pinned to 0.7
+   * (a d20 of 15). Fangs is `1d1 + 2`, so the spider's damage is 3, or 4 on a critical.
+   *
+   * Server rows today: a keyed End turn (the player's row) and each creature action. The player's
+   * attack and death save write no server row; their engine lines are the client's (#2658 step
+   * 4 Friction), so the gate reads their results from the participant rows and, for the save,
+   * from the DM tactical fact the server records for it.
+   */
+  test('combat gate: attack → end turn → downed → death save → outcome', async () => {
+    const restore: Array<() => void> = [];
+    try {
+      const authSpy = spyOn(authModule, 'authenticateRequest').mockImplementation(
+        async (request: Request) => {
+          const caller = request.headers.get('authorization')?.replace(/^Bearer /, '');
+          return caller === userId
+            ? { user: { userId: caller, email: 'gate@example.test', plan: 'free' }, error: null }
+            : { user: null, error: 'Unauthorized' };
+        },
+      );
+      restore.push(() => authSpy.mockRestore());
+      const random = spyOn(Math, 'random').mockReturnValue(0.7);
+      restore.push(() => random.mockRestore());
+      const app = new Elysia({ prefix: '/v1/combat' }).use(intentRoutes);
+      // 1) A campaign, a session, a 3 HP hero (STR 14: unarmed +4 to hit, 3 damage) and one
+      //    spider adjacent to it, sure to hit AC 11 with a 15 + 5.
+      const scene = await seedScene({ heroHp: 3, heroStrength: 14 });
+      const post = async (body: unknown) => {
+        const response = await app.handle(
+          new Request(`http://localhost/v1/combat/${scene.encounterId}/intent`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+            body: JSON.stringify(body),
+          }),
+        );
+        expect(response.status).toBe(200);
+        return (await response.json()) as Record<string, any>;
+      };
+      const rows = async () =>
+        (
+          await db
+            .select()
+            .from(dialogueHistory)
+            .where(
+              and(
+                eq(dialogueHistory.sessionId, scene.sessionId),
+                eq(dialogueHistory.speakerType, 'system'),
+              ),
+            )
+            .orderBy(asc(dialogueHistory.sequenceNumber))
+        ).map((row) => ({
+          id: row.id,
+          text: row.message,
+          source: (row.context as { combatEngineBlocks?: Array<{ source: string }> })
+            ?.combatEngineBlocks?.[0]?.source,
+        }));
+
+      // 2) Attack: propose, roll (the player's d20 is 17), commit.
+      const attack = {
+        type: 'attack',
+        actorId: scene.heroId,
+        targetId: scene.spiderId,
+        expectedVersion: (await encounterOf(scene.encounterId)).version,
+      };
+      const proposed = await post({ phase: 'propose', intent: attack, origin: 'action_bar' });
+      expect(proposed.proposal).toMatchObject({
+        legal: true,
+        weaponName: 'Unarmed Strike',
+        attackBonus: 4,
+        targetAc: 15,
+      });
+      expect((await statusOf(scene.spiderId)).currentHp).toBe(40);
+      const committed = await post({
+        intent: { ...attack, d20: 17, actionId: testId('attack') },
+        origin: 'action_bar',
+      });
+      expect(committed.result).toMatchObject({ hit: true, totalAttackRoll: 21, finalDamage: 3 });
+      expect(committed.result.npcTurns).toBeUndefined();
+      expect(committed.engineRows).toEqual([]);
+      expect((await statusOf(scene.spiderId)).currentHp).toBe(37);
+      expect(await rows()).toEqual([]);
+      expect(await encounterOf(scene.encounterId)).toMatchObject({
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: attack.expectedVersion + 1,
+      });
+
+      // 3) End turn: the server runs the spider's turn in the same request.
+      const ended = await post({
+        intent: { type: 'end_turn', actorId: scene.heroId, actionId: testId('end-turn') },
+      });
+      const afterEnd = await rows();
+      expect(afterEnd.map(({ text, source }) => [source, text])).toEqual([
+        ['player', '⚙️ Engine: The Scholar ended their turn.'],
+        [
+          'npc',
+          '⚙️ Engine: Vitruvian Spider rolled 15 + 5 = 20 vs AC 11 against The Scholar with Fangs — HIT. 3 piercing damage. The Scholar is now at 0 HP and is unconscious.',
+        ],
+      ]);
+      expect(ended.engineRows.map((row: { id: string }) => row.id)).toEqual(
+        afterEnd.map((row) => row.id),
+      );
+      expect(ended.result.npcTurns.results.map((result: any) => result.action.actor_id)).toEqual([
+        scene.spiderId,
+      ]);
+
+      // 4) Downed: dying at 0 HP {0,0}, the turn back with the hero, and the death save is the
+      //    only legal action.
+      expect(await statusOf(scene.heroId)).toMatchObject({
+        currentHp: 0,
+        isConscious: false,
+        deathSavesSuccesses: 0,
+        deathSavesFailures: 0,
+      });
+      expect((await sheetOf(scene.characterId)).vitalState).toBe('dying');
+      expect(ended.result.npcTurns.currentParticipant).toMatchObject({
+        id: scene.heroId,
+        vitalState: 'dying',
+      });
+      const legal = await getLegalCombatActions(scene.encounterId, userId);
+      expect(legal.actorId).toBe(scene.heroId);
+      expect(legal.actions.map((action) => action.type)).toEqual(['death_save']);
+
+      // The save: a 5 is one failure, and the save is the whole turn, so the spider goes again.
+      const saved = await post({
+        intent: { type: 'death_save', actorId: scene.heroId, d20: 5 },
+        origin: 'dice_roll',
+      });
+      const save = saved.result.deathSaves[0];
+      expect(save).toMatchObject({
+        participantId: scene.heroId,
+        roll: 5,
+        isSuccess: false,
+        successes: 0,
+        failures: 1,
+        isDead: false,
+      });
+      const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
+      expect(facts).toContain(describeDeathSave('The Scholar', save));
+
+      // 5) Outcome: the spider's melee blow on the unconscious hero is an automatic critical,
+      //    two more failures: three, dead, and the fight ends in defeat.
+      const afterSave = await rows();
+      expect(afterSave.slice(0, 2)).toEqual(afterEnd);
+      expect(afterSave.map(({ source }) => source)).toEqual(['player', 'npc', 'npc']);
+      expect(afterSave[2].text).toBe(
+        [
+          '⚙️ Engine: Vitruvian Spider rolled 15 + 5 = 20 vs AC 11 against The Scholar with Fangs — CRITICAL HIT (the target is unconscious). 4 piercing damage. The Scholar is now at 0 HP and is dead.',
+          '⚙️ Engine: Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕✕ The Scholar is DEAD.',
+          '⚙️ Engine: Combat ended — the party was defeated (reason: party_defeated).',
+        ].join('\n\n'),
+      );
+      expect(saved.engineRows.map((row: { id: string }) => row.id)).toEqual([afterSave[2].id]);
+      expect(await statusOf(scene.heroId)).toMatchObject({
+        currentHp: 0,
+        isConscious: false,
+        deathSavesSuccesses: 0,
+        deathSavesFailures: 3,
+      });
+      expect(await sheetOf(scene.characterId)).toMatchObject({
+        currentHitPoints: 0,
+        isConscious: false,
+        deathSavesFailures: 3,
+        vitalState: 'dead',
+      });
+      expect((await statusOf(scene.spiderId)).currentHp).toBe(37);
+      expect(await encounterOf(scene.encounterId)).toMatchObject({
+        status: 'completed',
+        endedReason: 'party_defeated',
+      });
+    } finally {
+      for (const undo of restore) undo();
+    }
   });
 });
