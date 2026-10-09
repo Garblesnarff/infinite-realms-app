@@ -261,7 +261,7 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     });
     const { view, tree } = renderHandler();
     fireEvent.click(screen.getByRole('button', { name: 'Resolve save' }));
-    const composerRetry = await screen.findByRole('button', { name: 'Retry', exact: true });
+    const composerRetry = await screen.findByRole('button', { name: /^Retry$/ });
     view.rerender(tree());
     const rollRetry = screen.getByRole('button', { name: 'Roll Retry' });
     let finish!: (reply: unknown) => void;
