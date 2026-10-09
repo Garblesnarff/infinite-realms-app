@@ -29,7 +29,7 @@ import {
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { requireUserAuth } from '../../middleware/require-user-auth.js';
+import { requireUserAuth, resolveUser } from '../../middleware/require-user-auth.js';
 
 const spellFiltersQuery = t.Object({
   level: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
@@ -75,8 +75,9 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
    * GET /v1/spells
    * Get all spells with optional filtering
    */
-  .use(requireUserAuth)
+  .use(resolveUser)
   .use(planRateLimit('default'))
+  .use(requireUserAuth)
   .get(
     '/',
     async ({ query, set }) => {

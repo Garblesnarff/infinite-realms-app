@@ -17,7 +17,7 @@ import { sql } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { logger } from '../../lib/logger.js';
 import { UserPlanCache } from '../../lib/user-plan-cache.js';
-import { requireUserAuth } from '../../middleware/require-user-auth.js';
+import { requireUserAuth, resolveUser } from '../../middleware/require-user-auth.js';
 import {
   claimStripeEvent,
   getPlanFromPriceId,
@@ -180,6 +180,7 @@ async function getOrCreateStripeCustomer(
 }
 
 const billingUserRoutes = new Elysia({ prefix: '/v1/billing' })
+  .use(resolveUser)
   .use(requireUserAuth)
 
   /**

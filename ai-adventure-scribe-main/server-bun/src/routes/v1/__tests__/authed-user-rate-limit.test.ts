@@ -51,6 +51,8 @@ const { spellsRoutes } = await import('../spells.js');
 
 // The free default per-user limit is 60 a minute (rate-limit.ts, `default`).
 const FREE_USER_LIMIT = 60;
+// The free default per-IP limit is also 60 a minute.
+const FREE_IP_LIMIT = 60;
 
 /** Pre-change wiring: the limiter runs, but the handler authenticates on its own. */
 const controlApp = createRequestPipelineApp().use(
@@ -107,5 +109,20 @@ describe('per-user rate limit on authenticated routes (#193 step 4)', () => {
 
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('unauthenticated requests count against the per-IP bucket before the 401', async () => {
+    const clientIp = '10.4.0.1';
+    // Each request is refused by the guard, but planRateLimit counts it first.
+    for (let i = 0; i < FREE_IP_LIMIT; i += 1) {
+      const res = await realApp.handle(classesRequest('/v1/spells', null, clientIp));
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: 'Unauthorized' });
+    }
+    // The request after the limit is refused by the IP bucket, not the auth guard.
+    const refused = await realApp.handle(classesRequest('/v1/spells', null, clientIp));
+    expect(refused.status).toBe(429);
+    const body = (await refused.json()) as { error: { details: { scope: string } } };
+    expect(body.error.details.scope).toBe('ip');
   });
 });

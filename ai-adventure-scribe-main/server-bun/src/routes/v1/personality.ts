@@ -15,7 +15,7 @@ import { logger } from '../../lib/logger.js';
 import { buildBackgroundOrFilter } from '../../lib/postgrest-filters.js';
 import { supabase } from '../../lib/supabase.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { requireUserAuth } from '../../middleware/require-user-auth.js';
+import { requireUserAuth, resolveUser } from '../../middleware/require-user-auth.js';
 
 // Valid personality types
 const VALID_TYPES = ['traits', 'ideals', 'bonds', 'flaws'] as const;
@@ -53,13 +53,14 @@ const COLUMN_MAP: Record<PersonalityType, string> = {
 };
 
 export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
+  .use(resolveUser)
+  .use(planRateLimit('default'))
+  .use(requireUserAuth)
 
   /**
    * GET /v1/personality/random/:type
    * Get a random personality element of the specified type
    */
-  .use(requireUserAuth)
-  .use(planRateLimit('default'))
   .get('/random/:type', async ({ params, query, set }) => {
     const { type } = params;
     const { background } = query as { background?: string };

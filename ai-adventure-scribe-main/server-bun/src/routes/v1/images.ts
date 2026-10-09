@@ -14,7 +14,7 @@ import { Elysia, t } from 'elysia';
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { requireUserAuth } from '../../middleware/require-user-auth.js';
+import { requireUserAuth, resolveUser } from '../../middleware/require-user-auth.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
 import { createUpstreamModelErrorBody } from '../../services/llm-errors.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
@@ -128,8 +128,9 @@ const extractFromMessage = (msg: any): string | null => {
 };
 
 export const imageRoutes = new Elysia({ prefix: '/v1/images' })
-  .use(requireUserAuth)
+  .use(resolveUser)
   .use(planRateLimit('images'))
+  .use(requireUserAuth)
 
   /**
    * Get image quota status
