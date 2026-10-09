@@ -14,7 +14,7 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { AppError } from '../../lib/errors.js';
+import { mapAppRouteError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { InventoryAttunementService } from '../../services/inventory/inventory-attunement-service.js';
@@ -54,27 +54,12 @@ const useConsumableSchema = t.Object({
 });
 
 function mapInventoryError(
-  set: any,
+  set: { status?: unknown },
   error: unknown,
   fallbackMessage: string,
-  notFoundMessage: string = 'Not found',
+  notFoundMessage = 'Not found',
 ): { error: string } {
-  if (error instanceof AppError) {
-    if (error.statusCode === 404) {
-      set.status = 404;
-      return { error: notFoundMessage };
-    }
-
-    set.status = error.statusCode;
-    if (error.statusCode >= 500) {
-      return { error: fallbackMessage };
-    }
-
-    return { error: error.message };
-  }
-
-  set.status = 500;
-  return { error: fallbackMessage };
+  return mapAppRouteError(set, error, fallbackMessage, [404], notFoundMessage, 500);
 }
 
 export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })

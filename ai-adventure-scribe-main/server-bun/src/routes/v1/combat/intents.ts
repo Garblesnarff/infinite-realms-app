@@ -77,7 +77,7 @@ function logIntentFailure(error: unknown, logContext: Record<string, unknown>): 
   );
 }
 
-function requestIdOf(context: unknown, request: Request): string {
+export function requestIdOf(context: unknown, request: Request): string {
   const contextRequestId = (context as { requestId?: unknown }).requestId;
   return typeof contextRequestId === 'string'
     ? contextRequestId

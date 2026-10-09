@@ -15,33 +15,13 @@
 
 import { Elysia } from 'elysia';
 
-import { AppError } from '../../lib/errors.js';
+import { mapAppRouteError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { ProgressionService } from '../../services/progression-service.js';
 
-function mapProgressionError(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  set: any,
-  error: unknown,
-  fallbackMessage: string
-) {
-  if (error instanceof AppError) {
-    if (error.statusCode === 404) {
-      set.status = 404;
-      return { error: 'Character not found' };
-    }
-
-    set.status = error.statusCode;
-    if (error.statusCode >= 500) {
-      return { error: fallbackMessage };
-    }
-
-    return { error: error.message };
-  }
-
-  set.status = 500;
-  return { error: fallbackMessage };
+function mapProgressionError(set: { status?: unknown }, error: unknown, fallbackMessage: string) {
+  return mapAppRouteError(set, error, fallbackMessage, [404], 'Character not found', 500);
 }
 
 export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })

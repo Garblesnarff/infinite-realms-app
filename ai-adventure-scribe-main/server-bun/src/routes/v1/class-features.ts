@@ -15,7 +15,7 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { AppError } from '../../lib/errors.js';
+import { mapAppRouteError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
@@ -77,31 +77,13 @@ const featureHistoryQuery = t.Object({
   ),
 });
 
-/**
- * Helper to map and mask error responses
- */
 function mapClassFeaturesError(
   set: { status?: number | string },
   error: unknown,
   fallbackMessage: string,
-  notFoundMessage: string = 'Not found',
+  notFoundMessage = 'Not found',
 ): { error: string } {
-  if (error instanceof AppError) {
-    if (error.statusCode === 404 || error.statusCode === 403) {
-      set.status = 404;
-      return { error: notFoundMessage };
-    }
-
-    set.status = error.statusCode;
-    if (error.statusCode >= 500) {
-      return { error: fallbackMessage };
-    }
-
-    return { error: error.message };
-  }
-
-  set.status = 500;
-  return { error: fallbackMessage };
+  return mapAppRouteError(set, error, fallbackMessage, [404, 403], notFoundMessage, 500);
 }
 
 export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })

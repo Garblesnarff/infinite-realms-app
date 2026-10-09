@@ -1,3 +1,5 @@
+import { logger } from './logger.js';
+
 /**
  * Standardized Error Handling System
  *
@@ -114,4 +116,30 @@ export class InternalServerError extends AppError {
   constructor(message = 'Internal server error', details?: unknown) {
     super(500, message, 'INTERNAL_ERROR', details);
   }
+}
+
+/** Codes rewritten to 404, that text, mask-at status, copy details, log non-AppError. */
+export function mapAppRouteError(
+  set: { status?: unknown },
+  error: unknown,
+  fallback: string,
+  notFound: readonly number[] = [],
+  notFoundMessage = 'Not found',
+  maskFrom?: number,
+  details = false,
+  log = false,
+): { error: string; details?: unknown } {
+  if (error instanceof AppError) {
+    if (notFound.includes(error.statusCode)) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+    set.status = error.statusCode;
+    if (maskFrom != null && error.statusCode >= maskFrom) return { error: fallback };
+    if (details && error.details) return { error: error.message, details: error.details };
+    return { error: error.message };
+  }
+  if (log) logger.error({ msg: fallback, error });
+  set.status = 500;
+  return { error: fallback };
 }

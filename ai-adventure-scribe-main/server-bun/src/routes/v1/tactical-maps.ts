@@ -3,6 +3,7 @@ import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { COMBAT_ACTION_ORIGINS } from './combat/intent-schema.js';
+import { requestIdOf } from './combat/intents.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -77,12 +78,6 @@ export interface TacticalMapRouteOptions {
   sessionOwnership?: typeof verifySessionOwnership;
   activeMapLoader?: typeof loadActiveTacticalMap;
   dmTacticalActions?: typeof applyDmTacticalActions;
-}
-
-/** The pipeline's request id when mounted under it, else the caller's header (#2304). */
-function requestIdOf(context: unknown, request: Request): string {
-  const derived = (context as { requestId?: unknown }).requestId;
-  return typeof derived === 'string' ? derived : request.headers.get('x-request-id') || 'unknown';
 }
 
 export function createTacticalMapRoutes({

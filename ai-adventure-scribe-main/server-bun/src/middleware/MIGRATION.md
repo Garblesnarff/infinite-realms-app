@@ -135,9 +135,7 @@ export const requireAuth = new Elysia({ name: 'require-auth' })
       return { user: null, error: { error: 'Invalid token' } };
     }
 
-    const headersRecord = {};
-    request.headers.forEach((value, key) => { headersRecord[key] = value; });
-    const plan = await resolveUserPlan(workosUser.userId, headersRecord);
+    const plan = await resolveUserPlan(workosUser.userId);
 
     return {
       user: { userId: workosUser.userId, email: workosUser.email, plan },
@@ -158,7 +156,7 @@ export const requireAuth = new Elysia({ name: 'require-auth' })
 - ✅ Short-circuits via return in `onBeforeHandle`
 - ✅ Added `optionalAuth` variant for flexible authentication
 - ✅ Uses `request.headers.get()` instead of `req.headers`
-- ✅ Headers converted to record for plan resolution
+- ✅ Plan comes from `resolveUserPlan(userId)`
 
 ### Rate Limiting Middleware
 
@@ -194,7 +192,7 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
     .onBeforeHandle(({ request, set, user }) => {
       const ip = getClientIp(request);
       const userId = user?.userId || null;
-      const plan = getUserPlan(user, request.headers);
+      const plan = getUserPlan(user);
 
       const ipRes = memoryStore.incr(ipKey, cfg.perIp.windowMs);
       if (ipRes.count > ipMax) {

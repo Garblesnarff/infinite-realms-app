@@ -1,8 +1,7 @@
 /* eslint-disable max-lines */
 import { Elysia, t } from 'elysia';
 
-import { AppError } from '../../lib/errors.js';
-import { logger } from '../../lib/logger.js';
+import { mapAppRouteError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import {
@@ -151,19 +150,8 @@ const mapSessionConfig = (
   };
 };
 
-const handleRouteError = (
-  set: { status?: unknown },
-  error: unknown,
-  fallback: string,
-): { error: string } => {
-  if (error instanceof AppError) {
-    set.status = error.statusCode;
-    return { error: error.statusCode === 404 ? 'Not found' : error.message };
-  }
-  logger.error({ msg: fallback, error });
-  set.status = 500;
-  return { error: fallback };
-};
+const handleRouteError = (set: { status?: unknown }, error: unknown, fallback: string) =>
+  mapAppRouteError(set, error, fallback, [404], 'Not found', undefined, false, true);
 
 /** Authenticated replacement paths for the six browser-facing legacy tables in #1784. */
 export const issue1784DataRoutes = new Elysia({ name: 'issue-1784-data-routes' })

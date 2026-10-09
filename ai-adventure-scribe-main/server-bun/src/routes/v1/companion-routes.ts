@@ -1,7 +1,7 @@
 import { Elysia, t } from 'elysia';
 
 import { isCompanionsEnabled } from '../../lib/companion-feature.js';
-import { AppError } from '../../lib/errors.js';
+import { mapAppRouteError } from '../../lib/errors.js';
 
 import type { verifySessionOwnership } from './combat/helpers.js';
 import type { requireAuth } from '../../middleware/auth.js';
@@ -34,12 +34,7 @@ const sceneQuery = t.Object({
 const rollKind = t.Union([t.Literal('skill'), t.Literal('ability'), t.Literal('save')]);
 
 function mapRouteError(set: { status?: unknown }, error: unknown) {
-  if (error instanceof AppError) {
-    set.status = error.statusCode;
-    return { error: error.message, ...(error.details ? { details: error.details } : {}) };
-  }
-  set.status = 500;
-  return { error: 'Companion request failed' };
+  return mapAppRouteError(set, error, 'Companion request failed', [], 'Not found', undefined, true);
 }
 
 export function createCompanionRoutes({
