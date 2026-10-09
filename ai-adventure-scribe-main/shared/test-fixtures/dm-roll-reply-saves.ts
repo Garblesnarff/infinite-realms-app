@@ -44,7 +44,10 @@ function wireBody(turn: Omit<DmRollReplyTurn, 'wireBody'>): Record<string, unkno
       combat_engine_blocks: null,
       combat_ended: false,
       narration_segments: turn.reply.narrationSegments,
-      rollRequests: turn.rollRequests,
+      rollRequests: turn.rollRequests.map((request, index) => ({
+        ...request,
+        rollRequestId: `${turn.dmMessageId}:roll:${index}`,
+      })),
     },
     timestamp: turn.timestamp,
   };

@@ -157,6 +157,9 @@ export const useMessageQueue = (sessionId: string | null) => {
                 location: message.context.location || null,
                 emotion: message.context.emotion || null,
                 intent: message.context.intent || null,
+                ...(message.context.rollRequestId
+                  ? { rollRequestId: message.context.rollRequestId }
+                  : {}),
                 handouts: message.context.handouts || null,
                 combat_transition: message.context.combat_transition || null,
                 scene_spec: Boolean(message.context.scene_spec),
@@ -297,6 +300,9 @@ export const useMessageQueue = (sessionId: string | null) => {
                 location: message.context.location || null,
                 emotion: message.context.emotion || null,
                 intent: message.context.intent || null,
+                ...(message.context.rollRequestId
+                  ? { rollRequestId: message.context.rollRequestId }
+                  : {}),
                 handouts: message.context.handouts || null,
                 combat_transition: message.context.combat_transition || null,
                 scene_spec: Boolean(message.context.scene_spec),

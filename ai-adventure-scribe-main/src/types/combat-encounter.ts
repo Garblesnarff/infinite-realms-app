@@ -129,6 +129,7 @@ export type DiceRollRequestType =
   | 'skill_check';
 
 export interface DiceRollRequest {
+  rollRequestId?: string;
   id: string;
   requestType: DiceRollRequestType;
   participantId?: string;

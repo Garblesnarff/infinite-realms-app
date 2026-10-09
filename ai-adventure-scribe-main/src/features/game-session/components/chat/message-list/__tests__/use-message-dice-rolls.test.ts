@@ -446,7 +446,7 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
-    it('latches one roll id until the server result clears the prompt', async () => {
+    it('settles the die before the server turn finishes and ignores duplicate results', async () => {
       let resolveSend!: () => void;
       mockOnSendFullMessage.mockReturnValueOnce(
         new Promise<void>((resolve) => {
@@ -460,7 +460,7 @@ describe('useMessageDiceRolls', () => {
         };
       });
 
-      const { result } = renderHook(() =>
+      const { result, rerender } = renderHook(() =>
         useMessageDiceRolls({
           onSendMessage: mockOnSendMessage,
           onSendFullMessage: mockOnSendFullMessage,
@@ -473,9 +473,9 @@ describe('useMessageDiceRolls', () => {
         void result.current.handleManualResult(19);
       });
 
-      expect(result.current.pendingRollId).toBe('roll-1');
+      expect(result.current.pendingRollId).toBeNull();
       expect(mockOnSendFullMessage).toHaveBeenCalledTimes(1);
-      expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
 
       resolveSend();
       await act(async () => {
@@ -483,11 +483,12 @@ describe('useMessageDiceRolls', () => {
       });
 
       expect(result.current.pendingRollId).toBeNull();
+      rerender();
       expect(result.current.currentRoll).toBeNull();
       expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
     });
 
-    it('releases the latch and keeps the prompt visible after a timeout error', async () => {
+    it('releases the resolved die and retains an explicit retry after a timeout error', async () => {
       mockOnSendFullMessage.mockRejectedValueOnce(new Error('request timed out'));
 
       const { result } = renderHook(() =>
@@ -503,8 +504,12 @@ describe('useMessageDiceRolls', () => {
 
       expect(result.current.pendingRollId).toBeNull();
       expect(result.current.rollError).toBe('Roll timed out. Please try again.');
-      expect(mockUseGame.completeDiceRoll).not.toHaveBeenCalled();
-      expect(result.current.currentRoll?.id).toBe('roll-1');
+      expect(mockUseGame.completeDiceRoll).toHaveBeenCalledWith('roll-1', { total: 18 });
+      expect(result.current.currentRoll).toBeNull();
+      await act(async () => {
+        await result.current.handleRetryRoll();
+      });
+      expect(mockOnSendFullMessage).toHaveBeenCalledTimes(2);
     });
 
     it('should handle manual result in batch', async () => {

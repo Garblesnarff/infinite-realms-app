@@ -35,6 +35,8 @@ interface DiceRollRequestProps {
   onResult: RollResultHandler;
   onRollCommit?: () => void;
   onCancel?: () => void;
+  onRetry?: () => Promise<void>;
+  isRetrying?: boolean;
   requestId?: string;
   pendingRollId?: string | null;
   rollError?: string | null;
@@ -51,6 +53,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
     onResult,
     onRollCommit,
     onCancel,
+    onRetry,
+    isRetrying = false,
     requestId,
     pendingRollId,
     rollError,
@@ -178,7 +182,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           </div>
 
           {/* Roll Actions */}
-          {!effectiveManualMode ? (
+          {rollError && onRetry ? (
+            <Button onClick={() => void onRetry()} disabled={isRetrying}>
+              {isRetrying ? 'Retrying…' : 'Retry'}
+            </Button>
+          ) : !effectiveManualMode ? (
             <div className="space-y-2">
               {rollCalculation.modifierUnknown ? (
                 <div className="space-y-2">

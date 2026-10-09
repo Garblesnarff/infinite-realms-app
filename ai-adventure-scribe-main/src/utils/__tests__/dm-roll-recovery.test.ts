@@ -95,7 +95,9 @@ describe('withheldDmRollReplies (#2280)', () => {
       const messages = [player, reply, notice];
 
       expect(withheldDmRollReplies(messages)).toEqual(new Set([reply]));
-      expect(latestUnansweredDmRollRequest(messages)?.requests).toEqual([insight]);
+      expect(latestUnansweredDmRollRequest(messages)?.requests).toEqual([
+        { ...insight, rollRequestId: 'd1:roll:0' },
+      ]);
     });
 
     it('reads "You chose not to roll: <check>."', () => {
@@ -138,7 +140,9 @@ describe('withheldDmRollReplies (#2280)', () => {
       const messages = [player, reply, answer];
 
       expect(withheldDmRollReplies(messages)).toEqual(new Set([reply]));
-      expect(latestUnansweredDmRollRequest(messages)?.requests).toEqual([perception]);
+      expect(latestUnansweredDmRollRequest(messages)?.requests).toEqual([
+        { ...perception, rollRequestId: 'd2:roll:1' },
+      ]);
     });
 
     it('both checks answered (one cancelled, one rolled): the reply shows, nothing is owed', () => {

@@ -11,12 +11,15 @@ export const ROLL_DECLINED_INTENT = 'roll_declined';
  * way a roll would: the withheld reply shows, a reload does not re-open the popup, and the next
  * DM turn reads "System: You chose not to roll: …" in its history.
  */
-export function declinedRollMessage(description: string | undefined): ChatMessage {
+export function declinedRollMessage(
+  description: string | undefined,
+  rollRequestId?: string,
+): ChatMessage {
   return {
     text: `You chose not to roll: ${description?.trim() || 'the requested check'}.`,
     sender: 'system',
     timestamp: new Date().toISOString(),
-    context: { intent: ROLL_DECLINED_INTENT },
+    context: { intent: ROLL_DECLINED_INTENT, ...(rollRequestId ? { rollRequestId } : {}) },
   };
 }
 
@@ -51,16 +54,45 @@ function narrativeRollRequestsOf(message: ChatMessage): RollRequest[] {
   );
 }
 
+export function identifyDmRollRequests(requests: RollRequest[], messageKey: string): RollRequest[] {
+  const identities = new Map<string, string>();
+  return requests.map((request, index) => {
+    // Legacy rows have no id. Match the existing queue's duplicate boundary once, then
+    // carry that identity in the saved answer rather than matching result descriptions.
+    const key = JSON.stringify([
+      request.type,
+      request.purpose,
+      request.formula,
+      request.advantage,
+      request.disadvantage,
+      request.dc,
+      request.ac,
+    ]);
+    const rollRequestId =
+      request.rollRequestId ?? identities.get(key) ?? `${messageKey}:roll:${index}`;
+    identities.set(key, rollRequestId);
+    return { ...request, rollRequestId };
+  });
+}
+
 /** The requests of `messages[index]` still owed, in the order the batch asks for them. */
 function unansweredRequestsAt(messages: readonly ChatMessage[], index: number): RollRequest[] {
-  const requests = narrativeRollRequestsOf(messages[index]);
-  let answered = 0;
-  for (let later = index + 1; later < messages.length && answered < requests.length; later += 1) {
-    const kind = answerKind(messages[later]);
+  const message = messages[index];
+  const requests = identifyDmRollRequests(
+    narrativeRollRequestsOf(message),
+    message.id ?? message.timestamp ?? `message-${index}`,
+  );
+  const owed = new Map(requests.map((request) => [request.rollRequestId!, request]));
+  for (let later = index + 1; later < messages.length && owed.size > 0; later += 1) {
+    const answer = messages[later];
+    const kind = answerKind(answer);
     if (kind === 'all') return [];
-    if (kind === 'one') answered += 1;
+    if (kind !== 'one') continue;
+    if (answer.context?.rollRequestId) owed.delete(answer.context.rollRequestId);
+    // Compatibility for answers written before request ids were persisted.
+    else owed.delete(owed.keys().next().value!);
   }
-  return requests.slice(answered);
+  return Array.from(owed.values());
 }
 
 /**

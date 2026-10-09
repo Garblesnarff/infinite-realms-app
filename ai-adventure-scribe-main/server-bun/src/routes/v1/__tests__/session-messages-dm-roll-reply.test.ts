@@ -14,6 +14,7 @@ import {
   DM_ROLL_REPLY_TURNS,
   TEXTLESS_PENDING_ROLL_BODY,
 } from '../../../../../shared/test-fixtures/dm-roll-reply-saves';
+import { storySaveAnswerBody } from '../../../../../shared/test-fixtures/story-rolls';
 
 const noopLogger = {
   debug: () => {},
@@ -107,6 +108,18 @@ describe('POST /v1/sessions/:id/messages — narrative roll replies (#2280)', ()
     saved.length = 0;
   });
 
+  it('retains the exact client spell-save answer identity through the real route', async () => {
+    const body = storySaveAnswerBody(
+      '33333333-3333-4333-8333-333333333333',
+      '2026-01-01T00:00:01.000Z',
+    );
+    const response = await post(body);
+    expect(response.status).toBe(200);
+    expect(saved[0]?.[0]?.context).toEqual(body.context);
+    expect(saved[0]?.[0]?.message).toBe(body.message);
+    expect(saved[0]?.[0]?.id).toBe(body.id);
+  });
+
   for (const turn of DM_ROLL_REPLY_TURNS) {
     it(`accepts the DM reply with its roll requests in context: ${turn.name}`, async () => {
       const response = await post(turn.wireBody);
@@ -123,7 +136,7 @@ describe('POST /v1/sessions/:id/messages — narrative roll replies (#2280)', ()
           message: turn.reply.text,
         }),
       );
-      expect((row?.context as { rollRequests?: unknown }).rollRequests).toEqual(turn.rollRequests);
+      expect(row?.context).toEqual(turn.wireBody.context);
     });
   }
 

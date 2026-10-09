@@ -19,6 +19,7 @@ import { handleAsyncError } from '@/utils/error-handler';
  * Context for dice roll messages to preserve intent through the message flow
  */
 export interface DiceRollContext {
+  rollRequestId?: string;
   intent: 'dice_roll';
   diceRoll?: {
     formula: string;

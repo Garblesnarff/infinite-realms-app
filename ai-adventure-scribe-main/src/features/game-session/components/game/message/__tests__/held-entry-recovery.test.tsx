@@ -5,7 +5,7 @@
  * the server remembers the popup. On the first ready page the handler re-runs that turn, once,
  * without saving the message a second time.
  */
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -43,6 +43,7 @@ vi.mock('@/contexts/combat/use-authoritative-combat-sync', () => ({
 }));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { listSessionMessages: mockListSessionMessages },
+  isTerminalDefeatError: () => false,
 }));
 vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({
@@ -81,6 +82,7 @@ vi.mock('@/hooks/ai/combat-entry-hold', () => ({
     [...messages].reverse().find((message) => message.sender === 'dm')?.text,
 }));
 
+import { storySaveAnswerBody } from '../../../../../../../shared/test-fixtures/story-rolls';
 import { MessageHandler } from '../MessageHandler';
 
 const SESSION_ID = 'd3d075ef-fec7-4442-b684-c5c35084f41e';
@@ -104,7 +106,21 @@ function renderHandler(updateGameSessionState = vi.fn().mockResolvedValue(undefi
       turnCount={4}
       updateGameSessionState={updateGameSessionState}
     >
-      {() => null}
+      {({ sendError, onRetry, handleSendMessage }) => (
+        <>
+          <button
+            onClick={() =>
+              void handleSendMessage(
+                'Wisdom save against Charm Person: 8 fail',
+                storySaveAnswerBody('player-1', '2026-01-01T00:00:01.000Z').context as any,
+              ).catch(() => {})
+            }
+          >
+            Resolve save
+          </button>
+          {sendError && <button onClick={() => void onRetry('').catch(() => {})}>Retry</button>}
+        </>
+      )}
     </MessageHandler>
   );
   const view = render(tree());
@@ -125,6 +141,7 @@ function serverNewest(rows: Array<{ id: string; speaker_type: string }>): void {
 describe('resuming a turn the combat-entry popup was holding when the page reloaded', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSendMessage.mockReset().mockResolvedValue(undefined);
     contextState.messages = [dmScene, attack];
     contextState.messagesReady = true;
     mockGetAIResponse.mockResolvedValue({ text: 'Frost takes Valerius.', rollRequests: [] });
@@ -133,6 +150,75 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     mockReadCombat.mockResolvedValue({ state: 'none' });
     serverNewest([{ id: 'player-1', speaker_type: 'player' }]);
   });
+
+  it('resumes a saved narrative spell-save answer without another player save or turn increment', async () => {
+    const save = {
+      id: 'player-1',
+      sender: 'player',
+      text: 'Wisdom save against Charm Person: 8 fail',
+      context: { intent: 'dice_roll', rollRequestId: 'dm-test:roll:0' },
+    };
+    contextState.messages = [dmScene, save];
+    const { updateGameSessionState } = renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
+    expect(mockGetAIResponse.mock.calls[0][0].at(-1)).toStrictEqual(save);
+    expect(mockCheckDeclaredAttack).not.toHaveBeenCalled();
+    expect(
+      mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+    ).toHaveLength(0);
+    for (const [updater] of updateGameSessionState.mock.calls) {
+      const next = typeof updater === 'function' ? updater({ turn_count: 4 }) : updater;
+      expect(next.turn_count ?? 4).toBe(4);
+    }
+  });
+
+  it('does not retry a saved roll when a DM answer arrived after recovery was offered', async () => {
+    contextState.messages = [
+      dmScene,
+      { ...attack, context: { intent: 'dice_roll', rollRequestId: 'dm-test:roll:0' } },
+    ];
+    renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    serverNewest([
+      { id: 'player-1', speaker_type: 'player' },
+      { id: 'dm-2', speaker_type: 'dm' },
+    ]);
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  for (const retryControl of ['Retry', 'Resolve save']) {
+    it(`retries a failed saved roll via ${retryControl} despite its system error notice, without another player save`, async () => {
+      contextState.messages = [dmScene];
+      mockGetAIResponse.mockRejectedValueOnce(new Error('Request failed (500)'));
+      const rows: Array<{ id: string; speaker_type: string; context?: unknown }> = [];
+      mockSendMessage.mockImplementation(async (message) => {
+        const saved = { ...message, id: message.id ?? `saved-${rows.length}` };
+        contextState.messages = [...contextState.messages, saved];
+        rows.push({ id: saved.id, speaker_type: saved.sender, context: saved.context });
+        serverNewest(rows);
+      });
+      const { view, tree } = renderHandler();
+      fireEvent.click(screen.getByRole('button', { name: 'Resolve save' }));
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
+      const retry = await screen.findByRole('button', { name: 'Retry' });
+      expect(rows.at(-1)?.speaker_type).toBe('system');
+      view.rerender(tree());
+      fireEvent.click(
+        retryControl === 'Retry' ? retry : screen.getByRole('button', { name: retryControl }),
+      );
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(2));
+      expect(
+        mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+      ).toHaveLength(1);
+      expect(mockGetAIResponse.mock.calls[1][0].at(-1).context.intent).toBe('dice_roll');
+    });
+  }
 
   it('re-runs the unanswered turn without saving the player message or counting the turn again', async () => {
     const { updateGameSessionState } = renderHandler();

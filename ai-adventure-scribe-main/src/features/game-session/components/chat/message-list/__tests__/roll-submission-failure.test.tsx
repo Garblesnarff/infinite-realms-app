@@ -73,7 +73,13 @@ vi.mock('@/lib/logger', () => ({
 
 const Prompt: React.FC<{ onSendFullMessage: () => Promise<void> }> = ({ onSendFullMessage }) => {
   const dice = useMessageDiceRolls({ onSendMessage: vi.fn(), onSendFullMessage });
-  if (!dice.currentRoll || !dice.rollRequest) return null;
+  if (!dice.currentRoll || !dice.rollRequest)
+    return dice.rollError ? (
+      <div role="alert">
+        {dice.rollError}
+        <button onClick={dice.handleRetryRoll}>Retry</button>
+      </div>
+    ) : null;
   return (
     <DiceRollRequest
       request={dice.rollRequest}
@@ -87,16 +93,17 @@ const Prompt: React.FC<{ onSendFullMessage: () => Promise<void> }> = ({ onSendFu
 };
 
 const rollButton = (): HTMLElement => screen.getByRole('button', { name: /^Roll 1d20\+1 for/ });
-const ownRollButton = (): HTMLElement => screen.getByRole('button', { name: /Enter my own roll/ });
-const cancelButton = (): HTMLElement =>
-  screen.getByRole('button', { name: /Dismiss roll request/ });
 
 describe('a failed roll submission leaves the prompt usable (#2280, run M5)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    game.state.diceRollQueue = { currentRollId: perceptionRoll.id, pendingRolls: [perceptionRoll] };
+    game.completeDiceRoll.mockImplementation(() => {
+      game.state.diceRollQueue = { currentRollId: '', pendingRolls: [] };
+    });
   });
 
-  it(`${m5.name}: after the send fails, Roll / Enter my own roll / Cancel are all enabled again`, async () => {
+  it(`${m5.name}: after the send fails, the resolved prompt closes and Retry is available`, async () => {
     const onSendFullMessage = vi.fn(async () => {
       throw new Error(
         'Validation failed (422): /message Expected string length greater or equal to 1',
@@ -115,18 +122,17 @@ describe('a failed roll submission leaves the prompt usable (#2280, run M5)', ()
         'Roll submission failed. Please try again.',
       ),
     );
-    // The dead end on M5: every control off. Now every control is on.
-    expect(rollButton()).toBeEnabled();
-    expect(rollButton()).not.toHaveTextContent('Rolling');
-    expect(ownRollButton()).toBeEnabled();
-    expect(cancelButton()).toBeEnabled();
-    // Nothing left mounted can roll and submit again by itself.
+    expect(screen.queryByTestId('dice-roll-request')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
     expect(screen.queryByTestId('dice-animation')).not.toBeInTheDocument();
     expect(onSendFullMessage).toHaveBeenCalledTimes(1);
-    expect(game.completeDiceRoll).not.toHaveBeenCalled();
+    expect(game.completeDiceRoll).toHaveBeenCalledWith(perceptionRoll.id, {
+      total: 7,
+      naturalRoll: 6,
+    });
   });
 
-  it('the player can roll again and it goes through', async () => {
+  it('Retry sends the same resolved result without rolling again', async () => {
     const onSendFullMessage = vi
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error('Request failed (500)'))
@@ -137,13 +143,8 @@ describe('a failed roll submission leaves the prompt usable (#2280, run M5)', ()
     await act(async () => {
       fireEvent.click(screen.getByTestId('dice-animation'));
     });
-    await waitFor(() => expect(rollButton()).toBeEnabled());
-
-    fireEvent.click(rollButton());
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('dice-animation'));
-    });
-
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     await waitFor(() =>
       expect(game.completeDiceRoll).toHaveBeenCalledWith(perceptionRoll.id, {
         total: 7,
@@ -153,7 +154,7 @@ describe('a failed roll submission leaves the prompt usable (#2280, run M5)', ()
     expect(onSendFullMessage).toHaveBeenCalledTimes(2);
   });
 
-  it('the player can withdraw the roll after a failure', async () => {
+  it('a failed resolved die is not left pending or cancelled', async () => {
     render(
       <Prompt
         onSendFullMessage={vi.fn(async () => {
@@ -166,9 +167,9 @@ describe('a failed roll submission leaves the prompt usable (#2280, run M5)', ()
     await act(async () => {
       fireEvent.click(screen.getByTestId('dice-animation'));
     });
-    await waitFor(() => expect(cancelButton()).toBeEnabled());
-
-    fireEvent.click(cancelButton());
-    expect(game.cancelDiceRoll).toHaveBeenCalledWith(perceptionRoll.id);
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.queryByRole('button', { name: /Dismiss roll request/ })).not.toBeInTheDocument();
+    expect(game.cancelDiceRoll).not.toHaveBeenCalled();
+    expect(game.completeDiceRoll).toHaveBeenCalledTimes(1);
   });
 });

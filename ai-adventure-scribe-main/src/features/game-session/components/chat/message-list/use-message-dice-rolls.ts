@@ -60,12 +60,16 @@ export function useMessageDiceRolls({
   rollRequest: RollRequest | null;
   handleManualResult: (result: number, details?: RolledResultDetails) => Promise<void>;
   handleCancelRoll: () => void;
+  handleRetryRoll: () => Promise<void>;
+  isRetrying: boolean;
   lastRollRef: MutableRefObject<LastRollMeta | null>;
   pendingRollId: string | null;
   rollError: string | null;
 } {
   const { state, getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll, clearBatch } = useGame();
 
+  const failedSubmissionRef = useRef<(() => Promise<void>) | null>(null);
+  const retryingRef = useRef(false);
   const lastRollRef = useRef<LastRollMeta | null>(null);
   const pendingRollIdRef = useRef<string | null>(null);
   // Rolls whose result is being handled. A narrative roll's handler awaits the whole DM turn,
@@ -74,6 +78,7 @@ export function useMessageDiceRolls({
   const handlingRollIdsRef = useRef<Set<string>>(new Set());
   const cancelledRollIdRef = useRef<string | null>(null);
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);
 
   /**
@@ -174,7 +179,7 @@ export function useMessageDiceRolls({
       isEngineTaggedRoll(currentRoll) ||
       isEngineChannelRollType(currentRoll.requestType);
     if (!engineOwned) {
-      const declined = declinedRollMessage(currentRoll.description);
+      const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
       Promise.resolve()
         .then(() => onSendMessage(declined))
         .catch((error: unknown) =>
@@ -191,6 +196,22 @@ export function useMessageDiceRolls({
     setRollError(null);
   }, [currentRoll, cancelDiceRoll, onSendMessage]);
 
+  const handleRetryRoll = useCallback(async () => {
+    if (!failedSubmissionRef.current || retryingRef.current) return;
+    retryingRef.current = true;
+    setIsRetrying(true);
+    try {
+      await failedSubmissionRef.current();
+      setRollError(null);
+      failedSubmissionRef.current = null;
+    } catch (error) {
+      setRollError(getRollErrorMessage(error));
+    } finally {
+      retryingRef.current = false;
+      setIsRetrying(false);
+    }
+  }, []);
+
   // Handle manual dice result input with batching support
   const handleManualResult = useCallback(
     async (result: number, details?: RolledResultDetails) => {
@@ -206,6 +227,7 @@ export function useMessageDiceRolls({
       setPendingRollId(roll.id);
       setRollError(null);
 
+      let retrySubmission: (() => Promise<void>) | null = null;
       try {
         let numericResult: number;
         if (typeof result === 'number') {
@@ -272,6 +294,7 @@ export function useMessageDiceRolls({
             : `${roll.rollConfig.count}d${roll.rollConfig.dieType}${signedModifier}`;
         const diceRollContext: DiceRollContext = {
           intent: 'dice_roll',
+          ...(roll.rollRequestId ? { rollRequestId: roll.rollRequestId } : {}),
           diceRoll: {
             formula,
             count: roll.rollConfig.count,
@@ -330,42 +353,34 @@ export function useMessageDiceRolls({
           return;
         }
 
-        if (roll.batchId && !willCompleteBatch) {
-          const playerMessage: ChatMessage = {
-            text: formattedRoll,
-            sender: 'player',
-            timestamp: new Date().toISOString(),
-            context: diceRollContext,
-          };
-          await onSendMessage(playerMessage);
-          completeDiceRoll(roll.id, settledResult);
-          logger.info(
-            '[useMessageDiceRolls] Manual batch roll persisted, waiting for remaining rolls',
-          );
-        } else {
-          if (onSendFullMessage) {
-            logger.info(
-              '[useMessageDiceRolls] Triggering AI response after manual roll(s) complete',
-            );
-            await onSendFullMessage(formattedRoll, diceRollContext);
-          } else {
-            const playerMessage: ChatMessage = {
-              text: formattedRoll,
-              sender: 'player',
-              timestamp: new Date().toISOString(),
-              context: diceRollContext,
-            };
-            await onSendMessage(playerMessage);
-          }
-
-          completeDiceRoll(roll.id, settledResult);
-
-          if (roll.batchId) {
-            logger.info('[useMessageDiceRolls] Batch complete (manual)! Clearing batch state');
-            clearBatch();
-          }
+        const playerMessage: ChatMessage = {
+          id: roll.id,
+          text: formattedRoll,
+          sender: 'player',
+          timestamp: new Date().toISOString(),
+          context: diceRollContext as ChatMessage['context'],
+        };
+        const submit =
+          roll.batchId && !willCompleteBatch
+            ? async () => {
+                await onSendMessage(playerMessage);
+                completeDiceRoll(roll.id, settledResult);
+              }
+            : onSendFullMessage
+              ? () => onSendFullMessage(formattedRoll, diceRollContext)
+              : () => onSendMessage(playerMessage);
+        retrySubmission = submit;
+        // The die is resolved. The DM turn may take longer or fail after its player row saves.
+        if (!roll.batchId || willCompleteBatch) completeDiceRoll(roll.id, settledResult);
+        if (!roll.batchId || willCompleteBatch) {
+          pendingRollIdRef.current = null;
+          setPendingRollId(null);
         }
+        if (roll.batchId && willCompleteBatch) clearBatch();
+        await submit();
+        if (failedSubmissionRef.current === submit) failedSubmissionRef.current = null;
       } catch (error) {
+        failedSubmissionRef.current = retrySubmission;
         setRollError(getRollErrorMessage(error));
         handleAsyncError(error, {
           userMessage: 'Failed to process dice result',
@@ -399,6 +414,8 @@ export function useMessageDiceRolls({
     rollRequest,
     handleManualResult,
     handleCancelRoll,
+    handleRetryRoll,
+    isRetrying,
     lastRollRef,
     pendingRollId,
     rollError,
