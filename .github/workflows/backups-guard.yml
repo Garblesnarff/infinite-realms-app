@@ -4,12 +4,13 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   no-tracked-backups:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Fail if backups contains tracked files

@@ -10,10 +10,7 @@ on:
     paths:
       - "ai-adventure-scribe-main/**"
 
-permissions:
-  contents: read
-  pull-requests: write
-  checks: write
+permissions: read-all
 
 defaults:
   run:
@@ -21,7 +18,13 @@ defaults:
 
 jobs:
   coverage:
+    # Preserve the source repository's disabled workflow state during prep.
+    if: ${{ false }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4

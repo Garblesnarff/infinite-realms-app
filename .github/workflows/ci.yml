@@ -1,19 +1,6 @@
 name: CI
 
-# Runs on the self-hosted runner (hetzner-nbg1-prod) rather than GitHub-hosted
-# minutes. This repo is private, so Actions minutes are metered and billed --
-# ci.yml has already been disabled once after exhausting the monthly allowance
-# (see db-guards.yml), and in August 2026 the whole account stopped running
-# jobs mid-session with "recent account payments have failed".
-#
-# The runner is a systemd service on the production box under a dedicated
-# unprivileged `ghrunner` user, capped at 4 of 8 cores and 6G, with a CPU
-# weight far below the game server so a CI run yields to live traffic.
-# See docs/ci-self-hosted-runner.md.
-#
-# The one exception is the `changes` job (path filters), which runs on
-# `ubuntu-latest`: it takes about 10 seconds and every heavy job waits for it,
-# so it must not queue behind self-hosted jobs.
+# All jobs use GitHub-hosted ubuntu-latest runners.
 
 # One run per commit: `pull_request` for branches, `push` for main only. A
 # branch with an open PR used to fire both events on every commit; concurrency
@@ -26,14 +13,11 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: read-all
 
 # One in-flight run per branch. Pushing three times in a minute used to start
 # three full matrices that all raced to finish; now the older ones are
-# cancelled the moment a newer commit arrives. Runs queue on the self-hosted
-# runners rather than running in parallel, so this matters more here than it
-# did on GitHub's fleet.
+# cancelled the moment a newer commit arrives.
 #
 # Keyed on the BRANCH NAME: `head_ref` is the PR's branch on `pull_request`, and
 # `ref_name` is the branch on `push` (always `main` now).
@@ -57,11 +41,6 @@ jobs:
   #
   # Every filter lists `.github/workflows/**`, so editing a workflow runs
   # everything. Globs are relative to the repository root.
-  #
-  # This is the one job on a GitHub-hosted runner, on purpose: it takes about
-  # 10 seconds, and every heavy job waits for it, so on the self-hosted runners
-  # it queued behind other runs' jobs (12 minutes in one burst, #2328). About
-  # 10 hosted seconds per run is negligible against the free monthly allowance.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -142,7 +121,7 @@ jobs:
   # `fetch-depth: 0` is for gitleaks, which scans the full history.
   # `pull-requests: write` is for gitleaks-action, which comments on the PR.
   checks:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
@@ -224,24 +203,25 @@ jobs:
   frontend:
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
-      # The runner is deliberately CPU-capped (4 of 8 cores, CPUWeight 20) so a
-      # test run cannot starve the game server, which makes this suite roughly
-      # 2.4x slower than unconstrained. Three timing-sensitive tests flaked at
-      # vitest's 5s default on the first self-hosted run; raising the ceiling is
-      # the right trade against loosening the cap that protects production.
+      # Three timing-sensitive tests flaked at vitest's 5s default under CI load,
+      # so the ceiling is raised to 20s.
       - run: bunx vitest run --testTimeout=20000 --hookTimeout=20000
       - run: bun run build
 
   server-vitest:
     needs: changes
     if: ${{ needs.changes.outputs.server == 'true' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -277,11 +257,10 @@ jobs:
   #
   # Two things this job does that are less obvious than they look:
   #
-  #   1. It provisions schema. The dedicated CI Postgres on 127.0.0.1:55432 is
-  #      an empty tmpfs instance -- db-guards.yml's migration-replay creates a
-  #      throwaway database and drops it again, leaving nothing behind, and a
-  #      container restart wipes it regardless. So the replay runs here too,
-  #      with KEEP_TEST_DB=1, and the suites point at what it leaves.
+  #   1. It provisions schema. The `postgres` service container below starts
+  #      empty -- db-guards.yml's migration-replay creates a throwaway database
+  #      and drops it again, leaving nothing behind. So the replay runs here
+  #      too, with KEEP_TEST_DB=1, and the suites point at what it leaves.
   #
   #   2. It sets DATABASE_URL, not just TEST_DATABASE_URL. The suites import the
   #      real services, which import db/client.ts, which THROWS at module load
@@ -289,7 +268,8 @@ jobs:
   #      blocks and then dies before the first assertion. Both must be set, and
   #      to the same scratch database, or the fixtures write to one database and
   #      assert against another. #1904's guard allowlists exactly
-  #      127.0.0.1:55432, which this satisfies.
+  #      127.0.0.1:55432, which is why the service maps host port 55432 to the
+  #      container's 5432 rather than using the default port.
   #
   # The file list is explicit rather than a glob, and that is deliberate: a
   # whole-suite `bun test` with a database configured fails 54 tests, because
@@ -303,8 +283,8 @@ jobs:
   # it had become green.
   #
   # solo-survivability is the one suite still absent, and it is genuinely
-  # blocked: 4 pass / 7 fail, re-measured (T02) on the pgvector/pgvector image
-  # this job actually uses, reproduced across three fresh replays. That 7 is
+  # blocked: 4 pass / 7 fail, re-measured (T02) on the pgvector/pgvector:pg16
+  # image this job used then, reproduced across three fresh replays. That 7 is
   # unchanged from when this note was first written. They are ordinary
   # assertion mismatches -- death-save outcomes, an encounter that stays
   # `active` where the suite expects `completed`, and transcript text that no
@@ -314,32 +294,41 @@ jobs:
   # MEASURING THIS CORRECTLY REQUIRES pgvector. scripts/test-migrations.sh
   # SKIPS every migration mentioning `vector(` when the extension is absent,
   # and says so in a warning that is easy to scroll past. On a plain
-  # postgres:16 that silently drops
+  # postgres that silently drops
   # supabase/migrations/20251205_create_lore_keeper_tables.sql, so
   # campaign_chunks comes out without its `embedding vector(768)` column, both
   # suites die on `column "embedding" ... does not exist`, and the result looks
   # exactly like schema drift. It is not -- #1999 was filed on that mistake and
-  # withdrawn. Use pgvector/pgvector:pg16, and check the replay summary says
+  # withdrawn. Use a pgvector image, and check the replay summary says
   # "pgvector available" before trusting any number from it.
+  #
+  # The service image is pgvector/pgvector:pg15: production is PostgreSQL 15.8
+  # (the Supabase stack, see ai-adventure-scribe-main/CLAUDE.md).
+  # The user, password and database are CI-only dummies; the container lives
+  # for this job only and is not a copy of anything.
   server-real-db:
     needs: changes
     if: ${{ needs.changes.outputs.server == 'true' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Check psql and the CI database are available
-        run: |
-          if ! command -v psql >/dev/null 2>&1; then
-            echo "::error::psql not on PATH on the runner host. Install postgresql-client."
-            exit 1
-          fi
-          if ! pg_isready -h 127.0.0.1 -p 55432 -U postgres; then
-            echo "::error::CI PostgreSQL is not accepting connections on 127.0.0.1:55432."
-            echo "On the runner host: docker start ci-postgres"
-            echo "See docs/ci-self-hosted-runner.md."
-            exit 1
-          fi
       # Three installs, matching server-vitest plus the app workspace: the
       # suites import db/schema/*.ts, whose drizzle-orm resolves out of
       # ai-adventure-scribe-main/node_modules.
@@ -424,14 +413,6 @@ jobs:
             echo "::error::no tests reported as passing -- the suites did not run."
             exit 1
           fi
-      - name: Drop the scratch database
-        if: always()
-        run: |
-          rm -f "/tmp/replay-$GITHUB_RUN_ID.log" "/tmp/real-db-$GITHUB_RUN_ID.log"
-          db="${{ steps.provision.outputs.db }}"
-          [ -n "$db" ] || exit 0
-          PGPASSWORD=postgres psql -X -q -h 127.0.0.1 -p 55432 -U postgres -d postgres \
-            -c "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE);" || true
 
   # Keep the check visible and truthfully skipped until its test harness is
   # self-contained. The old job was never green: it expected an unconfigured
@@ -447,7 +428,11 @@ jobs:
   e2e:
     name: e2e (skipped — harness blocked by #1817)
     if: ${{ false }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Document the intentional skip
         run: echo "E2E is intentionally skipped; see issue #1817."
+
+# Phase 1 hosted-runner verification for source issue #2729.

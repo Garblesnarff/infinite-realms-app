@@ -7,9 +7,7 @@ name: Coverage
 # runs the same suite with `--coverage` and uploads the HTML report as an
 # artifact. No thresholds yet.
 #
-# Runs on the self-hosted runners like CI, for the same reason (private repo,
-# metered minutes; see docs/ci-self-hosted-runner.md). It only runs the repo's
-# own test suite, so it carries no extra risk over a CI run on main.
+# Uses GitHub-hosted ubuntu-latest runners.
 #
 # `schedule` runs the default branch's copy of this file. To run it by hand:
 #   gh workflow run coverage.yml
@@ -20,8 +18,7 @@ on:
     - cron: '0 8 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: read-all
 
 defaults:
   run:
@@ -29,14 +26,18 @@ defaults:
 
 jobs:
   coverage:
-    runs-on: self-hosted
+    # Re-enable after Rob flips the repository public.
+    if: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      # Same timeouts as the `frontend` job in ci.yml: the runner is CPU-capped,
-      # and the suite is slower still with v8 instrumentation on.
+      # Same timeouts as the `frontend` job in ci.yml; the suite is slower still
+      # with v8 instrumentation on.
       - run: bunx vitest run --coverage --testTimeout=20000 --hookTimeout=20000
       - name: Upload coverage report
         if: ${{ !cancelled() }}

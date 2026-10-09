@@ -129,3 +129,7 @@ _PROJECT_PLANS/
 infinite-realms/
 supabase-docker/
 infiniterealms-character-image-hotreload/
+
+# Excluded from the published repository history.
+/backups/
+/prompts/

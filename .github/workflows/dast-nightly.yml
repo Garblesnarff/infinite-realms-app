@@ -5,12 +5,15 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch: {}
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   zap-baseline:
+    # Preserve the source repository's disabled workflow state during prep.
+    if: ${{ false }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.10.0

@@ -4,12 +4,7 @@
 # runs only on pushes that actually touch the database layer -- a handful of
 # pushes a month rather than every one.
 #
-# Runs on the self-hosted runner (hetzner-nbg1-prod), same as ci.yml. Until
-# 2026-08-19 both jobs were `runs-on: ubuntu-latest` and had therefore not
-# executed at all since the Actions billing failure: every run died in ~3s with
-# "The job was not started because recent account payments have failed or your
-# spending limit needs to be increased". The guards were red-by-default and
-# guarding nothing. See docs/ci-self-hosted-runner.md.
+# All jobs use GitHub-hosted ubuntu-latest runners.
 #
 # The same two checks also run locally: check-schema-drift.sh from the husky
 # pre-commit hook whenever db/schema/*.ts is staged, and test-migrations.sh
@@ -36,14 +31,12 @@ on:
       - 'ai-adventure-scribe-main/scripts/test-migrations.sh'
       - '.github/workflows/db-guards.yml'
 
-permissions:
-  contents: read
+permissions: read-all
 
-# One in-flight run per branch. Same rationale and same keying as ci.yml: a
-# branch with an open PR fires both `push` and `pull_request`, and on a single
-# self-hosted runner the duplicate queues behind the first rather than running
-# beside it. `ref_name` (bare branch name) is required for the two events to
-# collapse into one group -- `ref` is fully qualified and would not.
+# One in-flight run per branch. A branch with an open PR fires both `push` and
+# `pull_request`, and the duplicate would otherwise run beside the first.
+# `ref_name` (bare branch name) is required for the two events to collapse into
+# one group -- `ref` is fully qualified and would not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
@@ -58,7 +51,9 @@ jobs:
   # over) all came from that exact omission going unnoticed until a 500 in
   # production -- see 17ebfd47. Offline: no database, ~1 minute.
   schema-drift:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -76,39 +71,37 @@ jobs:
   # Replays the migration history into a throwaway PostgreSQL database, so a
   # migration that cannot apply is caught here and not on the production box.
   #
-  # This job used a GitHub `services:` container when it ran (or rather, failed
-  # to run) on ubuntu-latest. That does not port to this runner:
-  #
-  #   * `services:` needs Docker, and the runner user `ghrunner` is deliberately
-  #     NOT in the `docker` group -- membership is root-equivalent on this box
-  #     and would undo the hardening the runner exists behind.
-  #   * the old mapping `5432:5432` is already taken on the host by
-  #     supabase-pooler.
-  #
-  # Instead a dedicated, CI-only pgvector instance runs on 127.0.0.1:55432,
-  # started and owned by root rather than by the runner. It is empty, its data
-  # dir is a tmpfs, and it holds nothing from production -- the job only needs
-  # psql (installed on the host) and a loopback socket. Provisioning is
-  # documented in docs/ci-self-hosted-runner.md.
+  # The database is a `services:` container, CI-only and empty: it holds
+  # nothing from production and lives for this job only. The image is
+  # pgvector/pgvector:pg15 because production is PostgreSQL 15.8 (see
+  # ai-adventure-scribe-main/CLAUDE.md) and the embedding migrations need
+  # pgvector; on a stock postgres they are skipped, not tested. Host port 55432
+  # is the one #1904's DB-safety guard allowlists, so the URL below is
+  # unchanged from the previous workflow. The user, password and database are
+  # CI-only dummies.
   migration-replay:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
-      - name: Check psql and the CI database are available
-        run: |
-          if ! command -v psql >/dev/null 2>&1; then
-            # No sudo on this runner by design, so this cannot self-heal.
-            echo "::error::psql not on PATH on the runner host. Install postgresql-client."
-            exit 1
-          fi
-          psql --version
-          if ! pg_isready -h 127.0.0.1 -p 55432 -U postgres; then
-            echo "::error::CI PostgreSQL is not accepting connections on 127.0.0.1:55432."
-            echo "On the runner host: docker start ci-postgres"
-            echo "See docs/ci-self-hosted-runner.md."
-            exit 1
-          fi
       - name: Replay migrations
         run: bash scripts/test-migrations.sh
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/postgres
+
+# Phase 1 hosted-runner verification for source issue #2729.

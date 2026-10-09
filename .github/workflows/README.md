@@ -41,7 +41,7 @@ Triggers: `schedule` (08:00 UTC daily) and `workflow_dispatch`.
 
 PR CI runs Vitest with coverage off (`coverage.enabled: false` in
 `ai-adventure-scribe-main/vitest.config.ts`). This workflow runs
-`bunx vitest run --coverage` on the self-hosted runner and uploads the HTML
+`bunx vitest run --coverage` on a GitHub-hosted runner and uploads the HTML
 report as the `frontend-coverage` artifact (30-day retention). No thresholds.
 
 ### backups-guard.yml — Tracked Backups Guard
@@ -78,23 +78,14 @@ Runs an OWASP ZAP baseline scan (`zaproxy/action-baseline@v0.10.0`) against
 `${{ secrets.STAGING_URL }}` and uploads the HTML/JSON report as a build
 artifact. Fails the job if ZAP finds issues (`fail_action: true`).
 
-### claude.yml — Claude Code (@claude mentions)
-Triggers: issue comments, PR review comments, PR reviews, and issues, but only
-runs when the triggering body contains `@claude`. Invokes
-`anthropics/claude-code-action@v1` to respond/act on the mention.
-
-### claude-code-review.yml — Automated Claude PR Review
-Triggers: `pull_request` opened/synchronize (repo-wide, no path filter).
-Runs `anthropics/claude-code-action@v1` with a fixed review prompt and posts
-the review as a PR comment via `gh pr comment`.
+The two Claude workflows are omitted from this repository. Coverage is held until the public flip; re-enable its job afterward.
 
 ## Secrets / variables required
 
 | Secret or variable | Used by | Notes |
 |---|---|---|
 | `STAGING_URL` | dast-nightly.yml | Target URL for the nightly ZAP scan. |
-| `CLAUDE_CODE_OAUTH_TOKEN` | claude.yml, claude-code-review.yml | OAuth token for `anthropics/claude-code-action`. |
-| `GITHUB_TOKEN` | release.yml, claude.yml, claude-code-review.yml, gitleaks job in ci.yml | Auto-provided by GitHub Actions; no setup needed. |
+| `GITHUB_TOKEN` | release.yml, gitleaks job in ci.yml | Auto-provided by GitHub Actions; no setup needed. |
 | `BLOG_API_KEY` | release.yml | Optional — "Post to blog" step is non-fatal if missing/failing. |
 | `API_URL` (variable, not secret) | release.yml | Optional — defaults to `https://api.infiniterealms.app` if unset. |
 | `DATABASE_URL` | ci.yml `e2e` job | Required for `server-bun` to boot; job is `continue-on-error: true` until set. |

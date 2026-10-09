@@ -2,22 +2,54 @@
   "packages": {
     "ai-adventure-scribe-main": {
       "release-type": "node",
-      "package-name": "infinite-realms",
+      "package-name": "infinite-realms-app",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "changelog-sections": [
-        { "type": "feat", "section": "Features" },
-        { "type": "fix", "section": "Bug Fixes" },
-        { "type": "perf", "section": "Performance" },
-        { "type": "refactor", "section": "Refactoring" },
-        { "type": "docs", "section": "Documentation" },
-        { "type": "style", "section": "Styling" },
-        { "type": "test", "section": "Tests" },
-        { "type": "build", "section": "Build System" },
-        { "type": "ci", "section": "CI/CD" },
-        { "type": "chore", "hidden": true }
-      ]
+        {
+          "type": "feat",
+          "section": "Features"
+        },
+        {
+          "type": "fix",
+          "section": "Bug Fixes"
+        },
+        {
+          "type": "perf",
+          "section": "Performance"
+        },
+        {
+          "type": "refactor",
+          "section": "Refactoring"
+        },
+        {
+          "type": "docs",
+          "section": "Documentation"
+        },
+        {
+          "type": "style",
+          "section": "Styling"
+        },
+        {
+          "type": "test",
+          "section": "Tests"
+        },
+        {
+          "type": "build",
+          "section": "Build System"
+        },
+        {
+          "type": "ci",
+          "section": "CI/CD"
+        },
+        {
+          "type": "chore",
+          "hidden": true
+        }
+      ],
+      "release-as": "0.33.0"
     }
-  }
+  },
+  "last-release-sha": "450e6347edc5f1e38cdf67624bd297769ce75e90"
 }
