@@ -68,7 +68,6 @@ export default defineConfig({
       ['src/utils/__tests__/magic-item-attunement.test.ts', 'node'],
       ['src/utils/__tests__/magicItemEffects.test.ts', 'node'],
       ['src/utils/__tests__/massCombat.test.ts', 'node'],
-      ['src/utils/__tests__/movement-navigation.test.ts', 'node'],
       ['src/utils/__tests__/movement-validation.test.ts', 'node'],
       ['src/utils/__tests__/movementUtils.test.ts', 'node'],
       ['src/utils/__tests__/multiclassing.test.ts', 'node'],
