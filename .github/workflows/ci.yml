@@ -391,6 +391,10 @@ jobs:
             src/services/__tests__/spell-slot-single-source.real-db.test.ts \
             src/services/__tests__/rest-long-rest-recovery.real-db.test.ts \
             2>&1 | tee "/tmp/real-db-$GITHUB_RUN_ID.log"
+          # sheet-feature-rest replaces lib/auth.js for the whole process (#224).
+          bun test \
+            src/routes/v1/__tests__/sheet-feature-rest.real-db.test.ts \
+            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
           # playthrough-scope replaces lib/auth.js for the whole process. The
           # other suites in the list above share one invocation; this one does not.
           bun test \

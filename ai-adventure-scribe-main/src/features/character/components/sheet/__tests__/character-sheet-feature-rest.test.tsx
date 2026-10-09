@@ -76,6 +76,7 @@ const serverRow: ServerRow = {
 };
 
 const putBodies: Array<Record<string, unknown>> = [];
+const statsBodies: Array<Record<string, unknown>> = [];
 const restBodies: Array<{ restType: 'short' | 'long'; body: unknown }> = [];
 
 const json = (data: unknown, status = 200): Response =>
@@ -131,6 +132,7 @@ describe('CharacterSheet feature use and rests (#224)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     putBodies.length = 0;
+    statsBodies.length = 0;
     restBodies.length = 0;
     resetRow();
     markAuthReady();
@@ -144,6 +146,14 @@ describe('CharacterSheet feature use and rests (#224)', () => {
         }
         if (url === `${API}/v1/characters/${CID}/equipment`) {
           return json([]);
+        }
+        if (url === `${API}/v1/characters/${CID}/stats` && method === 'PUT') {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          statsBodies.push(body);
+          if (typeof body.current_hit_points === 'number') {
+            serverRow.stats.current_hit_points = body.current_hit_points;
+          }
+          return json({ ok: true });
         }
         if (url === `${API}/v1/characters/${CID}` && method === 'PUT') {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -280,5 +290,41 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     );
     expect(featuresTab().getAttribute('data-state')).toBe('active');
     expect(screen.queryByText('characters list')).not.toBeInTheDocument();
+  });
+
+  it('Second Wind heals 1d10 + level and never above max HP', async () => {
+    const random = vi.spyOn(Math, 'random');
+    random.mockReturnValue(0);
+    const view = renderSheet();
+    const user = userEvent.setup();
+    await screen.findByText('5/10');
+    await openFeatures();
+    await user.click(screen.getByRole('button', { name: /use feature/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('7/10')).toBeInTheDocument();
+    });
+    const healed = statsBodies[0]?.current_hit_points as number;
+    const level = 1;
+    expect(healed - 5).toBeGreaterThanOrEqual(1 + level);
+    expect(healed - 5).toBeLessThanOrEqual(10 + level);
+    expect(healed).toBeLessThanOrEqual(10);
+    expect(statsBodies[0]).toEqual({ current_hit_points: 7 });
+    view.unmount();
+
+    random.mockReturnValue(0.999);
+    resetRow();
+    serverRow.stats.current_hit_points = 9;
+    statsBodies.length = 0;
+    renderSheet();
+    await screen.findByText('9/10');
+    await openFeatures();
+    await user.click(screen.getByRole('button', { name: /use feature/i }));
+    await waitFor(() => {
+      expect(screen.getByText('10/10')).toBeInTheDocument();
+    });
+    expect(statsBodies[0]?.current_hit_points).toBe(10);
+    expect(screen.queryByText('20/10')).not.toBeInTheDocument();
+    random.mockRestore();
   });
 });
