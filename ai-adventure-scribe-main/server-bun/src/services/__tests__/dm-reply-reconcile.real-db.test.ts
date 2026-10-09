@@ -33,6 +33,10 @@ import {
   spellSlotUsageLog,
   type DialogueHistory,
 } from '../../../../db/schema/index';
+import {
+  apprenticeLevel2SpellLists,
+  apprenticeSpellLists,
+} from '../../../../shared/test-fixtures/apprentice-spell-lists';
 import { RUN_11_INSIGHT } from '../../../../shared/test-fixtures/dm-roll-reply-saves';
 
 const DEDICATED_REAL_DB_HOST = '127.0.0.1';
@@ -80,6 +84,7 @@ const { sql } = await importWithRealDb(() => import('../../lib/db.js'));
 // #2718: the DM turn is driven through the real route. Only the sign-in and the model are
 // replaced, by spies restored after each test (CI runs this file with other real-DB suites).
 const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
+const castableModule = await importWithRealDb(() => import('../dm/castable-spells.js'));
 const loggerModule = await importWithRealDb(() => import('../../lib/logger.js'));
 const { ClassFeaturesService } = await importWithRealDb(
   () => import('../class-features-service.js'),
@@ -431,6 +436,7 @@ ${playerInput}
    * `combatEntry` player from buildCombatEntryPlayer (structured-combat-payload.ts:87) rides on
    * every out-of-combat turn with a named character.
    */
+  let clientAddress = 0;
   const dmTurn = async (opts: {
     characterClass: string;
     race: string;
@@ -438,6 +444,8 @@ ${playerInput}
     dexterityModifier: number;
     level?: number;
     cantrips?: string;
+    knownSpells?: string;
+    preparedSpells?: string;
     classLevels?: Array<{ class: string; level: number }>;
     /** False leaves the session without a character: only the client's id names one. */
     linkSession?: boolean;
@@ -460,6 +468,8 @@ ${playerInput}
         race: opts.race,
         level: opts.level ?? 1,
         cantrips: opts.cantrips ?? null,
+        knownSpells: opts.knownSpells ?? null,
+        preparedSpells: opts.preparedSpells ?? null,
         classLevels: opts.classLevels ?? null,
       })
       .returning();
@@ -483,13 +493,21 @@ ${playerInput}
     const watchdog = spyOn(dmReplyPersistence, 'scheduleDmReplyWatchdog').mockResolvedValue(
       undefined as never,
     );
+    // Each turn comes from its own client address: this file plays more turns than the route's
+    // 20-a-minute limit for one IP, and the limiter runs before auth, so the plan cannot lift it.
+    const trustProxyHeaders = process.env.TRUST_PROXY_HEADERS;
+    process.env.TRUST_PROXY_HEADERS = 'true';
     try {
       const response = await createRequestPipelineApp()
         .use(llmRoutes)
         .handle(
           new Request('http://localhost/v1/llm/generate', {
             method: 'POST',
-            headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
+            headers: {
+              authorization: 'Bearer t',
+              'content-type': 'application/json',
+              'x-forwarded-for': `198.51.100.${(clientAddress = (clientAddress % 254) + 1)}`,
+            },
             body: JSON.stringify({
               prompt: promptFor(
                 `${character.name}, a level ${character.level} ${opts.race} ${opts.characterClass}`,
@@ -522,6 +540,8 @@ ${playerInput}
         modelCalls: model.mock.calls.length,
       };
     } finally {
+      if (trustProxyHeaders === undefined) delete process.env.TRUST_PROXY_HEADERS;
+      else process.env.TRUST_PROXY_HEADERS = trustProxyHeaders;
       auth.mockRestore();
       model.mockRestore();
       watchdog.mockRestore();
@@ -984,5 +1004,172 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text)).text).toBe(
       `${turn.character.name} can't use Flurry of Blows: it isn't on their character sheet.`,
     );
+  });
+
+  /** The Apprentice (Academy of Arcane Gastronomy), as the starter seeder writes them (#217). */
+  const apprentice = (
+    lists: typeof apprenticeSpellLists | typeof apprenticeLevel2SpellLists,
+  ): Omit<Parameters<typeof dmTurn>[0], 'playerInput' | 'reply'> => ({
+    characterClass: 'Wizard',
+    race: 'Human',
+    scores: 'STR 8(-1), DEX 12(+1), CON 12(+1), INT 16(+3), WIS 12(+1), CHA 10(+0)',
+    dexterityModifier: 1,
+    cantrips: lists.cantrips,
+    knownSpells: lists.known_spells,
+    preparedSpells: lists.prepared_spells,
+  });
+  const castReply = (
+    text: string,
+    rollRequests: Array<Record<string, unknown>> = [],
+  ): Record<string, unknown> & { text: string } =>
+    envelopeOf({
+      text,
+      options: ['A. **Press on** down the corridor.', 'B. **Wait**, and listen.'],
+      roll_requests: rollRequests,
+    });
+
+  /** A turn that must reach the spell check: an allowed cast proves nothing if none was claimed. */
+  const checkedCast = async (
+    opts: Parameters<typeof dmTurn>[0],
+  ): Promise<Awaited<ReturnType<typeof dmTurn>>> => {
+    const castable = spyOn(castableModule, 'castableSpells');
+    try {
+      const turn = await dmTurn(opts);
+      expect(castable).toHaveBeenCalledTimes(1);
+      return turn;
+    } finally {
+      castable.mockRestore();
+    }
+  };
+
+  test('refuses #217: The Apprentice casting Witch Bolt, which is not in their spellbook (RP-14)', async () => {
+    // RP-14 (Hark, 2026-10-09): Witch Bolt was cast and a slot "expended". It is not an SRD spell,
+    // so it is not in the server's catalog either, and the gate never saw a spell claim.
+    const reply = castReply(
+      'A crackling arc leaps from your hand toward the cultist. Your first-level slot is expended.',
+      [
+        {
+          type: 'attack',
+          formula: '1d20+5',
+          purpose: 'Witch Bolt ranged spell attack against the cultist',
+          dc: null,
+          ac: 12,
+          advantage: false,
+          disadvantage: false,
+        },
+      ],
+    );
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Witch Bolt at the cultist.',
+      reply,
+    });
+
+    expect(turn.status).toBe(200);
+    expect(turn.modelCalls).toBe(1);
+    const line = `${turn.character.name} can't use Witch Bolt: it isn't on their character sheet.`;
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...envelopeOf({ text: line, options: [], roll_requests: [] }),
+      narration_segments: [expect.objectContaining({ type: 'dm', text: line })],
+    });
+    expect(turn.body.dmReplyPersisted).toBe(true);
+    const [row] = await rowsFor([turn.dmMessageId]);
+    expect(row?.message).toBe(line);
+    // No slot spent.
+    expect(await ledgersOf(turn.character.id)).toEqual({
+      character: expect.objectContaining({
+        class: 'Wizard',
+        knownSpells: apprenticeSpellLists.known_spells,
+        preparedSpells: apprenticeSpellLists.prepared_spells,
+      }),
+      features: [],
+      featureUses: [],
+      slots: [],
+      slotUses: [],
+    });
+  });
+
+  test('refuses #217: a level-2 Apprentice casting Disguise Self, in their spellbook but not prepared', async () => {
+    const turn = await dmTurn({
+      ...apprentice(apprenticeLevel2SpellLists),
+      level: 2,
+      playerInput: 'I cast Disguise Self as I slip in among the kitchen staff.',
+      reply: castReply('Your face ripples and settles into a scullion’s tired features.'),
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(
+      `${turn.character.name} can't use Disguise Self: it isn't on their character sheet.`,
+    );
+  });
+
+  test('The Apprentice casting a cantrip is allowed: cantrips are cast at will (#217, RP-15)', async () => {
+    const reply = castReply('A skeletal hand of pale light grips the rat, and it goes still.');
+    const turn = await checkedCast({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Chill Touch at the rat.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('The Apprentice casting Detect Magic as a ritual from the spellbook is allowed, though it is not prepared (#217, RP-13)', async () => {
+    const reply = castReply('Ten minutes pass. A faint violet aura clings to the larder door.');
+    const turn = await checkedCast({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Detect Magic as a ritual, taking the ten minutes.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('The Apprentice casting Burning Hands, which they have prepared, is allowed (#217)', async () => {
+    const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+    const turn = await checkedCast({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Burning Hands at the cobwebs.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('"cast" with no spell after it is prose: a glance or a net is not refused (#217)', async () => {
+    const reply = castReply('Nothing moves behind the crates.');
+    for (const playerInput of [
+      'I cast a glance at the door before stepping in.',
+      'I cast my net over the crates.',
+      'I cast the Amulet of Kings into the fire.',
+    ]) {
+      const turn = await dmTurn({ ...apprentice(apprenticeSpellLists), playerInput, reply });
+      expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+    }
+  });
+
+  test('a model\'s roll purpose never claims a spell the catalog does not hold: "Casting Net Attack" is a net (#217)', async () => {
+    const reply = castReply('The net spins out over the cultist.', [
+      {
+        type: 'attack',
+        formula: '1d20+3',
+        purpose: 'Casting Net Attack against the cultist',
+        dc: null,
+        ac: 12,
+        advantage: false,
+        disadvantage: false,
+      },
+    ]);
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I throw my net over the cultist.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test("a prepared spell in the player's own spelling is allowed: Colour Spray is Color Spray (#217)", async () => {
+    const reply = castReply('A dazzle of colour washes over the two cooks, and one slumps.');
+    const turn = await checkedCast({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Colour Spray at the cooks.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
   });
 });

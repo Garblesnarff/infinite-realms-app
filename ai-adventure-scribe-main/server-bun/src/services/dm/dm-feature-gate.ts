@@ -8,8 +8,8 @@
  *
  * - features: `class_features_library` for the character's class, cumulative to their level
  *   (`ClassFeaturesService`), extended by any `character_features` rows granted to them;
- * - spells: the character's cantrips, known and prepared spells and `character_spells`, read the
- *   way the combat engine reads them (`getParticipantAbilityProfile`).
+ * - spells: what the character can cast now (`castableSpells`, #217), and a spell the catalog
+ *   does not hold ("Witch Bolt") is checked too, when the player names it as a spell.
  *
  * Only the player's own claim triggers it: a spell after a cast verb or a feature after a use verb,
  * in `player_input` or in the purpose of a roll the player makes for their own action. Never the
@@ -18,8 +18,9 @@
  * and nothing is spent. A check that cannot run fails open.
  */
 
+import { castableSpells, spellKey, spellsNamed } from './castable-spells.js';
 import { parseLlmEnvelope } from './dm-response-schema.js';
-import { getSpellByName, resolveCatalogSpell } from '../../data/spellData.js';
+import { getSpellByName } from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
 
 import type { characters } from '../../../../db/schema/index';
@@ -42,12 +43,24 @@ const baseFeatureName = (name: string): string => name.replace(/\s*\(.*\)\s*$/, 
  * "Use" never names a spell — "I use my shield to block" is not the Shield spell — and a name
  * with no verb in front is prose: "a stroke of luck", "Investigation to find traps".
  */
-const phraseAfter = (verbs: string): RegExp =>
+const phraseAfter = (
+  verbs: string,
+  before = '(?:my\\s+|the\\s+spell\\s+|the\\s+|a\\s+|an\\s+)?',
+): RegExp =>
   new RegExp(
-    `\\b(?:${verbs})\\s+(?:my\\s+|the\\s+spell\\s+|the\\s+|a\\s+|an\\s+)?(.+?)(?=\\s+(?:on|at|upon|toward|towards|into|against|to|and|then|while|again|with|in)\\b|[.,!?;:]|$)`,
+    `\\b(?:${verbs})\\s+${before}(.+?)(?=\\s+(?:on|at|upon|toward|towards|into|against|to|and|then|while|again|with|in|as)\\b|[.,!?;:]|$)`,
     'gi',
   );
 const CAST_PHRASE = phraseAfter('cast|casts|casting');
+/**
+ * A spell the catalog does not hold is claimed only in the player's own words, named straight
+ * after the verb: "I cast Witch Bolt". "I cast the Amulet of Kings into the fire" is an object,
+ * and a model's roll purpose ("Casting Net Attack") is not the player's claim.
+ */
+const NAMED_CAST_PHRASE = phraseAfter(
+  'cast|casts|casting',
+  '(?:the\\s+spell\\s+)?(?!(?:my|the|a|an|his|her|their|our|your|some)\\s)',
+);
 const USE_PHRASE = phraseAfter(
   'use|uses|using|activate|activates|activating|invoke|invokes|invoking',
 );
@@ -149,9 +162,12 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   const claimedSpells = input.inCombat
     ? []
     : [
-        ...new Set(
-          castPhrases.map((phrase) => getSpellByName(phrase)?.name).filter(Boolean) as string[],
-        ),
+        ...new Set([
+          ...(castPhrases
+            .map((phrase) => getSpellByName(phrase)?.name)
+            .filter(Boolean) as string[]),
+          ...spellsNamed(phrasesAfter(NAMED_CAST_PHRASE, input.playerInput ?? '')),
+        ]),
       ];
   const library = usePhrases.length ? await loadLibrary() : [];
   if (usePhrases.length && !library.length) {
@@ -214,12 +230,8 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
 
   let refusedSpells: string[] = [];
   if (claimedSpells.length) {
-    const { getParticipantAbilityProfile } = await import('../combat/data-access.js');
-    const profile = await getParticipantAbilityProfile({ characterId: character.id });
-    const known = new Set(
-      profile.spellIds.map((ref) => resolveCatalogSpell(ref, ref)?.id).filter(Boolean),
-    );
-    refusedSpells = claimedSpells.filter((name) => !known.has(resolveCatalogSpell(name, name)?.id));
+    const castable = new Set((await castableSpells(character)).map(spellKey));
+    refusedSpells = claimedSpells.filter((name) => !castable.has(spellKey(name)));
   }
 
   const refused = [...refusedFeatures, ...refusedSpells];
