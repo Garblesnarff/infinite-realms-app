@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 
 import { getAppRoutes } from '../app-routes';
 
+import { CAMPAIGN_HUB_TABS } from '@/pages/campaigns/CampaignHubTabsList';
+
 /**
  * #2155: in-app links pointed at /app/campaigns, which had no route, and the
  * /app/* subtree had no catch-all, so they rendered a blank page. These tests
@@ -17,8 +19,6 @@ import { getAppRoutes } from '../app-routes';
 const SRC_ROOT = join(__dirname, '..', '..');
 // Stands in for a `${…}` interpolation: an id, or a value we cannot know statically.
 const DYN = '__dyn__';
-// Tabs CampaignHub renders from the /campaigns/:id/* splat (CampaignHub.tsx currentTab).
-const CAMPAIGN_HUB_TABS = new Set(['characters', 'sessions', 'world', 'settings']);
 
 interface LinkTarget {
   path: string;

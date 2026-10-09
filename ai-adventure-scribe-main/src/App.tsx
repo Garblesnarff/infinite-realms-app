@@ -8,6 +8,7 @@ import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
 import { useTelemetry } from './hooks/use-telemetry';
 import { LEGAL_ROUTES } from './pages/legal/legal-routes';
+import AppNotFound from './routes/AppNotFound';
 import { ProtectedAppRoutes } from './routes/ProtectedAppRoutes';
 import { withRouteSuspense } from './routes/route-suspense';
 import { installGlobalClientFailureReporting } from './services/client-failure-reporting';
@@ -27,6 +28,54 @@ const BlogEditor = lazy(() => import('./pages/BlogEditor'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const ExploreGalleryPage = lazy(() => import('./pages/ExploreGalleryPage'));
 const StarterCharacterSelectionPage = lazy(() => import('./pages/StarterCharacterSelectionPage'));
+
+/** Public route table. Exported so tests can render it under MemoryRouter. */
+export function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public preview of the navy+gold game UI overhaul (mock data) */}
+      <Route path="/ui-preview" element={withRouteSuspense(<GameUIPreview />)} />
+
+      {/* Beta Launch Page - new main entry point */}
+      <Route path="/" element={withRouteSuspense(<LaunchPage />)} />
+
+      {/* OAuth callback route for WorkOS */}
+      <Route path="/auth/callback" element={withRouteSuspense(<CallbackPage />)} />
+
+      {/* Explore Gallery - browse all starter campaigns */}
+      <Route path="/explore" element={withRouteSuspense(<ExploreGalleryPage />)} />
+
+      {/* Campaign Detail Page - public browse/explore route */}
+      <Route path="/explore/:slug" element={withRouteSuspense(<CampaignDetailPage />)} />
+
+      {/* Starter Character Selection - choose pre-built or custom character */}
+      <Route
+        path="/explore/:slug/choose-character"
+        element={withRouteSuspense(<StarterCharacterSelectionPage />)}
+      />
+
+      {/* Blog Admin Login (public - separate from WorkOS auth) */}
+      <Route path="/admin/blog/login" element={withRouteSuspense(<BlogAdminLogin />)} />
+
+      {/* Blog Admin Panel (separate auth from WorkOS) */}
+      <Route path="/admin/blog" element={withRouteSuspense(<BlogAdmin />)} />
+      <Route path="/admin/blog/edit/:id" element={withRouteSuspense(<BlogEditor />)} />
+      <Route path="/admin/blog/new" element={withRouteSuspense(<BlogEditor />)} />
+
+      {/* Public legal pages linked from the footer and waitlist form (#2258) */}
+      {LEGAL_ROUTES.map(({ path, Component }) => (
+        <Route key={path} path={path} element={withRouteSuspense(<Component />)} />
+      ))}
+
+      {/* Protected app routes */}
+      <Route path="/app/*" element={<ProtectedAppRoutes />} />
+      {/* /account without /app is a blank page; send it to the real route (#2343 C8). */}
+      <Route path="/account" element={<Navigate to="/app/account" replace />} />
+      {/* Unknown public URLs (#2706). /app/* has its own catch-all. */}
+      <Route path="*" element={<AppNotFound homeTo="/" homeLabel="Home" />} />
+    </Routes>
+  );
+}
 
 /**
  * Main App component
@@ -65,65 +114,7 @@ function App() {
                       >
                         Skip to content
                       </a>
-                      <Routes>
-                        {/* Public preview of the navy+gold game UI overhaul (mock data) */}
-                        <Route path="/ui-preview" element={withRouteSuspense(<GameUIPreview />)} />
-
-                        {/* Beta Launch Page - new main entry point */}
-                        <Route path="/" element={withRouteSuspense(<LaunchPage />)} />
-
-                        {/* OAuth callback route for WorkOS */}
-                        <Route
-                          path="/auth/callback"
-                          element={withRouteSuspense(<CallbackPage />)}
-                        />
-
-                        {/* Explore Gallery - browse all starter campaigns */}
-                        <Route
-                          path="/explore"
-                          element={withRouteSuspense(<ExploreGalleryPage />)}
-                        />
-
-                        {/* Campaign Detail Page - public browse/explore route */}
-                        <Route
-                          path="/explore/:slug"
-                          element={withRouteSuspense(<CampaignDetailPage />)}
-                        />
-
-                        {/* Starter Character Selection - choose pre-built or custom character */}
-                        <Route
-                          path="/explore/:slug/choose-character"
-                          element={withRouteSuspense(<StarterCharacterSelectionPage />)}
-                        />
-
-                        {/* Blog Admin Login (public - separate from WorkOS auth) */}
-                        <Route
-                          path="/admin/blog/login"
-                          element={withRouteSuspense(<BlogAdminLogin />)}
-                        />
-
-                        {/* Blog Admin Panel (separate auth from WorkOS) */}
-                        <Route path="/admin/blog" element={withRouteSuspense(<BlogAdmin />)} />
-                        <Route
-                          path="/admin/blog/edit/:id"
-                          element={withRouteSuspense(<BlogEditor />)}
-                        />
-                        <Route path="/admin/blog/new" element={withRouteSuspense(<BlogEditor />)} />
-
-                        {/* Public legal pages linked from the footer and waitlist form (#2258) */}
-                        {LEGAL_ROUTES.map(({ path, Component }) => (
-                          <Route
-                            key={path}
-                            path={path}
-                            element={withRouteSuspense(<Component />)}
-                          />
-                        ))}
-
-                        {/* Protected app routes */}
-                        <Route path="/app/*" element={<ProtectedAppRoutes />} />
-                        {/* /account without /app is a blank page; send it to the real route (#2343 C8). */}
-                        <Route path="/account" element={<Navigate to="/app/account" replace />} />
-                      </Routes>
+                      <AppRoutes />
                       <Toaster />
                     </div>
                   </Router>

@@ -1,16 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import React from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import CampaignCharacters from './CampaignCharacters';
 import { CampaignHubHeader } from './CampaignHubHeader';
-import { CampaignHubTabsList } from './CampaignHubTabsList';
+import { CAMPAIGN_HUB_TABS, CampaignHubTabsList } from './CampaignHubTabsList';
 import CampaignOverview from './CampaignOverview';
 import CampaignSessions from './CampaignSessions';
 import CampaignSettings from './CampaignSettings';
 import CampaignWorld from './CampaignWorld';
 
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -61,13 +62,12 @@ const CampaignHub: React.FC = () => {
   }, [campaign, dispatch]);
 
   const currentTab = React.useMemo(() => {
-    if (location.pathname.endsWith('/characters') || location.pathname.includes('/characters/'))
-      return 'characters';
-    if (location.pathname.endsWith('/sessions')) return 'sessions';
-    if (location.pathname.endsWith('/world')) return 'world';
-    if (location.pathname.endsWith('/settings')) return 'settings';
-    return 'overview';
-  }, [location.pathname]);
+    const marker = `/campaigns/${campaignId}/`;
+    const at = location.pathname.indexOf(marker);
+    const rest = at === -1 ? '' : location.pathname.slice(at + marker.length);
+    const tab = rest.split('/').filter(Boolean)[0] ?? '';
+    return CAMPAIGN_HUB_TABS.has(tab) ? tab : 'overview';
+  }, [campaignId, location.pathname]);
 
   const onTabChange = (value: string) => {
     navigate(`/app/campaigns/${campaignId}/${value === 'overview' ? '' : value}`);
@@ -121,7 +121,12 @@ const CampaignHub: React.FC = () => {
   if (!campaign) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Card className="p-6 text-center">Campaign not found</Card>
+        <Card className="p-6 text-center">
+          <p>Campaign not found</p>
+          <Button asChild variant="ir-gold" className="mt-4">
+            <Link to="/app">Back to your campaigns</Link>
+          </Button>
+        </Card>
       </div>
     );
   }

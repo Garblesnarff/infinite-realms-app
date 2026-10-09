@@ -5,10 +5,14 @@ import { Button } from '@/components/ui/button';
 import { IRPanel } from '@/components/ui/ir-primitives';
 
 /**
- * Catch-all for unknown /app/* paths. Renders a visible dead-end with a way
- * back instead of an empty <main>, so a broken link is noticed (#2155).
+ * Catch-all for an unknown URL. Public pages link home (`/`); /app links back
+ * to the campaign list. One page, so a broken link is never a blank screen
+ * (#2155, #2706).
  */
-const AppNotFound: React.FC = () => {
+const AppNotFound: React.FC<{ homeTo?: string; homeLabel?: string }> = ({
+  homeTo = '/app',
+  homeLabel = 'Back to your campaigns',
+}) => {
   const location = useLocation();
 
   return (
@@ -19,7 +23,7 @@ const AppNotFound: React.FC = () => {
           Nothing lives at <code className="break-all">{location.pathname}</code>.
         </p>
         <Button asChild variant="ir-gold">
-          <Link to="/app">Back to your campaigns</Link>
+          <Link to={homeTo}>{homeLabel}</Link>
         </Button>
       </IRPanel>
     </div>

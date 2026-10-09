@@ -1,10 +1,29 @@
 import { ChevronRight } from 'lucide-react';
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, matchRoutes, useLocation } from 'react-router-dom';
 
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useEntityLabel } from '@/hooks/use-entity-label';
+import { CAMPAIGN_HUB_TABS } from '@/pages/campaigns/CampaignHubTabsList';
+import { getAppRoutes } from '@/routes/app-routes';
+
+/** Segments whose own URL is not a route, but which have a real list page. */
+const CRUMB_OVERRIDE: Record<string, { label: string; to: string }> = {
+  character: { label: 'Characters', to: '/app/characters' },
+};
+
+function isRealAppRoute(fullPath: string): boolean {
+  const pathname = fullPath.replace(/^\/app/, '') || '/';
+  const matches = matchRoutes(getAppRoutes(), pathname);
+  const leaf = matches?.at(-1);
+  if (!leaf || leaf.route.path === '*') return false;
+  if (leaf.route.path === '/campaigns/:id/*') {
+    const tab = (leaf.params['*'] ?? '').split('/').filter(Boolean)[0] ?? '';
+    if (tab && !CAMPAIGN_HUB_TABS.has(tab)) return false;
+  }
+  return true;
+}
 
 /**
  * Breadcrumbs component for navigation hierarchy
@@ -93,13 +112,8 @@ const Breadcrumbs: React.FC = () => {
    */
   const buildPath = (index: number): string => '/' + pathSegments.slice(0, index + 1).join('/');
 
-  // Hide breadcrumbs on home page and characters page
-  // TODO [legacy-character-deprecation]: '/app/characters' is legacy. When removing legacy entry, remove this special case per docs/cleanup/campaign-character-migration.md
-  if (
-    pathSegments.length === 0 ||
-    (pathSegments.length === 1 && pathSegments[0] === 'app') ||
-    location.pathname === '/app/characters'
-  )
+  // Hide breadcrumbs on the campaign list. /app/characters shows Home › Characters (#2706).
+  if (pathSegments.length === 0 || (pathSegments.length === 1 && pathSegments[0] === 'app'))
     return null;
 
   return (
@@ -111,12 +125,14 @@ const Breadcrumbs: React.FC = () => {
         {pathSegments.map((segment, index) => {
           if (segment === 'app') return null; // do not render the 'app' segment
 
-          // Humanize known sections
-          const pretty = getLabel(segment, index);
+          const override = CRUMB_OVERRIDE[segment];
+          const to = override?.to ?? buildPath(index);
+          if (!override && !isRealAppRoute(to)) return null;
+          const pretty = override?.label ?? getLabel(segment, index);
           return (
             <React.Fragment key={index}>
               <ChevronRight className="h-4 w-4" />
-              <Link to={buildPath(index)} className="hover:text-infinite-gold transition-colors">
+              <Link to={to} className="hover:text-infinite-gold transition-colors">
                 {pretty}
               </Link>
             </React.Fragment>

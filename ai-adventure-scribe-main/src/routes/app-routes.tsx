@@ -1,10 +1,11 @@
 import { lazy } from 'react';
-import { Navigate, type RouteObject } from 'react-router-dom';
+import { Navigate, useLocation, useParams, type RouteObject } from 'react-router-dom';
 
 import AppNotFound from './AppNotFound';
 import { withRouteSuspense } from './route-suspense';
 
 import { isCustomCampaignsEnabled } from '@/config/featureFlags';
+import { CAMPAIGN_HUB_TABS } from '@/pages/campaigns/CampaignHubTabsList';
 
 // Lazy load route page components for code splitting
 const Index = lazy(() => import('@/pages/Index'));
@@ -28,6 +29,16 @@ const AccountPage = lazy(() => import('@/pages/AccountPage'));
 
 // TODO [legacy-character-deprecation]: Feature flag for legacy character entry. When disabling legacy character creation, set to false and then remove this flag following docs/cleanup/campaign-character-migration.md
 const ENABLE_LEGACY_CHARACTER_ENTRY = true;
+
+function CampaignHubRoute() {
+  const { id, '*': splat } = useParams();
+  const location = useLocation();
+  const tab = (splat ?? '').split('/').filter(Boolean)[0] ?? '';
+  if (tab && !CAMPAIGN_HUB_TABS.has(tab)) {
+    return <Navigate to={{ pathname: `/app/campaigns/${id}`, search: location.search }} replace />;
+  }
+  return withRouteSuspense(<CampaignHubWithErrorBoundary />);
+}
 
 /**
  * The /app/* route table, relative to the /app mount in App.tsx. Exported so
@@ -56,6 +67,8 @@ export const getAppRoutes = (): RouteObject[] => [
   isCustomCampaignsEnabled()
     ? { path: '/campaigns/create', element: withRouteSuspense(<CampaignWizard />) }
     : { path: '/campaigns/create', element: <Navigate to="/app/" replace /> },
+  // /campaigns/new is not the wizard. It used to match :id and show "Campaign not found" (#2706).
+  { path: '/campaigns/new', element: <Navigate to="/app" replace /> },
   {
     path: '/campaigns/:campaignId/scenes/:sceneId',
     element: withRouteSuspense(<BattleMapPage />),
@@ -64,7 +77,7 @@ export const getAppRoutes = (): RouteObject[] => [
     path: '/campaigns/:campaignId/scenes',
     element: withRouteSuspense(<SceneManagementPage />),
   },
-  { path: '/campaigns/:id/*', element: withRouteSuspense(<CampaignHubWithErrorBoundary />) },
+  { path: '/campaigns/:id/*', element: <CampaignHubRoute /> },
   { path: '/game/:id', element: withRouteSuspense(<GameContentWithErrorBoundary />) },
   // Blog Admin Panel
   { path: '/blog', element: withRouteSuspense(<BlogAdmin />) },
