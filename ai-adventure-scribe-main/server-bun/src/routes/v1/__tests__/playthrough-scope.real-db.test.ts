@@ -505,6 +505,147 @@ describeWithDb('a playthrough is one character in one campaign (#2484)', () => {
       });
     });
 
+    test('concurrent map context calls deliver every pending fact only once (#2685 step 4)', async () => {
+      const responses = await Promise.all([
+        call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`),
+        call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`),
+      ]);
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      const contexts = responses.map((response) => response.json.tacticalContext as string);
+      expect(
+        contexts.filter((context) => context.includes('Private engine fact for user A')),
+      ).toHaveLength(1);
+      expect(
+        contexts.filter((context) => context.includes('Private correction for user A')),
+      ).toHaveLength(1);
+      const contracts = contexts.map((context) =>
+        JSON.parse(context.match(/<contract_json>(.*?)<\/contract_json>/s)![1]),
+      );
+      expect(contracts.flatMap((contract) => contract.actions)).toHaveLength(1);
+      const state = (await mapRow()).state as TacticalMap;
+      expect(state.pendingDmFacts).toBeUndefined();
+      expect(state.pendingDmCorrection).toBeUndefined();
+      expect(state.pendingDmFactActions).toBeUndefined();
+      expect(state.dmSilentTurns).toBe(1);
+    });
+
+    test('map context consumes facts, correction and structured actions together, then returns none (#2685 step 4)', async () => {
+      const initial = (await mapRow()).state as TacticalMap;
+      initial.pendingDmFacts!.push('Second engine fact for user A');
+      initial.pendingDmFactActions!.push({
+        kind: 'attack',
+        actorSlug: 'spent-sentinel',
+        actorIsPlayer: false,
+        hit: true,
+        timestamp: Date.now(),
+      });
+      await database.update(tacticalMaps).set({ state: initial }).where(eq(tacticalMaps.id, mapId));
+      const first = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
+      expect(first.status).toBe(200);
+      expect(Object.keys(first.json)).toEqual(['tacticalContext']);
+      const context = first.json.tacticalContext as string;
+      for (const fact of initial.pendingDmFacts!) expect(context.split(fact)).toHaveLength(2);
+      expect(context).toContain(
+        '<previous_tactical_failure>Private correction for user A</previous_tactical_failure>',
+      );
+      const contract = JSON.parse(context.match(/<contract_json>(.*?)<\/contract_json>/s)![1]);
+      expect(contract.actions).toMatchObject([
+        { kind: 'move', count: 1, actors: ['alice'] },
+        { kind: 'attack', count: 1, actors: ['spent-sentinel'], hit: true },
+      ]);
+      const consumed = (await mapRow()).state as TacticalMap;
+      expect(consumed).toEqual({
+        ...initial,
+        pendingDmFacts: undefined,
+        pendingDmCorrection: undefined,
+        pendingDmFactActions: undefined,
+        dmSilentTurns: 0,
+      });
+      const second = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
+      expect(second.status).toBe(200);
+      expect(Object.keys(second.json)).toEqual(['tacticalContext']);
+      expect(second.json.tacticalContext).not.toContain('<engine_resolved_outcomes>');
+      expect(second.json.tacticalContext).not.toContain('<previous_tactical_failure>');
+      expect(
+        JSON.parse(second.json.tacticalContext.match(/<contract_json>(.*?)<\/contract_json>/s)[1])
+          .actions,
+      ).toEqual([]);
+      expect(((await mapRow()).state as TacticalMap).dmSilentTurns).toBe(1);
+    });
+
+    test('map context consumes the latest inactive row once without reviving it (#2685 step 4)', async () => {
+      const initial = (await mapRow()).state as TacticalMap;
+      await database.insert(tacticalMaps).values({
+        id: crypto.randomUUID(),
+        sessionId,
+        active: false,
+        updatedAt: new Date('2020-01-01T00:00:00Z'),
+        state: { ...initial, pendingDmFacts: ['Older inactive fact must stay queued'] },
+      });
+      await database.update(tacticalMaps).set({ active: false }).where(eq(tacticalMaps.id, mapId));
+      const first = await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`);
+      expect(first.status).toBe(200);
+      expect(Object.keys(first.json)).toEqual(['tacticalContext']);
+      expect(first.json.tacticalContext).toContain('Private engine fact for user A');
+      expect(first.json.tacticalContext).toContain('Private correction for user A');
+      expect(first.json.tacticalContext).not.toContain('Older inactive fact must stay queued');
+      expect(
+        JSON.parse(first.json.tacticalContext.match(/<contract_json>(.*?)<\/contract_json>/s)[1])
+          .actions,
+      ).toMatchObject([{ kind: 'move', count: 1, actors: ['alice'] }]);
+      const consumed = await mapRow();
+      expect(consumed.active).toBe(false);
+      expect(consumed.state).toEqual({
+        ...initial,
+        pendingDmFacts: undefined,
+        pendingDmCorrection: undefined,
+        pendingDmFactActions: undefined,
+      });
+      expect(await call('GET', `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`)).toEqual(
+        { status: 404, json: { error: 'No active tactical map' } },
+      );
+      const maps = await database
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.sessionId, sessionId));
+      expect(maps).toHaveLength(2);
+      expect(maps.every((row) => !row.active)).toBe(true);
+      expect((maps.find((row) => row.id !== mapId)!.state as TacticalMap).pendingDmFacts).toEqual([
+        'Older inactive fact must stay queued',
+      ]);
+    });
+
+    test('map context keeps an older active board while consuming the latest inactive facts (#2685 step 4)', async () => {
+      const initial = (await mapRow()).state as TacticalMap;
+      const activeId = crypto.randomUUID();
+      await database.update(tacticalMaps).set({ active: false }).where(eq(tacticalMaps.id, mapId));
+      await database.insert(tacticalMaps).values({
+        id: activeId,
+        sessionId,
+        active: true,
+        updatedAt: new Date('2020-01-01T00:00:00Z'),
+        state: { ...initial, id: activeId, pendingDmFacts: ['Older active fact stays queued'] },
+      });
+      const response = await call(
+        'GET',
+        `/v1/sessions/${sessionId}/tactical-map/context/${heroId}`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.json.tacticalContext).toContain('Private engine fact for user A');
+      expect(response.json.tacticalContext).not.toContain('Older active fact stays queued');
+      expect(response.json.tacticalContext).toContain('TACTICAL AUTHORITY:');
+      expect(((await mapRow()).state as TacticalMap).pendingDmFacts).toBeUndefined();
+      const [active] = await database
+        .select()
+        .from(tacticalMaps)
+        .where(eq(tacticalMaps.id, activeId));
+      expect(active.active).toBe(true);
+      expect((active.state as TacticalMap).dmSilentTurns).toBe(0);
+      expect((active.state as TacticalMap).pendingDmFacts).toEqual([
+        'Older active fact stays queued',
+      ]);
+    });
+
     test('removed /tactical-map/action returns 404 through the real pipeline without DB changes (#2685 step 1)', async () => {
       const before = await persistedCombat();
       const response = await app.handle(

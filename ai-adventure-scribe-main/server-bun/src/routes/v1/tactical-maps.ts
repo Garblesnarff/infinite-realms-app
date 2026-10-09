@@ -22,10 +22,7 @@ import {
 import { resolveSessionEntityId } from '../../services/combat/session-entity-index.js';
 import {
   applyDmTacticalActions,
-  consumeDmFactActions,
-  consumeDmTacticalCorrection,
-  consumeDmTacticalFacts,
-  noteEngineResolutions,
+  consumeTacticalMapContext,
 } from '../../services/combat/tactical-action-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
@@ -146,20 +143,9 @@ export function createTacticalMapRoutes({
           set.status = access.error!.status;
           return { error: access.error!.message };
         }
-        const map = await activeMapLoader(params.id);
-        // Facts are consumed BEFORE the no-map check, and the no-map case is no longer an
-        // unconditional 404.
-        //
-        // The board is torn down the moment the fight resolves, and the fight's last event — the
-        // killing blow, the character going down, the reason the encounter ended — is recorded
-        // microseconds before that. Answering 404 here threw all of it away, which is the second
-        // half of why no ending has ever been narrated: even once the facts survived the teardown,
-        // the endpoint that delivers them refused to answer for a session with no board.
-        const [correction, facts, actions] = await Promise.all([
-          consumeDmTacticalCorrection(params.id),
-          consumeDmTacticalFacts(params.id),
-          consumeDmFactActions(params.id),
-        ]);
+        const { map, correction, facts, actions, silentTurns } = await consumeTacticalMapContext(
+          params.id,
+        );
         if (!map && !facts.length && !correction && !actions.length) {
           set.status = 404;
           return { error: 'No active tactical map' };
@@ -183,9 +169,6 @@ export function createTacticalMapRoutes({
               contract,
           };
         }
-        // Silence is measured where the context is assembled, because the thing being counted is
-        // turns on which the DM was handed nothing the engine had done.
-        const silentTurns = await noteEngineResolutions(params.id, facts.length > 0);
         const stalled = shouldBreakStall(silentTurns);
         if (stalled) {
           // The id and the slug are both recorded: the log is read against DM transcripts, which
@@ -413,9 +396,15 @@ export function createTacticalMapRoutes({
             await destroyTacticalCombatMap(params.id);
             return { ok: true, encounterEnded: false };
           }
-          const concluded = await concludeEncounter(encounter.id, params.id, user.userId, 'dm_ended_scene', {
-            exits: body?.combat_exits,
-          });
+          const concluded = await concludeEncounter(
+            encounter.id,
+            params.id,
+            user.userId,
+            'dm_ended_scene',
+            {
+              exits: body?.combat_exits,
+            },
+          );
           if (!concluded) {
             // #2524: a hostile is still standing and no fled/surrendered/withdrew exit
             // accounts for it. Combat stays active; the engine notice is already on
@@ -432,7 +421,11 @@ export function createTacticalMapRoutes({
                 t.Array(
                   t.Object({
                     participant_id: t.String(),
-                    exit: t.Union([t.Literal('fled'), t.Literal('surrendered'), t.Literal('withdrew')]),
+                    exit: t.Union([
+                      t.Literal('fled'),
+                      t.Literal('surrendered'),
+                      t.Literal('withdrew'),
+                    ]),
                   }),
                 ),
               ),

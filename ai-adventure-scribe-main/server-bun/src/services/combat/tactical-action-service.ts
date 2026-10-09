@@ -6,13 +6,16 @@ import {
   saveTacticalMap,
   saveTacticalMapRow,
 } from './tactical-map-store.js';
+import { tacticalMaps } from '../../../../db/schema/index.js';
+import { and, desc, eq } from '../../../../node_modules/drizzle-orm/index.js';
 import { alert } from '../../lib/alerting.js';
 import { combatLogger } from '../../lib/logger.js';
 import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactical/dispatch.js';
+import { assignEntitySlugs } from '../../tactical/identity.js';
 import { broadcastToRoom } from '../collaboration/room-manager.js';
 
 import type { MapAction } from '../../tactical/dispatch.js';
-import type { DmFactAction, MapEntity } from '../../tactical/types.js';
+import type { DmFactAction, MapEntity, TacticalMap } from '../../tactical/types.js';
 
 export type { DmFactAction };
 
@@ -197,13 +200,56 @@ export async function recordDmTacticalFact(
   await saveTacticalMapRow(row.rowId, row.state);
 }
 
-/**
- * Return the engine-resolved facts with the next tactical digest, then clear them.
- *
- * Reads the latest row, active or not, for the same reason the writer does: the last thing
- * that happened in a fight is recorded on a board that no longer exists by the time anyone
- * asks about it.
- */
+export async function consumeTacticalMapContext(sessionId: string): Promise<{
+  map: TacticalMap | null;
+  facts: string[];
+  actions: DmFactAction[];
+  correction: string | null;
+  silentTurns: number;
+}> {
+  const { db } = await import('../../../../db/client.js');
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId))
+      .orderBy(desc(tacticalMaps.updatedAt))
+      .limit(1)
+      .for('update');
+    if (!row) return { map: null, facts: [], actions: [], correction: null, silentTurns: 0 };
+    const [activeRow] = row.active
+      ? [row]
+      : await tx
+          .select()
+          .from(tacticalMaps)
+          .where(and(eq(tacticalMaps.sessionId, sessionId), eq(tacticalMaps.active, true)))
+          .orderBy(desc(tacticalMaps.updatedAt))
+          .limit(1)
+          .for('update');
+    const state = row.state as TacticalMap;
+    const facts = state.pendingDmFacts ?? [];
+    const actions = state.pendingDmFactActions ?? [];
+    const correction = state.pendingDmCorrection ?? null;
+    delete state.pendingDmFacts;
+    delete state.pendingDmFactActions;
+    delete state.pendingDmCorrection;
+    const map = activeRow ? (activeRow.state as TacticalMap) : null;
+    const silentTurns = map ? (facts.length ? 0 : (map.dmSilentTurns ?? 0) + 1) : 0;
+    if (map) map.dmSilentTurns = silentTurns;
+    assignEntitySlugs(state.entities);
+    if (map) assignEntitySlugs(map.entities);
+    for (const target of activeRow && activeRow.id !== row.id ? [row, activeRow] : [row]) {
+      if (target.active || facts.length || actions.length || correction) {
+        await tx
+          .update(tacticalMaps)
+          .set({ state: target.state, updatedAt: new Date() })
+          .where(eq(tacticalMaps.id, target.id));
+      }
+    }
+    return { map, facts, actions, correction, silentTurns };
+  });
+}
+
 export async function consumeDmTacticalFacts(sessionId: string): Promise<string[]> {
   const row = await loadLatestTacticalMapRow(sessionId);
   if (!row?.state.pendingDmFacts?.length) return [];
@@ -211,54 +257,4 @@ export async function consumeDmTacticalFacts(sessionId: string): Promise<string[
   delete row.state.pendingDmFacts;
   await saveTacticalMapRow(row.rowId, row.state);
   return facts;
-}
-
-/**
- * Return the structured engine-resolved actions with the next tactical digest, then clear
- * them. Latest row, not active row, for the same reason `consumeDmTacticalFacts` does:
- * the killing blow is recorded microseconds before the board is torn down.
- */
-export async function consumeDmFactActions(sessionId: string): Promise<DmFactAction[]> {
-  const row = await loadLatestTacticalMapRow(sessionId);
-  if (!row?.state.pendingDmFactActions?.length) return [];
-  const actions = row.state.pendingDmFactActions;
-  delete row.state.pendingDmFactActions;
-  await saveTacticalMapRow(row.rowId, row.state);
-  return actions;
-}
-
-/**
- * Advances the engine-silence streak by one turn, or resets it because something resolved.
- * Returns the streak the DM context should be built against.
- *
- * Counting happens where the context is assembled rather than where actions are executed,
- * because the thing being counted is turns the DM was given nothing — and a turn the DM never
- * asked about is a turn that did not happen.
- */
-export async function noteEngineResolutions(
-  sessionId: string,
-  resolvedSomething: boolean,
-): Promise<number> {
-  const map = await loadActiveTacticalMap(sessionId);
-  if (!map) return 0;
-  const streak = resolvedSomething ? 0 : (map.dmSilentTurns ?? 0) + 1;
-  if ((map.dmSilentTurns ?? 0) === streak) return streak;
-  map.dmSilentTurns = streak;
-  await saveTacticalMap(map);
-  return streak;
-}
-
-/**
- * Return the one-shot correction fact with the next tactical digest, then clear it.
- *
- * Latest row, not active row: a correction recorded on the DM's last map action before the
- * fight ended has exactly the same delivery problem the facts had.
- */
-export async function consumeDmTacticalCorrection(sessionId: string): Promise<string | null> {
-  const row = await loadLatestTacticalMapRow(sessionId);
-  if (!row?.state.pendingDmCorrection) return null;
-  const correction = row.state.pendingDmCorrection;
-  delete row.state.pendingDmCorrection;
-  await saveTacticalMapRow(row.rowId, row.state);
-  return correction;
 }
