@@ -51,7 +51,25 @@ describe('readBunSummary', () => {
   });
 });
 
+// Real bun 1.4.2 output from the hosted runner: each header is a GitHub log group.
+const BUN_1_4_OUTPUT_IN_CI = `##[group]src/services/__tests__/attack-telemetry.real-db.test.ts:
+(pass) attack resolution telemetry > a HIT emits one line with every field populated [12.89ms]
+##[endgroup]
+##[group]src/services/__tests__/empty.real-db.test.ts:
+##[endgroup]
+
+ 1 pass
+ 0 fail
+Ran 1 tests across 2 files. [10.64s]
+`;
+
 describe('filesWithPassingTests', () => {
+  it('reads the headers bun 1.4 prints as GitHub log groups', () => {
+    expect([...filesWithPassingTests(BUN_1_4_OUTPUT_IN_CI)]).toEqual([
+      'src/services/__tests__/attack-telemetry.real-db.test.ts',
+    ]);
+  });
+
   it('names only the files that have a passing test under their header', () => {
     expect([...filesWithPassingTests(BUN_OUTPUT_THREE_FILES)].sort()).toEqual([
       'a.test.ts',

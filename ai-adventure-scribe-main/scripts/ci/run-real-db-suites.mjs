@@ -99,7 +99,8 @@ export function filesWithPassingTests(output) {
   const passing = new Set();
   let current = null;
   for (const line of output.split('\n')) {
-    const header = line.match(/^(\S+\.test\.ts):$/);
+    // GitHub Actions turns each header into a log group (bun 1.4 on the hosted runner).
+    const header = line.match(/^(?:##\[group\]|::group::)?(\S+\.test\.ts):$/);
     if (header) {
       current = header[1];
     } else if (current !== null && line.startsWith('(pass)')) {
