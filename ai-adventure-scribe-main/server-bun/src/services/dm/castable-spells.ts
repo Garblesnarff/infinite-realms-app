@@ -1,9 +1,9 @@
 /**
- * What a character can cast right now, for the DM feature gate (#217 step d1).
+ * What a character can cast right now, for the DM feature gate (#217 steps d1, d2).
  *
  * Cantrips at will; prepared and known spells from `characters` and `character_spells`. A
  * wizard's known spells are the spellbook, which casts only what is prepared, or a ritual with no
- * slot.
+ * slot. A cleric, druid or paladin casts only what is prepared or always prepared.
  */
 
 import { allSpells, getSpellByName, resolveCatalogSpell } from '../../data/spellData.js';
@@ -61,11 +61,65 @@ export function catalogSpellSpelled(name: string): string | undefined {
   return near.length === 1 ? near[0] : undefined;
 }
 
-/** The spells a player names straight after a cast verb, catalog or not. */
-export const spellsNamed = (phrases: string[]): string[] =>
-  phrases
-    .filter((phrase) => SPELL_NAME_SHAPE.test(phrase))
-    .map((phrase) => catalogSpellSpelled(phrase) ?? phrase);
+/**
+ * Classes that cast spells, and the level they start at. A name the catalog does not hold is a
+ * spell claim only from one of these: a Fighter who casts Fishing Line is fishing (#217 step d2).
+ */
+const CASTER_FROM_LEVEL: Record<string, number> = {
+  artificer: 1,
+  bard: 1,
+  cleric: 1,
+  druid: 1,
+  paladin: 2,
+  ranger: 2,
+  sorcerer: 1,
+  warlock: 1,
+  wizard: 1,
+};
+
+export const castsSpells = (character: CharacterRow): boolean =>
+  character.level >= (CASTER_FROM_LEVEL[(character.class ?? '').toLowerCase()] ?? Infinity);
+
+/**
+ * Words only a spell's casting carries: a slot, a spell level, a saving throw or its DC. Bare
+ * "save" and "spell" are ordinary English ("to save the boy", "my spell focus") and do not count.
+ */
+const SPELL_WORDS =
+  /\b(?:slots?|cantrips?|ritual|upcast|(?:1st|2nd|3rd|[4-9]th)[- ]level|level\s*[1-9]|saving\s+throws?|DC\s*\d+)\b/i;
+/** A spell aims at a creature or a thing: "Witch Bolt at the cultist", "Bane on the guards". */
+const SPELL_TARGET = /^\s+(?:on|at|upon|against)\b/i;
+
+/**
+ * Whether a name the catalog does not hold, cast in `sentence`, reads as a spell (#217 step d2):
+ * the sentence names a slot, a spell level, a saving throw or a DC, or the name is aimed at a target
+ * ("at", "on", "upon", "against" straight after it). "Cast Fishing Line into the lake" is none of
+ * those, so it is not a claim; "into" and "toward" name a place, not a target.
+ */
+const readsLikeASpell = (sentence: string, afterName: string): boolean =>
+  SPELL_WORDS.test(sentence) || SPELL_TARGET.test(afterName);
+
+export interface NamedSpell {
+  name: string;
+  /** Not in the catalog: a claim only from a caster (`castsSpells`). */
+  offCatalog: boolean;
+}
+
+/**
+ * The spells a player names straight after a cast verb (`castPhrase`, whose first group is the
+ * name): a catalog spell however it is spelled, or a name the catalog does not hold when its
+ * sentence reads like a spell (`readsLikeASpell`).
+ */
+export const spellsNamed = (playerInput: string, castPhrase: RegExp): NamedSpell[] =>
+  playerInput.split(/(?<=[.!?;])\s+/).flatMap((sentence) =>
+    [...sentence.matchAll(castPhrase)].flatMap((match): NamedSpell[] => {
+      const phrase = (match[1] ?? '').trim();
+      if (!SPELL_NAME_SHAPE.test(phrase)) return [];
+      const catalogName = catalogSpellSpelled(phrase);
+      if (catalogName) return [{ name: catalogName, offCatalog: false }];
+      const afterName = sentence.slice((match.index ?? 0) + match[0].length);
+      return readsLikeASpell(sentence, afterName) ? [{ name: phrase, offCatalog: true }] : [];
+    }),
+  );
 
 /** One key per spell however it is written: the catalog id, or the name as a slug. */
 export const spellKey = (ref: string): string =>
@@ -80,6 +134,8 @@ const listedSpells = (value: string | null | undefined): string[] =>
     .split(',')
     .map((ref) => ref.trim())
     .filter(Boolean);
+
+const PREPARED_CASTERS = new Set(['cleric', 'druid', 'paladin']);
 
 /** What the character can cast now: cantrips at will, and their prepared or known spells. */
 export async function castableSpells(character: CharacterRow): Promise<string[]> {
@@ -108,10 +164,11 @@ export async function castableSpells(character: CharacterRow): Promise<string[]>
       .map((row) => row.name),
   ];
   const known = [...listedSpells(character.knownSpells), ...rows.map((row) => row.name)];
+  const className = (character.class ?? '').toLowerCase();
   // A wizard's known spells are the spellbook: from it they cast what they prepared, and a ritual
   // with no slot (RP-13). With nothing recorded as prepared, nothing says what that is, so the
   // whole book stands, as before: a false refusal is worse than a missed one.
-  if ((character.class ?? '').toLowerCase() === 'wizard' && prepared.length) {
+  if (className === 'wizard' && prepared.length) {
     return [
       ...cantrips,
       ...prepared,
@@ -119,5 +176,9 @@ export async function castableSpells(character: CharacterRow): Promise<string[]>
       ...known.filter((ref) => resolveCatalogSpell(ref, ref)?.ritual),
     ];
   }
+  // A cleric, druid or paladin draws on their whole class list, but casts only what they prepared
+  // today, and the spells their domain, circle or oath keeps always prepared (#217 step d2). The
+  // same fail-open: with nothing recorded as prepared, everything recorded stands.
+  if (PREPARED_CASTERS.has(className) && prepared.length) return [...cantrips, ...prepared];
   return [...cantrips, ...prepared, ...known];
 }

@@ -9,7 +9,7 @@
  * - features: `class_features_library` for the character's class, cumulative to their level
  *   (`ClassFeaturesService`), extended by any `character_features` rows granted to them;
  * - spells: what the character can cast now (`castableSpells`, #217), and a spell the catalog
- *   does not hold ("Witch Bolt") is checked too, when the player names it as a spell.
+ *   does not hold ("Witch Bolt") is checked too, when a caster names it as a spell (`spellsNamed`).
  *
  * Only the player's own claim triggers it: a spell after a cast verb or a feature after a use verb,
  * in `player_input` or in the purpose of a roll the player makes for their own action. Never the
@@ -18,7 +18,7 @@
  * and nothing is spent. A check that cannot run fails open.
  */
 
-import { castableSpells, spellKey, spellsNamed } from './castable-spells.js';
+import { castableSpells, castsSpells, spellKey, spellsNamed } from './castable-spells.js';
 import { parseLlmEnvelope } from './dm-response-schema.js';
 import { getSpellByName } from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
@@ -159,14 +159,15 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   const usePhrases = texts.flatMap((text) => phrasesAfter(USE_PHRASE, text));
   if (!castPhrases.length && !usePhrases.length) return result;
 
-  const claimedSpells = input.inCombat
+  const named = input.inCombat ? [] : spellsNamed(input.playerInput ?? '', NAMED_CAST_PHRASE);
+  let claimedSpells = input.inCombat
     ? []
     : [
         ...new Set([
           ...(castPhrases
             .map((phrase) => getSpellByName(phrase)?.name)
             .filter(Boolean) as string[]),
-          ...spellsNamed(phrasesAfter(NAMED_CAST_PHRASE, input.playerInput ?? '')),
+          ...named.map((spell) => spell.name),
         ]),
       ];
   const library = usePhrases.length ? await loadLibrary() : [];
@@ -228,6 +229,11 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     refusedFeatures = claimedFeatures.filter((name) => !allowed.has(name.toLowerCase()));
   }
 
+  if (!castsSpells(character)) {
+    // A name the catalog does not hold is a spell only from a caster: "Fishing Line" is a line.
+    const offCatalog = named.filter((spell) => spell.offCatalog).map((spell) => spell.name);
+    claimedSpells = claimedSpells.filter((name) => !offCatalog.includes(name));
+  }
   let refusedSpells: string[] = [];
   if (claimedSpells.length) {
     const castable = new Set((await castableSpells(character)).map(spellKey));
