@@ -10,7 +10,7 @@
  * dedicated local/CI Postgres because it writes fixtures.
  */
 import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -107,6 +107,7 @@ const { LLMProviderService } = await importWithRealDb(() => import('../llm-provi
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
+const { SpellSlotsService } = await importWithRealDb(() => import('../spell-slots-service.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -1675,5 +1676,91 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text))).toHaveProperty('combat_entry_pending');
     expect(await slotSpends(turn.character.id)).toEqual([]);
     expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  /** The level-1 slot row as the engine table holds it: never more used than there are. */
+  const levelOneSlots = async (characterId: string): Promise<Record<string, unknown>[]> =>
+    database
+      .select({ total: characterSpellSlots.totalSlots, used: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
+
+  test('#218 step 1: at 0 slots left a cast spends nothing: no negative slot, no log row', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    const again = 'I cast Burning Hands at the rats.';
+    await playerSays(again);
+    await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: character,
+      playerInput: again,
+      reply: castReply('The rats scatter, singed.'),
+    });
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
+
+    const third = 'I cast Burning Hands at the last rat.';
+    await playerSays(third);
+    expect(
+      await spendOutcomes(() =>
+        dmTurn({
+          ...apprentice(apprenticeSpellLists),
+          existingCharacter: character,
+          playerInput: third,
+          reply: castReply('You reach for the spell, but nothing answers.'),
+        }),
+      ),
+    ).toEqual([['Burning Hands', 'no_slot']]);
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
+    expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+    expect(await slotSpends(character.id)).toHaveLength(2);
+  });
+
+  test('#218 step 1: two concurrent spends for one player message spend one slot (row lock)', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    await playerSays('I cast Burning Hands at the rats under the stair.');
+    // The key the route reads: the session's newest player row (story-spell-slots.ts).
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    const spend = () =>
+      SpellSlotsService.spendStoryCastSlots({
+        characterId: character.id,
+        userId,
+        sessionId,
+        since,
+        spells: [{ spellName: 'Burning Hands', spellLevel: 1 }],
+      });
+    // A Retry sent while the first turn is still in flight: both ask at once for one message.
+    const outcomes = (await Promise.all([spend(), spend()])).flat().sort();
+    expect(outcomes).toEqual(['already_spent', 'spent']);
+    expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+    expect(await slotSpends(character.id)).toHaveLength(2);
+  });
+
+  test('#218 step 1: two concurrent casts with one slot left: one spends, one finds no slot, never negative', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    // No per-message key (\`since\` null), so only the lock and the used < total check stand.
+    const spend = () =>
+      SpellSlotsService.spendStoryCastSlots({
+        characterId: character.id,
+        userId,
+        sessionId,
+        since: null,
+        spells: [{ spellName: 'Burning Hands', spellLevel: 1 }],
+      });
+    const outcomes = (await Promise.all([spend(), spend()])).flat().sort();
+    expect(outcomes).toEqual(['no_slot', 'spent']);
+    expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
+    expect(await slotSpends(character.id)).toHaveLength(2);
   });
 });
