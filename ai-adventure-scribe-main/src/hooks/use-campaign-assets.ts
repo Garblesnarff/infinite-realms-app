@@ -189,19 +189,26 @@ export function useCampaignAssets(
     return map;
   }, [assets]);
 
+  // Asset names, for the possessive-strip guard in getAsset's third fallback (#292):
+  // a trailing s is only stripped when an asset name with 's justifies it.
+  const assetNames = useMemo(() => assets.map((asset) => asset.name), [assets]);
+
   // Get asset by type and key — tries exact key first, then normalized key as fallback,
   // then the possessive-stripped form (old-style keys like "the-bland-ones-disciple"
   // for "The Bland One's Disciple" must still resolve after the #267 key change).
+  // The strip only fires when an asset name with 's justifies it, so a lookup for
+  // "bats" never resolves to a different entity "bat" (#292).
   const getAsset = useCallback(
     (type: string, key: string): CampaignAsset | null => {
+      const normalized = generateAssetKey(key);
       return (
         assetMap.get(`${type}:${key}`) ||
-        assetMap.get(`${type}:${generateAssetKey(key)}`) ||
-        assetMap.get(`${type}:${stripKeyPossessiveS(generateAssetKey(key))}`) ||
+        assetMap.get(`${type}:${normalized}`) ||
+        assetMap.get(`${type}:${stripKeyPossessiveS(normalized, assetNames)}`) ||
         null
       );
     },
-    [assetMap],
+    [assetMap, assetNames],
   );
 
   // Get just the image URL

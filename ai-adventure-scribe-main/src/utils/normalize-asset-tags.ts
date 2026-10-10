@@ -181,7 +181,10 @@ export function normalizeAssetTagKeysInContent(content: string): string {
     // A model may emit an old-style key ("the-bland-ones-disciple") built without the
     // possessive strip; treat its stripped form ("the-bland-one-disciple") as the same
     // entity so the visible possessive name is recognized and no second name is added.
-    const strippedDerivedName = deriveAssetDisplayName(stripKeyPossessiveS(normalized));
+    // The strip only fires for stems the surrounding text justifies with 's (#292).
+    const strippedDerivedName = deriveAssetDisplayName(
+      stripKeyPossessiveS(normalized, [wholeString]),
+    );
     const nameAlreadyPresent =
       isAssetNamePresentAroundTag(wholeString, offset, fullMatch.length, derivedName) ||
       (strippedDerivedName !== derivedName &&

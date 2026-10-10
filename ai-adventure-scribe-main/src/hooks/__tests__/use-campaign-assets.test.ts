@@ -365,3 +365,52 @@ describe('useCampaignAssets', () => {
     expect(result.current.getAsset('faction', 'unlinked-faction')).toBeNull();
   });
 });
+
+describe('getAsset possessive fallback (#292)', () => {
+  const mockCampaignId = 'test-campaign-123';
+
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  async function renderWithChunks(mockChunks: any[]) {
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce([]);
+    (supabase.from as any).mockImplementation((table: string) =>
+      table === 'campaign_chunks' ? createMockChain(mockChunks) : createMockChain(null),
+    );
+    const { result } = renderHook(() => useCampaignAssets(mockCampaignId));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    return result;
+  }
+
+  const discipleChunk = {
+    entity_name: "The Bland One's Disciple",
+    chunk_type: 'npc_helper',
+    metadata: { image_url: 'https://example.test/disciple.webp' },
+  };
+  const batChunk = {
+    entity_name: 'Bat',
+    chunk_type: 'monster',
+    metadata: { image_url: 'https://example.test/bat.webp' },
+  };
+
+  it('resolves an old-style possessive key to the canonical asset (positive)', async () => {
+    const result = await renderWithChunks([discipleChunk, batChunk]);
+    // Old-style key kept the possessive s; the asset name justifies the strip.
+    const found = result.current.getAsset('npc', 'the-bland-ones-disciple');
+    expect(found?.name).toBe("The Bland One's Disciple");
+    expect(found?.key).toBe('the-bland-one-disciple');
+  });
+
+  it('does not resolve "bats" to a different entity "bat" (negative)', async () => {
+    const result = await renderWithChunks([batChunk]);
+    // Before #292, the blind strip turned "bats" into "bat" and returned the
+    // bat asset. No asset name carries "bat's", so the strip must not fire.
+    expect(result.current.getAsset('monster', 'bats')).toBeNull();
+  });
+
+  it('still resolves exact and normalized forms', async () => {
+    const result = await renderWithChunks([discipleChunk, batChunk]);
+    expect(result.current.getAsset('npc', 'the-bland-one-disciple')?.name).toBe(
+      "The Bland One's Disciple",
+    );
+    expect(result.current.getAsset('monster', 'Bat')?.key).toBe('bat');
+  });
+});

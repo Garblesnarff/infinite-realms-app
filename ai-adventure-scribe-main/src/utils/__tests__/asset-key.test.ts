@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { generateAssetKey } from '../asset-key';
+import { generateAssetKey, stripKeyPossessiveS } from '../asset-key';
 
 /**
  * Asset Key Generation Utility Tests
@@ -73,7 +73,7 @@ describe('generateAssetKey', () => {
     expect(generateAssetKey('Mjölnir')).toBe('mjolnir');
   });
 
-  it("should strip a possessive 's so the key matches the base name (#267)", () => {
+  it('should strip a possessive s so the key matches the base name (#267)', () => {
     // "The Bland One's Disciple" must key as the-bland-one-disciple, not
     // the-bland-ones-disciple: the possessive s is grammar, not name. Otherwise the
     // key-derived display name never matches the visible possessive and the
@@ -96,5 +96,42 @@ describe('generateAssetKey', () => {
     expect(generateAssetKey('Odin')).toBe('odin');
     // 's before a hyphen: the possessive is stripped, hyphen structure kept.
     expect(generateAssetKey("The Spider's-Web")).toBe('the-spider-web');
+  });
+});
+
+describe('stripKeyPossessiveS', () => {
+  it("strips a possessive remnant when an entity name with 's justifies it (#292)", () => {
+    expect(stripKeyPossessiveS('the-bland-ones-disciple', ["The Bland One's Disciple"])).toBe(
+      'the-bland-one-disciple',
+    );
+  });
+
+  it("treats Odin's and Odin as the same entity (#292)", () => {
+    expect(stripKeyPossessiveS('odins', ["Odin's"])).toBe('odin');
+  });
+
+  it('leaves "thieves" alone when the name has no possessive s (#292)', () => {
+    expect(stripKeyPossessiveS('thieves-guild', ["Thieves' Guild"])).toBe('thieves-guild');
+  });
+
+  it('leaves "bats" alone when no name justifies the strip (#292)', () => {
+    expect(stripKeyPossessiveS('bats', ['Bat'])).toBe('bats');
+    expect(stripKeyPossessiveS('bats', ['Bat', 'Cave'])).toBe('bats');
+  });
+
+  it('strips nothing without known names (#292)', () => {
+    expect(stripKeyPossessiveS('the-bland-ones-disciple')).toBe('the-bland-ones-disciple');
+  });
+
+  it('only strips justified words, leaving the rest of the key intact (#292)', () => {
+    expect(
+      stripKeyPossessiveS('the-bland-ones-glass-disciples', ["The Bland One's Disciple"]),
+    ).toBe('the-bland-one-glass-disciples');
+  });
+
+  it('extracts possessive stems from names with diacritics (#292)', () => {
+    // Keys are NFKD-normalized by generateAssetKey, so the stem must be too:
+    // "Mjölnir's" justifies stripping "mjolnirs", not the fragment "lnir".
+    expect(stripKeyPossessiveS('mjolnirs-hammer', ["Mjölnir's Hammer"])).toBe('mjolnir-hammer');
   });
 });
