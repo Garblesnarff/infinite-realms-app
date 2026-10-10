@@ -162,7 +162,13 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const emotionLabel = import.meta.env.DEV ? message.context?.emotion : undefined;
     const hasContextMetadata = Boolean(emotionLabel || message.context?.location);
     const timestamp = message.timestamp
-      ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? new Date(message.timestamp).toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZoneName: 'short',
+        })
       : '';
 
     return (

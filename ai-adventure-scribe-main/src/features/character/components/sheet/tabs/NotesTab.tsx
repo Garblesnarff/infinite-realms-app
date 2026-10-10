@@ -173,7 +173,7 @@ const NotesTab: React.FC<NotesTabProps> = ({ character, onUpdate }) => {
               </CardHeader>
               <CardContent>
                 <EditableDescription
-                  label=""
+                  label="Backstory"
                   value={character.backstory_elements || ''}
                   field="backstory_elements"
                   character={character}

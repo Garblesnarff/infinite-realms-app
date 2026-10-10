@@ -219,7 +219,11 @@ const WizardContent: React.FC = () => {
               <h1 className="text-3xl font-bold text-center mb-8 bg-gradient-to-r from-infinite-purple via-infinite-gold to-infinite-teal bg-clip-text text-transparent">
                 Create Your Character
               </h1>
-              <ProgressIndicator currentStep={currentStep} totalSteps={filteredSteps.length} />
+              <ProgressIndicator
+                currentStep={currentStep}
+                totalSteps={filteredSteps.length}
+                steps={filteredSteps}
+              />
               <div className="min-h-[600px] transition-all duration-500 ease-in-out">
                 <div
                   key={currentStep}
