@@ -2,11 +2,9 @@ import { useMemo } from 'react';
 
 import type { Character, Ability, AbilityScores } from '@/types/character';
 import type { CharacterStats } from '@/utils/character-calculations';
-import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import logger from '@/lib/logger';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
-import { calculateRacialBonuses, getTotalRacialBonus } from '@/utils/racialAbilityBonuses';
 
 /**
  * ⚡ Bolt: Hoisted constants to module scope to avoid re-allocation during render
@@ -109,30 +107,26 @@ export const useLevelProgression = (character: Character | null) => {
 };
 
 /**
- * Hook for getting character's effective ability scores (including racial bonuses)
+ * Hook for getting character's effective ability scores.
+ *
+ * Stored scores are final: racial bonuses are applied once, at creation
+ * (see applyRacialBonusesToAbilityScores). Reads must not add them again, or
+ * every reload double-counts. racialBonus is therefore always 0 here.
  */
 export const useEffectiveAbilityScores = (character: Character | null) => {
   return useMemo(() => {
     if (!character?.abilityScores) return null;
 
-    const baseScores = character.abilityScores;
-    const racialBonuses = calculateRacialBonuses(
-      character.race || null,
-      character.subrace || null,
-      character.racialAbilityChoices,
-    );
+    const finalScores = character.abilityScores;
 
-    const effectiveScores = (Object.entries(baseScores) as [keyof AbilityScores, Ability][]).reduce(
+    const effectiveScores = (
+      Object.entries(finalScores) as [keyof AbilityScores, Ability][]
+    ).reduce(
       (acc, [ability, data]) => {
-        const racialBonus = getTotalRacialBonus(ability as AbilityScoreName, racialBonuses);
-        const effectiveScore = data.score + racialBonus;
-
         acc[ability] = {
           ...data,
-          score: effectiveScore,
           baseScore: data.score,
-          racialBonus,
-          modifier: Math.floor((effectiveScore - 10) / 2),
+          racialBonus: 0,
         };
 
         return acc;
@@ -141,10 +135,5 @@ export const useEffectiveAbilityScores = (character: Character | null) => {
     );
 
     return effectiveScores;
-  }, [
-    character?.abilityScores,
-    character?.race,
-    character?.subrace,
-    character?.racialAbilityChoices,
-  ]);
+  }, [character?.abilityScores]);
 };

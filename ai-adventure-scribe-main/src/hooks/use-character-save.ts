@@ -19,6 +19,7 @@ import {
   transformEquipmentForStorage,
   transformMulticlassingForStorage,
 } from '@/utils/characterTransformations';
+import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 import { convertSpellIdsToDatabase } from '@/utils/spell-id-mapping';
 
 // Project Types
@@ -195,9 +196,7 @@ export const useCharacterSave = (): {
 
             // #2710: send the prepared set as database UUIDs (no lossy
             // name→kebab→UUID round trip; use the ids directly).
-            const preparedDatabaseIds = convertSpellIdsToDatabase(
-              character.preparedSpellIds || [],
-            );
+            const preparedDatabaseIds = convertSpellIdsToDatabase(character.preparedSpellIds || []);
 
             if (databaseSpellIds.length > 0) {
               await characterSpellService.saveCharacterSpells(id, {
@@ -222,9 +221,18 @@ export const useCharacterSave = (): {
         // For new characters, use atomic RPC function
         let savedCharacter: Character;
         if (!characterData.id) {
+          // The wizard holds base scores. Store final scores (racial bonus applied once, here)
+          // so AC, HP and saves derive from what is persisted and reads never re-add the bonus.
+          const finalAbilityScores = applyRacialBonusesToAbilityScores(
+            character.abilityScores!,
+            character.race || null,
+            character.subrace || null,
+            character.racialAbilityChoices,
+          );
+
           // Transform stats data
           const statsData = transformAbilityScoresForStorage(
-            character.abilityScores!,
+            finalAbilityScores,
             '00000000-0000-0000-0000-000000000000', // Temporary ID, will be replaced
             character.class?.name,
           );
