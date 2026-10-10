@@ -1,4 +1,4 @@
-import { generateAssetKey } from './asset-key';
+import { generateAssetKey, stripKeyPossessiveS } from './asset-key';
 
 const LEADING_ARTICLE_PATTERN = /^(?:the|an|a)\s+/i;
 const ASSET_NAME_WORD_PATTERN = /[a-z0-9]+(?:['’-][a-z0-9]+)*/gi;
@@ -178,12 +178,14 @@ export function normalizeAssetTagKeysInContent(content: string): string {
 
     const beforeTag = wholeString.slice(0, offset).replace(/[\s"'`*_]+$/, '');
     const afterTag = wholeString.slice(offset + fullMatch.length).replace(/^[^a-zA-Z]+/, '');
-    const nameAlreadyPresent = isAssetNamePresentAroundTag(
-      wholeString,
-      offset,
-      fullMatch.length,
-      derivedName,
-    );
+    // A model may emit an old-style key ("the-bland-ones-disciple") built without the
+    // possessive strip; treat its stripped form ("the-bland-one-disciple") as the same
+    // entity so the visible possessive name is recognized and no second name is added.
+    const strippedDerivedName = deriveAssetDisplayName(stripKeyPossessiveS(normalized));
+    const nameAlreadyPresent =
+      isAssetNamePresentAroundTag(wholeString, offset, fullMatch.length, derivedName) ||
+      (strippedDerivedName !== derivedName &&
+        isAssetNamePresentAroundTag(wholeString, offset, fullMatch.length, strippedDerivedName));
     const isStandaloneTag = beforeTag.length === 0 && afterTag.length === 0;
 
     if (!nameAlreadyPresent && !isStandaloneTag) {
