@@ -53,6 +53,43 @@ function injectBuildVersion(buildVersion: string): {
   };
 }
 
+type ChunkGraphApi = {
+  getModuleIds: () => Iterable<string>;
+  getModuleInfo: (id: string) => { importedIds: readonly string[]; isEntry: boolean } | null;
+};
+
+// One set per build: Rollup passes the same api object to every manualChunks call in a build.
+const entryReachableByBuild = new WeakMap<ChunkGraphApi, Set<string>>();
+
+/**
+ * Every module the entries reach through static imports only (#226). The landing page preloads
+ * the chunks its entry imports, so a package goes into a preloaded chunk only if this set has it;
+ * everything else stays in the route chunk that lazy-imports it.
+ */
+function isEntryReachable(id: string, api: ChunkGraphApi): boolean {
+  let reached = entryReachableByBuild.get(api);
+  if (!reached) {
+    reached = new Set<string>();
+    const queue: string[] = [];
+    for (const moduleId of api.getModuleIds()) {
+      if (api.getModuleInfo(moduleId)?.isEntry) {
+        reached.add(moduleId);
+        queue.push(moduleId);
+      }
+    }
+    for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+      for (const dep of api.getModuleInfo(next)?.importedIds ?? []) {
+        if (!reached.has(dep)) {
+          reached.add(dep);
+          queue.push(dep);
+        }
+      }
+    }
+    entryReachableByBuild.set(api, reached);
+  }
+  return reached.has(id);
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   define: {
@@ -110,7 +147,13 @@ export default defineConfig(({ mode }) => ({
         'landing-client': path.resolve(__dirname, 'src/landing-client.ts'),
       },
       output: {
-        manualChunks(id) {
+        manualChunks(id, api) {
+          // Vite's preload helper is imported by every lazy route. Without its own chunk,
+          // Rollup folds it into the three chunk, so the landing entry statically imports
+          // three.js and preloads it (#226).
+          if (id.includes('vite/preload-helper')) {
+            return 'preload-helper';
+          }
           if (id.includes('node_modules')) {
             // React core — isolated chunk so vendor and react-query both
             // import React from here, eliminating cross-chunk init cycles
@@ -152,9 +195,9 @@ export default defineConfig(({ mode }) => ({
               return 'supabase';
             }
 
-            // Radix UI primitives - large set of components
+            // Radix UI primitives - preloaded by the landing page, so only the entry-reachable part
             if (id.includes('@radix-ui')) {
-              return 'radix-ui';
+              return isEntryReachable(id, api) ? 'radix-ui' : undefined;
             }
 
             // Data fetching layer
@@ -162,7 +205,10 @@ export default defineConfig(({ mode }) => ({
               return 'react-query';
             }
 
-            return 'vendor';
+            // Shared vendor code is preloaded by the landing page, so only what the entry imports
+            // goes here. Packages only lazy routes import (mathjs, cannon-es, date-fns, ...) go
+            // to those routes' chunks (#226).
+            return isEntryReachable(id, api) ? 'vendor' : undefined;
           }
           return undefined;
         },

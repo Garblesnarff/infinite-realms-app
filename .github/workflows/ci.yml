@@ -177,7 +177,7 @@ jobs:
       # security-lint.test.ts has never run in CI -- see the T09 audit note.
       - name: Test-list guard unit tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bun test scripts/ci/check-real-db-test-list.test.ts scripts/ci/check-server-tests-run.test.ts
+        run: bun test scripts/ci/check-real-db-test-list.test.ts scripts/ci/check-server-tests-run.test.ts scripts/ci/check-landing-preload.test.ts
         working-directory: ai-adventure-scribe-main
       # Server typecheck gate (#2313). Runs tsc over the server program and
       # fails on any error in a file not quarantined in
@@ -215,6 +215,8 @@ jobs:
       # so the ceiling is raised to 20s.
       - run: bunx vitest run --testTimeout=20000 --hookTimeout=20000
       - run: bun run build
+      # The landing page must not preload three.js (#226). Reads the built index.html.
+      - run: node scripts/ci/check-landing-preload.mjs
 
   server-vitest:
     needs: changes
