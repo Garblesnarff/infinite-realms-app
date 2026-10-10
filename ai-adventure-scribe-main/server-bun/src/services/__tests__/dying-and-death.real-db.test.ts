@@ -1612,6 +1612,12 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
         expect(response.status).toBe(200);
         return (await response.json()) as Record<string, any>;
       };
+      // Engine rows never get a sequenceNumber (SessionMessageService.addMessages does
+      // not set it), so ordering by it is unspecified and the rows come back in an
+      // arbitrary order (#221). createdAt is the server clock (AGENTS.md §4); each
+      // engine-row write lands in its own physical transaction
+      // (withNpcActionTransaction uses the raw database handle), so createdAt
+      // reflects write order.
       const rows = async () =>
         (
           await db
@@ -1623,7 +1629,7 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
                 eq(dialogueHistory.speakerType, 'system'),
               ),
             )
-            .orderBy(asc(dialogueHistory.sequenceNumber))
+            .orderBy(asc(dialogueHistory.createdAt))
         ).map((row) => ({
           id: row.id,
           text: row.message,
