@@ -16,23 +16,35 @@
  * @returns A lowercase, hyphenated key (e.g., "remy-the-manager")
  */
 export function generateAssetKey(name: string): string {
-  return (
-    name
-      .toString()
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      // Strip a possessive 's before removing quotes ("The Bland One's Disciple" ->
-      // "the-bland-one-disciple", not "the-bland-ones-disciple"): the possessive s is
-      // grammar, not name. Without this the key-derived display name ("The Bland Ones
-      // Disciple") never matches the visible possessive ("The Bland One's Disciple") in
-      // normalizeAssetTagKeysInContent, which then prepends a second name (#267).
-      .replace(/['’]s\b/g, '')
-      .replace(/[""''«»`"']/g, '') // Remove all quote variants (Unicode + ASCII)
-      .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars
-      .replace(/\s+/g, '-') // Spaces to hyphens
-      .replace(/-+/g, '-') // Collapse multiple hyphens
-      .replace(/^-|-$/g, '') // Trim leading/trailing hyphens
-      .trim()
-  );
+  return name
+    .toString()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    // Strip a possessive 's before removing quotes ("The Bland One's Disciple" ->
+    // "the-bland-one-disciple", not "the-bland-ones-disciple"): the possessive s is
+    // grammar, not name. Without this the key-derived display name ("The Bland Ones
+    // Disciple") never matches the visible possessive ("The Bland One's Disciple") in
+    // normalizeAssetTagKeysInContent, which then prepends a second name (#267).
+    .replace(/['’]s\b/g, '')
+    .replace(/[""''«»`"']/g, '') // Remove all quote variants (Unicode + ASCII)
+    .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars
+    .replace(/\s+/g, '-') // Spaces to hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
+    .replace(/^-|-$/g, '') // Trim leading/trailing hyphens
+    .trim();
+}
+
+/**
+ * Strip a trailing "s" from each hyphen-separated word in a key, for matching
+ * old-style keys against visible prose. A model may emit a key built without the
+ * possessive strip (e.g. "the-bland-ones-disciple" for "The Bland One's Disciple");
+ * the stripped form ("the-bland-one-disciple") is the same entity and must match
+ * the same visible name. Shared by key generation and tag normalization (#267).
+ */
+export function stripKeyPossessiveS(key: string): string {
+  return key
+    .split('-')
+    .map((word) => (word.length > 2 && word.endsWith('s') ? word.slice(0, -1) : word))
+    .join('-');
 }

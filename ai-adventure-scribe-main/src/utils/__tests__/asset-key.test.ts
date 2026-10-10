@@ -83,4 +83,18 @@ describe('generateAssetKey', () => {
     // A plural s with no apostrophe is part of the name and stays.
     expect(generateAssetKey('The Bland Ones')).toBe('the-bland-ones');
   });
+
+  it('should handle apostrophe edge cases without breaking names (#267)', () => {
+    // O'Brien: apostrophe mid-name, not a possessive — the Brien stays.
+    expect(generateAssetKey("O'Brien")).toBe('obrien');
+    // Thieves' Guild: plural possessive (apostrophe after s) — the s stays, apostrophe goes.
+    expect(generateAssetKey("Thieves' Guild")).toBe('thieves-guild');
+    // Trailing apostrophe with no s: just the apostrophe is removed.
+    expect(generateAssetKey("Thieves'")).toBe('thieves');
+    // Odin's vs Odin: same entity by intent — both key as odin.
+    expect(generateAssetKey("Odin's")).toBe('odin');
+    expect(generateAssetKey('Odin')).toBe('odin');
+    // 's before a hyphen: the possessive is stripped, hyphen structure kept.
+    expect(generateAssetKey("The Spider's-Web")).toBe('the-spider-web');
+  });
 });

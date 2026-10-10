@@ -14,7 +14,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
-import { generateAssetKey } from '@/utils/asset-key';
+import { generateAssetKey, stripKeyPossessiveS } from '@/utils/asset-key';
 
 export interface CampaignAsset {
   type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'faction' | 'scene';
@@ -189,11 +189,16 @@ export function useCampaignAssets(
     return map;
   }, [assets]);
 
-  // Get asset by type and key — tries exact key first, then normalized key as fallback
+  // Get asset by type and key — tries exact key first, then normalized key as fallback,
+  // then the possessive-stripped form (old-style keys like "the-bland-ones-disciple"
+  // for "The Bland One's Disciple" must still resolve after the #267 key change).
   const getAsset = useCallback(
     (type: string, key: string): CampaignAsset | null => {
       return (
-        assetMap.get(`${type}:${key}`) || assetMap.get(`${type}:${generateAssetKey(key)}`) || null
+        assetMap.get(`${type}:${key}`) ||
+        assetMap.get(`${type}:${generateAssetKey(key)}`) ||
+        assetMap.get(`${type}:${stripKeyPossessiveS(generateAssetKey(key))}`) ||
+        null
       );
     },
     [assetMap],

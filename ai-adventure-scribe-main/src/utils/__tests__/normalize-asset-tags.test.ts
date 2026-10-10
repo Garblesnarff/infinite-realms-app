@@ -217,6 +217,17 @@ describe('normalize-asset-tags', () => {
       expect(result).toBe(input);
       expect(result.match(/Chef/g)).toHaveLength(1);
     });
+
+    it('does not prepend when the model emits an old-style key without the possessive strip (#267)', () => {
+      // The model may emit "the-bland-ones-disciple" (apostrophe dropped, s kept) even
+      // though generateAssetKey now produces "the-bland-one-disciple". Both forms are the
+      // same entity; the visible possessive must be recognized.
+      const input =
+        "The Bland One's Disciple [ASSET:npc:the-bland-ones-disciple] steps from the shadows.";
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result).not.toContain('The Bland Ones Disciple');
+    });
   });
 
   describe('normalizeAssetTagsInContent', () => {
