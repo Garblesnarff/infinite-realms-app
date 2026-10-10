@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /* eslint-disable no-console */
 /**
- * Safely re-ingest the three starter campaign bibles after the parser fix.
+ * Safely re-ingest the four starter campaign bibles after the parser fix.
  *
  * Dry-run is the default. The Hetzner operator must pass --apply explicitly.
  * This script never uses the destructive delete-first ingestion path; existing
@@ -57,6 +57,10 @@ const STARTER_CAMPAIGNS = [
   {
     id: 'the-eternal-feast',
     relativePath: 'Completed/Intrigue/the-eternal-feast',
+  },
+  {
+    id: 'a-midsummer-nights-chaos',
+    relativePath: 'Completed/Fantasy/a-midsummer-nights-chaos',
   },
 ] as const;
 
