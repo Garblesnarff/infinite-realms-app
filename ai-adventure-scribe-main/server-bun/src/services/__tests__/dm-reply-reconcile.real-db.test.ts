@@ -1194,6 +1194,190 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
   });
 
+  /**
+   * Seeds a Wizard 1 with The Apprentice's lists and the given 1st-level slot ledger, then
+   * returns them for a turn via `existingCharacter`. The sheet's 2/2 display reads this table.
+   */
+  const wizardWithSlots = async (
+    usedSlots: number,
+    totalSlots: number,
+  ): Promise<typeof characters.$inferSelect> => {
+    const [character] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('gp-wizard-slots'),
+        class: 'Wizard',
+        race: 'Human',
+        level: 1,
+        cantrips: apprenticeSpellLists.cantrips,
+        knownSpells: apprenticeSpellLists.known_spells,
+        preparedSpells: apprenticeSpellLists.prepared_spells,
+      })
+      .returning();
+    if (!character) throw new Error('[dm-reply-reconcile] the slot-test character was not seeded');
+    await database.insert(characterSpellSlots).values({
+      characterId: character.id,
+      spellLevel: 1,
+      totalSlots,
+      usedSlots,
+    });
+    return character;
+  };
+  const slotWizardTurn = {
+    characterClass: 'Wizard',
+    race: 'Human',
+    scores: 'STR 8(-1), DEX 12(+1), CON 12(+1), INT 16(+3), WIS 12(+1), CHA 10(+0)',
+    dexterityModifier: 1,
+    playerInput: 'I cast Burning Hands at the cobwebs.',
+  };
+
+  test('refuses #217 (RP-11): a Wizard with no 1st-level slots left casting Burning Hands gets the slot refusal, and nothing is spent', async () => {
+    // RP-11 (Hark, 2026-10-09): three 1st-level casts were allowed on a Wizard 1 with 2 slots.
+    const character = await wizardWithSlots(2, 2);
+    const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+    const turn = await dmTurn({ ...slotWizardTurn, existingCharacter: character, reply });
+
+    expect(turn.status).toBe(200);
+    expect(turn.modelCalls).toBe(1);
+    const line = `${character.name} can't cast Burning Hands: no 1st-level spell slots left.`;
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...envelopeOf({ text: line, options: [], roll_requests: [] }),
+      narration_segments: [expect.objectContaining({ type: 'dm', text: line })],
+    });
+    expect(turn.body.dmReplyPersisted).toBe(true);
+    const [row] = await rowsFor([turn.dmMessageId]);
+    expect(row?.message).toBe(line);
+    // The ledger is untouched: still 2/2 used, no usage row, nothing spent.
+    const noSlotLedgers = await ledgersOf(character.id);
+    expect(noSlotLedgers.slots).toEqual([
+      expect.objectContaining({ spellLevel: 1, totalSlots: 2, usedSlots: 2 }),
+    ]);
+    expect(noSlotLedgers.slotUses).toEqual([]);
+  });
+
+  test('#217 (RP-11): a Wizard with a 1st-level slot left casting Burning Hands is allowed, and the slot is spent', async () => {
+    const character = await wizardWithSlots(1, 2);
+    const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+    const turn = await dmTurn({ ...slotWizardTurn, existingCharacter: character, reply });
+
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+    const ledgers = await ledgersOf(character.id);
+    expect(ledgers.slots).toEqual([
+      expect.objectContaining({ spellLevel: 1, totalSlots: 2, usedSlots: 2 }),
+    ]);
+    const slotUses = ledgers.slotUses as Array<Record<string, unknown>>;
+    expect(slotUses).toHaveLength(1);
+    expect(slotUses[0]).toEqual(
+      expect.objectContaining({ spellName: 'Burning Hands', spellLevel: 1, slotLevelUsed: 1 }),
+    );
+  });
+
+  test('#217 (RP-11): a dice-roll report of an already-spent cast is not refused for slots', async () => {
+    // The cast went through on the earlier turn and spent the last slot; the client then saved
+    // this roll report as the turn's player message before the DM turn started. The slot it
+    // used is gone by design — refusing it would punish reporting the roll.
+    const character = await wizardWithSlots(2, 2);
+    const rollId = crypto.randomUUID();
+    await SessionMessageService.addMessages(
+      [
+        {
+          id: rollId,
+          sessionId,
+          speakerType: 'player',
+          message: 'Arcana to cast Burning Hands: 15',
+          context: { intent: 'dice_roll' },
+        },
+      ],
+      userId,
+    );
+    try {
+      const reply = castReply('The flames catch the cobwebs; the way is clear.');
+      const turn = await dmTurn({
+        ...slotWizardTurn,
+        existingCharacter: character,
+        playerInput: 'Arcana to cast Burning Hands: 15',
+        reply,
+      });
+
+      expect(turn.status).toBe(200);
+      expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+      // Already spent: no new usage row, ledger untouched.
+      const rollLedgers = await ledgersOf(character.id);
+      expect(rollLedgers.slots).toEqual([
+        expect.objectContaining({ spellLevel: 1, totalSlots: 2, usedSlots: 2 }),
+      ]);
+      expect(rollLedgers.slotUses).toEqual([]);
+    } finally {
+      // The row must not linger: playerMessage reads the newest player row, and a later
+      // test's turn would mistake it for its own dice-roll report.
+      await database.delete(dialogueHistory).where(eq(dialogueHistory.id, rollId));
+    }
+  });
+
+  test('#217 (RP-11): a retried turn whose cast already spent the last slot is not refused', async () => {
+    // Retry replays the same saved player message without saving a new one (story-spell-slots
+    // documents the contract). The first turn spends the last slot; the replay must be allowed
+    // and must not spend twice — the spend's `already_spent` idempotency covers the ledger, and
+    // the gate mirrors it so the retried turn is not refused for the full ledger it just made.
+    const character = await wizardWithSlots(1, 2);
+    const playerId = crypto.randomUUID();
+    await SessionMessageService.addMessages(
+      [
+        {
+          id: playerId,
+          sessionId,
+          speakerType: 'player',
+          message: 'I cast Burning Hands at the cobwebs.',
+        },
+      ],
+      userId,
+    );
+    try {
+      const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+      const turnOpts = {
+        ...slotWizardTurn,
+        existingCharacter: character,
+        reply,
+      };
+      const first = await dmTurn(turnOpts);
+      expect(JSON.parse(String(first.body.text)).text).toBe(reply.text);
+
+      // The retry: the identical input, no new player row.
+      const retry = await dmTurn(turnOpts);
+      expect(retry.status).toBe(200);
+      expect(JSON.parse(String(retry.body.text)).text).toBe(reply.text);
+
+      // One spend, not two: the ledger the first turn made, untouched by the retry.
+      const ledgers = await ledgersOf(character.id);
+      expect(ledgers.slots).toEqual([
+        expect.objectContaining({ spellLevel: 1, totalSlots: 2, usedSlots: 2 }),
+      ]);
+      const slotUses = ledgers.slotUses as Array<Record<string, unknown>>;
+      expect(slotUses).toHaveLength(1);
+    } finally {
+      await database.delete(dialogueHistory).where(eq(dialogueHistory.id, playerId));
+    }
+  });
+
+  test('#217 (RP-11): a Warlock casting Hellish Rebuke is not refused for slots — pact magic is not in character_spell_slots', async () => {
+    const reply = castReply('Hellfire answers your curse and wraps the guard.');
+    const turn = await dmTurn({
+      characterClass: 'Warlock',
+      race: 'Human',
+      scores: 'STR 10(+0), DEX 14(+2), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 16(+3)',
+      dexterityModifier: 2,
+      knownSpells: 'hellish-rebuke',
+      playerInput: 'I cast Hellish Rebuke at the guard.',
+      reply,
+    });
+
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
   test('"cast" with no spell after it is prose: a glance or a net is not refused (#217)', async () => {
     const reply = castReply('Nothing moves behind the crates.');
     for (const playerInput of [
@@ -1845,7 +2029,10 @@ ${playerInput}
         ),
       );
 
-  test('#218 step 1: at 0 slots left a cast spends nothing: no negative slot, no log row', async () => {
+  test('#218 step 1 / #217 (RP-11): at 0 slots left the cast is refused before any spend: no negative slot, no log row', async () => {
+    // #217's slot refusal supersedes the old no_slot spend path on the turn pipeline: the gate
+    // refuses the 3rd cast, so the spend never runs. The invariant stands — nothing is spent,
+    // no negative slot, no usage row.
     const character = await apprenticeWhoCastBurningHands();
     const again = 'I cast Burning Hands at the rats.';
     await playerSays(again);
@@ -1859,16 +2046,15 @@ ${playerInput}
 
     const third = 'I cast Burning Hands at the last rat.';
     await playerSays(third);
-    expect(
-      await spendOutcomes(() =>
-        dmTurn({
-          ...apprentice(apprenticeSpellLists),
-          existingCharacter: character,
-          playerInput: third,
-          reply: castReply('You reach for the spell, but nothing answers.'),
-        }),
-      ),
-    ).toEqual([['Burning Hands', 'no_slot']]);
+    const line = `${character.name} can't cast Burning Hands: no 1st-level spell slots left.`;
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: character,
+      playerInput: third,
+      reply: castReply('You reach for the spell, but nothing answers.'),
+    });
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(line);
     expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
     expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
     expect(await slotSpends(character.id)).toHaveLength(2);

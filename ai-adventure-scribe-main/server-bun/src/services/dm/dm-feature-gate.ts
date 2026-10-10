@@ -14,6 +14,8 @@
  *   does not hold ("Witch Bolt") is checked too, when a caster names it as a spell (`spellsNamed`):
  *   the sentence names a slot, a spell level, a saving throw or a DC, or the name is aimed at a
  *   target — unless the name is an ordinary object ("Fishing Line" is tackle, #248 item 3).
+ * - slots: an allowed cast still needs a slot left at its level (#217, RP-11) — a Wizard 1 with
+ *   both 1st-level slots spent is refused a third 1st-level cast instead of casting for free.
  *
  * Only the player's own claim triggers it: a spell after a cast verb or a feature after a use verb,
  * in `player_input` or in the purpose of a roll the player makes for their own action. Never the
@@ -297,8 +299,28 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
 
   const refused = [...refusedFeatures, ...refusedSpells];
   const spells = claimedSpells.filter((name) => playerCasts.has(name));
-  if (!refused.length && spells.length) input.onCastsAllowed?.({ character, spells });
-  if (!refused.length) return result;
+  // #217 (RP-11): a cast the sheet allows still needs a slot left to spend — a Wizard 1 with
+  // both 1st-level slots spent cannot cast a third 1st-level spell. The spend path runs after
+  // the reply is allowed, so it cannot refuse; the check lives in story-spell-slots. Dynamic
+  // import: that module pulls in spell-slots-service, which imports db/client at load time,
+  // and this module must stay loadable without an application database.
+  const slotModule =
+    !refused.length && spells.length ? await import('./story-spell-slots.js') : null;
+  const noSlot = slotModule
+    ? await slotModule.spellsWithNoSlot({
+        character,
+        sessionId,
+        playerInput: input.playerInput,
+        spells,
+      })
+    : [];
+  const slotLine =
+    slotModule && noSlot[0]
+      ? slotModule.slotRefusalLine(character.name, noSlot[0].name, noSlot[0].level)
+      : null;
+  if (!refused.length && !noSlot.length && spells.length)
+    input.onCastsAllowed?.({ character, spells });
+  if (!refused.length && !noSlot.length) return result;
 
   logger.warn({
     msg: 'DM_FEATURE_REFUSED',
@@ -308,6 +330,7 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     level: character.level,
     refusedFeatures,
     refusedSpells,
+    noSlotSpells: noSlot.map((spell) => `${spell.name} (level ${spell.level})`),
   });
   // Every field the client acts on is emptied: no roll, no combat action, no map or handout
   // change, no combat start (the entry gate's pending handoff included), no XP. The refusal line
@@ -317,7 +340,7 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     ...result,
     text: JSON.stringify({
       ...rest,
-      text: featureRefusalLine(character.name, refused[0] ?? ''),
+      text: slotLine ?? featureRefusalLine(character.name, refused[0] ?? ''),
       options: [],
       narration_segments: [],
       roll_requests: [],
