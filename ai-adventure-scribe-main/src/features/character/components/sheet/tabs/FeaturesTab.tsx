@@ -98,7 +98,6 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
   // Group features by source
   const featuresBySource = {
     race: features.filter((f) => f.source === 'race'),
-    class: features.filter((f) => f.source === 'class'),
     background: features.filter((f) => f.source === 'background'),
     feat: features.filter((f) => f.source === 'feat'),
   };
@@ -121,20 +120,8 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
         badgeLabel={() => character.race?.name}
       />
 
-      {/* Class Features */}
-      <FeatureCategoryCard
-        title="Class Features"
-        icon={<Star className="w-5 h-5 text-infinite-teal" />}
-        borderColorClass="border-infinite-teal"
-        badgeColorClass={getSourceColor('class')}
-        features={featuresBySource.class}
-        badgeLabel={(feature) => (
-          <>
-            {character.class?.name} {feature.level && `${feature.level}`}
-          </>
-        )}
-        showUsage
-      />
+      {/* Class Features are rendered by ClassFeatureTracker above (#214); the
+          second card duplicated the same section. */}
 
       {/* Background Features */}
       <FeatureCategoryCard
@@ -157,7 +144,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       />
 
       {/* Proficiencies */}
-      <FeaturesProficienciesCard />
+      <FeaturesProficienciesCard character={character} />
     </div>
   );
 };

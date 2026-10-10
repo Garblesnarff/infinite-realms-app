@@ -121,6 +121,8 @@ describe('useExperienceManager', () => {
     );
   });
 
+  // #214 (QA-037): the old "Invalid Input" catch-all is gone — each bad input
+  // gets its own message, and 0 is a valid amount.
   it('should not award experience with invalid input', async () => {
     const { result } = renderHook(() =>
       useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
@@ -139,15 +141,15 @@ describe('useExperienceManager', () => {
     expect(mockOnUpdate).not.toHaveBeenCalled();
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Invalid Input',
+        title: 'Missing Source',
         variant: 'destructive',
       }),
     );
 
-    // Zero amount
+    // Negative amount
     mockToast.mockClear();
     act(() => {
-      result.current.setExperienceAmount(0);
+      result.current.setExperienceAmount(-5);
       result.current.setExperienceSource('Source');
     });
 
@@ -158,7 +160,7 @@ describe('useExperienceManager', () => {
     expect(mockOnUpdate).not.toHaveBeenCalled();
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Invalid Input',
+        title: 'Invalid XP Amount',
       }),
     );
   });
@@ -273,5 +275,72 @@ describe('useExperienceManager', () => {
     });
 
     expect(result.current.showHistory).toBe(true);
+  });
+
+  // #214 (QA-037): awarding 0 XP is allowed — the field no longer rejects it.
+  it('should award 0 XP without an error toast', async () => {
+    const { result } = renderHook(() =>
+      useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
+    );
+
+    act(() => {
+      result.current.setExperienceAmount(0);
+      result.current.setExperienceSource('Quest reward');
+    });
+
+    await act(async () => {
+      await result.current.awardExperience();
+    });
+
+    expect(mockOnUpdate).toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Experience Awarded' }),
+    );
+  });
+
+  // #214 (QA-037): a negative amount gets a specific message, not "Invalid Input".
+  it('should show a specific message for negative XP', async () => {
+    const { result } = renderHook(() =>
+      useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
+    );
+
+    act(() => {
+      result.current.setExperienceAmount(-5);
+      result.current.setExperienceSource('Quest reward');
+    });
+
+    await act(async () => {
+      await result.current.awardExperience();
+    });
+
+    expect(mockOnUpdate).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Invalid XP Amount',
+        description: 'The XP amount cannot be negative.',
+        variant: 'destructive',
+      }),
+    );
+  });
+
+  // #214 (QA-037): a missing source gets its own message.
+  it('should show a specific message for a missing source', async () => {
+    const { result } = renderHook(() =>
+      useExperienceManager({ character: mockCharacter, onUpdate: mockOnUpdate }),
+    );
+
+    act(() => {
+      result.current.setExperienceAmount(100);
+      result.current.setExperienceSource('');
+    });
+
+    await act(async () => {
+      await result.current.awardExperience();
+    });
+
+    expect(mockOnUpdate).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Missing Source', variant: 'destructive' }),
+    );
   });
 });

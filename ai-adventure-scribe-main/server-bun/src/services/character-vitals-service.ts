@@ -425,6 +425,30 @@ export class CharacterVitalsService {
   }
 
   /**
+   * Set temporary hit points. 2014 5e: temporary hit points do not stack —
+   * the higher of the current and the new value wins (#214).
+   */
+  static async setTemporaryHitPoints(
+    characterId: string,
+    userId: string,
+    amount: number,
+  ): Promise<CharacterVitals> {
+    return db.transaction(async (tx) => {
+      const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
+      if (!current) throw notFound();
+
+      return writeVitals(tx, characterId, current.maxHitPoints, {
+        currentHitPoints: current.currentHitPoints,
+        temporaryHitPoints: Math.max(current.temporaryHitPoints, Math.max(0, Math.trunc(amount))),
+        isConscious: current.isConscious,
+        vitalState: current.vitalState,
+        deathSavesSuccesses: current.deathSavesSuccesses,
+        deathSavesFailures: current.deathSavesFailures,
+      });
+    });
+  }
+
+  /**
    * Record a combat-resolved outcome on the character record, inside the caller's transaction.
    *
    * Server-internal: the only caller is `CombatHPService`, which opens the transaction, calls

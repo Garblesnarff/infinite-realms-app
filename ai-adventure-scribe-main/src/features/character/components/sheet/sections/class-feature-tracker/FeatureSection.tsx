@@ -37,7 +37,7 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
         {classFeatures.map((feature, index) => (
           <div key={index} className="border-l-4 border-infinite-teal pl-4">
             <div className="flex items-center gap-2 mb-2">
-              <h4 className="font-semibold">{feature.name}</h4>
+              <h4 className="font-semibold">{feature.displayName ?? feature.name}</h4>
               <Badge variant="secondary" className="bg-infinite-teal/15 text-infinite-teal">
                 {character.class?.name} {feature.level}
               </Badge>
@@ -62,7 +62,7 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
                 <Progress
                   value={(feature.currentUses / feature.maxUses) * 100}
                   className="h-2"
-                  aria-label={`${feature.name} uses`}
+                  aria-label={`${feature.displayName ?? feature.name} uses`}
                 />
               </div>
             )}

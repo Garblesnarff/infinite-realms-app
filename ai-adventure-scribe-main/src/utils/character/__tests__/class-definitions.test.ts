@@ -222,4 +222,25 @@ describe('class-definitions', () => {
       expect(ws20?.maxUses).toBe(999);
     });
   });
+
+  // #214 (QA-034): every feature carries a human-readable displayName while the
+  // snake_case name stays the persistence key.
+  describe('feature display names', () => {
+    it('labels Second Wind instead of the raw second_wind id', () => {
+      const features = CLASS_FEATURES_MAP['fighter'](1);
+      const secondWind = features.find((f) => f.name === 'second_wind');
+      expect(secondWind?.displayName).toBe('Second Wind');
+    });
+
+    it('gives every defined feature a displayName', () => {
+      for (const [className, getFeatures] of Object.entries(CLASS_FEATURES_MAP)) {
+        for (const feature of getFeatures(20)) {
+          expect(
+            feature.displayName,
+            `${className}.${feature.name} needs a displayName`,
+          ).toBeTruthy();
+        }
+      }
+    });
+  });
 });

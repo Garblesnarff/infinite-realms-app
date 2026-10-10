@@ -29,9 +29,10 @@ interface MainTabProps {
  * Refactored: Logic moved to useCombatState hook, UI moved to CombatVitals component.
  * ⚡ Bolt: Wrapped in React.memo and uses useCharacterStats for optimized, centralized D&D calculations.
  */
-const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUpdate }) => {
+const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate }) => {
   const damageId = useId();
   const healingId = useId();
+  const tempHpId = useId();
   const descriptionId = useId();
 
   const stats = useCharacterStats(character);
@@ -46,11 +47,19 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
     setDamageInput,
     healingInput,
     setHealingInput,
+    tempHpInput,
+    setTempHpInput,
     applyDamage,
     applyHealing,
+    applyTempHp,
     resetDeathSaves,
     updateDeathSave,
-  } = useCombatState(maxHp ?? 0, currentHp ?? 0);
+  } = useCombatState(maxHp ?? 0, currentHp ?? 0, {
+    characterId: character.id,
+    // #214: damage/healing/temp-HP persist through the server; refresh the
+    // sheet so the header shows the stored HP, not a stale value.
+    onPersisted: onUpdate,
+  });
 
   const proficiencyBonus = stats?.proficiencyBonus ?? 2;
   const armorClass = getCharacterSheetArmorClass(character);
@@ -69,12 +78,16 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
         setDamageInput={setDamageInput}
         healingInput={healingInput}
         setHealingInput={setHealingInput}
+        tempHpInput={tempHpInput}
+        setTempHpInput={setTempHpInput}
         applyDamage={applyDamage}
         applyHealing={applyHealing}
+        applyTempHp={applyTempHp}
         resetDeathSaves={resetDeathSaves}
         updateDeathSave={updateDeathSave}
         damageId={damageId}
         healingId={healingId}
+        tempHpId={tempHpId}
       />
 
       {/* Core Stats */}

@@ -328,4 +328,178 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });
+
+  // #214 (QA-035): Apply Damage on the sheet persists HP through
+  // POST /v1/characters/:id/damage, and the GET the header reads serves the
+  // new value.
+  it('POST damage persists HP and the header GET shows the new value', async () => {
+    // Own character: the #224 test's long rest changes the shared HP, so this
+    // block sets up 8/10 HP independently.
+    const [{ id: dmgCampId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('sheet-dmg-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: dmgCharId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: dmgCampId,
+        name: testId('sheet-dmg-hero'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: dmgCharId,
+      maxHitPoints: 10,
+      currentHitPoints: 8,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    const damage = await request(`/v1/characters/${dmgCharId}/damage`, 'POST', {
+      amount: 3,
+    });
+    expect(damage.status).toBe(200);
+    const body = (await damage.json()) as {
+      currentHitPoints: number;
+      temporaryHitPoints: number;
+    };
+    expect(body.currentHitPoints).toBe(5);
+
+    // The write landed in character_stats.
+    const [row] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, dmgCharId));
+    expect(row.currentHitPoints).toBe(5);
+
+    // And the GET route serves it back — this is what the sheet header renders.
+    const got = (await (await request(`/v1/characters/${dmgCharId}`, 'GET')).json()) as {
+      stats: { current_hit_points: number };
+    };
+    expect(got.stats.current_hit_points).toBe(5);
+
+    await db.delete(characterStats).where(eq(characterStats.characterId, dmgCharId));
+    await db.delete(characters).where(eq(characters.id, dmgCharId));
+    await db.delete(campaigns).where(eq(campaigns.id, dmgCampId));
+  });
+
+  // #214 (QA-036, strategist round 5): healing is a server-side delta. The
+  // client sends the amount; the server adds it to the CURRENT row and clamps
+  // to max HP. A combat or DM HP change made after the sheet loaded is not
+  // lost, which the old absolute-PUT could not guarantee.
+  it('POST heal adds to the DB HP, not a stale client value, and clamps to max', async () => {
+    const [{ id: healCampId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('sheet-heal-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: healCharId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: healCampId,
+        name: testId('sheet-heal-hero'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: healCharId,
+      maxHitPoints: 10,
+      currentHitPoints: 8,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    // The sheet loaded at 8 HP; meanwhile something else (combat, the DM)
+    // changed the row to 3. The heal must apply to 3, not to the stale 8.
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 3 })
+      .where(eq(characterStats.characterId, healCharId));
+
+    const heal = await request(`/v1/characters/${healCharId}/heal`, 'POST', { amount: 4 });
+    expect(heal.status).toBe(200);
+    const body = (await heal.json()) as {
+      currentHitPoints: number;
+      temporaryHitPoints: number;
+    };
+    expect(body.currentHitPoints).toBe(7);
+
+    const [row] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, healCharId));
+    expect(row.currentHitPoints).toBe(7);
+
+    // And it clamps to max HP rather than overhealing.
+    const overheal = await request(`/v1/characters/${healCharId}/heal`, 'POST', { amount: 10 });
+    expect(overheal.status).toBe(200);
+    expect(((await overheal.json()) as { currentHitPoints: number }).currentHitPoints).toBe(10);
+
+    await db.delete(characterStats).where(eq(characterStats.characterId, healCharId));
+    await db.delete(characters).where(eq(characters.id, healCharId));
+    await db.delete(campaigns).where(eq(campaigns.id, healCampId));
+  });
+
+  // #214 (QA-036, strategist round 5): temp HP round trip. 2014 5e: temporary
+  // hit points do not stack — the server keeps the higher of the current and
+  // the new value.
+  it('POST temp-hp keeps the higher value and round-trips on GET', async () => {
+    const [{ id: thpCampId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('sheet-thp-camp') })
+      .returning({ id: campaigns.id });
+    const [{ id: thpCharId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: thpCampId,
+        name: testId('sheet-thp-hero'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: thpCharId,
+      maxHitPoints: 10,
+      currentHitPoints: 10,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    const set5 = await request(`/v1/characters/${thpCharId}/temp-hp`, 'POST', { amount: 5 });
+    expect(set5.status).toBe(200);
+    expect(((await set5.json()) as { temporaryHitPoints: number }).temporaryHitPoints).toBe(5);
+
+    // A lower value does not replace the higher one (no stacking).
+    const set3 = await request(`/v1/characters/${thpCharId}/temp-hp`, 'POST', { amount: 3 });
+    expect(set3.status).toBe(200);
+    expect(((await set3.json()) as { temporaryHitPoints: number }).temporaryHitPoints).toBe(5);
+
+    // A higher value wins.
+    const set8 = await request(`/v1/characters/${thpCharId}/temp-hp`, 'POST', { amount: 8 });
+    expect(set8.status).toBe(200);
+    expect(((await set8.json()) as { temporaryHitPoints: number }).temporaryHitPoints).toBe(8);
+
+    const [row] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, thpCharId));
+    expect(row.temporaryHitPoints).toBe(8);
+
+    // The GET the sheet reads serves it back.
+    const got = (await (await request(`/v1/characters/${thpCharId}`, 'GET')).json()) as {
+      stats: { temporary_hit_points: number };
+    };
+    expect(got.stats.temporary_hit_points).toBe(8);
+
+    await db.delete(characterStats).where(eq(characterStats.characterId, thpCharId));
+    await db.delete(characters).where(eq(characters.id, thpCharId));
+    await db.delete(campaigns).where(eq(campaigns.id, thpCampId));
+  });
 });

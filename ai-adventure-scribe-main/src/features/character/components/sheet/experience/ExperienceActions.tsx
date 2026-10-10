@@ -40,7 +40,7 @@ export const ExperienceActions: React.FC<ExperienceActionsProps> = ({
                 id="experience-amount"
                 type="number"
                 min="0"
-                value={experienceAmount || ''}
+                value={experienceAmount ?? ''}
                 onChange={(e) => setExperienceAmount(Number(e.target.value))}
                 placeholder="Enter XP amount"
               />
@@ -61,7 +61,7 @@ export const ExperienceActions: React.FC<ExperienceActionsProps> = ({
             <Button
               type="button"
               onClick={awardExperience}
-              disabled={!experienceAmount || !experienceSource}
+              disabled={experienceAmount < 0 || !experienceSource}
               className="flex-1"
             >
               <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -71,7 +71,7 @@ export const ExperienceActions: React.FC<ExperienceActionsProps> = ({
               type="button"
               variant="outline"
               onClick={removeExperience}
-              disabled={!experienceAmount || !experienceSource}
+              disabled={experienceAmount < 0 || !experienceSource}
               className="flex-1"
             >
               <Minus className="w-4 h-4 mr-2" aria-hidden="true" />

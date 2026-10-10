@@ -616,6 +616,36 @@ export const userDataApi = {
       method: 'POST',
       body: JSON.stringify({ amount }),
     }),
+  /**
+   * #214: server-side heal delta. The server adds the amount and clamps to max
+   * HP — the client never sends an absolute HP, so a combat or DM HP change
+   * made in between is not lost.
+   */
+  applyCharacterHealing: (
+    characterId: string,
+    amount: number,
+  ): Promise<{
+    currentHitPoints: number;
+    temporaryHitPoints: number;
+  }> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/heal`, {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+  /**
+   * #214: 2014 5e temp HP do not stack — the server keeps the higher of the
+   * current and the new value.
+   */
+  applyCharacterTempHp: (
+    characterId: string,
+    amount: number,
+  ): Promise<{
+    temporaryHitPoints: number;
+  }> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/temp-hp`, {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
   deleteCharacter: (characterId: string): Promise<void> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}`, { method: 'DELETE' }),
   /**

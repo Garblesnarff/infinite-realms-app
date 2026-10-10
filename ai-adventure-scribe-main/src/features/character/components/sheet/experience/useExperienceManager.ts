@@ -68,10 +68,18 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
   // after it lands. On failure the inputs stay so the user can retry, and the
   // persistence layer shows the single error toast.
   const awardExperience = async () => {
-    if (experienceAmount <= 0 || !experienceSource.trim()) {
+    if (experienceAmount < 0) {
       toast({
-        title: 'Invalid Input',
-        description: 'Please enter a valid experience amount and source.',
+        title: 'Invalid XP Amount',
+        description: 'The XP amount cannot be negative.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!experienceSource.trim()) {
+      toast({
+        title: 'Missing Source',
+        description: 'Please enter a source for the XP award.',
         variant: 'destructive',
       });
       return;
@@ -111,10 +119,18 @@ export const useExperienceManager = ({ character, onUpdate }: UseExperienceManag
   };
 
   const removeExperience = async () => {
-    if (experienceAmount <= 0 || !experienceSource.trim()) {
+    if (experienceAmount < 0) {
       toast({
-        title: 'Invalid Input',
-        description: 'Please enter a valid experience amount and source.',
+        title: 'Invalid XP Amount',
+        description: 'The XP amount cannot be negative.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!experienceSource.trim()) {
+      toast({
+        title: 'Missing Source',
+        description: 'Please enter a source for the XP removal.',
         variant: 'destructive',
       });
       return;

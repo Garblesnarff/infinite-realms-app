@@ -34,12 +34,16 @@ interface CombatVitalsProps {
   setDamageInput: (value: string) => void;
   healingInput: string;
   setHealingInput: (value: string) => void;
-  applyDamage: () => void;
-  applyHealing: () => void;
+  tempHpInput: string;
+  setTempHpInput: (value: string) => void;
+  applyDamage: () => void | Promise<void>;
+  applyHealing: () => void | Promise<void>;
+  applyTempHp: () => void | Promise<void>;
   resetDeathSaves: () => void;
   updateDeathSave: (type: 'success' | 'failure', increment: boolean) => void;
   damageId: string;
   healingId: string;
+  tempHpId: string;
 }
 
 /**
@@ -55,12 +59,16 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
   setDamageInput,
   healingInput,
   setHealingInput,
+  tempHpInput,
+  setTempHpInput,
   applyDamage,
   applyHealing,
+  applyTempHp,
   resetDeathSaves,
   updateDeathSave,
   damageId,
   healingId,
+  tempHpId,
 }) => {
   const isUnconscious = hasStoredHp && combatState.currentHp <= 0;
   const isDead = combatState.deathSaves.failures >= 3;
@@ -105,6 +113,29 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
               <Badge variant="outline" className="text-blue-600">
                 {combatState.tempHp}
               </Badge>
+            </div>
+          )}
+
+          {/* Temp HP input (#214) */}
+          {hasStoredHp && (
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Label htmlFor={tempHpId} className="sr-only">
+                  Temporary hit points
+                </Label>
+                <Input
+                  id={tempHpId}
+                  type="number"
+                  min="0"
+                  placeholder="Temp HP"
+                  value={tempHpInput}
+                  onChange={(e) => setTempHpInput(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+              <Button size="sm" variant="outline" onClick={() => void applyTempHp()}>
+                Set Temp HP
+              </Button>
             </div>
           )}
         </div>
@@ -262,7 +293,12 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                 onChange={(e) => setDamageInput(e.target.value)}
                 className="text-sm"
               />
-              <Button size="sm" variant="destructive" onClick={applyDamage} className="w-full mt-1">
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => void applyDamage()}
+                className="w-full mt-1"
+              >
                 <Minus className="w-3 h-3 mr-1" />
                 Apply Damage
               </Button>
@@ -282,7 +318,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
               <Button
                 size="sm"
                 variant="default"
-                onClick={applyHealing}
+                onClick={() => void applyHealing()}
                 className="w-full mt-1 bg-green-600 hover:bg-green-700"
               >
                 <Plus className="w-3 h-3 mr-1" />
