@@ -43,6 +43,7 @@ jobs:
   # everything. Globs are relative to the repository root.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -122,6 +123,7 @@ jobs:
   # `pull-requests: write` is for gitleaks-action, which comments on the PR.
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
@@ -129,18 +131,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Every `*.real-db.test.ts` must be in the `server-real-db` job's explicit
-      # file list below. That list stays a list (a whole-suite `bun test` with a
-      # database configured fails 54 tests), which is exactly why adding a suite
-      # to it is a step someone forgets -- and an unregistered suite runs nowhere
-      # while `server-vitest` stays green (#1906, again in #2560). First step of
-      # this job so it fails before anything expensive (#2574).
-      - name: Real-DB test files must be registered in ci.yml
-        if: ${{ !cancelled() }}
-        run: node scripts/ci/check-real-db-test-list.mjs
       # A *.test.ts / *.vitest.ts under server-bun that the isolated runner,
-      # server vitest, and the server-real-db list all miss runs nowhere
-      # (#2602). *.real-db.test.ts matches the isolated glob but skips there.
+      # server vitest, and the server-real-db job all miss runs nowhere
+      # (#2602). *.real-db.test.ts matches the isolated glob but skips there;
+      # the server-real-db job finds those by glob (#158), so they count as run.
       - name: Server test files must be run by a CI job
         if: ${{ !cancelled() }}
         run: node scripts/ci/check-server-tests-run.mjs
@@ -177,7 +171,7 @@ jobs:
       # security-lint.test.ts has never run in CI -- see the T09 audit note.
       - name: Test-list guard unit tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bun test scripts/ci/check-real-db-test-list.test.ts scripts/ci/check-server-tests-run.test.ts scripts/ci/check-landing-preload.test.ts
+        run: bun test scripts/ci/check-real-db-test-list.test.ts scripts/ci/run-real-db-suites.test.ts scripts/ci/check-server-tests-run.test.ts scripts/ci/check-landing-preload.test.ts
         working-directory: ai-adventure-scribe-main
       # Server typecheck gate (#2313). Runs tsc over the server program and
       # fails on any error in a file not quarantined in
@@ -204,6 +198,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -222,6 +217,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.server == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -273,11 +269,14 @@ jobs:
   #      127.0.0.1:55432, which is why the service maps host port 55432 to the
   #      container's 5432 rather than using the default port.
   #
-  # The file list is explicit rather than a glob, and that is deliberate: a
-  # whole-suite `bun test` with a database configured fails 54 tests, because
-  # `mock.module('.../db/client', () => ({ db: {} }))` in the route smoke tests
-  # leaks across files and hands the real-DB suites an empty `db`. Add files
-  # here as they harden; the tail of that work is tracked on #1906.
+  # The suites are found by glob and run one `bun test` process each by
+  # scripts/ci/run-real-db-suites.mjs (#158). One shared process is not safe: a
+  # `mock.module('.../db/client', () => ({ db: {} }))` in one file leaks across
+  # files and hands the real-DB suites an empty `db` (#1906). The runner also
+  # fails the job on a skipped test, a suite that reports no pass, or a count of
+  # suites that ran below the count found on disk. Deliberate exclusions are
+  # real-db-known-unlisted.json, one reason each; the tail of that work is
+  # tracked on #1906.
   #
   # monster-attacks joined this list in T02 and passes 10/10. The 2 failures
   # this note used to attribute to a participant_type CHECK violation do not
@@ -312,6 +311,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.server == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     services:
@@ -354,71 +354,15 @@ jobs:
             exit 1
           fi
           echo "db=$name" >> "$GITHUB_OUTPUT"
+      # Finds every *.real-db.test.ts by glob, so a new suite runs with no edit
+      # here (#158). The runner also fails the job on a skipped test, on a suite
+      # with no passing test, and when fewer suites ran than the glob found,
+      # minus the exclusions in real-db-known-unlisted.json.
       - name: Run the real-database suites
-        working-directory: ai-adventure-scribe-main/server-bun
         env:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/${{ steps.provision.outputs.db }}
           TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/${{ steps.provision.outputs.db }}
-        # The skip is the whole bug: a real-DB block whose database is missing
-        # reports `0 fail` and exits 0. A job that can silently skip the tests
-        # it exists to run is the thing #1906 is about, so assert out loud that
-        # nothing skipped rather than trusting the exit code.
-        run: |
-          set -o pipefail
-          bun test \
-            src/services/__tests__/attack-telemetry.real-db.test.ts \
-            src/services/__tests__/combat-hp-write-through.real-db.test.ts \
-            src/services/__tests__/encounter-ending-reason.real-db.test.ts \
-            src/services/__tests__/encounter-lifecycle.real-db.test.ts \
-            src/services/__tests__/idle-encounter-sweeper.real-db.test.ts \
-            src/services/__tests__/npc-turn-auto-advance.real-db.test.ts \
-            src/services/__tests__/turn-cycle-tolerance.real-db.test.ts \
-            src/services/__tests__/insert-select-writes-land.test.ts \
-            src/services/__tests__/combat-damage-log-resilience.test.ts \
-            src/services/__tests__/combat-initiative-modifier.real-db.test.ts \
-            src/services/__tests__/combat-pending-intent.real-db.test.ts \
-            src/services/__tests__/combat-intent-roster.real-db.test.ts \
-            src/services/__tests__/combat-entry-transcript.real-db.test.ts \
-            src/services/__tests__/combat-seat-player-name.real-db.test.ts \
-            src/services/__tests__/dying-and-death.real-db.test.ts \
-            src/services/combat/__tests__/campaign-monster-resolution.pg.test.ts \
-            src/services/__tests__/companions.real-db.test.ts \
-            src/services/__tests__/dm-reply-reconcile.real-db.test.ts \
-            src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts \
-            src/services/__tests__/monster-attacks.real-db.test.ts \
-            src/services/__tests__/player-exit-intent.real-db.test.ts \
-            src/services/__tests__/session-initial-greeting.real-db.test.ts \
-            src/services/__tests__/session-init-once.real-db.test.ts \
-            src/services/__tests__/spell-slot-backfill.real-db.test.ts \
-            src/services/__tests__/spell-slot-single-source.real-db.test.ts \
-            src/services/__tests__/rest-long-rest-recovery.real-db.test.ts \
-            2>&1 | tee "/tmp/real-db-$GITHUB_RUN_ID.log"
-          # sheet-feature-rest replaces lib/auth.js for the whole process (#224).
-          bun test \
-            src/routes/v1/__tests__/sheet-feature-rest.real-db.test.ts \
-            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
-          # playthrough-scope replaces lib/auth.js for the whole process. The
-          # other suites in the list above share one invocation; this one does not.
-          bun test \
-            src/routes/v1/__tests__/playthrough-scope.real-db.test.ts \
-            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
-          # npc-engine-rows mocks auth and dice with mock.module, which leaks across files in
-          # one process, so it runs in its own invocation too (#2658).
-          bun test \
-            src/services/__tests__/npc-engine-rows.real-db.test.ts \
-            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
-          # media-quota-failure replaces lib/auth.js too (#2676 step 2a), so it gets its own process.
-          bun test \
-            src/routes/v1/__tests__/media-quota-failure.real-db.test.ts \
-            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
-          if grep -qE '^ *[1-9][0-9]* skip' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
-            echo "::error::a real-database suite SKIPPED. The database env did not reach the tests."
-            exit 1
-          fi
-          if ! grep -qE '^ *[1-9][0-9]* pass' "/tmp/real-db-$GITHUB_RUN_ID.log"; then
-            echo "::error::no tests reported as passing -- the suites did not run."
-            exit 1
-          fi
+        run: node scripts/ci/run-real-db-suites.mjs
 
   # Keep the check visible and truthfully skipped until its test harness is
   # self-contained. The old job was never green: it expected an unconfigured
@@ -435,6 +379,7 @@ jobs:
     name: e2e (skipped — harness blocked by #1817)
     if: ${{ false }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:

@@ -7,14 +7,16 @@
  *
  * `*.real-db.test.ts` matches the isolated glob but does not count as run by
  * it: `server-vitest` sets no database, so `describeWithDb` skips the file
- * (#1906). Only the `server-real-db` list (or the known-unlisted baseline)
- * covers those.
+ * (#1906). The `server-real-db` job runs the glob from run-real-db-suites.mjs
+ * (#158), and the known-unlisted baseline excludes the rest, so those count.
  *
  * Run: node scripts/ci/check-server-tests-run.mjs   (exit 1 when any file is unrun)
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { collectRealDbTests } from './check-real-db-test-list.mjs';
+import { NON_REAL_DB_SUITES } from './run-real-db-suites.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_DIR = path.resolve(SCRIPT_DIR, '..', '..');
@@ -215,7 +217,11 @@ function main() {
     isolatedRunnerExecuted: true,
     vitestIncludes: include,
     vitestExecuted: true,
-    explicitPaths: parseBunTestPaths(sliceJob(workflow, 'server-real-db')),
+    explicitPaths: [
+      ...parseBunTestPaths(sliceJob(workflow, 'server-real-db')),
+      ...collectRealDbTests().filter((file) => !(file in knownUnlisted)),
+      ...NON_REAL_DB_SUITES,
+    ],
     skippedWithoutDb: onDisk.filter((file) =>
       usesDescribeWithDb(readFileSync(path.join(SERVER_DIR, file), 'utf8')),
     ),
