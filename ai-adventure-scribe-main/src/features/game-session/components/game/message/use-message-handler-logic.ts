@@ -995,9 +995,8 @@ export const useMessageHandlerLogic = ({
               ...prev,
               turn_count: Math.max(0, (prev.turn_count || 0) - 1),
             }));
-          if (timedOut) runDeferredTask('timed-out turn count rollback', revert);
-          else await revert();
           turnCountRef.current = revertCount;
+          runDeferredTask('failed turn count rollback', revert);
         } catch (revertError) {
           handleAsyncError(revertError, {
             userMessage: 'Failed to revert turn count',

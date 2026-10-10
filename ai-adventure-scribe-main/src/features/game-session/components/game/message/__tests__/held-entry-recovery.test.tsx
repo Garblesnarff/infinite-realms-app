@@ -201,6 +201,37 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     expect(screen.queryByText('Rolling…')).not.toBeInTheDocument();
   });
 
+  it('a rejected roll exposes Retry while stalled rollback remains observed in the background', async () => {
+    vi.useFakeTimers();
+    contextState.messages = [dmScene];
+    mockGetAIResponse.mockRejectedValue(new Error('Request failed (500)'));
+    let rejectRollback!: (error: Error) => void;
+    const rollback = new Promise<void>((_resolve, reject) => {
+      rejectRollback = reject;
+    });
+    const update = vi.fn().mockResolvedValueOnce(undefined).mockReturnValue(rollback);
+    renderHandler(update);
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve save' }));
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Roll Retry' })).toBeEnabled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DM_TURN_TIMEOUT_MS);
+    });
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      '[MessageHandler] Deferred failed turn count rollback failed:',
+      expect.any(Error),
+    );
+    await act(async () => {
+      rejectRollback(new Error('Late rollback failure'));
+    });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    expect(screen.queryByText('Rolling…')).not.toBeInTheDocument();
+  });
+
   it('reload in combat keeps a narrative save gated until engine ownership can be proved', async () => {
     const dm = storyDmBody(STORY_SAVE_ROLL);
     const answer = storySaveAnswerBody('player-1', '2026-01-01T00:00:01.000Z');
