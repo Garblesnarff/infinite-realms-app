@@ -5,7 +5,7 @@
  * the server remembers the popup. On the first ready page the handler re-runs that turn, once,
  * without saving the message a second time.
  */
-import { render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -43,6 +43,7 @@ vi.mock('@/contexts/combat/use-authoritative-combat-sync', () => ({
 }));
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: { listSessionMessages: mockListSessionMessages },
+  isTerminalDefeatError: () => false,
 }));
 vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({
@@ -68,7 +69,10 @@ vi.mock('@/utils/safetyCommands', () => ({
   checkSafetyCommands: vi.fn().mockResolvedValue({ isSafetyCommand: false }),
   processSafetyCommand: vi.fn(),
 }));
-vi.mock('@/utils/diceCommandParser', () => ({ parseDiceCommand: vi.fn().mockReturnValue(null) }));
+vi.mock('@/utils/diceCommandParser', async (importOriginal) => ({
+  ...(await importOriginal<typeof DiceCommandParser>()),
+  parseDiceCommand: vi.fn().mockReturnValue(null),
+}));
 vi.mock('@/utils/chatSanitizer', () => ({ sanitizeDMText: (text: string) => text }));
 vi.mock('@/utils/error-handler', () => ({ handleAsyncError: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ default: mockLogger }));
@@ -81,7 +85,16 @@ vi.mock('@/hooks/ai/combat-entry-hold', () => ({
     [...messages].reverse().find((message) => message.sender === 'dm')?.text,
 }));
 
+import {
+  STORY_SAVE_ROLL,
+  storyDmBody,
+  storySaveAnswerBody,
+} from '../../../../../../../shared/test-fixtures/story-rolls';
 import { MessageHandler } from '../MessageHandler';
+
+import type * as DiceCommandParser from '@/utils/diceCommandParser';
+
+import { ChatInput } from '@/features/game-session/components/chat/ChatInput';
 
 const SESSION_ID = 'd3d075ef-fec7-4442-b684-c5c35084f41e';
 const dmScene = { id: 'dm-1', sender: 'dm', text: 'Valerius hangs from the ceiling.' };
@@ -104,7 +117,38 @@ function renderHandler(updateGameSessionState = vi.fn().mockResolvedValue(undefi
       turnCount={4}
       updateGameSessionState={updateGameSessionState}
     >
-      {() => null}
+      {({ sendError, onRetry, handleSendMessage, retryInFlight }) => (
+        <>
+          <button
+            onClick={() =>
+              void handleSendMessage(
+                'Wisdom save against Charm Person: 8 fail',
+                storySaveAnswerBody('player-1', '2026-01-01T00:00:01.000Z').context as any,
+              ).catch(() => {})
+            }
+          >
+            Resolve save
+          </button>
+          <button
+            disabled={retryInFlight}
+            onClick={() =>
+              void handleSendMessage(
+                'Wisdom save against Charm Person: 8 fail',
+                storySaveAnswerBody('player-1', '2026-01-01T00:00:01.000Z').context as any,
+              ).catch(() => {})
+            }
+          >
+            Roll Retry
+          </button>
+          <ChatInput
+            isDisabled={false}
+            onSendMessage={handleSendMessage}
+            sendError={sendError ?? undefined}
+            onRetry={onRetry}
+            retryInFlight={retryInFlight}
+          />
+        </>
+      )}
     </MessageHandler>
   );
   const view = render(tree());
@@ -125,6 +169,7 @@ function serverNewest(rows: Array<{ id: string; speaker_type: string }>): void {
 describe('resuming a turn the combat-entry popup was holding when the page reloaded', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSendMessage.mockReset().mockResolvedValue(undefined);
     contextState.messages = [dmScene, attack];
     contextState.messagesReady = true;
     mockGetAIResponse.mockResolvedValue({ text: 'Frost takes Valerius.', rollRequests: [] });
@@ -132,6 +177,115 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     // No encounter, and the server's newest message is still the player's.
     mockReadCombat.mockResolvedValue({ state: 'none' });
     serverNewest([{ id: 'player-1', speaker_type: 'player' }]);
+  });
+
+  it('resumes a saved narrative spell-save answer without another player save or turn increment', async () => {
+    const dm = storyDmBody(STORY_SAVE_ROLL);
+    const answer = storySaveAnswerBody('player-1', '2026-01-01T00:00:01.000Z');
+    const save = { id: answer.id, sender: 'player', text: answer.message, context: answer.context };
+    contextState.messages = [
+      { id: dm.id, sender: 'dm', text: dm.message, context: dm.context },
+      save,
+    ];
+    const { updateGameSessionState } = renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
+    expect(mockGetAIResponse.mock.calls[0][0].at(-1)).toStrictEqual(save);
+    expect(mockCheckDeclaredAttack).not.toHaveBeenCalled();
+    expect(
+      mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+    ).toHaveLength(0);
+    for (const [updater] of updateGameSessionState.mock.calls) {
+      const next = typeof updater === 'function' ? updater({ turn_count: 4 }) : updater;
+      expect(next.turn_count ?? 4).toBe(4);
+    }
+  });
+
+  it('does not retry a saved roll when a DM answer arrived after recovery was offered', async () => {
+    contextState.messages = [
+      dmScene,
+      { ...attack, context: { intent: 'dice_roll', rollRequestId: 'dm-test:roll:0' } },
+    ];
+    renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    serverNewest([
+      { id: 'player-1', speaker_type: 'player' },
+      { id: 'dm-2', speaker_type: 'dm' },
+    ]);
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  for (const retryControl of ['Retry', 'Resolve save']) {
+    it(`retries a failed saved roll via ${retryControl} despite its system error notice, without another player save`, async () => {
+      contextState.messages = [dmScene];
+      mockGetAIResponse.mockRejectedValueOnce(new Error('Request failed (500)'));
+      const rows: Array<{ id: string; speaker_type: string; context?: unknown }> = [];
+      mockSendMessage.mockImplementation(async (message) => {
+        const saved = { ...message, id: message.id ?? `saved-${rows.length}` };
+        contextState.messages = [...contextState.messages, saved];
+        rows.push({ id: saved.id, speaker_type: saved.sender, context: saved.context });
+        serverNewest(rows);
+      });
+      const { view, tree } = renderHandler();
+      fireEvent.click(screen.getByRole('button', { name: 'Resolve save' }));
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
+      const retry = await screen.findByRole('button', { name: 'Retry' });
+      expect(rows.at(-1)?.speaker_type).toBe('system');
+      view.rerender(tree());
+      fireEvent.click(
+        retryControl === 'Retry' ? retry : screen.getByRole('button', { name: retryControl }),
+      );
+      await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(2));
+      expect(
+        mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+      ).toHaveLength(1);
+      expect(mockGetAIResponse.mock.calls[1][0].at(-1).context.intent).toBe('dice_roll');
+    });
+  }
+
+  it('clicking both Retry controls starts only one retry send for the saved roll', async () => {
+    contextState.messages = [dmScene];
+    mockGetAIResponse.mockRejectedValueOnce(new Error('Request failed (500)'));
+    const rows: Array<{ id: string; speaker_type: string; context?: unknown }> = [];
+    mockSendMessage.mockImplementation(async (message) => {
+      if (message.sender === 'dm') throw new Error('Reply save failed (500)');
+      const saved = { ...message, id: message.id ?? `saved-${rows.length}` };
+      contextState.messages = [...contextState.messages, saved];
+      rows.push({ id: saved.id, speaker_type: saved.sender, context: saved.context });
+      serverNewest(rows);
+    });
+    const { view, tree } = renderHandler();
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve save' }));
+    const composerRetry = await screen.findByRole('button', { name: /^Retry$/ });
+    view.rerender(tree());
+    const rollRetry = screen.getByRole('button', { name: 'Roll Retry' });
+    let finish!: (reply: unknown) => void;
+    mockGetAIResponse.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    act(() => {
+      fireEvent.click(composerRetry);
+      fireEvent.click(rollRetry);
+    });
+    await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(2));
+    const disabledDuringSend = rollRetry.hasAttribute('disabled');
+    await act(async () => {
+      finish({ text: 'The charm fails.', rollRequests: [] });
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll Retry' })).toBeEnabled());
+    expect(mockGetAIResponse).toHaveBeenCalledTimes(2);
+    expect(disabledDuringSend).toBe(true);
+    expect(
+      mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+    ).toHaveLength(1);
   });
 
   it('re-runs the unanswered turn without saving the player message or counting the turn again', async () => {

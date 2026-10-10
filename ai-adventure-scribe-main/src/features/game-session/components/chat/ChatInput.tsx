@@ -17,6 +17,7 @@ import {
 import { mightBeDiceCommand, getDiceCommandSuggestions } from '@/utils/diceCommandParser';
 
 interface ChatInputProps {
+  retryInFlight?: boolean;
   onSendMessage: (message: string) => void | Promise<void>;
   isDisabled: boolean;
   isReconnecting?: boolean;
@@ -54,6 +55,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
     attackWaitLabel = null,
     sendError,
     onRetry,
+    retryInFlight = false,
     disabledReason,
   } = props;
   const [input, setInput] = useState(loadPendingInput);
@@ -118,7 +120,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
   };
 
   const handleRetry = async (): Promise<void> => {
-    if (!onRetry || isRetrying) return;
+    if (!onRetry || isRetrying || retryInFlight) return;
 
     setIsRetrying(true);
     try {
@@ -399,9 +401,9 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                   variant="outline"
                   size="sm"
                   onClick={handleRetry}
-                  disabled={isRetrying}
+                  disabled={isRetrying || retryInFlight}
                 >
-                  {isRetrying ? 'Retrying…' : 'Retry'}
+                  {isRetrying || retryInFlight ? 'Retrying…' : 'Retry'}
                 </Button>
               )}
             </div>

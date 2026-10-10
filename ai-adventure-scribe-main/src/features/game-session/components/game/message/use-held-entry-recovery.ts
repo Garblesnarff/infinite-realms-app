@@ -6,6 +6,7 @@ import { readAuthoritativeCombat } from '@/contexts/combat/use-authoritative-com
 import { checkDeclaredAttack, recentNarrationFrom } from '@/hooks/ai/combat-entry-hold';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
+import { latestUnansweredDmRollRequest } from '@/utils/dm-roll-recovery';
 
 interface UseHeldEntryRecoveryProps {
   sessionId?: string | null;
@@ -14,6 +15,7 @@ interface UseHeldEntryRecoveryProps {
   characterRecord: Record<string, unknown> | null | undefined;
   /** Re-run the turn for the last player message, which is already saved. */
   resumeTurn: (playerInput: string) => Promise<void>;
+  onUnansweredRoll?: (message: ChatMessage) => void;
 }
 
 /**
@@ -37,12 +39,25 @@ interface UseHeldEntryRecoveryProps {
  *   player's own. A read that fails skips too: a retyped message costs less than an answer twice.
  */
 /** Whether the server's newest message for the session is still this player message. */
-async function playerMessageIsStillNewest(sessionId: string, messageId: string): Promise<boolean> {
+export async function playerMessageIsStillNewest(
+  sessionId: string,
+  messageId: string,
+): Promise<boolean> {
   const { total } = await userDataApi.listSessionMessages(sessionId, 0, 1);
-  if (total < 1) return false;
-  const { messages } = await userDataApi.listSessionMessages(sessionId, total - 1, 1);
-  const newest = messages[messages.length - 1];
-  return newest?.id === messageId && newest.speaker_type === 'player';
+  for (let end = total; end > 0; ) {
+    const offset = Math.max(0, end - 50);
+    const { messages } = await userDataApi.listSessionMessages(sessionId, offset, end - offset);
+    const newest = [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.speaker_type !== 'system' ||
+          (message.context as Record<string, unknown> | null)?.intent !== 'error_recovery',
+      );
+    if (newest) return newest.id === messageId && newest.speaker_type === 'player';
+    end = offset;
+  }
+  return false;
 }
 
 export function useHeldEntryRecovery({
@@ -51,6 +66,7 @@ export function useHeldEntryRecovery({
   messagesReady,
   characterRecord,
   resumeTurn,
+  onUnansweredRoll,
 }: UseHeldEntryRecoveryProps): void {
   const checkedSessionId = useRef<string | null>(null);
 
@@ -60,10 +76,16 @@ export function useHeldEntryRecovery({
     // Set before the async check so StrictMode's repeated effect setup cannot start it twice.
     checkedSessionId.current = sessionId;
 
-    const last = messages[messages.length - 1];
-    if (!last || last.sender !== 'player' || !last.text || last.context?.intent === 'dice_roll') {
+    const last = [...messages]
+      .reverse()
+      .find(
+        (message) => message.sender !== 'system' || message.context?.intent !== 'error_recovery',
+      );
+    if (!last || last.sender !== 'player' || !last.text) {
       return;
     }
+
+    if (last.context?.intent === 'dice_roll' && latestUnansweredDmRollRequest(messages)) return;
 
     const skip = (reason: string): void =>
       logger.info('COMBAT_ENTRY_HOLD_RESUME_SKIPPED', { sessionId, reason });
@@ -71,22 +93,32 @@ export function useHeldEntryRecovery({
     void (async () => {
       const combat = await readAuthoritativeCombat(sessionId);
       if (combat.state !== 'none') {
+        if (combat.state === 'unknown' && last.context?.intent === 'dice_roll') {
+          onUnansweredRoll?.(last);
+        }
         return skip(combat.state === 'combat' ? 'encounter_active' : 'encounter_unknown');
       }
-      const held = await checkDeclaredAttack({
-        sessionId,
-        message: last.text,
-        characterRecord,
-        recentNarration: recentNarrationFrom(messages.slice(0, -1)),
-      });
+      const held =
+        last.context?.intent === 'dice_roll' ||
+        (await checkDeclaredAttack({
+          sessionId,
+          message: last.text,
+          characterRecord,
+          recentNarration: recentNarrationFrom(messages.slice(0, -1)),
+        }));
       if (!held) return;
       if (!last.id || !(await playerMessageIsStillNewest(sessionId, last.id))) {
         return skip('answered_or_superseded');
+      }
+      if (last.context?.intent === 'dice_roll' && onUnansweredRoll) {
+        onUnansweredRoll(last);
+        return;
       }
       logger.info('COMBAT_ENTRY_HOLD_RESUMED', { sessionId });
       await resumeTurn(last.text);
     })().catch((error) => {
       logger.warn('COMBAT_ENTRY_HOLD_RESUME_FAILED', { sessionId, error });
+      if (last.context?.intent === 'dice_roll') onUnansweredRoll?.(last);
     });
-  }, [sessionId, messagesReady, messages, characterRecord, resumeTurn]);
+  }, [sessionId, messagesReady, messages, characterRecord, resumeTurn, onUnansweredRoll]);
 }

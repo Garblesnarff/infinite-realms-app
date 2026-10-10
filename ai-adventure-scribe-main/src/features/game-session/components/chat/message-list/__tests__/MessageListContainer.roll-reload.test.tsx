@@ -82,7 +82,12 @@ describe('reload with an unanswered narrative roll (#2280)', () => {
       expect(screen.getByText(turn.playerInput)).toBeInTheDocument();
       expect(screen.queryByText(turn.reply.text)).not.toBeInTheDocument();
       expect(processAiResponse).toHaveBeenCalledTimes(1);
-      expect(processAiResponse).toHaveBeenCalledWith(turn.rollRequests);
+      expect(processAiResponse).toHaveBeenCalledWith(
+        turn.rollRequests.map((request, index) => ({
+          ...request,
+          rollRequestId: `${turn.dmMessageId}:roll:${index}`,
+        })),
+      );
 
       // A refetch of the same page does not queue it again.
       rerender(list([player, { ...reply }]));
@@ -172,7 +177,9 @@ describe('reload with an unanswered narrative roll (#2280)', () => {
 
     expect(screen.queryByText(turn.reply.text)).not.toBeInTheDocument();
     expect(processAiResponse).toHaveBeenCalledTimes(1);
-    expect(processAiResponse).toHaveBeenCalledWith([perception]);
+    expect(processAiResponse).toHaveBeenCalledWith([
+      { ...perception, rollRequestId: `${turn.dmMessageId}:roll:1` },
+    ]);
   });
 });
 

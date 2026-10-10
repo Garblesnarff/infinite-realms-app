@@ -93,10 +93,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Check for duplicates based on type, purpose, and participant
       const isDuplicate = state.diceRollQueue.pendingRolls.some(
         (roll) =>
-          roll.requestType === action.payload.requestType &&
-          roll.description === action.payload.description &&
-          roll.participantId === action.payload.participantId &&
-          roll.status === 'pending',
+          roll.status === 'pending' &&
+          (action.payload.rollRequestId
+            ? roll.rollRequestId === action.payload.rollRequestId
+            : roll.requestType === action.payload.requestType &&
+              roll.description === action.payload.description &&
+              roll.participantId === action.payload.participantId),
       );
 
       if (isDuplicate) {

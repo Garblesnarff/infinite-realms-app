@@ -1,4 +1,5 @@
 export interface RollRequest {
+  rollRequestId?: string;
   type: 'attack' | 'save' | 'check' | 'damage' | 'damage_taken' | 'initiative' | 'skill_check';
   formula: string; // "1d20+5" or "1d20+modifier" or "1d20+str"
   purpose: string; // "Arcana check to understand the mechanism"

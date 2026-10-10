@@ -305,6 +305,13 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
   test('#2280: a narrative-roll reply is one row, with its prose and its roll requests together', async () => {
     const turn = RUN_11_INSIGHT;
     const dmId = crypto.randomUUID();
+    const clientContext = {
+      ...(turn.wireBody.context as Record<string, unknown>),
+      rollRequests: turn.rollRequests.map((request, index) => ({
+        ...request,
+        rollRequestId: `${dmId}:roll:${index}`,
+      })),
+    };
     const rollEnvelope = {
       text: turn.reply.text,
       options: [],
@@ -323,7 +330,7 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
           sessionId,
           speakerType: 'dm',
           message: turn.wireBody.message as string,
-          context: turn.wireBody.context as Record<string, unknown>,
+          context: clientContext,
         },
       ],
       userId,
@@ -332,9 +339,7 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
     const rows = await rowsFor([dmId]);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.message).toBe(turn.reply.text);
-    expect((rows[0]?.context as { rollRequests?: unknown }).rollRequests).toEqual(
-      turn.rollRequests,
-    );
+    expect(rows[0]?.context).toEqual(clientContext);
   });
 
   test('#2280: a provisional row is replaced by the full prose, never by blank text', async () => {

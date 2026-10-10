@@ -2,7 +2,7 @@ import React from 'react';
 
 import { toHeaderExcerpt } from './scene-blurb';
 import { ATTACK_WAIT_RESOLVING, TURN_WAIT_WORKING } from './turn-wait-copy';
-import { useHeldEntryRecovery } from './use-held-entry-recovery';
+import { useHeldEntryRecovery, playerMessageIsStillNewest } from './use-held-entry-recovery';
 import { useMessageCommandHandler } from './use-message-command-handler';
 import { useMessageSendQueue } from './use-message-send-queue';
 import { useSessionValidator } from '../session/SessionValidator';
@@ -39,6 +39,7 @@ import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 import { isTerminalDefeatError } from '@/services/user-data-api';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
+import { identifyDmRollRequests } from '@/utils/dm-roll-recovery';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
 import { handleAsyncError } from '@/utils/error-handler';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
@@ -140,6 +141,7 @@ export function rollReplyMessage(
   dmMessageId: string,
   rollRequests: RollRequest[],
 ): ChatMessage {
+  rollRequests = identifyDmRollRequests(rollRequests, dmMessageId);
   const text =
     reply.text.trim() ||
     `The DM asks for a roll: ${rollRequests.map((request) => request.purpose).join('; ')}.`;
@@ -168,7 +170,8 @@ export const useMessageHandlerLogic = ({
   /** #2536: staged attack wait in the composer. Null once the prompt, engine line, or turn end replaces it. */
   attackWaitLabel: string | null;
   sendError: string | null;
-  retrySendMessage: () => Promise<void>;
+  retrySendMessage: (editedInput: string) => Promise<void>;
+  retryInFlight: boolean;
   combatTurnUiState: CombatTurnUiState;
   resumeCombatTurn: () => Promise<void>;
   /** #2456: handled terminal death state; when set, the UI renders the death screen. */
@@ -202,7 +205,11 @@ export const useMessageHandlerLogic = ({
   });
 
   // Extract message queue and sending-state logic
-  const { handleSendMessage, isSending, actualSendMessageRef } = useMessageSendQueue();
+  const {
+    handleSendMessage: queuedHandleSendMessage,
+    isSending,
+    actualSendMessageRef,
+  } = useMessageSendQueue();
 
   // Refs to track current values for async operations
   const turnCountRef = React.useRef(turnCount);
@@ -217,6 +224,33 @@ export const useMessageHandlerLogic = ({
   const [sendError, setSendError] = React.useState<string | null>(null);
   const retryInputRef = React.useRef<string | null>(null);
   const retryContextRef = React.useRef<MessageSendContext | undefined>(undefined);
+
+  const inFlightRollsRef = React.useRef(new Map<string, Promise<void>>());
+  const [retryInFlight, setRetryInFlight] = React.useState(false);
+  const handleSendMessage = React.useCallback(
+    (input: string, context?: MessageSendContext): Promise<void> => {
+      const saved = [...messagesRef.current]
+        .reverse()
+        .find((message) => message.sender === 'player');
+      const rollRequestId =
+        context?.intent === 'dice_roll'
+          ? context.rollRequestId
+          : context?.intent === 'resume_unanswered' && saved?.context?.intent === 'dice_roll'
+            ? (saved.context.rollRequestId ?? saved.id)
+            : undefined;
+      if (!rollRequestId) return queuedHandleSendMessage(input, context);
+      const existing = inFlightRollsRef.current.get(rollRequestId);
+      if (existing) return existing;
+      const sending = queuedHandleSendMessage(input, context).finally(() => {
+        inFlightRollsRef.current.delete(rollRequestId);
+        setRetryInFlight(inFlightRollsRef.current.size > 0);
+      });
+      inFlightRollsRef.current.set(rollRequestId, sending);
+      setRetryInFlight(true);
+      return sending;
+    },
+    [queuedHandleSendMessage],
+  );
 
   React.useEffect(() => subscribeToNetworkRetry(setIsReconnecting), []);
 
@@ -461,11 +495,38 @@ export const useMessageHandlerLogic = ({
       const currentMessages = messagesRef.current;
       const isFirstMessage = currentMessages.length === 0;
       // #2341: a resumed turn answers a message that is already saved and already counted.
-      const resumingSavedMessage = providedContext?.intent === 'resume_unanswered';
-      const savedMessageIndex = resumingSavedMessage
-        ? currentMessages.findLastIndex((message) => message.sender === 'player')
-        : -1;
+      const answeredRollIndex =
+        providedContext?.intent === 'dice_roll' && providedContext.rollRequestId
+          ? currentMessages.findIndex(
+              (message) =>
+                message.sender === 'player' &&
+                message.context?.rollRequestId === providedContext.rollRequestId,
+            )
+          : -1;
+      const resumingSavedMessage =
+        providedContext?.intent === 'resume_unanswered' || answeredRollIndex >= 0;
+      const savedMessageIndex =
+        answeredRollIndex >= 0
+          ? answeredRollIndex
+          : resumingSavedMessage
+            ? currentMessages.findLastIndex((message) => message.sender === 'player')
+            : -1;
       const savedMessage = savedMessageIndex >= 0 ? currentMessages[savedMessageIndex] : undefined;
+
+      if (
+        resumingSavedMessage &&
+        savedMessage?.context?.intent === 'dice_roll' &&
+        savedMessage.id
+      ) {
+        const stillUnanswered = await rejectWhenAborted(
+          playerMessageIsStillNewest(sessionId, savedMessage.id),
+          turnSignal,
+        );
+        if (!stillUnanswered) {
+          setComposerBlocked(false);
+          return;
+        }
+      }
 
       // Add player message
       // CRITICAL FIX: Use provided context if available (for dice roll results)
@@ -473,7 +534,8 @@ export const useMessageHandlerLogic = ({
       // enabling the roll suppression logic in use-ai-response.ts
       const playerMessage: ChatMessage =
         resumingSavedMessage && savedMessage
-          ? providedContext?.retryInput !== undefined
+          ? providedContext?.intent === 'resume_unanswered' &&
+            providedContext.retryInput !== undefined
             ? { ...savedMessage, text: providedContext.retryInput }
             : savedMessage
           : {
@@ -574,7 +636,10 @@ export const useMessageHandlerLogic = ({
               // filtered list. The type filter is defence in depth: no engine-channel request is
               // ever forwarded from here, whatever the flag says.
               const earlyPromptRollRequests = textReadyOptions?.earlyRollPromptAllowed
-                ? (earlyResponse.rollRequests ?? []).filter(isNarrativeRollRequest)
+                ? identifyDmRollRequests(
+                    (earlyResponse.rollRequests ?? []).filter(isNarrativeRollRequest),
+                    dmMessageId,
+                  )
                 : [];
               if (earlyPromptRollRequests.length > 0) {
                 rollTurnStarted = true;
@@ -696,7 +761,10 @@ export const useMessageHandlerLogic = ({
       // this point: `requestPlayerAttackRoll` is awaited inside `handleDmActionsAndTransitions`,
       // so the composer stays blocked from submit until that roll settles.
       const rawRollRequests = sanitizedAiResponseMessage.rollRequests ?? [];
-      const narrativeRollRequests = rawRollRequests.filter(isNarrativeRollRequest);
+      const narrativeRollRequests = identifyDmRollRequests(
+        rawRollRequests.filter(isNarrativeRollRequest),
+        dmMessageId,
+      );
       const hasRollRequests = narrativeRollRequests.length > 0;
       if (rawRollRequests.length > narrativeRollRequests.length) {
         logger.info('[RollPrompt] final roll prompt withheld engine-channel requests', {
@@ -873,7 +941,7 @@ export const useMessageHandlerLogic = ({
           (error as { status?: unknown }).status === 401);
       const networkError = isNetworkError(error);
       const quotaExceeded = error instanceof QuotaExceededError;
-      if (networkError) abortController.abort();
+      abortController.abort();
       settlePendingPlayerInput();
       handleAsyncError(error, {
         userMessage: sessionExpired ? SESSION_EXPIRED_MESSAGE : 'Failed to process your message',
@@ -1010,6 +1078,11 @@ export const useMessageHandlerLogic = ({
     messagesReady,
     characterRecord: character as Record<string, unknown> | null | undefined,
     resumeTurn: (playerInput) => handleSendMessage(playerInput, { intent: 'resume_unanswered' }),
+    onUnansweredRoll: (message) => {
+      retryInputRef.current = message.text;
+      retryContextRef.current = { intent: 'resume_unanswered' };
+      setSendError(DM_PROCESSING_ERROR_MESSAGE);
+    },
   });
 
   React.useEffect(() => {
@@ -1026,6 +1099,7 @@ export const useMessageHandlerLogic = ({
     attackWaitLabel,
     sendError,
     retrySendMessage,
+    retryInFlight,
     combatTurnUiState,
     resumeCombatTurn,
     terminalDeathState,

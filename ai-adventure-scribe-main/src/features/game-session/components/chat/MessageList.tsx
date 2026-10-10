@@ -19,6 +19,7 @@ import { handleAsyncError } from '@/utils/error-handler';
  * Context for dice roll messages to preserve intent through the message flow
  */
 export interface DiceRollContext {
+  rollRequestId?: string;
   intent: 'dice_roll';
   diceRoll?: {
     formula: string;
@@ -72,6 +73,7 @@ export type MessageSendContext =
   | DeathSaveTurnContext;
 
 interface MessageListProps {
+  retryInFlight?: boolean;
   onSendFullMessage?: (message: string, context?: MessageSendContext) => Promise<void>;
   sessionId?: string;
   containerRef?: React.RefObject<HTMLDivElement>;
@@ -88,7 +90,7 @@ interface MessageListProps {
  * memoized or optimized via custom hooks.
  */
 export const MessageList: React.FC<MessageListProps> = React.memo(
-  ({ onSendFullMessage, sessionId, containerRef, suppressEmptyState }) => {
+  ({ onSendFullMessage, sessionId, containerRef, suppressEmptyState, retryInFlight }) => {
     const {
       messages = [],
       isLoading,
@@ -179,6 +181,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             onOptionSelect={handleOptionSelect}
             onSendMessage={sendMessage}
             onSendFullMessage={onSendFullMessage}
+            retryInFlight={retryInFlight}
             sessionId={sessionId}
             messagesReady={messagesReady && !isLoading}
             isFetchingMore={isFetchingMore}

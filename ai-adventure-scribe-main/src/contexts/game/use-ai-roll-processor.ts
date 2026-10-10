@@ -16,6 +16,7 @@ import { findDeclaredAbility, findDeclaredSkill } from '@/utils/roll-request/dec
  * to the internal DiceRollRequest format.
  */
 export interface AiRollRequest {
+  rollRequestId?: string;
   type: string;
   participantId?: string;
   purpose?: string;
@@ -88,6 +89,7 @@ export const useAiRollProcessor = (
           const parsedFormula = parseRollFormula(request.formula);
           const rollRequest: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'> = {
             requestType: request.type as DiceRollRequestType,
+            rollRequestId: request.rollRequestId,
             participantId: request.participantId,
             description: request.purpose || request.description || 'Dice roll requested',
             rollConfig: {
@@ -106,17 +108,19 @@ export const useAiRollProcessor = (
             damageType: request.damageType, // fire, cold, slashing, etc.
           };
 
-          const dedupeKey = [
-            rollRequest.requestType,
-            rollRequest.participantId || 'any',
-            rollRequest.description,
-            rollRequest.rollConfig.dieType,
-            rollRequest.rollConfig.count,
-            rollRequest.rollConfig.modifier,
-            rollRequest.rollConfig.abilityModifier || '',
-            rollRequest.rollConfig.advantage ? 'adv' : '',
-            rollRequest.rollConfig.disadvantage ? 'dis' : '',
-          ].join('|');
+          const dedupeKey =
+            request.rollRequestId ??
+            [
+              rollRequest.requestType,
+              rollRequest.participantId || 'any',
+              rollRequest.description,
+              rollRequest.rollConfig.dieType,
+              rollRequest.rollConfig.count,
+              rollRequest.rollConfig.modifier,
+              rollRequest.rollConfig.abilityModifier || '',
+              rollRequest.rollConfig.advantage ? 'adv' : '',
+              rollRequest.rollConfig.disadvantage ? 'dis' : '',
+            ].join('|');
 
           if (seenKeys.has(dedupeKey)) {
             logger.info('🎲 Skipping duplicate AI roll request before queue:', rollRequest);

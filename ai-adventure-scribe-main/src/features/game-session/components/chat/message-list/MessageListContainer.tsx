@@ -16,6 +16,7 @@ import type { ChatMessage } from '@/types/game';
 import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirmation';
 import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConfirmation';
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
+import { Button } from '@/components/ui/button';
 import { useCombat } from '@/contexts/CombatContext';
 import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { RollTray } from '@/features/game-session/components/game/game-content/roll-tray-slot';
@@ -31,6 +32,7 @@ import { previousEngineDividerKeys } from '@/utils/combat-engine-blocks';
 import { withheldDmRollReplies } from '@/utils/dm-roll-recovery';
 
 interface MessageListContainerProps {
+  retryInFlight?: boolean;
   messages: ChatMessage[];
   messagesRef: React.RefObject<HTMLDivElement>;
   expandedMessages: Set<string>;
@@ -70,6 +72,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     onOptionSelect,
     onSendMessage,
     onSendFullMessage,
+    retryInFlight = false,
     sessionId,
     isFetchingMore,
     hasMore,
@@ -91,6 +94,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       rollRequest,
       handleManualResult,
       handleCancelRoll,
+      handleRetryRoll,
+      isRetrying,
       lastRollRef: _lastRollRef,
       pendingRollId,
       rollError,
@@ -288,8 +293,23 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                   : () => markNarrativeRollCommitted(currentRoll.id)
               }
               onCancel={handleCancelRoll}
+              onRetry={handleRetryRoll}
+              isRetrying={isRetrying || retryInFlight}
             />
           </RollTray>
+        )}
+
+        {rollError && !currentRoll && (
+          <div role="alert" className="px-3 py-2 text-sm text-red-300">
+            {rollError}
+            <Button
+              variant="outline"
+              disabled={isRetrying || retryInFlight}
+              onClick={() => void handleRetryRoll()}
+            >
+              {isRetrying || retryInFlight ? 'Retrying…' : 'Retry'}
+            </Button>
+          </div>
         )}
 
         {/* Loading state */}

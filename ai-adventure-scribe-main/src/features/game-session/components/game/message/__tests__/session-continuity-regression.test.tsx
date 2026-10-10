@@ -393,7 +393,14 @@ describe('session-continuity regression', () => {
     let sendPromise: Promise<void>;
     await act(async () => {
       sendPromise = ref.send('I attack the ooze with my sword.');
-      await waitFor(() => expect(mockProcessAiResponse).toHaveBeenCalledWith(rollRequests));
+      await waitFor(() =>
+        expect(mockProcessAiResponse).toHaveBeenCalledWith(
+          rollRequests.map((request, index) => ({
+            ...request,
+            rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:${index}`,
+          })),
+        ),
+      );
     });
 
     expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
@@ -642,7 +649,14 @@ describe('session-continuity regression', () => {
     let sendPromise: Promise<void>;
     await act(async () => {
       sendPromise = ref.send('I attack the ooze with my sword.');
-      await waitFor(() => expect(mockProcessAiResponse).toHaveBeenCalledWith(rollRequests));
+      await waitFor(() =>
+        expect(mockProcessAiResponse).toHaveBeenCalledWith(
+          rollRequests.map((request, index) => ({
+            ...request,
+            rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:${index}`,
+          })),
+        ),
+      );
     });
 
     // Declaration prose is never shown while the roll is outstanding.
@@ -772,7 +786,9 @@ describe('session-continuity regression', () => {
 
     // The narrative check goes up; the attack request does not.
     expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
-    expect(mockProcessAiResponse).toHaveBeenCalledWith([rollRequests[1]]);
+    expect(mockProcessAiResponse).toHaveBeenCalledWith([
+      { ...rollRequests[1], rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:0` },
+    ]);
 
     await act(async () => {
       resolveAIResponse?.(rollResponse);
@@ -805,15 +821,23 @@ describe('session-continuity regression', () => {
     });
 
     expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
-    expect(mockProcessAiResponse).toHaveBeenCalledWith([rollRequests[2]]);
+    expect(mockProcessAiResponse).toHaveBeenCalledWith([
+      { ...rollRequests[2], rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:0` },
+    ]);
     // The skill check is still owed, so this turn waits on its die: the composer stays blocked
     // and combat detection waits for the roll turn. The reply is saved once, prose and the
     // narrative request together (#2280); the message list withholds the prose until the roll.
     expect(dmPersisted()).toEqual([
       expect.objectContaining({
         text: 'You brace against the rubble.',
-        rollRequests: [rollRequests[2]],
-        context: expect.objectContaining({ rollRequests: [rollRequests[2]] }),
+        rollRequests: [
+          { ...rollRequests[2], rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:0` },
+        ],
+        context: expect.objectContaining({
+          rollRequests: [
+            { ...rollRequests[2], rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:0` },
+          ],
+        }),
       }),
     ]);
     expect(dmPersisted()[0]?.context?.intent).not.toBe('pending_roll_request');
@@ -1045,13 +1069,28 @@ describe('session-continuity regression', () => {
         }>;
         expect(saved?.id).toBe(dmMessageId);
         expect(saved?.text).toBe(turn.reply.text);
-        expect(saved?.rollRequests).toEqual(turn.rollRequests);
-        expect(saved?.context?.rollRequests).toEqual(turn.rollRequests);
+        expect(saved?.rollRequests).toEqual(
+          turn.rollRequests.map((request, index) => ({
+            ...request,
+            rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:${index}`,
+          })),
+        );
+        expect(saved?.context?.rollRequests).toEqual(
+          turn.rollRequests.map((request, index) => ({
+            ...request,
+            rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:${index}`,
+          })),
+        );
         // No text-less row, ever.
         expect(dmPersisted().every((message) => (message.text ?? '').trim().length > 0)).toBe(true);
         // The popup went up once, and the prose was not put on screen by the handler.
         expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
-        expect(mockProcessAiResponse).toHaveBeenCalledWith(turn.rollRequests);
+        expect(mockProcessAiResponse).toHaveBeenCalledWith(
+          turn.rollRequests.map((request, index) => ({
+            ...request,
+            rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:${index}`,
+          })),
+        );
         expect(mockUpdateMessage).not.toHaveBeenCalled();
       });
     }
@@ -1075,7 +1114,13 @@ describe('session-continuity regression', () => {
 
       await waitFor(() => expect(mockUpdateMessage).toHaveBeenCalledTimes(1));
       expect(mockUpdateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: turn.reply.text, rollRequests: turn.rollRequests }),
+        expect.objectContaining({
+          text: turn.reply.text,
+          rollRequests: turn.rollRequests.map((request, index) => ({
+            ...request,
+            rollRequestId: `${mockGetAIResponse.mock.calls[0][5]}:roll:${index}`,
+          })),
+        }),
       );
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({ title: "The DM's reply wasn't saved" }),

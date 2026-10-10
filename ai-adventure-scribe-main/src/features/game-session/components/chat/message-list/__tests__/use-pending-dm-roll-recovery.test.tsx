@@ -45,7 +45,9 @@ describe('usePendingDmRollRecovery', () => {
     rerender({ ...props, messagesReady: true });
 
     await waitFor(() => expect(processAiResponse).toHaveBeenCalledTimes(1));
-    expect(processAiResponse).toHaveBeenCalledWith([stealthRequest]);
+    expect(processAiResponse).toHaveBeenCalledWith([
+      { ...stealthRequest, rollRequestId: 'dm-stealth-request:roll:0' },
+    ]);
     rerender({ ...props, messagesReady: true });
     expect(processAiResponse).toHaveBeenCalledTimes(1);
   });
