@@ -54,6 +54,14 @@ server {
     root /var/www/infiniterealms/ai-adventure-scribe-main/dist;
     index index.html;
 
+    # MIME type for the PWA manifest (AU-09): it must be served as
+    # application/manifest+json, not application/octet-stream. Add
+    #     application/manifest+json webmanifest;
+    # to /etc/nginx/mime.types on the box (Rob's line). Do NOT add a `types {}`
+    # block here: redeclaring types at server level *replaces* the inherited
+    # mime.types mapping, which would serve every other asset as
+    # application/octet-stream and blank the site under nosniff.
+
     # Logging
     access_log /var/log/nginx/infiniterealms_access.log;
     error_log /var/log/nginx/infiniterealms_error.log warn;
@@ -120,6 +128,32 @@ server {
     # Frontend SPA Routes (React Router)
     # No-cache on the try_files fallback: SPA routes (e.g. /game/session/...) are served
     # index.html via this block, so it must never let a browser cache a stale entry point.
+    #
+    # Public pages with server-injected head meta (#227 AU-06): /pricing,
+    # /contact, /privacy and /terms (with or without trailing slash) are
+    # proxied to the backend, which serves dist/index.html with per-page
+    # title/description/og tags. The regex outranks the asset regex below for
+    # these extensionless paths and beats the SPA fallback. Copy to the live
+    # host on Rob's line.
+    location ~ ^/(pricing|contact|privacy|terms)/?$ {
+        include /etc/nginx/snippets/infinite-realms-security-headers.conf;
+        proxy_pass http://infiniterealms_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    #
+    # Removed blog URLs 301 to the blog subdomain, preserving the path
+    # (#227 AU-05; matches the live box). Exact match first so /blog with no
+    # trailing slash lands on /blog, not /blog/.
+    location = /blog {
+        return 301 https://blog.infiniterealms.app/blog$is_args$args;
+    }
+    location /blog/ {
+        return 301 https://blog.infiniterealms.app$request_uri;
+    }
     location / {
         include /etc/nginx/snippets/infinite-realms-security-headers.conf;
         try_files $uri $uri/ /index.html;
