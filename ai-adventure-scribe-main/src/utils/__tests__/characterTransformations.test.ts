@@ -2,6 +2,10 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  EQUIPMENT_SHEET_INVENTORY,
+  equipmentSaveWireBody,
+} from '../../../shared/test-fixtures/equipment-save-wire-body';
+import {
   transformAbilityScoresForStorage,
   transformEquipmentForStorage,
   transformMulticlassingForStorage,
@@ -9,6 +13,7 @@ import {
 } from '../characterTransformations';
 
 import type { AbilityScores, Character } from '@/types/character';
+
 
 describe('characterTransformations', () => {
   describe('transformAbilityScoresForStorage', () => {
@@ -135,6 +140,46 @@ describe('characterTransformations', () => {
         magic_item_rarity: 'uncommon',
         magic_effects: JSON.stringify({ attackBonus: 1, damageBonus: 1 }),
       });
+    });
+
+    it('should emit the shared #205 equipment wire body for sheet-loaded inventory', () => {
+      // The sheet-loaded shape: itemId is the character_equipment row UUID,
+      // itemName carries the display name. The client must send exactly the
+      // shared fixture (see shared/test-fixtures/equipment-save-wire-body.ts),
+      // which the real-DB test PUTs through the real route.
+      const character: Partial<Character> = { inventory: EQUIPMENT_SHEET_INVENTORY };
+      const result = transformEquipmentForStorage(character as Character, 'char-123');
+      expect(result).toEqual(equipmentSaveWireBody('char-123'));
+    });
+
+    it('should fall back to itemId as the name for wizard/game inventory (#205)', () => {
+      // mapWizardEquipmentToInventory and equipmentRowsToInventory put the item
+      // NAME in itemId and set no itemName; those must keep saving the name.
+      const character: Partial<Character> = {
+        inventory: [{ itemId: 'Longsword', quantity: 1, equipped: false }],
+      };
+      const result = transformEquipmentForStorage(character as Character, 'char-123');
+      expect(result).toHaveLength(1);
+      expect(result[0].item_name).toBe('Longsword');
+    });
+
+    it('should write the resolved name, never the UUID, for corrupted rows (#205)', () => {
+      // A row whose item_name was corrupted to the row UUID loads with
+      // itemName "Unknown item" (loader resolution); the save must write that
+      // name back, not the UUID.
+      const character: Partial<Character> = {
+        inventory: [
+          {
+            itemId: 'aa11bb22-cc33-4d55-6e66-77889900aabb',
+            itemName: 'Unknown item',
+            quantity: 1,
+            equipped: false,
+          },
+        ],
+      };
+      const result = transformEquipmentForStorage(character as Character, 'char-123');
+      expect(result).toHaveLength(1);
+      expect(result[0].item_name).toBe('Unknown item');
     });
 
     it('should use default values for missing equipment properties', () => {

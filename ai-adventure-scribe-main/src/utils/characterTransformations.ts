@@ -52,7 +52,10 @@ export const transformEquipmentForStorage = (character: Character, characterId: 
 
   return character.inventory.map((item) => ({
     character_id: characterId,
-    item_name: item.itemId, // This should be the item name, not the ID
+    // #205: the sheet loads itemName from item_name; the wizard string[] and
+    // game paths carry the name in itemId with no itemName, so fall back to it
+    // rather than writing a row UUID into item_name.
+    item_name: item.itemName ?? item.itemId,
     item_type: item.itemType || 'equipment',
     quantity: item.quantity || 1,
     equipped: item.equipped || false,

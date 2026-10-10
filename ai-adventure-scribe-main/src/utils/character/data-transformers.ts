@@ -11,6 +11,7 @@ import type {
 
 import { lookupBackgrounds } from '@/data/backgroundOptions';
 import { classes } from '@/data/classes';
+import { resolveEquipmentById } from '@/data/equipment';
 import { lookupRaces } from '@/data/races';
 import logger from '@/lib/logger';
 import {
@@ -331,6 +332,20 @@ export const transformAbilityScores = (
 };
 
 /**
+ * #205: rows corrupted by the old save path carry the character_equipment row
+ * UUID in `item_name` instead of a name. Detect the UUID shape, resolve the
+ * display name from the equipment catalog, and fall back to a placeholder so
+ * the sheet never renders a UUID. The resolved name is what the loader puts
+ * in `itemName`, so the next save writes the name — never the UUID — back.
+ */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const resolveStoredItemName = (itemName: string): string => {
+  if (!UUID_SHAPE.test(itemName)) return itemName;
+  return resolveEquipmentById(itemName)?.name ?? 'Unknown item';
+};
+
+/**
  * Transforms database character data into Character type
  * @param characterData - Raw character data from database
  * @param statsData - Raw stats data from database
@@ -407,6 +422,9 @@ export const transformCharacterData = (
     inventory:
       equipmentData?.map((item) => ({
         itemId: item.id,
+        // #205: the row id is the React key / toggle target; the name renders and saves from here.
+        // Corrupted rows (UUID in item_name) resolve to the catalog name or "Unknown item".
+        itemName: resolveStoredItemName(item.item_name),
         itemType: item.item_type,
         description: item.description || undefined,
         quantity: item.quantity || 1,
