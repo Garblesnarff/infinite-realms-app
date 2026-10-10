@@ -1454,6 +1454,89 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
   });
 
+  test('#252: a level-2 Cleric saying "cast Turn Undead" is not refused — the feature takes the feature path', async () => {
+    const reply = castReply('The skeletons recoil from your raised holy symbol.');
+    const turn = await dmTurn({
+      characterClass: 'Cleric',
+      race: 'Human',
+      scores: 'STR 14(+2), DEX 10(+0), CON 14(+2), INT 10(+0), WIS 16(+3), CHA 14(+2)',
+      dexterityModifier: 0,
+      level: 2,
+      playerInput: 'I cast Turn Undead on them!',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#252: a level-2 Paladin saying "cast Lay on Hands at Mira" is not refused', async () => {
+    const reply = castReply('Warm light knits Mira’s wounds closed.');
+    const turn = await dmTurn({
+      characterClass: 'Paladin',
+      race: 'Human',
+      scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 1,
+      level: 2,
+      playerInput: 'I cast Lay on Hands at Mira.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#252: a Fighter saying "cast Turn Undead" is refused as a feature the character lacks', async () => {
+    const turn = await dmTurn({
+      characterClass: 'Fighter',
+      race: 'Human',
+      scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 1,
+      playerInput: 'I cast Turn Undead on them!',
+      reply: castReply('Nothing happens.'),
+    });
+    refusalOf(turn, 'Turn Undead');
+  });
+
+  test('#248 item 3: "I cast Witch Bolt." with no cue is a spell claim — The Apprentice is refused', async () => {
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Witch Bolt.',
+      reply: castReply('A crackling arc leaps from your hand.'),
+    });
+    refusalOf(turn, 'Witch Bolt');
+  });
+
+  test('#248 item 3: "using a 1st-level slot" no longer swallows the spell name — Fireball is claimed and refused', async () => {
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Fireball using a 1st-level slot at the goblin.',
+      reply: castReply('Flames engulf the goblin.'),
+    });
+    refusalOf(turn, 'Fireball');
+  });
+
+  test('#248 item 3: a prepared spell phrased with "using a 1st-level slot" is still allowed', async () => {
+    const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+    const turn = await checkedCast({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Burning Hands using a 1st-level slot at the cobwebs.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#248 item 3: "cast Fishing Line at the heron" is not a spell claim, even from a caster', async () => {
+    const reply = castReply('The line sails out over the reeds.');
+    for (const who of [
+      apprentice(apprenticeSpellLists),
+      creationCaster('Cleric', creationClericSpells, clericLevels),
+    ]) {
+      const turn = await dmTurn({
+        ...who,
+        playerInput: 'I cast Fishing Line at the heron.',
+        reply,
+      });
+      expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+    }
+  });
+
   /**
    * #218 step 1: the player's message, saved before the DM turn starts as the client saves it
    * (`sendMessage` → dialogue_history, use-message-handler-logic.ts). Retry re-sends this same row.
