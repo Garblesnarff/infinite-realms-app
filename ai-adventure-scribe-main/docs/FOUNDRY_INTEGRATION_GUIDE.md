@@ -336,11 +336,7 @@ If you're adding Foundry integration to an existing AI Adventure Scribe installa
    });
    ```
 
-4. **Add UI routes**
-
-   Create pages for battle map:
-   - `/campaigns/[id]/scenes` - Scene list
-   - `/campaigns/[id]/scenes/[sceneId]` - Battle map view
+The standalone scene-list and battle-map pages were removed in #233. The game screen uses the tactical combat map.
 
 ### From Foundry VTT
 
