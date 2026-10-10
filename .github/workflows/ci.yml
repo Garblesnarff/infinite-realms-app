@@ -399,7 +399,7 @@ jobs:
             2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
           # The roll route suite closes its raw AI-usage pool during cleanup. Keep that
           # lifecycle separate from dm-reply-reconcile, which uses the same module pool.
-          bun test --isolate \
+          bun test \
             src/services/__tests__/roll-answer-dedupe.real-db.test.ts \
             2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
           # playthrough-scope replaces lib/auth.js for the whole process. The
