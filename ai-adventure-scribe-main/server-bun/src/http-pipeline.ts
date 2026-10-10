@@ -203,6 +203,56 @@ export function validationIssues(
   });
 }
 
+/**
+ * Security headers for every response (#225). Shared by the app's
+ * onBeforeHandle (normal routes) and the pipeline's onError (404s and thrown
+ * errors, which never reach onBeforeHandle — and a later onError would never
+ * run, because this onError always returns a response). CSP violations show
+ * only in the browser console for now (no report-uri; the strategist will
+ * file a report collector as a follow-up).
+ */
+export function setSecurityHeaders({
+  set,
+}: {
+  set: { headers: Record<string, string | number> };
+}): void {
+  // Prevent MIME type sniffing
+  set.headers['X-Content-Type-Options'] = 'nosniff';
+
+  // Prevent clickjacking
+  set.headers['X-Frame-Options'] = 'DENY';
+
+  // XSS protection (legacy but still useful)
+  set.headers['X-XSS-Protection'] = '1; mode=block';
+
+  // Referrer policy for privacy
+  set.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+
+  // Content Security Policy - report-only first (#225)
+  set.headers['Content-Security-Policy-Report-Only'] = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https: wss:",
+    "frame-ancestors 'none'",
+  ].join('; ');
+
+  // HTTPS enforcement (Strict Transport Security)
+  // Only set in production to avoid issues with local development
+  if (process.env.NODE_ENV === 'production') {
+    set.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload';
+  }
+
+  // Permissions policy (restrict browser features)
+  set.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()';
+
+  // LLM documentation discovery headers (llms.txt standard)
+  set.headers['Link'] = '</llms.txt>; rel="llms-txt", </llms-full.txt>; rel="llms-full-txt"';
+  set.headers['X-Llms-Txt'] = '/llms.txt';
+}
+
 export function createRequestPipelineApp() {
   return new Elysia()
     .derive(({ request }) => {
@@ -267,6 +317,10 @@ export function createRequestPipelineApp() {
     .onError(({ error, request, set, code }) => {
       const requestId = resolveRequestId(request);
       set.headers['x-request-id'] = requestId;
+      // Error responses skip onBeforeHandle, so set the security headers here;
+      // this onError always returns, which is why the app registers no later
+      // onError for them (#225).
+      setSecurityHeaders({ set });
       const quotaUnavailable = error instanceof QuotaUnavailableError;
       const status =
         code === 'VALIDATION' ? 422 : code === 'NOT_FOUND' ? 404 : quotaUnavailable ? 503 : 500;

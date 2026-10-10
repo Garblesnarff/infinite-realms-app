@@ -44,14 +44,11 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
 
-    # HSTS (HTTP Strict Transport Security)
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-    # Security Headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Security headers live in nginx-security-headers.conf.example (#225).
+    # They are included in each location below that sets its own add_header
+    # (nginx drops inherited add_headers there). Copy the snippet to
+    # /etc/nginx/snippets/infinite-realms-security-headers.conf and keep the
+    # include paths in sync. Applying to the live host needs Rob's line.
 
     # Root Directory (Frontend Build)
     root /var/www/infiniterealms/ai-adventure-scribe-main/dist;
@@ -114,6 +111,7 @@ server {
 
     # Static Assets (with caching)
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        include /etc/nginx/snippets/infinite-realms-security-headers.conf;
         expires 1y;
         add_header Cache-Control "public, immutable";
         access_log off;
@@ -123,6 +121,7 @@ server {
     # No-cache on the try_files fallback: SPA routes (e.g. /game/session/...) are served
     # index.html via this block, so it must never let a browser cache a stale entry point.
     location / {
+        include /etc/nginx/snippets/infinite-realms-security-headers.conf;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
         add_header Pragma "no-cache" always;
@@ -137,6 +136,7 @@ server {
     # and try_files' internal redirect re-enters location matching — so this covers
     # both a direct hit on /index.html and the SPA fallback above.
     location = /index.html {
+        include /etc/nginx/snippets/infinite-realms-security-headers.conf;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         add_header Pragma "no-cache";
         add_header Expires 0;
@@ -144,6 +144,7 @@ server {
 
     # Health Check Endpoint
     location /health {
+        include /etc/nginx/snippets/infinite-realms-security-headers.conf;
         access_log off;
         return 200 "OK";
         add_header Content-Type text/plain;
