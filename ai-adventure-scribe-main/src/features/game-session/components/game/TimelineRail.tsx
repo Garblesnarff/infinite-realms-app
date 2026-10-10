@@ -209,7 +209,7 @@ export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }
         {anchors.map((id, i) => (
           <button
             key={id}
-            className={`timeline-dot ${currentId === id ? 'active' : ''}`}
+            className={`timeline-dot ir-hit-slop ${currentId === id ? 'active' : ''}`}
             title={`Jump to DM message ${i + 1}`}
             aria-label={`Jump to DM message ${i + 1}`}
             onClick={() => scrollTo(id)}

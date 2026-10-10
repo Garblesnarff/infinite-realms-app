@@ -11,6 +11,10 @@ export const GameFeedbackButton: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   return (
-    <SendFeedbackButton campaignSlug={id} sessionId={searchParams.get('session') ?? undefined} />
+    <SendFeedbackButton
+      className="ir-hit"
+      campaignSlug={id}
+      sessionId={searchParams.get('session') ?? undefined}
+    />
   );
 };

@@ -98,6 +98,23 @@ describe('.ir-app design tokens (#2258)', () => {
     expect(ratio([26, 18, 6], [213, 176, 112])).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('defines one 44px hit box and a 12px text floor (#228)', () => {
+    expect(token('--ir-hit-min')).toBe('44px');
+    expect(token('--ir-text-min')).toBe('12px');
+    expect(overhaulCss).toMatch(
+      /\.ir-app \.ir-hit\s*\{[^}]*min-width:\s*var\(--ir-hit-min\);\s*min-height:\s*var\(--ir-hit-min\);/,
+    );
+    expect(overhaulCss).toMatch(
+      /\.ir-app \.ir-hit-slop::before\s*\{[^}]*width:\s*var\(--ir-hit-min\);\s*height:\s*var\(--ir-hit-min\);/,
+    );
+    expect(overhaulCss).toMatch(
+      /\.ir-app \.ir-text-min\s*\{[^}]*font-size:\s*var\(--ir-text-min\);/,
+    );
+    expect(indexCss).toMatch(
+      /\.timeline-rail \.timeline-dot\s*\{[^}]*width:\s*14px;\s*height:\s*14px;/,
+    );
+  });
+
   it('draws the keyboard focus ring in gold at 2px', () => {
     expect(overhaulCss).toMatch(
       /\.ir-app :focus-visible\s*\{\s*outline:\s*2px solid var\(--infinite-gold\);\s*outline-offset:\s*2px;\s*\}/,

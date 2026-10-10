@@ -26,7 +26,7 @@ const StatBadge = React.memo(
     color: string;
   }) => (
     <div className="flex min-w-[3.25rem] shrink-0 flex-col items-center text-center">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="ir-text-min uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`mt-0.5 flex items-center justify-center gap-1 ${color}`}>
         <Icon className="w-3 h-3" />
         <span className="text-xs font-bold">{value}</span>

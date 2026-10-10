@@ -102,7 +102,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                   aria-label="Character Sheet"
                   title="Character Sheet"
                   aria-pressed={activeTab === 'character'}
-                  className="h-8 px-2"
+                  className="ir-hit-slop h-8 px-2"
                 >
                   <User className="h-4 w-4" />
                 </Button>
@@ -113,7 +113,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                   aria-label="Memories"
                   title="Memories"
                   aria-pressed={activeTab === 'memory'}
-                  className={`h-8 px-2 transition-all duration-200 ${
+                  className={`ir-hit-slop h-8 px-2 transition-all duration-200 ${
                     activeTab === 'memory'
                       ? 'bg-infinite-gold/15 text-infinite-gold shadow-glow-gold'
                       : 'text-foreground/60 hover:bg-white/5 hover:text-infinite-gold'
@@ -129,7 +129,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                     aria-label="Combat"
                     title="Combat"
                     aria-pressed={activeTab === 'combat'}
-                    className={`h-8 px-2 transition-all duration-200 ${
+                    className={`ir-hit-slop h-8 px-2 transition-all duration-200 ${
                       activeTab === 'combat'
                         ? 'bg-red-500 text-white shadow-lg animate-pulse'
                         : 'hover:bg-red-500/20'
@@ -145,7 +145,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                   aria-label="Journal"
                   title="Journal"
                   aria-pressed={activeTab === 'journal'}
-                  className={`h-8 px-2 transition-all duration-200 ${
+                  className={`ir-hit-slop h-8 px-2 transition-all duration-200 ${
                     activeTab === 'journal'
                       ? 'bg-amber-500/20 text-amber-100 shadow-lg'
                       : 'text-foreground/60 hover:bg-white/5 hover:text-amber-100'
@@ -171,7 +171,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                 }}
                 aria-label={isExpanded ? 'Minimize' : 'Expand'}
                 title={isExpanded ? 'Minimize' : 'Expand'}
-                className="h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
+                className="ir-hit-slop h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
               >
                 {isExpanded ? (
                   <ChevronDown className="h-4 w-4" />
@@ -185,7 +185,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                 onClick={() => onToggle()}
                 aria-label="Close Panel"
                 title="Close Panel"
-                className="h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
+                className="ir-hit-slop h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
