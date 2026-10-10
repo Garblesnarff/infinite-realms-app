@@ -189,6 +189,34 @@ describe('normalize-asset-tags', () => {
         expect(normalizeAssetTagsInContent(once)).toBe(once);
       }
     });
+
+    it('does not prepend a second name when the possessive stands mid-name (#267 GP-042)', () => {
+      // The entity is "The Bland One's Disciple"; the key drops the possessive s
+      // ("the-bland-one-disciple"), so the derived display name ("The Bland One
+      // Disciple") must match the visible possessive form instead of printing both.
+      const input =
+        "The Bland One's Disciple [ASSET:npc:the-bland-one-disciple] steps from the shadows.";
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Bland One/g)).toHaveLength(1);
+      expect(result).not.toContain('The Bland Ones Disciple');
+    });
+
+    it('does not prepend a second name when the possessive stands mid-name after the tag (#267 GP-042)', () => {
+      const input =
+        "A figure emerges: [ASSET:npc:the-bland-one-disciple] The Bland One's Disciple bows.";
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Bland One/g)).toHaveLength(1);
+    });
+
+    it('a place name appears once when the prose uses its possessive form (#267 GP-036)', () => {
+      const input =
+        "Together, you cross the threshold into the Chef's Kitchen [ASSET:location:the-chef-kitchen].";
+      const result = normalizeAssetTagKeysInContent(input);
+      expect(result).toBe(input);
+      expect(result.match(/Chef/g)).toHaveLength(1);
+    });
   });
 
   describe('normalizeAssetTagsInContent', () => {

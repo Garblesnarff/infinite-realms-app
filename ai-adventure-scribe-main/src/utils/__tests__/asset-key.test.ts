@@ -26,7 +26,7 @@ describe('generateAssetKey', () => {
   });
 
   it('should remove ASCII quote variants without adding hyphens', () => {
-    expect(generateAssetKey("'remy' \"the\" `manager`")).toBe('remy-the-manager');
+    expect(generateAssetKey('\'remy\' "the" `manager`')).toBe('remy-the-manager');
     expect(generateAssetKey("Don't")).toBe('dont');
   });
 
@@ -71,5 +71,16 @@ describe('generateAssetKey', () => {
     expect(generateAssetKey('Fäerun')).toBe('faerun');
     expect(generateAssetKey('Faerûn')).toBe('faerun');
     expect(generateAssetKey('Mjölnir')).toBe('mjolnir');
+  });
+
+  it("should strip a possessive 's so the key matches the base name (#267)", () => {
+    // "The Bland One's Disciple" must key as the-bland-one-disciple, not
+    // the-bland-ones-disciple: the possessive s is grammar, not name. Otherwise the
+    // key-derived display name never matches the visible possessive and the
+    // normalizer prepends a second name.
+    expect(generateAssetKey("The Bland One's Disciple")).toBe('the-bland-one-disciple');
+    expect(generateAssetKey('The Vitruvian Spider’s')).toBe('the-vitruvian-spider');
+    // A plural s with no apostrophe is part of the name and stays.
+    expect(generateAssetKey('The Bland Ones')).toBe('the-bland-ones');
   });
 });
