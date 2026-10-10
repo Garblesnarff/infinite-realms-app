@@ -402,6 +402,10 @@ jobs:
           bun test \
             src/routes/v1/__tests__/playthrough-scope.real-db.test.ts \
             2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
+          # racial-bonus-save replaces lib/auth.js and the logger for the whole process (#203).
+          bun test \
+            src/routes/v1/__tests__/racial-bonus-save.real-db.test.ts \
+            2>&1 | tee -a "/tmp/real-db-$GITHUB_RUN_ID.log"
           # npc-engine-rows mocks auth and dice with mock.module, which leaks across files in
           # one process, so it runs in its own invocation too (#2658).
           bun test \
