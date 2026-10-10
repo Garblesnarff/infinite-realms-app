@@ -106,6 +106,7 @@ const { ClassFeaturesService } = await importWithRealDb(
 const { LLMProviderService } = await importWithRealDb(() => import('../llm-provider-service.js'));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
+const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -480,6 +481,10 @@ ${playerInput}
     linkSession?: boolean;
     /** Writes the character's `character_spells` rows before the turn. */
     spellRows?: (characterId: string) => Promise<void>;
+    /** Plays the turn as this already-seeded character instead of seeding a new one. */
+    existingCharacter?: typeof characters.$inferSelect;
+    /** True sends no `combatEntry`, as the client does after the player declines a held entry. */
+    omitCombatEntry?: boolean;
     playerInput: string;
     reply: Record<string, unknown>;
   }): Promise<{
@@ -489,21 +494,23 @@ ${playerInput}
     dmMessageId: string;
     modelCalls: number;
   }> => {
-    const [character] = await database
-      .insert(characters)
-      .values({
-        userId,
-        campaignId,
-        name: testId(`gp-${opts.characterClass.toLowerCase()}`),
-        class: opts.characterClass,
-        race: opts.race,
-        level: opts.level ?? 1,
-        cantrips: opts.cantrips ?? null,
-        knownSpells: opts.knownSpells ?? null,
-        preparedSpells: opts.preparedSpells ?? null,
-        classLevels: opts.classLevels ?? null,
-      })
-      .returning();
+    const [character] = opts.existingCharacter
+      ? [opts.existingCharacter]
+      : await database
+          .insert(characters)
+          .values({
+            userId,
+            campaignId,
+            name: testId(`gp-${opts.characterClass.toLowerCase()}`),
+            class: opts.characterClass,
+            race: opts.race,
+            level: opts.level ?? 1,
+            cantrips: opts.cantrips ?? null,
+            knownSpells: opts.knownSpells ?? null,
+            preparedSpells: opts.preparedSpells ?? null,
+            classLevels: opts.classLevels ?? null,
+          })
+          .returning();
     if (!character) throw new Error('[dm-reply-reconcile] the character was not seeded');
     await opts.spellRows?.(character.id);
     await database
@@ -552,14 +559,18 @@ ${playerInput}
               maxTokens: 8192,
               requestType: 'user',
               dmReply: { messageId: dmMessageId, inCombat: false },
-              combatEntry: {
-                sessionId,
-                player: {
-                  characterId: character.id,
-                  name: character.name,
-                  initiativeModifier: opts.dexterityModifier,
-                },
-              },
+              ...(opts.omitCombatEntry
+                ? {}
+                : {
+                    combatEntry: {
+                      sessionId,
+                      player: {
+                        characterId: character.id,
+                        name: character.name,
+                        initiativeModifier: opts.dexterityModifier,
+                      },
+                    },
+                  }),
             }),
           }),
         );
@@ -1434,5 +1445,235 @@ ${playerInput}
       reply,
     });
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  /**
+   * #218 step 1: the player's message, saved before the DM turn starts as the client saves it
+   * (`sendMessage` → dialogue_history, use-message-handler-logic.ts). Retry re-sends this same row.
+   */
+  const playerSays = async (message: string, context?: Record<string, unknown>): Promise<void> => {
+    await SessionMessageService.addMessages(
+      [{ id: crypto.randomUUID(), sessionId, speakerType: 'player', message, context }],
+      userId,
+    );
+  };
+  /** What the spend decided for each spell, from its log line. */
+  const spendOutcomes = async (turn: () => Promise<unknown>): Promise<unknown[]> => {
+    const info = spyOn(loggerModule.logger, 'info');
+    // Only this turn's lines: in CI's one process the spy can already hold earlier calls.
+    const before = info.mock.calls.length;
+    try {
+      await turn();
+      return info.mock.calls
+        .slice(before)
+        .map(([line]) => line as Record<string, unknown>)
+        .filter((line) => line?.msg === 'DM_STORY_SLOT_SPEND')
+        .map((line) => [line.spellName, line.outcome]);
+    } finally {
+      info.mockRestore();
+    }
+  };
+  /** The sheet after a reload: GET /v1/characters/:id, whose slots come from the engine table. */
+  const sheetSpellSlots = async (characterId: string): Promise<unknown> => {
+    const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
+      user: { userId, email: 'gp@example.test', plan: 'free' },
+      error: null,
+    } as never);
+    try {
+      const response = await createRequestPipelineApp()
+        .use(charactersRoutes)
+        .handle(
+          new Request(`http://localhost/v1/characters/${characterId}`, {
+            headers: { authorization: 'Bearer t' },
+          }),
+        );
+      expect(response.status).toBe(200);
+      return ((await response.json()) as Record<string, unknown>).spell_slots;
+    } finally {
+      auth.mockRestore();
+    }
+  };
+  const slotSpends = async (characterId: string): Promise<Array<Record<string, unknown>>> =>
+    database
+      .select({
+        sessionId: spellSlotUsageLog.sessionId,
+        spellName: spellSlotUsageLog.spellName,
+        spellLevel: spellSlotUsageLog.spellLevel,
+        slotLevelUsed: spellSlotUsageLog.slotLevelUsed,
+      })
+      .from(spellSlotUsageLog)
+      .where(eq(spellSlotUsageLog.characterId, characterId));
+
+  test('#218 step 1: a cast the gate allows spends one slot of its level, once, and the sheet shows it after a reload; Retry spends nothing more', async () => {
+    const playerInput = 'I cast Burning Hands at the cobwebs.';
+    const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+    await playerSays(playerInput);
+    const first = await dmTurn({ ...apprentice(apprenticeSpellLists), playerInput, reply });
+    expect(JSON.parse(String(first.body.text)).text).toBe(reply.text);
+    expect(await sheetSpellSlots(first.character.id)).toEqual({ '1': { max: 2, current: 1 } });
+    const spend = { sessionId, spellName: 'Burning Hands', spellLevel: 1, slotLevelUsed: 1 };
+    expect(await slotSpends(first.character.id)).toEqual([spend]);
+
+    // Retry: the same saved player message, a new DM row id, the same reply. One spend stands.
+    const retry = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: first.character,
+      playerInput,
+      reply,
+    });
+    expect(retry.dmMessageId).not.toBe(first.dmMessageId);
+    expect(await sheetSpellSlots(first.character.id)).toEqual({ '1': { max: 2, current: 1 } });
+    expect(await slotSpends(first.character.id)).toEqual([spend]);
+
+    // A new message casting it again is a second cast: the second slot goes.
+    await playerSays('I cast Burning Hands again, at the rats this time.');
+    await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: first.character,
+      playerInput: 'I cast Burning Hands again, at the rats this time.',
+      reply,
+    });
+    expect(await sheetSpellSlots(first.character.id)).toEqual({ '1': { max: 2, current: 0 } });
+    expect(await slotSpends(first.character.id)).toEqual([spend, spend]);
+  });
+
+  test('#218 step 1: a cantrip spends no slot (RP-15)', async () => {
+    const playerInput = 'I cast Chill Touch at the rat.';
+    await playerSays(playerInput);
+    let turn: Awaited<ReturnType<typeof dmTurn>> | undefined;
+    expect(
+      await spendOutcomes(async () => {
+        turn = await checkedCast({
+          ...apprentice(apprenticeSpellLists),
+          playerInput,
+          reply: castReply('A skeletal hand of pale light grips the rat, and it goes still.'),
+        });
+      }),
+    ).toEqual([['Chill Touch', 'cantrip']]);
+    if (!turn) throw new Error('[dm-reply-reconcile] the cantrip turn did not run');
+    expect(await slotSpends(turn.character.id)).toEqual([]);
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  test('#218 step 1: a ritual cast as a ritual spends no slot (RP-13)', async () => {
+    const playerInput = 'I cast Detect Magic as a ritual, taking the ten minutes.';
+    await playerSays(playerInput);
+    const turn = await checkedCast({
+      ...apprentice(apprenticeSpellLists),
+      playerInput,
+      reply: castReply('Ten minutes pass. A faint violet aura clings to the larder door.'),
+    });
+    expect(await slotSpends(turn.character.id)).toEqual([]);
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  test('#218 step 1: a refused cast spends no slot: Magic Missile is not in the Apprentice’s spellbook', async () => {
+    // A catalog spell, so its level is known whatever the reference tables hold.
+    const playerInput = 'I cast Magic Missile at the cultist.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput,
+      reply: castReply(
+        'Three glowing darts strike the cultist. Your first-level slot is expended.',
+      ),
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toContain("can't use Magic Missile");
+    expect(await slotSpends(turn.character.id)).toEqual([]);
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  test("#218 step 1: a spell named only in the model's roll purpose spends no slot: the player never cast it", async () => {
+    const playerInput = 'I wave my hands at the cultist and shout.';
+    await playerSays(playerInput);
+    const reply = castReply('The cultist flinches.', [
+      {
+        // A check survives to the gate out of combat; an out-of-combat attack roll is dropped.
+        type: 'check',
+        formula: '1d20+3',
+        purpose: 'Arcana to cast Burning Hands at the cultist',
+        dc: 12,
+        ac: null,
+        advantage: false,
+        disadvantage: false,
+      },
+    ]);
+    const turn = await checkedCast({ ...apprentice(apprenticeSpellLists), playerInput, reply });
+    expect(await slotSpends(turn.character.id)).toEqual([]);
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  /** An Apprentice who cast Burning Hands, with its slot spent, for the follow-up turns below. */
+  const apprenticeWhoCastBurningHands = async (): Promise<typeof characters.$inferSelect> => {
+    const playerInput = 'I cast Burning Hands at the cobwebs.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput,
+      reply: castReply('Fire fans from your fingers and the cobwebs flash to ash.'),
+    });
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({ '1': { max: 2, current: 1 } });
+    return turn.character;
+  };
+
+  test('#218 step 1: the dice-roll reply that follows a cast spends nothing more, though its text names the spell', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    // The client sends a roll result as a new player message whose text is the DM's roll purpose
+    // (use-ai-roll-processor.ts, dice-roll-formatter.ts), saved with intent 'dice_roll'.
+    const rollText = 'Arcana to cast Burning Hands at the cobwebs: 15 (12+3)';
+    await playerSays(rollText, { intent: 'dice_roll' });
+    await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: character,
+      playerInput: rollText,
+      reply: castReply('The last strands curl and blacken.'),
+    });
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 1 } });
+    expect(await slotSpends(character.id)).toHaveLength(1);
+  });
+
+  test('#218 step 1: an edited Retry of a spent message spends nothing more, even for another spell', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    // retrySendMessage(editedInput): the same saved player row, new text, no new row.
+    await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: character,
+      playerInput: 'I cast Color Spray at the cobwebs.',
+      reply: castReply('A dazzle of colour washes over the cobwebs.'),
+    });
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 1 } });
+    expect(await slotSpends(character.id)).toHaveLength(1);
+  });
+
+  test('#218 step 1: a cast whose held combat entry the player declined spends nothing (#2341)', async () => {
+    const playerInput = 'I cast Burning Hands at the cultist.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      omitCombatEntry: true,
+      playerInput,
+      reply: castReply('You raise your hands, then think better of it. The cultist watches you.'),
+    });
+    expect(await slotSpends(turn.character.id)).toEqual([]);
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  test('#218 step 1: a cast that opens combat spends nothing here: the engine spends for the opening cast', async () => {
+    const playerInput = 'I cast Burning Hands at the cultist.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput,
+      reply: envelopeOf({
+        text: 'Fire fans toward the cultist, and the fight is on.',
+        options: ['A. **Press** the attack.'],
+        roll_requests: [],
+        combat_transition: 'start',
+        combatants: [{ monster_id: 'cultist', name: 'Cultist', count: 1 }],
+      }),
+    });
+    expect(JSON.parse(String(turn.body.text))).toHaveProperty('combat_entry_pending');
+    expect(await slotSpends(turn.character.id)).toEqual([]);
+    expect(await sheetSpellSlots(turn.character.id)).toEqual({});
   });
 });

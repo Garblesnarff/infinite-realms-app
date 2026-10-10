@@ -132,7 +132,11 @@ export interface FeatureGateInput {
   inCombat?: boolean;
   /** `combatEntry.player.characterId`: client-supplied, so it is logged, never trusted. */
   clientCharacterId?: string | null;
+  /** Told the spells the player cast in their own words and the check allowed (#218 step 1). */
+  onCastsAllowed?: (casts: AllowedCasts) => void;
 }
+
+export type AllowedCasts = { character: CharacterRow; spells: string[] };
 
 /**
  * Fails open: the generation is already paid for, so a check that cannot run logs and lets the
@@ -159,17 +163,15 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   const usePhrases = texts.flatMap((text) => phrasesAfter(USE_PHRASE, text));
   if (!castPhrases.length && !usePhrases.length) return result;
 
+  const catalogNames = (phrases: string[]): string[] =>
+    phrases.map((phrase) => getSpellByName(phrase)?.name).filter(Boolean) as string[];
   const named = input.inCombat ? [] : spellsNamed(input.playerInput ?? '', NAMED_CAST_PHRASE);
+  // The player's own casts; a roll purpose can claim a spell, but only these are reported.
+  const ownCasts = catalogNames(phrasesAfter(CAST_PHRASE, input.playerInput ?? ''));
+  const playerCasts = new Set([...ownCasts, ...named.map((spell) => spell.name)]);
   let claimedSpells = input.inCombat
     ? []
-    : [
-        ...new Set([
-          ...(castPhrases
-            .map((phrase) => getSpellByName(phrase)?.name)
-            .filter(Boolean) as string[]),
-          ...named.map((spell) => spell.name),
-        ]),
-      ];
+    : [...new Set([...catalogNames(castPhrases), ...playerCasts])];
   const library = usePhrases.length ? await loadLibrary() : [];
   if (usePhrases.length && !library.length) {
     // An unseeded library makes every class uncovered; say so rather than refuse nothing quietly.
@@ -241,6 +243,8 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   }
 
   const refused = [...refusedFeatures, ...refusedSpells];
+  const spells = claimedSpells.filter((name) => playerCasts.has(name));
+  if (!refused.length && spells.length) input.onCastsAllowed?.({ character, spells });
   if (!refused.length) return result;
 
   logger.warn({

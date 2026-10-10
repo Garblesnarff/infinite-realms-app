@@ -11,7 +11,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, or, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, gte, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index';
@@ -230,6 +230,100 @@ export class SpellSlotsService {
       logEntry: log,
       wasUpcast,
     };
+  }
+
+  /**
+   * Spend the slots for the spells cast in one story turn, which the DM turn's gate allowed
+   * (#218 step 1): one slot of each spell's level.
+   *
+   * At most once per player message: `since` is the `created_at` of the player message the turn
+   * answers, and any story spend logged for this character and session at or after it means that
+   * message was already spent for — a Retry, edited or not — so nothing is spent again. The
+   * character row is locked while that is checked and the spends are written, so two concurrent
+   * replays cannot both spend. A spell whose level the class has no slot for, or whose slots are
+   * all used, spends nothing: refusing that cast is not this writer's job.
+   */
+  static async spendStoryCastSlots(input: {
+    characterId: string;
+    userId: string;
+    sessionId: string;
+    since: Date | null;
+    spells: Array<{ spellName: string; spellLevel: number }>;
+  }): Promise<Array<'spent' | 'already_spent' | 'no_slot'>> {
+    const { characterId, userId, sessionId, since, spells } = input;
+    for (const spellLevel of new Set(spells.map((spell) => spell.spellLevel))) {
+      const [existing] = await db
+        .select({ id: characterSpellSlots.id })
+        .from(characterSpellSlots)
+        .where(
+          and(
+            eq(characterSpellSlots.characterId, characterId),
+            eq(characterSpellSlots.spellLevel, spellLevel),
+          ),
+        )
+        .limit(1);
+      if (existing) continue;
+      try {
+        await this.ensureSpellSlotRow(characterId, userId, spellLevel);
+      } catch (error) {
+        // No slot at that level for this class: the spend below finds no row and skips it.
+        if (!(error instanceof BusinessLogicError)) throw error;
+      }
+    }
+    return db.transaction(async (tx) => {
+      await tx
+        .select({ id: characters.id })
+        .from(characters)
+        .where(eq(characters.id, characterId))
+        .for('update');
+      if (since) {
+        const [spent] = await tx
+          .select({ id: spellSlotUsageLog.id })
+          .from(spellSlotUsageLog)
+          .where(
+            and(
+              eq(spellSlotUsageLog.characterId, characterId),
+              eq(spellSlotUsageLog.sessionId, sessionId),
+              gte(spellSlotUsageLog.timestamp, since),
+            ),
+          )
+          .limit(1);
+        if (spent) return spells.map(() => 'already_spent' as const);
+      }
+      const outcomes: Array<'spent' | 'no_slot'> = [];
+      for (const { spellName, spellLevel } of spells) {
+        const [slot] = await tx
+          .select({
+            id: characterSpellSlots.id,
+            totalSlots: characterSpellSlots.totalSlots,
+            usedSlots: characterSpellSlots.usedSlots,
+          })
+          .from(characterSpellSlots)
+          .where(
+            and(
+              eq(characterSpellSlots.characterId, characterId),
+              eq(characterSpellSlots.spellLevel, spellLevel),
+            ),
+          );
+        if (!slot || slot.usedSlots >= slot.totalSlots) {
+          outcomes.push('no_slot');
+          continue;
+        }
+        await tx
+          .update(characterSpellSlots)
+          .set({ usedSlots: slot.usedSlots + 1, updatedAt: new Date() })
+          .where(eq(characterSpellSlots.id, slot.id));
+        await tx.insert(spellSlotUsageLog).values({
+          characterId,
+          sessionId,
+          spellName,
+          spellLevel,
+          slotLevelUsed: spellLevel,
+        });
+        outcomes.push('spent');
+      }
+      return outcomes;
+    });
   }
 
   /**
