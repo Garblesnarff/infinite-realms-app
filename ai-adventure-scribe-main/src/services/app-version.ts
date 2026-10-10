@@ -7,6 +7,10 @@ export const APP_BUILD_VERSION =
   (typeof __APP_BUILD_VERSION__ === 'string' && __APP_BUILD_VERSION__.trim()) ||
   String(import.meta.env.VITE_RELEASE || import.meta.env.VITE_APP_VERSION || 'dev');
 
+/** The release number from package.json at build time, e.g. "0.33.0" (#227). */
+export const APP_RELEASE_VERSION =
+  (typeof __APP_RELEASE_VERSION__ === 'string' && __APP_RELEASE_VERSION__.trim()) || 'dev';
+
 /**
  * The first 8 characters of a build stamp, as the app shows it ("build 3fa7eefe") and as
  * GET /version reports `short` (#2293), so a tester can compare the two at a glance.

@@ -7,29 +7,22 @@ import { BlogService } from '../services/blog-service.js';
 type BlogPosts = Awaited<ReturnType<typeof BlogService.fetchPublishedBlogPosts>>;
 
 /**
- * Build XML sitemap from site config and blog posts
+ * Build XML sitemap: the URLs this host serves with 200.
+ *
+ * /blog and /blog/:slug are left out: they 301 to blog.infiniterealms.app, and a sitemap should
+ * list final URLs only (#227).
  */
-function buildSitemap(siteUrl: string, posts: BlogPosts): string {
+function buildSitemap(siteUrl: string): string {
   const urls: string[] = [];
 
-  // Static pages - landing pages have higher priority
+  // Landing pages have higher priority
   const landingPages = ['/', '/ai-game-master', '/solo-tabletop-rpg'];
-  const otherPages = ['/blog', '/rss.xml'];
-
-  // Add landing pages with priority
   landingPages.forEach((path) => {
     urls.push(renderSitemapUrl(`${siteUrl}${path === '/' ? '' : path}`, undefined, '0.9'));
   });
 
-  // Add other static pages
-  otherPages.forEach((path) => {
-    urls.push(renderSitemapUrl(`${siteUrl}${path}`, undefined));
-  });
-
-  // Add blog posts
-  posts.forEach((post) => {
-    urls.push(renderSitemapUrl(`${siteUrl}/blog/${post.slug}`, post.updatedAt ?? post.publishedAt));
-  });
+  urls.push(renderSitemapUrl(`${siteUrl}/pricing`, undefined, '0.8'));
+  urls.push(renderSitemapUrl(`${siteUrl}/rss.xml`, undefined));
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`;
@@ -39,7 +32,9 @@ function buildSitemap(siteUrl: string, posts: BlogPosts): string {
  * Render a single sitemap URL entry
  */
 function renderSitemapUrl(loc: string, lastMod?: string, priority?: string): string {
-  const lastmodTag = lastMod ? `<lastmod>${escapeXml(new Date(lastMod).toISOString())}</lastmod>` : '';
+  const lastmodTag = lastMod
+    ? `<lastmod>${escapeXml(new Date(lastMod).toISOString())}</lastmod>`
+    : '';
   const priorityTag = priority ? `<priority>${priority}</priority>` : '';
   return `<url><loc>${escapeXml(loc)}</loc>${lastmodTag}${priorityTag}</url>`;
 }
@@ -51,7 +46,7 @@ function buildRssFeed(
   siteUrl: string,
   siteName: string,
   siteDescription: string,
-  posts: BlogPosts
+  posts: BlogPosts,
 ): string {
   const items = posts.map((post) => {
     const link = `${siteUrl}/blog/${post.slug}`;
@@ -106,21 +101,13 @@ function escapeCdata(value: string): string {
  */
 export const seoRoutes = new Elysia()
   // XML Sitemap
-  .get('/sitemap.xml', async ({ set }) => {
-    try {
-      const site = getSiteConfig();
-      const posts = await BlogService.fetchPublishedBlogPosts();
-      const xml = buildSitemap(site.url, posts);
+  .get('/sitemap.xml', ({ set }) => {
+    const site = getSiteConfig();
 
-      set.headers['Content-Type'] = 'application/xml';
-      set.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400';
+    set.headers['Content-Type'] = 'application/xml';
+    set.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400';
 
-      return xml;
-    } catch (error) {
-      logger.error({ msg: 'Failed to generate sitemap', error });
-      set.status = 500;
-      return 'Unable to generate sitemap';
-    }
+    return buildSitemap(site.url);
   })
   // RSS Feed
   .get('/rss.xml', async ({ set }) => {

@@ -28,6 +28,7 @@ const BlogEditor = lazy(() => import('./pages/BlogEditor'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const ExploreGalleryPage = lazy(() => import('./pages/ExploreGalleryPage'));
 const StarterCharacterSelectionPage = lazy(() => import('./pages/StarterCharacterSelectionPage'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
 
 /** Public route table. Exported so tests can render it under MemoryRouter. */
 export function AppRoutes() {
@@ -41,6 +42,9 @@ export function AppRoutes() {
 
       {/* OAuth callback route for WorkOS */}
       <Route path="/auth/callback" element={withRouteSuspense(<CallbackPage />)} />
+
+      {/* Pricing - the landing page's plans on their own URL (#227) */}
+      <Route path="/pricing" element={withRouteSuspense(<PricingPage />)} />
 
       {/* Explore Gallery - browse all starter campaigns */}
       <Route path="/explore" element={withRouteSuspense(<ExploreGalleryPage />)} />

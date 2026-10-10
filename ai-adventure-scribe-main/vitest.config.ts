@@ -1,4 +1,5 @@
 /// <reference types="vitest" />
+import { readFileSync } from 'node:fs';
 import path from 'path'; // Added path import
 
 import react from '@vitejs/plugin-react-swc';
@@ -6,6 +7,12 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
+  // Same release number the production bundle defines (#227).
+  define: {
+    __APP_RELEASE_VERSION__: JSON.stringify(
+      JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version,
+    ),
+  },
   resolve: {
     // Added resolve configuration
     alias: {
