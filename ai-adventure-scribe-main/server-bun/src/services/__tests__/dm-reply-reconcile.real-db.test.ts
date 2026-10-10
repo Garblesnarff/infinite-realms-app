@@ -1494,13 +1494,74 @@ ${playerInput}
     refusalOf(turn, 'Turn Undead');
   });
 
-  test('#248 item 3: "I cast Witch Bolt." with no cue is a spell claim — The Apprentice is refused', async () => {
+  test('#252: a Fighter saying "cast Lay on Hands" is refused as a feature the character lacks', async () => {
+    const turn = await dmTurn({
+      characterClass: 'Fighter',
+      race: 'Human',
+      scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 1,
+      playerInput: 'I cast Lay on Hands.',
+      reply: castReply('Nothing happens.'),
+    });
+    refusalOf(turn, 'Lay on Hands');
+  });
+
+  test('#252: a level-2 Cleric saying "cast Channel Divinity" is not refused', async () => {
+    const reply = castReply('Divine light washes over the skeletons.');
+    const turn = await dmTurn({
+      characterClass: 'Cleric',
+      race: 'Human',
+      scores: 'STR 14(+2), DEX 10(+0), CON 14(+2), INT 10(+0), WIS 16(+3), CHA 14(+2)',
+      dexterityModifier: 0,
+      level: 2,
+      playerInput: 'I cast Channel Divinity.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#252: a level-2 Cleric saying "cast Channel Divinity: Turn Undead" is not refused', async () => {
+    const reply = castReply('The skeletons recoil from your raised holy symbol.');
+    const turn = await dmTurn({
+      characterClass: 'Cleric',
+      race: 'Human',
+      scores: 'STR 14(+2), DEX 10(+0), CON 14(+2), INT 10(+0), WIS 16(+3), CHA 14(+2)',
+      dexterityModifier: 0,
+      level: 2,
+      playerInput: 'I cast Channel Divinity: Turn Undead.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#252: a Fighter saying "cast Channel Divinity" is refused as a feature the character lacks', async () => {
+    const turn = await dmTurn({
+      characterClass: 'Fighter',
+      race: 'Human',
+      scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 1,
+      playerInput: 'I cast Channel Divinity.',
+      reply: castReply('Nothing happens.'),
+    });
+    refusalOf(turn, 'Channel Divinity');
+  });
+
+  test('#248 item 3: "cast Booming Blade at the guard" is a spell claim — The Apprentice is refused', async () => {
     const turn = await dmTurn({
       ...apprentice(apprenticeSpellLists),
-      playerInput: 'I cast Witch Bolt.',
-      reply: castReply('A crackling arc leaps from your hand.'),
+      playerInput: 'I cast Booming Blade at the guard.',
+      reply: castReply('Thunder booms around your blade.'),
     });
-    refusalOf(turn, 'Witch Bolt');
+    refusalOf(turn, 'Booming Blade');
+  });
+
+  test('#248 item 3: "cast Toll the Dead on him" is a spell claim — The Apprentice is refused', async () => {
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput: 'I cast Toll the Dead on him.',
+      reply: castReply('A dolorous bell tolls.'),
+    });
+    refusalOf(turn, 'Toll the Dead');
   });
 
   test('#248 item 3: "using a 1st-level slot" no longer swallows the spell name — Fireball is claimed and refused', async () => {

@@ -86,16 +86,24 @@ export const castsSpells = (character: CharacterRow): boolean =>
  */
 const SPELL_WORDS =
   /\b(?:slots?|cantrips?|ritual|upcast|(?:1st|2nd|3rd|[4-9]th)[- ]level|level\s*[1-9]|saving\s+throws?|DC\s*\d+)\b/i;
+/** A spell aims at a creature or a thing: "Witch Bolt at the cultist", "Bane on the guards". */
+const SPELL_TARGET = /^\s+(?:on|at|upon|against)\b/i;
+/**
+ * Ordinary object nouns that are never spell names, even aimed at a target: "Fishing Line" is
+ * tackle, not a spell (#248 item 3). "Cast Fishing Line into the lake" was already excluded by
+ * the target list; this covers "cast Fishing Line at the heron".
+ */
+const NON_SPELL_NOUNS = /\b(?:line|net|hook|rod)\b/i;
+
 /**
  * Whether a name the catalog does not hold, cast in `sentence`, reads as a spell (#217 step d2,
  * #248 item 3): the sentence names a slot, a spell level, a saving throw or a DC, or the name is
- * a known spell name. A bare target ("at", "on", "upon", "against" straight after the name) no
- * longer suffices on its own: "cast Fishing Line at the heron" is fishing, not casting.
- * "Cast Fishing Line into the lake" is none of those, so it is not a claim; "into" and "toward"
- * name a place, not a target.
+ * aimed at a target ("at", "on", "upon", "against" straight after it) — unless the name is an
+ * ordinary object. "Cast Fishing Line into the lake" is none of those, so it is not a claim;
+ * "into" and "toward" name a place, not a target.
  */
-const readsLikeASpell = (sentence: string, phrase: string): boolean =>
-  SPELL_WORDS.test(sentence) || KNOWN_OFF_CATALOG_SPELL_NAMES.has(spellKey(phrase));
+const readsLikeASpell = (sentence: string, phrase: string, afterName: string): boolean =>
+  (SPELL_WORDS.test(sentence) || SPELL_TARGET.test(afterName)) && !NON_SPELL_NOUNS.test(phrase);
 
 export interface NamedSpell {
   name: string;
@@ -115,7 +123,10 @@ export const spellsNamed = (playerInput: string, castPhrase: RegExp): NamedSpell
       if (!SPELL_NAME_SHAPE.test(phrase)) return [];
       const catalogName = catalogSpellSpelled(phrase);
       if (catalogName) return [{ name: catalogName, offCatalog: false }];
-      return readsLikeASpell(sentence, phrase) ? [{ name: phrase, offCatalog: true }] : [];
+      const afterName = sentence.slice((match.index ?? 0) + match[0].length);
+      return readsLikeASpell(sentence, phrase, afterName)
+        ? [{ name: phrase, offCatalog: true }]
+        : [];
     }),
   );
 
@@ -126,15 +137,6 @@ export const spellKey = (ref: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-
-/**
- * 2014 spell names the SRD catalog does not hold, for the off-catalog claim check (#248 item 3).
- * A caster naming one straight after a cast verb claims a spell, cue or no cue: "I cast Witch
- * Bolt" is checked, while "cast Fishing Line at the heron" is not, because neither a cue nor a
- * name on this list says it is a spell. Names are facts, not rules text, so this list does not
- * widen the SRD-only rules surface; it grows only as new off-catalog cases are reported.
- */
-const KNOWN_OFF_CATALOG_SPELL_NAMES = new Set(['Witch Bolt'].map(spellKey));
 
 const listedSpells = (value: string | null | undefined): string[] =>
   (value ?? '')

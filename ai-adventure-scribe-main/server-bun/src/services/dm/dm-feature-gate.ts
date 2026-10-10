@@ -12,9 +12,8 @@
  *   feature path too, matched straight against the claim texts (#252);
  * - spells: what the character can cast now (`castableSpells`, #217), and a spell the catalog
  *   does not hold ("Witch Bolt") is checked too, when a caster names it as a spell (`spellsNamed`):
- *   the sentence names a slot, a spell level, a saving throw or a DC, or the name is a known
- *   spell name. A bare target ("at", "on") no longer suffices: "cast Fishing Line at the heron"
- *   is fishing, not casting (#248 item 3).
+ *   the sentence names a slot, a spell level, a saving throw or a DC, or the name is aimed at a
+ *   target — unless the name is an ordinary object ("Fishing Line" is tackle, #248 item 3).
  *
  * Only the player's own claim triggers it: a spell after a cast verb or a feature after a use verb,
  * in `player_input` or in the purpose of a roll the player makes for their own action. Never the
