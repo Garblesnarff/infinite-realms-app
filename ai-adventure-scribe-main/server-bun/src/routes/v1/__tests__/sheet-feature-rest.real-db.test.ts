@@ -85,6 +85,10 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
   const db = hasRealDb ? realDb() : (null as never);
   let campaignId: string;
   let characterId: string;
+  // #202's block owns its rows too; these afterAll drops are the safety net
+  // if an assertion fails before the block's own cleanup runs.
+  let saveCampaignId = '';
+  let saveCharacterId = '';
 
   beforeAll(async () => {
     if (!hasRealDb) return;
@@ -120,6 +124,8 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     await drop(() => db.delete(characterStats).where(eq(characterStats.characterId, characterId)));
     await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    await drop(() => db.delete(characters).where(eq(characters.id, saveCharacterId)));
+    await drop(() => db.delete(campaigns).where(eq(campaigns.id, saveCampaignId)));
     await closeRealDb();
   });
 
@@ -169,5 +175,76 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     expect(afterLong.class_features.indomitable.currentUses).toBe(1);
     expect(afterLong.stats?.current_hit_points).toBe(10);
     expect(afterLong.stats?.max_hit_points).toBe(10);
+  });
+
+  it('#202: sheet-update wire bodies persist — award XP, add a trait, save appearance', async () => {
+    // The exact bodies buildSheetUpdatePayload produces for the three
+    // QA-listed edits (pinned in
+    // src/hooks/__tests__/use-character-data.sheet-update.test.ts): each
+    // goes through PUT /v1/characters/:id and must land in the row.
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('sheet-save-camp') })
+      .returning({ id: campaigns.id });
+    saveCampaignId = campId;
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('sheet-save-hero'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    saveCharacterId = charId;
+
+    // 1. Award XP — the client sends exactly { experience_points }.
+    const xpPut = await request(`/v1/characters/${charId}`, 'PUT', { experience_points: 250 });
+    expect(xpPut.status).toBe(200);
+
+    // 2. Add a trait — the client sends the serialized personality envelope
+    // in personality_notes. This literal is the byte-canonical output of
+    // serializePersonalityEnvelope for { personalityTraits: ['Brave in battle'] }
+    // (fixed key order, lastInspiration: null) — the exact wire string.
+    const envelope = JSON.stringify({
+      traits: ['Brave in battle'],
+      ideals: [],
+      bonds: [],
+      flaws: [],
+      inspiration: false,
+      lastInspiration: null,
+      inspirationHistory: [],
+    });
+    const traitPut = await request(`/v1/characters/${charId}`, 'PUT', {
+      personality_notes: envelope,
+    });
+    expect(traitPut.status).toBe(200);
+
+    // 3. Save appearance — the client sends exactly { appearance }.
+    const appearancePut = await request(`/v1/characters/${charId}`, 'PUT', {
+      appearance: 'Tall, scarred, silver hair.',
+    });
+    expect(appearancePut.status).toBe(200);
+
+    // The writes landed in the columns.
+    const [row] = await db.select().from(characters).where(eq(characters.id, charId));
+    expect(row.experiencePoints).toBe(250);
+    expect(row.appearance).toBe('Tall, scarred, silver hair.');
+    expect(JSON.parse(row.personalityNotes as string).traits).toEqual(['Brave in battle']);
+
+    // And the GET route serves them back to the sheet.
+    const got = (await (await request(`/v1/characters/${charId}`, 'GET')).json()) as {
+      experience_points: number;
+      appearance: string;
+      personality_notes: string;
+    };
+    expect(got.experience_points).toBe(250);
+    expect(got.appearance).toBe('Tall, scarred, silver hair.');
+    expect(JSON.parse(got.personality_notes).traits).toEqual(['Brave in battle']);
+
+    // This block's rows are its own; the shared afterAll only drops the #224 pair.
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
   });
 });
