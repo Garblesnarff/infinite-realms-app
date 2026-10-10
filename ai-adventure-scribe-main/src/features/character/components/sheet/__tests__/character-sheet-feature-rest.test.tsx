@@ -77,6 +77,7 @@ const serverRow: ServerRow = {
 
 const putBodies: Array<Record<string, unknown>> = [];
 const statsBodies: Array<Record<string, unknown>> = [];
+const healBodies: Array<Record<string, unknown>> = [];
 const restBodies: Array<{ restType: 'short' | 'long'; body: unknown }> = [];
 
 const json = (data: unknown, status = 200): Response =>
@@ -133,6 +134,7 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     vi.clearAllMocks();
     putBodies.length = 0;
     statsBodies.length = 0;
+    healBodies.length = 0;
     restBodies.length = 0;
     resetRow();
     markAuthReady();
@@ -154,6 +156,20 @@ describe('CharacterSheet feature use and rests (#224)', () => {
             serverRow.stats.current_hit_points = body.current_hit_points;
           }
           return json({ ok: true });
+        }
+        // #214: Second Wind heals through the server-side delta. The stub
+        // mirrors the route: the server adds the amount and clamps to max HP.
+        if (url === `${API}/v1/characters/${CID}/heal` && method === 'POST') {
+          const body = JSON.parse(String(init?.body)) as { amount: number };
+          healBodies.push(body);
+          serverRow.stats.current_hit_points = Math.min(
+            serverRow.stats.max_hit_points,
+            serverRow.stats.current_hit_points + Math.max(0, Math.trunc(body.amount)),
+          );
+          return json({
+            currentHitPoints: serverRow.stats.current_hit_points,
+            temporaryHitPoints: 0,
+          });
         }
         if (url === `${API}/v1/characters/${CID}` && method === 'PUT') {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -304,18 +320,18 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     await waitFor(() => {
       expect(screen.getByText('7/10')).toBeInTheDocument();
     });
-    const healed = statsBodies[0]?.current_hit_points as number;
+    const healed = healBodies[0]?.amount as number;
     const level = 1;
-    expect(healed - 5).toBeGreaterThanOrEqual(1 + level);
-    expect(healed - 5).toBeLessThanOrEqual(10 + level);
-    expect(healed).toBeLessThanOrEqual(10);
-    expect(statsBodies[0]).toEqual({ current_hit_points: 7 });
+    expect(healed).toBeGreaterThanOrEqual(1 + level);
+    expect(healed).toBeLessThanOrEqual(10 + level);
+    expect(healBodies[0]).toEqual({ amount: 2 });
     view.unmount();
 
     random.mockReturnValue(0.999);
     resetRow();
     serverRow.stats.current_hit_points = 9;
     statsBodies.length = 0;
+    healBodies.length = 0;
     renderSheet();
     await screen.findByText('9/10');
     await openFeatures();
@@ -323,7 +339,8 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     await waitFor(() => {
       expect(screen.getByText('10/10')).toBeInTheDocument();
     });
-    expect(statsBodies[0]?.current_hit_points).toBe(10);
+    // 1d10 -> 10 + level 1 = 11 sent; the server clamps 9 + 11 to max 10.
+    expect(healBodies[0]?.amount).toBe(11);
     expect(screen.queryByText('20/10')).not.toBeInTheDocument();
     random.mockRestore();
   });

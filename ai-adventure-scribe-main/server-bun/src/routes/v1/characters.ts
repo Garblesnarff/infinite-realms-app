@@ -564,6 +564,73 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     { body: t.Object({ amount: t.Number({ minimum: 0 }), critical: t.Optional(t.Boolean()) }) },
   )
 
+  /**
+   * POST /v1/characters/:id/heal
+   *
+   * The out-of-combat heal path, mirroring POST /:id/damage. The server adds
+   * the amount and clamps to max HP (#214): the client never sends an absolute
+   * HP, so a combat or DM HP change made in between is not lost. In a live
+   * encounter the participant row is healed (write-through mirrors the sheet).
+   */
+  .post(
+    '/:id/heal',
+    async ({ params, body, user }) => {
+      const { findLiveParticipant } = await import('../../services/combat/non-attack-damage.js');
+      const { CharacterVitalsService } = await import('../../services/character-vitals-service.js');
+      const live = body.amount > 0 ? await findLiveParticipant(params.id) : null;
+      if (live) {
+        const { CombatHPService } = await import('../../services/combat-hp-service.js');
+        await CombatHPService.healDamage(
+          live.participantId,
+          live.encounterId,
+          body.amount,
+          'healing',
+          user!.userId,
+        );
+      } else {
+        await CharacterVitalsService.heal(params.id, user!.userId, body.amount);
+      }
+      const vitals = await CharacterVitalsService.getVitals(params.id, user!.userId);
+      return {
+        currentHitPoints: vitals.currentHitPoints,
+        temporaryHitPoints: vitals.temporaryHitPoints,
+      };
+    },
+    { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
+  )
+
+  /**
+   * POST /v1/characters/:id/temp-hp
+   *
+   * 2014 5e: temporary hit points do not stack — the server keeps the higher
+   * of the current and the new value (#214).
+   */
+  .post(
+    '/:id/temp-hp',
+    async ({ params, body, user }) => {
+      const { findLiveParticipant } = await import('../../services/combat/non-attack-damage.js');
+      const { CharacterVitalsService } = await import('../../services/character-vitals-service.js');
+      const live = await findLiveParticipant(params.id);
+      if (live) {
+        const { CombatHPService } = await import('../../services/combat-hp-service.js');
+        const result = await CombatHPService.setTempHP(
+          live.participantId,
+          live.encounterId,
+          body.amount,
+          user!.userId,
+        );
+        return { temporaryHitPoints: result.newTempHp };
+      }
+      const vitals = await CharacterVitalsService.setTemporaryHitPoints(
+        params.id,
+        user!.userId,
+        body.amount,
+      );
+      return { temporaryHitPoints: vitals.temporaryHitPoints };
+    },
+    { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
+  )
+
   .put(
     '/:id/stats',
     async ({ params, body, user }) => {

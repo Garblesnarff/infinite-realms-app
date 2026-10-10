@@ -11,7 +11,6 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { userDataApi } from '@/services/user-data-api';
-import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 
 interface ClassFeatureTrackerProps {
@@ -83,24 +82,21 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     const updatedCharacter = { ...character, classFeatures: classFeaturesState };
 
     if (feature.name === 'second_wind') {
-      const { current, maximum } = getCharacterSheetHitPoints(character);
-      if (current !== null && maximum !== null) {
-        const roll = Math.floor(Math.random() * 10) + 1;
-        const level = character.level ?? 1;
-        // Same cap as Apply Healing: current + amount, never above max.
-        const nextHp = Math.min(maximum, current + roll + level);
-        try {
-          await userDataApi.updateCharacterStats(character.id, { current_hit_points: nextHp });
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : String(error);
-          logger.error('Failed to save Second Wind healing', error);
-          toast({
-            title: 'Save failed',
-            description: reason,
-            variant: 'destructive',
-          });
-          return;
-        }
+      const roll = Math.floor(Math.random() * 10) + 1;
+      const level = character.level ?? 1;
+      // #214: server-side heal delta — the server adds the amount and clamps
+      // to max HP. Never send an absolute HP computed from client state.
+      try {
+        await userDataApi.applyCharacterHealing(character.id, roll + level);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        logger.error('Failed to save Second Wind healing', error);
+        toast({
+          title: 'Save failed',
+          description: reason,
+          variant: 'destructive',
+        });
+        return;
       }
     }
 

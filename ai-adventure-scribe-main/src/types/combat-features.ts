@@ -54,6 +54,8 @@ export type ClassFeatureName =
 
 export interface ClassFeature {
   name: ClassFeatureName;
+  /** Human-readable label; the snake_case `name` stays the persistence key (#214). */
+  displayName?: string;
   description: string;
   className: string;
   level: number;
