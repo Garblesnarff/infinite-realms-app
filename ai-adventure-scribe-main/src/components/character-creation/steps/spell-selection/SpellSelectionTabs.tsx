@@ -16,6 +16,8 @@ interface SpellSelectionTabsProps {
   totalRacialCantrips: number;
   selectedCantrips: string[];
   selectedSpells: string[];
+  // #212 QA-042: racial bonus cantrips are a separate pool.
+  selectedBonusCantrips: string[];
   filteredCantrips: Spell[];
   filteredSpells: Spell[];
   availableCantrips: Spell[];
@@ -23,6 +25,7 @@ interface SpellSelectionTabsProps {
   hasRacialSpells: boolean;
   toggleCantrip: (cantripId: string) => void;
   toggleSpell: (spellId: string) => void;
+  toggleBonusCantrip: (cantripId: string) => void;
 }
 
 const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
@@ -33,6 +36,7 @@ const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
   totalRacialCantrips,
   selectedCantrips,
   selectedSpells,
+  selectedBonusCantrips,
   filteredCantrips,
   filteredSpells,
   availableCantrips,
@@ -40,6 +44,7 @@ const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
   hasRacialSpells,
   toggleCantrip,
   toggleSpell,
+  toggleBonusCantrip,
 }) => {
   return (
     <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
@@ -66,7 +71,8 @@ const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
                 data-[state=active]:bg-infinite-gold/30 data-[state=active]:text-infinite-gold-dark
               `}
             >
-              {selectedCantrips.length}/
+              {/* #212 QA-042: class + bonus pools shown together on the tab. */}
+              {selectedCantrips.length + selectedBonusCantrips.length}/
               {(spellcastingInfo?.cantripsKnown || 0) + totalRacialCantrips}
             </Badge>
           )}
@@ -229,9 +235,10 @@ const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
                           cantrip.id.includes(racialSpells.bonusCantripSource),
                       )
                 }
-                selectedSpells={selectedCantrips}
+                // #212 QA-042: the bonus pool is separate from class cantrips.
+                selectedSpells={selectedBonusCantrips}
                 maxSpells={racialSpells.bonusCantrips}
-                onToggleSpell={toggleCantrip}
+                onToggleSpell={toggleBonusCantrip}
                 icon="racial"
                 colorTheme="teal"
                 info={`This bonus cantrip is granted by your ${character?.subrace?.name || character?.race?.name} heritage.`}

@@ -32,10 +32,13 @@ interface UseSpellSelectionReturn {
   // Current selections
   selectedCantrips: string[];
   selectedSpells: string[];
+  // #212 QA-042: racial bonus cantrips are a separate pool from class cantrips.
+  selectedBonusCantrips: string[];
 
   // Selection actions
   toggleCantrip: (cantripId: string) => void;
   toggleSpell: (spellId: string) => void;
+  toggleBonusCantrip: (cantripId: string) => void;
   clearSelections: () => void;
 
   // Filtering
@@ -102,6 +105,8 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   // Selection state
   const [selectedCantrips, setSelectedCantrips] = useState<string[]>([]);
   const [selectedSpells, setSelectedSpells] = useState<string[]>([]);
+  // #212 QA-042: racial bonus cantrips are picked separately from class cantrips.
+  const [selectedBonusCantrips, setSelectedBonusCantrips] = useState<string[]>([]);
   const [isSavingSpells, setIsSavingSpells] = useState(false);
 
   // Initialize from character data
@@ -128,23 +133,38 @@ export function useSpellSelection(): UseSpellSelectionReturn {
 
   // Selection actions
   // ⚡ Bolt: Wrapped toggleCantrip in useCallback to ensure reference stability and prevent redundant child re-renders
+  // #212 QA-042: class cantrips use only the class limit now; the racial
+  // bonus pool is separate (toggleBonusCantrip).
   const toggleCantrip = useCallback((cantripId: string): void => {
     setSelectedCantrips((prev) => {
       if (prev.includes(cantripId)) {
         return prev.filter((id) => id !== cantripId);
       } else {
-        // Check if we've reached the limit
-        const maxCantrips =
-          (spellcastingInfo?.cantripsKnown || 0) +
-          racialSpells.cantrips.length +
-          racialSpells.bonusCantrips;
+        // Check if we've reached the class limit
+        const maxCantrips = spellcastingInfo?.cantripsKnown || 0;
         if (prev.length >= maxCantrips) {
           return prev; // Don't add if at limit
         }
         return [...prev, cantripId];
       }
     });
-  }, [spellcastingInfo, racialSpells]);
+  }, [spellcastingInfo]);
+
+  // #212 QA-042: racial bonus cantrips are their own pick, on top of the
+  // class cantrips. Separate pool, separate limit.
+  const toggleBonusCantrip = useCallback((cantripId: string): void => {
+    setSelectedBonusCantrips((prev) => {
+      if (prev.includes(cantripId)) {
+        return prev.filter((id) => id !== cantripId);
+      } else {
+        const maxBonus = racialSpells.bonusCantrips;
+        if (prev.length >= maxBonus) {
+          return prev; // Don't add if at limit
+        }
+        return [...prev, cantripId];
+      }
+    });
+  }, [racialSpells.bonusCantrips]);
 
   // ⚡ Bolt: Wrapped toggleSpell in useCallback to ensure reference stability and prevent redundant child re-renders
   const toggleSpell = useCallback((spellId: string): void => {
@@ -181,12 +201,14 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   const clearSelections = useCallback((): void => {
     setSelectedCantrips([]);
     setSelectedSpells([]);
+    setSelectedBonusCantrips([]);
   }, []);
 
   // Validation delegated to useSpellSelectionValidation hook
+  // #212 QA-042: validate the combined cantrip pools (class + bonus + racial auto).
   const { validation, canProceed } = useSpellSelectionValidation({
     character,
-    selectedCantrips,
+    selectedCantrips: [...selectedCantrips, ...selectedBonusCantrips, ...racialSpells.cantrips],
     selectedSpells,
     availableCantrips,
     availableSpells,
@@ -206,8 +228,14 @@ export function useSpellSelection(): UseSpellSelectionReturn {
 
     setIsSavingSpells(true);
     try {
-      // Combine cantrips and spells for API call
-      const allSpells = [...selectedCantrips, ...selectedSpells];
+      // Combine cantrips and spells for API call.
+      // #212 QA-042: class cantrips + racial bonus picks + automatic racial cantrips.
+      const allCantrips = [
+        ...selectedCantrips,
+        ...selectedBonusCantrips,
+        ...racialSpells.cantrips,
+      ];
+      const allSpells = [...allCantrips, ...selectedSpells];
 
       // Save to database first
       await characterSpellService.saveCharacterSpells(character.id, {
@@ -219,7 +247,7 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       dispatch({
         type: 'UPDATE_CHARACTER',
         payload: {
-          cantrips: selectedCantrips,
+          cantrips: allCantrips,
           knownSpells: selectedSpells,
         },
       });
@@ -230,16 +258,22 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     } finally {
       setIsSavingSpells(false);
     }
-  }, [character, validation.valid, selectedCantrips, selectedSpells, dispatch, setSpellsError]);
+  }, [character, validation.valid, selectedCantrips, selectedBonusCantrips, selectedSpells, racialSpells.cantrips, dispatch, setSpellsError]);
 
   // Auto-save selections to character immediately when they change
   useEffect(() => {
     if (character) {
       // Only log when there are actual changes to reduce noise
+      // #212 QA-042: include the bonus pool in the combined cantrips.
+      const combinedCantrips = [
+        ...selectedCantrips,
+        ...selectedBonusCantrips,
+        ...racialSpells.cantrips,
+      ];
       const currentCantrips = character.cantrips || [];
       const currentSpells = character.knownSpells || [];
       const cantripsChanged =
-        JSON.stringify([...selectedCantrips].sort()) !==
+        JSON.stringify([...combinedCantrips].sort()) !==
         JSON.stringify([...currentCantrips].sort());
       const spellsChanged =
         JSON.stringify([...selectedSpells].sort()) !== JSON.stringify([...currentSpells].sort());
@@ -247,21 +281,21 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       if (cantripsChanged || spellsChanged) {
         logger.debug('🔄 [useSpellSelection] Auto-saving spell selections to character context:', {
           characterId: character.id,
-          cantrips: selectedCantrips,
+          cantrips: combinedCantrips,
           knownSpells: selectedSpells,
-          cantripCount: selectedCantrips.length,
+          cantripCount: combinedCantrips.length,
           spellCount: selectedSpells.length,
         });
         dispatch({
           type: 'UPDATE_CHARACTER',
           payload: {
-            cantrips: selectedCantrips,
+            cantrips: combinedCantrips,
             knownSpells: selectedSpells,
           },
         });
       }
     }
-  }, [selectedCantrips, selectedSpells, character, dispatch]);
+  }, [selectedCantrips, selectedBonusCantrips, selectedSpells, racialSpells.cantrips, character, dispatch]);
 
   return useMemo(
     () => ({
@@ -282,10 +316,12 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       // Current selections
       selectedCantrips,
       selectedSpells,
+      selectedBonusCantrips,
 
       // Selection actions
       toggleCantrip,
       toggleSpell,
+      toggleBonusCantrip,
       clearSelections,
 
       // Filtering
@@ -318,8 +354,10 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       spellsError,
       selectedCantrips,
       selectedSpells,
+      selectedBonusCantrips,
       toggleCantrip,
       toggleSpell,
+      toggleBonusCantrip,
       clearSelections,
       searchTerm,
       setSearchTerm,
