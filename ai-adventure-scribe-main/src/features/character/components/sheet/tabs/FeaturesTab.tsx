@@ -6,15 +6,15 @@ import { FeaturesProficienciesCard } from './FeaturesProficienciesCard';
 import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
 interface FeaturesTabProps {
   character: Character;
-  // #2701: carries the edited character (ClassFeatureTracker passes its
-  // updated copy); callers that ignore the return treat it as a refresh.
-  onUpdate: (updatedCharacter: Character) => void;
+  // #2701 / #224: persists the edited character and resolves true when the
+  // write landed. ClassFeatureTracker toasts only then.
+  onUpdate: CharacterSheetUpdateFn;
 }
 
 interface Feature {

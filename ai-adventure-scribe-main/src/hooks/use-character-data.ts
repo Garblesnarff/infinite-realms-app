@@ -51,9 +51,9 @@ import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
  * prepareCharacterPayload). This maps exactly the fields the sheet edits —
  * experience, level, notes, appearance, description, backstory, personality —
  * from the client shape to the DB columns, and only the fields that actually
- * changed. Anything else the caller changed (rest results, feature uses,
- * inventory toggles) is persisted by its own API already, so an empty payload
- * means "no write, just refresh".
+ * changed. Feature uses travel as `class_features` (#224). Hit points and the
+ * other rest results stay on the rest route, so a hit-point-only diff is still
+ * an empty payload: no write, just refresh.
  *
  * The trait/ideal/bond/flaw arrays and inspiration state have no dedicated
  * columns; they travel as the JSON personality envelope in `personality_notes`.
@@ -85,6 +85,10 @@ export const buildSheetUpdatePayload = (
   // The envelope owns personality_notes: compare canonically serialized forms.
   if (serializePersonalityEnvelope(prev) !== serializePersonalityEnvelope(next)) {
     payload.personality_notes = serializePersonalityEnvelope(next);
+  }
+
+  if (JSON.stringify(prev.classFeatures ?? null) !== JSON.stringify(next.classFeatures ?? null)) {
+    payload.class_features = next.classFeatures ?? {};
   }
 
   return payload;
