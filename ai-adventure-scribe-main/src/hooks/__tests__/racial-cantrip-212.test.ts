@@ -138,3 +138,48 @@ describe('QA-043: cantrips are never preparable (#212)', () => {
     expect(cantripsInList).toHaveLength(0);
   });
 });
+
+describe('QA-042: one toggle → one save (#212)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('toggling the bonus cantrip dispatches a single combined save', async () => {
+    const { result } = renderHook(() => useSpellSelection());
+
+    await waitFor(() => {
+      expect(result.current.isLoadingSpells).toBe(false);
+    });
+
+    // Pick 1 class cantrip first so the combined list is non-trivial.
+    act(() => {
+      result.current.toggleCantrip('fire-bolt');
+    });
+
+    mockDispatch.mockClear();
+
+    // One bonus toggle → the auto-save effect should dispatch exactly once
+    // with the combined cantrip list (class + bonus). A render-loop would
+    // dispatch repeatedly.
+    act(() => {
+      const hook = result.current as unknown as {
+        toggleBonusCantrip: (id: string) => void;
+      };
+      hook.toggleBonusCantrip('acid-splash');
+    });
+
+    // Allow effects to settle.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    const saves = mockDispatch.mock.calls.filter(
+      ([action]) =>
+        action.type === 'UPDATE_CHARACTER' && 'cantrips' in action.payload,
+    );
+    // Exactly one save for the one toggle (not a loop).
+    expect(saves.length).toBe(1);
+    const savedCantrips = saves[0][0].payload.cantrips as string[];
+    expect(savedCantrips.sort()).toEqual(['acid-splash', 'fire-bolt']);
+  });
+});

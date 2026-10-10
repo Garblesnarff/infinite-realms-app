@@ -206,9 +206,15 @@ export function useSpellSelection(): UseSpellSelectionReturn {
 
   // Validation delegated to useSpellSelectionValidation hook
   // #212 QA-042: validate the combined cantrip pools (class + bonus + racial auto).
+  // Memoized: a fresh array literal here would be a new identity every render,
+  // re-firing the validation effect forever (the frontend CI hang).
+  const allSelectedCantrips = useMemo(
+    () => [...selectedCantrips, ...selectedBonusCantrips, ...racialSpells.cantrips],
+    [selectedCantrips, selectedBonusCantrips, racialSpells.cantrips],
+  );
   const { validation, canProceed } = useSpellSelectionValidation({
     character,
-    selectedCantrips: [...selectedCantrips, ...selectedBonusCantrips, ...racialSpells.cantrips],
+    selectedCantrips: allSelectedCantrips,
     selectedSpells,
     availableCantrips,
     availableSpells,
