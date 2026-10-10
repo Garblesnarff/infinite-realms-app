@@ -25,12 +25,16 @@ import {
   campaigns,
   characterFeatures,
   characterSpellSlots,
+  characterSpells,
   classFeaturesLibrary,
+  classSpells,
+  classes,
   characters,
   dialogueHistory,
   featureUsageLog,
   gameSessions,
   spellSlotUsageLog,
+  spells,
   type DialogueHistory,
 } from '../../../../db/schema/index';
 import {
@@ -38,6 +42,13 @@ import {
   apprenticeSpellLists,
 } from '../../../../shared/test-fixtures/apprentice-spell-lists';
 import { RUN_11_INSIGHT } from '../../../../shared/test-fixtures/dm-roll-reply-saves';
+import {
+  creationBardSpells,
+  creationClericSpells,
+  creationPaladinSpells,
+  herbalistSpellLists,
+  type CreationWizardSpells,
+} from '../../../../shared/test-fixtures/prepared-caster-spell-lists';
 
 const DEDICATED_REAL_DB_HOST = '127.0.0.1';
 const DEDICATED_REAL_DB_PORT = '55432';
@@ -85,6 +96,9 @@ const { sql } = await importWithRealDb(() => import('../../lib/db.js'));
 // replaced, by spies restored after each test (CI runs this file with other real-DB suites).
 const authModule = await importWithRealDb(() => import('../../lib/auth.js'));
 const castableModule = await importWithRealDb(() => import('../dm/castable-spells.js'));
+const { CharacterSpellService } = await importWithRealDb(
+  () => import('../character/character-spell-service.js'),
+);
 const loggerModule = await importWithRealDb(() => import('../../lib/logger.js'));
 const { ClassFeaturesService } = await importWithRealDb(
   () => import('../class-features-service.js'),
@@ -119,6 +133,9 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
   const userId = `dm-reply-reconcile-user-${process.pid}`;
   let campaignId = '';
   let sessionId = '';
+  // #217 step d2: the reference rows the creation-wizard casters' spells are written against.
+  const createdClassIds: string[] = [];
+  const createdSpellIds: string[] = [];
 
   const rowsFor = async (ids: string[]): Promise<DialogueHistory[]> =>
     database
@@ -148,6 +165,13 @@ describeWithDb('DM reply: server provisional row + client save = one row (#2218)
   afterAll(async () => {
     try {
       if (sessionId) await database.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+      // Deleting a class or a spell removes its class_spells and character_spells rows with it.
+      if (createdClassIds.length) {
+        await database.delete(classes).where(inArray(classes.id, createdClassIds));
+      }
+      if (createdSpellIds.length) {
+        await database.delete(spells).where(inArray(spells.id, createdSpellIds));
+      }
       await database.delete(characters).where(eq(characters.userId, userId));
       // The #2718 turns record usage after responding, so a row can land after their own cleanup.
       await sql`DELETE FROM ai_usage WHERE user_id = ${userId}`;
@@ -454,6 +478,8 @@ ${playerInput}
     classLevels?: Array<{ class: string; level: number }>;
     /** False leaves the session without a character: only the client's id names one. */
     linkSession?: boolean;
+    /** Writes the character's `character_spells` rows before the turn. */
+    spellRows?: (characterId: string) => Promise<void>;
     playerInput: string;
     reply: Record<string, unknown>;
   }): Promise<{
@@ -479,6 +505,7 @@ ${playerInput}
       })
       .returning();
     if (!character) throw new Error('[dm-reply-reconcile] the character was not seeded');
+    await opts.spellRows?.(character.id);
     await database
       .update(gameSessions)
       .set({ characterId: opts.linkSession === false ? null : character.id })
@@ -1023,6 +1050,16 @@ ${playerInput}
     knownSpells: lists.known_spells,
     preparedSpells: lists.prepared_spells,
   });
+  /** The Herbalist (Academy of Arcane Gastronomy), as the starter seeder writes them (#217 d2). */
+  const herbalist: Omit<Parameters<typeof dmTurn>[0], 'playerInput' | 'reply'> = {
+    characterClass: 'Druid',
+    race: 'Half-Elf',
+    scores: 'STR 10(+0), DEX 12(+1), CON 12(+1), INT 12(+1), WIS 16(+3), CHA 12(+1)',
+    dexterityModifier: 1,
+    cantrips: herbalistSpellLists.cantrips,
+    knownSpells: herbalistSpellLists.known_spells,
+    preparedSpells: herbalistSpellLists.prepared_spells,
+  };
   const castReply = (
     text: string,
     rollRequests: Array<Record<string, unknown>> = [],
@@ -1173,6 +1210,221 @@ ${playerInput}
     const turn = await checkedCast({
       ...apprentice(apprenticeSpellLists),
       playerInput: 'I cast Colour Spray at the cooks.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  /** A catalog spell's reference row, made once: `spells.name` is unique. */
+  const spellRowId = async (name: string, level: number): Promise<string> => {
+    const [created] = await database
+      .insert(spells)
+      .values({
+        name,
+        level,
+        school: 'evocation',
+        castingTime: '1 action',
+        rangeText: '60 feet',
+        duration: 'Instantaneous',
+        description: `${name} (#217 step d2 fixture).`,
+      })
+      .onConflictDoNothing()
+      .returning({ id: spells.id });
+    if (created) {
+      createdSpellIds.push(created.id);
+      return created.id;
+    }
+    const [existing] = await database
+      .select({ id: spells.id })
+      .from(spells)
+      .where(eq(spells.name, name));
+    if (!existing) throw new Error(`[dm-reply-reconcile] no spells row for ${name}`);
+    return existing.id;
+  };
+
+  /**
+   * A character the creation wizard saved: its spell columns, and its `character_spells` rows
+   * written by the real `CharacterSpellService.saveCharacterSpells` with the wizard's prepared set
+   * (#232). `levels` maps each picked spell's name to its level, cantrips at 0.
+   */
+  const creationCaster = (
+    characterClass: string,
+    wizard: CreationWizardSpells,
+    levels: Record<string, number>,
+    afterSave?: (characterId: string, spellIds: Record<string, string>) => Promise<void>,
+  ): Omit<Parameters<typeof dmTurn>[0], 'playerInput' | 'reply'> => ({
+    characterClass,
+    race: 'Human',
+    scores: 'STR 14(+2), DEX 10(+0), CON 14(+2), INT 10(+0), WIS 16(+3), CHA 14(+2)',
+    dexterityModifier: 0,
+    cantrips: wizard.columns.cantrips,
+    knownSpells: wizard.columns.known_spells,
+    preparedSpells: wizard.columns.prepared_spells,
+    spellRows: async (characterId) => {
+      const [classRow] = await database
+        .insert(classes)
+        .values({ name: testId(characterClass), hitDie: 8 })
+        .returning({ id: classes.id, name: classes.name });
+      if (!classRow) throw new Error('[dm-reply-reconcile] the class was not seeded');
+      createdClassIds.push(classRow.id);
+      const spellIds: Record<string, string> = {};
+      for (const [name, level] of Object.entries(levels)) {
+        spellIds[name] = await spellRowId(name, level);
+        await database
+          .insert(classSpells)
+          .values({ classId: classRow.id, spellId: spellIds[name], spellLevel: level });
+      }
+      // The wizard posts every picked spell, and the prepared ones again as `prepared`.
+      const prepared = wizard.preparedSpells.map((name) => spellIds[name] ?? '');
+      await CharacterSpellService.saveCharacterSpells(
+        characterId,
+        userId,
+        Object.values(spellIds),
+        classRow.name,
+        prepared,
+      );
+      await afterSave?.(characterId, spellIds);
+    },
+  });
+  const clericLevels = {
+    Guidance: 0,
+    'Sacred Flame': 0,
+    Bless: 1,
+    'Guiding Bolt': 1,
+    'Shield of Faith': 1,
+  };
+  const refusalOf = (turn: Awaited<ReturnType<typeof dmTurn>>, spell: string): void =>
+    expect(JSON.parse(String(turn.body.text)).text).toBe(
+      `${turn.character.name} can't use ${spell}: it isn't on their character sheet.`,
+    );
+
+  test('refuses #217 step d2: a creation-wizard Cleric casting Guiding Bolt, picked but not prepared', async () => {
+    const turn = await dmTurn({
+      ...creationCaster('Cleric', creationClericSpells, clericLevels),
+      playerInput: 'I cast Guiding Bolt at the ghoul.',
+      reply: castReply('A flash of radiance streaks toward the ghoul.'),
+    });
+    refusalOf(turn, 'Guiding Bolt');
+    const rows = await database
+      .select({ isPrepared: characterSpells.isPrepared })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, turn.character.id));
+    // The producer wrote one row per picked spell, and only Bless as prepared.
+    expect(rows.length).toBe(5);
+    expect(rows.filter((row) => row.isPrepared).length).toBe(1);
+  });
+
+  test('refuses #217 step d2: a creation-wizard level-2 Paladin casting Command, picked but not prepared', async () => {
+    const turn = await dmTurn({
+      ...creationCaster('Paladin', creationPaladinSpells, { Bless: 1, Command: 1 }),
+      level: 2,
+      playerInput: 'I cast Command on the bandit: "Flee!"',
+      reply: castReply('The bandit turns and runs.'),
+    });
+    refusalOf(turn, 'Command');
+  });
+
+  test('refuses #217 step d2: The Herbalist casting Thunderwave, a druid spell they did not prepare', async () => {
+    const turn = await dmTurn({
+      ...herbalist,
+      playerInput: 'I cast Thunderwave at the boar.',
+      reply: castReply('A wave of thunder bowls the boar over.'),
+    });
+    refusalOf(turn, 'Thunderwave');
+  });
+
+  test('a creation-wizard Cleric casting Bless, which they prepared, is allowed (#217 step d2)', async () => {
+    const reply = castReply('A soft light settles on your companions.');
+    const turn = await checkedCast({
+      ...creationCaster('Cleric', creationClericSpells, clericLevels),
+      playerInput: 'I cast Bless on my companions.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('a creation-wizard Cleric casting a cantrip is allowed: Sacred Flame at will (#217 step d2)', async () => {
+    const reply = castReply('Radiant flame washes down over the ghoul.');
+    const turn = await checkedCast({
+      ...creationCaster('Cleric', creationClericSpells, clericLevels),
+      playerInput: 'I cast Sacred Flame on the ghoul.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('a Cleric casting an always-prepared (domain) spell is allowed though it is not prepared today (#217 step d2)', async () => {
+    // No producer writes is_always_prepared yet: the column (20250920 migration) is where domain
+    // and oath spells go, so the row the real service wrote is flagged here as one would be.
+    const reply = castReply('A shimmering field wraps around you.');
+    const turn = await checkedCast({
+      ...creationCaster(
+        'Cleric',
+        creationClericSpells,
+        clericLevels,
+        async (characterId, spellIds) => {
+          await database
+            .update(characterSpells)
+            .set({ isAlwaysPrepared: true })
+            .where(
+              and(
+                eq(characterSpells.characterId, characterId),
+                eq(characterSpells.spellId, spellIds['Shield of Faith'] ?? ''),
+              ),
+            );
+        },
+      ),
+      playerInput: 'I cast Shield of Faith on myself.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('The Herbalist casting Cure Wounds, which they prepared, is allowed (#217 step d2)', async () => {
+    const reply = castReply('Green light knits the cut on your arm closed.');
+    const turn = await checkedCast({
+      ...herbalist,
+      playerInput: 'I cast Cure Wounds on myself.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('a known caster is unchanged: a creation-wizard Bard casts Healing Word, though no row says prepared (#217 step d2)', async () => {
+    const reply = castReply('A word, and the halfling’s eyes flutter open.');
+    const turn = await checkedCast({
+      ...creationCaster('Bard', creationBardSpells, { 'Vicious Mockery': 0, 'Healing Word': 1 }),
+      playerInput: 'I cast Healing Word on the halfling.',
+      reply,
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('"Cast Fishing Line into the lake" is not a spell claim, from a caster or a Fighter (#217 step d2)', async () => {
+    const reply = castReply('The line arcs out and settles on the still water.');
+    for (const who of [
+      apprentice(apprenticeSpellLists),
+      creationCaster('Cleric', creationClericSpells, clericLevels),
+      {
+        characterClass: 'Fighter',
+        race: 'Human',
+        scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
+        dexterityModifier: 1,
+      },
+    ]) {
+      const turn = await dmTurn({ ...who, playerInput: 'Cast Fishing Line into the lake.', reply });
+      expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+    }
+  });
+
+  test('a name the catalog does not hold is no spell from a non-caster: a Fighter "casts Witch Bolt at" nothing (#217 step d2)', async () => {
+    const reply = castReply('You fling your arm out. Nothing happens, and the cultist laughs.');
+    const turn = await dmTurn({
+      characterClass: 'Fighter',
+      race: 'Human',
+      scores: 'STR 16(+3), DEX 12(+1), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 1,
+      playerInput: 'I cast Witch Bolt at the cultist.',
       reply,
     });
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);

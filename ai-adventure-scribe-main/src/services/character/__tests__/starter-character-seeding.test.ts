@@ -9,6 +9,7 @@ import {
   apprenticeSpellLists,
 } from '../../../../shared/test-fixtures/apprentice-spell-lists';
 import { premadeWizardSpellSlotsWireValue } from '../../../../shared/test-fixtures/premade-wizard-spell-slots';
+import { herbalistSpellLists } from '../../../../shared/test-fixtures/prepared-caster-spell-lists';
 import {
   buildStarterCharacterSeed,
   buildStarterSpellSeed,
@@ -460,5 +461,19 @@ describe('starter-character-seeding', () => {
       known_spells: level2.known_spells,
       prepared_spells: level2.prepared_spells,
     }).toEqual(apprenticeLevel2SpellLists);
+  });
+
+  it("emits The Herbalist's cantrips and prepared list exactly as the #217 step d2 gate tests seed them", () => {
+    // The Herbalist (academyTemplates[3]) is a level-1 Druid.
+    const seed = buildStarterCharacterSeed(
+      academyTemplates[3] as unknown as StarterCharacterTemplateLike,
+      'academy-of-arcane-gastronomy',
+    );
+
+    expect({
+      cantrips: seed.cantrips,
+      known_spells: seed.known_spells,
+      prepared_spells: seed.prepared_spells,
+    }).toEqual(herbalistSpellLists);
   });
 });
