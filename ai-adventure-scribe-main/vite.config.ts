@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'path';
 
 import react from '@vitejs/plugin-react-swc';
@@ -6,6 +7,11 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig, loadEnv } from 'vite';
 
 const BUILD_VERSION_PLACEHOLDER = '__APP_BUILD_VERSION__';
+
+// The release number from package.json, shown next to the build hash on the account page (#227).
+const RELEASE_VERSION: string = JSON.parse(
+  readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
+).version;
 
 function escapeHtmlAttribute(value: string): string {
   const replacements: Record<string, string> = {
@@ -94,6 +100,7 @@ function isEntryReachable(id: string, api: ChunkGraphApi): boolean {
 export default defineConfig(({ mode }) => ({
   define: {
     __APP_BUILD_VERSION__: JSON.stringify(resolveBuildVersion(mode)),
+    __APP_RELEASE_VERSION__: JSON.stringify(RELEASE_VERSION),
   },
   server: {
     host: '::',

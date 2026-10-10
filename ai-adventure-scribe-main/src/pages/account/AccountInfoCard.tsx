@@ -3,7 +3,7 @@ import React from 'react';
 import type { SubscriptionStatus } from '@/hooks/use-account-billing';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { APP_BUILD_SHORT } from '@/services/app-version';
+import { APP_BUILD_SHORT, APP_RELEASE_VERSION } from '@/services/app-version';
 
 interface AccountInfoCardProps {
   email: string | undefined;
@@ -39,7 +39,7 @@ export const AccountInfoCard: React.FC<AccountInfoCardProps> = ({
       </dl>
       {/* Compare with https://api.infiniterealms.app/version before a playtest (#2293). */}
       <p className="mt-4 text-xs text-muted-foreground" data-testid="app-build">
-        build {APP_BUILD_SHORT}
+        {APP_RELEASE_VERSION} · build {APP_BUILD_SHORT}
       </p>
     </CardContent>
   </Card>
