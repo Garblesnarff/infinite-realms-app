@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulated Alexa+ — Infinite Realms Party Member</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>🔮 Simulated Alexa+ <span>· Infinite Realms party member</span></h1>
+  <div id="status">connecting…</div>
+</header>
+<main>
+  <section id="voice-card" aria-live="polite">
+    <h2>Alexa says</h2>
+    <div id="reply">…</div>
+  </section>
+  <section id="controls">
+    <div class="ids">
+      <label>Session <input id="session-id" placeholder="session id" autocomplete="off"></label>
+      <label>Character <input id="character-id" placeholder="character id" autocomplete="off"></label>
+    </div>
+    <div class="input-row">
+      <input id="input" placeholder="Ask your companion anything…" autocomplete="off">
+      <button id="mic" title="Speak" hidden>🎤</button>
+      <button id="send">Send</button>
+      <button id="run-demo">▶ Run scripted demo</button>
+    </div>
+    <p class="hint">Try: <em>join</em> · <em>look around</em> · <em>say stay behind me</em> · <em>roll perception</em> · <em>who is here</em> · <em>leave</em></p>
+  </section>
+  <section>
+    <h2>Tool log</h2>
+    <div id="log" aria-live="polite"></div>
+  </section>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

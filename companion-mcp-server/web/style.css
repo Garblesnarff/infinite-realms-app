@@ -1,0 +1,108 @@
+:root {
+  --bg: #14101d;
+  --panel: #1e1830;
+  --accent: #8b5cf6;
+  --text: #ece7f7;
+  --muted: #a79ec4;
+  --good: #34d399;
+  --bad: #f87171;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+header {
+  padding: 1rem 1.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid #332a52;
+}
+
+header h1 { margin: 0; font-size: 1.25rem; }
+header h1 span { color: var(--muted); font-weight: normal; font-size: 1rem; }
+
+#status { color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem; }
+#status.ok { color: var(--good); }
+#status.bad { color: var(--bad); }
+
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+#voice-card {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+#voice-card h2, section h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+#reply { font-size: 1.4rem; min-height: 2.2em; }
+
+#controls { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.ids { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.ids label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+
+input {
+  background: #0f0b18;
+  border: 1px solid #332a52;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 1rem;
+}
+
+.ids input { width: 12rem; }
+
+.input-row { display: flex; gap: 0.5rem; }
+.input-row #input { flex: 1; }
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:disabled { opacity: 0.5; cursor: default; }
+button#mic { background: #2c2347; }
+
+.hint { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+#log {
+  background: #0f0b18;
+  border: 1px solid #332a52;
+  border-radius: 8px;
+  padding: 0.75rem;
+  height: 320px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+
+.log-call { margin-bottom: 0.6rem; }
+.log-req { color: #93c5fd; }
+.log-res { color: var(--good); }
+.log-info { color: var(--muted); font-style: italic; margin-bottom: 0.4rem; }

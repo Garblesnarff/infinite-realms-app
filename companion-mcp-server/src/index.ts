@@ -27,6 +27,9 @@ async function main(): Promise<void> {
   console.error(
     `Companion MCP server listening at ${running.url} (upstream ${irApiBaseUrl})`,
   );
+  console.error(
+    `Simulated Alexa+ web client at ${running.url.replace(/\/mcp$/, '/')} (#215 step 3b)`,
+  );
 
   const shutdown = (): void => {
     console.error('Companion MCP server shutting down...');

@@ -4,7 +4,7 @@
     "dotenv": "^16.4.5",
     "zod": "^4.1.0"
   },
-  "description": "Self-hosted MCP server (Streamable HTTP, MCP spec 2025-11-25) exposing the Infinite Realms AI party-member companion API. Alexa+ hackathon entry, issue #215 step 1.",
+  "description": "Self-hosted MCP server (Streamable HTTP, MCP spec 2025-11-25) exposing the Infinite Realms AI party-member companion API, plus a simulated Alexa+ web client. Alexa+ hackathon entry, issue #215 steps 1 and 3b.",
   "devDependencies": {
     "@types/node": "^20.10.0",
     "bun-types": "1.4.2",

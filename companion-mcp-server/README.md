@@ -5,10 +5,10 @@ A self-hosted MCP server (TypeScript MCP SDK, **Streamable HTTP**, MCP spec
 exposes the Infinite Realms AI party-member companion API as six tools.
 Built for the Amazon Developer Hackathon 2026, Alexa+ track.
 
-Real Alexa+ is partner-only during this hackathon, so the entry is planned to
-pair this server with a local simulated Alexa+ web client (step 3b — planned,
-not built yet): the client will be a real MCP client (`initialize`,
-`tools/list`, `tools/call` over Streamable HTTP). No device, no Alexa
+Real Alexa+ is partner-only during this hackathon, so the entry pairs this
+server with a local simulated Alexa+ web client (step 3b): the client is a
+real MCP client (`initialize`, `tools/list`, `tools/call` over Streamable
+HTTP), served from the same loopback server at `/`. No device, no Alexa
 account, no hosting needed.
 
 ## Tools
@@ -36,8 +36,17 @@ route, which is being rebuilt (#2658).
 cd companion-mcp-server
 bun install
 cp .env.example .env   # then put the static demo token in IR_DEMO_TOKEN
-bun src/index.ts       # serves the MCP endpoint at http://localhost:8893/mcp
+bun src/index.ts       # MCP endpoint at http://127.0.0.1:8893/mcp
 ```
+
+Then open **http://127.0.0.1:8893/** for the simulated Alexa+ web client
+(step 3b): enter a session id and a character id, then either click
+**▶ Run scripted demo** (join → scene → speak → roll) or type free text
+(`join`, `look around`, `say …`, `roll perception`, `who is here`,
+`leave`). The page is a real MCP client over Streamable HTTP: every tool
+call and its result appears in the tool log, the reply is shown in the
+voice card and spoken with the browser's text-to-speech, and the 🎤 button
+uses the browser's speech-to-text when available.
 
 Environment:
 
@@ -55,10 +64,20 @@ for local demo use; do not expose it to the internet.
 
 ## Test it
 
-`bun test test/` runs the proving test: a stub IR API wired with the real
-companion route definitions, then a real MCP client that lists the tools
-and runs `join → get_scene → speak → roll` over Streamable HTTP. No
-database needed. `bun run typecheck` typechecks.
+`bun test test/` runs two suites, no database needed:
+
+- `proving.test.ts` — a stub IR API wired with the real companion route
+  definitions, then a real MCP client that lists the tools and runs
+  `join → get_scene → speak → roll` over Streamable HTTP, plus the
+  error-path and DNS-rebinding-guard tests.
+- `web-client.test.ts` — headless Chromium (CDP) drives the real simulated
+  Alexa+ page against the stub API: the scripted demo performs
+  `join_party → get_scene → speak_as_companion → roll_for_companion` in
+  order, and free text input maps to the right tool. (This Chromium build
+  blocks loopback navigations, so the test injects the page and relays its
+  MCP fetches through CDP Fetch interception.)
+
+`bun run typecheck` typechecks.
 
 ## Auth roadmap
 
