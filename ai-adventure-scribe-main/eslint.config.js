@@ -457,7 +457,6 @@ export default tseslint.config(
       'src/services/prompts/character-prompt-extractors.ts',
       'src/components/battle-map/QuickActionMenu.tsx',
       'src/components/battle-map/hooks/use-quick-action-menu.ts',
-      'src/components/battle-map/Toolbar.tsx',
       'src/components/ui/enhancement-panel.tsx',
       'server-bun/src/services/inventory-service.ts',
       'server-bun/src/services/inventory/inventory-data-access.ts',
