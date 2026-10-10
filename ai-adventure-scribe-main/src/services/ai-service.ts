@@ -74,7 +74,7 @@ function reportTurnPhase(
  * this bound it can surface a stale authoritative outcome from an earlier turn —
  * that outcome must not reach the DM as `lastRollOutcome`.
  */
-function isRollOutcomeStale(
+export function isRollOutcomeStale(
   outcome: PersistedRollOutcome,
   conversationHistory: ChatMessage[] | undefined,
 ): boolean {

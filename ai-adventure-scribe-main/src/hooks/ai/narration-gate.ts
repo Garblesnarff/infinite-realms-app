@@ -1,6 +1,9 @@
+import type { EngineOutcome } from '@/hooks/ai/silent-player-turn';
+import type { ChatMessage } from '@/services/ai-service';
 import type { PlayerInputOrigin } from '@/services/combat/combat-action-origin';
+import type { PersistedRollOutcome } from '@/types/session-state';
 
-import { fabricatedOutcomeClaims } from '@/hooks/ai/silent-player-turn';
+import { contradictsEngineOutcome, fabricatedOutcomeClaims } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 
@@ -25,6 +28,9 @@ export const NEUTRAL_NO_EFFECT_LINE =
 
 export const NARRATION_REJECTED_REASON = 'harm_claim_without_engine_event';
 
+/** #266: the reply contradicted the engine's authoritative verdict for the turn. */
+export const NARRATION_OUTCOME_REJECTED_REASON = 'outcome_contradicts_engine';
+
 /** What the DM is told about the reply it just wrote. */
 export function narrationViolationNote(claims: string[]): string {
   return (
@@ -33,6 +39,19 @@ export function narrationViolationNote(claims: string[]): string {
     'Nothing hit, wounded, damaged or afflicted the player, and no creature attacked. Write the ' +
     'reply again without any strike, hit, blow, damage, wound, HP change, condition or creature ' +
     'attack. Do not mention this correction.'
+  );
+}
+
+/** What the DM is told when its reply contradicted the engine's verdict (#266). */
+export function engineOutcomeViolationNote(outcome: EngineOutcome, claims: string[]): string {
+  return (
+    'Your previous reply for this turn was rejected. The engine already resolved the roll: it ' +
+    `${outcome.success ? 'SUCCEEDED' : 'FAILED'}. It claimed ${claims.map((claim) => `"${claim}"`).join(', ')}, ` +
+    'which contradicts the engine result. Narrate the turn following the engine result — ' +
+    (outcome.success
+      ? 'the attempt came off; do not describe it failing, missing, or falling short.'
+      : 'the attempt failed; do not describe it succeeding.') +
+    ' Do not mention this correction.'
   );
 }
 
@@ -64,6 +83,12 @@ export interface NarrationGateParams<T extends GatedNarration> {
   /** Outside combat the player's own spell or blow may be narrated; see `fabricatedOutcomeClaims`. */
   playerMayHaveActed?: boolean;
   encounterId?: string;
+  /**
+   * #266: the engine's authoritative verdict for the turn (a roll it decided). When present the
+   * harm check is skipped — the engine did resolve something, so harm claims may be legitimate —
+   * and the reply must not contradict the verdict instead.
+   */
+  engineOutcome?: EngineOutcome | null;
   /** Asks the DM again with the violation named; resolves the new reply. */
   regenerate: (violation: string) => Promise<T>;
 }
@@ -71,7 +96,15 @@ export interface NarrationGateParams<T extends GatedNarration> {
 export async function enforceNarrationGate<T extends GatedNarration>(
   params: NarrationGateParams<T>,
 ): Promise<{ narration: T; outcome: NarrationGateOutcome }> {
-  const { narration, sessionId, branch, playerMayHaveActed, encounterId, regenerate } = params;
+  const {
+    narration,
+    sessionId,
+    branch,
+    playerMayHaveActed,
+    encounterId,
+    regenerate,
+    engineOutcome,
+  } = params;
   const options = { playerMayHaveActed };
   const logRejection = (attempt: 1 | 2, claims: string[], reason: string): void =>
     logger.warn('DM_NARRATION_REJECTED', {
@@ -84,23 +117,35 @@ export async function enforceNarrationGate<T extends GatedNarration>(
       ...(encounterId ? { encounterId } : {}),
     });
 
-  const claims = fabricatedOutcomeClaims(narration.text, options);
-  if (!claims.length) {
+  // #266: with an engine verdict the check is contradiction, not fabrication — a hit deals
+  // damage legitimately, so the harm patterns must not run here.
+  const contradictions = engineOutcome
+    ? contradictsEngineOutcome(narration.text, engineOutcome)
+    : [];
+  const claims = engineOutcome ? [] : fabricatedOutcomeClaims(narration.text, options);
+  const violations = engineOutcome ? contradictions : claims;
+  const reason = engineOutcome ? NARRATION_OUTCOME_REJECTED_REASON : NARRATION_REJECTED_REASON;
+  const violationNote = engineOutcome
+    ? engineOutcomeViolationNote(engineOutcome, contradictions)
+    : narrationViolationNote(claims);
+  if (!violations.length) {
     releaseHeldSideEffects(narration);
     return { narration, outcome: 'clean' };
   }
-  logRejection(1, claims, NARRATION_REJECTED_REASON);
+  logRejection(1, violations, reason);
 
   try {
-    const retry = await regenerate(narrationViolationNote(claims));
-    const repeated = fabricatedOutcomeClaims(retry.text, options);
+    const retry = await regenerate(violationNote);
+    const repeated = engineOutcome
+      ? contradictsEngineOutcome(retry.text, engineOutcome)
+      : fabricatedOutcomeClaims(retry.text, options);
     if (!repeated.length) {
       releaseHeldSideEffects(retry);
       return { narration: retry, outcome: 'regenerated' };
     }
-    logRejection(2, repeated, NARRATION_REJECTED_REASON);
+    logRejection(2, repeated, reason);
   } catch {
-    logRejection(2, claims, 'regeneration_failed');
+    logRejection(2, violations, 'regeneration_failed');
   }
   // Neither reply is kept: nothing they parked runs, and nothing they carried survives.
   return {
@@ -157,4 +202,45 @@ export function narrativeTurnHasNoEngineEvent({
     !result.combat_entry &&
     !/```ROLL_REQUESTS_V1/.test(result.text ?? '')
   );
+}
+
+export interface RollOutcomeGateParams<T extends GatedNarration> {
+  narration: T;
+  sessionId: string;
+  /** Only a dice-roll turn carries the engine's verdict. */
+  isDiceRollMessage: boolean;
+  conversationHistory: ChatMessage[];
+  /** The player character's name, for subject-anchored claims. */
+  characterName?: string;
+  /** Reads the authoritative outcome; the real `SessionStateService.getLatestRollOutcome`. */
+  getOutcome: (sessionId: string) => Promise<PersistedRollOutcome | null>;
+  /**
+   * The #2609 staleness bound; the real `isRollOutcomeStale`. Injectable (rather than
+   * imported) so this module's `ai-service` import surface stays at `AIService` — server
+   * tests mock that module narrowly and a new named import breaks them.
+   */
+  isStale: (outcome: PersistedRollOutcome, history: ChatMessage[]) => boolean;
+  /** Runs the gate once a contradiction is found. */
+  runGate: (engineOutcome: EngineOutcome, narration: T) => Promise<T>;
+}
+
+/**
+ * The #266 wiring, extracted so tests can drive it: on a roll-result turn, load the engine's
+ * authoritative verdict and — when it is fresh per the #2609 staleness bound and the reply
+ * contradicts it — run the gate. Anything else returns the narration untouched.
+ */
+export async function gateRollOutcomeContradiction<T extends GatedNarration>(
+  params: RollOutcomeGateParams<T>,
+): Promise<T> {
+  if (!params.isDiceRollMessage) return params.narration;
+  const outcome = await params.getOutcome(params.sessionId).catch(() => null);
+  if (!outcome || params.isStale(outcome, params.conversationHistory)) return params.narration;
+  const engineOutcome: EngineOutcome = {
+    success: outcome.success,
+    characterName: params.characterName,
+  };
+  if (!contradictsEngineOutcome(params.narration.text, engineOutcome).length) {
+    return params.narration;
+  }
+  return params.runGate(engineOutcome, params.narration);
 }

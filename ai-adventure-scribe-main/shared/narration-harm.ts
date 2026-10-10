@@ -138,3 +138,98 @@ export function suspectsFabricatedOutcome(
 ): boolean {
   return fabricatedOutcomeClaims(text, options).length > 0;
 }
+
+/**
+ * The engine's authoritative verdict for the turn (#266): a roll the dice decided, an attack
+ * the engine resolved. `true` = the check succeeded / the attack hit; `false` = it failed /
+ * missed. Mirrors `PersistedRollOutcome`'s `success`, the field the DM prompt already carries
+ * as `lastRollOutcome`. `characterName` lets claims anchor on the player character as well as
+ * "you" — an NPC's success ("the guard successfully spots you") is not a contradiction.
+ */
+export interface EngineOutcome {
+  success: boolean;
+  characterName?: string;
+}
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The DM asserting the player came off, contradicting a FAILED engine verdict. Every pattern
+ * anchors the success word on the player ("you …", "but succeed …") — the character-name
+ * variants are built per outcome below. An NPC's success never matches.
+ */
+const YOU_SUCCESS: RegExp[] = [
+  /\byou\s+succeed(?:s|ed)?\b/gi,
+  /\byou\s+manage[sd]?\s+to\b/gi,
+  /\byou\s+(?:are\s+)?successful(?:ly)?\b/gi,
+  // "you fail to notice, but succeed in slipping past": the subject carries across the "but".
+  /\bbut\s+succeed(?:s|ed)?\b/gi,
+];
+
+/**
+ * The DM asserting the player fell flat, contradicting a SUCCESSFUL engine verdict. A bare
+ * "miss" is deliberately absent: "you miss the sunrise" is not a failed attack. A miss only
+ * counts with attack context, i.e. an attack noun within the same clause.
+ */
+const YOU_FAILURE: RegExp[] = [
+  /\byou\s+fail(?:s|ed)?\b/gi,
+  /\byou\s+(?:are\s+)?unsuccessful(?:ly)?\b/gi,
+];
+const ATTACK_MISS: RegExp[] = [
+  /\b(?:strike|attack|blow|shot|arrow|blade|swing)\b[^.!?]{0,40}?\bmiss(?:es|ed)?\b/gi,
+  /\bmiss(?:es|ed)?\b[^.!?]{0,40}?\b(?:strike|attack|blow|shot|arrow|blade|swing)\b/gi,
+  /\b(?:go|goes|went)\s+wide\b/gi,
+  /\b(?:fall|falls|fell)\s+short\b/gi,
+];
+
+/** Subject-anchored success/failure claims for the named player character. */
+function namePatterns(name: string, success: boolean): RegExp[] {
+  const n = escapeRegExp(name);
+  return success
+    ? [
+        new RegExp(`\\b${n}\\s+fail(?:s|ed)?\\b`, 'gi'),
+        new RegExp(`\\b${n}\\s+(?:is\\s+|are\\s+)?unsuccessful(?:ly)?\\b`, 'gi'),
+      ]
+    : [
+        new RegExp(`\\b${n}\\s+succeed(?:s|ed)?\\b`, 'gi'),
+        new RegExp(`\\b${n}\\s+manage[sd]?\\s+to\\b`, 'gi'),
+        new RegExp(`\\b${n}\\s+(?:is\\s+|are\\s+)?successful(?:ly)?\\b`, 'gi'),
+      ];
+}
+
+/**
+ * Negation scoped to the matched verb phrase (#266 review): only a negator in the 3 words
+ * immediately before the match can undo it. A "not" in an earlier clause ("The guard does not
+ * notice you and you succeed") does not reach the verb. "not only"/"not just" is emphasis,
+ * not negation ("Not only do you succeed").
+ */
+function isOutcomeClaimNegated(text: string, index: number): boolean {
+  const words = text.slice(0, index).trim().split(/\s+/);
+  const window = words.slice(-3).join(' ');
+  if (/\bnot\s+(only|just)\b/i.test(window)) return false;
+  return NEGATOR.test(window);
+}
+
+/**
+ * The phrases where the DM's text asserts the opposite of the engine's verdict (empty when the
+ * text follows it). A failed check may still have a consequence — noise, a cost, damage — so
+ * only explicit verdict language with the player as the subject contradicts.
+ */
+export function contradictsEngineOutcome(
+  text: string | null | undefined,
+  outcome: EngineOutcome,
+): string[] {
+  const source = text ?? '';
+  const base = outcome.success ? [...YOU_FAILURE, ...ATTACK_MISS] : YOU_SUCCESS;
+  const name = outcome.characterName?.trim();
+  const patterns = name ? [...base, ...namePatterns(name, outcome.success)] : base;
+  const claims = new Set<string>();
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      if (isOutcomeClaimNegated(source, index)) continue;
+      claims.add(match[0].trim().toLowerCase().slice(0, 80));
+    }
+  }
+  return [...claims].slice(0, 5);
+}
