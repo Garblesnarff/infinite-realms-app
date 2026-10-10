@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -88,6 +88,29 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
   // #2517: a fallen character is listed read-only; opening it shows the end
   // state (the sheet swaps), and it can neither be played nor deleted here.
   const fallen = isFallenCharacter(character);
+
+  // #209: at-rest caption labels so duplicate premade copies are distinguishable
+  // without hovering (same artwork, same name — e.g. The Scholar x8). The stats
+  // row shape mirrors CharacterCardHoverContent.
+  const cardStats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const createdDate = character.created_at ? new Date(character.created_at) : null;
+  const createdLabel =
+    createdDate && !Number.isNaN(createdDate.getTime())
+      ? createdDate.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : null;
+  const captionMeta = [
+    character.level ? `Level ${character.level}` : null,
+    cardStats?.max_hit_points
+      ? `HP ${cardStats.current_hit_points ?? cardStats.max_hit_points}/${cardStats.max_hit_points}`
+      : null,
+    createdLabel ? `Created ${createdLabel}` : null,
+  ].filter((part): part is string => part !== null);
 
   /**
    * Handles character deletion confirmation
@@ -244,6 +267,43 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
             handleDeleteClick();
           }}
         />
+        {/* #209: at-rest caption — name plus distinguishing labels, always visible
+            so duplicate premade copies can be told apart without hovering, and an
+            always-visible Delete that works on touch (the hover popup is
+            unreachable without a pointer). Fallen characters stay read-only. */}
+        <div
+          data-testid="character-card-caption"
+          className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3"
+          style={{ zIndex: Z_INDEX.DROPDOWN }}
+        >
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-white">{character.name}</div>
+            {captionMeta.length > 0 && (
+              <div className="truncate text-xs text-white/70">{captionMeta.join(' · ')}</div>
+            )}
+          </div>
+          {!fallen && (
+            <button
+              type="button"
+              data-testid="character-card-delete"
+              aria-label={`Delete ${character.name}`}
+              title="Delete character"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick();
+              }}
+              onKeyDown={(e) => {
+                // #209: the hero div handles Enter/Space as "open details"; stop the
+                // keydown here or keyboard activation would navigate instead of
+                // opening the delete dialog.
+                e.stopPropagation();
+              }}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
 
       <CampaignSelectionModal
