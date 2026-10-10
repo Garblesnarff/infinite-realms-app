@@ -170,6 +170,12 @@ export type DMResponse = {
     participant_id: string;
     exit: 'fled' | 'surrendered' | 'withdrew';
   }>;
+  /**
+   * XP the story awards the player's character this turn (#218 step 2): a challenge overcome
+   * out of combat. The server adds it to the sheet once per player message; absent or null
+   * when nothing is earned.
+   */
+  xp_award?: { amount: number; reason: string } | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -417,7 +423,18 @@ const combatExitsProperty = {
   },
 } as const;
 
-export const dmResponseSchema = createDmResponseSchema({ combat_exits: combatExitsProperty });
+/** #218 step 2: XP the story awards this turn. Optional and nullable, like `combat_exits`. */
+const xpAwardProperty = nullable({
+  type: 'object',
+  additionalProperties: false,
+  properties: { amount: { type: 'integer' }, reason: { type: 'string' } },
+  required: ['amount', 'reason'],
+});
+
+export const dmResponseSchema = createDmResponseSchema({
+  combat_exits: combatExitsProperty,
+  xp_award: xpAwardProperty,
+});
 
 const isPoint = (value: unknown): value is Point =>
   !!value &&

@@ -119,11 +119,17 @@ describe('the prompt outside combat (#2400)', () => {
     expect(prompt).not.toContain('<combat_declaration_format>');
   });
 
+  it('teaches the xp_award field out of combat only (#218 step 2)', async () => {
+    expect(await buildPrompt(false)).toContain('<xp_award_field>');
+    expect(await buildPrompt(true)).not.toContain('<xp_award_field>');
+  });
+
   /**
    * GUARD, not a spec: this pins the out-of-combat prompt to the bytes it had before #2400 split
    * out the combat variants. It exists so the split cannot change what a non-combat turn sends.
    * A deliberate edit to these sections will fail it: update the hashes in that same PR.
    * #2533 re-pinned the rules-of-play hash after condensing the five engine-owned combat blocks.
+   * #218 step 2 re-pinned the response-structure hash after adding the out-of-combat XP field.
    */
   it('keeps the byte-identical sections it had before the combat variants existed', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -132,7 +138,7 @@ describe('the prompt outside combat (#2400)', () => {
       'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
-      'b29b276ba637e3fe7c8414e183d23081bea4f74d12297212df0ab06d11c2376a',
+      'd112f2568596861db30f4c3a7db07293539c76fb9cb1ca813d9dda638558a5ad',
     );
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',

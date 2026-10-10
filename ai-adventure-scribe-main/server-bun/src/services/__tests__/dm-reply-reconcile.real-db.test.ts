@@ -10,7 +10,7 @@
  * dedicated local/CI Postgres because it writes fixtures.
  */
 import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -31,6 +31,7 @@ import {
   classes,
   characters,
   dialogueHistory,
+  experienceEvents,
   featureUsageLog,
   gameSessions,
   spellSlotUsageLog,
@@ -107,6 +108,10 @@ const { LLMProviderService } = await importWithRealDb(() => import('../llm-provi
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
+const { SpellSlotsService } = await importWithRealDb(() => import('../spell-slots-service.js'));
+const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
+  () => import('../dm/story-xp.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -485,6 +490,8 @@ ${playerInput}
     existingCharacter?: typeof characters.$inferSelect;
     /** True sends no `combatEntry`, as the client does after the player declines a held entry. */
     omitCombatEntry?: boolean;
+    /** `dmReply.inCombat`, as the client reports it. */
+    inCombat?: boolean;
     playerInput: string;
     reply: Record<string, unknown>;
   }): Promise<{
@@ -558,7 +565,7 @@ ${playerInput}
               temperature: 0.9,
               maxTokens: 8192,
               requestType: 'user',
-              dmReply: { messageId: dmMessageId, inCombat: false },
+              dmReply: { messageId: dmMessageId, inCombat: opts.inCombat ?? false },
               ...(opts.omitCombatEntry
                 ? {}
                 : {
@@ -1474,7 +1481,9 @@ ${playerInput}
     }
   };
   /** The sheet after a reload: GET /v1/characters/:id, whose slots come from the engine table. */
-  const sheetSpellSlots = async (characterId: string): Promise<unknown> => {
+  const sheetSpellSlots = async (characterId: string): Promise<unknown> =>
+    (await sheetAfterReload(characterId)).spell_slots;
+  const sheetAfterReload = async (characterId: string): Promise<Record<string, unknown>> => {
     const auth = spyOn(authModule, 'authenticateRequest').mockResolvedValue({
       user: { userId, email: 'gp@example.test', plan: 'free' },
       error: null,
@@ -1488,7 +1497,7 @@ ${playerInput}
           }),
         );
       expect(response.status).toBe(200);
-      return ((await response.json()) as Record<string, unknown>).spell_slots;
+      return (await response.json()) as Record<string, unknown>;
     } finally {
       auth.mockRestore();
     }
@@ -1675,5 +1684,413 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text))).toHaveProperty('combat_entry_pending');
     expect(await slotSpends(turn.character.id)).toEqual([]);
     expect(await sheetSpellSlots(turn.character.id)).toEqual({});
+  });
+
+  /** The level-1 slot row as the engine table holds it: never more used than there are. */
+  const levelOneSlots = async (characterId: string): Promise<Record<string, unknown>[]> =>
+    database
+      .select({ total: characterSpellSlots.totalSlots, used: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
+
+  test('#218 step 1: at 0 slots left a cast spends nothing: no negative slot, no log row', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    const again = 'I cast Burning Hands at the rats.';
+    await playerSays(again);
+    await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      existingCharacter: character,
+      playerInput: again,
+      reply: castReply('The rats scatter, singed.'),
+    });
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
+
+    const third = 'I cast Burning Hands at the last rat.';
+    await playerSays(third);
+    expect(
+      await spendOutcomes(() =>
+        dmTurn({
+          ...apprentice(apprenticeSpellLists),
+          existingCharacter: character,
+          playerInput: third,
+          reply: castReply('You reach for the spell, but nothing answers.'),
+        }),
+      ),
+    ).toEqual([['Burning Hands', 'no_slot']]);
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
+    expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+    expect(await slotSpends(character.id)).toHaveLength(2);
+  });
+
+  test('#218 step 1: two concurrent spends for one player message spend one slot (row lock)', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    await playerSays('I cast Burning Hands at the rats under the stair.');
+    // The key the route reads: the session's newest player row (story-spell-slots.ts).
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    const spend = (): ReturnType<typeof SpellSlotsService.spendStoryCastSlots> =>
+      SpellSlotsService.spendStoryCastSlots({
+        characterId: character.id,
+        userId,
+        sessionId,
+        since,
+        spells: [{ spellName: 'Burning Hands', spellLevel: 1 }],
+      });
+    // A Retry sent while the first turn is still in flight: both ask at once for one message.
+    const outcomes = (await Promise.all([spend(), spend()])).flat().sort();
+    expect(outcomes).toEqual(['already_spent', 'spent']);
+    expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+    expect(await slotSpends(character.id)).toHaveLength(2);
+  });
+
+  test('#218 step 1: two concurrent casts with one slot left: one spends, one finds no slot, never negative', async () => {
+    const character = await apprenticeWhoCastBurningHands();
+    // No per-message key (\`since\` null), so only the lock and the used < total check stand.
+    const spend = (): ReturnType<typeof SpellSlotsService.spendStoryCastSlots> =>
+      SpellSlotsService.spendStoryCastSlots({
+        characterId: character.id,
+        userId,
+        sessionId,
+        since: null,
+        spells: [{ spellName: 'Burning Hands', spellLevel: 1 }],
+      });
+    const outcomes = (await Promise.all([spend(), spend()])).flat().sort();
+    expect(outcomes).toEqual(['no_slot', 'spent']);
+    expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+    expect(await sheetSpellSlots(character.id)).toEqual({ '1': { max: 2, current: 0 } });
+    expect(await slotSpends(character.id)).toHaveLength(2);
+  });
+
+  /**
+   * A reply carrying `xp_award` as the model writes it under `dmResponseSchema`
+   * (dm-response-schema.ts `xpAwardProperty`, #218 step 2). `undefined` leaves the field out.
+   */
+  const xpReply = (text: string, xpAward: unknown): Record<string, unknown> =>
+    envelopeOf({
+      text,
+      options: ['A. **Cross** the bridge.', 'B. **Rest** a while first.'],
+      roll_requests: [],
+      ...(xpAward === undefined ? {} : { xp_award: xpAward }),
+    });
+  /** The sheet's XP after a reload (GET /v1/characters/:id → `experience_points`). */
+  const sheetXp = async (characterId: string): Promise<unknown> =>
+    (await sheetAfterReload(characterId)).experience_points;
+  const xpEvents = async (characterId: string): Promise<Array<Record<string, unknown>>> =>
+    database
+      .select({
+        sessionId: experienceEvents.sessionId,
+        xpGained: experienceEvents.xpGained,
+        source: experienceEvents.source,
+        description: experienceEvents.description,
+      })
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, characterId))
+      .orderBy(asc(experienceEvents.timestamp));
+  /** What the award decided, from its log line. */
+  const xpOutcomes = async (turn: () => Promise<unknown>): Promise<unknown[]> => {
+    const info = spyOn(loggerModule.logger, 'info');
+    const before = info.mock.calls.length;
+    try {
+      await turn();
+      return info.mock.calls
+        .slice(before)
+        .map(([line]) => line as Record<string, unknown>)
+        .filter((line) => line?.msg === 'DM_STORY_XP_AWARD')
+        .map((line) => [line.amount, line.outcome]);
+    } finally {
+      info.mockRestore();
+    }
+  };
+  const trollDown = { amount: 50, reason: 'Talked the bridge troll out of its toll' };
+
+  test('#218 step 2: XP the story awards reaches the sheet after a reload, once; Retry, plain or edited, adds nothing', async () => {
+    const playerInput = 'I talk the bridge troll into letting us pass for a song.';
+    const reply = xpReply('The troll laughs until it weeps, and waves you across.', trollDown);
+    await playerSays(playerInput);
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    expect(JSON.parse(String(first.body.text)).text).toBe(reply.text);
+    expect(await sheetXp(first.character.id)).toBe(50);
+    const event = { sessionId, xpGained: 50, source: 'other', description: trollDown.reason };
+    expect(await xpEvents(first.character.id)).toEqual([event]);
+
+    // Retry: the same saved player message, a new DM row id, the same reply.
+    const retry = await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput,
+      reply,
+    });
+    expect(retry.dmMessageId).not.toBe(first.dmMessageId);
+    // An edited Retry re-sends the same saved row with new text, and the model sizes it anew.
+    expect(
+      await xpOutcomes(() =>
+        dmTurn({
+          ...fighter,
+          existingCharacter: first.character,
+          playerInput: 'I sing the troll a ballad about its own bridge.',
+          reply: xpReply('The troll sobs and lets you pass.', { amount: 100, reason: 'Ballad' }),
+        }),
+      ),
+    ).toEqual([[100, 'already_awarded']]);
+    expect(await sheetXp(first.character.id)).toBe(50);
+    expect(await xpEvents(first.character.id)).toEqual([event]);
+
+    // A new message earning XP is a second award.
+    await playerSays('I solve the riddle carved on the far gate.');
+    await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput: 'I solve the riddle carved on the far gate.',
+      reply: xpReply('The gate grinds open.', { amount: 25, reason: 'Solved the gate riddle' }),
+    });
+    expect(await sheetXp(first.character.id)).toBe(75);
+    expect(await xpEvents(first.character.id)).toHaveLength(2);
+  });
+
+  test('#218 step 2: a reply with no xp_award, or a null one, awards nothing', async () => {
+    const playerInput = 'I walk on down the road.';
+    await playerSays(playerInput);
+    let character: typeof characters.$inferSelect | undefined;
+    expect(
+      await xpOutcomes(async () => {
+        ({ character } = await dmTurn({
+          ...fighter,
+          playerInput,
+          reply: xpReply('The road winds on.', undefined),
+        }));
+        await dmTurn({
+          ...fighter,
+          existingCharacter: character,
+          playerInput,
+          reply: xpReply('The road winds on.', null),
+        });
+      }),
+    ).toEqual([]);
+    if (!character) throw new Error('[dm-reply-reconcile] the no-award turn did not run');
+    expect(await sheetXp(character.id)).toBe(0);
+    expect(await xpEvents(character.id)).toEqual([]);
+  });
+
+  test('#218 step 2: an amount that is not a whole number from 1 to one level of XP is ignored; 300 at level 1 is not', async () => {
+    let character: typeof characters.$inferSelect | undefined;
+    const outcomes: unknown[] = [];
+    // A level-1 band is 300 XP (PHB pg. 15): a level-1 award over it is a model mistake.
+    for (const amount of [0, -10, 12.5, '50', 301, 300]) {
+      const playerInput = `I haggle with the ferryman (${String(amount)}).`;
+      await playerSays(playerInput);
+      outcomes.push(
+        ...(await xpOutcomes(async () => {
+          ({ character } = await dmTurn({
+            ...fighter,
+            existingCharacter: character,
+            playerInput,
+            reply: xpReply('The ferryman shrugs.', { amount, reason: 'Haggled' }),
+          }));
+        })),
+      );
+    }
+    expect(outcomes).toEqual([
+      [0, 'invalid_amount'],
+      [-10, 'invalid_amount'],
+      [12.5, 'invalid_amount'],
+      ['50', 'invalid_amount'],
+      [301, 'invalid_amount'],
+      [300, 'awarded'],
+    ]);
+    if (!character) throw new Error('[dm-reply-reconcile] the amount turns did not run');
+    expect(await sheetXp(character.id)).toBe(300);
+    expect(await xpEvents(character.id)).toHaveLength(1);
+  });
+
+  test('#218 step 2: a refused turn awards nothing, and its refusal carries no xp_award', async () => {
+    const playerInput = 'I cast Magic Missile at the cultist.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...apprentice(apprenticeSpellLists),
+      playerInput,
+      reply: xpReply('Three darts strike the cultist down.', { amount: 50, reason: 'Cultist' }),
+    });
+    const refusal = JSON.parse(String(turn.body.text)) as Record<string, unknown>;
+    expect(refusal.text).toContain("can't use Magic Missile");
+    expect(refusal).not.toHaveProperty('xp_award');
+    expect(await sheetXp(turn.character.id)).toBe(0);
+    expect(await xpEvents(turn.character.id)).toEqual([]);
+  });
+
+  test('#218 step 2: no XP in combat, nor when the player declined a held entry (#2341), nor on a turn that opens combat', async () => {
+    const playerInput = 'I talk the cultist into dropping his knife.';
+    await playerSays(playerInput);
+    // The in-combat flag alone is enough, whatever else the body carries.
+    const inCombat = await dmTurn({
+      ...fighter,
+      inCombat: true,
+      playerInput,
+      reply: xpReply('He wavers.', trollDown),
+    });
+    const declined = await dmTurn({
+      ...fighter,
+      omitCombatEntry: true,
+      playerInput,
+      reply: xpReply('He wavers.', trollDown),
+    });
+    const opening = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: envelopeOf({
+        text: 'He lunges instead, and the fight is on.',
+        options: ['A. **Parry**.'],
+        roll_requests: [],
+        combat_transition: 'start',
+        combatants: [{ monster_id: 'cultist', name: 'Cultist', count: 1 }],
+        xp_award: trollDown,
+      }),
+    });
+    expect(JSON.parse(String(opening.body.text))).toHaveProperty('combat_entry_pending');
+    for (const turn of [inCombat, declined, opening]) {
+      expect(await sheetXp(turn.character.id)).toBe(0);
+      expect(await xpEvents(turn.character.id)).toEqual([]);
+    }
+  });
+
+  test('#218 step 2: no XP on the turn that asks for a roll; the roll result awards once, and its Retry adds nothing', async () => {
+    const asked = 'I try to climb the cliff to the eyrie.';
+    await playerSays(asked);
+    // The model awards early, on the turn that asks for the roll: nothing is earned yet.
+    const athletics = {
+      type: 'check',
+      formula: '1d20+3',
+      purpose: 'Athletics to climb the cliff',
+      dc: 15,
+      ac: null,
+      advantage: false,
+      disadvantage: false,
+    };
+    let ask: Awaited<ReturnType<typeof dmTurn>> | undefined;
+    expect(
+      await xpOutcomes(async () => {
+        ask = await dmTurn({
+          ...fighter,
+          playerInput: asked,
+          reply: {
+            ...xpReply('Roll Athletics.', { amount: 25, reason: 'Climbing the cliff' }),
+            roll_requests: [athletics],
+          },
+        });
+      }),
+    ).toEqual([[25, 'roll_pending']]);
+    if (!ask) throw new Error('[dm-reply-reconcile] the roll-request turn did not run');
+    expect(await sheetXp(ask.character.id)).toBe(0);
+    // The roll result: a new player row with intent 'dice_roll' (use-ai-roll-processor.ts).
+    const rollText = 'Athletics to climb the cliff: 18 (15+3)';
+    await playerSays(rollText, { intent: 'dice_roll' });
+    const climbed = xpReply('You haul yourself onto the eyrie ledge.', {
+      amount: 25,
+      reason: 'Climbed to the eyrie',
+    });
+    await dmTurn({
+      ...fighter,
+      existingCharacter: ask.character,
+      playerInput: rollText,
+      reply: climbed,
+    });
+    await dmTurn({
+      ...fighter,
+      existingCharacter: ask.character,
+      playerInput: rollText,
+      reply: climbed,
+    });
+    expect(await sheetXp(ask.character.id)).toBe(25);
+    expect(await xpEvents(ask.character.id)).toHaveLength(1);
+  });
+
+  test('#218 step 2: two concurrent awards for one player message add the XP once (row lock)', async () => {
+    const playerInput = 'I talk the gatekeeper round.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({ ...fighter, playerInput, reply: xpReply('He nods.', undefined) });
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+    const award = (): ReturnType<typeof awardStoryXpOnce> =>
+      awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since,
+        amount: 40,
+        reason: 'Talked the gatekeeper round',
+      });
+    expect((await Promise.all([award(), award()])).sort()).toEqual(['already_awarded', 'awarded']);
+    expect(await sheetXp(turn.character.id)).toBe(40);
+    expect(await xpEvents(turn.character.id)).toHaveLength(1);
+  });
+
+  test("#218 step 2: another user's session awards nothing: the character comes only from the owned session", async () => {
+    const playerInput = 'I talk the toll-keeper down.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: xpReply('He waves you on.', null),
+    });
+    expect(
+      await xpOutcomes(() =>
+        awardStoryXp({ userId: `${userId}-other`, sessionId, xpAward: trollDown }),
+      ),
+    ).toEqual([[50, 'no_character']]);
+    expect(await sheetXp(turn.character.id)).toBe(0);
+    expect(await xpEvents(turn.character.id)).toEqual([]);
+  });
+
+  test('#218 step 2: an XP event from elsewhere (combat) in the same message window does not block the story award', async () => {
+    const playerInput = 'I talk the ogre into a truce.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: xpReply('The ogre grunts.', null),
+    });
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+    // The shape ProgressionService.awardXP writes (progression-service.ts), with a combat source.
+    await database.insert(experienceEvents).values({
+      characterId: turn.character.id,
+      sessionId,
+      xpGained: 10,
+      source: 'combat',
+      description: 'Goblin',
+    });
+    expect(
+      await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since,
+        amount: 30,
+        reason: 'Truce with the ogre',
+      }),
+    ).toBe('awarded');
+    expect(await sheetXp(turn.character.id)).toBe(30);
   });
 });

@@ -18,7 +18,7 @@ import type { AllowedCasts } from './dm-feature-gate.js';
  * The player message the turn answers: the session's newest player row. The client saves it
  * before the DM turn starts, and Retry re-sends that saved message without saving a new one.
  */
-async function playerMessage(
+export async function playerMessage(
   sessionId: string,
 ): Promise<{ createdAt: Date | null; context: unknown } | null> {
   const { db } = await import('../../../../db/client');
