@@ -208,7 +208,11 @@ export class LevelUpService {
 
       // ⚡ Bolt: Parallelize all database updates for character level-up.
       // Stats, character record, and level progression are independent updates.
-      const newTotalXp = ProgressionMechanics.getXPForLevel(newLevel);
+      // #273: XP is cumulative in 2014 rules -- levelling up never removes surplus XP.
+      const newTotalXp = Math.max(
+        character.experiencePoints ?? 0,
+        ProgressionMechanics.getXPForLevel(newLevel),
+      );
       const charUpdate = db
         .update(characters)
         .set({
@@ -253,7 +257,11 @@ export class LevelUpService {
       await Promise.all([statsUpdate, charUpdate, progressionUpdate]);
     } else {
       // ⚡ Bolt: Parallelize level and progression updates when no ASI is required.
-      const newTotalXp = ProgressionMechanics.getXPForLevel(newLevel);
+      // #273: XP is cumulative in 2014 rules -- levelling up never removes surplus XP.
+      const newTotalXp = Math.max(
+        character.experiencePoints ?? 0,
+        ProgressionMechanics.getXPForLevel(newLevel),
+      );
       const charUpdate = db
         .update(characters)
         .set({

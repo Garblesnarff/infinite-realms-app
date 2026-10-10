@@ -19,7 +19,8 @@ export type StoryXpOutcome =
   | 'invalid_amount'
   | 'no_character'
   | 'no_player_message'
-  | 'roll_pending';
+  | 'roll_pending'
+  | 'capped';
 
 /** One story beat never carries more than a whole level's worth of XP (PHB pg. 15 table). */
 export function maxStoryXp(level: number): number {
@@ -39,14 +40,14 @@ export async function awardStoryXpOnce(input: {
   since: Date;
   amount: number;
   reason: string;
-}): Promise<'awarded' | 'already_awarded' | 'no_character'> {
+}): Promise<'awarded' | 'already_awarded' | 'no_character' | 'capped'> {
   const { db } = await import('../../../../db/client');
   const { and, eq, gte, sql } = await import('drizzle-orm');
   const { characters, experienceEvents } = await import('../../../../db/schema/index');
   const { characterId, sessionId, since, amount, reason } = input;
   return db.transaction(async (tx) => {
     const [locked] = await tx
-      .select({ id: characters.id })
+      .select({ id: characters.id, level: characters.level })
       .from(characters)
       .where(eq(characters.id, characterId))
       .for('update');
@@ -64,21 +65,46 @@ export async function awardStoryXpOnce(input: {
       )
       .limit(1);
     if (awarded) return 'already_awarded';
+    // #273: one quarter of the level's milestone band per session, clamped and logged.
+    // Only story awards (source 'other') count toward the session total, as above.
+    const [sumRow] = await tx
+      .select({ total: sql<number>`coalesce(sum(${experienceEvents.xpGained}), 0)` })
+      .from(experienceEvents)
+      .where(
+        and(
+          eq(experienceEvents.characterId, characterId),
+          eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'other'),
+        ),
+      );
+    const sessionCap = Math.floor(maxStoryXp(locked.level ?? 1) / 4);
+    const granted = Math.min(amount, Math.max(0, sessionCap - Number(sumRow?.total ?? 0)));
+    if (granted < amount) {
+      logger.info({
+        msg: 'DM_STORY_XP_CAPPED',
+        sessionId,
+        characterId,
+        requested: amount,
+        granted,
+        sessionCap,
+      });
+    }
+    if (granted <= 0) return 'capped';
     await tx
       .update(characters)
       .set({
-        experiencePoints: sql`coalesce(${characters.experiencePoints}, 0) + ${amount}`,
+        experiencePoints: sql`coalesce(${characters.experiencePoints}, 0) + ${granted}`,
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
     await tx.insert(experienceEvents).values({
       characterId,
       sessionId,
-      xpGained: amount,
+      xpGained: granted,
       source: 'other',
       description: reason.slice(0, 500) || null,
     });
-    return 'awarded';
+    return granted < amount ? 'capped' : 'awarded';
   });
 }
 

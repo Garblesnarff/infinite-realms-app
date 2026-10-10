@@ -26,6 +26,7 @@ import {
   characterFeatures,
   characterSpellSlots,
   characterSpells,
+  characterStats,
   classFeaturesLibrary,
   classSpells,
   classes,
@@ -34,6 +35,7 @@ import {
   experienceEvents,
   featureUsageLog,
   gameSessions,
+  levelProgression,
   spellSlotUsageLog,
   spells,
   type DialogueHistory,
@@ -109,6 +111,7 @@ const { createRequestPipelineApp } = await importWithRealDb(() => import('../../
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
 const { SpellSlotsService } = await importWithRealDb(() => import('../spell-slots-service.js'));
+const { LevelUpService } = await importWithRealDb(() => import('../progression/level-up-service.js'));
 const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
   () => import('../dm/story-xp.js'),
 );
@@ -2050,10 +2053,12 @@ ${playerInput}
       [12.5, 'invalid_amount'],
       ['50', 'invalid_amount'],
       [301, 'invalid_amount'],
-      [300, 'awarded'],
+      // #273: the per-award check still accepts 300 (one full band), but the per-session
+      // cap (band / 4 = 75 at level 1) clamps it and logs the excess instead of awarding it.
+      [300, 'capped'],
     ]);
     if (!character) throw new Error('[dm-reply-reconcile] the amount turns did not run');
-    expect(await sheetXp(character.id)).toBe(300);
+    expect(await sheetXp(character.id)).toBe(75);
     expect(await xpEvents(character.id)).toHaveLength(1);
   });
 
@@ -2236,5 +2241,119 @@ ${playerInput}
       }),
     ).toBe('awarded');
     expect(await sheetXp(turn.character.id)).toBe(30);
+  });
+
+  test('#273: level-up keeps surplus XP -- 350 XP at level 1 levels to 2 with 350 kept', async () => {
+    // Fixture follows the real producers: the story-XP writer (story-xp.ts) leaves
+    // characters.experience_points at the earned total, and the level-up needs stats
+    // plus a level_progression row (as ProgressionService.initializeProgression seeds it).
+    const [character] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('gp-xp-keeper'),
+        class: 'Fighter',
+        race: 'Human',
+        level: 1,
+        experiencePoints: 350,
+      })
+      .returning();
+    if (!character) throw new Error('[dm-reply-reconcile] the character was not seeded');
+    await database.insert(characterStats).values({ characterId: character.id, constitution: 14 });
+    await database.insert(levelProgression).values({
+      characterId: character.id,
+      currentLevel: 1,
+      currentXp: 0,
+      totalXp: 0,
+      xpToNextLevel: 300,
+    });
+    const result = await LevelUpService.levelUp({ characterId: character.id, hpRoll: 6 }, userId);
+    expect(result.oldLevel).toBe(1);
+    expect(result.newLevel).toBe(2);
+    // The sheet reads characters.experience_points: the 50 XP over the 300 threshold stays.
+    const [sheet] = await database
+      .select({ level: characters.level, xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, character.id));
+    expect(sheet?.level).toBe(2);
+    expect(sheet?.xp).toBe(350);
+    const [prog] = await database
+      .select()
+      .from(levelProgression)
+      .where(eq(levelProgression.characterId, character.id));
+    expect(prog?.currentLevel).toBe(2);
+    expect(prog?.currentXp).toBe(350);
+    expect(prog?.totalXp).toBe(350);
+    expect(prog?.xpToNextLevel).toBe(550);
+  });
+
+  test('#273: story XP per session is capped at a quarter of the level band, clamped and logged', async () => {
+    // Fighter is level 1: band 300 (XP_THRESHOLDS), so the session cap is 75.
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput: 'I scout the pass.',
+      reply: xpReply('The pass is clear.', undefined),
+    });
+    const playerSince = async (): Promise<Date> => {
+      const [{ createdAt: since }] = await database
+        .select({ createdAt: dialogueHistory.createdAt })
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'player'),
+          ),
+        )
+        .orderBy(desc(dialogueHistory.createdAt))
+        .limit(1);
+      if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+      return since;
+    };
+    await playerSays('I scout the pass.');
+    expect(
+      await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since: await playerSince(),
+        amount: 50,
+        reason: 'Scouting the pass',
+      }),
+    ).toBe('awarded');
+    // A new player message: not a Retry, so the cap (not the already-awarded check) decides.
+    await playerSays('I parley with the patrol.');
+    const info = spyOn(loggerModule.logger, 'info');
+    const before = info.mock.calls.length;
+    let outcome: unknown;
+    let capped: Array<Record<string, unknown>>;
+    try {
+      outcome = await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since: await playerSince(),
+        amount: 50,
+        reason: 'Parley with the patrol',
+      });
+      // Read the spy before mockRestore(): restoring clears the recorded calls.
+      capped = info.mock.calls
+        .slice(before)
+        .map(([line]) => line as Record<string, unknown>)
+        .filter((line) => line?.msg === 'DM_STORY_XP_CAPPED');
+    } finally {
+      info.mockRestore();
+    }
+    expect(outcome).toBe('capped');
+    expect(capped).toEqual([
+      {
+        msg: 'DM_STORY_XP_CAPPED',
+        sessionId,
+        characterId: turn.character.id,
+        requested: 50,
+        granted: 25,
+        sessionCap: 75,
+      },
+    ]);
+    expect(await sheetXp(turn.character.id)).toBe(75);
+    expect(await xpEvents(turn.character.id)).toHaveLength(2);
   });
 });
