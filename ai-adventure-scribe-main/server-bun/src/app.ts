@@ -83,8 +83,11 @@ export function createApp() {
       // Referrer policy for privacy
       set.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
 
-      // Content Security Policy - allow self and common CDNs
-      set.headers['Content-Security-Policy'] = [
+      // Content Security Policy - report-only first (#225): violations surface
+      // in the browser console without breaking the app or the SEO pages.
+      // No report-uri yet: graduating to the enforcing header needs a report
+      // collector first (follow-up on #225).
+      set.headers['Content-Security-Policy-Report-Only'] = [
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
