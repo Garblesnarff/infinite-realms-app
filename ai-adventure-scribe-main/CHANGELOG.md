@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.33.3](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.2...v0.33.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **creation:** racial cantrip is its own pick; cantrips are never prepared ([#212](https://github.com/Garblesnarff/infinite-realms-app/issues/212)) ([#243](https://github.com/Garblesnarff/infinite-realms-app/issues/243)) ([2836765](https://github.com/Garblesnarff/infinite-realms-app/commit/2836765f37178cd64cdcb90a509485e0bae8b854))
+
 ## [0.33.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.1...v0.33.2) (2026-10-10)
 
 
