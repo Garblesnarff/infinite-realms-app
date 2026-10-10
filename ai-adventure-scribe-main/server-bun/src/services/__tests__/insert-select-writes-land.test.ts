@@ -16,7 +16,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
 import {
@@ -349,6 +349,7 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
   let magicMissileUuid: string;
   let shieldUuid: string;
   let fireBoltUuid: string;
+  const createdCharacterIds: string[] = [];
   let app: { handle: (request: Request) => Promise<Response> };
 
   const postJson = async (path: string, body: unknown) => {
@@ -423,10 +424,44 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
 
   afterAll(async () => {
     if (!hasRealDb) return;
-    try {
-      if (characterId) await db.delete(characters).where(eq(characters.id, characterId));
-    } catch {
-      /* best-effort */
+    // #256: the old teardown deleted only the character, leaving the
+    // Wizard2710-* class row, the three spell rows ('Magic Missile',
+    // 'Shield', 'Fire Bolt' — fixed names, so the second run on the same DB
+    // died on spells_name_unique) and the class_spells links behind. Delete
+    // every row this block created, explicitly and individually guarded like
+    // the block above, so a rerun starts clean.
+    const drop = async (run: () => Promise<unknown>) => {
+      try {
+        await run();
+      } catch {
+        /* fixture teardown is best-effort */
+      }
+    };
+
+    if (createdCharacterIds.length > 0) {
+      await drop(() =>
+        db
+          .delete(characterSpells)
+          .where(inArray(characterSpells.characterId, createdCharacterIds)),
+      );
+      await drop(() =>
+        db
+          .delete(characterEquipment)
+          .where(inArray(characterEquipment.characterId, createdCharacterIds)),
+      );
+      await drop(() =>
+        db.delete(characters).where(inArray(characters.id, createdCharacterIds)),
+      );
+    }
+    if (wizardClassId) {
+      await drop(() => db.delete(classSpells).where(eq(classSpells.classId, wizardClassId)));
+    }
+    const spellIds = [magicMissileUuid, shieldUuid, fireBoltUuid].filter(Boolean);
+    if (spellIds.length > 0) {
+      await drop(() => db.delete(spells).where(inArray(spells.id, spellIds)));
+    }
+    if (wizardClassId) {
+      await drop(() => db.delete(classes).where(eq(classes.id, wizardClassId)));
     }
     await closeRealDb();
   });
@@ -455,6 +490,7 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     expect(createStatus).toBe(201);
     characterId = (created as { id: string }).id;
     expect(characterId).toBeDefined();
+    createdCharacterIds.push(characterId);
 
     // The exact body saveSpells sends: database UUIDs + prepared set.
     const { status: spellsStatus } = await postJson(`/v1/characters/${characterId}/spells`, {
@@ -525,7 +561,7 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     // All true — no regression from the prepared-set feature.
     expect(spellRows.every((r) => r.isPrepared)).toBe(true);
 
-    // Cleanup
-    await db.delete(characters).where(eq(characters.id, sorcererId));
+    // Cleanup happens in afterAll (deletes spell/equipment rows first).
+    createdCharacterIds.push(sorcererId);
   });
   });
