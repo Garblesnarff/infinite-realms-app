@@ -123,8 +123,9 @@ here rather than the player rolling it. See <combat_roll_requirements>.
 When the player's character overcomes a challenge in the story (solves a puzzle, wins over an NPC,
 completes a quest goal, succeeds at a check that matters), set the \`xp_award\` JSON field to
 \`{"amount": <whole number of XP>, "reason": "<short reason>"}\`, sized by D&D 5e guidance for the
-character's level. Otherwise set it to \`null\`. The game adds it to the character sheet; do not
-state an XP gain in \`text\` without setting the field.
+character's level. Award it when the outcome is known: on a turn that requests a roll, leave it
+\`null\` and award on the turn that reports a success. Otherwise set it to \`null\`. The game adds
+it to the character sheet; do not state an XP gain in \`text\` without setting the field.
 </xp_award_field>
 
 `;

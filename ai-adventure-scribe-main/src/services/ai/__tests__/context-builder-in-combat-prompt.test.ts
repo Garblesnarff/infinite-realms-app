@@ -138,7 +138,7 @@ describe('the prompt outside combat (#2400)', () => {
       'f119ee187786252d48e7ebc27edce36870089a10e3297bcd55584c703cfb0797',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
-      '57ce4fb470a135ba53a581f9bdf26780c65d77327b3c64b59a9a42ea4b490c0a',
+      'd112f2568596861db30f4c3a7db07293539c76fb9cb1ca813d9dda638558a5ad',
     );
     expect(sha256(ContextBuilderPrompts.buildFinalRemindersSection())).toBe(
       'f73f18110ce03c6aca6e4a04932ba834ce476d71c27392f86d1b4b81221fada2',

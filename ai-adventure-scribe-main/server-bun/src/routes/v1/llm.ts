@@ -648,8 +648,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
       }
       // #218 step 2: XP the story awards reaches the sheet, server-side, once per player message.
-      // Out of combat only, with the same skips as the slot spend above. A refused turn carries
-      // no `xp_award`: the gate's refusal envelope drops it.
+      // Out of combat only, with the same skips as the slot spend above, and never on a turn that
+      // asks for a roll. A refused turn carries no `xp_award`: the gate's refusal envelope drops it.
       if (
         envelope?.xp_award &&
         dmReply &&
@@ -660,7 +660,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       ) {
         try {
           const { awardStoryXp } = await import('../../services/dm/story-xp.js');
-          await awardStoryXp({ userId, sessionId: castSessionId, xpAward: envelope.xp_award });
+          await awardStoryXp({
+            userId,
+            sessionId: castSessionId,
+            xpAward: envelope.xp_award,
+            rollRequested:
+              Array.isArray(envelope.roll_requests) && envelope.roll_requests.length > 0,
+          });
         } catch (error) {
           logger.warn({ msg: 'DM_STORY_XP_AWARD_FAILED', sessionId: castSessionId, error });
         }

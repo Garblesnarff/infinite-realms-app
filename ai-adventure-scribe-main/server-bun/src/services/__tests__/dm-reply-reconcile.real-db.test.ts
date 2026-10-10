@@ -109,7 +109,9 @@ const { createRequestPipelineApp } = await importWithRealDb(() => import('../../
 const { llmRoutes } = await importWithRealDb(() => import('../../routes/v1/llm.js'));
 const { charactersRoutes } = await importWithRealDb(() => import('../../routes/v1/characters.js'));
 const { SpellSlotsService } = await importWithRealDb(() => import('../spell-slots-service.js'));
-const { awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
+const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
+  () => import('../dm/story-xp.js'),
+);
 
 if (!hasRealDb) {
   console.warn(
@@ -1961,14 +1963,34 @@ ${playerInput}
     }
   });
 
-  test('#218 step 2: the dice-roll reply is its own player message: it awards once, and its Retry adds nothing', async () => {
+  test('#218 step 2: no XP on the turn that asks for a roll; the roll result awards once, and its Retry adds nothing', async () => {
     const asked = 'I try to climb the cliff to the eyrie.';
     await playerSays(asked);
-    const ask = await dmTurn({
-      ...fighter,
-      playerInput: asked,
-      reply: xpReply('Roll Athletics.', undefined),
-    });
+    // The model awards early, on the turn that asks for the roll: nothing is earned yet.
+    const athletics = {
+      type: 'check',
+      formula: '1d20+3',
+      purpose: 'Athletics to climb the cliff',
+      dc: 15,
+      ac: null,
+      advantage: false,
+      disadvantage: false,
+    };
+    let ask: Awaited<ReturnType<typeof dmTurn>> | undefined;
+    expect(
+      await xpOutcomes(async () => {
+        ask = await dmTurn({
+          ...fighter,
+          playerInput: asked,
+          reply: {
+            ...xpReply('Roll Athletics.', { amount: 25, reason: 'Climbing the cliff' }),
+            roll_requests: [athletics],
+          },
+        });
+      }),
+    ).toEqual([[25, 'roll_pending']]);
+    if (!ask) throw new Error('[dm-reply-reconcile] the roll-request turn did not run');
+    expect(await sheetXp(ask.character.id)).toBe(0);
     // The roll result: a new player row with intent 'dice_roll' (use-ai-roll-processor.ts).
     const rollText = 'Athletics to climb the cliff: 18 (15+3)';
     await playerSays(rollText, { intent: 'dice_roll' });
@@ -2016,5 +2038,59 @@ ${playerInput}
     expect((await Promise.all([award(), award()])).sort()).toEqual(['already_awarded', 'awarded']);
     expect(await sheetXp(turn.character.id)).toBe(40);
     expect(await xpEvents(turn.character.id)).toHaveLength(1);
+  });
+
+  test("#218 step 2: another user's session awards nothing: the character comes only from the owned session", async () => {
+    const playerInput = 'I talk the toll-keeper down.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: xpReply('He waves you on.', null),
+    });
+    expect(
+      await xpOutcomes(() =>
+        awardStoryXp({ userId: `${userId}-other`, sessionId, xpAward: trollDown }),
+      ),
+    ).toEqual([[50, 'no_character']]);
+    expect(await sheetXp(turn.character.id)).toBe(0);
+    expect(await xpEvents(turn.character.id)).toEqual([]);
+  });
+
+  test('#218 step 2: an XP event from elsewhere (combat) in the same message window does not block the story award', async () => {
+    const playerInput = 'I talk the ogre into a truce.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: xpReply('The ogre grunts.', null),
+    });
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+    // The shape ProgressionService.awardXP writes (progression-service.ts), with a combat source.
+    await database.insert(experienceEvents).values({
+      characterId: turn.character.id,
+      sessionId,
+      xpGained: 10,
+      source: 'combat',
+      description: 'Goblin',
+    });
+    expect(
+      await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since,
+        amount: 30,
+        reason: 'Truce with the ogre',
+      }),
+    ).toBe('awarded');
+    expect(await sheetXp(turn.character.id)).toBe(30);
   });
 });

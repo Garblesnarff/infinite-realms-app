@@ -18,7 +18,8 @@ export type StoryXpOutcome =
   | 'already_awarded'
   | 'invalid_amount'
   | 'no_character'
-  | 'no_player_message';
+  | 'no_player_message'
+  | 'roll_pending';
 
 /** One story beat never carries more than a whole level's worth of XP (PHB pg. 15 table). */
 export function maxStoryXp(level: number): number {
@@ -29,7 +30,8 @@ export function maxStoryXp(level: number): number {
 /**
  * The single writer. Locks the character row, so two turns for one message cannot both read
  * "nothing awarded yet" and both add; then adds the award unless an XP event for this character
- * and session already exists at or after the player message (`since`, the DB clock).
+ * and session already exists at or after the player message (`since`, the DB clock). Only story
+ * awards (source 'other') count: a later combat or milestone event must not swallow one.
  */
 export async function awardStoryXpOnce(input: {
   characterId: string;
@@ -56,6 +58,7 @@ export async function awardStoryXpOnce(input: {
         and(
           eq(experienceEvents.characterId, characterId),
           eq(experienceEvents.sessionId, sessionId),
+          eq(experienceEvents.source, 'other'),
           gte(experienceEvents.timestamp, since),
         ),
       )
@@ -84,6 +87,8 @@ export async function awardStoryXp(input: {
   userId: string;
   sessionId: string;
   xpAward: unknown;
+  /** The reply asks for a roll: the outcome is not known yet, so nothing is earned yet. */
+  rollRequested?: boolean;
 }): Promise<StoryXpOutcome> {
   const { userId, sessionId } = input;
   const award = input.xpAward as { amount?: unknown; reason?: unknown };
@@ -91,6 +96,8 @@ export async function awardStoryXp(input: {
   const message = character ? await playerMessage(sessionId) : null;
   let outcome: StoryXpOutcome;
   if (!character) outcome = 'no_character';
+  // The award belongs to the roll's result, which arrives as its own player message.
+  else if (input.rollRequested) outcome = 'roll_pending';
   else if (
     typeof award.amount !== 'number' ||
     !Number.isInteger(award.amount) ||
