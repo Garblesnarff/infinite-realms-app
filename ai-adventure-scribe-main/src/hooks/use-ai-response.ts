@@ -45,7 +45,7 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
-import { AIService } from '@/services/ai-service';
+import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import { participantVital } from '@/services/combat/participant-vital';
 import {
@@ -917,8 +917,9 @@ export const useAIResponse = (): {
             sessionId,
             isDiceRollMessage,
             conversationHistory,
-            characterName: gameContext.character?.basic.name,
+            characterName: gameContext.character?.name ?? undefined,
             getOutcome: (sid) => SessionStateService.getLatestRollOutcome(sid),
+            isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
             runGate: (engineOutcome, narration) =>
               enforceNarrationGate({
                 narration,

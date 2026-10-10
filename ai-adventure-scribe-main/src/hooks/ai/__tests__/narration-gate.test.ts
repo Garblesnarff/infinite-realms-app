@@ -12,6 +12,7 @@ import {
 import type { ChatMessage } from '@/services/ai-service';
 
 import logger from '@/lib/logger';
+import { isRollOutcomeStale } from '@/services/ai-service';
 import { SessionStateService } from '@/services/session-state-service';
 import { createDefaultSessionState, type PersistedRollOutcome } from '@/types/session-state';
 
@@ -429,6 +430,7 @@ describe('enforceNarrationGate', () => {
         isDiceRollMessage: true,
         conversationHistory: [],
         getOutcome: realGetOutcome,
+        isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
         runGate: vi.fn(async (_outcome, n) => n),
         ...overrides,
       });

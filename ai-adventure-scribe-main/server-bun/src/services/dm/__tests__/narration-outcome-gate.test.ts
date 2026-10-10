@@ -63,9 +63,7 @@ describe('contradictsEngineOutcome (#266)', () => {
   });
 
   test("an NPC's success is not a contradiction", () => {
-    const envelope = reply(
-      'The guard successfully spots you in the shadows and raises the alarm.',
-    );
+    const envelope = reply('The guard successfully spots you in the shadows and raises the alarm.');
     expect(contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH)).toEqual([]);
   });
 
@@ -95,9 +93,7 @@ describe('contradictsEngineOutcome (#266)', () => {
 
   test('an engine hit narrated in past tense as a miss is flagged', () => {
     const envelope = reply('The strike went wide. Your attempt fell short of the goblin.');
-    expect(contradictsEngineOutcome(envelope.text as string, engineHit).length).toBeGreaterThan(
-      0,
-    );
+    expect(contradictsEngineOutcome(envelope.text as string, engineHit).length).toBeGreaterThan(0);
   });
 
   test('an engine hit narrated as a hit is clean', () => {

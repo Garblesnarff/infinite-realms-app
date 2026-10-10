@@ -5,7 +5,7 @@ import type { PersistedRollOutcome } from '@/types/session-state';
 
 import { contradictsEngineOutcome, fabricatedOutcomeClaims } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
-import { AIService, isRollOutcomeStale } from '@/services/ai-service';
+import { AIService } from '@/services/ai-service';
 
 /**
  * The one check every DM reply passes when the turn produced no engine event (#2373).
@@ -96,8 +96,15 @@ export interface NarrationGateParams<T extends GatedNarration> {
 export async function enforceNarrationGate<T extends GatedNarration>(
   params: NarrationGateParams<T>,
 ): Promise<{ narration: T; outcome: NarrationGateOutcome }> {
-  const { narration, sessionId, branch, playerMayHaveActed, encounterId, regenerate, engineOutcome } =
-    params;
+  const {
+    narration,
+    sessionId,
+    branch,
+    playerMayHaveActed,
+    encounterId,
+    regenerate,
+    engineOutcome,
+  } = params;
   const options = { playerMayHaveActed };
   const logRejection = (attempt: 1 | 2, claims: string[], reason: string): void =>
     logger.warn('DM_NARRATION_REJECTED', {
@@ -112,7 +119,9 @@ export async function enforceNarrationGate<T extends GatedNarration>(
 
   // #266: with an engine verdict the check is contradiction, not fabrication — a hit deals
   // damage legitimately, so the harm patterns must not run here.
-  const contradictions = engineOutcome ? contradictsEngineOutcome(narration.text, engineOutcome) : [];
+  const contradictions = engineOutcome
+    ? contradictsEngineOutcome(narration.text, engineOutcome)
+    : [];
   const claims = engineOutcome ? [] : fabricatedOutcomeClaims(narration.text, options);
   const violations = engineOutcome ? contradictions : claims;
   const reason = engineOutcome ? NARRATION_OUTCOME_REJECTED_REASON : NARRATION_REJECTED_REASON;
@@ -205,6 +214,12 @@ export interface RollOutcomeGateParams<T extends GatedNarration> {
   characterName?: string;
   /** Reads the authoritative outcome; the real `SessionStateService.getLatestRollOutcome`. */
   getOutcome: (sessionId: string) => Promise<PersistedRollOutcome | null>;
+  /**
+   * The #2609 staleness bound; the real `isRollOutcomeStale`. Injectable (rather than
+   * imported) so this module's `ai-service` import surface stays at `AIService` — server
+   * tests mock that module narrowly and a new named import breaks them.
+   */
+  isStale: (outcome: PersistedRollOutcome, history: ChatMessage[]) => boolean;
   /** Runs the gate once a contradiction is found. */
   runGate: (engineOutcome: EngineOutcome, narration: T) => Promise<T>;
 }
@@ -219,7 +234,7 @@ export async function gateRollOutcomeContradiction<T extends GatedNarration>(
 ): Promise<T> {
   if (!params.isDiceRollMessage) return params.narration;
   const outcome = await params.getOutcome(params.sessionId).catch(() => null);
-  if (!outcome || isRollOutcomeStale(outcome, params.conversationHistory)) return params.narration;
+  if (!outcome || params.isStale(outcome, params.conversationHistory)) return params.narration;
   const engineOutcome: EngineOutcome = {
     success: outcome.success,
     characterName: params.characterName,
