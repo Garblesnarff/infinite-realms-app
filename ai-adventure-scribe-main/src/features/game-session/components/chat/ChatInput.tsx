@@ -64,6 +64,11 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
+  const retryErrorRef = useRef<string | undefined>(sendError);
+  useEffect(() => {
+    if (sendError || !retryInFlight) retryErrorRef.current = sendError;
+  }, [sendError, retryInFlight]);
+  const visibleSendError = sendError ?? (retryInFlight ? retryErrorRef.current : undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const baseId = useId();
   const suggestionsHeaderId = `${baseId}-header`;
@@ -389,12 +394,12 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
             )
           )}
 
-          {sendError && (
+          {visibleSendError && (
             <div
               className="flex items-center justify-between gap-3 px-3 pb-2 text-sm text-destructive"
               role="alert"
             >
-              <span>{sendError}</span>
+              <span>{visibleSendError}</span>
               {onRetry && (
                 <Button
                   type="button"

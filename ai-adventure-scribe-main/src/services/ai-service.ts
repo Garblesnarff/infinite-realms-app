@@ -149,7 +149,12 @@ export class AIService {
      * #2218: the id reserved for this turn's DM row, so the server can persist the reply, and
      * whether the engine may still resolve the turn (in which case the server must not).
      */
-    dmReply?: { messageId: string; inCombat: boolean; narrationGated?: boolean };
+    dmReply?: {
+      messageId: string;
+      inCombat: boolean;
+      narrationGated?: boolean;
+      rollRequestId?: string;
+    };
     /**
      * #2373: do not write memory, world updates or voice assignments for this reply. They are
      * returned on `heldSideEffects` for the caller to run once it has decided to keep the reply.
@@ -188,6 +193,7 @@ export class AIService {
     const p = (async () => {
       let preparationCheckpoint = performance.now();
       let rawResponse: string;
+      let canonicalDmMessageId: string | undefined;
       let voiceContext: SessionVoiceContext | null = null;
       let isFirstMessage = false;
       try {
@@ -508,7 +514,10 @@ export class AIService {
           temperature: 0.9,
           maxTokens: 8192,
           responseSchema: dmResponseSchema,
-          onResponseMetadata: params.onProviderResponse,
+          onResponseMetadata: (metadata) => {
+            canonicalDmMessageId = metadata.dmReplyMessageId;
+            params.onProviderResponse?.(metadata);
+          },
           metrics: promptMetrics,
           combatEntry,
           dmReply: params.dmReply,
@@ -595,6 +604,7 @@ export class AIService {
           deferSideEffects: Boolean(params.onTextReady) || Boolean(params.holdSideEffects),
         };
         const processedResponse = await processDMResponse(responseParams);
+        if (canonicalDmMessageId) processedResponse.dmMessageId = canonicalDmMessageId;
 
         // The UI owns the render boundary. Once it confirms that the parsed response is ready,
         // bookkeeping can start without making the player wait for memory/world/voice work.

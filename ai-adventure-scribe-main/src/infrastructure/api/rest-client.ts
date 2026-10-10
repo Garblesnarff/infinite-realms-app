@@ -335,7 +335,11 @@ export interface GenerateTextParams {
   /** Aborts the request; the caller treats the resulting AbortError as a cancel. */
   signal?: AbortSignal;
   requestType?: 'user' | 'system';
-  onResponseMetadata?: (metadata: { provider?: 'openrouter' | 'gemini'; model?: string }) => void;
+  onResponseMetadata?: (metadata: {
+    provider?: 'openrouter' | 'gemini';
+    model?: string;
+    dmReplyMessageId?: string;
+  }) => void;
   /**
    * Optional, numbers-only per-section prompt token telemetry (log-only on the
    * server -- see #1688). No prompt content, just counts. Omitted entirely if
@@ -354,7 +358,12 @@ export interface GenerateTextParams {
    * under it before responding, and the client's own save of the turn replaces that row in
    * place. Only the main DM turn sends it.
    */
-  dmReply?: { messageId: string; inCombat?: boolean; narrationGated?: boolean };
+  dmReply?: {
+    messageId: string;
+    inCombat?: boolean;
+    narrationGated?: boolean;
+    rollRequestId?: string;
+  };
   combatEntry?: {
     sessionId: string;
     player: {
@@ -554,6 +563,7 @@ class LlmApiClient {
         text?: string;
         provider?: 'openrouter' | 'gemini';
         model?: string;
+        dmReplyMessageId?: string;
         terminalState?: string;
         encounterId?: string;
       };
@@ -565,7 +575,11 @@ class LlmApiClient {
           typeof data.encounterId === 'string' ? data.encounterId : null,
         );
       }
-      params.onResponseMetadata?.({ provider: data.provider, model: data.model });
+      params.onResponseMetadata?.({
+        provider: data.provider,
+        model: data.model,
+        ...(data.dmReplyMessageId ? { dmReplyMessageId: data.dmReplyMessageId } : {}),
+      });
       this.lastGenerateRequestId = this.lastRequestId;
       return data?.text ?? '';
     } catch (err: any) {

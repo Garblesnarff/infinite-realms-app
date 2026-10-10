@@ -185,7 +185,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ? { rollRequests }
                 : {};
 
-          await userDataApi.saveSessionMessages(sessionId, {
+          const saved = await userDataApi.saveSessionMessages(sessionId, {
             id: messageId,
             message: message.text,
             speaker_type: message.sender,
@@ -193,11 +193,18 @@ export const useMessageQueue = (sessionId: string | null) => {
             timestamp: now,
           });
 
-          // Return the message with the ID we generated (available immediately, no race condition)
+          const existingAnswer =
+            message.context?.intent === 'dice_roll' && message.context.rollRequestId
+              ? saved?.messages?.find(
+                  (row: { context?: { rollRequestId?: string } }) =>
+                    row.context?.rollRequestId === message.context?.rollRequestId,
+                )
+              : undefined;
           const persistedMessage: ChatMessage = {
             ...message,
-            id: messageId,
-            timestamp: now,
+            id: existingAnswer?.id ?? messageId,
+            text: existingAnswer?.message ?? message.text,
+            timestamp: existingAnswer?.timestamp ?? now,
           };
 
           logger.info(`[MessageQueue] Message persisted with ID: ${messageId}`);
