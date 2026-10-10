@@ -49,9 +49,12 @@ export const MessageMetadata: React.FC<MessageMetadataProps> = React.memo(({
       {isLastInGroup && (
         <div className={`text-xs message-meta px-2 ${isPlayer ? 'text-right' : 'text-left'} mt-1`}>
           {message.timestamp
-            ? new Date(message.timestamp).toLocaleTimeString([], {
+            ? new Date(message.timestamp).toLocaleString([], {
+                month: 'short',
+                day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit',
+                timeZoneName: 'short',
               })
             : ''}
         </div>

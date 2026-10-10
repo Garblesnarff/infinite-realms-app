@@ -39,8 +39,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
     ? PAID_SESSION_EXPIRY_MS
     : FREE_SESSION_EXPIRY_MS;
 
-  // Only use this query to decide whether the campaign has anything resumable.
-  // The button opens the session picker so the user chooses the exact session.
+  // The Resume button jumps straight into the most recent resumable session.
   const { data: activeSessions = [], isLoading: isLoadingActiveSession } = useQuery({
     queryKey: ['campaign', campaignId, 'active-sessions'],
     queryFn: async () => {
@@ -50,22 +49,37 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
     enabled: Boolean(campaignId),
   });
 
-  const hasActiveSession = React.useMemo(
-    () =>
-      activeSessions.some((session) => {
-        const start = session.start_time || session.created_at;
-        if (!start) return false;
+  const resumableSession = React.useMemo(() => {
+    const candidates = activeSessions.filter((session) => {
+      const start = session.start_time || session.created_at;
+      if (!start) return false;
 
-        const startTime = new Date(start).getTime();
-        return !Number.isFinite(startTime) || Date.now() - startTime <= sessionExpiryMs;
-      }),
-    [activeSessions, sessionExpiryMs],
-  );
+      const startTime = new Date(start).getTime();
+      return !Number.isFinite(startTime) || Date.now() - startTime <= sessionExpiryMs;
+    });
+    // Most recently started first.
+    candidates.sort((a, b) => {
+      const aTime = new Date(a.start_time || a.created_at || 0).getTime();
+      const bTime = new Date(b.start_time || b.created_at || 0).getTime();
+      return bTime - aTime;
+    });
+    return candidates[0] ?? null;
+  }, [activeSessions, sessionExpiryMs]);
+
+  const hasActiveSession = resumableSession !== null;
 
   const handleResumeSession = React.useCallback(() => {
     if (!campaignId) return;
+    // GP-024: resume the session directly instead of landing on the Sessions
+    // tab for a second click.
+    if (resumableSession?.character_id) {
+      navigate(
+        `/app/game/${campaignId}?character=${resumableSession.character_id}&session=${resumableSession.id}`,
+      );
+      return;
+    }
     navigate(`/app/campaigns/${campaignId}/sessions`);
-  }, [campaignId, navigate]);
+  }, [campaignId, navigate, resumableSession]);
 
   if (!campaign) {
     return <CampaignOverviewSkeleton />;

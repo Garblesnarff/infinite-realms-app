@@ -16,13 +16,16 @@ describe('MessageMetadata', () => {
     },
   };
 
-  // MessageMetadata.tsx formats the timestamp with `toLocaleTimeString()`, which is
-  // timezone-dependent - hardcoding "/10:00/" (the UTC hour) fails whenever the test
-  // runner's TZ isn't UTC (e.g. it renders "05:00 AM" in a UTC-5 sandbox). Compute the
+  // MessageMetadata.tsx formats the timestamp with `toLocaleString()` including
+  // date and timezone (GP-007), which is timezone-dependent - hardcoding the UTC
+  // rendering fails whenever the test runner's TZ isn't UTC. Compute the
   // expected string the same way the component does so the assertion is TZ-agnostic.
-  const expectedTime = new Date(mockMessage.timestamp).toLocaleTimeString([], {
+  const expectedTime = new Date(mockMessage.timestamp).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZoneName: 'short',
   });
 
   it('renders correctly with all props', () => {

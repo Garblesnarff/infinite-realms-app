@@ -10,9 +10,12 @@ interface CompanionMessageProps {
 export const CompanionMessage: React.FC<CompanionMessageProps> = ({ message, displayText }) => {
   const name = message.speakerName ?? message.characterName ?? 'Companion';
   const timestamp = message.timestamp
-    ? new Date(message.timestamp).toLocaleTimeString([], {
+    ? new Date(message.timestamp).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
+        timeZoneName: 'short',
       })
     : null;
 
