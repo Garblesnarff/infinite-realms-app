@@ -32,7 +32,10 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
-import { refuseFeaturesCharacterLacks } from '../../services/dm/dm-feature-gate.js';
+import {
+  refuseFeaturesCharacterLacks,
+  type AllowedCasts,
+} from '../../services/dm/dm-feature-gate.js';
 import {
   persistGeneratedDmReply,
   scheduleDmReplyWatchdog,
@@ -580,6 +583,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       });
       // #2718: a feature or spell the player claims and their character lacks is refused here,
       // before the reply is persisted or returned, so it applies nothing and spends nothing.
+      let allowedCasts: AllowedCasts | null = null;
       if (dmReply) {
         result = await refuseFeaturesCharacterLacks({
           result,
@@ -588,6 +592,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           playerInput,
           inCombat: dmReply.inCombat === true,
           clientCharacterId: combatEntry?.player?.characterId ?? null,
+          onCastsAllowed: (casts) => {
+            allowedCasts = casts;
+          },
         });
       }
 
@@ -621,6 +628,25 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
       // One parse, shared by the log line and the narration rewrite. (#2050 G)
       const envelope = parseLlmEnvelope(result.text);
+      // #218 step 1: a cast the gate allowed spends its slot, server-side, once per player
+      // message. Not when combat is opening: the engine spends for the opening cast. Not when the
+      // body carries no `combatEntry` out of combat: the player declined a held entry (#2341) and
+      // nothing was cast. A spend that fails is logged; it never costs the player their turn.
+      const castsToSpend = allowedCasts as AllowedCasts | null;
+      const castSessionId = sessionId ?? combatEntry?.sessionId;
+      if (castsToSpend && castSessionId && combatEntry && !envelope?.combat_entry_pending) {
+        try {
+          const { spendStorySpellSlots } = await import('../../services/dm/story-spell-slots.js');
+          await spendStorySpellSlots({
+            userId,
+            sessionId: castSessionId,
+            playerInput: playerInput ?? '',
+            casts: castsToSpend,
+          });
+        } catch (error) {
+          logger.warn({ msg: 'DM_STORY_SLOT_SPEND_FAILED', sessionId: castSessionId, error });
+        }
+      }
       // sessionId must not come from combatEntry: that is only sent when combat
       // is NOT already active, so in-combat turns logged `sessionId: null` --
       // precisely the turns being debugged. (#2050 C)
