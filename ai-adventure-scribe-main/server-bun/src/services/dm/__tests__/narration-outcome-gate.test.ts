@@ -14,20 +14,14 @@ import {
 // entry — the same object the DM prompt carries as `lastRollOutcome`. The mocked reply uses
 // the real DM response envelope fields (`dm-response-schema.ts`): text, options,
 // narration_segments, combat_transition.
-const FAILED_STEALTH: EngineOutcome & {
-  total: number;
-  dc: number;
-  requestType: string;
-  description: string;
-  timestamp: string;
-} = {
+const FAILED_STEALTH: EngineOutcome = {
   success: false,
   total: 7,
   dc: 14,
   requestType: 'skill_check',
   description: 'Stealth check to climb the shaft unheard',
   timestamp: '2026-10-10T02:49:00.000Z',
-};
+} as EngineOutcome;
 
 const engineHit: EngineOutcome = { success: true };
 
@@ -48,15 +42,16 @@ describe('contradictsEngineOutcome (#266)', () => {
     );
     const claims = contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH);
     expect(claims.length).toBeGreaterThan(0);
-    expect(claims.join(' ')).toContain('succeed');
+    expect(claims.join(' ')).toContain('you succeed');
   });
 
   test('a failed check narrated in past tense as a success is flagged', () => {
     const envelope = reply(
-      'You succeeded in climbing the shaft unnoticed. The check succeeded against all odds.',
+      'You succeeded in climbing the shaft unnoticed. You managed to stay silent.',
     );
-    const claims = contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH);
-    expect(claims.length).toBeGreaterThan(0);
+    expect(
+      contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH).length,
+    ).toBeGreaterThan(0);
   });
 
   test('a failed check narrated as a failure is clean', () => {
@@ -64,6 +59,28 @@ describe('contradictsEngineOutcome (#266)', () => {
       'Your foot scrapes loose stone halfway up. The clatter echoes down the shaft — ' +
         'you fail to stay quiet, and something below stirs.',
     );
+    expect(contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH)).toEqual([]);
+  });
+
+  test("an NPC's success is not a contradiction", () => {
+    const envelope = reply(
+      'The guard successfully spots you in the shadows and raises the alarm.',
+    );
+    expect(contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH)).toEqual([]);
+  });
+
+  test('the named character succeeding is flagged', () => {
+    const envelope = reply('Mira succeeded in climbing the shaft unnoticed.');
+    expect(
+      contradictsEngineOutcome(envelope.text as string, {
+        ...FAILED_STEALTH,
+        characterName: 'Mira',
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test('the named character succeeding is clean without the name', () => {
+    const envelope = reply('Mira succeeded in climbing the shaft unnoticed.');
     expect(contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH)).toEqual([]);
   });
 
@@ -77,11 +94,10 @@ describe('contradictsEngineOutcome (#266)', () => {
   });
 
   test('an engine hit narrated in past tense as a miss is flagged', () => {
-    const envelope = reply(
-      'The strike went wide. Your attempt fell short of the goblin, who laughs.',
+    const envelope = reply('The strike went wide. Your attempt fell short of the goblin.');
+    expect(contradictsEngineOutcome(envelope.text as string, engineHit).length).toBeGreaterThan(
+      0,
     );
-    const claims = contradictsEngineOutcome(envelope.text as string, engineHit);
-    expect(claims.length).toBeGreaterThan(0);
   });
 
   test('an engine hit narrated as a hit is clean', () => {
@@ -91,13 +107,16 @@ describe('contradictsEngineOutcome (#266)', () => {
     expect(contradictsEngineOutcome(envelope.text as string, engineHit)).toEqual([]);
   });
 
-  test('negated claims agree with the verdict and are clean', () => {
+  test('"you miss the sunrise" is not a failed attack', () => {
+    const envelope = reply('Dawn breaks. You miss the sunrise, still climbing in the dark.');
+    expect(contradictsEngineOutcome(envelope.text as string, engineHit)).toEqual([]);
+  });
+
+  test('negation in an earlier clause does not excuse the success claim', () => {
+    const envelope = reply('The guard does not notice you and you succeed without a sound.');
     expect(
-      contradictsEngineOutcome('You do not succeed; the noise gives you away.', FAILED_STEALTH),
-    ).toEqual([]);
-    expect(
-      contradictsEngineOutcome("The strike doesn't miss — it lands hard.", engineHit),
-    ).toEqual([]);
+      contradictsEngineOutcome(envelope.text as string, FAILED_STEALTH).length,
+    ).toBeGreaterThan(0);
   });
 
   test('a failed check may still have a consequence without contradicting the verdict', () => {

@@ -1,9 +1,11 @@
 import type { EngineOutcome } from '@/hooks/ai/silent-player-turn';
+import type { ChatMessage } from '@/services/ai-service';
 import type { PlayerInputOrigin } from '@/services/combat/combat-action-origin';
+import type { PersistedRollOutcome } from '@/types/session-state';
 
 import { contradictsEngineOutcome, fabricatedOutcomeClaims } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
-import { AIService } from '@/services/ai-service';
+import { AIService, isRollOutcomeStale } from '@/services/ai-service';
 
 /**
  * The one check every DM reply passes when the turn produced no engine event (#2373).
@@ -191,4 +193,39 @@ export function narrativeTurnHasNoEngineEvent({
     !result.combat_entry &&
     !/```ROLL_REQUESTS_V1/.test(result.text ?? '')
   );
+}
+
+export interface RollOutcomeGateParams<T extends GatedNarration> {
+  narration: T;
+  sessionId: string;
+  /** Only a dice-roll turn carries the engine's verdict. */
+  isDiceRollMessage: boolean;
+  conversationHistory: ChatMessage[];
+  /** The player character's name, for subject-anchored claims. */
+  characterName?: string;
+  /** Reads the authoritative outcome; the real `SessionStateService.getLatestRollOutcome`. */
+  getOutcome: (sessionId: string) => Promise<PersistedRollOutcome | null>;
+  /** Runs the gate once a contradiction is found. */
+  runGate: (engineOutcome: EngineOutcome, narration: T) => Promise<T>;
+}
+
+/**
+ * The #266 wiring, extracted so tests can drive it: on a roll-result turn, load the engine's
+ * authoritative verdict and — when it is fresh per the #2609 staleness bound and the reply
+ * contradicts it — run the gate. Anything else returns the narration untouched.
+ */
+export async function gateRollOutcomeContradiction<T extends GatedNarration>(
+  params: RollOutcomeGateParams<T>,
+): Promise<T> {
+  if (!params.isDiceRollMessage) return params.narration;
+  const outcome = await params.getOutcome(params.sessionId).catch(() => null);
+  if (!outcome || isRollOutcomeStale(outcome, params.conversationHistory)) return params.narration;
+  const engineOutcome: EngineOutcome = {
+    success: outcome.success,
+    characterName: params.characterName,
+  };
+  if (!contradictsEngineOutcome(params.narration.text, engineOutcome).length) {
+    return params.narration;
+  }
+  return params.runGate(engineOutcome, params.narration);
 }

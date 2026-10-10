@@ -3,18 +3,41 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NEUTRAL_NO_EFFECT_LINE,
   enforceNarrationGate,
+  gateRollOutcomeContradiction,
   narrationViolationNote,
   narrativeTurnHasNoEngineEvent,
   releaseHeldSideEffects,
 } from '../narration-gate';
 
+import type { ChatMessage } from '@/services/ai-service';
+
 import logger from '@/lib/logger';
+import { SessionStateService } from '@/services/session-state-service';
+import { createDefaultSessionState, type PersistedRollOutcome } from '@/types/session-state';
 
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/services/ai-service', () => ({
   AIService: { lastRequestId: vi.fn(() => 'req-1') },
+  // Faithful copy of the real #2609 staleness bound (ai-service.ts); the bound itself is
+  // covered by ai-service-roll-outcome-gate.test.ts, this mock only lets the wiring run.
+  isRollOutcomeStale: (
+    outcome: { timestamp: string },
+    conversationHistory: Array<{ speakerType?: string; timestamp?: unknown }> = [],
+  ): boolean => {
+    let latestDmReplyMs = -1;
+    for (const message of conversationHistory ?? []) {
+      if (message.speakerType !== 'dm') continue;
+      const ts = message.timestamp;
+      const ms = ts instanceof Date ? ts.getTime() : NaN;
+      if (!Number.isNaN(ms) && ms > latestDmReplyMs) latestDmReplyMs = ms;
+    }
+    if (latestDmReplyMs < 0) return false;
+    const outcomeMs = Date.parse(outcome.timestamp);
+    if (Number.isNaN(outcomeMs)) return true;
+    return outcomeMs <= latestDmReplyMs;
+  },
 }));
 
 const HARM = 'You narrowly avoid a strike from the entity, though the blow leaves you wounded.';
@@ -180,7 +203,7 @@ describe('enforceNarrationGate', () => {
   describe('with an engine outcome (#266)', () => {
     const gateWithOutcome = (
       narration: Record<string, unknown>,
-      engineOutcome: { success: boolean },
+      engineOutcome: { success: boolean; characterName?: string },
       regenerate = vi.fn(),
     ): ReturnType<typeof enforceNarrationGate> =>
       enforceNarrationGate({
@@ -213,11 +236,57 @@ describe('enforceNarrationGate', () => {
       );
     });
 
-    it('passes a failed check narrated as a failure without asking again', async () => {
+    it('accepts an NPC success against a failed verdict', async () => {
+      const regenerate = vi.fn();
+      const reply = { text: 'The guard successfully spots you and raises the alarm.' };
+
+      const outcome = await gateWithOutcome(reply, { success: false }, regenerate);
+
+      expect(outcome).toEqual({ narration: reply, outcome: 'clean' });
+      expect(regenerate).not.toHaveBeenCalled();
+    });
+
+    it('rejects "you fail to notice, but succeed" against a failed verdict', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'You fail to stay quiet.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'You fail to notice the tripwire, but succeed in slipping past.' },
+        { success: false },
+        regenerate,
+      );
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome.outcome).toBe('regenerated');
+    });
+
+    it('rejects the success claim when the negation sits in an earlier clause', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'You fail to stay quiet.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'The guard does not notice you and you succeed without a sound.' },
+        { success: false },
+        regenerate,
+      );
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome.outcome).toBe('regenerated');
+    });
+
+    it('accepts a correct failure narration', async () => {
       const regenerate = vi.fn();
       const reply = { text: 'The clatter echoes. You fail to stay quiet.' };
 
       const outcome = await gateWithOutcome(reply, { success: false }, regenerate);
+
+      expect(outcome).toEqual({ narration: reply, outcome: 'clean' });
+      expect(regenerate).not.toHaveBeenCalled();
+    });
+
+    it('accepts a success check narrated as a success', async () => {
+      const regenerate = vi.fn();
+      const reply = { text: 'You succeed, slipping past unheard.' };
+
+      const outcome = await gateWithOutcome(reply, { success: true }, regenerate);
 
       expect(outcome).toEqual({ narration: reply, outcome: 'clean' });
       expect(regenerate).not.toHaveBeenCalled();
@@ -239,6 +308,16 @@ describe('enforceNarrationGate', () => {
       );
     });
 
+    it('accepts "you miss the sunrise" against a successful verdict', async () => {
+      const regenerate = vi.fn();
+      const reply = { text: 'Dawn breaks. You miss the sunrise, still climbing.' };
+
+      const outcome = await gateWithOutcome(reply, { success: true }, regenerate);
+
+      expect(outcome).toEqual({ narration: reply, outcome: 'clean' });
+      expect(regenerate).not.toHaveBeenCalled();
+    });
+
     it('does not run the harm check when the engine resolved the turn', async () => {
       const regenerate = vi.fn();
       // A hit dealing damage is legitimate here, not a fabricated harm claim.
@@ -251,9 +330,7 @@ describe('enforceNarrationGate', () => {
     });
 
     it('replaces the reply when the retry still contradicts the verdict', async () => {
-      const regenerate = vi
-        .fn()
-        .mockResolvedValue({ text: 'You succeed without a sound.' });
+      const regenerate = vi.fn().mockResolvedValue({ text: 'You succeed without a sound.' });
 
       const outcome = await gateWithOutcome(
         { text: 'You succeed without a sound.' },
@@ -289,6 +366,113 @@ describe('enforceNarrationGate', () => {
 
       expect(regenerate).toHaveBeenCalledTimes(1);
       expect(outcome.outcome).toBe('regenerated');
+    });
+
+    it('flags the named character succeeding against a failed verdict', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'You fail to stay quiet.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'Mira succeeded in climbing the shaft unnoticed.' },
+        { success: false, characterName: 'Mira' },
+        regenerate,
+      );
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome.outcome).toBe('regenerated');
+    });
+  });
+
+  describe('gateRollOutcomeContradiction (#266 wiring)', () => {
+    const ROLL_TS = '2026-10-10T02:49:00.000Z';
+    const sessionId = 'session-1';
+
+    /** The real reader, fed by a real roll_result combat-log entry. */
+    const realGetOutcome = (sid: string): Promise<PersistedRollOutcome | null> => {
+      vi.spyOn(SessionStateService, 'getState').mockResolvedValue({
+        ...createDefaultSessionState(sid),
+        combatLog: [
+          {
+            timestamp: ROLL_TS,
+            entry: {
+              kind: 'roll_result',
+              payload: {
+                success: false,
+                total: 7,
+                dc: 14,
+                requestType: 'skill_check',
+                description: 'Stealth check to climb the shaft unheard',
+              },
+            },
+          },
+        ],
+      });
+      return SessionStateService.getLatestRollOutcome(sid);
+    };
+
+    const dmHistory = (timestamp: string): ChatMessage[] => [
+      {
+        id: 'dm-1',
+        role: 'assistant',
+        content: 'Make a Stealth check.',
+        speakerType: 'dm',
+        timestamp: new Date(timestamp),
+      } as ChatMessage,
+    ];
+
+    const wiring = (
+      narration: { text: string },
+      overrides: Partial<Parameters<typeof gateRollOutcomeContradiction>[0]> = {},
+    ): Promise<{ text: string }> =>
+      gateRollOutcomeContradiction({
+        narration,
+        sessionId,
+        isDiceRollMessage: true,
+        conversationHistory: [],
+        getOutcome: realGetOutcome,
+        runGate: vi.fn(async (_outcome, n) => n),
+        ...overrides,
+      });
+
+    it('drives the gate on a dice-roll turn with a fresh contradicting outcome', async () => {
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+
+      const result = await wiring({ text: 'You succeed without a sound.' }, { runGate });
+
+      expect(runGate).toHaveBeenCalledTimes(1);
+      expect(runGate.mock.calls[0][0]).toMatchObject({ success: false });
+      expect(result.text).toBe('You succeed without a sound.');
+    });
+
+    it('skips the gate when the outcome is stale', async () => {
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+
+      await wiring(
+        { text: 'You succeed without a sound.' },
+        { runGate, conversationHistory: dmHistory('2026-10-10T03:00:00.000Z') },
+      );
+
+      expect(runGate).not.toHaveBeenCalled();
+    });
+
+    it('skips the gate when the reply follows the verdict', async () => {
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+
+      await wiring({ text: 'You fail to stay quiet.' }, { runGate });
+
+      expect(runGate).not.toHaveBeenCalled();
+    });
+
+    it('never loads an outcome off the dice-roll branch', async () => {
+      const getOutcome = vi.fn(async (_sid: string) => null);
+      const runGate = vi.fn(async (_outcome: unknown, n: { text: string }) => n);
+
+      await wiring(
+        { text: 'You succeed without a sound.' },
+        { getOutcome, runGate, isDiceRollMessage: false },
+      );
+
+      expect(getOutcome).not.toHaveBeenCalled();
+      expect(runGate).not.toHaveBeenCalled();
     });
   });
 });

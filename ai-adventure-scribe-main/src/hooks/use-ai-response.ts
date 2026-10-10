@@ -36,15 +36,16 @@ import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dy
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import {
   enforceNarrationGate,
+  gateRollOutcomeContradiction,
   narrativeTurnHasNoEngineEvent,
   releaseHeldSideEffects,
   type NarrativeTurn,
 } from '@/hooks/ai/narration-gate';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
-import { contradictsEngineOutcome, suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
+import { suspectsFabricatedOutcome } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
-import { AIService, isRollOutcomeStale } from '@/services/ai-service';
+import { AIService } from '@/services/ai-service';
 import { playerInputOriginOf } from '@/services/combat/combat-action-origin';
 import { participantVital } from '@/services/combat/participant-vital';
 import {
@@ -911,21 +912,20 @@ export const useAIResponse = (): {
         // harm check does not run here: the engine did resolve something, so harm claims may
         // be legitimate — only contradiction of the verdict is gated.
         if (isDiceRollMessage && sessionId) {
-          const rollOutcome = await SessionStateService.getLatestRollOutcome(sessionId).catch(
-            () => null,
-          );
-          if (
-            rollOutcome &&
-            !isRollOutcomeStale(rollOutcome, conversationHistory) &&
-            contradictsEngineOutcome(result.text, { success: rollOutcome.success }).length > 0
-          ) {
-            result = (
-              await enforceNarrationGate({
-                narration: result,
+          result = await gateRollOutcomeContradiction({
+            narration: result,
+            sessionId,
+            isDiceRollMessage,
+            conversationHistory,
+            characterName: gameContext.character?.basic.name,
+            getOutcome: (sid) => SessionStateService.getLatestRollOutcome(sid),
+            runGate: (engineOutcome, narration) =>
+              enforceNarrationGate({
+                narration,
                 sessionId,
                 branch: 'narrative',
                 playerMayHaveActed: true,
-                engineOutcome: { success: rollOutcome.success },
+                engineOutcome,
                 regenerate: (violation) =>
                   AIService.chatWithDM({
                     message: latestMessage.text,
@@ -938,9 +938,8 @@ export const useAIResponse = (): {
                     relevantMemories,
                     ...(requestSignal ? { signal: requestSignal } : {}),
                   }),
-              })
-            ).narration;
-          }
+              }).then((gated) => gated.narration),
+          });
         }
 
         // Extract response data (result type has both snake_case and camelCase variants)
