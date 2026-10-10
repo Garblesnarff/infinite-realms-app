@@ -403,6 +403,7 @@ jobs:
             src/services/__tests__/session-init-once.real-db.test.ts \
             src/services/__tests__/spell-slot-backfill.real-db.test.ts \
             src/services/__tests__/spell-slot-single-source.real-db.test.ts \
+            src/services/__tests__/character-spells-prepared.real-db.test.ts \
             src/services/__tests__/rest-long-rest-recovery.real-db.test.ts \
             2>&1 | tee "/tmp/real-db-$GITHUB_RUN_ID.log"
           # sheet-feature-rest replaces lib/auth.js for the whole process (#224).
