@@ -80,19 +80,22 @@ const CASTER_FROM_LEVEL: Record<string, number> = {
 export const castsSpells = (character: CharacterRow): boolean =>
   character.level >= (CASTER_FROM_LEVEL[(character.class ?? '').toLowerCase()] ?? Infinity);
 
-/** Words only a spell's casting carries: a slot, a level, a save, the word "spell" itself. */
+/**
+ * Words only a spell's casting carries: a slot, a spell level, a saving throw or its DC. Bare
+ * "save" and "spell" are ordinary English ("to save the boy", "my spell focus") and do not count.
+ */
 const SPELL_WORDS =
-  /\b(?:spells?|slots?|cantrips?|ritual|upcast|(?:1st|2nd|3rd|[4-9]th)[- ]level|level\s*[1-9]|saves?|saving\s+throws?|DC\s*\d+)\b/i;
+  /\b(?:slots?|cantrips?|ritual|upcast|(?:1st|2nd|3rd|[4-9]th)[- ]level|level\s*[1-9]|saving\s+throws?|DC\s*\d+)\b/i;
 /** A spell aims at a creature or a thing: "Witch Bolt at the cultist", "Bane on the guards". */
 const SPELL_TARGET = /^\s+(?:on|at|upon|against)\b/i;
 
 /**
  * Whether a name the catalog does not hold, cast in `sentence`, reads as a spell (#217 step d2):
- * the sentence names a slot, a level, a save or the word "spell", or the name is aimed at a target
+ * the sentence names a slot, a spell level, a saving throw or a DC, or the name is aimed at a target
  * ("at", "on", "upon", "against" straight after it). "Cast Fishing Line into the lake" is none of
  * those, so it is not a claim; "into" and "toward" name a place, not a target.
  */
-export const readsLikeASpell = (sentence: string, afterName: string): boolean =>
+const readsLikeASpell = (sentence: string, afterName: string): boolean =>
   SPELL_WORDS.test(sentence) || SPELL_TARGET.test(afterName);
 
 export interface NamedSpell {

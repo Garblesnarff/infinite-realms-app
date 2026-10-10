@@ -1324,7 +1324,8 @@ ${playerInput}
     refusalOf(turn, 'Command');
   });
 
-  test('refuses #217 step d2: The Herbalist casting Thunderwave, a druid spell they did not prepare', async () => {
+  test('The Herbalist casting Thunderwave, a druid spell they did not prepare, stays refused (#217 step d2 control)', async () => {
+    // A starter Druid has no known list, so this was refused before d2 too; d2 must keep it.
     const turn = await dmTurn({
       ...herbalist,
       playerInput: 'I cast Thunderwave at the boar.',
@@ -1400,7 +1401,7 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
   });
 
-  test('"Cast Fishing Line into the lake" is not a spell claim, from a caster or a Fighter (#217 step d2)', async () => {
+  test('"Cast Fishing Line into the lake" (or "to save the drowning boy") is not a spell claim, from a caster or a Fighter (#217 step d2)', async () => {
     const reply = castReply('The line arcs out and settles on the still water.');
     for (const who of [
       apprentice(apprenticeSpellLists),
@@ -1412,8 +1413,13 @@ ${playerInput}
         dexterityModifier: 1,
       },
     ]) {
-      const turn = await dmTurn({ ...who, playerInput: 'Cast Fishing Line into the lake.', reply });
-      expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+      for (const playerInput of [
+        'Cast Fishing Line into the lake.',
+        'I cast Fishing Line to save the drowning boy.',
+      ]) {
+        const turn = await dmTurn({ ...who, playerInput, reply });
+        expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+      }
     }
   });
 
