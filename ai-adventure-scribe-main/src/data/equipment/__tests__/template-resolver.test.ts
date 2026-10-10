@@ -135,6 +135,55 @@ describe('starter template equipment resolver audit', () => {
     ]);
   });
 
+  it('resolves the crossbow bolt bundle to 20 bolts, never a single bolt (#268)', () => {
+    expect(resolveEquipmentByName('crossbow bolts (20)')?.name).toBe('Crossbow Bolts (20)');
+    expect(resolveEquipmentByName('crossbow bolts (20)')?.id).toBe('bolts-20');
+    // The reported case: the Sous Chef's kit must seed the 20-bolt bundle.
+    const sousChefKit = [
+      'dagger',
+      'dagger',
+      'dagger',
+      'light crossbow',
+      'crossbow bolts (20)',
+      'arcane focus',
+      "explorer's pack",
+      'musical instrument',
+      'costume',
+      'disguise kit',
+      "traveler's clothes",
+    ];
+    const records = transformStarterEquipment(sousChefKit);
+    expect(records).toContainEqual(
+      expect.objectContaining({ item_name: 'Crossbow Bolts (20)', quantity: 1 }),
+    );
+    expect(records).not.toContainEqual(expect.objectContaining({ item_name: 'Crossbow bolt' }));
+  });
+
+  it('audit: every premade template that names bolts gets the 20-bolt bundle (#268)', () => {
+    const migrationRoot = join(process.cwd(), 'supabase/migrations');
+    const templateLists = sqlFiles(migrationRoot).flatMap((path) =>
+      extractStarterTemplateEquipment(readFileSync(path, 'utf8')),
+    );
+    expect(templateLists.length).toBeGreaterThan(0);
+
+    let checked = 0;
+    for (const equipment of templateLists) {
+      const names = equipment.map((item) => (typeof item === 'string' ? item : item.name));
+      const hasCrossbowWeapon = names.some(
+        (name) => /crossbow/i.test(name) && resolveEquipmentByName(name)?.category === 'weapon',
+      );
+      const mentionsBolts = names.some((name) => /bolt/i.test(name));
+      if (!hasCrossbowWeapon || !mentionsBolts) continue;
+      checked += 1;
+      const records = transformStarterEquipment(equipment);
+      // The standard kit is the 20-bolt bundle; a lone "Crossbow bolt" row is the #268 bug.
+      expect(records).toContainEqual(expect.objectContaining({ item_name: 'Crossbow Bolts (20)' }));
+      expect(records).not.toContainEqual(expect.objectContaining({ item_name: 'Crossbow bolt' }));
+    }
+    // The Academy seed (sous-chef, gourmand) must be covered by this audit.
+    expect(checked).toBeGreaterThanOrEqual(2);
+  });
+
   it('extracts equipment from INSERT ... SELECT seeds', () => {
     const sql = `INSERT INTO public.starter_character_templates (
   template_key,

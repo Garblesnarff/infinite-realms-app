@@ -125,8 +125,8 @@ export const EQUIPMENT_NAME_ALIASES: Record<string, string> = {
   [normalizeEquipmentLookupKey('hand crossbow')]: 'crossbow-hand',
   [normalizeEquipmentLookupKey('hooded lantern')]: 'lantern-hooded',
   [normalizeEquipmentLookupKey('bullseye lantern')]: 'lantern-bullseye',
-  [normalizeEquipmentLookupKey('crossbow bolts (20)')]: 'crossbow-bolt',
-  [normalizeEquipmentLookupKey('case with 20 crossbow bolts')]: 'case-crossbow-bolt',
+  [normalizeEquipmentLookupKey('crossbow bolts (20)')]: 'bolts-20',
+  [normalizeEquipmentLookupKey('case with 20 crossbow bolts')]: 'bolts-20',
   [normalizeEquipmentLookupKey('two shortswords')]: 'shortsword',
 };
 
