@@ -42,6 +42,17 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: vi.fn(),
 }));
 
+vi.mock('@/services/character/starter-character-seeding', () => ({
+  seedStarterCharacter: vi.fn(),
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createCharacter: vi.fn(),
+    listCharacters: vi.fn(),
+  },
+}));
+
 describe('useCharacterSelection', () => {
   const mockNavigate = vi.fn();
   const mockToast = vi.fn();
@@ -158,5 +169,43 @@ describe('useCharacterSelection', () => {
       vi.advanceTimersByTime(0);
     });
     expect(mockNavigate).toHaveBeenCalledWith('/app/game/camp-1?character=char-1&new=true');
+  });
+
+  it('#209: two fast picks of the same template create only one character', async () => {
+    const { seedStarterCharacter } = await import('@/services/character/starter-character-seeding');
+    const { userDataApi } = await import('@/services/user-data-api');
+    (userDataApi.createCharacter as Mock).mockResolvedValue({ id: 'char-new-1' });
+    (seedStarterCharacter as Mock).mockImplementation(
+      async (
+        _template: unknown,
+        _campaignId: string,
+        create: (payload: unknown) => Promise<unknown>,
+      ) => create({ name: 'The Scholar' }),
+    );
+
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
+
+    // Two picks in the same tick, before any re-render flips isCreating: without
+    // the synchronous ref guard both would read isCreating=false and create twice.
+    const template = { id: 'tpl-scholar', name: 'The Scholar' } as never;
+    let first: Promise<void>;
+    let second: Promise<void>;
+    act(() => {
+      first = result.current.handleSelectTemplate(template);
+      second = result.current.handleSelectTemplate(template);
+    });
+    await act(async () => {
+      await Promise.all([first, second]);
+    });
+
+    expect(seedStarterCharacter).toHaveBeenCalledTimes(1);
+    expect(userDataApi.createCharacter).toHaveBeenCalledTimes(1);
   });
 });

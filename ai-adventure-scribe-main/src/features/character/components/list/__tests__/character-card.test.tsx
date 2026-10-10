@@ -92,6 +92,18 @@ describe('CharacterCard #209 at-rest caption', () => {
     expect(captions[1]).toHaveTextContent('HP 7/24');
   });
 
+  it('distinguishes copies that differ only by creation date', () => {
+    renderCard(scholarCopy({ id: 'char-scholar-1', created_at: '2026-10-01T12:00:00.000Z' }));
+    renderCard(scholarCopy({ id: 'char-scholar-2', created_at: '2026-10-08T09:30:00.000Z' }));
+
+    const captions = screen.getAllByTestId('character-card-caption');
+    expect(captions).toHaveLength(2);
+    // Same name, level and HP — the created date is the only distinguisher.
+    expect(captions[0]).toHaveTextContent('HP 18/24');
+    expect(captions[1]).toHaveTextContent('HP 18/24');
+    expect(captions[0].textContent).not.toBe(captions[1].textContent);
+  });
+
   it('omits caption segments when the data is missing', () => {
     renderCard({ id: 'char-bare', name: 'Nameless' });
 
