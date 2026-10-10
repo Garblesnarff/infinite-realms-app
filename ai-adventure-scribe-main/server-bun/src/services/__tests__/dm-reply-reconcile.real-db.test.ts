@@ -2356,4 +2356,172 @@ ${playerInput}
     expect(await sheetXp(turn.character.id)).toBe(75);
     expect(await xpEvents(turn.character.id)).toHaveLength(2);
   });
+
+  test('#273: level-up keeps surplus XP across two level-ups -- 1000 XP at level 1 reaches 3 with 1000 kept', async () => {
+    const [character] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('gp-xp-keeper-two'),
+        class: 'Fighter',
+        race: 'Human',
+        level: 1,
+        experiencePoints: 1000,
+      })
+      .returning();
+    if (!character) throw new Error('[dm-reply-reconcile] the character was not seeded');
+    await database.insert(characterStats).values({ characterId: character.id, constitution: 14 });
+    await database.insert(levelProgression).values({
+      characterId: character.id,
+      currentLevel: 1,
+      currentXp: 0,
+      totalXp: 0,
+      xpToNextLevel: 300,
+    });
+    expect((await LevelUpService.levelUp({ characterId: character.id, hpRoll: 6 }, userId)).newLevel).toBe(2);
+    const result = await LevelUpService.levelUp({ characterId: character.id, hpRoll: 6 }, userId);
+    expect(result.oldLevel).toBe(2);
+    expect(result.newLevel).toBe(3);
+    const [sheet] = await database
+      .select({ level: characters.level, xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, character.id));
+    expect(sheet?.level).toBe(3);
+    expect(sheet?.xp).toBe(1000);
+    const [prog] = await database
+      .select()
+      .from(levelProgression)
+      .where(eq(levelProgression.characterId, character.id));
+    expect(prog?.currentLevel).toBe(3);
+    expect(prog?.currentXp).toBe(1000);
+    expect(prog?.totalXp).toBe(1000);
+    // 2014 PHB: level 4 threshold is 2,700, so 1,700 XP to go.
+    expect(prog?.xpToNextLevel).toBe(1700);
+  });
+
+  test('#273: a session cap already reached awards nothing -- outcome capped, no new event, log with granted 0', async () => {
+    // Fighter is level 1: band 300, session cap 75. One award fills it exactly.
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput: 'I chart the mountain passes.',
+      reply: xpReply('The passes are mapped.', undefined),
+    });
+    const playerSince = async (): Promise<Date> => {
+      const [{ createdAt: since }] = await database
+        .select({ createdAt: dialogueHistory.createdAt })
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'player'),
+          ),
+        )
+        .orderBy(desc(dialogueHistory.createdAt))
+        .limit(1);
+      if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+      return since;
+    };
+    await playerSays('I chart the mountain passes.');
+    expect(
+      await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since: await playerSince(),
+        amount: 75,
+        reason: 'Charted the passes',
+      }),
+    ).toBe('awarded');
+    expect(await xpEvents(turn.character.id)).toHaveLength(1);
+    // A new player message earning more: the cap is full, so nothing is written.
+    await playerSays('I befriend the mountain clan.');
+    const info = spyOn(loggerModule.logger, 'info');
+    const before = info.mock.calls.length;
+    let outcome: unknown;
+    let capped: Array<Record<string, unknown>>;
+    try {
+      outcome = await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since: await playerSince(),
+        amount: 50,
+        reason: 'Befriended the clan',
+      });
+      // Read the spy before mockRestore(): restoring clears the recorded calls.
+      capped = info.mock.calls
+        .slice(before)
+        .map(([line]) => line as Record<string, unknown>)
+        .filter((line) => line?.msg === 'DM_STORY_XP_CAPPED');
+    } finally {
+      info.mockRestore();
+    }
+    expect(outcome).toBe('capped');
+    expect(capped).toEqual([
+      {
+        msg: 'DM_STORY_XP_CAPPED',
+        sessionId,
+        characterId: turn.character.id,
+        requested: 50,
+        granted: 0,
+        sessionCap: 75,
+      },
+    ]);
+    expect(await sheetXp(turn.character.id)).toBe(75);
+    expect(await xpEvents(turn.character.id)).toHaveLength(1);
+  });
+
+  test('#273: at level 20, levelUp is rejected and story XP is capped with no row written', async () => {
+    const [character] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('gp-xp-keeper-twenty'),
+        class: 'Fighter',
+        race: 'Human',
+        level: 20,
+        experiencePoints: 355000,
+      })
+      .returning();
+    if (!character) throw new Error('[dm-reply-reconcile] the character was not seeded');
+    await database.insert(characterStats).values({ characterId: character.id, constitution: 14 });
+    await database.insert(levelProgression).values({
+      characterId: character.id,
+      currentLevel: 20,
+      currentXp: 355000,
+      totalXp: 355000,
+      xpToNextLevel: 0,
+    });
+    await expect(LevelUpService.levelUp({ characterId: character.id }, userId)).rejects.toThrow(
+      'maximum level (20)',
+    );
+    // 2014 5e has no XP use past 20: the session cap is 0, not the 19→20 band.
+    const turn = await dmTurn({
+      ...fighter,
+      level: 20,
+      playerInput: 'I recount my legend.',
+      reply: xpReply('The hall falls silent.', undefined),
+    });
+    await playerSays('I recount my legend.');
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+    expect(
+      await awardStoryXpOnce({
+        characterId: turn.character.id,
+        sessionId,
+        since,
+        amount: 50,
+        reason: 'Recounted legend',
+      }),
+    ).toBe('capped');
+    expect(await sheetXp(turn.character.id)).toBe(0);
+    expect(await xpEvents(turn.character.id)).toEqual([]);
+  });
 });

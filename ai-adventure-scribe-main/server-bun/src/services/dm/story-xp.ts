@@ -6,6 +6,12 @@
  * Once per player message, as the slot spend in story-spell-slots.ts: Retry re-sends the same
  * saved message, so a second award for it is not written. No level-up happens here; the sheet
  * shows the XP and levelling stays the player's action. `level_progression` is not written.
+ *
+ * #273: total story XP per game session is capped at a quarter of the character's current
+ * level's milestone band (`storyXpSessionCap`). An award that would exceed the cap is clamped
+ * to what remains and logged (`DM_STORY_XP_CAPPED`); when the cap is already reached nothing
+ * is written. Level-20 characters earn no story XP: 2014 5e has no XP use past 20, so their
+ * cap is 0 rather than the 19→20 band.
  */
 
 import { ownedSessionCharacter } from './dm-feature-gate.js';
@@ -26,6 +32,16 @@ export type StoryXpOutcome =
 export function maxStoryXp(level: number): number {
   const from = Math.min(Math.max(Math.trunc(level) || 1, 1), 19);
   return (XP_THRESHOLDS[from + 1] ?? 0) - (XP_THRESHOLDS[from] ?? 0);
+}
+
+/**
+ * #273: per-session story-XP cap — one quarter of the level's milestone band. Level-20
+ * characters earn no story XP (2014 5e has no XP use past 20), so the cap is 0 rather than
+ * the 19→20 band.
+ */
+export function storyXpSessionCap(level: number): number {
+  if (level >= 20) return 0;
+  return Math.floor(maxStoryXp(level) / 4);
 }
 
 /**
@@ -77,7 +93,7 @@ export async function awardStoryXpOnce(input: {
           eq(experienceEvents.source, 'other'),
         ),
       );
-    const sessionCap = Math.floor(maxStoryXp(locked.level ?? 1) / 4);
+    const sessionCap = storyXpSessionCap(locked.level ?? 1);
     const granted = Math.min(amount, Math.max(0, sessionCap - Number(sumRow?.total ?? 0)));
     if (granted < amount) {
       logger.info({
