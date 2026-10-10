@@ -79,7 +79,19 @@ function parseEquipmentValue(value: string): StarterTemplateEquipmentInput[] {
 
 /** Extract equipment arrays from starter template INSERT and UPDATE migrations. */
 export function extractStarterTemplateEquipment(sql: string): StarterTemplateEquipmentInput[][] {
-  const lists: StarterTemplateEquipmentInput[][] = [];
+  return extractStarterTemplateEquipmentWithKeys(sql).map((entry) => entry.equipment);
+}
+
+export interface StarterTemplateEquipmentWithKey {
+  templateKey: string | null;
+  equipment: StarterTemplateEquipmentInput[];
+}
+
+/** Extract equipment arrays with their template keys (null when not parseable). */
+export function extractStarterTemplateEquipmentWithKeys(
+  sql: string,
+): StarterTemplateEquipmentWithKey[] {
+  const lists: StarterTemplateEquipmentWithKey[] = [];
   const insertPattern =
     /INSERT\s+INTO\s+public\.starter_character_templates\s*\(([^)]*)\)\s*(?:VALUES\s*\(|SELECT\s)/gi;
   let insertMatch: RegExpExecArray | null;
@@ -94,8 +106,13 @@ export function extractStarterTemplateEquipment(sql: string): StarterTemplateEqu
     const columns = splitSqlList(insertMatch[1]).map((column) => column.trim().toLowerCase());
     const values = splitSqlList(sql.slice(isSelect ? valuesStart : valuesStart + 1, valuesEnd));
     const equipmentIndex = columns.indexOf('equipment');
+    const keyIndex = columns.indexOf('template_key');
     if (equipmentIndex >= 0 && values[equipmentIndex]) {
-      lists.push(parseEquipmentValue(values[equipmentIndex]));
+      lists.push({
+        templateKey:
+          keyIndex >= 0 ? (decodeSqlString(values[keyIndex]) ?? null) : null,
+        equipment: parseEquipmentValue(values[equipmentIndex]),
+      });
     }
     insertPattern.lastIndex = valuesEnd + 1;
   }
@@ -103,7 +120,14 @@ export function extractStarterTemplateEquipment(sql: string): StarterTemplateEqu
   const updatePattern = /\bequipment\s*=\s*('(.*)'\s*)(?=,|\s+WHERE)/gi;
   let updateMatch: RegExpExecArray | null;
   while ((updateMatch = updatePattern.exec(sql))) {
-    lists.push(parseEquipmentValue(updateMatch[1].trim()));
+    // UPDATEs carry the template key in the WHERE clause; capture it when present.
+    const whereMatch = /\btemplate_key\s*=\s*'((?:''|[^'])*)'/i.exec(
+      sql.slice(updateMatch.index, updateMatch.index + 2000),
+    );
+    lists.push({
+      templateKey: whereMatch ? whereMatch[1].replace(/''/g, "'") : null,
+      equipment: parseEquipmentValue(updateMatch[1].trim()),
+    });
   }
   return lists;
 }

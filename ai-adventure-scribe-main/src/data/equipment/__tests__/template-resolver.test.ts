@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { resolveEquipmentByName } from '@/data/equipment/resolver';
-import { extractStarterTemplateEquipment } from '@/data/equipment/template-audit';
+import { extractStarterTemplateEquipment, extractStarterTemplateEquipmentWithKeys } from '@/data/equipment/template-audit';
 import {
   transformStarterEquipment,
   transformStarterInventory,
@@ -159,29 +159,73 @@ describe('starter template equipment resolver audit', () => {
     expect(records).not.toContainEqual(expect.objectContaining({ item_name: 'Crossbow bolt' }));
   });
 
-  it('audit: every premade template that names bolts gets the 20-bolt bundle (#268)', () => {
+  it('audit: every premade template with a ranged weapon seeds the standard ammo bundle (#268)', () => {
     const migrationRoot = join(process.cwd(), 'supabase/migrations');
     const templateLists = sqlFiles(migrationRoot).flatMap((path) =>
-      extractStarterTemplateEquipment(readFileSync(path, 'utf8')),
+      extractStarterTemplateEquipmentWithKeys(readFileSync(path, 'utf8')),
     );
     expect(templateLists.length).toBeGreaterThan(0);
 
+    // 2014 PHB starting quantities, as seeded bundles (one bundle = the full count).
+    const AMMO_BY_WEAPON: Array<{ weapon: RegExp; bundleName: string }> = [
+      { weapon: /crossbow/i, bundleName: 'Crossbow Bolts (20)' },
+      { weapon: /\b(shortbow|longbow|bow)\b/i, bundleName: 'Arrows (20)' },
+      { weapon: /\bsling\b/i, bundleName: 'Sling Bullets (20)' },
+      { weapon: /\bblowgun\b/i, bundleName: 'Blowgun Needles (50)' },
+    ];
+    // Templates with a ranged weapon but no ammo entry at all. Each needs a
+    // content-data fix (needs Rob's line); the test fails for any template
+    // with a ranged weapon and no ammo that is NOT on this list.
+    const KNOWN_AMMO_GAPS = new Set([
+      'the-veteran', // Abyssal Descent: light crossbow, no bolts
+      'the-pact-bound', // Abyssal Descent: light crossbow, no bolts
+      'the-exile', // Abyssal Descent: hand crossbow, no bolts
+      'the-lucky-one', // Eternal Feast: shortbow, no arrows
+      'the-rigger', // Wings of the Void: light crossbow, no bolts
+      'the-driller', // Journey to the Inner World: light crossbow, no bolts
+    ]);
+
     let checked = 0;
-    for (const equipment of templateLists) {
+    const gapHits: string[] = [];
+    for (const { templateKey, equipment } of templateLists) {
       const names = equipment.map((item) => (typeof item === 'string' ? item : item.name));
-      const hasCrossbowWeapon = names.some(
-        (name) => /crossbow/i.test(name) && resolveEquipmentByName(name)?.category === 'weapon',
+      const rangedWeapons = names.filter(
+        (name) => /crossbow|shortbow|longbow|\bsling\b|\bblowgun\b/i.test(name),
       );
-      const mentionsBolts = names.some((name) => /bolt/i.test(name));
-      if (!hasCrossbowWeapon || !mentionsBolts) continue;
-      checked += 1;
+      if (rangedWeapons.length === 0) continue;
+
       const records = transformStarterEquipment(equipment);
-      // The standard kit is the 20-bolt bundle; a lone "Crossbow bolt" row is the #268 bug.
-      expect(records).toContainEqual(expect.objectContaining({ item_name: 'Crossbow Bolts (20)' }));
-      expect(records).not.toContainEqual(expect.objectContaining({ item_name: 'Crossbow bolt' }));
+      const recordNames = records.map((r) => r.item_name);
+      let hasAmmo = false;
+      for (const { weapon, bundleName } of AMMO_BY_WEAPON) {
+        if (!rangedWeapons.some((w) => weapon.test(w))) continue;
+        const bundle = records.find((r) => r.item_name === bundleName);
+        if (bundle) {
+          hasAmmo = true;
+          checked += 1;
+          // Assert quantity, not only presence: one bundle = the PHB count.
+          expect(bundle.quantity).toBe(1);
+        }
+      }
+      // A lone single bolt is the #268 bug, never a valid kit.
+      expect(recordNames).not.toContain('Crossbow bolt');
+
+      if (!hasAmmo) {
+        if (templateKey && KNOWN_AMMO_GAPS.has(templateKey)) {
+          gapHits.push(templateKey);
+        } else {
+          throw new Error(
+            `Template ${templateKey ?? '(unknown key)'} has ranged weapon(s) ` +
+              `${rangedWeapons.join(', ')} but no ammo bundle. ` +
+              `Add the standard bundle or list it in KNOWN_AMMO_GAPS with a content-fix note.`,
+          );
+        }
+      }
     }
     // The Academy seed (sous-chef, gourmand) must be covered by this audit.
     expect(checked).toBeGreaterThanOrEqual(2);
+    // Every known gap must still exist; a fixed template drops off the list.
+    expect(new Set(gapHits)).toEqual(KNOWN_AMMO_GAPS);
   });
 
   it('extracts equipment from INSERT ... SELECT seeds', () => {
