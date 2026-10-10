@@ -8,7 +8,8 @@
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
-import { campaigns, characterStats, characters, restEvents } from '../../../../../db/schema/index';
+import { campaigns, characterEquipment, characterStats, characters, restEvents } from '../../../../../db/schema/index';
+import { equipmentSaveWireBody } from '../../../../../shared/test-fixtures/equipment-save-wire-body';
 import {
   closeRealDb,
   describeWithDb,
@@ -52,7 +53,8 @@ const pipeline = await importWithRealDb(async () => {
   const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
   const { charactersRoutes } = await import('../characters.js');
   const { restRoutes } = await import('../rest.js');
-  return createRequestPipelineApp().use(charactersRoutes).use(restRoutes);
+  const { issue1784DataRoutes } = await import('../issue-1784-data.js');
+  return createRequestPipelineApp().use(charactersRoutes).use(restRoutes).use(issue1784DataRoutes);
 });
 
 if (!hasRealDb) {
@@ -89,6 +91,9 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
   // if an assertion fails before the block's own cleanup runs.
   let saveCampaignId = '';
   let saveCharacterId = '';
+  // Same for the #205 block below.
+  let equipCampaignId = '';
+  let equipCharacterId = '';
 
   beforeAll(async () => {
     if (!hasRealDb) return;
@@ -126,6 +131,11 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
     await drop(() => db.delete(characters).where(eq(characters.id, saveCharacterId)));
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, saveCampaignId)));
+    await drop(() =>
+      db.delete(characterEquipment).where(eq(characterEquipment.characterId, equipCharacterId)),
+    );
+    await drop(() => db.delete(characters).where(eq(characters.id, equipCharacterId)));
+    await drop(() => db.delete(campaigns).where(eq(campaigns.id, equipCampaignId)));
     await closeRealDb();
   });
 
@@ -244,6 +254,65 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     expect(JSON.parse(got.personality_notes).traits).toEqual(['Brave in battle']);
 
     // This block's rows are its own; the shared afterAll only drops the #224 pair.
+    await db.delete(characters).where(eq(characters.id, charId));
+    await db.delete(campaigns).where(eq(campaigns.id, campId));
+  });
+
+  it('#205: equipment save round-trips names — item_name never becomes a row UUID', async () => {
+    // The exact wire body the fixed client sends: the shared fixture pins what
+    // transformEquipmentForStorage emits (see
+    // shared/test-fixtures/equipment-save-wire-body.ts) — item_name from
+    // itemName (the sheet's loaded name), not from itemId (the row UUID).
+    const [{ id: campId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('sheet-equip-camp') })
+      .returning({ id: campaigns.id });
+    equipCampaignId = campId;
+    const [{ id: charId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId: campId,
+        name: testId('sheet-equip-hero'),
+        level: 1,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    equipCharacterId = charId;
+
+    const wireEquipment = equipmentSaveWireBody(charId);
+
+    const put = await request(`/v1/characters/${charId}`, 'PUT', { equipment: wireEquipment });
+    expect(put.status).toBe(200);
+
+    // Names landed in the DB; nothing UUID-shaped.
+    const uuidish = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const names = async () =>
+      (await db.select().from(characterEquipment).where(eq(characterEquipment.characterId, charId))).map(
+        (r) => r.itemName,
+      );
+    expect((await names()).sort()).toEqual(['Chain Mail', 'Longsword']);
+
+    // A second save from a reloaded sheet sends the same names (item_name from
+    // itemName). The upsert matches by name, so no duplicate rows appear and
+    // item_name is unchanged. (Before the fix the client sent the row UUID as
+    // item_name; the name lookup missed and a UUID-named duplicate row was
+    // inserted on every save.)
+    const put2 = await request(`/v1/characters/${charId}`, 'PUT', { equipment: wireEquipment });
+    expect(put2.status).toBe(200);
+    const names2 = await names();
+    expect(names2).toHaveLength(2);
+    expect(names2.sort()).toEqual(['Chain Mail', 'Longsword']);
+    expect(names2.some((n) => uuidish.test(n))).toBe(false);
+
+    // GET /v1/characters/:id/equipment (the sheet's loader path) serves the
+    // names back; transformCharacterData then maps item_name -> itemName.
+    const eqGet = await request(`/v1/characters/${charId}/equipment`, 'GET');
+    expect(eqGet.status).toBe(200);
+    const eqRows = (await eqGet.json()) as Array<{ id: string; item_name: string }>;
+    expect(eqRows.map((e) => e.item_name).sort()).toEqual(['Chain Mail', 'Longsword']);
+
+    await db.delete(characterEquipment).where(eq(characterEquipment.characterId, charId));
     await db.delete(characters).where(eq(characters.id, charId));
     await db.delete(campaigns).where(eq(campaigns.id, campId));
   });

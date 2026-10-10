@@ -317,6 +317,8 @@ export interface Character {
   // Equipment & Inventory
   inventory?: Array<{
     itemId: string;
+    /** #205: the item's display name, loaded from character_equipment.item_name. */
+    itemName?: string;
     itemType?: string;
     properties?: Record<string, unknown>;
     description?: string;

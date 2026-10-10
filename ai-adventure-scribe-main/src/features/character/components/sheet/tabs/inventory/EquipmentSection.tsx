@@ -63,7 +63,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
 
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{item.itemId}</span>
+                        <span className="font-medium">{item.itemName}</span>
                         {item.equipped && (
                           <Badge variant="secondary" className="text-xs">
                             Equipped

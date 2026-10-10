@@ -51,11 +51,15 @@ const getStoredCharacterStats = (character: Character): StoredCharacterStats | u
 /**
  * #2710: Maps the wizard's equipment (string[]) to inventory form.
  * The wizard writes equipment as string[]; the save path expects inventory.
+ * The return type is the sheet's inventory type: the passthrough branch hands
+ * back sheet-loaded items, which carry itemName (#205) — a narrower declared
+ * type would erase that field and risk reintroducing the UUID-into-item_name
+ * corruption this function feeds.
  * Exported for testing — useCharacterSave calls this, tests call this.
  */
 export const mapWizardEquipmentToInventory = (
   character: Character,
-): Array<{ itemId: string; itemType: string; quantity: number; equipped: boolean }> => {
+): NonNullable<Character['inventory']> => {
   if (character.inventory && character.inventory.length > 0) {
     return character.inventory;
   }

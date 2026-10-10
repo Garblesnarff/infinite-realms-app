@@ -407,6 +407,8 @@ export const transformCharacterData = (
     inventory:
       equipmentData?.map((item) => ({
         itemId: item.id,
+        // #205: the row id is the React key / toggle target; the name renders and saves from here.
+        itemName: item.item_name,
         itemType: item.item_type,
         description: item.description || undefined,
         quantity: item.quantity || 1,

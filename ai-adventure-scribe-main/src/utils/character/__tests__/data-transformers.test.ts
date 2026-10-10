@@ -206,6 +206,16 @@ describe('data-transformers', () => {
       expect(character.visionTypes).toEqual(['darkvision']);
     });
 
+    it('loads itemName from item_name and keeps itemId as the row id (#205)', () => {
+      const character = transformCharacterData(mockCharacterRow, mockStats, mockEquipment);
+
+      const sword = character.inventory?.find((i) => i.itemId === 'item-1');
+      expect(sword?.itemName).toBe('Greatsword');
+      expect(sword?.itemId).toBe('item-1');
+      const ring = character.inventory?.find((i) => i.itemId === 'item-2');
+      expect(ring?.itemName).toBe('Ring of Protection');
+    });
+
     describe('canonical race, class, and background hydration', () => {
       it('covers the same twelve classes as the frontend class records', () => {
         expect(SRD_CLASS_TABLE.map((entry) => entry.name).sort()).toEqual(
