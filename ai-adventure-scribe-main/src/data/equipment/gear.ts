@@ -10,6 +10,14 @@ export const adventuringGear: Equipment[] = [
     description: 'A bundle of 20 arrows for use with a bow.',
   },
   {
+    id: 'bolts-20',
+    name: 'Crossbow Bolts (20)',
+    category: 'gear',
+    cost: { amount: 1, currency: 'gp' },
+    weight: 1,
+    description: 'A bundle of 20 crossbow bolts for use with a crossbow.',
+  },
+  {
     id: 'backpack',
     name: 'Backpack',
     category: 'gear',
