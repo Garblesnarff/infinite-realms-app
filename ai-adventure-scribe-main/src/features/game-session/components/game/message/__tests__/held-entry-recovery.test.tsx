@@ -7,7 +7,7 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const {
   mockGetAIResponse,
@@ -91,6 +91,7 @@ import {
   storySaveAnswerBody,
 } from '../../../../../../../shared/test-fixtures/story-rolls';
 import { MessageHandler } from '../MessageHandler';
+import { DM_TURN_TIMEOUT_MS } from '../use-message-handler-logic';
 
 import type * as DiceCommandParser from '@/utils/diceCommandParser';
 
@@ -177,6 +178,42 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     // No encounter, and the server's newest message is still the player's.
     mockReadCombat.mockResolvedValue({ state: 'none' });
     serverNewest([{ id: 'player-1', speaker_type: 'player' }]);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('a never-settling roll turn and cleanup end at the fixed deadline with Retry', async () => {
+    vi.useFakeTimers();
+    contextState.messages = [dmScene];
+    mockGetAIResponse.mockImplementation(() => new Promise(() => {}));
+    const update = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockImplementation(() => new Promise(() => {}));
+    renderHandler(update);
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve save' }));
+    await vi.waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DM_TURN_TIMEOUT_MS);
+    });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Roll Retry' })).toBeEnabled();
+    expect(screen.queryByText('Rolling…')).not.toBeInTheDocument();
+  });
+
+  it('reload in combat keeps a narrative save gated until engine ownership can be proved', async () => {
+    const dm = storyDmBody(STORY_SAVE_ROLL);
+    const answer = storySaveAnswerBody('player-1', '2026-01-01T00:00:01.000Z');
+    contextState.messages = [
+      { id: dm.id, sender: 'dm', text: dm.message, context: dm.context },
+      { id: answer.id, sender: 'player', text: answer.message, context: answer.context },
+    ];
+    mockReadCombat.mockResolvedValue({ state: 'combat', encounter: { id: 'encounter-1' } });
+    renderHandler();
+    await waitFor(() => expect(mockReadCombat).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   it('resumes a saved narrative spell-save answer without another player save or turn increment', async () => {

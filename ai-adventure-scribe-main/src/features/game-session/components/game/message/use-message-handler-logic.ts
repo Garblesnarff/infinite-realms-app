@@ -574,7 +574,7 @@ export const useMessageHandlerLogic = ({
       // #2218: one id for this turn's DM row, reserved before generation. The server persists a
       // display-ready reply under it, and the early render and the final save below reuse it,
       // so the turn is one row whichever side writes it and a dead tab cannot lose the reply.
-      const dmMessageId = crypto.randomUUID();
+      let dmMessageId: string = crypto.randomUUID();
       const showEngineNotice = (notice: LocalNotice): void => {
         if (attackNoticesReplaceStatus && attackPhase) {
           setAttackPhase(null);
@@ -610,6 +610,7 @@ export const useMessageHandlerLogic = ({
           turnPhase,
           async (earlyResponse, textReadyOptions) => {
             if (abortController.signal.aborted) return;
+            if (earlyResponse.id) dmMessageId = earlyResponse.id;
             const hasEarlyRollRequests = Boolean(earlyResponse.rollRequests?.length);
             const combatGatePending = Boolean(
               hasEarlyRollRequests ||
@@ -718,6 +719,7 @@ export const useMessageHandlerLogic = ({
       // #2456: the party was defeated. The hook has already surfaced the death
       // screen state and settled the combat preflight. Skip ordinary DM-reply
       // processing — no sanitizing, no persistence, no generic error text.
+      if (aiResponseMessage.id) dmMessageId = aiResponseMessage.id;
       if (aiResponseMessage.context?.terminalState === 'party_defeated') {
         setComposerBlocked(false);
         // The killing round's paragraph (#2518) is the one thing a terminal turn can carry: save
@@ -988,10 +990,13 @@ export const useMessageHandlerLogic = ({
       if (turnCountAdvanced) {
         try {
           const revertCount = Math.max(0, turnCountRef.current - 1);
-          await updateGameSessionState((prev: ExtendedGameSession) => ({
-            ...prev,
-            turn_count: Math.max(0, (prev.turn_count || 0) - 1),
-          }));
+          const revert = () =>
+            updateGameSessionState((prev: ExtendedGameSession) => ({
+              ...prev,
+              turn_count: Math.max(0, (prev.turn_count || 0) - 1),
+            }));
+          if (timedOut) runDeferredTask('timed-out turn count rollback', revert);
+          else await revert();
           turnCountRef.current = revertCount;
         } catch (revertError) {
           handleAsyncError(revertError, {

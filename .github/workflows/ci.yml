@@ -384,6 +384,7 @@ jobs:
             src/services/combat/__tests__/campaign-monster-resolution.pg.test.ts \
             src/services/__tests__/companions.real-db.test.ts \
             src/services/__tests__/dm-reply-reconcile.real-db.test.ts \
+            src/services/__tests__/roll-answer-dedupe.real-db.test.ts \
             src/services/__tests__/issue-1784-public-table-rls.real-db.test.ts \
             src/services/__tests__/monster-attacks.real-db.test.ts \
             src/services/__tests__/player-exit-intent.real-db.test.ts \

@@ -9,7 +9,8 @@ import {
   type GameSession,
   type DialogueHistory,
 } from '../../../../db/schema/index';
-import { InternalServerError, NotFoundError } from '../../lib/errors.js';
+import { transactionContext } from '../../../../db/transaction-context';
+import { ConflictError, InternalServerError, NotFoundError } from '../../lib/errors.js';
 
 /**
  * Message with pagination metadata
@@ -198,6 +199,48 @@ export class SessionMessageService {
         });
       }
 
+      // Serialise answer saves by session, including retries under a new client message id.
+      if (
+        messages.some(
+          (message) =>
+            message.speakerType === 'player' &&
+            message.context?.intent === 'dice_roll' &&
+            typeof message.context.rollRequestId === 'string',
+        )
+      ) {
+        await tx
+          .select({ id: gameSessions.id })
+          .from(gameSessions)
+          .where(eq(gameSessions.id, sessionId))
+          .for('no key update');
+        const unique = [];
+        for (const message of batch) {
+          const rollId =
+            message.speakerType === 'player' && message.context?.intent === 'dice_roll'
+              ? message.context.rollRequestId
+              : undefined;
+          if (typeof rollId !== 'string') {
+            unique.push(message);
+            continue;
+          }
+          const [stored] = await tx
+            .select()
+            .from(dialogueHistory)
+            .where(
+              and(
+                eq(dialogueHistory.sessionId, sessionId),
+                eq(dialogueHistory.speakerType, 'player'),
+                sql`${dialogueHistory.context}->>'rollRequestId' = ${rollId}`,
+              ),
+            )
+            .limit(1);
+          if (stored) existingOnce.push(stored);
+          else if (!unique.some((candidate) => candidate.context?.rollRequestId === rollId))
+            unique.push(message);
+        }
+        batch = unique;
+      }
+
       // #2218: /v1/llm/generate writes the DM reply it produced as a provisional row under the
       // id the client reserved for the turn. The client's own save of that turn carries the same
       // id and its final text, and replaces the provisional row in place rather than being
@@ -266,6 +309,63 @@ export class SessionMessageService {
       }
       return [...existingOnce, ...reconciled, ...inserted];
     });
+  }
+
+  // A row lock queues overlapping generations. Reply persistence and the cached response share
+  // this transaction, so a crash rolls both back and a committed reply replays its canonical id.
+  static async withRollTurn<T extends Record<string, unknown>>(
+    sessionId: string,
+    userId: string,
+    playerInput: string | undefined,
+    suppliedRollId: string | undefined,
+    requestedReplyId: string | undefined,
+    generate: (replyId?: string) => Promise<T>,
+  ): Promise<T> {
+    const afterCommit: Array<() => void> = [];
+    const result = await db.transaction(async (tx) => {
+      const session = await tx.query.gameSessions.findFirst({
+        where: (session, { and, eq }) =>
+          and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
+        columns: { id: true },
+      });
+      if (!session) throw new NotFoundError('Session', sessionId);
+      const [answer] = await tx
+        .select()
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+        )
+        .orderBy(desc(dialogueHistory.createdAt))
+        .limit(1)
+        .for('update');
+      const context = answer?.context as Record<string, unknown> | null;
+      const rollId =
+        context?.intent === 'dice_roll' && typeof context.rollRequestId === 'string'
+          ? context.rollRequestId
+          : undefined;
+      if (suppliedRollId && suppliedRollId !== rollId)
+        throw new ConflictError(
+          'This roll is missing or has been superseded by another player turn.',
+        );
+      if (!rollId || (!suppliedRollId && playerInput !== answer?.message))
+        return { guarded: false as const };
+      const cached = context?.rollTurnResult;
+      if (cached && typeof cached === 'object')
+        return { guarded: true as const, response: cached as T };
+      const replyId = requestedReplyId ?? crypto.randomUUID();
+      return transactionContext.run({ database: tx, afterCommit }, async () => {
+        const response = await generate(replyId);
+        if (typeof response.dmReplyPersisted === 'boolean') {
+          await tx
+            .update(dialogueHistory)
+            .set({ context: { ...context, rollTurnResult: response } })
+            .where(eq(dialogueHistory.id, answer!.id));
+        }
+        return { guarded: true as const, response };
+      });
+    });
+    for (const publish of afterCommit) publish();
+    return result.guarded ? result.response : generate();
   }
 
   /**
