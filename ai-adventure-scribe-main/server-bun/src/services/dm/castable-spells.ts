@@ -88,15 +88,22 @@ const SPELL_WORDS =
   /\b(?:slots?|cantrips?|ritual|upcast|(?:1st|2nd|3rd|[4-9]th)[- ]level|level\s*[1-9]|saving\s+throws?|DC\s*\d+)\b/i;
 /** A spell aims at a creature or a thing: "Witch Bolt at the cultist", "Bane on the guards". */
 const SPELL_TARGET = /^\s+(?:on|at|upon|against)\b/i;
+/**
+ * Ordinary object nouns that are never spell names, even aimed at a target: "Fishing Line" is
+ * tackle, not a spell (#248 item 3). "Cast Fishing Line into the lake" was already excluded by
+ * the target list; this covers "cast Fishing Line at the heron".
+ */
+const NON_SPELL_NOUNS = /\b(?:line|net|hook|rod)\b/i;
 
 /**
- * Whether a name the catalog does not hold, cast in `sentence`, reads as a spell (#217 step d2):
- * the sentence names a slot, a spell level, a saving throw or a DC, or the name is aimed at a target
- * ("at", "on", "upon", "against" straight after it). "Cast Fishing Line into the lake" is none of
- * those, so it is not a claim; "into" and "toward" name a place, not a target.
+ * Whether a name the catalog does not hold, cast in `sentence`, reads as a spell (#217 step d2,
+ * #248 item 3): the sentence names a slot, a spell level, a saving throw or a DC, or the name is
+ * aimed at a target ("at", "on", "upon", "against" straight after it) — unless the name is an
+ * ordinary object. "Cast Fishing Line into the lake" is none of those, so it is not a claim;
+ * "into" and "toward" name a place, not a target.
  */
-const readsLikeASpell = (sentence: string, afterName: string): boolean =>
-  SPELL_WORDS.test(sentence) || SPELL_TARGET.test(afterName);
+const readsLikeASpell = (sentence: string, phrase: string, afterName: string): boolean =>
+  (SPELL_WORDS.test(sentence) || SPELL_TARGET.test(afterName)) && !NON_SPELL_NOUNS.test(phrase);
 
 export interface NamedSpell {
   name: string;
@@ -117,7 +124,9 @@ export const spellsNamed = (playerInput: string, castPhrase: RegExp): NamedSpell
       const catalogName = catalogSpellSpelled(phrase);
       if (catalogName) return [{ name: catalogName, offCatalog: false }];
       const afterName = sentence.slice((match.index ?? 0) + match[0].length);
-      return readsLikeASpell(sentence, afterName) ? [{ name: phrase, offCatalog: true }] : [];
+      return readsLikeASpell(sentence, phrase, afterName)
+        ? [{ name: phrase, offCatalog: true }]
+        : [];
     }),
   );
 

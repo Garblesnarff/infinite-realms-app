@@ -7,9 +7,13 @@
  * before it is persisted or returned, against one allowlist built from the character:
  *
  * - features: `class_features_library` for the character's class, cumulative to their level
- *   (`ClassFeaturesService`), extended by any `character_features` rows granted to them;
+ *   (`ClassFeaturesService`), extended by any `character_features` rows granted to them. A
+ *   feature phrased as a cast ("cast Turn Undead", "cast Lay on Hands at Mira") takes the
+ *   feature path too, matched straight against the claim texts (#252);
  * - spells: what the character can cast now (`castableSpells`, #217), and a spell the catalog
- *   does not hold ("Witch Bolt") is checked too, when a caster names it as a spell (`spellsNamed`).
+ *   does not hold ("Witch Bolt") is checked too, when a caster names it as a spell (`spellsNamed`):
+ *   the sentence names a slot, a spell level, a saving throw or a DC, or the name is aimed at a
+ *   target — unless the name is an ordinary object ("Fishing Line" is tackle, #248 item 3).
  *
  * Only the player's own claim triggers it: a spell after a cast verb or a feature after a use verb,
  * in `player_input` or in the purpose of a roll the player makes for their own action. Never the
@@ -38,17 +42,30 @@ export function featureRefusalLine(characterName: string, claim: string): string
 const baseFeatureName = (name: string): string => name.replace(/\s*\(.*\)\s*$/, '').trim();
 
 /**
+ * The names a player might use for a feature: the base name, plus the option after a colon.
+ * "Channel Divinity: Turn Undead" is claimed as "Turn Undead" (#252).
+ */
+const featureClaimNames = (featureName: string): string[] => {
+  const base = baseFeatureName(featureName);
+  const afterColon = base.includes(':') ? base.split(':').slice(1).join(':').trim() : '';
+  return afterColon && afterColon.toLowerCase() !== base.toLowerCase() ? [base, afterColon] : [base];
+};
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
  * What a sentence claims: the name after a verb. A spell is claimed only by casting it ("I cast
  * Detect Thoughts on him"); a feature only by using it ("I use Action Surge and swing again").
  * "Use" never names a spell — "I use my shield to block" is not the Shield spell — and a name
- * with no verb in front is prose: "a stroke of luck", "Investigation to find traps".
+ * with no verb in front is prose: "a stroke of luck", "Investigation to find traps". "Using"
+ * ends the name, so "I cast Fireball using a 1st-level slot" claims Fireball (#248 item 3).
  */
 const phraseAfter = (
   verbs: string,
   before = '(?:my\\s+|the\\s+spell\\s+|the\\s+|a\\s+|an\\s+)?',
 ): RegExp =>
   new RegExp(
-    `\\b(?:${verbs})\\s+${before}(.+?)(?=\\s+(?:on|at|upon|toward|towards|into|against|to|and|then|while|again|with|in|as)\\b|[.,!?;:]|$)`,
+    `\\b(?:${verbs})\\s+${before}(.+?)(?=\\s+(?:on|at|upon|toward|towards|into|against|to|and|then|while|again|using|with|in|as)\\b|[.,!?;:]|$)`,
     'gi',
   );
 const CAST_PHRASE = phraseAfter('cast|casts|casting');
@@ -172,23 +189,57 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   let claimedSpells = input.inCombat
     ? []
     : [...new Set([...catalogNames(castPhrases), ...playerCasts])];
-  const library = usePhrases.length ? await loadLibrary() : [];
-  if (usePhrases.length && !library.length) {
+  // A class feature phrased as a cast needs the library even with no use verb (#252).
+  const nonCatalogCasts = castPhrases.filter((phrase) => !getSpellByName(phrase));
+  const library = usePhrases.length || nonCatalogCasts.length ? await loadLibrary() : [];
+  if ((usePhrases.length || nonCatalogCasts.length) && !library.length) {
     // An unseeded library makes every class uncovered; say so rather than refuse nothing quietly.
     logger.info({ msg: 'DM_FEATURE_CHECK_UNCOVERED', sessionId, reason: 'library_empty' });
   }
   // Only a feature a character uses can be claimed; a passive one is never "used".
   const usable = [
-    ...new Set(
+    ...new Map(
       library
         .filter((feature) => feature.usageType && feature.usageType !== 'passive')
-        .map((feature) => baseFeatureName(feature.featureName)),
-    ),
+        .flatMap((feature) =>
+          featureClaimNames(feature.featureName).map(
+            (name) => [name.toLowerCase(), name] as const,
+          ),
+        ),
+    ).values(),
   ];
   const claimedFeatures = usable.filter((name) =>
     usePhrases.some((phrase) => phrase.toLowerCase() === name.toLowerCase()),
   );
-  if (!claimedFeatures.length && !claimedSpells.length) return result;
+  // A class feature phrased as a cast ("cast Turn Undead", "cast Lay on Hands at Mira", #252):
+  // the phrase capture fragments multi-word features ("Lay"), so feature names are matched
+  // straight against the claim texts. A name that is also a catalog spell keeps the spell path.
+  const castFeatureClaims: string[] = [];
+  if (nonCatalogCasts.length && usable.length) {
+    for (const name of [...usable].sort((a, b) => b.length - a.length)) {
+      if (getSpellByName(name)) continue;
+      const pattern = new RegExp(
+        `\\bcast(?:s|ing)?\\s+(?:my\\s+|the\\s+spell\\s+|the\\s+|a\\s+|an\\s+)?${escapeRegExp(name)}(?![\\w'-])`,
+        'i',
+      );
+      if (texts.some((text) => pattern.test(text))) castFeatureClaims.push(name);
+    }
+    // The spell path saw only fragments ("Lay" from "cast Lay on Hands at Mira"); they leave
+    // with the feature, so the feature claim is never also refused as an unknown spell.
+    const featureKeys = castFeatureClaims.map(spellKey);
+    claimedSpells = claimedSpells.filter((spellName) => {
+      const key = spellKey(spellName);
+      return !featureKeys.some(
+        (featureKey) => key === featureKey || featureKey.startsWith(`${key}-`),
+      );
+    });
+  }
+  const allClaimedFeatures = [
+    ...new Map(
+      [...claimedFeatures, ...castFeatureClaims].map((name) => [name.toLowerCase(), name] as const),
+    ).values(),
+  ];
+  if (!allClaimedFeatures.length && !claimedSpells.length) return result;
 
   const character = await ownedSessionCharacter(sessionId, userId);
   if (!character) {
@@ -197,7 +248,7 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
       sessionId,
       reason: 'no_owned_session_character',
       clientCharacterIdOffered: Boolean(input.clientCharacterId),
-      claimedFeatures,
+      claimedFeatures: allClaimedFeatures,
       claimedSpells,
     });
     return result;
@@ -212,10 +263,10 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
   const className = (character.class ?? '').toLowerCase();
   const classRows = library.filter((feature) => feature.className.toLowerCase() === className);
   let refusedFeatures: string[] = [];
-  if (claimedFeatures.length && !classRows.length) {
+  if (allClaimedFeatures.length && !classRows.length) {
     // A class the library does not cover gets no feature refusal: nothing says what it has.
     logger.info({ msg: 'DM_FEATURE_CHECK_UNCOVERED', sessionId, className: character.class });
-  } else if (claimedFeatures.length) {
+  } else if (allClaimedFeatures.length) {
     const { ClassFeaturesService } = await import('../class-features-service.js');
     const grantedIds = new Set(
       (await ClassFeaturesService.getCharacterFeatures(character.id, userId)).map(
@@ -226,9 +277,11 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
       [
         ...classRows.filter((feature) => feature.levelAcquired <= character.level),
         ...library.filter((feature) => grantedIds.has(feature.id)),
-      ].map((feature) => baseFeatureName(feature.featureName).toLowerCase()),
+      ].flatMap((feature) =>
+        featureClaimNames(feature.featureName).map((name) => name.toLowerCase()),
+      ),
     );
-    refusedFeatures = claimedFeatures.filter((name) => !allowed.has(name.toLowerCase()));
+    refusedFeatures = allClaimedFeatures.filter((name) => !allowed.has(name.toLowerCase()));
   }
 
   if (!castsSpells(character)) {
