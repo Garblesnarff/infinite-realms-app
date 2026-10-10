@@ -10,6 +10,9 @@
  */
 
 import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { dirname, extname, join, normalize, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -21,7 +24,10 @@ export const SERVER_NAME = 'infinite-realms-companion';
 export const SERVER_VERSION = '1.0.0';
 
 /** Hostnames that resolve to this machine. */
-const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', '::1', 'localhost']);
+const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', '::1', 'localhost', '[::1]']);
+// Note: '[::1]' is the bracketed form. `new URL(origin).hostname` keeps the
+// brackets for IPv6 literals, while the Host header parser above strips them,
+// so both forms are listed.
 
 function hostHeaderHostname(value: string | undefined): string | null {
   if (!value) return null;
@@ -81,6 +87,49 @@ export interface RunningMcpServer {
   close: () => Promise<void>;
 }
 
+/** Directory holding the simulated Alexa+ web client (#215 step 3b). */
+const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
+
+const STATIC_CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+};
+
+/**
+ * Serve the simulated Alexa+ web client. Only GET/HEAD, never outside
+ * WEB_DIR (path traversal → miss → 404). Returns true when it handled the
+ * request. Loopback-only like everything else: the isLoopbackRequest guard
+ * runs before this.
+ */
+async function serveWebClient(
+  req: IncomingMessage,
+  res: import('node:http').ServerResponse,
+): Promise<boolean> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  const urlPath = (req.url ?? '/').split('?')[0].split('#')[0];
+  let rel: string;
+  try {
+    rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath.slice(1));
+  } catch {
+    return false;
+  }
+  const filePath = normalize(join(WEB_DIR, rel));
+  if (filePath !== WEB_DIR && !filePath.startsWith(WEB_DIR + sep)) return false;
+  let data: Buffer;
+  try {
+    data = await readFile(filePath);
+  } catch {
+    return false;
+  }
+  res.writeHead(200, {
+    'content-type': STATIC_CONTENT_TYPES[extname(filePath)] ?? 'application/octet-stream',
+    'content-length': data.length,
+  });
+  res.end(req.method === 'HEAD' ? undefined : data);
+  return true;
+}
+
 /**
  * Start the MCP server on Streamable HTTP. Resolves once listening.
  * Pass port 0 for an ephemeral port (used by the proving test).
@@ -96,8 +145,20 @@ export async function startMcpHttpServer(
       return;
     }
     if (req.url !== '/mcp') {
-      res.writeHead(404, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
+      void serveWebClient(req, res)
+        .then((handled) => {
+          if (!handled && !res.headersSent) {
+            res.writeHead(404, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Not found' }));
+          }
+        })
+        .catch((error) => {
+          if (!res.headersSent) {
+            res.writeHead(500, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal server error' }));
+          }
+          console.error('Static file error:', error instanceof Error ? error.message : error);
+        });
       return;
     }
     void (async () => {
