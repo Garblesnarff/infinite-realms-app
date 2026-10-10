@@ -117,6 +117,18 @@ here rather than the player rolling it. See <combat_roll_requirements>.
 **Do NOT narrate the outcome of an action in \`text\` while also populating \`roll_requests\` for that same action - request the roll and stop; narrate the result next turn.**
 </dice_roll_format>`;
 
+    // #218 step 2: the server adds this to the sheet, once per player message, out of combat.
+    const xpAwardField = `<xp_award_field>
+<title>STORY XP</title>
+When the player's character overcomes a challenge in the story (solves a puzzle, wins over an NPC,
+completes a quest goal, succeeds at a check that matters), set the \`xp_award\` JSON field to
+\`{"amount": <whole number of XP>, "reason": "<short reason>"}\`, sized by D&D 5e guidance for the
+character's level. Otherwise set it to \`null\`. The game adds it to the character sheet; do not
+state an XP gain in \`text\` without setting the field.
+</xp_award_field>
+
+`;
+
     const principlesRules = inCombat
       ? `- Use D&D 5e mechanics when appropriate. The engine resolves attacks, spells and saves during
   combat: declare the player's attack in \`combat_actions\` and do not request rolls.`
@@ -149,7 +161,7 @@ field. Use an empty array when resolving a specific combat action${inCombat ? ''
 choice is appropriate.
 </options_field>
 
-<visual_prompt_rule>
+${inCombat ? '' : xpAwardField}<visual_prompt_rule>
 **OPTIONAL** - At the very end, if the scene would benefit from an illustration:
 VISUAL PROMPT: <short art prompt focusing on key visual elements>
 </visual_prompt_rule>

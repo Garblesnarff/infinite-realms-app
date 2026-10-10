@@ -647,6 +647,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           logger.warn({ msg: 'DM_STORY_SLOT_SPEND_FAILED', sessionId: castSessionId, error });
         }
       }
+      // #218 step 2: XP the story awards reaches the sheet, server-side, once per player message.
+      // Out of combat only, with the same skips as the slot spend above. A refused turn carries
+      // no `xp_award`: the gate's refusal envelope drops it.
+      if (
+        envelope?.xp_award &&
+        dmReply &&
+        dmReply.inCombat !== true &&
+        castSessionId &&
+        combatEntry &&
+        !envelope.combat_entry_pending
+      ) {
+        try {
+          const { awardStoryXp } = await import('../../services/dm/story-xp.js');
+          await awardStoryXp({ userId, sessionId: castSessionId, xpAward: envelope.xp_award });
+        } catch (error) {
+          logger.warn({ msg: 'DM_STORY_XP_AWARD_FAILED', sessionId: castSessionId, error });
+        }
+      }
       // sessionId must not come from combatEntry: that is only sent when combat
       // is NOT already active, so in-combat turns logged `sessionId: null` --
       // precisely the turns being debugged. (#2050 C)
