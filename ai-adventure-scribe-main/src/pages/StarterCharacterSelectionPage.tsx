@@ -10,7 +10,7 @@
  */
 
 import { Sparkles, User, ChevronRight } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -51,6 +51,9 @@ const StarterCharacterSelectionPage: React.FC = () => {
 
   const [selectedTemplate, setSelectedTemplate] = useState<StarterCharacterTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  // #209: synchronous in-flight guard — same double-click race as
+  // handleSelectTemplate: the disabled button lags a render behind.
+  const creatingRef = useRef(false);
 
   const isLoading = campaignLoading || templatesLoading;
 
@@ -58,8 +61,9 @@ const StarterCharacterSelectionPage: React.FC = () => {
    * Create character from template and start game
    */
   const handleStartWithCharacter = async () => {
-    if (!selectedTemplate || !user || !campaignId || !campaign) return;
+    if (!selectedTemplate || !user || !campaignId || !campaign || creatingRef.current) return;
 
+    creatingRef.current = true;
     setIsCreating(true);
 
     try {
@@ -85,6 +89,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
         variant: 'destructive',
       });
     } finally {
+      creatingRef.current = false;
       setIsCreating(false);
     }
   };

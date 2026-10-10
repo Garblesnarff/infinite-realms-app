@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { resolveStarterCampaignIdFromSessionList } from '../../../../shared/session-list-contract';
@@ -98,6 +98,10 @@ export function useCharacterSelection({
   const { toast } = useToast();
   const { user } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
+  // #209: synchronous in-flight guard. setIsCreating is async, so two fast
+  // clicks (double-click / double-tap) both read isCreating=false and create
+  // twice — the duplicate-premade root cause. The ref flips synchronously.
+  const creatingRef = useRef(false);
 
   // Check if this campaign is linked to a starter campaign
   const {
@@ -186,8 +190,9 @@ export function useCharacterSelection({
    * Create character from starter template and start game
    */
   const handleSelectTemplate = async (template: StarterTemplate): Promise<void> => {
-    if (!user || isCreating) return;
+    if (!user || creatingRef.current) return;
 
+    creatingRef.current = true;
     setIsCreating(true);
 
     try {
@@ -216,6 +221,7 @@ export function useCharacterSelection({
         variant: 'destructive',
       });
     } finally {
+      creatingRef.current = false;
       setIsCreating(false);
     }
   };
