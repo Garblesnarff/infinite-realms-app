@@ -29,6 +29,8 @@ export const elf: CharacterRace = {
       description: 'Masters of magic, they know an extra wizard cantrip.',
       backgroundImage: '/images/races/subraces/high-elf-elf-sub-race-card-background.png',
       abilityScoreIncrease: { intelligence: 1 },
+      // The actual weapon lists live in shared/weapon-proficiency.ts
+      // (SRD_SUBRACE_WEAPON_TRAINING) — this record names the trait only.
       traits: ['High Elf Cantrip', 'Weapon Training'],
       bonusCantrip: { source: 'wizard', count: 1 },
     },

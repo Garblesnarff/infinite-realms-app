@@ -16,6 +16,7 @@ import { and, asc, desc, eq, exists, inArray, or, isNotNull, sql } from 'drizzle
 import { isEquippedWeaponCandidate } from './combat-weapon-options.js';
 import {
   findCatalogWeapon,
+  findMagicBaseWeapon,
   isUnarmedWeaponClaim,
   UNARMED_STRIKE,
   weaponProfileMatches,
@@ -106,6 +107,11 @@ function candidateToProfile(
   owner: EquippedWeaponOwner | undefined,
 ): WeaponRuleProfile {
   const catalog = findCatalogWeapon(candidate.name);
+  // Magic weapons that name a single base weapon (Sun Blade -> longsword)
+  // resolve proficiency through the base weapon. Damage/range still come from
+  // the item's own properties with the old fallbacks — the base entry is only
+  // consulted for the proficiency decision, never for combat stats.
+  const proficiencyCatalog = catalog ?? findMagicBaseWeapon(candidate.name);
   const damage = (candidate.properties.damage ?? {}) as Record<string, unknown>;
   const range = (candidate.properties.range ?? {}) as Record<string, unknown>;
   const normalRange = Number(range.normal ?? catalog?.range?.normal ?? 5);
@@ -119,7 +125,7 @@ function candidateToProfile(
     magicBonus: candidate.magicBonus,
     finesse: Boolean(candidate.properties.finesse ?? catalog?.weaponProperties?.finesse),
     ranged: normalRange > 5,
-    proficient: catalog ? characterCanUseWeapon(owner, catalog) : false,
+    proficient: proficiencyCatalog ? characterCanUseWeapon(owner, proficiencyCatalog) : false,
   };
 }
 

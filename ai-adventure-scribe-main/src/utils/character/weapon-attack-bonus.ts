@@ -41,7 +41,10 @@ function proficiencySubject(character: Character): WeaponProficiencySubject {
 }
 
 function isProficient(character: Character, weapon: Equipment): boolean {
-  return isWeaponProficient(weapon.id, proficiencySubject(character));
+  // A magic weapon resolves through its base weapon (Sun Blade -> longsword),
+  // so a Fighter is proficient with one. Rows with no baseWeaponId (e.g.
+  // "Weapon (any sword)") keep the old behavior: not proficient.
+  return isWeaponProficient(weapon.baseWeaponId ?? weapon.id, proficiencySubject(character));
 }
 
 export interface WeaponAttackBonus {

@@ -12,6 +12,7 @@ import {
   normalizeEquipmentName,
   resolveWeaponName,
 } from '../../../../shared/equipment-weapon-resolver';
+import magicItemCatalog from '../../../../src/data/srd/magic-items.json';
 import weaponCatalog from '../../../../src/data/srd/weapons.json';
 
 export type CatalogWeapon = {
@@ -27,6 +28,25 @@ const catalogWeapons = weaponCatalog as CatalogWeapon[];
 
 /** Collapses "Shortsword", "short-sword", and "SHORT SWORD" onto one key. */
 export const normalizeWeaponName = (value: string): string => normalizeEquipmentName(value);
+
+/**
+ * Magic weapons that name a single base weapon (Sun Blade -> longsword) resolve
+ * to that base weapon's catalog entry, so proficiency is checked against the
+ * base weapon. Rows that name no single weapon ("Weapon (any sword)") carry no
+ * baseWeaponId and keep the old behavior: not proficient.
+ */
+const magicBaseWeaponIdByName = new Map<string, string>();
+for (const item of magicItemCatalog as { name?: string; baseWeaponId?: string }[]) {
+  if (item.name && item.baseWeaponId) {
+    magicBaseWeaponIdByName.set(normalizeWeaponName(item.name), item.baseWeaponId);
+  }
+}
+
+/** The SRD catalog entry for a magic weapon's base weapon, if the row names one. */
+export function findMagicBaseWeapon(name: string): CatalogWeapon | undefined {
+  const baseId = magicBaseWeaponIdByName.get(normalizeWeaponName(name));
+  return baseId ? findCatalogWeapon(baseId) : undefined;
+}
 
 export const findCatalogWeapon = (value: string): CatalogWeapon | undefined => {
   const key = normalizeWeaponName(value);

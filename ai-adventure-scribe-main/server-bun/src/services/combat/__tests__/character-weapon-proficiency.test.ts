@@ -112,3 +112,33 @@ describe('engine weapon proficiency reads the character record (#2540)', () => {
     expect(proficient).toEqual({ 'Sword of Certain Doom': false });
   });
 });
+
+describe('engine weapon proficiency resolves magic weapons through their base weapon (#155)', () => {
+  it('gives a Fighter a Sun Blade (baseWeaponId: longsword, martial)', async () => {
+    const proficient = await proficiencyFor(HUMAN, ['Sun Blade']);
+
+    expect(proficient).toEqual({ 'Sun Blade': true });
+  });
+
+  it('denies a Wizard a Mace of Disruption (mace is not on the wizard list)', async () => {
+    const proficient = await proficiencyFor({ class: 'Wizard', race: 'Human', subrace: '' }, [
+      'Mace of Disruption',
+    ]);
+
+    expect(proficient).toEqual({ 'Mace of Disruption': false });
+  });
+
+  it('gives a Wizard a Dagger of Venom (dagger is on the wizard list)', async () => {
+    const proficient = await proficiencyFor({ class: 'Wizard', race: 'Human', subrace: '' }, [
+      'Dagger of Venom',
+    ]);
+
+    expect(proficient).toEqual({ 'Dagger of Venom': true });
+  });
+
+  it('leaves a Flame Tongue without proficiency — "any sword" names no single base weapon', async () => {
+    const proficient = await proficiencyFor(HUMAN, ['Flame Tongue']);
+
+    expect(proficient).toEqual({ 'Flame Tongue': false });
+  });
+});

@@ -30,6 +30,12 @@ export interface Equipment {
   /** Damage dice used when a versatile weapon is wielded in two hands. */
   versatileDamage?: string;
   weaponType?: 'simple' | 'martial';
+  /**
+   * SRD id of the mundane weapon this magic weapon is (e.g. 'longsword' for a
+   * Sun Blade), so proficiency checks resolve through the base weapon. Unset
+   * when the row names no single weapon (e.g. "Weapon (any sword)").
+   */
+  baseWeaponId?: string;
   attackBonus?: number;
   range?: { normal: number; long?: number };
   weaponProperties?: {
