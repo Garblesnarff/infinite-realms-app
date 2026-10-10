@@ -138,3 +138,65 @@ export function suspectsFabricatedOutcome(
 ): boolean {
   return fabricatedOutcomeClaims(text, options).length > 0;
 }
+
+/**
+ * The engine's authoritative verdict for the turn (#266): a roll the dice decided, an attack
+ * the engine resolved. `true` = the check succeeded / the attack hit; `false` = it failed /
+ * missed. Mirrors `PersistedRollOutcome`'s `success`, the field the DM prompt already carries
+ * as `lastRollOutcome`.
+ */
+export interface EngineOutcome {
+  success: boolean;
+}
+
+/**
+ * The DM asserting the attempt came off, contradicting a FAILED engine verdict: "you succeed",
+ * "the check succeeds", "you are successful". Finite forms only — "you hope to succeed" is an
+ * aspiration, not a claim, so the bare infinitive is not matched.
+ */
+const SUCCESS_CLAIMS: RegExp[] = [
+  /\byou\s+succeed(?:s|ed)?\b/gi,
+  /\bsucceeds\b/gi,
+  /\bsucceeded\b/gi,
+  /\bsuccessful(?:ly)?\b/gi,
+  /\ba\s+success\b/gi,
+];
+
+/**
+ * The DM asserting the attempt fell flat, contradicting a SUCCESSFUL engine verdict: "you
+ * fail", "the strike misses", "it goes wide". `missing` is deliberately not matched — "the
+ * missing guard" is not a failed attempt.
+ */
+const FAILURE_CLAIMS: RegExp[] = [
+  /\byou\s+fail(?:s|ed)?\b/gi,
+  /\b(?:attempt|check|strike|attack|blow|shot)\s+(?:fails?|failed)\b/gi,
+  /\bunsuccessful(?:ly)?\b/gi,
+  /\bmiss(?:es|ed)?\b/gi,
+  /\b(?:go|goes|went)\s+wide\b/gi,
+  /\b(?:fall|falls|fell)\s+short\b/gi,
+];
+
+/**
+ * The phrases where the DM's text asserts the opposite of the engine's verdict (empty when the
+ * text follows it). A failed check may still have a consequence — noise, a cost, damage — so
+ * only explicit success language contradicts a failure, and only explicit failure language
+ * contradicts a success. Negated claims ("you don't succeed", "the strike doesn't miss") agree
+ * with the verdict and are skipped, as are claims inside a `but`-clause after one.
+ */
+export function contradictsEngineOutcome(
+  text: string | null | undefined,
+  outcome: EngineOutcome,
+): string[] {
+  const source = text ?? '';
+  const patterns = outcome.success ? FAILURE_CLAIMS : SUCCESS_CLAIMS;
+  const claims = new Set<string>();
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      const matched = match[0];
+      if (isNegated(source, index, matched)) continue;
+      claims.add(matched.trim().toLowerCase().slice(0, 80));
+    }
+  }
+  return [...claims].slice(0, 5);
+}

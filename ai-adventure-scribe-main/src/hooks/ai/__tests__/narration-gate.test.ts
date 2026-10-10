@@ -176,6 +176,121 @@ describe('enforceNarrationGate', () => {
     expect(note).toContain('"avoid a strike", "wounded"');
     expect(note).toContain('no creature attacked');
   });
+
+  describe('with an engine outcome (#266)', () => {
+    const gateWithOutcome = (
+      narration: Record<string, unknown>,
+      engineOutcome: { success: boolean },
+      regenerate = vi.fn(),
+    ): ReturnType<typeof enforceNarrationGate> =>
+      enforceNarrationGate({
+        narration: narration as { text: string },
+        sessionId: 'session-1',
+        branch: 'narrative',
+        playerMayHaveActed: true,
+        engineOutcome,
+        regenerate,
+      });
+
+    it('rejects a failed check narrated as a success, names the verdict, and takes a clean retry', async () => {
+      const retry = { text: 'Your foot scrapes stone. You fail to stay quiet.' };
+      const regenerate = vi.fn().mockResolvedValue(retry);
+
+      const outcome = await gateWithOutcome(
+        { text: 'You move with practiced stillness. You succeed without a sound.' },
+        { success: false },
+        regenerate,
+      );
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      const violation = regenerate.mock.calls[0][0] as string;
+      expect(violation).toContain('FAILED');
+      expect(violation).toContain('"you succeed"');
+      expect(outcome).toEqual({ narration: retry, outcome: 'regenerated' });
+      expect(logger.warn).toHaveBeenCalledWith(
+        'DM_NARRATION_REJECTED',
+        expect.objectContaining({ reason: 'outcome_contradicts_engine', attempt: 1 }),
+      );
+    });
+
+    it('passes a failed check narrated as a failure without asking again', async () => {
+      const regenerate = vi.fn();
+      const reply = { text: 'The clatter echoes. You fail to stay quiet.' };
+
+      const outcome = await gateWithOutcome(reply, { success: false }, regenerate);
+
+      expect(outcome).toEqual({ narration: reply, outcome: 'clean' });
+      expect(regenerate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an engine hit narrated as a miss', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'Your blade bites deep.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'The strike goes wide and misses entirely.' },
+        { success: true },
+        regenerate,
+      );
+
+      expect(outcome.outcome).toBe('regenerated');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'DM_NARRATION_REJECTED',
+        expect.objectContaining({ reason: 'outcome_contradicts_engine' }),
+      );
+    });
+
+    it('does not run the harm check when the engine resolved the turn', async () => {
+      const regenerate = vi.fn();
+      // A hit dealing damage is legitimate here, not a fabricated harm claim.
+      const reply = { text: 'Your blade bites deep. You deal 4 damage.' };
+
+      const outcome = await gateWithOutcome(reply, { success: true }, regenerate);
+
+      expect(outcome.outcome).toBe('clean');
+      expect(regenerate).not.toHaveBeenCalled();
+    });
+
+    it('replaces the reply when the retry still contradicts the verdict', async () => {
+      const regenerate = vi
+        .fn()
+        .mockResolvedValue({ text: 'You succeed without a sound.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'You succeed without a sound.' },
+        { success: false },
+        regenerate,
+      );
+
+      expect(outcome.outcome).toBe('replaced');
+      expect(outcome.narration.text).toBe(NEUTRAL_NO_EFFECT_LINE);
+    });
+
+    it('flags past-tense success claims against a failed verdict', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'You fail to stay quiet.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'You succeeded in climbing the shaft unnoticed.' },
+        { success: false },
+        regenerate,
+      );
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome.outcome).toBe('regenerated');
+    });
+
+    it('flags past-tense miss claims against a successful verdict', async () => {
+      const regenerate = vi.fn().mockResolvedValue({ text: 'Your blade bites deep.' });
+
+      const outcome = await gateWithOutcome(
+        { text: 'The strike went wide. Your attempt fell short.' },
+        { success: true },
+        regenerate,
+      );
+
+      expect(regenerate).toHaveBeenCalledTimes(1);
+      expect(outcome.outcome).toBe('regenerated');
+    });
+  });
 });
 
 describe('narrativeTurnHasNoEngineEvent', () => {
