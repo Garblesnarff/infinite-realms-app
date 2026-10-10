@@ -47,9 +47,8 @@
           "type": "chore",
           "hidden": true
         }
-      ],
-      "release-as": "0.33.0"
+      ]
     }
   },
-  "last-release-sha": "450e6347edc5f1e38cdf67624bd297769ce75e90"
+  "last-release-sha": "cefa17f6d936b082065cd4e48d67c50c2c6ae17f"
 }
