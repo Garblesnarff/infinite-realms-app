@@ -16,7 +16,7 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
 import {
@@ -349,6 +349,11 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
   let magicMissileUuid: string;
   let shieldUuid: string;
   let fireBoltUuid: string;
+  // Every id below is pushed the moment its insert succeeds, so a beforeAll
+  // or test that dies halfway still cleans up everything it created (#256).
+  const createdCharacterIds: string[] = [];
+  const createdClassIds: string[] = [];
+  const createdSpellIds: string[] = [];
   let app: { handle: (request: Request) => Promise<Response> };
 
   const postJson = async (path: string, body: unknown) => {
@@ -372,47 +377,50 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     );
     app = createRequestPipelineApp().use(charactersRoutes);
 
-    // Setup: wizard class and spells in the DB
+    // Setup: wizard class and spells in the DB. Each id is tracked the moment
+    // its insert succeeds, so a beforeAll that dies halfway still cleans up.
     [{ id: wizardClassId }] = await db
       .insert(classes)
       .values({ name: className, hitDie: 6 })
       .returning({ id: classes.id });
+    createdClassIds.push(wizardClassId);
 
-    const spellRows = await db
-      .insert(spells)
-      .values([
-        {
-          name: 'Magic Missile',
-          level: 1,
-          school: 'evocation',
-          castingTime: '1 action',
-          rangeText: '120 feet',
-          duration: 'Instantaneous',
-          description: 'Test.',
-        },
-        {
-          name: 'Shield',
-          level: 1,
-          school: 'abjuration',
-          castingTime: '1 reaction',
-          rangeText: 'Self',
-          duration: '1 round',
-          description: 'Test.',
-        },
-        {
-          name: 'Fire Bolt',
-          level: 0,
-          school: 'evocation',
-          castingTime: '1 action',
-          rangeText: '120 feet',
-          duration: 'Instantaneous',
-          description: 'Test.',
-        },
-      ])
-      .returning({ id: spells.id, name: spells.name });
-    magicMissileUuid = spellRows.find((s) => s.name === 'Magic Missile')!.id;
-    shieldUuid = spellRows.find((s) => s.name === 'Shield')!.id;
-    fireBoltUuid = spellRows.find((s) => s.name === 'Fire Bolt')!.id;
+    // One insert per spell (not a multi-row insert): a unique-violation on the
+    // second or third row must not orphan the rows that already landed.
+    const spellSeeds = [
+      {
+        name: 'Magic Missile',
+        level: 1,
+        school: 'evocation',
+        castingTime: '1 action',
+        rangeText: '120 feet',
+        duration: 'Instantaneous',
+        description: 'Test.',
+      },
+      {
+        name: 'Shield',
+        level: 1,
+        school: 'abjuration',
+        castingTime: '1 reaction',
+        rangeText: 'Self',
+        duration: '1 round',
+        description: 'Test.',
+      },
+      {
+        name: 'Fire Bolt',
+        level: 0,
+        school: 'evocation',
+        castingTime: '1 action',
+        rangeText: '120 feet',
+        duration: 'Instantaneous',
+        description: 'Test.',
+      },
+    ];
+    for (const seed of spellSeeds) {
+      const [{ id }] = await db.insert(spells).values(seed).returning({ id: spells.id });
+      createdSpellIds.push(id);
+    }
+    [magicMissileUuid, shieldUuid, fireBoltUuid] = createdSpellIds;
 
     await db.insert(classSpells).values([
       { classId: wizardClassId, spellId: magicMissileUuid, spellLevel: 1 },
@@ -423,10 +431,45 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
 
   afterAll(async () => {
     if (!hasRealDb) return;
-    try {
-      if (characterId) await db.delete(characters).where(eq(characters.id, characterId));
-    } catch {
-      /* best-effort */
+    // #256: the old teardown deleted only the character, leaving the
+    // Wizard2710-* class row, the three spell rows ('Magic Missile',
+    // 'Shield', 'Fire Bolt' — fixed names, so the second run on the same DB
+    // died on spells_name_unique) and the class_spells links behind. Delete
+    // every tracked row this block created, explicitly and individually
+    // guarded like the block above, so a rerun starts clean.
+    const drop = async (run: () => Promise<unknown>) => {
+      try {
+        await run();
+      } catch {
+        /* fixture teardown is best-effort */
+      }
+    };
+
+    if (createdCharacterIds.length > 0) {
+      await drop(() =>
+        db
+          .delete(characterSpells)
+          .where(inArray(characterSpells.characterId, createdCharacterIds)),
+      );
+      await drop(() =>
+        db
+          .delete(characterEquipment)
+          .where(inArray(characterEquipment.characterId, createdCharacterIds)),
+      );
+      await drop(() =>
+        db.delete(characters).where(inArray(characters.id, createdCharacterIds)),
+      );
+    }
+    if (createdClassIds.length > 0) {
+      await drop(() =>
+        db.delete(classSpells).where(inArray(classSpells.classId, createdClassIds)),
+      );
+    }
+    if (createdSpellIds.length > 0) {
+      await drop(() => db.delete(spells).where(inArray(spells.id, createdSpellIds)));
+    }
+    if (createdClassIds.length > 0) {
+      await drop(() => db.delete(classes).where(inArray(classes.id, createdClassIds)));
     }
     await closeRealDb();
   });
@@ -454,6 +497,7 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     );
     expect(createStatus).toBe(201);
     characterId = (created as { id: string }).id;
+    if (characterId) createdCharacterIds.push(characterId);
     expect(characterId).toBeDefined();
 
     // The exact body saveSpells sends: database UUIDs + prepared set.
@@ -506,6 +550,8 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     );
     expect(createStatus).toBe(201);
     const sorcererId = (created as { id: string }).id;
+    if (sorcererId) createdCharacterIds.push(sorcererId);
+    expect(sorcererId).toBeDefined();
 
     // Omit `prepared` entirely.
     const { status: spellsStatus } = await postJson(
@@ -524,8 +570,5 @@ describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => 
     expect(spellRows.length).toBeGreaterThan(0);
     // All true — no regression from the prepared-set feature.
     expect(spellRows.every((r) => r.isPrepared)).toBe(true);
-
-    // Cleanup
-    await db.delete(characters).where(eq(characters.id, sorcererId));
   });
   });
