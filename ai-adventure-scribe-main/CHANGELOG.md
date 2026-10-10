@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.33.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.1...v0.33.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **dm:** prepared casters cast only prepared spells; no false spell claims ([#217](https://github.com/Garblesnarff/infinite-realms-app/issues/217) step d2) ([#245](https://github.com/Garblesnarff/infinite-realms-app/issues/245)) ([4b48503](https://github.com/Garblesnarff/infinite-realms-app/commit/4b485035e2a59a2491ff424fa77ff3b8b4731ba5))
+* **dm:** spells cast in the story spend slots on the sheet ([#218](https://github.com/Garblesnarff/infinite-realms-app/issues/218) step 1) ([#251](https://github.com/Garblesnarff/infinite-realms-app/issues/251)) ([b125223](https://github.com/Garblesnarff/infinite-realms-app/commit/b12522368731b730f9601ecacb053bfc67fd3f67))
+
 ## [0.33.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.0...v0.33.1) (2026-10-10)
 
 
