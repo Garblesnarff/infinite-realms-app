@@ -9,7 +9,7 @@
  * wiring: blur-save -> PUT -> silent refresh, tabs stay mounted.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -180,6 +180,41 @@ describe('CharacterSheet Notes tab (#2701)', () => {
         expect.objectContaining({ title: 'Save failed', variant: 'destructive' }),
       );
     });
+    expect(
+      screen.getByRole('tab', { name: /notes & backstory/i }).getAttribute('data-state'),
+    ).toBe('active');
+  });
+
+  it('ten rapid keystrokes produce at most one save and keep the Notes tab active', async () => {
+    // Before the fix, every keystroke called onUpdate, which reloaded the
+    // sheet and kicked the user back to the Main tab. Now notes save
+    // debounced (800ms): ten keystrokes inside the window must not produce
+    // ten writes.
+    renderSheet();
+    await openNotesTab();
+
+    const textarea = screen.getByPlaceholderText(/keep track of important events/i);
+    let value = '';
+    for (const ch of 'abcdefghij') {
+      value += ch;
+      fireEvent.change(textarea, { target: { value } });
+    }
+
+    // Let the debounce fire on real timers (state updates wrapped in act).
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1100)));
+
+    await waitFor(() => {
+      expect(mockUpdateCharacter).toHaveBeenCalledTimes(1);
+    });
+    expect(mockUpdateCharacter).toHaveBeenCalledWith(CHARACTER_ID, {
+      session_notes: 'abcdefghij',
+    });
+
+    // "At most one" needs a second full debounce window with no new
+    // keystrokes: a late second save would fail this plain assertion.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1100)));
+    expect(mockUpdateCharacter).toHaveBeenCalledTimes(1);
+
     expect(
       screen.getByRole('tab', { name: /notes & backstory/i }).getAttribute('data-state'),
     ).toBe('active');
