@@ -1,0 +1,31 @@
+# Shared security headers for InfiniteRealms (#225).
+#
+# Install: copy this file to /etc/nginx/snippets/infinite-realms-security-headers.conf
+# (or another path) and make sure every `include` in nginx.conf.example points at it.
+#
+# Why a snippet: nginx drops ALL inherited server-level `add_header` directives
+# inside any location block that has its own `add_header`. The SPA locations
+# below (`/`, `= /index.html`, static assets, `/health`) each set Cache-Control,
+# so without this include the app shell would get none of the security headers
+# (AU-01). The `/api/` and `/ws` proxy locations intentionally do NOT include
+# this: the Elysia backend already sets the same headers, and including them
+# here would send each header twice (AU-02).
+#
+# Applying any of this to the live host is a prod config change and needs
+# Rob's line (see #225).
+
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+# HSTS mirrors exactly what Elysia sends in production
+# (max-age=31536000; includeSubDomains; preload). NOTE for Rob: `preload`
+# is a public commitment — once live, removal requires delisting.
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+# Content-Security-Policy, report-only first (#225). Mirrors the Elysia
+# API/SEO policy. Violations show only in the browser console for now
+# (no report-uri; the strategist will file a report collector as a follow-up).
+# Graduate to the enforcing header only after that collector exists.
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-ancestors 'none'" always;
