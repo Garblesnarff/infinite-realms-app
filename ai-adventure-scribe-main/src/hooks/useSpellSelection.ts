@@ -110,19 +110,8 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   const [isSavingSpells, setIsSavingSpells] = useState(false);
 
   // Initialize from character data
-  useEffect(() => {
-    if (character) {
-      logger.debug('🎯 [useSpellSelection] Initializing spell selection from character:', {
-        characterId: character.id,
-        cantrips: character.cantrips,
-        knownSpells: character.knownSpells,
-      });
-      setSelectedCantrips(character.cantrips || []);
-      setSelectedSpells(character.knownSpells || []);
-    }
-  }, [character?.id]); // Only reset when character changes
-
-  // Racial spells
+  // Racial spells (moved above init: the init effect splits saved cantrips
+  // across the class/bonus pools and needs the automatic racial list).
   const racialSpells = useMemo(() => {
     if (!character) {
       return { cantrips: [], spells: [], bonusCantrips: 0 };
@@ -130,6 +119,28 @@ export function useSpellSelection(): UseSpellSelectionReturn {
 
     return getRacialSpells(character.race?.name || '', character.subrace || undefined);
   }, [character?.race?.name, character?.subrace]);
+
+  // Initialize from character data
+  useEffect(() => {
+    if (character) {
+      logger.debug('🎯 [useSpellSelection] Initializing spell selection from character:', {
+        characterId: character.id,
+        cantrips: character.cantrips,
+        knownSpells: character.knownSpells,
+      });
+      // #212: the saved cantrip list holds all three pools. Split them back:
+      // drop automatic racial cantrips (they rejoin on save), fill the class
+      // pool up to cantripsKnown, and put the rest in the bonus pool.
+      const savedCantrips = Array.isArray(character.cantrips) ? character.cantrips : [];
+      const autoRacial = new Set(racialSpells.cantrips);
+      const selectable = savedCantrips.filter((id) => !autoRacial.has(id));
+      const classLimit = spellcastingInfo?.cantripsKnown ?? selectable.length;
+      setSelectedCantrips(selectable.slice(0, classLimit));
+      setSelectedBonusCantrips(selectable.slice(classLimit));
+      setSelectedSpells(character.knownSpells || []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character?.id]); // Only reset when character changes
 
   // Selection actions
   // ⚡ Bolt: Wrapped toggleCantrip in useCallback to ensure reference stability and prevent redundant child re-renders
@@ -204,12 +215,16 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     setSelectedBonusCantrips([]);
   }, []);
 
+  // #212: dedupe helper — the save joins class + bonus + automatic racial
+  // cantrips, and a Drow who toggles an automatic cantrip would save it twice.
+  const dedupeIds = (ids: string[]): string[] => [...new Set(ids)];
+
   // Validation delegated to useSpellSelectionValidation hook
   // #212 QA-042: validate the combined cantrip pools (class + bonus + racial auto).
   // Memoized: a fresh array literal here would be a new identity every render,
   // re-firing the validation effect forever (the frontend CI hang).
   const allSelectedCantrips = useMemo(
-    () => [...selectedCantrips, ...selectedBonusCantrips, ...racialSpells.cantrips],
+    () => dedupeIds([...selectedCantrips, ...selectedBonusCantrips, ...racialSpells.cantrips]),
     [selectedCantrips, selectedBonusCantrips, racialSpells.cantrips],
   );
   const { validation, canProceed } = useSpellSelectionValidation({
@@ -236,11 +251,12 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     try {
       // Combine cantrips and spells for API call.
       // #212 QA-042: class cantrips + racial bonus picks + automatic racial cantrips.
-      const allCantrips = [
+      // Deduped: a Drow who toggles an automatic cantrip would otherwise save it twice.
+      const allCantrips = dedupeIds([
         ...selectedCantrips,
         ...selectedBonusCantrips,
         ...racialSpells.cantrips,
-      ];
+      ]);
       const allSpells = [...allCantrips, ...selectedSpells];
 
       // Save to database first
@@ -271,11 +287,12 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     if (character) {
       // Only log when there are actual changes to reduce noise
       // #212 QA-042: include the bonus pool in the combined cantrips.
-      const combinedCantrips = [
+      // Deduped for the same reason as allSelectedCantrips above.
+      const combinedCantrips = dedupeIds([
         ...selectedCantrips,
         ...selectedBonusCantrips,
         ...racialSpells.cantrips,
-      ];
+      ]);
       const currentCantrips = character.cantrips || [];
       const currentSpells = character.knownSpells || [];
       const cantripsChanged =

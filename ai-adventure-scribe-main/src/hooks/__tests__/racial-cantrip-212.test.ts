@@ -14,9 +14,26 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import type { Character } from '@/types/character';
+import type * as SpellValidation from '@/utils/spell-validation';
 
 import { useAdvancedSpellcasting } from '@/hooks/useAdvancedSpellcasting';
 import { useSpellSelection } from '@/hooks/useSpellSelection';
+
+// #212: count validateSpellSelectionAsync calls to prove the render loop is
+// gone. The mock wraps the real implementation.
+const validateAsyncSpy = vi.fn();
+vi.mock('@/utils/spell-validation', async (importOriginal) => {
+  const mod = (await importOriginal()) as unknown as typeof SpellValidation;
+  return {
+    ...mod,
+    validateSpellSelectionAsync: (
+      ...args: Parameters<typeof mod.validateSpellSelectionAsync>
+    ) => {
+      validateAsyncSpy(...args);
+      return mod.validateSpellSelectionAsync(...args);
+    },
+  };
+});
 
 
 // Mock character context with a High Elf Wizard
@@ -117,6 +134,31 @@ describe('QA-042: racial bonus cantrip is its own pool (#212)', () => {
     // Class pool unchanged by the racial pick.
     expect(result.current.selectedCantrips).toHaveLength(3);
   });
+
+  it('reopening with 4 saved cantrips splits 3 class + 1 bonus', async () => {
+    // Simulate a saved character carrying all 4 cantrips (3 class + 1 racial).
+    // The mocked context reads highElfWizard directly, so set its cantrips.
+    const savedCantrips = ['fire-bolt', 'mage-hand', 'prestidigitation', 'acid-splash'];
+    (highElfWizard as { cantrips: string[] }).cantrips = savedCantrips;
+
+    const { result } = renderHook(() => useSpellSelection());
+
+    await waitFor(() => {
+      expect(result.current.isLoadingSpells).toBe(false);
+    });
+
+    // The init effect must split, not dump everything into the class pool.
+    expect(result.current.selectedCantrips).toHaveLength(3);
+    expect(result.current.selectedCantrips).toContain('fire-bolt');
+    const bonus = (
+      result.current as unknown as { selectedBonusCantrips: string[] }
+    ).selectedBonusCantrips;
+    expect(bonus).toHaveLength(1);
+    expect(bonus).toContain('acid-splash');
+
+    // Restore for other tests.
+    (highElfWizard as { cantrips: string[] }).cantrips = [];
+  });
 });
 
 describe('QA-043: cantrips are never preparable (#212)', () => {
@@ -142,9 +184,10 @@ describe('QA-043: cantrips are never preparable (#212)', () => {
 describe('QA-042: one toggle → one save (#212)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    validateAsyncSpy.mockClear();
   });
 
-  it('toggling the bonus cantrip dispatches a single combined save', async () => {
+  it('toggling the bonus cantrip does not loop validation', async () => {
     const { result } = renderHook(() => useSpellSelection());
 
     await waitFor(() => {
@@ -156,11 +199,13 @@ describe('QA-042: one toggle → one save (#212)', () => {
       result.current.toggleCantrip('fire-bolt');
     });
 
+    validateAsyncSpy.mockClear();
     mockDispatch.mockClear();
 
-    // One bonus toggle → the auto-save effect should dispatch exactly once
-    // with the combined cantrip list (class + bonus). A render-loop would
-    // dispatch repeatedly.
+    // One bonus toggle. Without the useMemo on allSelectedCantrips, the
+    // validation effect re-fires every render (fresh array identity) and
+    // validateSpellSelectionAsync is called dozens of times. With the memo,
+    // it runs once for the real change.
     act(() => {
       const hook = result.current as unknown as {
         toggleBonusCantrip: (id: string) => void;
@@ -173,13 +218,47 @@ describe('QA-042: one toggle → one save (#212)', () => {
       await new Promise((r) => setTimeout(r, 100));
     });
 
+    // The loop drives validation, not just the save: without the memo this
+    // count is in the dozens (fails on 771f14d0); with the memo it is 1-2.
+    expect(validateAsyncSpy.mock.calls.length).toBeLessThan(5);
+
+    // And the save itself fires once with the combined, deduped list.
     const saves = mockDispatch.mock.calls.filter(
       ([action]) =>
         action.type === 'UPDATE_CHARACTER' && 'cantrips' in action.payload,
     );
-    // Exactly one save for the one toggle (not a loop).
     expect(saves.length).toBe(1);
     const savedCantrips = saves[0][0].payload.cantrips as string[];
     expect(savedCantrips.sort()).toEqual(['acid-splash', 'fire-bolt']);
+  });
+
+  it('a duplicate id across pools saves once', async () => {
+    const { result } = renderHook(() => useSpellSelection());
+
+    await waitFor(() => {
+      expect(result.current.isLoadingSpells).toBe(false);
+    });
+
+    // Toggle the same cantrip in both the class and bonus pools.
+    // (Simulates a Drow toggling an automatic cantrip.)
+    act(() => {
+      result.current.toggleCantrip('fire-bolt');
+      const hook = result.current as unknown as {
+        toggleBonusCantrip: (id: string) => void;
+      };
+      hook.toggleBonusCantrip('fire-bolt');
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    const saves = mockDispatch.mock.calls.filter(
+      ([action]) =>
+        action.type === 'UPDATE_CHARACTER' && 'cantrips' in action.payload,
+    );
+    const lastSave = saves[saves.length - 1][0].payload.cantrips as string[];
+    const fireBoltCount = lastSave.filter((id) => id === 'fire-bolt').length;
+    expect(fireBoltCount).toBe(1);
   });
 });
