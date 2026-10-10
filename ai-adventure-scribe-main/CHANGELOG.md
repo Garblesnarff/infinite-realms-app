@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.33.4](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.3...v0.33.4) (2026-10-10)
+
+
+### Bug Fixes
+
+* **dm:** XP found in the story reaches the sheet ([#218](https://github.com/Garblesnarff/infinite-realms-app/issues/218) step 2) ([#269](https://github.com/Garblesnarff/infinite-realms-app/issues/269)) ([7d695f3](https://github.com/Garblesnarff/infinite-realms-app/commit/7d695f374c4b798954bc782b2be5f71ed1a30a68))
+
 ## [0.33.3](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.2...v0.33.3) (2026-10-10)
 
 
