@@ -82,11 +82,14 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
   const maxPreparedSpells = canPrepareSpells
     ? calculateSpellsKnown(characterClass?.id || '', level, abilityModifier)
     : 0;
+  // #212 QA-043: only level 1+ spells are preparable; cantrips (level 0)
+  // can never be prepared.
   const availableSpells = allSpells.filter(
-    (spell: Spell) => spell.level <= Math.min(5, Math.ceil(level / 2)),
+    (spell: Spell) => spell.level >= 1 && spell.level <= Math.min(5, Math.ceil(level / 2)),
   );
   const availableRitualSpells = allSpells.filter(
-    (spell: Spell) => spell.ritual && spell.level <= Math.min(5, Math.ceil(level / 2)),
+    (spell: Spell) =>
+      spell.ritual && spell.level >= 1 && spell.level <= Math.min(5, Math.ceil(level / 2)),
   );
 
   // Pact Magic progression

@@ -44,8 +44,10 @@ const SpellSelection: React.FC = () => {
     spellsError,
     selectedCantrips,
     selectedSpells,
+    selectedBonusCantrips,
     toggleCantrip,
     toggleSpell,
+    toggleBonusCantrip,
     searchTerm,
     setSearchTerm,
     filters,
@@ -246,6 +248,7 @@ const SpellSelection: React.FC = () => {
         totalRacialCantrips={totalRacialCantrips}
         selectedCantrips={selectedCantrips}
         selectedSpells={selectedSpells}
+        selectedBonusCantrips={selectedBonusCantrips}
         filteredCantrips={filteredCantrips}
         filteredSpells={filteredSpells}
         availableCantrips={availableCantrips}
@@ -253,6 +256,7 @@ const SpellSelection: React.FC = () => {
         hasRacialSpells={hasRacialSpells}
         toggleCantrip={toggleCantrip}
         toggleSpell={toggleSpell}
+        toggleBonusCantrip={toggleBonusCantrip}
       />
 
       {/* Manual Save Button (fallback) */}

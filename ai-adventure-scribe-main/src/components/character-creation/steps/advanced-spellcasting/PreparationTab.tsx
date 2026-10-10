@@ -32,8 +32,9 @@ export const PreparationTab: React.FC<PreparationTabProps> = ({
           Spell Preparation
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Choose {maxPreparedSpells} spells to prepare. You can change your prepared spells after a
-          long rest.
+          {/* #212 QA-043: "Choose 1 spell" not "Choose 1 spells". */}
+          Choose {maxPreparedSpells} spell{maxPreparedSpells === 1 ? '' : 's'} to prepare.
+          You can change your prepared spells after a long rest.
         </p>
       </CardHeader>
       <CardContent>
