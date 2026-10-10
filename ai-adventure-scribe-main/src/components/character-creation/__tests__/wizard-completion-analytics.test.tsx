@@ -36,6 +36,11 @@ vi.mock('@/contexts/CharacterContext', () => ({
   }),
 }));
 
+// Mock auth for the wizard draft key (#208)
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'test-user-1' } }),
+}));
+
 // Mock saver hook to resolve with id
 vi.mock('@/hooks/use-character-save', () => ({
   useCharacterSave: () => ({ saveCharacter: async () => ({ id: 'char-1' }), isSaving: false }),

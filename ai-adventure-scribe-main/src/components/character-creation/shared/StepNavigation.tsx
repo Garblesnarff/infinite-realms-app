@@ -10,6 +10,8 @@ interface StepNavigationProps {
   onNext: () => void;
   onPrevious: () => void;
   isLoading?: boolean;
+  /** When provided, renders a Cancel button that calls this handler. */
+  onCancel?: () => void;
 }
 
 /**
@@ -22,6 +24,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   onNext,
   onPrevious,
   isLoading = false,
+  onCancel,
 }) => {
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === totalSteps - 1;
@@ -46,15 +49,27 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
 
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          onClick={onPrevious}
-          disabled={isFirstStep || isLoading}
-          className="transition-all duration-200 hover:scale-105 disabled:opacity-50"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Previous
-        </Button>
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="outline"
+            onClick={onPrevious}
+            disabled={isFirstStep || isLoading}
+            className="transition-all duration-200 hover:scale-105 disabled:opacity-50"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Previous
+          </Button>
+          {onCancel && (
+            <Button
+              variant="ghost"
+              onClick={onCancel}
+              disabled={isLoading}
+              className="transition-all duration-200 hover:scale-105 disabled:opacity-50"
+            >
+              Cancel
+            </Button>
+          )}
+        </div>
 
         <div className="flex items-center space-x-4">
           {/* Step indicators */}

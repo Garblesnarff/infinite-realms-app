@@ -3,30 +3,61 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { wizardSteps } from './constants';
 import { saveCharacterAndNavigate } from './save-character-and-navigate';
+import { useWizardDraft } from './use-wizard-draft';
+import { hasWizardDraftData, type WizardDraft } from './wizard-draft';
 import { validateStep, validateCharacterForSave } from './wizard-validators';
 import CharacterPreview from '../shared/CharacterPreview';
 import ProgressIndicator from '../shared/ProgressIndicator';
 import StepNavigation from '../shared/StepNavigation';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
+import { initialState as initialCharacterState } from '@/contexts/character/character-reducer';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useCharacterSave } from '@/hooks/use-character-save';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 
+/** URL param carrying the wizard step, so browser Back/Forward moves one step. */
+const STEP_PARAM = 'step';
+
+function readStepParam(searchParams: URLSearchParams): number {
+  const raw = searchParams.get(STEP_PARAM);
+  if (raw === null) return 0;
+  // Bounded at parse time; the sync effect clamps to the filtered step list too.
+  return Math.max(0, Math.min(Number.parseInt(raw, 10) || 0, 9999));
+}
+
+function formatDraftDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? 'recently' : d.toLocaleString();
+}
+
 /**
  * Main content component for the character creation wizard
  * Handles step navigation, validation, and character saving
  */
 const WizardContent: React.FC = () => {
-  const { state } = useCharacter();
-  const [currentStep, setCurrentStep] = React.useState(0);
+  const { state, dispatch } = useCharacter();
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [currentStep, setCurrentStep] = React.useState<number>(() => readStepParam(searchParams));
   const { saveCharacter, isSaving } = useCharacterSave();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { scrollToTop } = useAutoScroll();
-  const [searchParams] = useSearchParams();
+  const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
 
   // Filter steps based on character state
   const getFilteredSteps = React.useCallback(() => {
@@ -40,17 +71,96 @@ const WizardContent: React.FC = () => {
 
   const filteredSteps = getFilteredSteps();
 
-  // Adjust current step if steps are filtered and current step is out of bounds
+  /** Move to a step, recording it in the URL (new history entry by default). */
+  const goToStep = React.useCallback(
+    (step: number, opts?: { replace?: boolean }) => {
+      setCurrentStep(step);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set(STEP_PARAM, String(step));
+          return next;
+        },
+        { replace: opts?.replace },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // Draft persistence (#208): autosave locally per user, offer resume on return.
+  const { pendingDraft, resumeDraft, discardDraft, clearDraft } = useWizardDraft({
+    character: state.character,
+    currentStep,
+    userId: user?.id ?? null,
+    campaignId: searchParams.get('campaign'),
+    onRestore: (draft: WizardDraft) => {
+      dispatch({ type: 'SET_CHARACTER', payload: draft.character });
+      goToStep(draft.step, { replace: true });
+    },
+  });
+
+  const handleDiscardDraft = React.useCallback(() => {
+    discardDraft();
+    // Reset the form too: otherwise the stale character stays on screen and
+    // the next edit would resurrect the "discarded" draft via autosave.
+    dispatch({ type: 'SET_CHARACTER', payload: { ...initialCharacterState.character } });
+    goToStep(0, { replace: true });
+  }, [discardDraft, dispatch, goToStep]);
+
+  // Ensure the step param exists on first mount (replace, no history entry).
+  // The step state itself is initialized from the URL above.
+  const didInitStepParam = React.useRef(false);
   React.useEffect(() => {
-    if (currentStep >= filteredSteps.length && filteredSteps.length > 0) {
-      setCurrentStep(filteredSteps.length - 1);
+    if (didInitStepParam.current) return;
+    didInitStepParam.current = true;
+    if (searchParams.get(STEP_PARAM) === null) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set(STEP_PARAM, '0');
+          return next;
+        },
+        { replace: true },
+      );
     }
-  }, [filteredSteps.length, currentStep]);
+  }, [searchParams, setSearchParams]);
+
+  // Sync the step from the URL (browser Back/Forward) and clamp to the
+  // filtered step list.
+  React.useEffect(() => {
+    const maxStep = Math.max(0, filteredSteps.length - 1);
+    const clamped = Math.min(readStepParam(searchParams), maxStep);
+    setCurrentStep((prev) => (prev === clamped ? prev : clamped));
+  }, [searchParams, filteredSteps.length]);
+
+  // Warn before the tab is closed or refreshed while the draft has data.
+  React.useEffect(() => {
+    if (!hasWizardDraftData(state.character) || isSaving) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [state.character, isSaving]);
 
   // Scroll to top whenever the step changes
   React.useEffect(() => {
     scrollToTop();
   }, [currentStep, scrollToTop]);
+
+  const handleCancelClick = () => {
+    if (hasWizardDraftData(state.character)) {
+      setCancelDialogOpen(true);
+    } else {
+      confirmCancel();
+    }
+  };
+
+  const confirmCancel = () => {
+    clearDraft();
+    setCancelDialogOpen(false);
+    navigate('/app/characters');
+  };
 
   /**
    * Handles navigation to the next step
@@ -96,7 +206,7 @@ const WizardContent: React.FC = () => {
 
         // Enhanced safety check: ensure the next step exists in filtered steps
         if (nextStepIndex < filteredSteps.length && filteredSteps[nextStepIndex]) {
-          setCurrentStep(nextStepIndex);
+          goToStep(nextStepIndex);
         } else {
           logger.error(
             'Next step does not exist in filtered steps:',
@@ -112,7 +222,7 @@ const WizardContent: React.FC = () => {
           // Attempt recovery by resetting to the last valid step
           const lastValidStep = Math.max(0, filteredSteps.length - 1);
           if (currentStep !== lastValidStep) {
-            setCurrentStep(lastValidStep);
+            goToStep(lastValidStep, { replace: true });
           }
         }
       } else {
@@ -168,6 +278,7 @@ const WizardContent: React.FC = () => {
           navigate,
           searchParams,
           toast,
+          onSaved: () => clearDraft(),
         });
       }
     } catch (unexpectedError) {
@@ -188,7 +299,7 @@ const WizardContent: React.FC = () => {
    */
   const handlePrevious = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+      goToStep(currentStep - 1);
     }
   };
 
@@ -237,6 +348,7 @@ const WizardContent: React.FC = () => {
                 totalSteps={filteredSteps.length}
                 onNext={handleNext}
                 onPrevious={handlePrevious}
+                onCancel={handleCancelClick}
                 isLoading={isSaving}
               />
             </Card>
@@ -250,6 +362,40 @@ const WizardContent: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Resume draft dialog (#208): explicit choice, not dismissible by backdrop */}
+      <AlertDialog open={pendingDraft !== null}>
+        <AlertDialogContent onEscapeKeyDown={(e) => e.preventDefault()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resume your character?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have an unfinished character draft
+              {pendingDraft ? ` from ${formatDraftDate(pendingDraft.updatedAt)}` : ''}. Pick up
+              where you left off, or start over.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDiscardDraft}>Start over</AlertDialogCancel>
+            <AlertDialogAction onClick={resumeDraft}>Resume draft</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel confirm dialog (#208) */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel character creation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your unfinished draft will be discarded. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancel}>Discard draft</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
