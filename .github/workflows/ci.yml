@@ -199,6 +199,18 @@ jobs:
         if: ${{ !cancelled() && steps.install-lore-keeper-ingest.outcome == 'success' }}
         run: bun test tools/lore-keeper-ingest
         working-directory: ai-adventure-scribe-main
+      # companion-mcp-server has its own bun.lock and node_modules, so the
+      # workspace installs above do not provide its dependencies. Its
+      # proving test imports the real companion route definitions, which
+      # resolve elysia/pino through server-bun's node_modules (#215).
+      - id: install-companion-mcp
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun install --frozen-lockfile
+        working-directory: companion-mcp-server
+      - name: Companion MCP server typecheck and proving test
+        if: ${{ !cancelled() && steps.install-companion-mcp.outcome == 'success' && steps.install-server.outcome == 'success' }}
+        run: bun run typecheck && bun test test/
+        working-directory: companion-mcp-server
 
   frontend:
     needs: changes
