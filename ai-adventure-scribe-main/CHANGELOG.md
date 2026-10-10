@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.33.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.0...v0.33.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **creation:** the wizard saves equipment, gold and prepared spells ([#211](https://github.com/Garblesnarff/infinite-realms-app/issues/211)) ([#232](https://github.com/Garblesnarff/infinite-realms-app/issues/232)) ([4f0a4a4](https://github.com/Garblesnarff/infinite-realms-app/commit/4f0a4a49b702a064d3ee213e86d893beaab67086))
+* **dm:** refuse spells the character has not prepared ([#217](https://github.com/Garblesnarff/infinite-realms-app/issues/217) step d1) ([#238](https://github.com/Garblesnarff/infinite-realms-app/issues/238)) ([5ab649a](https://github.com/Garblesnarff/infinite-realms-app/commit/5ab649a46dc42386033a5aedc43582dc5e4a215e))
+* **public:** /pricing route, clean sitemap, release number on account ([#227](https://github.com/Garblesnarff/infinite-realms-app/issues/227)) ([#242](https://github.com/Garblesnarff/infinite-realms-app/issues/242)) ([0963ca0](https://github.com/Garblesnarff/infinite-realms-app/commit/0963ca08c1449c3d88ddfcbb31373448115a9e30))
+* **rolls:** a resolved roll always finishes the turn ([#216](https://github.com/Garblesnarff/infinite-realms-app/issues/216)) ([#236](https://github.com/Garblesnarff/infinite-realms-app/issues/236)) ([06edc8d](https://github.com/Garblesnarff/infinite-realms-app/commit/06edc8da7cf72f55d3a0cd477d8191600d429d19))
+* **sheet:** Use Feature and rests save and show feedback ([#224](https://github.com/Garblesnarff/infinite-realms-app/issues/224)) ([#235](https://github.com/Garblesnarff/infinite-realms-app/issues/235)) ([9f04ce5](https://github.com/Garblesnarff/infinite-realms-app/commit/9f04ce57ded4845de1c7b08f0b76546e4d16ed8c))
+
+
+### Performance
+
+* **client:** keep three.js and app-only chunks off the landing page ([#226](https://github.com/Garblesnarff/infinite-realms-app/issues/226)) ([#237](https://github.com/Garblesnarff/infinite-realms-app/issues/237)) ([2d0b382](https://github.com/Garblesnarff/infinite-realms-app/commit/2d0b382e0135cf9b05a542efe57c8ea4d2435d63))
+
+
+### Refactoring
+
+* **auth:** attach the user via resolve on spells, personality, images, billing ([#193](https://github.com/Garblesnarff/infinite-realms-app/issues/193) step 4) ([#234](https://github.com/Garblesnarff/infinite-realms-app/issues/234)) ([94e35d1](https://github.com/Garblesnarff/infinite-realms-app/commit/94e35d177a277d43e310e9a7d2c714a694d04df2))
+* **map:** delete disconnected map client code ([#199](https://github.com/Garblesnarff/infinite-realms-app/issues/199) step 3) ([#233](https://github.com/Garblesnarff/infinite-realms-app/issues/233)) ([58d30d5](https://github.com/Garblesnarff/infinite-realms-app/commit/58d30d5654ecec608b8d1df1af989dc6b517a42b))
+* **map:** delete map files orphaned by [#233](https://github.com/Garblesnarff/infinite-realms-app/issues/233) ([#199](https://github.com/Garblesnarff/infinite-realms-app/issues/199)) ([#241](https://github.com/Garblesnarff/infinite-realms-app/issues/241)) ([4ba571f](https://github.com/Garblesnarff/infinite-realms-app/commit/4ba571f50c20ff3dc57e22eebfd86f8f19c5ac96))
+
+
+### Documentation
+
+* update repository targets [skip ci] ([f50122d](https://github.com/Garblesnarff/infinite-realms-app/commit/f50122d9b00fc7f115c393b0af803e06d0b9a2f7))
+
 ## [0.33.0](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.32.6...v0.33.0) (2026-10-09)
 
 
