@@ -513,16 +513,21 @@ export const useMessageHandlerLogic = ({
             : -1;
       const savedMessage = savedMessageIndex >= 0 ? currentMessages[savedMessageIndex] : undefined;
 
-      if (
-        resumingSavedMessage &&
-        savedMessage?.context?.intent === 'dice_roll' &&
-        savedMessage.id
-      ) {
+      // Send-time guard: resuming must never answer a turn that already has a
+      // reply. This covers dice_roll resumes, failed-turn retries
+      // (retryContext.intent === 'resume_unanswered'), and the #265
+      // orphaned-message Retry offer — the offer-time newest check in
+      // use-held-entry-recovery runs before an unbounded user-think window,
+      // so the check has to be redone here at click time.
+      if (resumingSavedMessage && savedMessage?.id) {
         const stillUnanswered = await rejectWhenAborted(
           playerMessageIsStillNewest(sessionId, savedMessage.id),
           turnSignal,
         );
         if (!stillUnanswered) {
+          logger.debug(
+            `[MessageHandler] resume skipped: saved message ${savedMessage.id} is no longer the newest`,
+          );
           setComposerBlocked(false);
           return;
         }
@@ -1056,6 +1061,8 @@ export const useMessageHandlerLogic = ({
   // Synchronous assignment (not useEffect) ensures it's updated before any render-triggered call.
   actualSendMessageRef.current = actualSendMessage;
 
+  // Retry of a saved-but-unanswered row: intent 'resume_unanswered' makes actualSendMessage
+  // skip the player save and the turn-count increment, re-sending the last saved player row once.
   const retrySendMessage = React.useCallback(
     async (editedInput: string): Promise<void> => {
       const retryInput = editedInput.trim() || retryInputRef.current;
@@ -1072,17 +1079,25 @@ export const useMessageHandlerLogic = ({
     [handleSendMessage],
   );
 
+  // One shared offer: a saved-but-unanswered player row (a roll whose DM resolution
+  // never landed, or a plain message orphaned by a dropped turn) gets the same Retry
+  // setup — resume_unanswered re-sends the saved row with no duplicate save and no
+  // turn-count increment.
+  const offerRetryForSavedMessage = React.useCallback((message: ChatMessage) => {
+    retryInputRef.current = message.text;
+    retryContextRef.current = { intent: 'resume_unanswered' };
+    setSendError(DM_PROCESSING_ERROR_MESSAGE);
+  }, []);
+
   useHeldEntryRecovery({
     sessionId,
     messages,
     messagesReady,
     characterRecord: character as Record<string, unknown> | null | undefined,
     resumeTurn: (playerInput) => handleSendMessage(playerInput, { intent: 'resume_unanswered' }),
-    onUnansweredRoll: (message) => {
-      retryInputRef.current = message.text;
-      retryContextRef.current = { intent: 'resume_unanswered' };
-      setSendError(DM_PROCESSING_ERROR_MESSAGE);
-    },
+    onUnansweredRoll: offerRetryForSavedMessage,
+    // #265: a plain player message orphaned by a dropped turn gets the same retry setup.
+    onOrphanedMessage: offerRetryForSavedMessage,
   });
 
   React.useEffect(() => {

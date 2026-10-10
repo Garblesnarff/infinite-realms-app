@@ -16,6 +16,11 @@ interface UseHeldEntryRecoveryProps {
   /** Re-run the turn for the last player message, which is already saved. */
   resumeTurn: (playerInput: string) => Promise<void>;
   onUnansweredRoll?: (message: ChatMessage) => void;
+  /**
+   * #265: a plain player message orphaned by a dropped turn (e.g. a deploy mid-turn killed the
+   * in-flight DM reply). Offered, not auto-resumed — the player may have moved on.
+   */
+  onOrphanedMessage?: (message: ChatMessage) => void;
 }
 
 /**
@@ -37,6 +42,11 @@ interface UseHeldEntryRecoveryProps {
  *   reload saves its reply under the turn's id). The newest saved message is read again from
  *   the server immediately before resuming, and the turn is skipped unless it is still the
  *   player's own. A read that fails skips too: a retyped message costs less than an answer twice.
+ *
+ * #265 extends this to a plain player message orphaned by a dropped turn: a deploy mid-turn
+ * kills the in-flight DM reply, and after a reload the player's line sits with no reply under
+ * it. That message is offered a Retry (not auto-resumed): the retry re-sends the already-saved
+ * row once, with no duplicate player save.
  */
 /** Whether the server's newest message for the session is still this player message. */
 export async function playerMessageIsStillNewest(
@@ -67,6 +77,7 @@ export function useHeldEntryRecovery({
   characterRecord,
   resumeTurn,
   onUnansweredRoll,
+  onOrphanedMessage,
 }: UseHeldEntryRecoveryProps): void {
   const checkedSessionId = useRef<string | null>(null);
 
@@ -106,7 +117,23 @@ export function useHeldEntryRecovery({
           characterRecord,
           recentNarration: recentNarrationFrom(messages.slice(0, -1)),
         }));
-      if (!held) return;
+      if (!held) {
+        // #265: a plain player message the drop orphaned (not an attack, not a roll). Offer
+        // Retry rather than resuming: the player may have moved on. The offer-time
+        // newest check below only guards the offer decision; the send-time guard in
+        // actualSendMessage re-verifies before the retry fires, so a reply that
+        // lands in between can never be answered a second time.
+        if (last.id && (await playerMessageIsStillNewest(sessionId, last.id))) {
+          logger.info('ORPHANED_PLAYER_MESSAGE_OFFERED', { sessionId });
+          onOrphanedMessage?.(last);
+        } else {
+          logger.debug('ORPHANED_PLAYER_MESSAGE_OFFER_SKIPPED', {
+            sessionId,
+            reason: !last.id ? 'missing_id' : 'no_longer_newest',
+          });
+        }
+        return;
+      }
       if (!last.id || !(await playerMessageIsStillNewest(sessionId, last.id))) {
         return skip('answered_or_superseded');
       }
@@ -120,5 +147,5 @@ export function useHeldEntryRecovery({
       logger.warn('COMBAT_ENTRY_HOLD_RESUME_FAILED', { sessionId, error });
       if (last.context?.intent === 'dice_roll') onUnansweredRoll?.(last);
     });
-  }, [sessionId, messagesReady, messages, characterRecord, resumeTurn, onUnansweredRoll]);
+  }, [sessionId, messagesReady, messages, characterRecord, resumeTurn, onUnansweredRoll, onOrphanedMessage]);
 }
