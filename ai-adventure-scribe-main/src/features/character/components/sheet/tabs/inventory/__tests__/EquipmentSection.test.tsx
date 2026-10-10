@@ -67,4 +67,24 @@ describe('EquipmentSection (#205)', () => {
     expect(container.textContent).not.toContain(ROW_UUID_1);
     expect(container.textContent).not.toContain(ROW_UUID_2);
   });
+
+  it('renders "Unknown item" for a row whose item_name is a UUID', () => {
+    // Rows corrupted by the old save path carry the row UUID in item_name;
+    // the loader resolves them to the placeholder (the catalog has no UUID ids).
+    const corruptedUuid = 'aa11bb22-cc33-4d55-6e66-77889900aabb';
+    const character = transformCharacterData(characterRow, null, [
+      {
+        id: corruptedUuid,
+        item_name: corruptedUuid,
+        item_type: 'weapon',
+        quantity: 1,
+        equipped: false,
+        is_magic: false,
+      },
+    ]);
+    const { container } = renderSection(character);
+
+    expect(screen.getByText('Unknown item')).toBeInTheDocument();
+    expect(container.textContent).not.toContain(corruptedUuid);
+  });
 });

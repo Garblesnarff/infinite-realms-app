@@ -49,6 +49,18 @@ if (hasRealDb && !process.env.DATABASE_URL && process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 }
 
+// #205: the pipeline below mounts issue1784DataRoutes, whose service executes
+// a module-scope sql`` template; the db proxy validates the full server env
+// on first use, and the real-DB CI job does not provide CORS_ORIGIN,
+// WORKOS_API_KEY, WORKOS_CLIENT_ID, or PORT. Dummy values only — real values
+// win via ??=, and nothing here is a secret.
+if (hasRealDb) {
+  process.env.CORS_ORIGIN ??= 'http://localhost:5173';
+  process.env.WORKOS_API_KEY ??= 'test-workos-api-key';
+  process.env.WORKOS_CLIENT_ID ??= 'test-workos-client-id';
+  process.env.PORT ??= '8888';
+}
+
 const pipeline = await importWithRealDb(async () => {
   const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
   const { charactersRoutes } = await import('../characters.js');

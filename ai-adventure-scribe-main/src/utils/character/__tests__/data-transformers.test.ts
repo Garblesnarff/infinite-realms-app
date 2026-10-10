@@ -216,6 +216,26 @@ describe('data-transformers', () => {
       expect(ring?.itemName).toBe('Ring of Protection');
     });
 
+    it('resolves a UUID-shaped item_name to "Unknown item", never the UUID (#205)', () => {
+      // Rows corrupted by the old save path carry the row UUID in item_name.
+      // The equipment catalog has no UUID ids, so the lookup misses and the
+      // loader falls back to the placeholder. The row id stays in itemId.
+      const corrupted: CharacterEquipmentRow[] = [
+        {
+          id: 'aa11bb22-cc33-4d55-6e66-77889900aabb',
+          item_name: 'aa11bb22-cc33-4d55-6e66-77889900aabb',
+          quantity: 1,
+          equipped: false,
+          is_magic: false,
+        },
+      ];
+      const character = transformCharacterData(mockCharacterRow, mockStats, corrupted);
+
+      expect(character.inventory).toHaveLength(1);
+      expect(character.inventory?.[0].itemId).toBe('aa11bb22-cc33-4d55-6e66-77889900aabb');
+      expect(character.inventory?.[0].itemName).toBe('Unknown item');
+    });
+
     describe('canonical race, class, and background hydration', () => {
       it('covers the same twelve classes as the frontend class records', () => {
         expect(SRD_CLASS_TABLE.map((entry) => entry.name).sort()).toEqual(

@@ -7,6 +7,13 @@
  * Two inline copies would drift — the #2250/#2280 failure mode, where a body
  * the tests approved 422'd in production.
  *
+ * This is a literal transcription rather than a call to the real transform:
+ * importing `transformEquipmentForStorage` into the server test program pulls
+ * `src/types/character.ts` (via the transform's type import) into the server
+ * typecheck gate, where its pre-existing `DamageType`/`VisionInfo` errors
+ * fail the build. The client pin (`toEqual` against this literal) still fails
+ * loudly if the transform's output changes.
+ *
  * No imports: this file is loaded by both the client vitest suite (which uses
  * the `@/` alias) and the server bun:test suite (which does not), so it must
  * stay dependency-free like the other fixtures here.

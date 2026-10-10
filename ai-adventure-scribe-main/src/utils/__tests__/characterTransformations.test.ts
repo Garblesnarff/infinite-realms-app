@@ -163,6 +163,25 @@ describe('characterTransformations', () => {
       expect(result[0].item_name).toBe('Longsword');
     });
 
+    it('should write the resolved name, never the UUID, for corrupted rows (#205)', () => {
+      // A row whose item_name was corrupted to the row UUID loads with
+      // itemName "Unknown item" (loader resolution); the save must write that
+      // name back, not the UUID.
+      const character: Partial<Character> = {
+        inventory: [
+          {
+            itemId: 'aa11bb22-cc33-4d55-6e66-77889900aabb',
+            itemName: 'Unknown item',
+            quantity: 1,
+            equipped: false,
+          },
+        ],
+      };
+      const result = transformEquipmentForStorage(character as Character, 'char-123');
+      expect(result).toHaveLength(1);
+      expect(result[0].item_name).toBe('Unknown item');
+    });
+
     it('should use default values for missing equipment properties', () => {
       const character: Partial<Character> = {
         inventory: [
