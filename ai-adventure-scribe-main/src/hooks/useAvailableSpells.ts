@@ -10,6 +10,14 @@ interface UseAvailableSpellsProps {
   isSpellcaster: boolean;
   className?: string;
   level: number;
+  /**
+   * #320 CR-008: also fetch this class's cantrips for racial bonus-cantrip
+   * options. A High Elf Ranger's bonus pick comes from the *wizard* list, but
+   * the class list is empty for a non-spellcaster, so the tab showed "No
+   * spells available". When it matches className (case-insensitive) the main
+   * list is reused and no second fetch happens.
+   */
+  bonusCantripClassName?: string;
 }
 
 /**
@@ -22,6 +30,8 @@ interface ProcessedSpell extends Spell {
 export interface UseAvailableSpellsReturn {
   availableCantrips: Spell[];
   availableSpells: Spell[];
+  /** #320 CR-008: cantrips of bonusCantripClassName (e.g. wizard), unfiltered. */
+  bonusCantrips: Spell[];
   isLoadingSpells: boolean;
   spellsError: string | null;
   searchTerm: string;
@@ -30,6 +40,8 @@ export interface UseAvailableSpellsReturn {
   setFilters: (filters: SpellFilters) => void;
   filteredCantrips: Spell[];
   filteredSpells: Spell[];
+  /** #320 CR-008: bonusCantrips run through the same search/filter as the tabs. */
+  filteredBonusCantrips: Spell[];
   setSpellsError: (error: string | null) => void;
   refetchSpells: () => Promise<void>;
 }
@@ -86,12 +98,15 @@ export function useAvailableSpells({
   isSpellcaster,
   className,
   level,
+  bonusCantripClassName,
 }: UseAvailableSpellsProps): UseAvailableSpellsReturn {
   // Loading state
   const [isLoadingSpells, setIsLoadingSpells] = useState(false);
   const [spellsError, setSpellsError] = useState<string | null>(null);
   const [availableCantrips, setAvailableCantrips] = useState<ProcessedSpell[]>([]);
   const [availableSpells, setAvailableSpells] = useState<ProcessedSpell[]>([]);
+  // #320 CR-008: racial bonus-cantrip options from another class's list.
+  const [bonusCantrips, setBonusCantrips] = useState<ProcessedSpell[]>([]);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -158,24 +173,54 @@ export function useAvailableSpells({
     fetchSpells();
   }, [fetchSpells]);
 
+  // #320 CR-008: fetch the bonus-cantrip class's cantrips independently of the
+  // class gate above — a High Elf Ranger is not a spellcaster, so the main
+  // fetch is skipped, but the wizard bonus pick still needs its list.
+  const bonusNeedsFetch =
+    !!bonusCantripClassName &&
+    bonusCantripClassName.toLowerCase() !== (className || '').toLowerCase();
+  const fetchBonusCantrips = useCallback(async () => {
+    if (!bonusNeedsFetch || !bonusCantripClassName) {
+      setBonusCantrips([]);
+      return;
+    }
+    try {
+      const { cantrips } = await spellApi.getClassSpells(bonusCantripClassName, level);
+      setBonusCantrips(cantrips.map(processSpell));
+    } catch (error) {
+      logger.error('Failed to fetch bonus cantrips:', error);
+      setBonusCantrips([]);
+    }
+  }, [bonusNeedsFetch, bonusCantripClassName, level]);
+
+  useEffect(() => {
+    fetchBonusCantrips();
+  }, [fetchBonusCantrips]);
+
   /**
    * ⚡ Bolt: Consolidated filtering into a single useMemo to avoid redundant
    * processing of search terms and filter criteria.
    */
-  const { filteredCantrips, filteredSpells } = useMemo(() => {
+  // #320 CR-008: when the bonus class is the character's own class, the main
+  // cantrip list already is the bonus list — no second fetch, no divergence.
+  const bonusSourceCantrips =
+    bonusCantripClassName && !bonusNeedsFetch ? availableCantrips : bonusCantrips;
+  const { filteredCantrips, filteredSpells, filteredBonusCantrips } = useMemo(() => {
     const searchLower = searchTerm.toLowerCase();
     const schoolSet = filters.schools.length > 0 ? new Set(filters.schools) : null;
 
     return {
       filteredCantrips: filterSpells(availableCantrips, searchLower, filters, schoolSet),
       filteredSpells: filterSpells(availableSpells, searchLower, filters, schoolSet),
+      filteredBonusCantrips: filterSpells(bonusSourceCantrips, searchLower, filters, schoolSet),
     };
-  }, [availableCantrips, availableSpells, searchTerm, filters]);
+  }, [availableCantrips, availableSpells, bonusSourceCantrips, searchTerm, filters]);
 
   return useMemo(
     () => ({
       availableCantrips,
       availableSpells,
+      bonusCantrips: bonusNeedsFetch ? bonusCantrips : availableCantrips,
       isLoadingSpells,
       spellsError,
       setSpellsError,
@@ -185,11 +230,14 @@ export function useAvailableSpells({
       setFilters,
       filteredCantrips,
       filteredSpells,
+      filteredBonusCantrips,
       refetchSpells: fetchSpells,
     }),
     [
       availableCantrips,
       availableSpells,
+      bonusCantrips,
+      bonusNeedsFetch,
       isLoadingSpells,
       spellsError,
       setSpellsError,
@@ -199,6 +247,7 @@ export function useAvailableSpells({
       setFilters,
       filteredCantrips,
       filteredSpells,
+      filteredBonusCantrips,
       fetchSpells,
     ],
   );

@@ -48,6 +48,8 @@ interface UseSpellSelectionReturn {
   setFilters: (filters: SpellFilters) => void;
   filteredCantrips: Spell[];
   filteredSpells: Spell[];
+  /** #320 CR-008: options for the racial bonus-cantrip pick (source list, not the class list). */
+  bonusCantripOptions: Spell[];
 
   // Validation
   validation: SpellValidationResult;
@@ -82,6 +84,17 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     return currentClass ? getSpellcastingInfo(currentClass, character?.level || 1) : null;
   }, [currentClass, character?.level]);
 
+  // Racial spells (above the spell fetch: the bonus-cantrip class feeds
+  // useAvailableSpells, and the init effect below splits saved cantrips
+  // across the class/bonus pools and needs the automatic racial list).
+  const racialSpells = useMemo(() => {
+    if (!character) {
+      return { cantrips: [], spells: [], bonusCantrips: 0 };
+    }
+
+    return getRacialSpells(character.race?.name || '', character.subrace || undefined);
+  }, [character?.race?.name, character?.subrace]);
+
   // Discover available spells using the extracted hook
   const {
     availableCantrips,
@@ -94,12 +107,16 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     setFilters,
     filteredCantrips,
     filteredSpells,
+    filteredBonusCantrips,
     setSpellsError,
     refetchSpells,
   } = useAvailableSpells({
     isSpellcaster,
     className: currentClass?.name,
     level: character?.level || 1,
+    // #320 CR-008: the racial bonus pick comes from its source list (e.g.
+    // wizard for High Elf), not the character's class list.
+    bonusCantripClassName: racialSpells.bonusCantripSource,
   });
 
   // Selection state
@@ -108,17 +125,6 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   // #212 QA-042: racial bonus cantrips are picked separately from class cantrips.
   const [selectedBonusCantrips, setSelectedBonusCantrips] = useState<string[]>([]);
   const [isSavingSpells, setIsSavingSpells] = useState(false);
-
-  // Initialize from character data
-  // Racial spells (moved above init: the init effect splits saved cantrips
-  // across the class/bonus pools and needs the automatic racial list).
-  const racialSpells = useMemo(() => {
-    if (!character) {
-      return { cantrips: [], spells: [], bonusCantrips: 0 };
-    }
-
-    return getRacialSpells(character.race?.name || '', character.subrace || undefined);
-  }, [character?.race?.name, character?.subrace]);
 
   // Initialize from character data
   useEffect(() => {
@@ -131,10 +137,14 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       // #212: the saved cantrip list holds all three pools. Split them back:
       // drop automatic racial cantrips (they rejoin on save), fill the class
       // pool up to cantripsKnown, and put the rest in the bonus pool.
+      // #320 CR-008/item 4: a non-spellcaster has no spellcastingInfo, so the
+      // class pool limit is 0 — a saved bonus cantrip must land in the bonus
+      // pool, not the class pool (the old `?? selectable.length` fallback put
+      // a High Elf Ranger's bonus pick in the class pool).
       const savedCantrips = Array.isArray(character.cantrips) ? character.cantrips : [];
       const autoRacial = new Set(racialSpells.cantrips);
       const selectable = savedCantrips.filter((id) => !autoRacial.has(id));
-      const classLimit = spellcastingInfo?.cantripsKnown ?? selectable.length;
+      const classLimit = spellcastingInfo?.cantripsKnown ?? 0;
       setSelectedCantrips(selectable.slice(0, classLimit));
       setSelectedBonusCantrips(selectable.slice(classLimit));
       setSelectedSpells(character.knownSpells || []);
@@ -320,6 +330,19 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     }
   }, [selectedCantrips, selectedBonusCantrips, selectedSpells, racialSpells.cantrips, character, dispatch]);
 
+  // #320 CR-012/item 3: a High Elf Wizard's bonus list IS the class list, so
+  // the same cantrip could be picked in both pools; the save dedupes and the
+  // count validation then mismatches. Each pool's options exclude the other
+  // pool's picks. A pick never disappears from its own list.
+  const exclusiveFilteredCantrips = useMemo(
+    () => filteredCantrips.filter((spell) => !selectedBonusCantrips.includes(spell.id)),
+    [filteredCantrips, selectedBonusCantrips],
+  );
+  const exclusiveBonusCantripOptions = useMemo(
+    () => filteredBonusCantrips.filter((spell) => !selectedCantrips.includes(spell.id)),
+    [filteredBonusCantrips, selectedCantrips],
+  );
+
   return useMemo(
     () => ({
       // Character and class info
@@ -352,8 +375,11 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       setSearchTerm,
       filters,
       setFilters,
-      filteredCantrips,
+      filteredCantrips: exclusiveFilteredCantrips,
       filteredSpells,
+      // #320 CR-008: the bonus pick is drawn from its source list.
+      // #320 CR-012/item 3: minus cantrips already picked in the class pool.
+      bonusCantripOptions: exclusiveBonusCantripOptions,
 
       // Validation
       validation,
@@ -386,8 +412,9 @@ export function useSpellSelection(): UseSpellSelectionReturn {
       setSearchTerm,
       filters,
       setFilters,
-      filteredCantrips,
       filteredSpells,
+      exclusiveFilteredCantrips,
+      exclusiveBonusCantripOptions,
       validation,
       canProceed,
       updateCharacterSpells,

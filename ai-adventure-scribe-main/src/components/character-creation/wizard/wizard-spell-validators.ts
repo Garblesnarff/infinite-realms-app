@@ -67,7 +67,8 @@ export function validateAdvancedSpellcasting(character: Character): ValidationRe
     const preparedCount = character.preparedSpells?.length || 0;
     if (preparedCount < maxPreparedSpells) {
       return invalid(
-        `Please prepare ${maxPreparedSpells} spells for your ${character.class?.name}`,
+        // #320 CR-003: "1 spells" reads broken; singularize like the step does (#212 QA-043).
+        `Please prepare ${maxPreparedSpells} spell${maxPreparedSpells === 1 ? '' : 's'} for your ${character.class?.name}`,
       );
     }
   }
