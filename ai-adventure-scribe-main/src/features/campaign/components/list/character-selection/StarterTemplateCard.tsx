@@ -2,11 +2,15 @@ import { Play, Loader2 } from 'lucide-react';
 import React from 'react';
 
 import type { StarterTemplate } from '@/features/campaign/hooks/use-character-selection';
+import type { AbilityScores } from '@/types/character';
+import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
+import { lookupRaces } from '@/data/races';
+import { getEffectiveAbilityScores } from '@/hooks/use-character-stats';
 
 interface StarterTemplateCardProps {
   template: StarterTemplate;
@@ -27,6 +31,49 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
 }) => {
   const abilityScores = template.ability_scores || {};
   const cardTitle = `Select character: ${template.name}, Level ${template.level} ${template.race} ${template.class}`;
+
+  // Show the same resolved scores the sheet does: base + racial bonuses (#153).
+  // The template stores base scores as plain numbers; the sheet applies the
+  // shared getEffectiveAbilityScores at display time (useEffectiveAbilityScores),
+  // so the preview calls that exact function — the two can never drift apart.
+  // Race/subrace name matching uses the sheet's key normalization
+  // (src/utils/character/data-transformers.ts): lowercase, strip non-alphanumerics.
+  const normalizeKey = (value: string | null | undefined): string =>
+    (typeof value === 'string' ? value : '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  const raceKey = normalizeKey(template.race);
+  const race =
+    lookupRaces.find((r) => normalizeKey(r.name) === raceKey || normalizeKey(r.id) === raceKey) ??
+    null;
+  const subraceKey = normalizeKey(template.subrace);
+  const subrace =
+    race?.subraces?.find(
+      (s) => normalizeKey(s.name) === subraceKey || normalizeKey(s.id) === subraceKey,
+    ) ?? null;
+  const abilities: AbilityScoreName[] = [
+    'strength',
+    'dexterity',
+    'constitution',
+    'intelligence',
+    'wisdom',
+    'charisma',
+  ];
+  const baseScores = Object.fromEntries(
+    abilities.map((ability) => [
+      ability,
+      {
+        score: abilityScores[ability as keyof typeof abilityScores] ?? 10,
+        modifier: 0,
+        savingThrow: false,
+      },
+    ]),
+  ) as AbilityScores;
+  const effectiveScores = getEffectiveAbilityScores(baseScores, race, subrace);
+  const resolvedScores = Object.fromEntries(
+    abilities.map((ability) => [ability, effectiveScores[ability].score]),
+  ) as Record<AbilityScoreName, number>;
 
   return (
     <Card
@@ -92,68 +139,68 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
           >
             <div
               className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
-              aria-label={`Strength modifier: ${getModifier(abilityScores.strength)}`}
+              aria-label={`Strength modifier: ${getModifier(resolvedScores.strength)}`}
             >
               <span className="font-semibold text-muted-foreground" aria-hidden="true">
                 STR
               </span>
               <span className="text-lg font-bold text-foreground" aria-hidden="true">
-                {getModifier(abilityScores.strength)}
+                {getModifier(resolvedScores.strength)}
               </span>
             </div>
             <div
               className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
-              aria-label={`Dexterity modifier: ${getModifier(abilityScores.dexterity)}`}
+              aria-label={`Dexterity modifier: ${getModifier(resolvedScores.dexterity)}`}
             >
               <span className="font-semibold text-muted-foreground" aria-hidden="true">
                 DEX
               </span>
               <span className="text-lg font-bold text-foreground" aria-hidden="true">
-                {getModifier(abilityScores.dexterity)}
+                {getModifier(resolvedScores.dexterity)}
               </span>
             </div>
             <div
               className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
-              aria-label={`Constitution modifier: ${getModifier(abilityScores.constitution)}`}
+              aria-label={`Constitution modifier: ${getModifier(resolvedScores.constitution)}`}
             >
               <span className="font-semibold text-muted-foreground" aria-hidden="true">
                 CON
               </span>
               <span className="text-lg font-bold text-foreground" aria-hidden="true">
-                {getModifier(abilityScores.constitution)}
+                {getModifier(resolvedScores.constitution)}
               </span>
             </div>
             <div
               className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
-              aria-label={`Intelligence modifier: ${getModifier(abilityScores.intelligence)}`}
+              aria-label={`Intelligence modifier: ${getModifier(resolvedScores.intelligence)}`}
             >
               <span className="font-semibold text-muted-foreground" aria-hidden="true">
                 INT
               </span>
               <span className="text-lg font-bold text-foreground" aria-hidden="true">
-                {getModifier(abilityScores.intelligence)}
+                {getModifier(resolvedScores.intelligence)}
               </span>
             </div>
             <div
               className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
-              aria-label={`Wisdom modifier: ${getModifier(abilityScores.wisdom)}`}
+              aria-label={`Wisdom modifier: ${getModifier(resolvedScores.wisdom)}`}
             >
               <span className="font-semibold text-muted-foreground" aria-hidden="true">
                 WIS
               </span>
               <span className="text-lg font-bold text-foreground" aria-hidden="true">
-                {getModifier(abilityScores.wisdom)}
+                {getModifier(resolvedScores.wisdom)}
               </span>
             </div>
             <div
               className="flex flex-col items-center p-2 bg-secondary/20 rounded border border-border shadow-sm"
-              aria-label={`Charisma modifier: ${getModifier(abilityScores.charisma)}`}
+              aria-label={`Charisma modifier: ${getModifier(resolvedScores.charisma)}`}
             >
               <span className="font-semibold text-muted-foreground" aria-hidden="true">
                 CHA
               </span>
               <span className="text-lg font-bold text-foreground" aria-hidden="true">
-                {getModifier(abilityScores.charisma)}
+                {getModifier(resolvedScores.charisma)}
               </span>
             </div>
           </div>

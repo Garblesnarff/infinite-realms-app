@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import type { Character, Ability, AbilityScores } from '@/types/character';
+import type { Character, Ability, AbilityScores, CharacterRace, Subrace } from '@/types/character';
 import type { CharacterStats } from '@/utils/character-calculations';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
@@ -109,38 +109,51 @@ export const useLevelProgression = (character: Character | null) => {
 };
 
 /**
+ * Pure sheet math for effective ability scores (base + racial bonuses, no cap).
+ * Extracted from useEffectiveAbilityScores so non-sheet surfaces (e.g. the
+ * character-select preview) can call the exact same function instead of
+ * re-implementing it — the two can never drift apart (#153).
+ */
+export function getEffectiveAbilityScores(
+  baseScores: AbilityScores,
+  race: CharacterRace | null,
+  subrace: Subrace | null,
+  racialAbilityChoices?: Character['racialAbilityChoices'],
+): Record<keyof AbilityScores, Ability & { baseScore: number; racialBonus: number }> {
+  const racialBonuses = calculateRacialBonuses(race, subrace, racialAbilityChoices);
+
+  return (Object.entries(baseScores) as [keyof AbilityScores, Ability][]).reduce(
+    (acc, [ability, data]) => {
+      const racialBonus = getTotalRacialBonus(ability as AbilityScoreName, racialBonuses);
+      const effectiveScore = data.score + racialBonus;
+
+      acc[ability] = {
+        ...data,
+        score: effectiveScore,
+        baseScore: data.score,
+        racialBonus,
+        modifier: Math.floor((effectiveScore - 10) / 2),
+      };
+
+      return acc;
+    },
+    {} as Record<keyof AbilityScores, Ability & { baseScore: number; racialBonus: number }>,
+  );
+}
+
+/**
  * Hook for getting character's effective ability scores (including racial bonuses)
  */
 export const useEffectiveAbilityScores = (character: Character | null) => {
   return useMemo(() => {
     if (!character?.abilityScores) return null;
 
-    const baseScores = character.abilityScores;
-    const racialBonuses = calculateRacialBonuses(
+    return getEffectiveAbilityScores(
+      character.abilityScores,
       character.race || null,
       character.subrace || null,
       character.racialAbilityChoices,
     );
-
-    const effectiveScores = (Object.entries(baseScores) as [keyof AbilityScores, Ability][]).reduce(
-      (acc, [ability, data]) => {
-        const racialBonus = getTotalRacialBonus(ability as AbilityScoreName, racialBonuses);
-        const effectiveScore = data.score + racialBonus;
-
-        acc[ability] = {
-          ...data,
-          score: effectiveScore,
-          baseScore: data.score,
-          racialBonus,
-          modifier: Math.floor((effectiveScore - 10) / 2),
-        };
-
-        return acc;
-      },
-      {} as Record<keyof AbilityScores, Ability & { baseScore: number; racialBonus: number }>,
-    );
-
-    return effectiveScores;
   }, [
     character?.abilityScores,
     character?.race,
