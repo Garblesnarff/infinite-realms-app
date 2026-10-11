@@ -75,10 +75,18 @@ export interface UseCharacterSelectionReturn {
   templates: StarterTemplate[] | undefined;
   characters: Character[] | undefined;
   /**
-   * The whole account roster, loaded only when the campaign-bound list came back
-   * empty (#2142). Undefined while the bound list has entries.
+   * The whole account roster: loaded when the campaign-bound list came back
+   * empty (#2142), and additionally for starter campaigns alongside their
+   * templates (#321). Undefined otherwise.
    */
   accountCharacters: Character[] | undefined;
+  /**
+   * #321: the account-roster fetch error, surfaced only on starter campaigns
+   * where the roster is a peer section (elsewhere it folds into loadError).
+   * The modal renders an inline retry for it; the full-modal loadError must
+   * not hide the templates.
+   */
+  rosterError: Error | null;
   loadError: Error | null;
   retryLoad: () => void;
   starterCampaignId: string | null | undefined;
@@ -163,6 +171,11 @@ export function useCharacterSelection({
   // must not hide the account's characters behind "no characters yet".
   const boundListEmpty = !boundLoading && !boundError && boundList?.length === 0;
 
+  // #321: starter campaigns also load the account roster, so a saved custom
+  // character can start a session there. The roster is an addition to the
+  // templates, never a fallback for a failed template load — the modal only
+  // renders this section when templates loaded, keeping the #2193
+  // load-failure state roster-free.
   const {
     data: accountCharacters,
     isLoading: accountLoading,
@@ -171,7 +184,7 @@ export function useCharacterSelection({
   } = useQuery({
     queryKey: ['characters', 'account', user?.id],
     queryFn: async () => userDataApi.listCharacters() as Promise<Character[]>,
-    enabled: !!user?.id && isOpen && boundListEmpty,
+    enabled: !!user?.id && isOpen && (boundListEmpty || isStarterCampaign),
   });
 
   const isLoading = boundLoading || (boundListEmpty && accountLoading);
@@ -227,13 +240,17 @@ export function useCharacterSelection({
   };
 
   /**
-   * Handles starting a game with an existing character
+   * Handles starting a game with an existing character.
+   * On a starter-linked campaign the starter id rides along (#321), exactly
+   * like handleSelectTemplate: the session needs starter_campaign_id for the
+   * DM's starter lore, combat difficulty, and the choose-hero flow.
    */
   const startGameWithCharacter = (character: Character): void => {
     onClose();
 
     setTimeout(() => {
-      navigate(`/app/game/${campaignId}?character=${character.id}&new=true`);
+      const starterParam = starterCampaignId ? `&starterCampaign=${starterCampaignId}` : '';
+      navigate(`/app/game/${campaignId}?character=${character.id}${starterParam}&new=true`);
       toast({
         title: 'Starting Adventure!',
         description: `Beginning your journey with ${character.name} in ${campaignName}.`,
@@ -276,7 +293,8 @@ export function useCharacterSelection({
     isStarterCampaign,
     templates,
     characters,
-    accountCharacters: boundListEmpty ? accountCharacters : undefined,
+    accountCharacters: boundListEmpty || isStarterCampaign ? accountCharacters : undefined,
+    rosterError: isStarterCampaign ? (accountError as Error | null) : null,
     loadError,
     retryLoad,
     starterCampaignId,

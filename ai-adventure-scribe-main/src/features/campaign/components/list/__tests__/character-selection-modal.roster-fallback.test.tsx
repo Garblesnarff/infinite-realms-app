@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CharacterSelectionModal from '../character-selection-modal';
 
-import type { Character } from '@/features/campaign/hooks/use-character-selection';
+import type { Character, StarterTemplate } from '@/features/campaign/hooks/use-character-selection';
 
 import { userDataApi } from '@/services/user-data-api';
 
@@ -45,6 +45,37 @@ const makeCharacter = (i: number): Character => ({
   race: 'Human',
   class: 'Fighter',
   level: 1,
+});
+
+const makeTemplate = (): StarterTemplate => ({
+  id: 'tpl-1',
+  starter_campaign_id: 'starter-1',
+  template_key: 'scholar',
+  name: 'The Scholar',
+  tagline: null,
+  race: 'Human',
+  subrace: null,
+  class: 'Wizard',
+  background: null,
+  level: 1,
+  ability_scores: {
+    strength: 8,
+    dexterity: 12,
+    constitution: 12,
+    intelligence: 16,
+    wisdom: 14,
+    charisma: 10,
+  },
+  personality: {},
+  skills: [],
+  languages: [],
+  equipment: [],
+  adapted_backstory: null,
+  campaign_hook: null,
+  portrait_url: null,
+  card_image_url: null,
+  portrait_prompt: null,
+  display_order: 0,
 });
 
 /** Mirrors CampaignHub: the modal is driven by ?startSession, and onClose rewrites the URL. */
@@ -201,5 +232,71 @@ describe('CharacterSelectionModal — empty campaign falls back to the account r
     expect(screen.queryByText('Use here')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Create/ })).not.toBeInTheDocument();
     expect(api.listStarterCharacterTemplates).toHaveBeenCalledWith('starter-1');
+  });
+
+  it('a starter campaign with loaded templates also offers the account roster (#321)', async () => {
+    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
+    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
+    api.listCharacters.mockImplementation(async (campaignId?: string) =>
+      campaignId ? [] : [makeCharacter(9)],
+    );
+
+    renderPicker();
+
+    // The premade template is still offered…
+    expect(
+      await screen.findByRole('button', { name: /Select character: The Scholar/ }),
+    ).toBeInTheDocument();
+    // …and the saved custom character is offered below it, not hidden.
+    expect(
+      await screen.findByRole('button', { name: /Select character: Hero 9/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Your characters')).toBeInTheDocument();
+    expect(screen.getAllByText('Use here')).toHaveLength(1);
+  });
+
+  it('picking a custom character on a starter campaign keeps the starter link (#321)', async () => {
+    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
+    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
+    api.listCharacters.mockImplementation(async (campaignId?: string) =>
+      campaignId ? [] : [makeCharacter(9)],
+    );
+
+    renderPicker();
+    fireEvent.click(await screen.findByRole('button', { name: /Select character: Hero 9/ }));
+
+    // Same session plumbing as a premade pick: the starter id rides along so
+    // the session keeps starter_campaign_id (DM lore, difficulty, hero flow).
+    await waitFor(() =>
+      expect(screen.getByTestId('game-page')).toHaveTextContent(
+        `/app/game/${CAMPAIGN_ID}?character=char-9&starterCampaign=starter-1&new=true`,
+      ),
+    );
+  });
+
+  it('a failed roster load on a starter campaign shows an inline retry, not a full-modal error (#321)', async () => {
+    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
+    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
+    let rosterCalls = 0;
+    api.listCharacters.mockImplementation(async (campaignId?: string) => {
+      if (campaignId) return [];
+      rosterCalls += 1;
+      if (rosterCalls === 1) throw new Error('network down');
+      return [makeCharacter(5)];
+    });
+
+    renderPicker();
+
+    // The templates still render — a roster failure must not hide them.
+    expect(
+      await screen.findByRole('button', { name: /Select character: The Scholar/ }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Couldn't load your characters/)).toBeInTheDocument();
+    expect(screen.queryByText('Use here')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Use here')).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn't load your characters/)).not.toBeInTheDocument();
   });
 });
