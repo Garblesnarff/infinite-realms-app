@@ -54,6 +54,15 @@ const CUSTOM_FLAVOR_ITEMS = [
   'waxed map case',
   'chapel bell clapper',
   'sound-shell that replays one sound',
+  // #222 Midsummer flavor items
+  'costume',
+  'play script',
+  'stage paint',
+  'unsent love letter',
+  'perfumed handkerchief',
+  'small vial of milk (fae offering)',
+  'stolen wedding ring on a cord',
+  'assorted poultices',
 ];
 
 describe('starter template equipment resolver audit', () => {
