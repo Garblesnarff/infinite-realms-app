@@ -216,12 +216,12 @@ const SpellsSection: React.FC<{
       {c.spellcasting ? (
         <div className="grid grid-cols-3 gap-1.5 rounded border border-white/5 bg-white/[0.02] p-2 text-center">
           <div>
-            <p className="text-[9px] uppercase text-muted-foreground">Ability</p>
-            <p className="text-[11px] font-semibold text-foreground">{c.spellcasting.ability}</p>
+            <p className="ir-text-min uppercase text-muted-foreground">Ability</p>
+            <p className="ir-text-min font-semibold text-foreground">{c.spellcasting.ability}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase text-muted-foreground">Attack</p>
-            <p className="text-[11px] font-semibold text-foreground">
+            <p className="ir-text-min uppercase text-muted-foreground">Attack</p>
+            <p className="ir-text-min font-semibold text-foreground">
               {c.spellcasting.spellAttackBonus == null
                 ? '—'
                 : c.spellcasting.spellAttackBonus >= 0
@@ -230,8 +230,8 @@ const SpellsSection: React.FC<{
             </p>
           </div>
           <div>
-            <p className="text-[9px] uppercase text-muted-foreground">Save DC</p>
-            <p className="text-[11px] font-semibold text-foreground">
+            <p className="ir-text-min uppercase text-muted-foreground">Save DC</p>
+            <p className="ir-text-min font-semibold text-foreground">
               {c.spellcasting.spellSaveDC ?? '—'}
             </p>
           </div>

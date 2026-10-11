@@ -18,9 +18,9 @@ export const IRPanelHeader: React.FC<{
   right?: React.ReactNode;
 }> = ({ title, right }) => (
   <header className="ir-panel-h justify-between">
-    <span>{title}</span>
+    <span className="ir-text-min">{title}</span>
     {right ? (
-      <span className="text-[10px] tracking-normal text-infinite-gold/80">{right}</span>
+      <span className="ir-text-min tracking-normal text-infinite-gold/80">{right}</span>
     ) : null}
   </header>
 );
@@ -35,12 +35,12 @@ export const IRStatTile: React.FC<{
   <div
     className={`flex flex-col items-center justify-center rounded-md border border-white/10 bg-white/[0.03] px-1 py-2 text-center ${className}`}
   >
-    <span className="ir-display text-[9px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80">
+    <span className="ir-display ir-text-min font-semibold uppercase tracking-[1.5px] text-infinite-gold/80">
       {label}
     </span>
     <span className="mt-0.5 text-base font-bold leading-none text-foreground">{value}</span>
     {sub != null && (
-      <span className="mt-0.5 text-[10px] leading-none text-muted-foreground">{sub}</span>
+      <span className="ir-text-min mt-0.5 leading-none text-muted-foreground">{sub}</span>
     )}
   </div>
 );
@@ -48,8 +48,8 @@ export const IRStatTile: React.FC<{
 /** Label + modifier row used in Saving Throws / Skills lists. */
 export const IRModRow: React.FC<{ label: string; modifier: string }> = ({ label, modifier }) => (
   <div className="flex items-center justify-between border-b border-white/5 py-1 last:border-0">
-    <span className="text-[11px] text-foreground/80">{label}</span>
-    <span className="text-[11px] font-semibold text-infinite-gold">{modifier}</span>
+    <span className="ir-text-min text-foreground/80">{label}</span>
+    <span className="ir-text-min font-semibold text-infinite-gold">{modifier}</span>
   </div>
 );
 

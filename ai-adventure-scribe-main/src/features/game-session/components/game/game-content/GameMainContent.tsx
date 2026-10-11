@@ -310,7 +310,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     aria-expanded={showMapSheet}
                     aria-controls="tactical-map-sheet"
                     onClick={() => setMapSheetOpen((open) => !open)}
-                    className="border-infinite-gold/30 bg-white/[0.03] text-infinite-gold/90 hover:bg-infinite-gold/10"
+                    className="ir-hit border-infinite-gold/30 bg-white/[0.03] text-infinite-gold/90 hover:bg-infinite-gold/10"
                   >
                     <MapIcon className="h-4 w-4" aria-hidden="true" />
                     <span className="font-display font-medium">
@@ -322,7 +322,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   variant={showTracker ? 'destructive' : 'outline'}
                   size="sm"
                   onClick={() => setShowTracker(!showTracker)}
-                  className={`relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow ${
+                  className={`ir-hit relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow ${
                     showTracker
                       ? 'bg-gradient-to-r from-red-600 to-red-700 border-red-500 animate-pulse shadow-2xl'
                       : 'bg-white/[0.03] border-infinite-gold/30 text-infinite-gold/90 hover:bg-infinite-gold/10'
@@ -366,7 +366,12 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 }`}
               >
                 <div className="text-sm text-red-700 font-medium">⚔️ Combat in progress</div>
-                <Button size="sm" variant="outline" onClick={() => setShowTracker(true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ir-hit"
+                  onClick={() => setShowTracker(true)}
+                >
                   Open Tracker
                 </Button>
               </div>

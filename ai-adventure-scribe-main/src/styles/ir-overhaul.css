@@ -83,6 +83,9 @@
   --ir-hp-bad: #ef6b6b;
   --ir-player: rgba(95, 113, 168, 0.2);
   --ir-engine: rgba(213, 176, 112, 0.07);
+  /* #228: one tap box and one text floor for the game screen. */
+  --ir-hit-min: 44px;
+  --ir-text-min: 12px;
 
   --secondary: 213 176 112; /* #d5b070, matches --infinite-gold above */
   --secondary-foreground: 7 11 20; /* #070b14, matches --infinite-dark above */
@@ -131,7 +134,7 @@
   padding: 11px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-family: 'Cinzel', serif;
-  font-size: 11px;
+  font-size: var(--ir-text-min);
   font-weight: 600;
   letter-spacing: 1.8px;
   text-transform: uppercase;
@@ -143,6 +146,37 @@
 .ir-app .ir-narr {
   font-family: 'EB Garamond', Georgia, serif;
   font-style: italic;
+}
+
+/* #228: the control's box grows to the token. Icons keep their own size classes. */
+.ir-app .ir-hit {
+  min-width: var(--ir-hit-min);
+  min-height: var(--ir-hit-min);
+}
+
+/* #228: same 44px tap box, painted size unchanged (timeline beads, icon buttons, TTS). */
+.ir-app .ir-hit-slop {
+  position: relative;
+}
+.ir-app .ir-hit-slop::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--ir-hit-min);
+  height: var(--ir-hit-min);
+  transform: translate(-50%, -50%);
+}
+
+.ir-app .ir-text-min {
+  font-size: var(--ir-text-min);
+}
+
+/* TTS is a gold rounded control, not a timeline bead (#228 MB-003). */
+.ir-app .ir-tts {
+  border-radius: 6px;
+  border: 1px solid var(--infinite-gold);
+  background: rgba(213, 176, 112, 0.12);
 }
 
 /* keyboard focus: one gold ring for every focusable control in the app */

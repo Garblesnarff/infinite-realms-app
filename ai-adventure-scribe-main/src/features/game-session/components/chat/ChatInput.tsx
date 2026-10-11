@@ -212,7 +212,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+                    className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg ir-hit touch-manipulation"
                     disabled={isDisabled}
                     aria-label="Attach file"
                   >
@@ -229,7 +229,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+                    className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg ir-hit touch-manipulation"
                     disabled={isDisabled}
                     aria-label="Insert emoji"
                   >
@@ -247,7 +247,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo((props) => {
                     variant="ghost"
                     size="sm"
                     onClick={handleQuickDiceRoll}
-                    className="h-10 w-10 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+                    className="h-10 w-10 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg ir-hit touch-manipulation"
                     disabled={isDisabled}
                     aria-label="Quick dice roll (1d20)"
                   >

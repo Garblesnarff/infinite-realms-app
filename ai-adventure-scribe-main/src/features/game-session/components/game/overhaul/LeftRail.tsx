@@ -12,7 +12,7 @@ const CurrentCampaign: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }
       <IRThumb src={campaign.thumbnailUrl} size={40} />
       <div className="min-w-0">
         <p className="ir-display truncate text-sm font-semibold text-foreground">{campaign.name}</p>
-        <p className="truncate text-xs text-infinite-gold/80">{campaign.chapter}</p>
+        <p className="ir-text-min truncate text-xs text-infinite-gold/80">{campaign.chapter}</p>
       </div>
     </div>
   </IRPanel>
@@ -77,14 +77,14 @@ const PartyMemberRow: React.FC<{ member: PartyMemberVM }> = ({ member }) => (
     <div className="min-w-0 flex-1">
       <div className="flex items-baseline justify-between gap-2">
         <p className="truncate text-xs font-semibold text-foreground">{member.name}</p>
-        <span className="shrink-0 text-[10px] text-muted-foreground">
+        <span className="ir-text-min shrink-0 text-muted-foreground">
           {formatCharacterSheetHitPoints({
             current: member.currentHp,
             maximum: member.maxHp,
           })}
         </span>
       </div>
-      <p className="truncate text-[10px] text-muted-foreground">{member.subtitle}</p>
+      <p className="ir-text-min truncate text-muted-foreground">{member.subtitle}</p>
       {member.currentHp !== null && member.maxHp !== null && (
         <IRBar value={member.currentHp} max={member.maxHp} className="mt-1" />
       )}
@@ -113,9 +113,9 @@ const EncounterTracker: React.FC<{
   <IRPanel>
     <IRPanelHeader title="Encounter Tracker" />
     <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2">
-      <span className="whitespace-nowrap text-[11px] text-foreground/80">Round {round}</span>
+      <span className="ir-text-min whitespace-nowrap text-foreground/80">Round {round}</span>
       {actedCount !== undefined && (
-        <span className="text-[11px] text-foreground/80">
+        <span className="ir-text-min text-foreground/80">
           {actedCount} of {combatants.length} have acted this round
         </span>
       )}
@@ -137,7 +137,7 @@ const EncounterTracker: React.FC<{
           <span className="flex-1 truncate text-xs">{c.name}</span>
           {c.state && (
             <span
-              className={`text-[10px] uppercase tracking-wide ${
+              className={`ir-text-min uppercase tracking-wide ${
                 c.state === 'now' ? 'font-bold text-infinite-gold' : 'text-white/70'
               }`}
             >
