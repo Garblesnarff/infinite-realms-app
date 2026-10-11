@@ -10,10 +10,8 @@
  * - run M4: the DM narrated "You dash across the room" when no Dash was declared or resolved.
  * - run M4: the DM wrote "It is not your turn yet" while the tracker showed the player's turn
  *   (initiative 19 vs 7).
- *
- * Pure and dependency-free so it can be unit-tested without a database, following the
- * attack-narration.ts convention.
  */
+import { getDistance } from '../../tactical/engine.js';
 import { entitySlug, resolveEntityRef } from '../../tactical/identity.js';
 
 import type { DmFactAction, TacticalMap } from '../../tactical/types.js';
@@ -98,15 +96,10 @@ export function sceneAnchorForActor(map: TacticalMap, actorRef: string): string 
   const parts = [`${slug}@(${actor.x},${actor.y}) mv${actor.movementRemaining}/${actor.speedFeet}`];
   for (const other of map.entities) {
     if (other.isLiving === false || other.id === actor.id) continue;
-    parts.push(`${entitySlug(other)} ${distanceFeet(actor, other)}ft`);
+    parts.push(`${entitySlug(other)} ${getDistance(actor, other)}ft`);
   }
   return parts.join('; ');
 }
-
-const distanceFeet = (
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) * 5;
 
 const KIND_LABEL: Record<ContractActionKind, string> = {
   attack: 'attack',
@@ -136,7 +129,9 @@ export function buildNarrationContract(input: NarrationContractInput): string {
   const { currentTurn, sceneAnchor, sceneDescription } = input;
   const aggregated = aggregateContractActions(input.actions);
   const lines: string[] = ['<narration_contract>'];
-  lines.push('<!-- ENGINE-AUTHORITATIVE. These facts are the engine\'s ground truth for this turn. -->');
+  lines.push(
+    "<!-- ENGINE-AUTHORITATIVE. These facts are the engine's ground truth for this turn. -->",
+  );
   if (currentTurn) {
     lines.push(
       `Turn: ${currentTurn.label} (${currentTurn.slug}) — ` +
@@ -155,13 +150,17 @@ export function buildNarrationContract(input: NarrationContractInput): string {
       );
     }
   } else {
-    lines.push('Resolved actions this turn: none. Narrate no attack, spell, dash, dodge, or disengage.');
+    lines.push(
+      'Resolved actions this turn: none. Narrate no attack, spell, dash, dodge, or disengage.',
+    );
   }
   if (sceneAnchor) {
     lines.push(`Scene anchor (engine geometry — the fight is HERE): ${sceneAnchor}.`);
   }
   if (sceneDescription) {
-    lines.push(`Scene setting (the semantic scene — do not relocate the fight): ${sceneDescription}.`);
+    lines.push(
+      `Scene setting (the semantic scene — do not relocate the fight): ${sceneDescription}.`,
+    );
   }
   lines.push('RULES:');
   lines.push(
@@ -183,7 +182,9 @@ export function buildNarrationContract(input: NarrationContractInput): string {
         '"finds its mark", "bites deep", "flurry of strikes", or "blows" that land.',
     );
   } else {
-    lines.push('3. Describe each outcome exactly as the engine resolved it: HIT means it landed, MISS means it did not.');
+    lines.push(
+      '3. Describe each outcome exactly as the engine resolved it: HIT means it landed, MISS means it did not.',
+    );
   }
   lines.push(
     '4. Keep the setting. The scene anchor above and the scene state are the only setting ' +
