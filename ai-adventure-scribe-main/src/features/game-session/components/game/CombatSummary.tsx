@@ -160,7 +160,7 @@ export const CombatSummary: React.FC = React.memo(() => {
       {currentParticipant && (
         <div className="pt-2 border-t text-xs text-muted-foreground">
           <div>Current: {currentParticipant.name}</div>
-          <div className="text-[10px]">
+          <div className="ir-text-min">
             Action: {currentParticipant.actionTaken ? 'Used' : 'Available'} | Bonus:{' '}
             {currentParticipant.bonusActionTaken ? 'Used' : 'Available'} | Reaction:{' '}
             {currentParticipant.reactionTaken ? 'Used' : 'Available'}

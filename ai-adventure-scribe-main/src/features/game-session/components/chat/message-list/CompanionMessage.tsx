@@ -27,14 +27,14 @@ export const CompanionMessage: React.FC<CompanionMessageProps> = ({ message, dis
       >
         <header className="mb-1.5 flex items-center gap-2">
           <span className="truncate text-xs font-semibold text-infinite-teal">{name}</span>
-          <span className="rounded-full border border-infinite-teal/40 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-infinite-teal">
+          <span className="rounded-full border border-infinite-teal/40 px-1.5 py-0.5 ir-text-min font-bold tracking-[0.14em] text-infinite-teal">
             COMPANION
           </span>
         </header>
         <p className="whitespace-pre-wrap break-words text-sm text-foreground/90">{displayText}</p>
       </article>
       {timestamp && (
-        <div className="mt-1 text-left text-[10px] text-muted-foreground">{timestamp}</div>
+        <div className="mt-1 text-left ir-text-min text-muted-foreground">{timestamp}</div>
       )}
     </div>
   );

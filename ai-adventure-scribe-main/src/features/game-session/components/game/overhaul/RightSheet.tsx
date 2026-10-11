@@ -33,14 +33,14 @@ const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => {
           <IRThumb src={c.avatarUrl} size={48} />
           <div className="min-w-0 flex-1">
             <p className="ir-display truncate text-sm font-semibold text-foreground">{c.name}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{c.subtitle}</p>
-            <p className="mt-1 text-[11px] font-semibold text-infinite-gold">Level {c.level}</p>
+            <p className="truncate ir-text-min text-muted-foreground">{c.subtitle}</p>
+            <p className="mt-1 ir-text-min font-semibold text-infinite-gold">Level {c.level}</p>
           </div>
         </div>
         {!isMilestone && (
           <div className="mt-2">
             <IRBar value={c.xpCurrent} max={c.xpMax} barClassName="bg-infinite-gold/80" />
-            <p className="mt-1 text-right text-[10px] text-muted-foreground">
+            <p className="mt-1 text-right ir-text-min text-muted-foreground">
               {c.xpCurrent.toLocaleString()} / {c.xpMax.toLocaleString()} XP
             </p>
           </div>
@@ -75,7 +75,7 @@ const TwoCol: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const EmptyNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-[10px] italic text-muted-foreground">{children}</p>
+  <p className="ir-text-min italic text-muted-foreground">{children}</p>
 );
 
 const spellLevelLabel = (level: number | null): string => {
@@ -97,8 +97,8 @@ const SpellEntry: React.FC<{
   <div className="rounded border border-white/5 bg-white/[0.02] p-2">
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium text-foreground/90">{spell.name}</p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="truncate ir-text-min font-medium text-foreground/90">{spell.name}</p>
+        <p className="ir-text-min text-muted-foreground">
           {spellLevelLabel(spell.level)}
           {spell.school ? ` · ${spell.school}` : ''}
         </p>
@@ -110,7 +110,7 @@ const SpellEntry: React.FC<{
               type="button"
               size="sm"
               variant={spell.isPrepared ? 'secondary' : 'outline'}
-              className="h-6 px-1.5 text-[10px]"
+              className="h-6 px-1.5 ir-text-min ir-hit"
               disabled={pendingSpellId === spell.id}
               aria-pressed={spell.isPrepared}
               aria-label={`${spell.isPrepared ? 'Unprepare' : 'Prepare'} ${spell.name}`}
@@ -140,7 +140,7 @@ const SpellEntry: React.FC<{
       )}
     </div>
     {spell.description && (
-      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 line-clamp-2 ir-text-min leading-relaxed text-muted-foreground">
         {spell.description}
       </p>
     )}
@@ -168,7 +168,7 @@ const SpellGroup: React.FC<{
   onTogglePrepared,
 }) => (
   <section aria-label={title} className="space-y-1.5">
-    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-infinite-gold/80">
+    <h3 className="ir-text-min font-semibold uppercase tracking-wider text-infinite-gold/80">
       {title}
     </h3>
     {spells.length > 0 ? (
@@ -187,7 +187,7 @@ const SpellGroup: React.FC<{
         ))}
       </div>
     ) : (
-      <p className="text-[10px] text-muted-foreground">None recorded.</p>
+      <p className="ir-text-min text-muted-foreground">None recorded.</p>
     )}
   </section>
 );
@@ -216,12 +216,12 @@ const SpellsSection: React.FC<{
       {c.spellcasting ? (
         <div className="grid grid-cols-3 gap-1.5 rounded border border-white/5 bg-white/[0.02] p-2 text-center">
           <div>
-            <p className="text-[9px] uppercase text-muted-foreground">Ability</p>
-            <p className="text-[11px] font-semibold text-foreground">{c.spellcasting.ability}</p>
+            <p className="ir-text-min uppercase text-muted-foreground">Ability</p>
+            <p className="ir-text-min font-semibold text-foreground">{c.spellcasting.ability}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase text-muted-foreground">Attack</p>
-            <p className="text-[11px] font-semibold text-foreground">
+            <p className="ir-text-min uppercase text-muted-foreground">Attack</p>
+            <p className="ir-text-min font-semibold text-foreground">
               {c.spellcasting.spellAttackBonus == null
                 ? '—'
                 : c.spellcasting.spellAttackBonus >= 0
@@ -230,18 +230,18 @@ const SpellsSection: React.FC<{
             </p>
           </div>
           <div>
-            <p className="text-[9px] uppercase text-muted-foreground">Save DC</p>
-            <p className="text-[11px] font-semibold text-foreground">
+            <p className="ir-text-min uppercase text-muted-foreground">Save DC</p>
+            <p className="ir-text-min font-semibold text-foreground">
               {c.spellcasting.spellSaveDC ?? '—'}
             </p>
           </div>
         </div>
       ) : (
-        <p className="text-[10px] text-muted-foreground">No spellcasting data recorded.</p>
+        <p className="ir-text-min text-muted-foreground">No spellcasting data recorded.</p>
       )}
 
       {spellActionError && (
-        <p role="alert" className="text-[10px] text-destructive">
+        <p role="alert" className="ir-text-min text-destructive">
           {spellActionError}
         </p>
       )}
@@ -275,7 +275,7 @@ const SpellsSection: React.FC<{
 
       {c.spellcasting && (
         <section aria-label="Spell Slots" className="space-y-1.5">
-          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-infinite-gold/80">
+          <h3 className="ir-text-min font-semibold uppercase tracking-wider text-infinite-gold/80">
             Spell Slots
           </h3>
           {c.spellcasting.slots.length > 0 ? (
@@ -283,7 +283,7 @@ const SpellsSection: React.FC<{
               {c.spellcasting.slots.map((slot) => (
                 <div
                   key={slot.level}
-                  className="flex items-center justify-between rounded border border-white/5 px-2 py-1 text-[10px]"
+                  className="flex items-center justify-between rounded border border-white/5 px-2 py-1 ir-text-min"
                 >
                   <span className="text-muted-foreground">Level {slot.level}</span>
                   <span className="font-semibold text-foreground">
@@ -293,7 +293,7 @@ const SpellsSection: React.FC<{
               ))}
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground">No spell slots recorded.</p>
+            <p className="ir-text-min text-muted-foreground">No spell slots recorded.</p>
           )}
         </section>
       )}
@@ -374,12 +374,12 @@ export const RightSheet: React.FC<{
               <IRThumb size={26} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-1">
-                  <span className="truncate text-[11px] font-medium text-foreground/90">
+                  <span className="truncate ir-text-min font-medium text-foreground/90">
                     {a.name}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">{a.damage}</span>
+                  <span className="ir-text-min text-muted-foreground">{a.damage}</span>
                 </div>
-                <span className="text-[10px] font-semibold text-infinite-gold">{a.bonus}</span>
+                <span className="ir-text-min font-semibold text-infinite-gold">{a.bonus}</span>
               </div>
             </div>
           ))}
@@ -392,9 +392,9 @@ export const RightSheet: React.FC<{
           {c.conditions.map((cd) => (
             <div key={cd.id} className="flex items-center gap-2">
               <IRThumb src={cd.iconUrl} size={26} />
-              <span className="flex-1 truncate text-[11px] text-foreground/90">{cd.name}</span>
+              <span className="flex-1 truncate ir-text-min text-foreground/90">{cd.name}</span>
               {cd.duration && (
-                <span className="text-[10px] text-muted-foreground">{cd.duration}</span>
+                <span className="ir-text-min text-muted-foreground">{cd.duration}</span>
               )}
             </div>
           ))}
@@ -415,8 +415,8 @@ export const RightSheet: React.FC<{
             <div key={e.id} className="flex items-center gap-2">
               <IRThumb size={26} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-medium text-foreground/90">{e.name}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{e.detail}</p>
+                <p className="truncate ir-text-min font-medium text-foreground/90">{e.name}</p>
+                <p className="truncate ir-text-min text-muted-foreground">{e.detail}</p>
               </div>
             </div>
           ))}
@@ -426,7 +426,7 @@ export const RightSheet: React.FC<{
         <IRPanelHeader title="Inventory" />
         <div className="p-2.5">
           {(c.gold != null || c.carriedWeight != null) && (
-            <div className="mb-1.5 flex items-center justify-between border-b border-white/5 pb-1.5 text-[10px]">
+            <div className="mb-1.5 flex items-center justify-between border-b border-white/5 pb-1.5 ir-text-min">
               {c.gold != null && (
                 <span className="font-semibold text-infinite-gold">
                   {c.gold.toLocaleString()} gp
@@ -448,9 +448,9 @@ export const RightSheet: React.FC<{
             {c.inventory.map((it) => (
               <div key={it.id} className="flex items-center gap-2">
                 <IRThumb size={26} />
-                <span className="flex-1 truncate text-[11px] text-foreground/90">{it.name}</span>
+                <span className="flex-1 truncate ir-text-min text-foreground/90">{it.name}</span>
                 {it.quantity != null && it.quantity > 1 && (
-                  <span className="text-[10px] text-muted-foreground">x{it.quantity}</span>
+                  <span className="ir-text-min text-muted-foreground">x{it.quantity}</span>
                 )}
               </div>
             ))}

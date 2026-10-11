@@ -39,7 +39,7 @@ export const HandoutCard: React.FC<{ entry: JournalHandoutEntry; className?: str
           <div className="border-b border-amber-900/20 bg-[radial-gradient(circle_at_top,_#fff6d6,_#dfc48c)] px-4 py-3">
             <div className="flex items-center gap-2 text-amber-900">
               <ScrollText className="h-4 w-4" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">Handout</span>
+              <span className="ir-text-min font-semibold uppercase tracking-[0.18em]">Handout</span>
             </div>
           </div>
         )}

@@ -54,7 +54,7 @@ export const CombatTurnBar: React.FC<{ summary: CombatTurnSummary; busy: CombatT
               data-testid="combat-turn-pip"
               data-state={actor.state}
               className={cn(
-                'inline-flex shrink-0 items-center justify-center rounded-full border text-[10px] font-bold',
+                'inline-flex shrink-0 items-center justify-center rounded-full border ir-text-min font-bold',
                 'h-6 min-w-6 px-1 sm:h-2.5 sm:w-2.5 sm:min-w-0 sm:p-0',
                 actor.state === 'acted' && 'border-white/20 bg-white/25 text-white/70',
                 actor.state === 'now' && 'border-infinite-gold bg-infinite-gold text-slate-950',

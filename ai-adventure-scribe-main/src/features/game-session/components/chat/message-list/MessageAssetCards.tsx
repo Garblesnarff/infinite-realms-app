@@ -109,7 +109,7 @@ export const AssetCard: React.FC<{
       </div>
       <div className="text-center max-w-[100px]">
         <div className="text-sm font-medium text-white/90 truncate">{asset.name}</div>
-        <div className="text-[10px] text-white/50 uppercase tracking-wider">{asset.type}</div>
+        <div className="ir-text-min text-white/50 uppercase tracking-wider">{asset.type}</div>
       </div>
     </button>
   );
@@ -165,7 +165,7 @@ export const GeneratedImageCard: React.FC<{
       </div>
       <div className="text-center max-w-[100px]">
         <div className="text-sm font-medium text-white/90 truncate">Scene</div>
-        <div className="text-[10px] text-white/50 uppercase tracking-wider">Generated</div>
+        <div className="ir-text-min text-white/50 uppercase tracking-wider">Generated</div>
       </div>
     </button>
   );
@@ -205,7 +205,7 @@ export const GenerateButtonCard: React.FC<{
         <div className="text-sm font-medium text-white/90 truncate">
           {isGenerating ? 'Generating...' : 'Generate'}
         </div>
-        <div className="text-[10px] text-white/50 uppercase tracking-wider">
+        <div className="ir-text-min text-white/50 uppercase tracking-wider">
           {error ? <span className="text-red-400">{error}</span> : 'Scene'}
         </div>
       </div>

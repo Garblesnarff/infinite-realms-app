@@ -58,7 +58,7 @@ export const BuildSessionStatus: React.FC<BuildSessionStatusProps> = memo(({ ses
       data-testid="build-session-status"
       aria-label={`Copy build and session id: ${summary}`}
       title="Copy build and session id"
-      className="rounded px-1.5 py-0.5 font-mono text-[10px] leading-tight text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+      className="ir-hit-slop ir-text-min rounded px-1.5 py-0.5 font-mono leading-tight text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
     >
       {copyStatus === 'idle' ? summary : copyStatus === 'copied' ? 'Copied' : 'Copy failed'}
     </button>

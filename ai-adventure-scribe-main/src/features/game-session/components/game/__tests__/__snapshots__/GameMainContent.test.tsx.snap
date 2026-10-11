@@ -29,7 +29,7 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
         >
           <button
             aria-label="Copy build and session id: build dev · session session-"
-            class="rounded px-1.5 py-0.5 font-mono text-[10px] leading-tight text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+            class="ir-hit-slop ir-text-min rounded px-1.5 py-0.5 font-mono leading-tight text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
             data-testid="build-session-status"
             title="Copy build and session id"
             type="button"
@@ -41,14 +41,14 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
           </div>
           <button
             aria-pressed="true"
-            class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3"
+            class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 ir-hit"
             type="button"
           >
             Show target numbers: 
             On
           </button>
           <button
-            class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 hover:text-accent-foreground h-9 rounded-md px-3 relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow bg-white/[0.03] border-infinite-gold/30 text-infinite-gold/90 hover:bg-infinite-gold/10"
+            class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 hover:text-accent-foreground h-9 rounded-md px-3 ir-hit relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow bg-white/[0.03] border-infinite-gold/30 text-infinite-gold/90 hover:bg-infinite-gold/10"
           >
             <div
               class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"

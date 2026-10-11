@@ -13,7 +13,7 @@ export const SceneHeader: React.FC<{
   <div className="relative flex items-start justify-between gap-3 px-4 py-3">
     <button
       onClick={onSceneInfo}
-      className="shrink-0 rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-foreground/70 transition-colors hover:border-infinite-gold/40 hover:text-infinite-gold"
+      className="ir-hit ir-text-min shrink-0 rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 font-medium text-foreground/70 transition-colors hover:border-infinite-gold/40 hover:text-infinite-gold"
     >
       Scene Info
     </button>

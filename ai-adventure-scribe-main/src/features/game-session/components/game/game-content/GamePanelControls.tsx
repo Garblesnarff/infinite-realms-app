@@ -38,6 +38,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
               type="button"
               variant="outline"
               size="sm"
+              className="ir-hit"
               onClick={onLeftToggle}
               aria-pressed={!isLeftCollapsed}
             >
@@ -55,6 +56,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
               type="button"
               variant="outline"
               size="sm"
+              className="ir-hit"
               onClick={onRightToggle}
               aria-pressed={!isRightCollapsed}
             >
@@ -72,6 +74,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
               type="button"
               variant="outline"
               size="sm"
+              className="ir-hit"
               onClick={onSceneBlurbToggle}
               aria-pressed={showSceneBlurb}
             >
