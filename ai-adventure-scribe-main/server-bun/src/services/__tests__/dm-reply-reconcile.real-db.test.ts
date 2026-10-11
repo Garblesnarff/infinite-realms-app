@@ -31,10 +31,12 @@ import {
   classSpells,
   classes,
   characters,
+  conditionsLibrary,
   dialogueHistory,
   experienceEvents,
   featureUsageLog,
   gameSessions,
+  inventoryItems,
   levelProgression,
   spellSlotUsageLog,
   spells,
@@ -115,6 +117,11 @@ const { LevelUpService } = await importWithRealDb(() => import('../progression/l
 const { awardStoryXp, awardStoryXpOnce } = await importWithRealDb(
   () => import('../dm/story-xp.js'),
 );
+const { applyStoryItems, applyStoryItemsOnce } = await importWithRealDb(
+  () => import('../dm/story-items.js'),
+);
+const { applyStoryConditions, applyStoryConditionsOnce, getActiveCharacterConditions, SRD_2014_CONDITIONS } =
+  await importWithRealDb(() => import('../dm/story-conditions.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -2523,5 +2530,382 @@ ${playerInput}
     ).toBe('capped');
     expect(await sheetXp(turn.character.id)).toBe(0);
     expect(await xpEvents(turn.character.id)).toEqual([]);
+  });
+
+  // #218 step 3: items the story grants or takes reach the inventory, server-side,
+  // once per player message (story-items.ts). The sheet reads inventory from the server.
+  const storyReply = (
+    text: string,
+    extra?: Record<string, unknown>,
+  ): Record<string, unknown> =>
+    envelopeOf({
+      text,
+      options: ['A. **Take** it.', 'B. **Leave** it.'],
+      roll_requests: [],
+      ...(extra ?? {}),
+    });
+  const sheetInventory = async (
+    characterId: string,
+  ): Promise<Array<{ name: string; quantity: number }>> =>
+    (await database
+      .select({ name: inventoryItems.name, quantity: inventoryItems.quantity })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.characterId, characterId))
+      .orderBy(asc(inventoryItems.createdAt))) as Array<{
+      name: string;
+      quantity: number;
+    }>;
+  /** The sheet's Conditions panel after a reload (GET /v1/characters/:id → `conditions`). */
+  const sheetConditions = async (characterId: string): Promise<unknown> =>
+    (await sheetAfterReload(characterId)).conditions;
+  // The dedicated test DB carries no conditions_library seed rows; the step-4 writer
+  // resolves names against the library, so these tests seed the rows they name.
+  // Names use SRD title case ('Poisoned'): CI's scratch DB pre-seeds the library
+  // with title-case names, and the name column is UNIQUE (case-sensitive), so a
+  // lowercase seed would create a duplicate row and make the case-insensitive
+  // writer lookup non-deterministic.
+  const seedConditionLibrary = async (): Promise<void> => {
+    for (const name of ['Poisoned', 'Frightened']) {
+      await database
+        .insert(conditionsLibrary)
+        .values({ name, description: `${name} (test seed)`, mechanicalEffects: '{}' })
+        .onConflictDoNothing();
+    }
+  };
+
+  test('#218 step 3: a found item reaches the inventory once per player message', async () => {
+    const playerInput = 'I pick up the stopper.';
+    await playerSays(playerInput);
+    const reply = storyReply('You pocket the stopper.', {
+      items: [{ name: 'Stopper', quantity: 1, change: 'gain' }],
+    });
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    expect(await sheetInventory(first.character.id)).toEqual([{ name: 'Stopper', quantity: 1 }]);
+    // Retry re-sends the same saved player message: the grant must not land twice.
+    await dmTurn({ ...fighter, existingCharacter: first.character, playerInput, reply });
+    expect(await sheetInventory(first.character.id)).toEqual([{ name: 'Stopper', quantity: 1 }]);
+  });
+
+  test('#218 step 3: losing items removes them, and a retry does not remove twice', async () => {
+    const playerInput = 'I hand over two torches.';
+    await playerSays(playerInput);
+    const setup = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('The keeper counts your torches.', {
+        items: [{ name: 'Torch', quantity: 3, change: 'gain' }],
+      }),
+    });
+    const characterId = setup.character.id;
+    expect(await sheetInventory(characterId)).toEqual([{ name: 'Torch', quantity: 3 }]);
+    const lose = storyReply('You hand two torches over.', {
+      items: [{ name: 'Torch', quantity: 2, change: 'lose' }],
+    });
+    await playerSays(playerInput);
+    await dmTurn({ ...fighter, existingCharacter: setup.character, playerInput, reply: lose });
+    expect(await sheetInventory(characterId)).toEqual([{ name: 'Torch', quantity: 1 }]);
+    // Retry of the same message: one torch is left, not minus one.
+    await dmTurn({ ...fighter, existingCharacter: setup.character, playerInput, reply: lose });
+    expect(await sheetInventory(characterId)).toEqual([{ name: 'Torch', quantity: 1 }]);
+  });
+
+  test('#218 step 3: invalid items write nothing, and a roll turn writes nothing yet', async () => {
+    const playerInput = 'I grab at the shiny things.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({ ...fighter, playerInput, reply: storyReply('Shiny.', undefined) });
+    const characterId = turn.character.id;
+    expect(
+      await applyStoryItems({
+        userId,
+        sessionId,
+        items: [{ name: 'Shiny rock', quantity: 0, change: 'gain' }],
+      }),
+    ).toBe('invalid_items');
+    expect(
+      await applyStoryItems({
+        userId,
+        sessionId,
+        items: [{ name: 'Shiny rock', quantity: 1, change: 'steal' }],
+      }),
+    ).toBe('invalid_items');
+    expect(
+      await applyStoryItems({
+        userId,
+        sessionId,
+        items: [{ name: 'Shiny rock', quantity: 1, change: 'gain' }],
+        rollRequested: true,
+      }),
+    ).toBe('roll_pending');
+    expect(await sheetInventory(characterId)).toEqual([]);
+  });
+
+  test('#218 step 4: an applied condition reaches the sheet once, and removal clears it', async () => {
+    await seedConditionLibrary();
+    const playerInput = 'I breathe the spores in.';
+    await playerSays(playerInput);
+    const reply = storyReply('Your eyes water; the spores take hold.', {
+      conditions: [{ name: 'Poisoned', change: 'apply', duration_minutes: 10 }],
+    });
+    const first = await dmTurn({ ...fighter, playerInput, reply });
+    const characterId = first.character.id;
+    // The description comes from conditions_library (test seed locally, SRD seed
+    // in CI), so assert its presence, not its exact text.
+    expect(await getActiveCharacterConditions(characterId)).toEqual([
+      { name: 'Poisoned', description: expect.any(String), duration: 0 },
+    ]);
+    // The sheet reads the same source on reload.
+    expect(await sheetConditions(characterId)).toEqual([
+      { name: 'Poisoned', description: expect.any(String), duration: 0 },
+    ]);
+    // Retry re-sends the same message: still one active row (5e: no stacking).
+    await dmTurn({ ...fighter, existingCharacter: first.character, playerInput, reply });
+    expect(await getActiveCharacterConditions(characterId)).toHaveLength(1);
+    // The story lifts it: the row deactivates and the sheet clears.
+    await playerSays('The cleric lays hands on me.');
+    await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput: 'The cleric lays hands on me.',
+      reply: storyReply('The sickness passes.', {
+        conditions: [{ name: 'Poisoned', change: 'remove' }],
+      }),
+    });
+    expect(await getActiveCharacterConditions(characterId)).toEqual([]);
+    expect(await sheetConditions(characterId)).toEqual([]);
+  });
+
+  test('#218 step 4: an unknown condition name writes nothing, and a roll turn writes nothing yet', async () => {
+    await seedConditionLibrary();
+    const playerInput = 'The mummy glares at me.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({ ...fighter, playerInput, reply: storyReply('Eerie.', undefined) });
+    const characterId = turn.character.id;
+    expect(
+      await applyStoryConditions({
+        userId,
+        sessionId,
+        conditions: [{ name: 'drained', change: 'apply' }],
+      }),
+    ).toBe('invalid_conditions');
+    expect(
+      await applyStoryConditions({
+        userId,
+        sessionId,
+        conditions: [{ name: 'Frightened', change: 'apply' }],
+        rollRequested: true,
+      }),
+    ).toBe('roll_pending');
+    expect(await getActiveCharacterConditions(characterId)).toEqual([]);
+  });
+
+  test('#218 step 3: two concurrent movements for one player message move the items once (row lock)', async () => {
+    const playerInput = 'I grab the charts.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('Rolls of charts.', undefined),
+    });
+    const [{ createdAt: since }] = await database
+      .select({ createdAt: dialogueHistory.createdAt })
+      .from(dialogueHistory)
+      .where(
+        and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+      )
+      .orderBy(desc(dialogueHistory.createdAt))
+      .limit(1);
+    if (!since) throw new Error('[dm-reply-reconcile] the player row has no created_at');
+    const move = (): ReturnType<typeof applyStoryItemsOnce> =>
+      applyStoryItemsOnce({
+        characterId: turn.character.id,
+        sessionId,
+        playerMessageAt: since,
+        items: [{ name: 'Charts', quantity: 2, change: 'gain' }],
+      });
+    expect((await Promise.all([move(), move()])).sort()).toEqual([
+      'already_applied',
+      'applied',
+    ]);
+    expect(await sheetInventory(turn.character.id)).toEqual([{ name: 'Charts', quantity: 2 }]);
+  });
+
+  test('#218 step 4: two concurrent applies for one player message apply the condition once (row lock)', async () => {
+    await seedConditionLibrary();
+    const playerInput = 'I stare into the abyss.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('The abyss stares back.', undefined),
+    });
+    const [frightened] = await database
+      .select({ id: conditionsLibrary.id })
+      .from(conditionsLibrary)
+      .where(eq(conditionsLibrary.name, 'Frightened'))
+      .limit(1);
+    if (!frightened) throw new Error('[dm-reply-reconcile] frightened was not seeded');
+    const apply = (): ReturnType<typeof applyStoryConditionsOnce> =>
+      applyStoryConditionsOnce({
+        characterId: turn.character.id,
+        conditions: [{ name: 'Frightened', change: 'apply', conditionId: frightened.id }],
+      });
+    expect((await Promise.all([apply(), apply()])).sort()).toEqual([
+      'already_applied',
+      'applied',
+    ]);
+    expect(await getActiveCharacterConditions(turn.character.id)).toHaveLength(1);
+  });
+
+  test('#218 FIX round 3: three finds of Torch land as one row of quantity 3', async () => {
+    let character: typeof characters.$inferSelect | undefined;
+    for (let i = 0; i < 3; i++) {
+      const playerInput = `I pocket torch number ${i + 1}.`;
+      await playerSays(playerInput);
+      const turn = await dmTurn({
+        ...fighter,
+        ...(character ? { existingCharacter: character } : {}),
+        playerInput,
+        reply: storyReply('You take a torch.', {
+          items: [{ name: 'Torch', quantity: 1, change: 'gain' }],
+        }),
+      });
+      character = turn.character;
+    }
+    if (!character) throw new Error('[dm-reply-reconcile] no character after three finds');
+    expect(await sheetInventory(character.id)).toEqual([{ name: 'Torch', quantity: 3 }]);
+  });
+
+  test('#218 FIX round 3 (self-review): a legacy free-text row gets the catalog type and stats backfilled on the next find', async () => {
+    const playerInput = 'I take the longsword.';
+    await playerSays(playerInput);
+    const first = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('A plain blade.', { items: [] }),
+    });
+    const characterId = first.character.id;
+    // A legacy row from before the catalog lookup: free-text equipment, no stats.
+    await database.insert(inventoryItems).values({
+      characterId,
+      name: 'Longsword',
+      itemType: 'equipment',
+      quantity: 1,
+      weight: '0',
+      description: 'Found in the story',
+      properties: null,
+      requiresAttunement: false,
+    });
+    const turn = await dmTurn({
+      ...fighter,
+      existingCharacter: first.character,
+      playerInput,
+      reply: storyReply('A longsword lies across the sarcophagus.', {
+        items: [{ name: 'longsword', change: 'gain', quantity: 1 }],
+      }),
+    });
+    expect(turn.status).toBe(200);
+    const rows = await database
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.characterId, characterId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quantity).toBe(2);
+    expect(rows[0].itemType).toBe('weapon');
+    expect(JSON.parse(rows[0].properties ?? '{}').damage).toEqual({ dice: '1d8', type: 'slashing' });
+  });
+
+  test('#218 FIX round 3: two gain lines for the same item in one reply both count', async () => {
+    const playerInput = 'I sweep the armory shelves.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('Two torches: one on the shelf, one behind it.', {
+        items: [
+          { name: 'Torch', quantity: 1, change: 'gain' },
+          { name: 'Torch', quantity: 2, change: 'gain' },
+        ],
+      }),
+    });
+    expect(await sheetInventory(turn.character.id)).toEqual([{ name: 'Torch', quantity: 3 }]);
+    // A retry of the same reply still lands once: the summed lines share one marker.
+    await dmTurn({
+      ...fighter,
+      existingCharacter: turn.character,
+      playerInput,
+      reply: storyReply('Two torches: one on the shelf, one behind it.', {
+        items: [
+          { name: 'Torch', quantity: 1, change: 'gain' },
+          { name: 'Torch', quantity: 2, change: 'gain' },
+        ],
+      }),
+    });
+    expect(await sheetInventory(turn.character.id)).toEqual([{ name: 'Torch', quantity: 3 }]);
+  });
+
+  test('#218 FIX round 3: a cataloged find gets the right type and stats', async () => {
+    const playerInput = 'I take the longsword from the rack.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({
+      ...fighter,
+      playerInput,
+      reply: storyReply('The longsword is yours.', {
+        items: [{ name: 'Longsword', quantity: 1, change: 'gain' }],
+      }),
+    });
+    const [row] = await database
+      .select({
+        name: inventoryItems.name,
+        itemType: inventoryItems.itemType,
+        quantity: inventoryItems.quantity,
+        properties: inventoryItems.properties,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.characterId, turn.character.id));
+    expect(row.name).toBe('Longsword');
+    expect(row.itemType).toBe('weapon');
+    expect(row.quantity).toBe(1);
+    expect(JSON.parse(row.properties ?? '{}').damage).toEqual({ dice: '1d8', type: 'slashing' });
+  });
+
+  test('#218 FIX round 3: the condition allowlist is exactly the 15 conditions of 2014 5e', async () => {
+    const expected = [
+      'blinded',
+      'charmed',
+      'deafened',
+      'exhaustion',
+      'frightened',
+      'grappled',
+      'incapacitated',
+      'invisible',
+      'paralyzed',
+      'petrified',
+      'poisoned',
+      'prone',
+      'restrained',
+      'stunned',
+      'unconscious',
+    ] as const;
+    expect([...SRD_2014_CONDITIONS].sort()).toEqual([...expected].sort());
+  });
+
+  test('#218 FIX round 3: a non-5e condition is refused even when the library holds it', async () => {
+    // Seed a non-allowlist name into the library: the allowlist, not the library
+    // lookup, must be what refuses it.
+    await database
+      .insert(conditionsLibrary)
+      .values({ name: 'Dazed', description: 'Not a 2014 5e condition', mechanicalEffects: '{}' })
+      .onConflictDoNothing();
+    const playerInput = 'The flash leaves me reeling.';
+    await playerSays(playerInput);
+    const turn = await dmTurn({ ...fighter, playerInput, reply: storyReply('Flash.', undefined) });
+    expect(
+      await applyStoryConditions({
+        userId,
+        sessionId,
+        conditions: [{ name: 'Dazed', change: 'apply' }],
+      }),
+    ).toBe('invalid_conditions');
+    expect(await getActiveCharacterConditions(turn.character.id)).toEqual([]);
   });
 });

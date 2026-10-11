@@ -58,6 +58,31 @@ export async function overlayEngineSpellSlots(
 }
 
 /**
+ * Overlay the character's out-of-combat conditions onto the sheet-facing character
+ * payload. `character_conditions` is the single source of truth outside combat (#218
+ * step 4); without this the sheet's Conditions panel always showed "None" (GP-014).
+ */
+export async function overlayCharacterConditions(
+  mapped: Record<string, unknown> | null,
+  characterId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!mapped) return mapped;
+  // Best-effort enrichment: a conditions lookup failure (or a test double that
+  // stubs the db client away, e.g. #2598's wire tests) must not 500 the whole
+  // character read — the sheet renders "None" when conditions are absent.
+  try {
+    const { getActiveCharacterConditions } = await import('../../services/dm/story-conditions.js');
+    return {
+      ...mapped,
+      conditions: await getActiveCharacterConditions(characterId),
+    };
+  } catch (error) {
+    logger.warn({ err: error, characterId }, 'overlayCharacterConditions lookup failed; serving character without conditions');
+    return mapped;
+  }
+}
+
+/**
  * Validation schema for character operations
  */
 const characterSchema = t.Object({
@@ -461,7 +486,10 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     if (!mapped) return mapped;
     // Serve the engine's slot table so the sheet shows the same source the
     // engine spends from (#2459).
-    return overlayEngineSpellSlots(mapped, resolved.id, user!.userId);
+    const withSlots = await overlayEngineSpellSlots(mapped, resolved.id, user!.userId);
+    // Serve the out-of-combat conditions so the sheet's Conditions panel reads the
+    // same source the story writer writes (#218 step 4).
+    return overlayCharacterConditions(withSlots, resolved.id);
   })
 
   /**

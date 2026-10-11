@@ -134,6 +134,13 @@
       "when": 1791612984402,
       "tag": "0018_add_character_enhancement_selections",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791695130235,
+      "tag": "0019_story_item_events",
+      "breakpoints": true
     }
   ]
 }

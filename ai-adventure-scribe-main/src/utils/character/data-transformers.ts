@@ -8,6 +8,7 @@ import type {
   CharacterRace,
   Subrace,
 } from '@/types/character';
+import type { ConditionName } from '@/types/combat';
 
 import { lookupBackgrounds } from '@/data/backgroundOptions';
 import { classes } from '@/data/classes';
@@ -113,6 +114,16 @@ export interface CharacterRow {
   languages?: string | string[] | null;
   character_stats?: CharacterStatsRow | CharacterStatsRow[] | null;
   character_equipment?: CharacterEquipmentRow[] | null;
+  /**
+   * #218 step 4: active out-of-combat conditions, served by GET /v1/characters/:id.
+   * `{ name, description, duration }`; duration is -1 for permanent, 0 when the
+   * condition is clock-based rather than round-based.
+   */
+  conditions?: Array<{
+    name: string;
+    description?: string | null;
+    duration?: number | null;
+  }> | null;
 }
 
 // ===========================
@@ -504,5 +515,16 @@ export const transformCharacterData = (
     enhancementSelections: readStoredEnhancementSelections(
       characterData.enhancement_selections,
     ),
+    // #218 step 4: the story writer applies conditions server-side; the sheet only renders
+    // what the server serves. A missing or malformed entry is dropped, never rendered.
+    conditions: Array.isArray(characterData.conditions)
+      ? characterData.conditions
+          .filter((c) => !!c && typeof c.name === 'string' && c.name.length > 0)
+          .map((c) => ({
+            name: c.name as ConditionName,
+            description: c.description ?? '',
+            duration: typeof c.duration === 'number' ? c.duration : 0,
+          }))
+      : [],
   };
 };

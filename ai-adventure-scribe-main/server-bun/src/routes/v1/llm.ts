@@ -650,6 +650,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       // #218 step 2: XP the story awards reaches the sheet, server-side, once per player message.
       // Out of combat only, with the same skips as the slot spend above, and never on a turn that
       // asks for a roll. A refused turn carries no `xp_award`: the gate's refusal envelope drops it.
+      // Steps 3+4 below share the same guards: items the story grants/takes and conditions it
+      // applies/removes reach the sheet the same way.
+      const rollRequests = envelope?.roll_requests;
+      const rollRequested = Array.isArray(rollRequests) && rollRequests.length > 0;
       if (
         envelope?.xp_award &&
         dmReply &&
@@ -664,11 +668,44 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             userId,
             sessionId: castSessionId,
             xpAward: envelope.xp_award,
-            rollRequested:
-              Array.isArray(envelope.roll_requests) && envelope.roll_requests.length > 0,
+            rollRequested,
           });
         } catch (error) {
           logger.warn({ msg: 'DM_STORY_XP_AWARD_FAILED', sessionId: castSessionId, error });
+        }
+      }
+      // #218 steps 3+4: items the story grants or takes, and conditions it applies or removes
+      // out of combat, reach the sheet, server-side, once per player message. A failed write
+      // is logged; it never costs the player their turn.
+      if (
+        (envelope?.items || envelope?.conditions) &&
+        dmReply &&
+        dmReply.inCombat !== true &&
+        castSessionId &&
+        combatEntry &&
+        !envelope.combat_entry_pending
+      ) {
+        try {
+          if (envelope.items) {
+            const { applyStoryItems } = await import('../../services/dm/story-items.js');
+            await applyStoryItems({
+              userId,
+              sessionId: castSessionId,
+              items: envelope.items,
+              rollRequested,
+            });
+          }
+          if (envelope.conditions) {
+            const { applyStoryConditions } = await import('../../services/dm/story-conditions.js');
+            await applyStoryConditions({
+              userId,
+              sessionId: castSessionId,
+              conditions: envelope.conditions,
+              rollRequested,
+            });
+          }
+        } catch (error) {
+          logger.warn({ msg: 'DM_STORY_STATE_APPLY_FAILED', sessionId: castSessionId, error });
         }
       }
       // sessionId must not come from combatEntry: that is only sent when combat
