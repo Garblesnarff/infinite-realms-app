@@ -5,6 +5,7 @@ import { getWeaponAttackBonus } from '../weapon-attack-bonus';
 import type { AbilityScores, Character, CharacterClass } from '@/types/character';
 
 import { fighter } from '@/data/classes/fighter';
+import { monk } from '@/data/classes/monk';
 import { wizard } from '@/data/classes/wizard';
 
 /**
@@ -65,6 +66,17 @@ describe('getWeaponAttackBonus with magic weapons (#155)', () => {
   it('gives a Fighter proficiency with a Sun Blade (baseWeaponId: longsword, martial)', () => {
     // Fighter, STR 16 (+3); proficiency bonus passed explicitly as 2: 3 + 2 = 5
     const result = getWeaponAttackBonus(makeCharacter(fighter, 16, 5), 'sun-blade', 2);
+
+    expect(result).not.toBeNull();
+    expect(result?.proficient).toBe(true);
+    expect(result?.bonus).toBe(5);
+  });
+
+  it('gives a Monk proficiency with a Sun Blade (alternate base: shortsword, 2014 DMG "shortswords or longswords")', () => {
+    // Monk, STR 16 (+3); proficiency bonus passed explicitly as 2: 3 + 2 = 5.
+    // The Monk has no longsword proficiency — this passes only through the
+    // shortsword alternate on the sun-blade row.
+    const result = getWeaponAttackBonus(makeCharacter(monk, 16, 5), 'sun-blade', 2);
 
     expect(result).not.toBeNull();
     expect(result?.proficient).toBe(true);

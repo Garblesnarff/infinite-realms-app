@@ -36,9 +36,20 @@ export const normalizeWeaponName = (value: string): string => normalizeEquipment
  * baseWeaponId and keep the old behavior: not proficient.
  */
 const magicBaseWeaponIdByName = new Map<string, string>();
-for (const item of magicItemCatalog as { name?: string; baseWeaponId?: string }[]) {
+const magicAlternateBaseWeaponIdsByName = new Map<string, string[]>();
+for (const item of magicItemCatalog as {
+  name?: string;
+  baseWeaponId?: string;
+  alternateBaseWeaponIds?: string[];
+}[]) {
   if (item.name && item.baseWeaponId) {
     magicBaseWeaponIdByName.set(normalizeWeaponName(item.name), item.baseWeaponId);
+  }
+  if (item.name && item.alternateBaseWeaponIds?.length) {
+    magicAlternateBaseWeaponIdsByName.set(
+      normalizeWeaponName(item.name),
+      item.alternateBaseWeaponIds,
+    );
   }
 }
 
@@ -46,6 +57,14 @@ for (const item of magicItemCatalog as { name?: string; baseWeaponId?: string }[
 export function findMagicBaseWeapon(name: string): CatalogWeapon | undefined {
   const baseId = magicBaseWeaponIdByName.get(normalizeWeaponName(name));
   return baseId ? findCatalogWeapon(baseId) : undefined;
+}
+
+/**
+ * Alternate base weapon SRD ids a magic weapon's own text grants proficiency by
+ * (Sun Blade: "proficient with shortswords or longswords"), if the row names any.
+ */
+export function findMagicAlternateBaseWeaponIds(name: string): string[] {
+  return magicAlternateBaseWeaponIdsByName.get(normalizeWeaponName(name)) ?? [];
 }
 
 export const findCatalogWeapon = (value: string): CatalogWeapon | undefined => {

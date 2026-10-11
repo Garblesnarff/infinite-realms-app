@@ -16,7 +16,7 @@
  * @see /shared/weapon-proficiency.ts
  */
 
-import { isWeaponProficient } from '../../../shared/weapon-proficiency';
+import { isWeaponProficientWithAny } from '../../../shared/weapon-proficiency';
 
 import type { WeaponProficiencySubject } from '../../../shared/weapon-proficiency';
 import type { Equipment } from '@/data/equipment/types';
@@ -42,9 +42,15 @@ function proficiencySubject(character: Character): WeaponProficiencySubject {
 
 function isProficient(character: Character, weapon: Equipment): boolean {
   // A magic weapon resolves through its base weapon (Sun Blade -> longsword),
-  // so a Fighter is proficient with one. Rows with no baseWeaponId (e.g.
-  // "Weapon (any sword)") keep the old behavior: not proficient.
-  return isWeaponProficient(weapon.baseWeaponId ?? weapon.id, proficiencySubject(character));
+  // so a Fighter is proficient with one. The Sun Blade's row also names an
+  // alternate base weapon (2014 DMG: "proficient with shortswords or
+  // longswords"), so a Monk (shortsword-proficient) is proficient too. Rows
+  // with no baseWeaponId (e.g. "Weapon (any sword)") keep the old behavior:
+  // not proficient.
+  return isWeaponProficientWithAny(
+    [weapon.baseWeaponId ?? weapon.id, ...(weapon.alternateBaseWeaponIds ?? [])],
+    proficiencySubject(character),
+  );
 }
 
 export interface WeaponAttackBonus {

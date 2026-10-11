@@ -16,6 +16,7 @@ import { and, asc, desc, eq, exists, inArray, or, isNotNull, sql } from 'drizzle
 import { isEquippedWeaponCandidate } from './combat-weapon-options.js';
 import {
   findCatalogWeapon,
+  findMagicAlternateBaseWeaponIds,
   findMagicBaseWeapon,
   isUnarmedWeaponClaim,
   UNARMED_STRIKE,
@@ -40,13 +41,12 @@ import {
   inventoryItems,
   characterEquipment,
 } from '../../../../db/schema/index';
-import { isWeaponProficient } from '../../../../shared/weapon-proficiency';
+import { isWeaponProficientWithAny } from '../../../../shared/weapon-proficiency';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
 import type { WeaponRuleProfile } from './combat-rules.js';
 import type { MonsterAttack } from './monster-attack-profile.js';
-import type { CatalogWeapon } from './weapon-catalog.js';
 import type { WeaponAttack, CreatureStats, CombatParticipant } from '../../../../db/schema/index';
 import type { CreateWeaponAttackInput } from '../../types/combat.js';
 
@@ -75,9 +75,9 @@ type EquippedWeaponOwner = {
  */
 function characterCanUseWeapon(
   character: EquippedWeaponOwner | undefined,
-  weapon: CatalogWeapon,
+  weaponIds: readonly string[],
 ): boolean {
-  return isWeaponProficient(weapon.id, {
+  return isWeaponProficientWithAny(weaponIds, {
     className: character?.class,
     raceName: character?.race,
     subraceName: character?.subrace,
@@ -112,6 +112,12 @@ function candidateToProfile(
   // the item's own properties with the old fallbacks — the base entry is only
   // consulted for the proficiency decision, never for combat stats.
   const proficiencyCatalog = catalog ?? findMagicBaseWeapon(candidate.name);
+  // A magic weapon whose own text grants proficiency by alternate weapon (Sun
+  // Blade: "proficient with shortswords or longswords") is proficient when the
+  // owner is proficient with the base weapon or any alternate.
+  const proficientIds = proficiencyCatalog
+    ? [proficiencyCatalog.id, ...findMagicAlternateBaseWeaponIds(candidate.name)]
+    : [];
   const damage = (candidate.properties.damage ?? {}) as Record<string, unknown>;
   const range = (candidate.properties.range ?? {}) as Record<string, unknown>;
   const normalRange = Number(range.normal ?? catalog?.range?.normal ?? 5);
@@ -125,7 +131,8 @@ function candidateToProfile(
     magicBonus: candidate.magicBonus,
     finesse: Boolean(candidate.properties.finesse ?? catalog?.weaponProperties?.finesse),
     ranged: normalRange > 5,
-    proficient: proficiencyCatalog ? characterCanUseWeapon(owner, proficiencyCatalog) : false,
+    proficient:
+      proficientIds.length > 0 ? characterCanUseWeapon(owner, proficientIds) : false,
   };
 }
 

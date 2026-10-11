@@ -120,6 +120,16 @@ describe('engine weapon proficiency resolves magic weapons through their base we
     expect(proficient).toEqual({ 'Sun Blade': true });
   });
 
+  it('gives a Monk a Sun Blade (alternate base: shortsword — 2014 DMG "shortswords or longswords")', async () => {
+    // The Monk has no longsword proficiency: this passes only through the
+    // shortsword alternate on the sun-blade row.
+    const proficient = await proficiencyFor({ class: 'Monk', race: 'Human', subrace: '' }, [
+      'Sun Blade',
+    ]);
+
+    expect(proficient).toEqual({ 'Sun Blade': true });
+  });
+
   it('denies a Wizard a Mace of Disruption (mace is not on the wizard list)', async () => {
     const proficient = await proficiencyFor({ class: 'Wizard', race: 'Human', subrace: '' }, [
       'Mace of Disruption',
