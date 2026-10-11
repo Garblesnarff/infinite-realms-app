@@ -143,9 +143,9 @@ async function engineBonuses(character: Character, weaponNames: string[]): Promi
 
 describe('the sheet and the engine agree on every seeded premade weapon (#2540, #2541)', () => {
   // Every seeded premade, named rather than counted: #2578 gave the five Academy of Arcane
-  // Gastronomy rows their equipment, and #222 added the five A Midsummer Night's Chaos rows, so
-  // the set is 40 now. A count would go stale silently; the key list makes a new premade a
-  // deliberate line here, and the loop below covers all of them.
+  // Gastronomy rows their equipment, #222 added the five A Midsummer Night's Chaos rows, and
+  // #317 added the Paladin, so the set is 41 now. A count would go stale silently; the key
+  // list makes a new premade a deliberate line here, and the loop below covers all of them.
   const SEEDED_PREMADES = [
     'abyssal-descent/the-veteran',
     'abyssal-descent/the-scholar',
@@ -187,6 +187,7 @@ describe('the sheet and the engine agree on every seeded premade weapon (#2540, 
     'a-midsummer-nights-chaos/the-woodsman',
     'a-midsummer-nights-chaos/the-runaway',
     'a-midsummer-nights-chaos/the-hedgewitch',
+    'academy-of-arcane-gastronomy/the-oathbound',
   ];
 
   it('reads every seeded premade the list names', () => {
