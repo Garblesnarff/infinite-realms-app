@@ -206,6 +206,7 @@ mock.module('../data-access.js', () => ({
   }),
   getActiveConditionNames: async () => [],
   listEquippedWeaponProfiles: async () => [],
+  listCarriedWeaponProfiles: async () => [],
 }));
 mock.module('../death-saves-service.js', () => ({
   describeGoingDown: () => '',

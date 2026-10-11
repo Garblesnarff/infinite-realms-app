@@ -147,6 +147,7 @@ mock.module('../data-access.js', () => ({
   getWeaponAttack: async () => null,
   getCharacterWeapons: async () => [],
   listEquippedWeaponProfiles: async () => equippedWeapons,
+  listCarriedWeaponProfiles: async () => [],
   monsterAttackSource: () => 'derived',
   verifyCharacterOwnership: async () => {},
   verifyEncounterAccess: async () => {},

@@ -275,6 +275,7 @@ mock.module('../data-access.js', () => ({
     spellIds: [],
   }),
   getActiveConditionNames: async () => [],
+  listCarriedWeaponProfiles: async () => [],
   listEquippedWeaponProfiles: async () => [
     {
       id: 'quarterstaff',

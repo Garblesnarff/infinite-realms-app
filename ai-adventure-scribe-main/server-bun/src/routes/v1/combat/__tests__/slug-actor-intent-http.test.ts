@@ -164,6 +164,7 @@ const CLAWS = {
 };
 mock.module('../../../../services/combat/data-access.js', () => ({
   listEquippedWeaponProfiles: async () => [CLAWS],
+  listCarriedWeaponProfiles: async () => [],
   getEquippedWeaponProfile: async () => CLAWS,
   getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: [] }),
   getActiveConditionNames: async () => [],

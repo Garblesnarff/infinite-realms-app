@@ -15,6 +15,7 @@ import { buildCombatWeaponOptions } from './combat-weapon-options.js';
 import {
   getParticipantAbilityProfile,
   getActiveConditionNames,
+  listCarriedWeaponProfiles,
   listEquippedWeaponProfiles,
 } from './data-access.js';
 import {
@@ -775,7 +776,19 @@ export async function proposeCombatAttack(
   const actorLabel = facingName(actor.name, resolvedAttack.actorId, rosterFrom(state.participants));
   const targetLabel = await participantLabel(encounterId, resolvedAttack.targetId, userId);
   const equipped = await listEquippedWeaponProfiles(actor);
-  const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped);
+  const carried = await listCarriedWeaponProfiles(actor);
+  const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped, carried);
+  // #260: a requested weapon that is carried but not equipped must not silently become
+  // a different weapon. Refuse player-sourced intents with a clear message so the player
+  // equips it first. DM narration is never refused: a DM naming an unowned weapon takes
+  // the ungrounded substitute path below, and a carried-but-unequipped one resolves the
+  // same way rather than stopping the fight.
+  if (grounding.notEquipped && source === 'player') {
+    throw new BusinessLogicError(
+      `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+      { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+    );
+  }
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
@@ -1131,7 +1144,17 @@ export async function executeCombatIntent(
       // from `[0]` while resolving with `intent.weaponId` is how a bow-and-sword character got
       // walked into melee to fire an arrow, or reach-refused for a sword she was holding.
       const equipped = await listEquippedWeaponProfiles(actor);
-      const grounding = groundRequestedWeapon(intent.weaponId, equipped);
+      const carried = await listCarriedWeaponProfiles(actor);
+      const grounding = groundRequestedWeapon(intent.weaponId, equipped, carried);
+      // #260: a requested weapon that is not equipped must not silently swap. Refuse
+      // player-sourced intents clearly; DM narration keeps the ungrounded substitute
+      // path below so a fight is never stopped by a weapon name.
+      if (grounding.notEquipped && source === 'player') {
+        throw new BusinessLogicError(
+          `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+          { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+        );
+      }
       const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
         ? UNARMED_STRIKE.id
         : grounding.weaponId;
