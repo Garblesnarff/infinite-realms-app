@@ -749,6 +749,9 @@ export const useAIResponse = (): {
             ? {
                 dmReply: {
                   messageId: dmMessageId,
+                  ...(isDiceRollMessage && latestMessage.context?.rollRequestId
+                    ? { rollRequestId: latestMessage.context.rollRequestId }
+                    : {}),
                   // A cast that can still be cancelled keeps its prose off the server too: a
                   // provisional row would narrate a cast the player gave up after a reload.
                   inCombat: Boolean(isInCombat || castSignal),
@@ -804,6 +807,7 @@ export const useAIResponse = (): {
                   await onTextReady(
                     {
                       text: earlyText,
+                      id: parsedResult.dmMessageId,
                       sender: 'dm',
                       timestamp: new Date().toISOString(),
                       context: {
@@ -1172,6 +1176,7 @@ export const useAIResponse = (): {
         // Format the response as an EnhancedChatMessage
         return {
           text: finalResponseText,
+          id: answered.dmMessageId,
           sender: 'dm',
           timestamp: new Date().toISOString(),
           context: {

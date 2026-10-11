@@ -166,6 +166,46 @@ describe('the origin useAIResponse hands the combat resolution (#2305)', () => {
     });
   });
 
+  it('passes the saved roll request identity to the real DM request producer', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { result } = renderHook(() => useAIResponse());
+    const rollRequestId = '22222222-2222-4222-8222-222222222222:roll:0';
+    const canonicalId = '44444444-4444-4444-8444-444444444444';
+    vi.mocked(AIService.chatWithDM).mockResolvedValueOnce({
+      text: 'The charm fails.',
+      dmMessageId: canonicalId,
+      narrationSegments: [],
+      dice_rolls: [],
+      roll_requests: [],
+      combatDetection: { isCombat: false },
+    } as any);
+    const response = await result.current.getAIResponse(
+      [
+        {
+          sender: 'player',
+          text: 'Wisdom save against Charm Person: 8 fail',
+          context: { intent: 'dice_roll', rollRequestId },
+        },
+      ] as any,
+      'session-origin',
+      4,
+      undefined,
+      undefined,
+      '33333333-3333-4333-8333-333333333333',
+    );
+    expect(response.id).toBe(canonicalId);
+    expect(AIService.chatWithDM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dmReply: {
+          messageId: '33333333-3333-4333-8333-333333333333',
+          inCombat: false,
+          narrationGated: false,
+          rollRequestId,
+        },
+      }),
+    );
+  });
+
   const originFor = async (latest: Record<string, unknown>) => {
     const { result } = renderHook(() => useAIResponse());
     await result.current.getAIResponse(

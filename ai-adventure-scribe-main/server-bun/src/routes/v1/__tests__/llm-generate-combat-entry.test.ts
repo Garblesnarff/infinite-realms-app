@@ -116,6 +116,20 @@ mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
   }),
 }));
 
+// Route contract tests stub persistence; roll serialization is exercised with real PostgreSQL.
+mock.module('../../../services/session/session-message-service.js', () => ({
+  SessionMessageService: {
+    withRollTurn: async (
+      _sessionId: string,
+      _userId: string,
+      _playerInput: string | undefined,
+      _rollId: string | undefined,
+      _replyId: string | undefined,
+      generate: () => Promise<unknown>,
+    ) => generate(),
+  },
+}));
+
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 const app = createRequestPipelineApp().use(llmRoutes);

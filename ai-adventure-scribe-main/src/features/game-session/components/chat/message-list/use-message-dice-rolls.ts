@@ -24,6 +24,25 @@ import { declinedRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
 
+export const ROLL_SUBMISSION_TIMEOUT_MS = 90_000;
+
+async function boundedRollSave(save: Promise<void>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      save,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Roll save timed out')),
+          ROLL_SUBMISSION_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Type for last roll metadata
 export type LastRollMeta = {
   kind: 'attack' | 'skill_check' | 'save' | 'damage' | 'initiative' | 'generic';
@@ -363,7 +382,7 @@ export function useMessageDiceRolls({
         const submit =
           roll.batchId && !willCompleteBatch
             ? async () => {
-                await onSendMessage(playerMessage);
+                await boundedRollSave(onSendMessage(playerMessage));
                 completeDiceRoll(roll.id, settledResult);
               }
             : onSendFullMessage

@@ -10,11 +10,24 @@ const { mockInsert, mockSaveSessionMessages } = vi.hoisted(() => {
   const insert = vi.fn().mockResolvedValue({ error: null });
   return {
     mockInsert: insert,
-    mockSaveSessionMessages: vi.fn(async (_sessionId: string, payload: unknown) => {
-      const result = await insert(payload);
-      if (result.error) throw result.error;
-      return { messages: [] };
-    }),
+    mockSaveSessionMessages: vi.fn(
+      async (
+        _sessionId: string,
+        payload: unknown,
+      ): Promise<{
+        messages: Array<{
+          id: string;
+          speaker_type: string;
+          message: string;
+          timestamp: string;
+          context?: Record<string, unknown>;
+        }>;
+      }> => {
+        const result = await insert(payload);
+        if (result.error) throw result.error;
+        return { messages: [] };
+      },
+    ),
   };
 });
 
@@ -102,6 +115,34 @@ describe('useMessageQueue', () => {
   const wrapper = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
+
+  it('uses the first stored roll answer id and text when the server deduplicates a retry', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    const rollRequestId = '22222222-2222-4222-8222-222222222222:roll:0';
+    mockSaveSessionMessages.mockResolvedValueOnce({
+      messages: [
+        {
+          id: 'first-answer',
+          speaker_type: 'player',
+          message: 'Wisdom save: 8 fail',
+          timestamp: '2026-01-01T00:00:00.000Z',
+          context: { intent: 'dice_roll', rollRequestId },
+        },
+      ],
+    });
+    let saved;
+    await act(async () => {
+      saved = await result.current.messageMutation.mutateAsync({
+        id: 'retry-answer',
+        sender: 'player',
+        text: 'Wisdom save: 8 fail',
+        context: { intent: 'dice_roll', rollRequestId },
+      } as any);
+    });
+    expect(saved).toEqual(
+      expect.objectContaining({ id: 'first-answer', text: 'Wisdom save: 8 fail' }),
+    );
+  });
 
   it('should successfully persist a message', async () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });

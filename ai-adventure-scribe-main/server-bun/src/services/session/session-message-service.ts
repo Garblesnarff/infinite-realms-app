@@ -9,7 +9,8 @@ import {
   type GameSession,
   type DialogueHistory,
 } from '../../../../db/schema/index';
-import { InternalServerError, NotFoundError } from '../../lib/errors.js';
+import { transactionContext } from '../../../../db/transaction-context';
+import { ConflictError, InternalServerError, NotFoundError } from '../../lib/errors.js';
 
 /**
  * Message with pagination metadata
@@ -198,6 +199,48 @@ export class SessionMessageService {
         });
       }
 
+      // Serialise answer saves by session, including retries under a new client message id.
+      if (
+        messages.some(
+          (message) =>
+            message.speakerType === 'player' &&
+            message.context?.intent === 'dice_roll' &&
+            typeof message.context.rollRequestId === 'string',
+        )
+      ) {
+        await tx
+          .select({ id: gameSessions.id })
+          .from(gameSessions)
+          .where(eq(gameSessions.id, sessionId))
+          .for('no key update');
+        const unique = [];
+        for (const message of batch) {
+          const rollId =
+            message.speakerType === 'player' && message.context?.intent === 'dice_roll'
+              ? message.context.rollRequestId
+              : undefined;
+          if (typeof rollId !== 'string') {
+            unique.push(message);
+            continue;
+          }
+          const [stored] = await tx
+            .select()
+            .from(dialogueHistory)
+            .where(
+              and(
+                eq(dialogueHistory.sessionId, sessionId),
+                eq(dialogueHistory.speakerType, 'player'),
+                sql`${dialogueHistory.context}->>'rollRequestId' = ${rollId}`,
+              ),
+            )
+            .limit(1);
+          if (stored) existingOnce.push(stored);
+          else if (!unique.some((candidate) => candidate.context?.rollRequestId === rollId))
+            unique.push(message);
+        }
+        batch = unique;
+      }
+
       // #2218: /v1/llm/generate writes the DM reply it produced as a provisional row under the
       // id the client reserved for the turn. The client's own save of that turn carries the same
       // id and its final text, and replaces the provisional row in place rather than being
@@ -266,6 +309,94 @@ export class SessionMessageService {
       }
       return [...existingOnce, ...reconciled, ...inserted];
     });
+  }
+
+  // A row lock serializes overlapping generations for the same roll, and the lock is held for
+  // the whole provider call. The wait is bounded on purpose: SET LOCAL lock_timeout fails a
+  // second submit fast (55P03, mapped to 409 "in progress" below) instead of letting it queue
+  // behind a generation that can run for a minute. The client shows its wait state and retries,
+  // and the retry replays the first turn's committed result.
+  //
+  // Atomicity contract: reply persistence and the cached rollTurnResult share this transaction.
+  // A provider error or any thrown AppError propagates out of db.transaction and rolls both
+  // back, so a retry never finds a half-written DM row or a cached partial result. A client
+  // that hits its 90 s turn bound while a turn is still generating either replays the committed
+  // result from the cache or regenerates cleanly — the transaction admits no other outcome.
+  static async withRollTurn<T extends Record<string, unknown>>(
+    sessionId: string,
+    userId: string,
+    playerInput: string | undefined,
+    suppliedRollId: string | undefined,
+    requestedReplyId: string | undefined,
+    generate: (replyId?: string) => Promise<T>,
+  ): Promise<T> {
+    const afterCommit: Array<() => void> = [];
+    const result = await db.transaction(async (tx) => {
+      // Bound the row-lock wait: a second submit that arrives while the first turn is still
+      // generating waits at most 5 s for the lock, then fails with 55P03 (mapped to 409 below)
+      // instead of queueing behind the in-flight provider call.
+      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+      const session = await tx.query.gameSessions.findFirst({
+        where: (session, { and, eq }) =>
+          and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
+        columns: { id: true },
+      });
+      if (!session) throw new NotFoundError('Session', sessionId);
+      let answer: typeof dialogueHistory.$inferSelect | undefined;
+      try {
+        [answer] = await tx
+          .select()
+          .from(dialogueHistory)
+          .where(
+            and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+          )
+          .orderBy(desc(dialogueHistory.createdAt))
+          .limit(1)
+          .for('update');
+      } catch (error) {
+        // 55P03: the row lock is held by another turn that is still generating. Drizzle wraps
+        // the postgres.js error, so the code lives on `cause`.
+        const code =
+          (error as { code?: string })?.code ?? (error as { cause?: { code?: string } })?.cause?.code;
+        if (code === '55P03')
+          throw new ConflictError('Another turn is in progress. Retry to pick up its result.');
+        throw error;
+      }
+      // The 5 s bound was only for acquiring the row lock. The turn's own generate + writes run
+      // under the normal (no) lock timeout; a 55P03 here would be a different lock, not "another
+      // turn in progress", so it must not be mapped to 409.
+      await tx.execute(sql`SET LOCAL lock_timeout = DEFAULT`);
+      const context = answer?.context as Record<string, unknown> | null;
+      const rollId =
+        context?.intent === 'dice_roll' && typeof context.rollRequestId === 'string'
+          ? context.rollRequestId
+          : undefined;
+      if (suppliedRollId && suppliedRollId !== rollId)
+        throw new ConflictError(
+          'This roll is missing or has been superseded by another player turn.',
+        );
+      if (!rollId || (!suppliedRollId && playerInput !== answer?.message))
+        return { guarded: false as const };
+      const cached = context?.rollTurnResult;
+      if (cached && typeof cached === 'object')
+        return { guarded: true as const, response: cached as T };
+      const replyId = requestedReplyId ?? crypto.randomUUID();
+      return transactionContext.run({ database: tx, afterCommit }, async () => {
+        const response = await generate(replyId);
+        // Cache the turn result for replay on the guarded path. The guarded path only runs
+        // for roll turns, and the cached response carries the canonical reply id — a retry
+        // replays it instead of generating twice. Unconditional (not gated on the response
+        // carrying dmReplyPersisted) so turns from pre-fix clients, which send no dmReply,
+        // get the same dedupe as current clients.
+        await tx
+          .update(dialogueHistory)
+          .set({ context: { ...context, rollTurnResult: response } })
+          .where(eq(dialogueHistory.id, answer!.id));
+        return { guarded: true as const, response };
+      });
+    });
+    for (const publish of afterCommit) publish();
+    return result.guarded ? result.response : generate();
   }
 
   /**
