@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import type { Character } from '@/types/character';
 
@@ -16,6 +16,7 @@ const mockState = vi.hoisted(() => ({
   character: null as unknown as Character | null,
   dispatch: vi.fn(),
   toast: vi.fn(),
+  userId: 'user-1',
 }));
 
 // Three stub steps; unknown labels pass validation (validateStep defaults VALID).
@@ -40,7 +41,7 @@ vi.mock('@/contexts/CharacterContext', () => ({
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
+  useAuth: () => ({ user: { id: mockState.userId } }),
 }));
 
 vi.mock('@/hooks/use-character-save', () => ({
@@ -76,6 +77,12 @@ describe('wizard draft persistence (#208)', () => {
     window.localStorage.clear();
     mockState.character = null;
     mockState.dispatch.mockClear();
+    mockState.userId = 'user-1';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('restores a stored draft on refresh when the user chooses Resume', async () => {
@@ -176,7 +183,17 @@ describe('wizard draft persistence (#208)', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it('Cancel asks for confirmation, then clears the draft and leaves', async () => {
+  it('Cancel asks for confirmation, then clears the seeded draft and leaves', async () => {
+    // Seed a draft first: without this the "cleared" assertion passes vacuously.
+    writeWizardDraft(DRAFT_KEY, {
+      version: WIZARD_DRAFT_VERSION,
+      character: { name: 'Half-typed Hero' } as Character,
+      step: 1,
+      campaignId: null,
+      updatedAt: new Date().toISOString(),
+    });
+    expect(window.localStorage.getItem(DRAFT_KEY)).not.toBeNull();
+
     mockState.character = { name: 'Half-typed Hero' } as Character;
 
     renderWizard();
@@ -190,5 +207,76 @@ describe('wizard draft persistence (#208)', () => {
       expect(screen.getByTestId('location-search').textContent).toContain('/app/characters');
     });
     expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it('user B is never offered user A\'s draft', async () => {
+    // User A's draft sits in storage under A's key.
+    writeWizardDraft(getWizardDraftKey('user-A'), {
+      version: WIZARD_DRAFT_VERSION,
+      character: { name: "A's Hero" } as Character,
+      step: 2,
+      campaignId: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Render the wizard signed in as user B.
+    mockState.userId = 'user-B';
+    mockState.character = { name: 'B Hero' } as Character;
+    renderWizard();
+
+    // The wizard renders, but no resume prompt appears for B.
+    expect(await screen.findByTestId('step-a')).toBeTruthy();
+    expect(screen.queryByText('Resume your character?')).toBeNull();
+    // And A's draft is untouched in storage.
+    expect(window.localStorage.getItem(getWizardDraftKey('user-A'))).not.toBeNull();
+  });
+
+  it('autosaves the draft after the debounce delay', async () => {
+    vi.useFakeTimers();
+    mockState.character = { name: 'Autosave Hero' } as Character;
+
+    renderWizard();
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+
+    const stored = window.localStorage.getItem(DRAFT_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored as string).character.name).toBe('Autosave Hero');
+  });
+
+  it('does not autosave before the debounce delay elapses', async () => {
+    vi.useFakeTimers();
+    mockState.character = { name: 'Impatient Hero' } as Character;
+
+    renderWizard();
+
+    await act(async () => {
+      vi.advanceTimersByTime(499);
+    });
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(window.localStorage.getItem(DRAFT_KEY)).not.toBeNull();
+  });
+
+  it('the wizard still works when storage throws', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+
+    mockState.character = { name: 'Storage-denied Hero' } as Character;
+    renderWizard();
+
+    // No crash, no resume dialog, the wizard step renders.
+    expect(await screen.findByTestId('step-a')).toBeTruthy();
+    expect(screen.queryByText('Resume your character?')).toBeNull();
   });
 });

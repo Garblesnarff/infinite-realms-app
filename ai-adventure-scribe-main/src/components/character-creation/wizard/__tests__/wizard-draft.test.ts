@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import type { Character } from '@/types/character';
 
@@ -28,6 +28,10 @@ function makeDraft(overrides: Partial<WizardDraft> = {}): WizardDraft {
 describe('wizard-draft storage', () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('keys drafts per user, and per campaign when present', () => {
@@ -69,6 +73,27 @@ describe('wizard-draft storage', () => {
     writeWizardDraft(KEY, makeDraft());
     clearWizardDraft(KEY);
     expect(readWizardDraft(KEY)).toBeNull();
+  });
+
+  it('returns null when getItem throws instead of crashing', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    expect(readWizardDraft(KEY)).toBeNull();
+  });
+
+  it('write does not throw when setItem throws', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    expect(() => writeWizardDraft(KEY, makeDraft())).not.toThrow();
+  });
+
+  it('clear does not throw when removeItem throws', () => {
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    expect(() => clearWizardDraft(KEY)).not.toThrow();
   });
 });
 
