@@ -32,7 +32,7 @@ type ExpectedSeededWeapon = {
   longRange?: number;
 };
 
-/** Literal weapon kits from the 40 seeded premade rows (35 from seed migrations + 5 hardcoded academy); this must not be derived from the resolver. */
+/** Literal weapon kits from the 41 seeded premade rows (36 from seed migrations + 5 hardcoded academy); this must not be derived from the resolver. */
 const EXPECTED_SEEDED_WEAPONS: Array<{
   campaign: string;
   templateKey: string;
@@ -319,6 +319,11 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-hedgewitch',
     weapons: [{ name: 'Quarterstaff', ranged: false, reachFeet: 5 }],
   },
+  {
+    campaign: 'academy-of-arcane-gastronomy',
+    templateKey: 'the-oathbound',
+    weapons: [{ name: 'Longsword', ranged: false, reachFeet: 5 }],
+  },
 ];
 
 const expectedFor = (template: { starter_campaign_id: string; template_key: string }) => {
@@ -345,9 +350,9 @@ const actualProfilesFor = (equipment: string[]): WeaponRuleProfile[] => {
 };
 
 describe('combat weapon option builder', () => {
-  test('offers one correctly gated attack per weapon for all 40 seeded premades', () => {
+  test('offers one correctly gated attack per weapon for all 41 seeded premades', () => {
     const templates = readSeededPremadeTemplates();
-    expect(templates).toHaveLength(40);
+    expect(templates).toHaveLength(41);
 
     for (const template of templates) {
       const expectedWeapons = expectedFor(template);

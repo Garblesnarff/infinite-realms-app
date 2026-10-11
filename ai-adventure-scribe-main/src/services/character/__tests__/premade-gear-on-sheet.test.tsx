@@ -261,14 +261,19 @@ describe('Academy of Arcane Gastronomy premades have real weapon rows', () => {
         { name: 'Crossbow, Light', bonus: '+3' },
       ],
     },
+    'the-oathbound': {
+      weaponIds: ['longsword'],
+      ac: 18,
+      attacks: [{ name: 'Longsword', bonus: '+5' }],
+    },
   };
 
   const academyTemplates = templates.filter(
     (template) => template.starter_campaign_id === 'academy-of-arcane-gastronomy',
   );
 
-  it('includes all five production Academy templates with catalog-resolvable weapons', () => {
-    expect(academyTemplates).toHaveLength(5);
+  it('includes all six production Academy templates with catalog-resolvable weapons', () => {
+    expect(academyTemplates).toHaveLength(6);
     expect(
       academyTemplates.map(({ template_key, class: className, background }) => ({
         template_key,
@@ -276,6 +281,7 @@ describe('Academy of Arcane Gastronomy premades have real weapon rows', () => {
         background,
       })),
     ).toEqual([
+      { template_key: 'the-oathbound', class: 'Paladin', background: 'Acolyte' },
       { template_key: 'the-apprentice', class: 'Wizard', background: 'Sage' },
       { template_key: 'the-kitchen-hand', class: 'Rogue', background: 'Urchin' },
       { template_key: 'the-gourmand', class: 'Fighter', background: 'Folk Hero' },
