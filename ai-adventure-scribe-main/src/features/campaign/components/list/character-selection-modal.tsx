@@ -61,8 +61,10 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
 
   // #321: templates successfully loaded on a starter campaign — the state in
   // which the account roster is offered as an addition. (A failed/empty
-  // template load keeps the #2193 failure state, roster-free.)
-  const starterTemplatesLoaded = Boolean(isStarterCampaign && templates && templates.length > 0);
+  // template load keeps the #2193 failure state, roster-free.) Typed as
+  // T[] | undefined (not boolean) so the ternary below narrows it for TS.
+  const starterTemplates =
+    isStarterCampaign && templates && templates.length > 0 ? templates : undefined;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -70,7 +72,7 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
         <DialogHeader>
           <DialogTitle>Choose Your Character</DialogTitle>
           <DialogDescription>
-            {starterTemplatesLoaded
+            {starterTemplates
               ? `Select a pre-built character for "${campaignName}", or bring one of your own`
               : isStarterCampaign
                 ? `Select a pre-built character for "${campaignName}"`
@@ -88,16 +90,15 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
               </p>
               <Button onClick={retryLoad}>Retry</Button>
             </div>
-          ) : isStarterCampaign && templates && templates.length > 0 ? (
+          ) : starterTemplates ? (
             // Show starter templates, then the account roster below them
             // (#321): a saved custom character can start a session here too.
             // The roster is only an addition to loaded templates — when the
             // template load fails the modal still shows the failure alone
-            // (#2193), never the roster. (Inline condition, not
-            // starterTemplatesLoaded, so TS narrows templates below.)
+            // (#2193), never the roster.
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {templates.map((template) => (
+                {starterTemplates.map((template) => (
                   <StarterTemplateCard
                     key={template.id}
                     template={template}
