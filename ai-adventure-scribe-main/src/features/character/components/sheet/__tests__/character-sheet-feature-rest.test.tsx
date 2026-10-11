@@ -344,4 +344,23 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     expect(screen.queryByText('20/10')).not.toBeInTheDocument();
     random.mockRestore();
   });
+
+  it('#214: the Main tab vitals also offer Short Rest and Long Rest', async () => {
+    resetRow();
+    renderSheet();
+    const user = userEvent.setup();
+    // The Main tab is the default; its Combat Vitals card carries the rest buttons.
+    await screen.findByText('5/10');
+    const mainTab = screen.getByRole('tab', { name: /main/i });
+    expect(mainTab.getAttribute('data-state')).toBe('active');
+
+    await user.click(screen.getByRole('button', { name: /^short rest$/i }));
+    await waitFor(() => {
+      expect(restBodies.map((call) => call.restType)).toContain('short');
+    });
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Short rest complete' }),
+    );
+    expect(mainTab.getAttribute('data-state')).toBe('active');
+  });
 });

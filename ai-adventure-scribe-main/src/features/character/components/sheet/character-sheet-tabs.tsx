@@ -134,6 +134,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
               onUpdate={() => {
                 void onCharacterUpdate(character);
               }}
+              onCharacterUpdate={onCharacterUpdate}
             />
           </TabsContent>
 

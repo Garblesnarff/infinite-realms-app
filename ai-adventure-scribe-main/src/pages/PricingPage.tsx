@@ -15,6 +15,10 @@ const PricingPage: React.FC = () => (
     <Helmet>
       <title>Pricing | Infinite Realms</title>
       <meta name="description" content={launchPageContent.pricing.subtitle} />
+      <meta property="og:title" content="Pricing | Infinite Realms" />
+      <meta property="og:description" content={launchPageContent.pricing.subtitle} />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content="https://infiniterealms.app/pricing" />
       <link rel="canonical" href="https://infiniterealms.app/pricing" />
     </Helmet>
     <header className="px-6 py-4 border-b border-white/10">
