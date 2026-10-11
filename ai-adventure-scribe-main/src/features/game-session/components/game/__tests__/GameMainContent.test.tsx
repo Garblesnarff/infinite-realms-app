@@ -346,6 +346,37 @@ describe('GameMainContent overhaul behavior contract', () => {
     });
   });
 
+  it('hides the preflight banner out of combat but keeps the composer locked mid-turn (#219)', () => {
+    state.combatTurnUiState = {
+      holder: null,
+      pendingIntent: null,
+      preflight: 'running',
+      error: undefined,
+    };
+
+    // No isCombatDetected: an ordinary out-of-combat turn.
+    render(<GameMainContent {...baseProps} {...handlerRef} />);
+
+    expect(screen.queryByText('Checking whose turn it is…')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Resume turn|Resuming/ })).not.toBeInTheDocument();
+    // The lock itself is unchanged: the turn is still in flight.
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+
+  it('hides the combat-turn recovery states out of combat too (#219)', () => {
+    state.combatTurnUiState = {
+      holder: null,
+      pendingIntent: null,
+      preflight: 'unknown',
+      error: undefined,
+    };
+
+    render(<GameMainContent {...baseProps} {...handlerRef} />);
+
+    expect(screen.queryByRole('button', { name: 'Resume turn' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).not.toBeDisabled();
+  });
+
   it('blocks input while a dice request is pending', () => {
     state.currentRoll = {
       id: 'save-1',

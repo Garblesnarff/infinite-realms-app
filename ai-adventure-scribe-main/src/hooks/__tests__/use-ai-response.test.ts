@@ -171,6 +171,31 @@ describe('useAIResponse', () => {
     expect(AIService.chatWithDM).toHaveBeenCalled();
   });
 
+  it('#219: a failed out-of-combat turn resets the preflight so the composer cannot wedge', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
+    } as any);
+    (AIService.chatWithDM as any).mockRejectedValue(new Error('provider down'));
+
+    const { result } = renderHook(() => useAIResponse());
+    await act(async () => {
+      await expect(
+        result.current.getAIResponse(mockMessages as any, mockSessionId),
+      ).rejects.toThrow('provider down');
+    });
+
+    // The catch settles the preflight the turn forced to 'running'; the
+    // composer lock in GameMainContent keys off this flag, so a stuck
+    // 'running' would be a frozen composer (#219: always unlock on error).
+    expect(result.current.combatTurnUiState.preflight).toBe('idle');
+  });
+
   it('#2456: sets terminalDeathState when the AI service returns party_defeated', async () => {
     const { AIService } = await import('@/services/ai-service');
 
