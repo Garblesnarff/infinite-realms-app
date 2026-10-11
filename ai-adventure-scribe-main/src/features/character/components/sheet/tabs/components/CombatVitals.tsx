@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import React from 'react';
 
+import { RestActionButtons } from '../../sections/class-feature-tracker/RestActionButtons';
+
 import type { CombatState } from '@/features/character/hooks/use-combat-state';
 import type { Character } from '@/types/character';
 
@@ -44,6 +46,8 @@ interface CombatVitalsProps {
   damageId: string;
   healingId: string;
   tempHpId: string;
+  /** #214: rests are on the Main tab vitals, not only the Features tab. */
+  onRest?: (restType: 'short' | 'long') => void;
 }
 
 /**
@@ -69,6 +73,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
   damageId,
   healingId,
   tempHpId,
+  onRest,
 }) => {
   const isUnconscious = hasStoredHp && combatState.currentHp <= 0;
   const isDead = combatState.deathSaves.failures >= 3;
@@ -325,6 +330,14 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                 Apply Healing
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Rests (#214): Short/Long Rest on the Main tab, not only the Features tab */}
+        {onRest && (
+          <div className="border-t pt-3">
+            <h4 className="text-sm font-medium mb-2">Rests</h4>
+            <RestActionButtons onRest={onRest} />
           </div>
         )}
 
