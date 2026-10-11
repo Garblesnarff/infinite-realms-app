@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.35.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.34.0...v0.35.0) (2026-10-11)
+
+
+### Features
+
+* **character:** persist and load enhancement selections ([#204](https://github.com/Garblesnarff/infinite-realms-app/issues/204)) ([e381ae3](https://github.com/Garblesnarff/infinite-realms-app/commit/e381ae36b367f8b67fe0848ceaa32a6291c6682b))
+
+
+### Bug Fixes
+
+* **roster:** distinguish duplicate premade copies and add sheet Delete ([#311](https://github.com/Garblesnarff/infinite-realms-app/issues/311)) ([#338](https://github.com/Garblesnarff/infinite-realms-app/issues/338)) ([45f0d22](https://github.com/Garblesnarff/infinite-realms-app/commit/45f0d222313c1999e5135dde52947d348c986e3a))
+
 ## [0.34.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.4...v0.34.0) (2026-10-11)
 
 
