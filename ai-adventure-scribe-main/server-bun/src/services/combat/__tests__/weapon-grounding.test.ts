@@ -105,3 +105,28 @@ describe('grounding a narrated weapon name against the sheet', () => {
     }
   });
 });
+
+describe('notEquipped flag (#260)', () => {
+  test('marks a requested weapon that is not equipped', () => {
+    const handaxe = weapon({ id: 'inv-handaxe', name: 'Handaxe' });
+    const sheet = [handaxe];
+    const result = groundRequestedWeapon('light-crossbow', sheet);
+    expect(result.notEquipped).toBe(true);
+    expect(result.grounded).toBe(false);
+    expect(result.requested).toBe('light-crossbow');
+  });
+
+  test('does not mark notEquipped when the weapon is equipped', () => {
+    const crossbow = weapon({ id: 'inv-crossbow', name: 'Light Crossbow', ranged: true });
+    const sheet = [crossbow];
+    const result = groundRequestedWeapon('light-crossbow', sheet);
+    expect(result.notEquipped).toBe(false);
+    expect(result.grounded).toBe(true);
+  });
+
+  test('does not mark notEquipped when nothing is requested', () => {
+    const handaxe = weapon({ id: 'inv-handaxe', name: 'Handaxe' });
+    const result = groundRequestedWeapon(null, [handaxe]);
+    expect(result.notEquipped).toBe(false);
+  });
+});

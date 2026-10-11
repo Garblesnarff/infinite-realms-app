@@ -776,6 +776,15 @@ export async function proposeCombatAttack(
   const targetLabel = await participantLabel(encounterId, resolvedAttack.targetId, userId);
   const equipped = await listEquippedWeaponProfiles(actor);
   const grounding = groundRequestedWeapon(resolvedAttack.weaponId, equipped);
+  // #260: a requested weapon that is carried but not equipped must not silently become
+  // a different weapon. Refuse with a clear message so the player equips it first.
+  if (grounding.notEquipped) {
+    const { BusinessLogicError } = await import('../../lib/errors.js');
+    throw new BusinessLogicError(
+      `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+      { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+    );
+  }
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
@@ -1132,6 +1141,14 @@ export async function executeCombatIntent(
       // walked into melee to fire an arrow, or reach-refused for a sword she was holding.
       const equipped = await listEquippedWeaponProfiles(actor);
       const grounding = groundRequestedWeapon(intent.weaponId, equipped);
+      // #260: a requested weapon that is not equipped must not silently swap. Refuse clearly.
+      if (grounding.notEquipped) {
+        const { BusinessLogicError } = await import('../../lib/errors.js');
+        throw new BusinessLogicError(
+          `Weapon not equipped: ${grounding.requested} is not equipped — equip it before attacking, or choose an equipped weapon`,
+          { reason: 'weapon_not_equipped', requestedWeaponId: grounding.requested },
+        );
+      }
       const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
         ? UNARMED_STRIKE.id
         : grounding.weaponId;

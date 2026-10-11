@@ -371,7 +371,13 @@ export async function deriveCombatEntryFirstAction(
   const equipped = await deps.listEquippedWeaponProfiles(playerParticipant);
   const grounded =
     requestedAttackSource === 'unarmed'
-      ? { weapon: { ...UNARMED_STRIKE }, weaponId: undefined, grounded: true, requested: null }
+      ? {
+          weapon: { ...UNARMED_STRIKE },
+          weaponId: undefined,
+          grounded: true,
+          requested: null,
+          notEquipped: false,
+        }
       : groundRequestedWeapon(params.declaredAttack.weaponName, equipped);
   const weaponStated =
     params.declaredAttack.weaponStated ?? Boolean(params.declaredAttack.weaponName?.trim());

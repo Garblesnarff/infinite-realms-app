@@ -37,6 +37,11 @@ export type GroundedWeapon = {
   grounded: boolean;
   /** The name that was claimed, kept for the log line. */
   requested: string | null;
+  /**
+   * True when a specific weapon was requested but is not in the equipped list (#260).
+   * The caller should refuse with "not equipped" instead of silently substituting.
+   */
+  notEquipped: boolean;
 };
 
 /**
@@ -64,6 +69,7 @@ export function groundRequestedWeapon(
       weaponId: idFor(fallback),
       grounded: true,
       requested: null,
+      notEquipped: false,
     };
   }
 
@@ -75,12 +81,19 @@ export function groundRequestedWeapon(
       weaponId: undefined,
       grounded: true,
       requested: requestedWeaponId,
+      notEquipped: false,
     };
   }
 
   const exact = equipped.find((profile) => weaponProfileMatches(profile, requestedWeaponId));
   if (exact) {
-    return { weapon: exact, weaponId: exact.id, grounded: true, requested: requestedWeaponId };
+    return {
+      weapon: exact,
+      weaponId: exact.id,
+      grounded: true,
+      requested: requestedWeaponId,
+      notEquipped: false,
+    };
   }
 
   const catalog = findCatalogWeapon(requestedWeaponId);
@@ -90,10 +103,13 @@ export function groundRequestedWeapon(
       ? undefined
       : equipped.find((profile) => profile.ranged === wantsRanged);
   const substitute = byType ?? fallback;
+  // #260: a specific weapon was requested but is not equipped. The substitute is returned
+  // for the approach geometry, but the caller must refuse instead of silently swapping.
   return {
     weapon: asProfile(substitute),
     weaponId: idFor(substitute),
     grounded: false,
     requested: requestedWeaponId,
+    notEquipped: true,
   };
 }
