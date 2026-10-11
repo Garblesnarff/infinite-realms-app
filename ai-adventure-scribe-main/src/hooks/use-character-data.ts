@@ -91,6 +91,16 @@ export const buildSheetUpdatePayload = (
     payload.class_features = next.classFeatures ?? {};
   }
 
+  // #204: wizard quirk picks; the sheet itself does not edit these, but the
+  // diff keeps the single writer complete if a flow ever hands back a
+  // character with changed selections.
+  if (
+    JSON.stringify(prev.enhancementSelections ?? null) !==
+    JSON.stringify(next.enhancementSelections ?? null)
+  ) {
+    payload.enhancement_selections = next.enhancementSelections ?? [];
+  }
+
   return payload;
 };
 

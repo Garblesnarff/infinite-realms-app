@@ -91,6 +91,13 @@ export interface CharacterRow {
    * or a rest does not snap the tracker back to the template counts.
    */
   class_features?: string | Record<string, unknown> | null;
+  /**
+   * #204: wizard step-12 quirk picks as JSON (array of OptionSelection).
+   * Loaded into Character.enhancementSelections so the sheet's Enhancements
+   * tab shows them; absent or empty reads as undefined so the tab's empty
+   * state renders.
+   */
+  enhancement_selections?: string | unknown[] | null;
   vision_types?: string | null;
   obscurement?: string | null;
   is_hidden?: boolean | null;
@@ -250,6 +257,22 @@ const readStoredClassFeatures = (
   }
   if (typeof raw === 'object') return raw;
   return undefined;
+};
+
+/**
+ * #204: reads the stored quirk picks. An absent or empty value reads as
+ * undefined (not []) so the Enhancements tab's empty state renders instead
+ * of a blank tab.
+ */
+const readStoredEnhancementSelections = (
+  raw: CharacterRow['enhancement_selections'],
+): Character['enhancementSelections'] | undefined => {
+  if (raw == null) return undefined;
+  const parsed =
+    typeof raw === 'string' ? parseJsonField<unknown>(raw, undefined) : raw;
+  return Array.isArray(parsed) && parsed.length > 0
+    ? (parsed as Character['enhancementSelections'])
+    : undefined;
 };
 
 export const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {
@@ -478,5 +501,8 @@ export const transformCharacterData = (
     preparedSpells: parseSpellListField(characterData.prepared_spells),
     ritualSpells: parseSpellListField(characterData.ritual_spells),
     classFeatures: readStoredClassFeatures(characterData.class_features),
+    enhancementSelections: readStoredEnhancementSelections(
+      characterData.enhancement_selections,
+    ),
   };
 };

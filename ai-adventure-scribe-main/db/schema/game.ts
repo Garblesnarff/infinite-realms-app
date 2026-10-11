@@ -117,6 +117,8 @@ export const characters = pgTable(
     pactSlots: jsonb('pact_slots'),
     activeConcentration: text('active_concentration'),
     classFeatures: jsonb('class_features'),
+    // #204: wizard step-12 quirk picks (OptionSelection[]) as JSON.
+    enhancementSelections: jsonb('enhancement_selections'),
     fightingStyles: jsonb('fighting_styles'),
     copperPieces: integer('copper_pieces').default(0),
     silverPieces: integer('silver_pieces').default(0),

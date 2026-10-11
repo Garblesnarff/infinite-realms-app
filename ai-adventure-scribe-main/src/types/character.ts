@@ -485,6 +485,9 @@ export function transformCharacterForStorage(character: Character) {
     pact_slots: JSON.stringify(character.pactSlots || {}),
     active_concentration: character.activeConcentration || null,
     class_features: JSON.stringify(character.classFeatures || {}),
+    // #204: wizard step-12 quirk picks; the loader reads them back into
+    // enhancementSelections so the sheet's Enhancements tab shows them.
+    enhancement_selections: JSON.stringify(character.enhancementSelections || []),
     // Fighting Styles
     fighting_styles: JSON.stringify(character.fightingStyles || []),
     copper_pieces: character.currency?.cp || 0,

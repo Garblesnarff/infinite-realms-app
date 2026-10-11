@@ -120,6 +120,16 @@ describe('buildSheetUpdatePayload (#2701)', () => {
     expect(buildSheetUpdatePayload(prev, { ...prev })).toEqual({});
   });
 
+  it('changed quirk picks produce exactly { enhancement_selections } (#204)', () => {
+    const prev = baseCharacter();
+    const quirks = [
+      { optionId: 'quirk-1', value: 'Scarred knuckles' },
+      { optionId: 'quirk-2', value: 'Whistles when nervous' },
+    ];
+    const next = { ...prev, enhancementSelections: quirks };
+    expect(buildSheetUpdatePayload(prev, next)).toEqual({ enhancement_selections: quirks });
+  });
+
   it('returns an empty payload when there is no previous character', () => {
     expect(buildSheetUpdatePayload(null, baseCharacter())).toEqual({});
   });

@@ -541,6 +541,45 @@ describe('data-transformers', () => {
 
         expect(character.expertiseProficiencies).toBeUndefined();
       });
+
+      describe('enhancement selections (#204)', () => {
+        const quirks = [
+          { optionId: 'quirk-1', value: 'Scarred knuckles' },
+          { optionId: 'quirk-2', value: 'Whistles when nervous' },
+        ];
+
+        it('loads stored quirk picks from a JSON string', () => {
+          const character = transformCharacterData(
+            { ...mockCharacterRow, enhancement_selections: JSON.stringify(quirks) },
+            mockStats,
+            [],
+          );
+
+          expect(character.enhancementSelections).toEqual(quirks);
+        });
+
+        it('loads stored quirk picks from an already-parsed array', () => {
+          const character = transformCharacterData(
+            { ...mockCharacterRow, enhancement_selections: quirks },
+            mockStats,
+            [],
+          );
+
+          expect(character.enhancementSelections).toEqual(quirks);
+        });
+
+        it('reads absent or empty picks as undefined so the empty state renders', () => {
+          for (const empty of [null, undefined, '[]', []] as const) {
+            const character = transformCharacterData(
+              { ...mockCharacterRow, enhancement_selections: empty },
+              mockStats,
+              [],
+            );
+
+            expect(character.enhancementSelections).toBeUndefined();
+          }
+        });
+      });
     });
   });
 });

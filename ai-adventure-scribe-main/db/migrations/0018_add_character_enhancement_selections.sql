@@ -1,0 +1,1 @@
+ALTER TABLE "characters" ADD COLUMN "enhancement_selections" jsonb;
