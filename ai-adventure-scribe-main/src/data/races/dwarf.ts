@@ -15,6 +15,9 @@ export const dwarf: CharacterRace = {
   name: 'Dwarf',
   description:
     'Bold and hardy, dwarves are known as skilled warriors, miners, and workers of stone and metal.',
+  // Dwarven weapon training (battleaxes, handaxes, light hammers, warhammers)
+  // lives in shared/weapon-proficiency.ts (SRD_RACE_WEAPON_TRAINING) — the
+  // single home for racial training lists. This record carries no copy.
   traits: ['Darkvision', 'Dwarven Resilience', 'Tool Proficiency'],
   abilityScoreIncrease: { constitution: 2 },
   speed: 25,

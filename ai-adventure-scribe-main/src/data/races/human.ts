@@ -46,7 +46,6 @@ export const human: CharacterRace = {
       abilityScoreIncrease: {},
       traits: ['Skills', 'Feat', 'Extra Language or Tool Proficiency'],
       languages: ['Choice of One or Tool Proficiency'],
-      weaponProficiencies: [],
       armorProficiencies: [],
     },
     {
