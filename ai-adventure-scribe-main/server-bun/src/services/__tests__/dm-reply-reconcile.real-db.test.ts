@@ -1378,6 +1378,143 @@ ${playerInput}
     expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
   });
 
+  test('#217 FIX round 3: an exhausted-slot cantrip is allowed — cantrips are cast at will', async () => {
+    const character = await wizardWithSlots(2, 2);
+    const reply = castReply('A spectral hand claws at the cobwebs.');
+    const turn = await dmTurn({
+      ...slotWizardTurn,
+      existingCharacter: character,
+      playerInput: 'I cast Chill Touch at the cobwebs.',
+      reply,
+    });
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#217 FIX round 3: upcasting is allowed — 1st-level slots spent but a 2nd-level slot left, Burning Hands is not refused', async () => {
+    const character = await wizardWithSlots(2, 2);
+    await database.insert(characterSpellSlots).values({
+      characterId: character.id,
+      spellLevel: 2,
+      totalSlots: 2,
+      usedSlots: 0,
+    });
+    const reply = castReply('Fire fans from your fingers and the cobwebs flash to ash.');
+    const turn = await dmTurn({ ...slotWizardTurn, existingCharacter: character, reply });
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#217 FIX round 3: a Wizard ritual cast as a ritual with no slot left is allowed', async () => {
+    const character = await wizardWithSlots(2, 2);
+    const reply = castReply('Ten minutes pass. A faint violet aura clings to the larder door.');
+    const turn = await dmTurn({
+      ...slotWizardTurn,
+      existingCharacter: character,
+      playerInput: 'I cast Detect Magic as a ritual, taking the ten minutes.',
+      reply,
+    });
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
+  test('#217 FIX round 3: a Sorcerer "ritual" with no slot left is refused — sorcerers have no ritual casting', async () => {
+    const [character] = await database
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('gp-sorcerer-slots'),
+        class: 'Sorcerer',
+        race: 'Human',
+        level: 3,
+        knownSpells: 'detect-magic',
+      })
+      .returning();
+    if (!character) throw new Error('[dm-reply-reconcile] the sorcerer was not seeded');
+    await database.insert(characterSpellSlots).values({
+      characterId: character.id,
+      spellLevel: 1,
+      totalSlots: 2,
+      usedSlots: 2,
+    });
+    const reply = castReply('Ten minutes pass. A faint violet aura clings to the larder door.');
+    const turn = await dmTurn({
+      characterClass: 'Sorcerer',
+      race: 'Human',
+      scores: 'STR 8(-1), DEX 14(+2), CON 14(+2), INT 10(+0), WIS 12(+1), CHA 16(+3)',
+      dexterityModifier: 2,
+      existingCharacter: character,
+      playerInput: 'I cast Detect Magic as a ritual, taking the ten minutes.',
+      reply,
+    });
+    expect(turn.status).toBe(200);
+    const line = `${character.name} can't cast Detect Magic: no 1st-level spell slots left.`;
+    expect(JSON.parse(String(turn.body.text))).toEqual({
+      ...envelopeOf({ text: line, options: [], roll_requests: [] }),
+      narration_segments: [expect.objectContaining({ type: 'dm', text: line })],
+    });
+  });
+
+  test('#217 FIX round 3: a Warlock/Wizard multiclass casting a warlock spell is not blocked by the spent wizard row — pact slots are separate', async () => {
+    const character = await wizardWithSlots(2, 2);
+    await database
+      .update(characters)
+      .set({ classLevels: [{ class: 'Wizard', level: 1 }, { class: 'Warlock', level: 2 }] })
+      .where(eq(characters.id, character.id));
+    // The warlock class row (plain name, so the pact check matches) and Hellish Rebuke
+    // granted by it.
+    await database.insert(classes).values({ name: 'Warlock', hitDie: 8 }).onConflictDoNothing();
+    const [warlockClass] = await database
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.name, 'Warlock'))
+      .limit(1);
+    if (!warlockClass) throw new Error('[dm-reply-reconcile] no warlock class row');
+    const [rebukeSpell] = await database
+      .insert(spells)
+      .values({
+        name: 'Hellish Rebuke',
+        level: 1,
+        school: 'evocation',
+        castingTime: '1 reaction',
+        rangeText: '60 feet',
+        duration: 'Instantaneous',
+        description: 'Hellish Rebuke (#217 FIX round 3 fixture).',
+      })
+      .onConflictDoNothing()
+      .returning({ id: spells.id });
+    const spellId =
+      rebukeSpell?.id ??
+      (
+        await database
+          .select({ id: spells.id })
+          .from(spells)
+          .where(eq(spells.name, 'Hellish Rebuke'))
+          .limit(1)
+      )[0]?.id;
+    if (!spellId) throw new Error('[dm-reply-reconcile] no Hellish Rebuke spell row');
+    await database
+      .insert(classSpells)
+      .values({ classId: warlockClass.id, spellId, spellLevel: 1 })
+      .onConflictDoNothing();
+    await database.insert(characterSpells).values({
+      characterId: character.id,
+      spellId,
+      sourceClassId: warlockClass.id,
+      isPrepared: true,
+    });
+    const reply = castReply('Hellfire answers your curse and wraps the guard.');
+    const turn = await dmTurn({
+      ...slotWizardTurn,
+      existingCharacter: character,
+      playerInput: 'I cast Hellish Rebuke at the guard.',
+      reply,
+    });
+    expect(turn.status).toBe(200);
+    expect(JSON.parse(String(turn.body.text)).text).toBe(reply.text);
+  });
+
   test('"cast" with no spell after it is prose: a glance or a net is not refused (#217)', async () => {
     const reply = castReply('Nothing moves behind the crates.');
     for (const playerInput of [
