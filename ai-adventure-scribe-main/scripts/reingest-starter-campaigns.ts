@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /* eslint-disable no-console */
 /**
- * Safely re-ingest the three starter campaign bibles after the parser fix.
+ * Safely re-ingest the four starter campaign bibles after the parser fix.
  *
  * Dry-run is the default. The Hetzner operator must pass --apply explicitly.
  * This script never uses the destructive delete-first ingestion path; existing
@@ -57,6 +57,10 @@ const STARTER_CAMPAIGNS = [
   {
     id: 'the-eternal-feast',
     relativePath: 'Completed/Intrigue/the-eternal-feast',
+  },
+  {
+    id: 'a-midsummer-nights-chaos',
+    relativePath: 'Completed/Fantasy/a-midsummer-nights-chaos',
   },
 ] as const;
 
@@ -136,9 +140,21 @@ async function main(options: Options): Promise<void> {
   }
 
   const repoPath = resolve(options.repoPath);
-  const loadedCampaigns = STARTER_CAMPAIGNS.map(({ id, relativePath }) =>
-    loadCampaign(repoPath, id, relativePath),
-  );
+  // A missing bible folder for one campaign must not fail the other three:
+  // report it clearly and continue with the campaigns that did load.
+  const loadedCampaigns: LoadedCampaign[] = [];
+  for (const { id, relativePath } of STARTER_CAMPAIGNS) {
+    try {
+      loadedCampaigns.push(loadCampaign(repoPath, id, relativePath));
+    } catch (error) {
+      console.error(
+        `SKIP ${id}: bible folder missing or unreadable at ${join(repoPath, 'campaign-ideas', relativePath)} — ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+  if (loadedCampaigns.length === 0) {
+    throw new Error('No starter campaign bibles loaded; nothing to do.');
+  }
 
   console.log(`${options.apply ? 'APPLY' : 'DRY RUN'}: ${repoPath}`);
   for (const { campaign, chunks, rules } of loadedCampaigns) {

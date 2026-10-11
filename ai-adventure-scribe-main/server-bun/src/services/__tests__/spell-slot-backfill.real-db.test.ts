@@ -8,6 +8,9 @@
  * overflowing integer), runs the migration file's SQL verbatim, and asserts
  * the rows that land in `character_spell_slots`.
  *
+ * Also hosts the #222 Midsummer seed re-runnability proof (describe block at
+ * the end): the seed migration must apply twice with identical results.
+ *
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { readFileSync } from 'node:fs';
@@ -220,5 +223,125 @@ describeWithDb('spell-slot backfill migration (#2598)', () => {
     > | null;
     // The sheet sees max 2 / current 0: the backfilled spent state.
     expect(overlaid?.spell_slots).toEqual({ '1': { max: 2, current: 0 } });
+  });
+});
+
+const MIDSUMMER_SEED_SQL = hasRealDb
+  ? readFileSync(
+      new URL(
+        '../../../../supabase/migrations/20261010_seed_a_midsummer_nights_chaos_character_templates.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    )
+  : '';
+
+const MIDSUMMER_CAMPAIGN_ID = 'a-midsummer-nights-chaos';
+
+/**
+ * Run the Midsummer seed migration file's SQL verbatim, the way a migration
+ * runner applies it. node-postgres uses the simple query protocol, so the
+ * file's five INSERT ... SELECT ... ON CONFLICT statements execute in one call.
+ */
+async function runMidsummerSeed(): Promise<void> {
+  const client = new Client({ connectionString: realDbUrl });
+  await client.connect();
+  try {
+    await client.query(MIDSUMMER_SEED_SQL);
+  } finally {
+    await client.end();
+  }
+}
+
+interface TemplateSnapshot {
+  template_key: string;
+  name: string;
+  class: string;
+  background: string;
+  skills: unknown;
+}
+
+async function snapshotTemplates(): Promise<TemplateSnapshot[]> {
+  const client = new Client({ connectionString: realDbUrl });
+  await client.connect();
+  try {
+    const res = await client.query(
+      `SELECT template_key, name, class, background, skills
+       FROM public.starter_character_templates
+       WHERE starter_campaign_id = $1
+       ORDER BY template_key`,
+      [MIDSUMMER_CAMPAIGN_ID],
+    );
+    return res.rows as TemplateSnapshot[];
+  } finally {
+    await client.end();
+  }
+}
+
+describeWithDb('midsummer seed migration is re-runnable (#222)', () => {
+  let createdCampaignRow = false;
+
+  beforeAll(async () => {
+    // The seed is a no-op until the campaign row exists (see the migration
+    // header for the Hetzner apply order). Create it if missing.
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      const existing = await client.query(
+        'SELECT id FROM public.starter_campaigns WHERE id = $1',
+        [MIDSUMMER_CAMPAIGN_ID],
+      );
+      if (existing.rows.length === 0) {
+        await client.query(
+          `INSERT INTO public.starter_campaigns
+             (id, slug, title, genre, tone, difficulty, premise, is_complete, is_published)
+           VALUES ($1, $1, 'A Midsummer Night''s Chaos',
+                   ARRAY['fae','comedy']::text[], ARRAY['fae mischief']::text[],
+                   'medium', 'Test campaign row for the #222 seed re-runnability proof.',
+                   false, false)`,
+          [MIDSUMMER_CAMPAIGN_ID],
+        );
+        createdCampaignRow = true;
+      }
+    } finally {
+      await client.end();
+    }
+  });
+
+  afterAll(async () => {
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      await client.query(
+        'DELETE FROM public.starter_character_templates WHERE starter_campaign_id = $1',
+        [MIDSUMMER_CAMPAIGN_ID],
+      );
+      if (createdCampaignRow) {
+        await client.query('DELETE FROM public.starter_campaigns WHERE id = $1', [
+          MIDSUMMER_CAMPAIGN_ID,
+        ]);
+      }
+    } finally {
+      await client.end();
+    }
+    await closeRealDb();
+  });
+
+  it('applies twice with the same row count and values', async () => {
+    await runMidsummerSeed();
+    const first = await snapshotTemplates();
+    expect(first).toHaveLength(5);
+
+    // The strategist's 5e fixes must be what lands (skills is JSONB, so the
+    // driver returns a parsed array, not the SQL string literal).
+    const byKey = Object.fromEntries(first.map((r) => [r.template_key, r]));
+    expect(byKey['the-lovesick'].skills).toEqual(["history", "persuasion", "arcana", "deception"]);
+    expect(byKey['the-hedgewitch'].skills).toEqual(["medicine", "religion", "arcana", "nature"]);
+
+    await runMidsummerSeed();
+    const second = await snapshotTemplates();
+
+    expect(second).toHaveLength(first.length);
+    expect(second).toEqual(first);
   });
 });
