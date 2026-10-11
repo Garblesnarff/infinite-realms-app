@@ -13,6 +13,7 @@ import { wsTicketRoutes } from './routes/v1/ws-ticket';
 import { blogRoutes } from './routes/blog.js';
 import { chronicleRoutes } from './routes/chronicle.js';
 import { landingRoutes } from './routes/landing.js';
+import { publicMetaRoutes } from './routes/public-meta.js';
 import { seoRoutes } from './routes/seo.js';
 import { authRoutes } from './routes/v1/auth';
 import { charactersRoutes } from './routes/v1/characters';
@@ -326,6 +327,10 @@ export function createApp() {
   app.use(chronicleRoutes);
   app.use(landingRoutes);
   app.use(seoRoutes);
+  // Public SPA pages with server-injected head meta (#227 AU-06).
+  // nginx must proxy these exact paths to the backend (nginx.conf.example);
+  // without that they fall through to the static index.html as before.
+  app.use(publicMetaRoutes);
 
   // LLM documentation routes (llms.txt standard)
   app.use(llmsRoutes);

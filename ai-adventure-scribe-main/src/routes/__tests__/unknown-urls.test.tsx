@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter, Route, Routes, useLocation, useRoutes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -47,13 +48,15 @@ const AppTable = (): React.ReactElement | null => useRoutes(getAppRoutes());
 
 function renderApp(path: string) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Breadcrumbs />
-      <Routes>
-        <Route path="/app/*" element={<AppTable />} />
-      </Routes>
-      <LocationProbe />
-    </MemoryRouter>,
+    <HelmetProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Breadcrumbs />
+        <Routes>
+          <Route path="/app/*" element={<AppTable />} />
+        </Routes>
+        <LocationProbe />
+      </MemoryRouter>
+    </HelmetProvider>,
   );
 }
 
@@ -75,13 +78,32 @@ describe('unknown URLs (#2706)', () => {
 
   it('renders a public 404 with a link home', () => {
     render(
-      <MemoryRouter initialEntries={['/nonsense']}>
-        <AppRoutes />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter initialEntries={['/nonsense']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+  });
+
+  it('emits noindex on the public 404 page (#227 AU-04)', async () => {
+    render(
+      <HelmetProvider>
+        <MemoryRouter initialEntries={['/nonsense']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </HelmetProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    // react-helmet-async applies head changes on requestAnimationFrame.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'noindex, nofollow',
+    );
   });
 
   it('redirects an unknown campaign tab to the overview', async () => {

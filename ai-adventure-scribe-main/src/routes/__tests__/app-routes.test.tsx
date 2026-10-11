@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter, Route, Routes, matchRoutes, useLocation, useRoutes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
@@ -111,13 +112,15 @@ describe('/app catch-all', () => {
 
   const renderAt = (path: string): ReturnType<typeof render> =>
     render(
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/app" element={<p>campaign list</p>} />
-          <Route path="/app/*" element={<AppRouteTable />} />
-        </Routes>
-        <LocationProbe />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/app" element={<p>campaign list</p>} />
+            <Route path="/app/*" element={<AppRouteTable />} />
+          </Routes>
+          <LocationProbe />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
   it('renders "Page not found" for an unknown /app path', () => {
