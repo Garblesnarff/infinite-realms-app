@@ -176,6 +176,23 @@ export type DMResponse = {
    * when nothing is earned.
    */
   xp_award?: { amount: number; reason: string } | null;
+  /**
+   * Items the story grants or takes this turn (#218 step 3): found loot, spent supplies.
+   * The server applies them to the inventory once per player message; absent or null when
+   * nothing changes hands.
+   */
+  items?: Array<{ name: string; quantity: number; change: 'gain' | 'lose' }> | null;
+  /**
+   * Conditions the story applies or removes out of combat (#218 step 4). Names must be
+   * 2014 5e conditions; the server validates them against the conditions library. The
+   * server applies them to the sheet once per player message; absent or null when nothing
+   * changes.
+   */
+  conditions?: Array<{
+    name: string;
+    change: 'apply' | 'remove';
+    duration_minutes?: number | null;
+  }> | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -431,9 +448,41 @@ const xpAwardProperty = nullable({
   required: ['amount', 'reason'],
 });
 
+/** #218 step 3: items the story grants or takes this turn. Optional and nullable. */
+const storyItemsProperty = nullable({
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      name: { type: 'string' },
+      quantity: { type: 'integer', minimum: 1 },
+      change: { type: 'string', enum: ['gain', 'lose'] },
+    },
+    required: ['name', 'quantity', 'change'],
+  },
+});
+
+/** #218 step 4: conditions the story applies or removes out of combat. Optional and nullable. */
+const storyConditionsProperty = nullable({
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      name: { type: 'string' },
+      change: { type: 'string', enum: ['apply', 'remove'] },
+      duration_minutes: nullable({ type: 'integer', minimum: 1 }),
+    },
+    required: ['name', 'change'],
+  },
+});
+
 export const dmResponseSchema = createDmResponseSchema({
   combat_exits: combatExitsProperty,
   xp_award: xpAwardProperty,
+  items: storyItemsProperty,
+  conditions: storyConditionsProperty,
 });
 
 const isPoint = (value: unknown): value is Point =>

@@ -310,9 +310,16 @@ async function checkClaims(input: FeatureGateInput): Promise<LLMResponse> {
     refusedSpells,
   });
   // Every field the client acts on is emptied: no roll, no combat action, no map or handout
-  // change, no combat start (the entry gate's pending handoff included), no XP. The refusal line
-  // is the whole turn.
-  const { combat_entry_pending: _p, combat_exits: _e, xp_award: _xp, ...rest } = envelope;
+  // change, no combat start (the entry gate's pending handoff included), no XP, no items, no
+  // conditions. The refusal line is the whole turn.
+  const {
+    combat_entry_pending: _p,
+    combat_exits: _e,
+    xp_award: _xp,
+    items: _i,
+    conditions: _c,
+    ...rest
+  } = envelope;
   return {
     ...result,
     text: JSON.stringify({

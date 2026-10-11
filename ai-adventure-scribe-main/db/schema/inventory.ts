@@ -51,6 +51,34 @@ export const inventoryItems = pgTable(
   }),
 );
 
+/**
+ * Story Item Events Table (#218 step 3)
+ * One row per item movement the story writer applies: the idempotency marker that makes
+ * each grant or loss land once per player message, in the style of `experience_events`.
+ * The inventory rows themselves cannot serve as the marker — a loss deletes its rows —
+ * so the marker lives here, keyed on the player message's timestamp (the server clock).
+ */
+export const storyItemEvents = pgTable(
+  'story_item_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => gameSessions.id, { onDelete: 'cascade' }),
+    playerMessageAt: timestamp('player_message_at', { withTimezone: true, mode: 'date' }).notNull(),
+    itemName: text('item_name').notNull(),
+    change: text('change').notNull(), // 'gain' | 'lose'
+    quantity: integer('quantity').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => ({
+    characterIdx: index('idx_story_item_events_character').on(table.characterId),
+  }),
+);
+
 /** Legacy character-sheet equipment table used by character creation. */
 export const characterEquipment = pgTable(
   'character_equipment',
