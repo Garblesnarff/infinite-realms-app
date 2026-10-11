@@ -191,12 +191,17 @@ describe('RestService Security', () => {
       healDamageMock.mockResolvedValue({} as any);
 
       try {
+        // #180: the guard refuses a 0 HP character, so this wires the
+        // write-through with a standing, wounded character (10/30) instead
+        // of a dying one; the guard's own refusals are pinned in the
+        // real-DB suite.
         (db.query.characters.findFirst as any).mockResolvedValue({
           id: mockCharacterId,
           stats: {
             constitution: 10,
             maxHitPoints: 30,
-            currentHitPoints: 0,
+            currentHitPoints: 10,
+            vitalState: 'standing',
           },
           hitDice: [],
           classFeatures: null,
@@ -205,7 +210,7 @@ describe('RestService Security', () => {
         });
 
         (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
-        // A participant mid-death-saves (2 successes, 1 failure, dying).
+        // A wounded participant in an active encounter.
         (db.query.combatParticipants.findMany as any).mockResolvedValue([
           {
             id: 'part-1',
@@ -235,7 +240,7 @@ describe('RestService Security', () => {
 
         // The sheet is healed through CharacterVitalsService (vitalState,
         // isConscious and tallies move with the HP; dead are left alone).
-        expect(healMock).toHaveBeenCalledWith(mockCharacterId, mockUserId, 30);
+        expect(healMock).toHaveBeenCalledWith(mockCharacterId, mockUserId, 20);
         // Each participant is healed through CombatHPService (HP to max,
         // conscious, tallies 0/0 via the write-through; dead are left alone).
         expect(healDamageMock).toHaveBeenCalledWith('part-1', 'enc-1', 30, 'long rest', mockUserId);
@@ -326,6 +331,15 @@ describe('RestService Security', () => {
       });
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
       mockRestEventInsert();
+      // #170: takeLongRest looks up the rest-clearable condition ids from the
+      // conditions library; resolve empty so the lookup is a no-op here. Saved
+      // and restored because mock implementations leak across tests in this
+      // file (clearAllMocks does not remove them).
+      const selectImpl = (db.select as any).getMockImplementation();
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
+      });
       const restoreSpy = vi
         .spyOn(SpellSlotsService, 'restoreSpellSlots')
         .mockResolvedValue({
@@ -367,6 +381,7 @@ describe('RestService Security', () => {
       restoreSpy.mockRestore();
       getSpy.mockRestore();
       updateMock.mockImplementation(updateImpl);
+      (db.select as any).mockImplementation(selectImpl);
     });
   });
 

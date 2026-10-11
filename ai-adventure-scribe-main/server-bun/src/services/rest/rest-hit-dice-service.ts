@@ -345,7 +345,12 @@ export class RestHitDiceService {
 
     // ⚡ Bolt: Batch update hit dice restoration in a single query instead of N updates.
     if (updates.length > 0) {
-      const caseStatements = updates.map((u) => sql`WHEN ${u.id} THEN ${u.newUsedDice}`);
+      // The pg driver sends parameters untyped; without casts Postgres infers
+      // the CASE as text and the update fails with "column used_dice is of
+      // type integer but expression is of type text" (#170).
+      const caseStatements = updates.map(
+        (u) => sql`WHEN ${u.id}::uuid THEN ${u.newUsedDice}::integer`,
+      );
 
       await db
         .update(characterHitDice)
