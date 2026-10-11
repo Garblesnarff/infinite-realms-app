@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.35.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.35.1...v0.35.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **account:** never show "Free Tier" for unknown plan ([#351](https://github.com/Garblesnarff/infinite-realms-app/issues/351)) ([#361](https://github.com/Garblesnarff/infinite-realms-app/issues/361)) ([81c3750](https://github.com/Garblesnarff/infinite-realms-app/commit/81c3750ae89062bfb44882e60a733af876c6dd4f))
+* **campaign:** let custom characters start sessions on starter campaigns ([#321](https://github.com/Garblesnarff/infinite-realms-app/issues/321)) ([#362](https://github.com/Garblesnarff/infinite-realms-app/issues/362)) ([b0a955a](https://github.com/Garblesnarff/infinite-realms-app/commit/b0a955a295f5bf65560a3b49f925cf75d281756d))
+* **combat:** dying flow — death saves, conditions, defeat wrap-up ([#261](https://github.com/Garblesnarff/infinite-realms-app/issues/261)) ([#365](https://github.com/Garblesnarff/infinite-realms-app/issues/365)) ([421ee29](https://github.com/Garblesnarff/infinite-realms-app/commit/421ee2915433b540e402cc37f61030941c8cc35c))
+* **creation:** the wizard saves prepared spells ([#211](https://github.com/Garblesnarff/infinite-realms-app/issues/211) QA-041) ([#271](https://github.com/Garblesnarff/infinite-realms-app/issues/271)) ([0c0f568](https://github.com/Garblesnarff/infinite-realms-app/commit/0c0f568c56b402ceb0befd5b5ac6da6ad2c86248))
+* **dm:** refuse story casts with no spell slot left ([#217](https://github.com/Garblesnarff/infinite-realms-app/issues/217)) ([#306](https://github.com/Garblesnarff/infinite-realms-app/issues/306)) ([e5e7527](https://github.com/Garblesnarff/infinite-realms-app/commit/e5e75275ca11dc1d254dc750d75820685b444952))
+* **game-session:** clear pending composer input when the server accepts the turn ([#354](https://github.com/Garblesnarff/infinite-realms-app/issues/354)) ([#367](https://github.com/Garblesnarff/infinite-realms-app/issues/367)) ([eb6eb18](https://github.com/Garblesnarff/infinite-realms-app/commit/eb6eb187d502c9819ff061580da9fd45ebc4a037))
+* **game-session:** hide the preflight banner out of combat; keep the composer locked mid-turn ([#219](https://github.com/Garblesnarff/infinite-realms-app/issues/219)) ([#368](https://github.com/Garblesnarff/infinite-realms-app/issues/368)) ([ec94f34](https://github.com/Garblesnarff/infinite-realms-app/commit/ec94f34a92743ef02b96f87444a1de6c6acac141))
+* **rolls:** dedupe roll answers server-side; bounded wait ([#216](https://github.com/Garblesnarff/infinite-realms-app/issues/216) step 3) ([#244](https://github.com/Garblesnarff/infinite-realms-app/issues/244)) ([35fe298](https://github.com/Garblesnarff/infinite-realms-app/commit/35fe298f439f2140f92bed30b24909cb78e8bd55))
+* **spells:** add PATCH route to toggle spell preparation ([#248](https://github.com/Garblesnarff/infinite-realms-app/issues/248)) ([#346](https://github.com/Garblesnarff/infinite-realms-app/issues/346)) ([aba0542](https://github.com/Garblesnarff/infinite-realms-app/commit/aba0542064a970438b6488fbaf7582c8689e89aa))
+* **wizard:** step 11 auto-apply loop, racial bonus cantrip options ([#320](https://github.com/Garblesnarff/infinite-realms-app/issues/320)) ([#347](https://github.com/Garblesnarff/infinite-realms-app/issues/347)) ([2a6f179](https://github.com/Garblesnarff/infinite-realms-app/commit/2a6f1799791947ea6f7a9d50dd3cb53294eb20d0))
+
+
+### Documentation
+
+* **deploy:** AGENTS.md and ops README match the staged deploy order ([#197](https://github.com/Garblesnarff/infinite-realms-app/issues/197)) ([#358](https://github.com/Garblesnarff/infinite-realms-app/issues/358)) ([c0db525](https://github.com/Garblesnarff/infinite-realms-app/commit/c0db525ff7ae02ff0f25935089f15eed523ccf52))
+
 ## [0.35.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.35.0...v0.35.1) (2026-10-11)
 
 
