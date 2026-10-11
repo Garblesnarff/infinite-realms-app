@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.35.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.34.0...v0.35.0) (2026-10-11)
+
+
+### Features
+
+* **character:** persist and load enhancement selections ([#204](https://github.com/Garblesnarff/infinite-realms-app/issues/204)) ([e381ae3](https://github.com/Garblesnarff/infinite-realms-app/commit/e381ae36b367f8b67fe0848ceaa32a6291c6682b))
+* **premades:** add Paladin premade for Academy of Arcane Gastronomy ([#317](https://github.com/Garblesnarff/infinite-realms-app/issues/317)) ([#339](https://github.com/Garblesnarff/infinite-realms-app/issues/339)) ([d17c28e](https://github.com/Garblesnarff/infinite-realms-app/commit/d17c28ecf0f75ff9725affe1b1de921c02a24cac))
+* **security:** CSP violation collector POST /csp-report ([#283](https://github.com/Garblesnarff/infinite-realms-app/issues/283)) ([#302](https://github.com/Garblesnarff/infinite-realms-app/issues/302)) ([315f407](https://github.com/Garblesnarff/infinite-realms-app/commit/315f4073e23c34fe12f05cc0907000c9ccc303e6))
+
+
+### Bug Fixes
+
+* **character-select:** preview shows sheet-resolved ability scores ([#153](https://github.com/Garblesnarff/infinite-realms-app/issues/153)) ([#307](https://github.com/Garblesnarff/infinite-realms-app/issues/307)) ([3f13cdf](https://github.com/Garblesnarff/infinite-realms-app/commit/3f13cdf75312212c01f2bdc7797b96b160a7ecdc))
+* **combat:** detect typed/inline dodge, disengage, dash, yield and flee declarations ([#262](https://github.com/Garblesnarff/infinite-realms-app/issues/262)) ([#335](https://github.com/Garblesnarff/infinite-realms-app/issues/335)) ([1e45608](https://github.com/Garblesnarff/infinite-realms-app/commit/1e456086f76f8d3359076c6d621119c2cab9049d))
+* **combat:** refuse clearly when requested weapon is not equipped instead of silently swapping ([#260](https://github.com/Garblesnarff/infinite-realms-app/issues/260)) ([#336](https://github.com/Garblesnarff/infinite-realms-app/issues/336)) ([a3c6e3b](https://github.com/Garblesnarff/infinite-realms-app/commit/a3c6e3b2f435132b9dbd9055305f6a15c30739f6))
+* **creation:** keep racial ability bonuses on save ([#203](https://github.com/Garblesnarff/infinite-realms-app/issues/203)) ([#250](https://github.com/Garblesnarff/infinite-realms-app/issues/250)) ([4dfb868](https://github.com/Garblesnarff/infinite-realms-app/commit/4dfb86814cb4439f3aebfb0838cb56766f755727))
+* **dm:** retry the storyteller once on transient failure before degrading ([#312](https://github.com/Garblesnarff/infinite-realms-app/issues/312)) ([#342](https://github.com/Garblesnarff/infinite-realms-app/issues/342)) ([c9a2f99](https://github.com/Garblesnarff/infinite-realms-app/commit/c9a2f990dc3b8666009933da2b236ddb88e6d0a8))
+* **dm:** story items and conditions reach the sheet ([#218](https://github.com/Garblesnarff/infinite-realms-app/issues/218)) ([#300](https://github.com/Garblesnarff/infinite-realms-app/issues/300)) ([32bfce4](https://github.com/Garblesnarff/infinite-realms-app/commit/32bfce4d8d43f267b719b33871f0d8ad5ce60b0a))
+* **game:** crash card shows session/build and copies report details ([#173](https://github.com/Garblesnarff/infinite-realms-app/issues/173)) ([#308](https://github.com/Garblesnarff/infinite-realms-app/issues/308)) ([2fcd216](https://github.com/Garblesnarff/infinite-realms-app/commit/2fcd21608a25ed835fe6c058d44e2055e04cd06b))
+* **premades:** Midsummer seed ammo + test counts and flavor allowlist ([#222](https://github.com/Garblesnarff/infinite-realms-app/issues/222)) ([#341](https://github.com/Garblesnarff/infinite-realms-app/issues/341)) ([da79bd9](https://github.com/Garblesnarff/infinite-realms-app/commit/da79bd9de6f6f83947bb84e12bc0504ed3111e92))
+* **proficiency:** magic weapons resolve through baseWeaponId; one home for racial training ([#155](https://github.com/Garblesnarff/infinite-realms-app/issues/155)) ([#298](https://github.com/Garblesnarff/infinite-realms-app/issues/298)) ([e2c20c5](https://github.com/Garblesnarff/infinite-realms-app/commit/e2c20c55cc632911e94d194bbcb7f3e6bf59669a))
+* **rest:** one long-rest ruleset for sheet and combat; no rest while dying ([#170](https://github.com/Garblesnarff/infinite-realms-app/issues/170), [#180](https://github.com/Garblesnarff/infinite-realms-app/issues/180)) ([#257](https://github.com/Garblesnarff/infinite-realms-app/issues/257)) ([5a906c2](https://github.com/Garblesnarff/infinite-realms-app/commit/5a906c21699fc3b41c2451338e233ca7ebc38466))
+* **roster:** distinguish duplicate premade copies and add sheet Delete ([#311](https://github.com/Garblesnarff/infinite-realms-app/issues/311)) ([#338](https://github.com/Garblesnarff/infinite-realms-app/issues/338)) ([45f0d22](https://github.com/Garblesnarff/infinite-realms-app/commit/45f0d222313c1999e5135dde52947d348c986e3a))
+* **seeds:** Midsummer template seed re-runnable upsert + campaign-row path ([#222](https://github.com/Garblesnarff/infinite-realms-app/issues/222)) ([#303](https://github.com/Garblesnarff/infinite-realms-app/issues/303)) ([a7a458d](https://github.com/Garblesnarff/infinite-realms-app/commit/a7a458d1e714f86d17ddb1bf0cf375edcf9cb188))
+* **spells:** spend spell slots atomically to prevent double-spend ([#255](https://github.com/Garblesnarff/infinite-realms-app/issues/255)) ([#344](https://github.com/Garblesnarff/infinite-realms-app/issues/344)) ([c028f11](https://github.com/Garblesnarff/infinite-realms-app/commit/c028f11e0f824bb9f3aef7c43cdeceac5e7510f1))
+* **ui:** 44 px tap targets and 12 px minimum text on the game screen ([#228](https://github.com/Garblesnarff/infinite-realms-app/issues/228)) ([#246](https://github.com/Garblesnarff/infinite-realms-app/issues/246)) ([7c5bca7](https://github.com/Garblesnarff/infinite-realms-app/commit/7c5bca733218e95fc09cd4c2fafc6f246ef784ec))
+* **wizard:** persist draft locally, step in URL, Cancel with confirm ([#208](https://github.com/Garblesnarff/infinite-realms-app/issues/208)) ([#299](https://github.com/Garblesnarff/infinite-realms-app/issues/299)) ([9afac4f](https://github.com/Garblesnarff/infinite-realms-app/commit/9afac4f2ddcaa30f0f3eebe42c070546b2880c4c))
+
+
+### Refactoring
+
+* **map:** share footprint and distance sources ([#199](https://github.com/Garblesnarff/infinite-realms-app/issues/199)) ([#332](https://github.com/Garblesnarff/infinite-realms-app/issues/332)) ([ca90c5b](https://github.com/Garblesnarff/infinite-realms-app/commit/ca90c5b58107f4fcd4ccbabed62b694532466fc6))
+* **scripts:** delete uncalled digest path ([#197](https://github.com/Garblesnarff/infinite-realms-app/issues/197)) ([#331](https://github.com/Garblesnarff/infinite-realms-app/issues/331)) ([d695112](https://github.com/Garblesnarff/infinite-realms-app/commit/d695112fbe775611215205fc29c18a6aaffdf299))
+
 ## [0.34.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.4...v0.34.0) (2026-10-11)
 
 
