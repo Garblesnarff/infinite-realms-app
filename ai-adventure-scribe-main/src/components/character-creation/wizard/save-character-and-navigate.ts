@@ -16,6 +16,8 @@ interface SaveCharacterAndNavigateParams {
   navigate: NavigateFunction;
   searchParams: URLSearchParams;
   toast: ReturnType<typeof useToast>['toast'];
+  /** Called once the character is saved with an id (e.g. to clear a local draft). */
+  onSaved?: () => void;
 }
 
 export async function saveCharacterAndNavigate({
@@ -24,6 +26,7 @@ export async function saveCharacterAndNavigate({
   navigate,
   searchParams,
   toast,
+  onSaved,
 }: SaveCharacterAndNavigateParams): Promise<void> {
   try {
     logger.info('Calling saveCharacter...');
@@ -37,6 +40,7 @@ export async function saveCharacterAndNavigate({
 
     if (savedCharacter.id) {
       logger.info('Character saved successfully, navigating to /characters');
+      onSaved?.();
       try {
         const campaignId = searchParams.get('campaign') || undefined;
         const artStyle = analytics.detectArtStyle({
