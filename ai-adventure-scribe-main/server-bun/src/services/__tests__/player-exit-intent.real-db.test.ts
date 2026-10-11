@@ -449,6 +449,32 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(facts).toContain('The Scholar flees the fight.');
   });
 
+  test('#262: a player dodge intent applies the Dodge condition and spends the turn action', async () => {
+    // The Dodge chip / a typed "I dodge", exactly as the client sends it.
+    await executeCombatIntent(
+      encounterId,
+      { type: 'dodge', actorId: heroId, expectedVersion: 1 },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+
+    // The engine applied Dodge (attacks against the Scholar now have disadvantage)
+    // and the turn's Action is spent: a second dodge is refused, the turn is over.
+    expect(await heroRow()).toMatchObject({ isDodging: true, actionUsed: true });
+    await expect(
+      executeCombatIntent(
+        encounterId,
+        { type: 'dodge', actorId: heroId, expectedVersion: 2 },
+        userId,
+        'player',
+        Date.now(),
+        'action_bar',
+      ),
+    ).rejects.toThrow('Action already used this turn');
+  });
+
   test('an opportunity attack that downs the player records NO exit', async () => {
     // Hero at 1 HP, Math.random pinned high so the Swarm's d20 is a natural 20: the reaction hits.
     await db

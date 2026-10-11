@@ -70,6 +70,35 @@ export function isCombatDeescalationSpeech(text: string): boolean {
   return DEESCALATION_SPEECH_PATTERN.test(text.replace(/[’‘]/g, "'"));
 }
 
+/**
+ * A player declaring a defensive combat action in plain text ("I dodge", "dodge",
+ * "I yield"). The DM's inline options send the option text as chat, and without this
+ * the engine never sees the intent: the DM narrates "X dodged" but no Dodge condition
+ * is applied and the turn does not end (#262).
+ *
+ * Deliberately strict: the whole input must be the declaration (after the option-text
+ * cleanup the client does), so "I dodge behind the pillar and attack" still goes to the
+ * attack parser. Returns the intent type, or null.
+ */
+export type DefensiveDeclaration = 'dodge' | 'disengage' | 'dash' | 'yield' | 'flee';
+
+const DEFENSIVE_DECLARATION_PATTERNS: Array<{ type: DefensiveDeclaration; pattern: RegExp }> = [
+  { type: 'dodge', pattern: /^(?:i\s+)?dodge[sd]?\s*[.!]?$/i },
+  { type: 'disengage', pattern: /^(?:i\s+)?disengage[sd]?\s*[.!]?$/i },
+  { type: 'dash', pattern: /^(?:i\s+)?dash(?:e[sd])?\s*[.!]?$/i },
+  { type: 'yield', pattern: /^(?:i\s+)?yield[sd]?\s*[.!]?$/i },
+  { type: 'flee', pattern: /^(?:i\s+)?(?:flee[sd]?|run\s+away)\s*[.!]?$/i },
+];
+
+export function detectDeclaredDefense(playerInput: string): DefensiveDeclaration | null {
+  if (typeof playerInput !== 'string' || !playerInput.trim()) return null;
+  const input = playerInput.trim().replace(/\s+/g, ' ');
+  for (const { type, pattern } of DEFENSIVE_DECLARATION_PATTERNS) {
+    if (pattern.test(input)) return type;
+  }
+  return null;
+}
+
 const normalize = (value: string): string =>
   value
     .toLowerCase()
