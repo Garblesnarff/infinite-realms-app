@@ -45,6 +45,9 @@ const PUBLIC_ROUTE_FILES = new Set([
   'server-bun/src/routes/version.ts',
   'server-bun/src/routes/v1/auth-token-exchange.ts',
   'server-bun/src/routes/v1/public-campaign-templates.ts',
+  // POST /csp-report: public by design (#283); browsers POST violation reports
+  // with no credentials. Rate-limited, 8 KB body cap, logs directive + URI only.
+  'server-bun/src/routes/csp-report.ts',
 ]);
 const ROUTE_METHOD_PATTERN = /\.(?:get|post|put|patch|delete|all)\s*\(\s*['"`]/;
 const STRIPE_LIVE_PREFIX = ['sk', 'live'].join('_');
