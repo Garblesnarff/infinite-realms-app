@@ -6,9 +6,24 @@
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
-import { campaigns, characterEquipment, characterStats, characters, restEvents } from '../../../../../db/schema/index';
+import {
+  campaigns,
+  characterConditions,
+  characterEquipment,
+  characterHitDice,
+  characterSpellSlots,
+  characterStats,
+  characters,
+  combatEncounters,
+  combatParticipantConditions,
+  combatParticipantStatus,
+  combatParticipants,
+  conditionsLibrary,
+  gameSessions,
+  restEvents,
+} from '../../../../../db/schema/index';
 import { equipmentSaveWireBody } from '../../../../../shared/test-fixtures/equipment-save-wire-body';
 import {
   closeRealDb,
@@ -501,5 +516,373 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
     await db.delete(characterStats).where(eq(characterStats.characterId, thpCharId));
     await db.delete(characters).where(eq(characters.id, thpCharId));
     await db.delete(campaigns).where(eq(campaigns.id, thpCampId));
+  });
+});
+
+/**
+ * #170: one long-rest ruleset for the sheet path and the combat path.
+ *
+ * Both buttons call the same server route (`POST /v1/rest/characters/:id/long`),
+ * so the parity assertion is that the same seeded character — a non-permanent
+ * condition, active concentration, spent slots, spent hit dice — gets the same
+ * rest result through both paths: HP to max, all slots restored, hit dice
+ * regained up to half the total (minimum 1), concentration ended, the
+ * rest-clearable conditions cleared, and nothing touched in ended encounters.
+ */
+describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', () => {
+  // Fresh client per block: the #224 block above closes the shared one in its
+  // afterAll, and realDb() reconnects when the cached client is gone.
+  let db: ReturnType<typeof realDb>;
+
+  let campaignId: string;
+  let characterId: string;
+  let sessionId: string;
+  let activeEncounterId: string;
+  let participantId: string;
+  let endedEncounterId: string;
+  let endedParticipantId: string;
+  let unconsciousId: string;
+  let poisonedId: string;
+
+  const request = (path: string, method: string, body?: unknown): Promise<Response> =>
+    pipeline.handle(
+      new Request(`http://localhost${path}`, {
+        method,
+        headers: authHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    db = realDb();
+    userId = testId('rest-parity-user');
+
+    // The conditions library is a shared reference table: insert the rows this
+    // suite needs, ignoring the unique-name conflict when another suite (or a
+    // previous run) already put them there.
+    await db
+      .insert(conditionsLibrary)
+      .values([
+        { name: 'unconscious', description: 'test', mechanicalEffects: 'test' },
+        { name: 'poisoned', description: 'test', mechanicalEffects: 'test' },
+      ])
+      .onConflictDoNothing();
+    const libraryRows = await db
+      .select({ id: conditionsLibrary.id, name: conditionsLibrary.name })
+      .from(conditionsLibrary)
+      .where(eq(conditionsLibrary.name, 'unconscious'));
+    const poisonedRows = await db
+      .select({ id: conditionsLibrary.id })
+      .from(conditionsLibrary)
+      .where(eq(conditionsLibrary.name, 'poisoned'));
+    unconsciousId = libraryRows[0].id;
+    poisonedId = poisonedRows[0].id;
+
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('camp') })
+      .returning({ id: campaigns.id });
+
+    [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('wizard'),
+        level: 3,
+        class: 'Wizard',
+        activeConcentration: 'Bless',
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId,
+      maxHitPoints: 30,
+      currentHitPoints: 12,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    // Spent slots: level 1 has 1 of 4 left, level 2 is empty.
+    await db.insert(characterSpellSlots).values([
+      { characterId, spellLevel: 1, totalSlots: 4, usedSlots: 3 },
+      { characterId, spellLevel: 2, totalSlots: 2, usedSlots: 2 },
+    ]);
+
+    // Spent hit dice: 3 total d6, 2 used (rest restores floor(3/2) = 1).
+    await db.insert(characterHitDice).values({
+      characterId,
+      className: 'Wizard',
+      dieType: 'd6',
+      totalDice: 3,
+      usedDice: 2,
+    });
+
+    // Character-scoped conditions: unconscious is cleared by a long rest,
+    // poisoned survives it.
+    await db.insert(characterConditions).values([
+      { characterId, conditionId: unconsciousId, durationType: 'hours', isActive: true },
+      { characterId, conditionId: poisonedId, durationType: 'hours', isActive: true },
+    ]);
+
+    [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+
+    [{ id: activeEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 2, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+
+    [{ id: participantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: activeEncounterId,
+        characterId,
+        name: testId('wizard'),
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 12,
+        maxHp: 30,
+      })
+      .returning({ id: combatParticipants.id });
+
+    await db.insert(combatParticipantStatus).values({
+      participantId,
+      currentHp: 12,
+      maxHp: 30,
+      tempHp: 0,
+      isConscious: true,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+
+    await db.insert(combatParticipantConditions).values([
+      {
+        participantId,
+        conditionId: unconsciousId,
+        durationType: 'minutes',
+        appliedAtRound: 1,
+        isActive: true,
+      },
+      {
+        participantId,
+        conditionId: poisonedId,
+        durationType: 'minutes',
+        appliedAtRound: 1,
+        isActive: true,
+      },
+    ]);
+
+    // An ended encounter with a stale row: the rest must not touch it.
+    [{ id: endedEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'completed', currentRound: 9, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+
+    [{ id: endedParticipantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: endedEncounterId,
+        characterId,
+        name: testId('wizard-old'),
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 5,
+        maxHp: 10,
+      })
+      .returning({ id: combatParticipants.id });
+
+    await db.insert(combatParticipantStatus).values({
+      participantId: endedParticipantId,
+      currentHp: 5,
+      maxHp: 10,
+      tempHp: 0,
+      isConscious: true,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    const drop = async (run: () => Promise<unknown>) => {
+      try {
+        await run();
+      } catch {
+        /* fixture teardown is best-effort */
+      }
+    };
+    await drop(() =>
+      db
+        .delete(combatParticipantConditions)
+        .where(eq(combatParticipantConditions.participantId, participantId)),
+    );
+    await drop(() =>
+      db.delete(combatParticipantStatus).where(eq(combatParticipantStatus.participantId, participantId)),
+    );
+    await drop(() => db.delete(combatParticipants).where(eq(combatParticipants.id, participantId)));
+    await drop(() =>
+      db.delete(combatParticipantStatus).where(eq(combatParticipantStatus.participantId, endedParticipantId)),
+    );
+    await drop(() => db.delete(combatParticipants).where(eq(combatParticipants.id, endedParticipantId)));
+    await drop(() => db.delete(combatEncounters).where(eq(combatEncounters.id, endedEncounterId)));
+    await drop(() => db.delete(combatEncounters).where(eq(combatEncounters.id, activeEncounterId)));
+    await drop(() => db.delete(gameSessions).where(eq(gameSessions.id, sessionId)));
+    await drop(() => db.delete(characterConditions).where(eq(characterConditions.characterId, characterId)));
+    await drop(() => db.delete(characterHitDice).where(eq(characterHitDice.characterId, characterId)));
+    await drop(() => db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId)));
+    await drop(() => db.delete(characterStats).where(eq(characterStats.characterId, characterId)));
+    await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
+    await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
+    await closeRealDb();
+  });
+
+  /** Re-spend everything so a second rest starts from the same state. */
+  const seedSpentState = async (): Promise<void> => {
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 12, isConscious: true, vitalState: 'standing' })
+      .where(eq(characterStats.characterId, characterId));
+    await db
+      .update(characters)
+      .set({ activeConcentration: 'Bless' })
+      .where(eq(characters.id, characterId));
+    await db
+      .update(characterSpellSlots)
+      .set({ usedSlots: 3 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
+    await db
+      .update(characterSpellSlots)
+      .set({ usedSlots: 2 })
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, characterId),
+          eq(characterSpellSlots.spellLevel, 2),
+        ),
+      );
+    await db
+      .update(characterHitDice)
+      .set({ usedDice: 2 })
+      .where(eq(characterHitDice.characterId, characterId));
+    await db
+      .update(characterConditions)
+      .set({ isActive: true })
+      .where(eq(characterConditions.characterId, characterId));
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 12, isConscious: true })
+      .where(eq(combatParticipantStatus.participantId, participantId));
+    await db
+      .update(combatParticipantConditions)
+      .set({ isActive: true })
+      .where(eq(combatParticipantConditions.participantId, participantId));
+  };
+
+  /** Two rests are the same result when everything but the event id matches. */
+  const normalizeResult = (body: Record<string, unknown>): Record<string, unknown> => {
+    const { restEventId: _restEventId, hitDiceRemaining, ...rest } = body;
+    return {
+      ...rest,
+      hitDiceRemaining: ((hitDiceRemaining ?? []) as Array<Record<string, unknown>>)
+        .map(({ id: _id, characterId: _characterId, createdAt: _ca, updatedAt: _ua, ...die }) => die)
+        .sort((a, b) => String(a.dieType).localeCompare(String(b.dieType))),
+    };
+  };
+
+  it('the sheet path and the combat path get the same long-rest result', async () => {
+    if (!hasRealDb) return;
+
+    // The sheet button's call.
+    await seedSpentState();
+    const sheetRes = await request(`/v1/rest/characters/${characterId}/long`, 'POST', {});
+    expect(sheetRes.status).toBe(200);
+    const sheetBody = (await sheetRes.json()) as Record<string, unknown>;
+
+    // The combat button's call: the same route, the same server implementation.
+    await seedSpentState();
+    const combatRes = await request(`/v1/rest/characters/${characterId}/long`, 'POST', {});
+    expect(combatRes.status).toBe(200);
+    const combatBody = (await combatRes.json()) as Record<string, unknown>;
+
+    expect(sheetBody.restType).toBe('long');
+    expect(normalizeResult(combatBody)).toEqual(normalizeResult(sheetBody));
+
+    // The full SRD 5.1 package lands in the response...
+    expect(sheetBody.hpRestored).toBe(18);
+    expect(sheetBody.hitDiceRestored).toBe(1);
+    expect(sheetBody.spellSlots).toEqual({
+      '1': { max: 4, current: 4 },
+      '2': { max: 2, current: 2 },
+    });
+
+    // ...and in the database, where both paths read it back from.
+    const sheet = (await (await request(`/v1/characters/${characterId}`, 'GET')).json()) as {
+      active_concentration: string | null;
+      stats?: { current_hit_points?: number; max_hit_points?: number };
+    };
+    expect(sheet.active_concentration).toBeNull();
+    expect(sheet.stats?.current_hit_points).toBe(30);
+
+    const slots = await db
+      .select()
+      .from(characterSpellSlots)
+      .where(eq(characterSpellSlots.characterId, characterId));
+    expect(slots.every((slot) => slot.usedSlots === 0)).toBe(true);
+
+    const [hitDice] = await db
+      .select()
+      .from(characterHitDice)
+      .where(eq(characterHitDice.characterId, characterId));
+    expect(hitDice.usedDice).toBe(1);
+
+    // Unconscious is cleared by the rest; poisoned survives it — on the
+    // character and on the participant in the active encounter.
+    const characterConditionStates = await db
+      .select({ conditionId: characterConditions.conditionId, isActive: characterConditions.isActive })
+      .from(characterConditions)
+      .where(eq(characterConditions.characterId, characterId));
+    expect(
+      characterConditionStates.find((row) => row.conditionId === unconsciousId)?.isActive,
+    ).toBe(false);
+    expect(
+      characterConditionStates.find((row) => row.conditionId === poisonedId)?.isActive,
+    ).toBe(true);
+
+    const participantConditionStates = await db
+      .select({
+        conditionId: combatParticipantConditions.conditionId,
+        isActive: combatParticipantConditions.isActive,
+      })
+      .from(combatParticipantConditions)
+      .where(eq(combatParticipantConditions.participantId, participantId));
+    expect(
+      participantConditionStates.find((row) => row.conditionId === unconsciousId)?.isActive,
+    ).toBe(false);
+    expect(
+      participantConditionStates.find((row) => row.conditionId === poisonedId)?.isActive,
+    ).toBe(true);
+
+    const [participantStatus] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, participantId));
+    expect(participantStatus.currentHp).toBe(30);
+
+    // The ended encounter's stale row is untouched.
+    const [endedStatus] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, endedParticipantId));
+    expect(endedStatus.currentHp).toBe(5);
+    expect(endedStatus.maxHp).toBe(10);
   });
 });

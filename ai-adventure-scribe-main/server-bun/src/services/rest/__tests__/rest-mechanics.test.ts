@@ -129,9 +129,19 @@ describe('RestMechanics', () => {
   });
 
   describe('resource restoration', () => {
-    it('rounds recovered hit dice up for odd character levels', () => {
+    it('rounds recovered hit dice down for odd character levels (2014 PHB)', () => {
       const dice = [{ id: 'odd', dieType: 'd8', totalDice: 5, usedDice: 5 }] as CharacterHitDice[];
-      expect(RestMechanics.calculateRestoredHitDice(dice).restoredCount).toBe(3);
+      expect(RestMechanics.calculateRestoredHitDice(dice).restoredCount).toBe(2);
+    });
+
+    it('restores a minimum of 1 hit die', () => {
+      const dice = [{ id: 'one', dieType: 'd8', totalDice: 1, usedDice: 1 }] as CharacterHitDice[];
+      expect(RestMechanics.calculateRestoredHitDice(dice).restoredCount).toBe(1);
+    });
+
+    it('restores half of 4 total hit dice', () => {
+      const dice = [{ id: 'four', dieType: 'd8', totalDice: 4, usedDice: 4 }] as CharacterHitDice[];
+      expect(RestMechanics.calculateRestoredHitDice(dice).restoredCount).toBe(2);
     });
 
     it('restores spell slots and rest-cadence class features', () => {
