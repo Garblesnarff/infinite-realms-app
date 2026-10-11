@@ -431,31 +431,23 @@ export class CombatAttackService {
         cover: geometry?.cover ?? null,
       };
 
-      // SRD 5.1: a melee attack within 5 ft of an unconscious creature is an automatic critical
-      // hit. The engine enforces it whatever the attacker chose to do about a creature on the
-      // floor; the die is still rolled and shown, but it cannot turn the blow into a miss.
+      // Check if the attack hits: a natural 1 always misses, a natural 20 always hits.
+      const hitCheck = checkHit({
+        attackRoll,
+        attackBonus: rules.attackBonus,
+        targetAC,
+        advantage: rules.advantage,
+        disadvantage: rules.disadvantage,
+      });
+
+      // SRD 5.1: a melee attack within 5 ft of an unconscious creature is an automatic
+      // critical hit — but only when the attack HITS. A miss is still a miss, and a miss
+      // adds no death-save failures (#261 CB-053). The die is rolled and shown either way.
       const autoCritOnDowned =
+        hitCheck.hit &&
         targetConditions.includes('unconscious') &&
         !weapon.ranged &&
         (geometry?.distanceFeet ?? 5) <= 5;
-
-      // Check if attack hits
-      const hitCheck = autoCritOnDowned
-        ? {
-            hit: true,
-            totalAttackRoll: attackRoll + rules.attackBonus,
-            targetAC,
-            isNaturalOne: false,
-            isNaturalTwenty: false,
-            isCritical: true,
-          }
-        : checkHit({
-            attackRoll,
-            attackBonus: rules.attackBonus,
-            targetAC,
-            advantage: rules.advantage,
-            disadvantage: rules.disadvantage,
-          });
 
       // Everything the telemetry line knows before damage is rolled. Both branches below
       // finish it with their own outcome, so a miss is logged as fully as a hit -- see
