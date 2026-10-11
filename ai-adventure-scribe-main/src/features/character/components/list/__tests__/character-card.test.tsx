@@ -60,19 +60,23 @@ const LocationProbe = (): JSX.Element => {
 };
 
 describe('CharacterCard #209 at-rest caption', () => {
-  it('shows name, level, HP and created date without hovering', () => {
+  it('shows name, level, HP and created date-time without hovering', () => {
     renderCard(scholarCopy());
 
     const caption = screen.getByTestId('character-card-caption');
     expect(within(caption).getByText('The Scholar')).toBeInTheDocument();
-    const expectedDate = new Date('2026-10-01T12:00:00.000Z').toLocaleDateString(undefined, {
+    // #311: the label carries the creation time, not just the date, so two
+    // copies made on the same day are distinguishable.
+    const expectedDateTime = new Date('2026-10-01T12:00:00.000Z').toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
     });
     expect(caption).toHaveTextContent('Level 3');
     expect(caption).toHaveTextContent('HP 18/24');
-    expect(caption).toHaveTextContent(`Created ${expectedDate}`);
+    expect(caption).toHaveTextContent(`Created ${expectedDateTime}`);
   });
 
   it('distinguishes duplicate premade copies by HP and created date', () => {
@@ -104,6 +108,37 @@ describe('CharacterCard #209 at-rest caption', () => {
     expect(captions[0].textContent).not.toBe(captions[1].textContent);
   });
 
+  it('distinguishes copies created on the same day by creation time', () => {
+    // #311 retest: two "The Faithful" cards both read
+    // "Level 1 - HP 10/10 - Created Oct 10, 2026" with the date-only label.
+    renderCard(scholarCopy({ id: 'char-scholar-1', created_at: '2026-10-10T14:00:00.000Z' }));
+    renderCard(scholarCopy({ id: 'char-scholar-2', created_at: '2026-10-10T18:30:00.000Z' }));
+
+    const captions = screen.getAllByTestId('character-card-caption');
+    expect(captions).toHaveLength(2);
+    // Same name, level and HP — the creation time is the only distinguisher.
+    expect(captions[0]).toHaveTextContent('HP 18/24');
+    expect(captions[1]).toHaveTextContent('HP 18/24');
+    expect(captions[0].textContent).not.toBe(captions[1].textContent);
+  });
+
+  it('gives each duplicate copy a distinct Delete accessible name', () => {
+    // #311 retest: both Delete buttons were named "Delete The Faithful".
+    renderCard(
+      scholarCopy({ id: 'char-scholar-1', name: 'The Faithful', created_at: '2026-10-10T14:00:00.000Z' }),
+    );
+    renderCard(
+      scholarCopy({ id: 'char-scholar-2', name: 'The Faithful', created_at: '2026-10-10T18:30:00.000Z' }),
+    );
+
+    const deleteButtons = screen.getAllByTestId('character-card-delete');
+    expect(deleteButtons).toHaveLength(2);
+    const names = deleteButtons.map((button) => button.getAttribute('aria-label'));
+    expect(names[0]).toContain('Delete The Faithful');
+    expect(names[1]).toContain('Delete The Faithful');
+    expect(names[0]).not.toBe(names[1]);
+  });
+
   it('omits caption segments when the data is missing', () => {
     renderCard({ id: 'char-bare', name: 'Nameless' });
 
@@ -121,7 +156,16 @@ describe('CharacterCard #209 always-visible Delete', () => {
 
     const deleteButton = screen.getByTestId('character-card-delete');
     expect(deleteButton).toBeVisible();
-    expect(deleteButton).toHaveAccessibleName('Delete The Scholar');
+    // #311: the accessible name carries the creation time so duplicate
+    // premade copies are distinguishable.
+    const expectedDateTime = new Date('2026-10-01T12:00:00.000Z').toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    expect(deleteButton).toHaveAccessibleName(`Delete The Scholar (created ${expectedDateTime})`);
 
     fireEvent.click(deleteButton);
 
