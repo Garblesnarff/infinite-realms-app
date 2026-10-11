@@ -43,6 +43,17 @@ export function getSpellById(spellId: string, createFallback: boolean = true): S
       if (mappedSpell) return mappedSpell;
     }
 
+    // #320 CR-004/CR-012: the server syncs the legacy character spell columns
+    // with display names (string_agg(spells.name) in
+    // CharacterSpellService.saveCharacterSpells), so a reloaded character can
+    // carry 'Animal Friendship' instead of 'animal-friendship'. Resolve names
+    // too — otherwise the lookup falls through to a level-0 fallback stub and
+    // a level-1 spell is filed under Cantrips on the sheet.
+    const byName = allSpells.find(
+      (spell) => spell?.name?.toLowerCase() === spellId.toLowerCase(),
+    );
+    if (byName) return byName;
+
     // Log missing spells for debugging
     logger.warn(`[SpellLookup] Spell not found: ${spellId}`, {
       directLookup: !!spell,

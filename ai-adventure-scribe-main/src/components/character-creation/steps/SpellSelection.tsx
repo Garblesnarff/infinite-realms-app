@@ -1,5 +1,5 @@
 import { Wand2, Filter, ChevronDown, AlertTriangle, CheckCircle, Info } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 import SpellcastingInfoCard from './spell-selection/SpellcastingInfoCard';
 import SpellSelectionTabs from './spell-selection/SpellSelectionTabs';
@@ -54,6 +54,7 @@ const SpellSelection: React.FC = () => {
     setFilters,
     filteredCantrips,
     filteredSpells,
+    bonusCantripOptions,
     validation,
     canProceed,
     updateCharacterSpells,
@@ -72,6 +73,15 @@ const SpellSelection: React.FC = () => {
   const totalRacialCantrips = racialSpells.cantrips.length + racialSpells.bonusCantrips;
 
   // Auto-save when valid selection is made
+  // #320 item 2: updateCharacterSpells is re-created on every character
+  // change (it dispatches into context), so listing it as an effect dep
+  // re-fired the save after every save — an infinite save loop. The ref keeps
+  // this effect keyed only on the validity transition, so a completed pick
+  // saves exactly once.
+  const updateCharacterSpellsRef = useRef(updateCharacterSpells);
+  useEffect(() => {
+    updateCharacterSpellsRef.current = updateCharacterSpells;
+  });
   useEffect(() => {
     logger.debug('🎯 [SpellSelection] Auto-save check:', {
       canProceed,
@@ -84,9 +94,9 @@ const SpellSelection: React.FC = () => {
 
     if (canProceed && validation.valid) {
       logger.info('✅ [SpellSelection] Triggering updateCharacterSpells');
-      updateCharacterSpells();
+      updateCharacterSpellsRef.current();
     }
-  }, [canProceed, validation.valid, updateCharacterSpells]);
+  }, [canProceed, validation.valid, selectedCantrips, selectedSpells, selectedBonusCantrips]);
 
   // Show validation feedback
   useEffect(() => {
@@ -251,6 +261,7 @@ const SpellSelection: React.FC = () => {
         selectedBonusCantrips={selectedBonusCantrips}
         filteredCantrips={filteredCantrips}
         filteredSpells={filteredSpells}
+        bonusCantripOptions={bonusCantripOptions}
         availableCantrips={availableCantrips}
         racialSpells={racialSpells}
         hasRacialSpells={hasRacialSpells}

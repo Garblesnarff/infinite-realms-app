@@ -20,6 +20,9 @@ interface SpellSelectionTabsProps {
   selectedBonusCantrips: string[];
   filteredCantrips: Spell[];
   filteredSpells: Spell[];
+  // #320 CR-008: options for the racial bonus-cantrip pick, drawn from the
+  // bonus source list (e.g. wizard) rather than the class list.
+  bonusCantripOptions: Spell[];
   availableCantrips: Spell[];
   racialSpells: ReturnType<typeof getRacialSpells>;
   hasRacialSpells: boolean;
@@ -39,6 +42,7 @@ const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
   selectedBonusCantrips,
   filteredCantrips,
   filteredSpells,
+  bonusCantripOptions,
   availableCantrips,
   racialSpells,
   hasRacialSpells,
@@ -226,15 +230,10 @@ const SpellSelectionTabs: React.FC<SpellSelectionTabsProps> = ({
               <SpellCategorySection
                 title="Bonus Cantrip"
                 description={`Choose ${racialSpells.bonusCantrips} additional cantrip from the ${racialSpells.bonusCantripSource} spell list.`}
-                spells={
-                  racialSpells.bonusCantripSource === 'wizard'
-                    ? filteredCantrips
-                    : availableCantrips.filter(
-                        (cantrip) =>
-                          racialSpells.bonusCantripSource &&
-                          cantrip.id.includes(racialSpells.bonusCantripSource),
-                      )
-                }
+                // #320 CR-008: the bonus pick comes from its source list, not
+                // the class-filtered list (a High Elf Ranger's class list has
+                // no cantrips, which left this section empty).
+                spells={bonusCantripOptions}
                 // #212 QA-042: the bonus pool is separate from class cantrips.
                 selectedSpells={selectedBonusCantrips}
                 maxSpells={racialSpells.bonusCantrips}

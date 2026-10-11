@@ -84,12 +84,21 @@ export function useAdvancedSpellcasting(): UseAdvancedSpellcastingReturn {
     : 0;
   // #212 QA-043: only level 1+ spells are preparable; cantrips (level 0)
   // can never be prepared.
-  const availableSpells = allSpells.filter(
-    (spell: Spell) => spell.level >= 1 && spell.level <= Math.min(5, Math.ceil(level / 2)),
+  // #320 CR-003: memoized. These were fresh array identities every render,
+  // which changed applySpellcastingFeatures's identity every render and
+  // re-fired the auto-apply effect forever once selections were complete
+  // (toast flood + frozen page). Stable inputs keep the effect quiet.
+  const maxPreparableLevel = Math.min(5, Math.ceil(level / 2));
+  const availableSpells = useMemo(
+    () => allSpells.filter((spell: Spell) => spell.level >= 1 && spell.level <= maxPreparableLevel),
+    [allSpells, maxPreparableLevel],
   );
-  const availableRitualSpells = allSpells.filter(
-    (spell: Spell) =>
-      spell.ritual && spell.level >= 1 && spell.level <= Math.min(5, Math.ceil(level / 2)),
+  const availableRitualSpells = useMemo(
+    () =>
+      allSpells.filter(
+        (spell: Spell) => spell.ritual && spell.level >= 1 && spell.level <= maxPreparableLevel,
+      ),
+    [allSpells, maxPreparableLevel],
   );
 
   // Pact Magic progression
