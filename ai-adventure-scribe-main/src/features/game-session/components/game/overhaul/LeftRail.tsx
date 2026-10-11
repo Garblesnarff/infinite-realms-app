@@ -103,7 +103,7 @@ const Party: React.FC<{ party: PartyMemberVM[]; partyMax: number }> = ({ party, 
   </IRPanel>
 );
 
-const STATE_LABEL = { acted: 'Acted', now: 'Now', waiting: 'Waiting' } as const;
+const STATE_LABEL = { acted: 'Acted', now: 'Now', waiting: 'Waiting', down: 'Down' } as const;
 
 const EncounterTracker: React.FC<{
   round: number;

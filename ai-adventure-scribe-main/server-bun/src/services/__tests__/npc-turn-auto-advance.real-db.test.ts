@@ -332,4 +332,78 @@ describeWithDb('an NPC turn ends on the spending of its action, not on the DM sa
     expect(await currentTurnOrder()).toBe(0);
     expect(droppedEndTurnLogs).toHaveLength(0);
   });
+
+  test('two consecutive enemy turns draw independent d20s from the server RNG (#223 CB-006)', async () => {
+    // The enemy attack roll repeated across rounds ("8 + 5 = 13 — MISS" in R2 and again in R3),
+    // which reads as a seeded-per-turn RNG or a cached roll being re-read. The server RNG is
+    // unseeded Math.random; this pins that two enemy turns consume successive draws, not the
+    // same one twice.
+    //
+    // The draw script is non-repeating and the attack d20 is the first draw of its turn (each
+    // attack consumes exactly two draws: the d20, then damage), so the expected rolls are
+    // exact — a cycling stub would make `secondRoll !== firstRoll` depend on draw counts.
+    const draws = [0.051, 0.9, 0.351, 0.9, 0.651, 0.9, 0.951, 0.9];
+    let drawIndex = 0;
+    const realRandom = Math.random;
+    Math.random = () => {
+      if (drawIndex >= draws.length) throw new Error('CB-006 test consumed more RNG draws than scripted');
+      return draws[drawIndex++];
+    };
+    try {
+      // Turn 1: the NPC attacks and consumes draws.
+      const first = await attackBy(npcId, playerId);
+      const firstRoll = (first as { d20?: number }).d20;
+      expect(firstRoll).toBe(Math.floor(draws[0] * 20) + 1);
+      const drawsAfterFirst = drawIndex;
+      expect(drawsAfterFirst).toBeGreaterThan(0);
+
+      // The player's turn ends, the round advances, the NPC acts again.
+      await executeCombatIntent(encounterId, { type: 'end_turn', actorId: playerId }, userId, 'dm');
+      expect(await currentTurnOrder()).toBe(0);
+
+      // Turn 2: the attack d20 comes from later in the same draw sequence — a fresh draw, not
+      // a repeat of turn 1's.
+      const second = await attackBy(npcId, playerId);
+      const secondRoll = (second as { d20?: number }).d20;
+      expect(drawIndex).toBeGreaterThan(drawsAfterFirst);
+      expect(secondRoll).toBe(Math.floor(draws[drawsAfterFirst] * 20) + 1);
+      expect(secondRoll).not.toBe(firstRoll);
+    } finally {
+      Math.random = realRandom;
+    }
+  });
+
+  test('killing the last hostile ends the encounter in victory (#223 CB-007)', async () => {
+    // CB-007: with one living enemy left idling, there was no victory or end-of-fight message.
+    // Drop the NPC to 1 HP, let it take its turn, then kill it on the player's turn: the
+    // encounter must end with reason last_hostile_defeated.
+    await db
+      .update(combatParticipants)
+      .set({ maxHp: 1 })
+      .where(eq(combatParticipants.id, npcId));
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1, maxHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, npcId));
+
+    await attackBy(npcId, playerId);
+    expect(await currentTurnOrder()).toBe(1);
+
+    // The killing blow rolls a real d20, and a natural 1 always misses however low the target's
+    // AC is — a 5% flake. Script it: d20 -> 11 hits AC 1, and any hit kills the 1-HP NPC.
+    const realRandom = Math.random;
+    Math.random = () => 0.5;
+    try {
+      await attackBy(playerId, npcId);
+    } finally {
+      Math.random = realRandom;
+    }
+
+    const [encounter] = await db
+      .select({ status: combatEncounters.status, endedReason: combatEncounters.endedReason })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(encounter.status).toBe('completed');
+    expect(encounter.endedReason).toBe('last_hostile_defeated');
+  });
 });

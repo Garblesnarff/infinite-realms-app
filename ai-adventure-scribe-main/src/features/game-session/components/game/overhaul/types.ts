@@ -34,7 +34,7 @@ export interface CombatantVM {
   isEnemy?: boolean;
   isActive?: boolean;
   /** Where the actor stands in this round's pass through the order. */
-  state?: 'acted' | 'now' | 'waiting';
+  state?: 'acted' | 'now' | 'waiting' | 'down';
 }
 
 export interface AttackVM {
