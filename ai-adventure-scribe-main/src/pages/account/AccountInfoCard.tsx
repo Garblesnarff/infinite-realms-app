@@ -28,7 +28,8 @@ export const AccountInfoCard: React.FC<AccountInfoCardProps> = ({
         </div>
         <div className="flex justify-between py-2 border-b border-border">
           <dt className="text-muted-foreground">Plan</dt>
-          <dd className="font-medium capitalize">{userPlan || 'Free'}</dd>
+          {/* #351: never downgrade to "Free" while the plan is unknown. */}
+          <dd className="font-medium capitalize">{userPlan ?? '—'}</dd>
         </div>
         {subscription?.subscriptionId && (
           <div className="flex justify-between py-2">

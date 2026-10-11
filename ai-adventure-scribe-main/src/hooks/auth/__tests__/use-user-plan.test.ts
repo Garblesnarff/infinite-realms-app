@@ -46,12 +46,15 @@ describe('useUserPlan', () => {
     expect(result.current.userPlan).toBeNull();
   });
 
-  it('should return null plan when no token is found in localStorage', async () => {
+  it('reports the error and retries when no token is found in localStorage (#351)', async () => {
     const { result } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
 
+    // No token means the server is unreachable: never invent "Free Tier".
     await waitFor(() => {
       expect(result.current.userPlan).toBeNull();
+      expect(result.current.userPlanError).toBe(true);
     });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('should fetch user plan successfully', async () => {
@@ -96,28 +99,97 @@ describe('useUserPlan', () => {
     expect(global.fetch).toHaveBeenCalledWith(`/v1/llm/quota`, expect.any(Object));
   });
 
-  it('should default to free plan on fetch error', async () => {
+  it('keeps the last known plan on fetch error instead of downgrading to free (#351)', async () => {
     window.localStorage.setItem('workos_access_token', mockToken);
-    (global.fetch as any).mockResolvedValue({
-      ok: false,
-    });
+    (global.fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ plan: 'tester' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+      });
 
     const { result } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
 
     await waitFor(() => {
-      expect(result.current.userPlan).toBe('free');
+      expect(result.current.userPlan).toBe('tester');
     });
+
+    await act(async () => {
+      await result.current.refreshUserPlan();
+    });
+
+    // The failed fetch must not paint "Free Tier": the known plan stays.
+    expect(result.current.userPlan).toBe('tester');
+    expect(result.current.userPlanError).toBe(true);
   });
 
-  it('should default to free plan on network exception', async () => {
+  it('reports the error without inventing a plan on network exception (#351)', async () => {
     window.localStorage.setItem('workos_access_token', mockToken);
     (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
     const { result } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
 
     await waitFor(() => {
-      expect(result.current.userPlan).toBe('free');
+      expect(result.current.userPlanError).toBe(true);
     });
+    expect(result.current.userPlan).toBeNull();
+  });
+
+  it('retries a failed fetch with backoff (#351)', async () => {
+    vi.useFakeTimers();
+    try {
+      window.localStorage.setItem('workos_access_token', mockToken);
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
+
+      renderHook(() => useUserPlan({ user: mockUser, loading: false }));
+
+      // The initial fetch fails…
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      // …the first retry fires after ~1s, the second ~2s after that…
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+
+      // …and the third waits ~4s, so 3s is not enough.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the error when a later fetch succeeds (#351)', async () => {
+    window.localStorage.setItem('workos_access_token', mockToken);
+    (global.fetch as any)
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ plan: 'pro' }) });
+
+    const { result } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
+
+    await waitFor(() => {
+      expect(result.current.userPlanError).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.refreshUserPlan();
+    });
+
+    expect(result.current.userPlan).toBe('pro');
+    expect(result.current.userPlanError).toBe(false);
   });
 
   it('should not fetch plan while auth is loading', async () => {
@@ -129,16 +201,58 @@ describe('useUserPlan', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('should return early when offline', async () => {
+  it('reports the error and retries when offline (#351)', async () => {
     window.localStorage.setItem('workos_access_token', mockToken);
     (isOffline as any).mockReturnValue(true);
 
-    const { result } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
+    const { result, unmount } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
+
+    // Offline is a fetch failure, not a free plan: error surfaces, the plan
+    // stays unknown, and no request goes out.
+    await waitFor(() => {
+      expect(result.current.userPlanError).toBe(true);
+    });
+    expect(result.current.userPlan).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    // The backoff retry fires and recovers once the network is back.
+    (isOffline as any).mockReturnValue(false);
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => ({ plan: 'tester' }),
+    });
+    await waitFor(
+      () => {
+        expect(result.current.userPlan).toBe('tester');
+      },
+      { timeout: 5000 },
+    );
+    expect(result.current.userPlanError).toBe(false);
+    unmount();
+  });
+
+  it('keeps the last known plan when the network drops after a success (#351)', async () => {
+    window.localStorage.setItem('workos_access_token', mockToken);
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => ({ plan: 'tester' }),
+    });
+
+    const { result, unmount } = renderHook(() => useUserPlan({ user: mockUser, loading: false }));
 
     await waitFor(() => {
-      expect(result.current.userPlan).toBeNull();
+      expect(result.current.userPlan).toBe('tester');
     });
-    expect(global.fetch).not.toHaveBeenCalled();
+
+    // The network drops; the next refresh must not downgrade the label.
+    (isOffline as any).mockReturnValue(true);
+    await act(async () => {
+      await result.current.refreshUserPlan();
+    });
+
+    expect(result.current.userPlan).toBe('tester');
+    expect(result.current.userPlanError).toBe(true);
+    unmount();
   });
 
   it('should allow manual refresh via refreshUserPlan', async () => {
