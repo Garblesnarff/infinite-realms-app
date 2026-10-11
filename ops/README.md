@@ -1,6 +1,6 @@
 # Production deploy gate
 
-`auto-deploy.sh` is the canonical host deploy script. Install or invoke this tracked copy from the existing deploy cron. It preserves the current single-writer behavior (`git reset --hard origin/main`, then PM2 restart) and runs the full API journey after the process binds port 8888.
+`auto-deploy.sh` is the canonical host deploy script. Install or invoke this tracked copy from the existing deploy cron. It preserves the current single-writer behavior (`git reset --hard origin/main`, then PM2 restart).
 
 After the deploy it runs `ops/smoke.sh` (below) when that is configured, and never rolls back automatically. Failures page through `SLACK_ALERT_WEBHOOK_URL` (from `/etc/infiniterealms/alerts.env`) and `/var/log/infiniterealms/alerts.log`, rate-limited, and exit non-zero for cron mail.
 

@@ -239,9 +239,9 @@ Re-run only the runs whose conclusion is `cancelled` with no failed steps, or wh
 
 The client bundle must not go live before the server restart.
 
-`ops/auto-deploy.sh` (and the host copy) currently builds the Vite bundle into `dist/` — nginx's docroot — and only then runs `pm2 restart`. The new hashed client is live while the old server is still bound. That skew is how `stale_client_detected` happens, and the restart itself drops in-flight turns.
+`ops/auto-deploy.sh` builds the Vite bundle into a staging directory outside the repo, runs `pm2 restart`, and only then publishes into `dist/` (nginx's docroot). A restart still drops in-flight turns.
 
-Until Rob approves a script change:
+Do not change that order:
 
 - Do not publish a new `dist/` in front of a still-running old server.
 - Do not "fix" the script as a drive-by; prod config needs an approval line (Hetzner rules).
