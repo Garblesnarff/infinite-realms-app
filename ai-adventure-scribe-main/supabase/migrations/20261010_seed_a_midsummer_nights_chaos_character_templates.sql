@@ -8,6 +8,14 @@
 -- reingest-starter-campaigns.ts path (a-midsummer-nights-chaos is in its campaign list).
 -- No portrait_url: the asset uploader sets it.
 -- Classes are SRD only (starter seeding rejects non-SRD classes). Races use the app's names.
+--
+-- APPLY ORDER (Hetzner): this SQL is a no-op until the campaign row exists, and
+-- migrations do not re-run. Exact order:
+--   1. bun scripts/reingest-starter-campaigns.ts --repo-path <infinite-realms-clean> --apply
+--      (creates the a-midsummer-nights-chaos campaign row; dry-run first)
+--   2. Apply this migration (supabase migration replay, or psql -f).
+-- Running step 2 on prod needs Rob's line. If step 1 has not run, this file
+-- inserts zero rows and a later replay is required.
 
 -- 1. The Thespian (Human Bard)
 INSERT INTO public.starter_character_templates (
@@ -101,7 +109,7 @@ INSERT INTO public.starter_character_templates (
   1,
   '{"strength": 8, "dexterity": 14, "constitution": 14, "intelligence": 12, "wisdom": 10, "charisma": 16}',
   '{"traits": ["I fall dramatically in and out of love at inconvenient moments", "I describe everything as though it were a ballad"], "ideals": ["Love. It is the only magic that matters — I would know"], "bonds": ["I owe a badger a sincere apology"], "flaws": ["I trust anyone who speaks beautifully, no matter what they are selling"]}',
-  '["arcana", "deception", "insight", "persuasion"]',
+  '["history", "persuasion", "arcana", "deception"]',
   '["Common", "Elvish", "Sylvan"]',
   '["light crossbow", "component pouch", "fine clothes", "signet ring", "unsent love letter", "perfumed handkerchief"]',
   'I came to Athens for the Duke''s wedding — a minor noble''s third child, invited out of obligation, hoping to catch someone''s eye across the feast. In the forest I drank from a spring a flower had fallen into. I woke up in love with the first thing I saw (a badger — we have talked it through, we are better as friends) and with magic crackling at my fingertips that was not there yesterday. The sorcery, apparently, was always in the blood. The potion just... uncorked it.',
@@ -281,7 +289,7 @@ INSERT INTO public.starter_character_templates (
   1,
   '{"strength": 8, "dexterity": 12, "constitution": 14, "intelligence": 12, "wisdom": 16, "charisma": 10}',
   '{"traits": ["I diagnose everyone I meet, invited or not", "I name my poultices after the people they saved"], "ideals": ["Balance. Every remedy has its poison; every poison its remedy"], "bonds": ["My cottage garden is the work of forty years; I will not see it trampled"], "flaws": ["I lecture. At length. During emergencies."]}',
-  '["arcana", "medicine", "nature", "survival"]',
+  '["medicine", "religion", "arcana", "nature"]',
   '["Common", "Gnomish", "Druidic", "Sylvan"]',
   '["quarterstaff", "herbalism kit", "leather armor", "explorer''s pack", "druidic focus (sprig of mistletoe)", "assorted poultices"]',
   'I keep a cottage at the forest''s edge where the villagers come for poultices, teas, and advice they pretend not to need. I know every herb, every mushroom, every flower — including the small purple one with the heart-shaped petals that only blooms when the fae are feuding. It is blooming everywhere this season, out of cycle, in impossible quantities. I have seen this flower''s work before. It never ends with anyone happy.',
