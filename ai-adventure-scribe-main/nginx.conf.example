@@ -154,6 +154,22 @@ server {
     location /blog/ {
         return 301 https://blog.infiniterealms.app$request_uri;
     }
+    #
+    # Plain-text /version on the app host (#173 item 3; Hark's finding:
+    # infiniterealms.app/version → 404 because /version exists only on the
+    # API host). Exact match proxies to the backend's /version route
+    # (server-bun/src/routes/version.ts — text/plain for ?format=text or an
+    # Accept header preferring text/plain, JSON otherwise). Copy to the live
+    # box on Rob's line — needs Rob's line.
+    location = /version {
+        include /etc/nginx/snippets/infinite-realms-security-headers.conf;
+        proxy_pass http://infiniterealms_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
     location / {
         include /etc/nginx/snippets/infinite-realms-security-headers.conf;
         try_files $uri $uri/ /index.html;

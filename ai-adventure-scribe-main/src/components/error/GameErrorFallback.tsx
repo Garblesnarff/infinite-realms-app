@@ -1,8 +1,10 @@
 import { AlertTriangle, Home, RotateCcw } from 'lucide-react';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { APP_BUILD_SHORT } from '@/services/app-version';
+import { activeSessionId } from '@/services/client-failure-reporting';
 
 /**
  * Props for the GameErrorFallback component
@@ -10,6 +12,11 @@ import { Button } from '@/components/ui/button';
 interface GameErrorFallbackProps {
   error?: Error;
   reset?: () => void;
+}
+
+/** The first 8 characters of a session id, matching the boundary's context line. */
+function shortSessionId(sessionId: string): string {
+  return sessionId.trim().slice(0, 8);
 }
 
 /**
@@ -45,6 +52,39 @@ export const GameErrorFallback: React.FC<GameErrorFallbackProps> = ({ error, res
     window.location.reload();
   };
 
+  // What a player quotes when reporting this crash (#173): the session the
+  // failure reporting already keyed its CLIENT_FAILURE line by, and the
+  // running build. The failure itself is reported by the boundary's
+  // componentDidCatch; the copy button below only touches the clipboard.
+  const sessionId = activeSessionId();
+  const contextLine = sessionId
+    ? `Session ${shortSessionId(sessionId)} · build ${APP_BUILD_SHORT}`
+    : `build ${APP_BUILD_SHORT}`;
+
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const resetTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(resetTimer.current), []);
+
+  const handleCopyDetails = async (): Promise<void> => {
+    const details = [
+      `error: ${error?.message ?? 'An unexpected error occurred.'}`,
+      `session: ${sessionId ?? 'unknown'}`,
+      `build: ${APP_BUILD_SHORT}`,
+      `route: ${typeof window === 'undefined' ? '' : window.location.pathname}`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopyStatus('copied');
+    } catch {
+      // `navigator.clipboard` is undefined outside secure contexts, and writeText can reject.
+      setCopyStatus('failed');
+    }
+    // A second click restarts the feedback window instead of letting the first timer cut it short.
+    clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setCopyStatus('idle'), 2000);
+  };
+
   return (
     <div className="flex items-center justify-center h-screen bg-background p-4">
       <div className="max-w-lg w-full p-8 bg-card border border-destructive/20 rounded-lg shadow-lg">
@@ -69,6 +109,13 @@ export const GameErrorFallback: React.FC<GameErrorFallbackProps> = ({ error, res
           {error && (
             <p className="text-xs text-muted-foreground mt-2 font-mono">Error: {error.message}</p>
           )}
+
+          <p
+            className="text-xs text-muted-foreground mt-2 font-mono"
+            data-testid="game-error-context"
+          >
+            {contextLine}
+          </p>
         </div>
 
         {/* Recovery Options */}
@@ -87,6 +134,20 @@ export const GameErrorFallback: React.FC<GameErrorFallbackProps> = ({ error, res
 
           <Button onClick={handleReload} variant="ghost" className="w-full" size="sm">
             Reload Page
+          </Button>
+
+          <Button
+            onClick={handleCopyDetails}
+            variant="ghost"
+            className="w-full"
+            size="sm"
+            data-testid="copy-details-button"
+          >
+            {copyStatus === 'idle'
+              ? 'Copy details'
+              : copyStatus === 'copied'
+                ? 'Copied'
+                : 'Copy failed'}
           </Button>
         </div>
 
