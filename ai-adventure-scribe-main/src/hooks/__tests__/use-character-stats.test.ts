@@ -10,7 +10,7 @@ import {
   useIsSpellcaster,
 } from '../use-character-stats';
 
-import type { Character } from '@/types/character';
+import type { AbilityScores, Character } from '@/types/character';
 
 import { applyRacialBonuses, formatRacialBonus } from '@/utils/racialAbilityBonuses';
 
@@ -60,9 +60,26 @@ describe('use-character-stats hooks', () => {
     },
   };
 
+  // Stored ability scores are final (racial bonus already applied at creation, #203).
+  // These fixtures hold the final score; the expectations are unchanged, so a read that
+  // re-adds the racial bonus would fail them.
+  const withFinalScores = (finals: Partial<Record<keyof AbilityScores, number>>): AbilityScores => {
+    const scores = { ...mockCharacter.abilityScores } as AbilityScores;
+    (Object.keys(finals) as (keyof AbilityScores)[]).forEach((ability) => {
+      const score = finals[ability] ?? scores[ability].score;
+      scores[ability] = { ...scores[ability], score, modifier: Math.floor((score - 10) / 2) };
+    });
+    return scores;
+  };
+
   describe('useEffectiveAbilityScores', () => {
     it('should apply base racial bonuses', () => {
-      const { result } = renderHook(() => useEffectiveAbilityScores(mockCharacter));
+      const { result } = renderHook(() =>
+        useEffectiveAbilityScores({
+          ...mockCharacter,
+          abilityScores: withFinalScores({ strength: 11 }),
+        }),
+      );
 
       expect(result.current?.strength.score).toBe(11);
       expect(result.current?.strength.modifier).toBe(0); // floor((11-10)/2) = 0
@@ -71,6 +88,7 @@ describe('use-character-stats hooks', () => {
     it('should stack race and subrace bonuses', () => {
       const dwarfCharacter: Character = {
         ...mockCharacter,
+        abilityScores: withFinalScores({ constitution: 12, wisdom: 11 }),
         race: {
           id: 'dwarf',
           name: 'Dwarf',
@@ -93,6 +111,7 @@ describe('use-character-stats hooks', () => {
       // In D&D 5e, if a race and subrace both give a bonus to the same ability, they stack.
       const stackingCharacter: Character = {
         ...mockCharacter,
+        abilityScores: withFinalScores({ strength: 12 }),
         race: {
           id: 'test-race',
           name: 'Test Race',
@@ -107,13 +126,14 @@ describe('use-character-stats hooks', () => {
 
       const { result } = renderHook(() => useEffectiveAbilityScores(stackingCharacter));
 
-      // CURRENT BUG: This will likely be 11 because of the spread operator in useEffectiveAbilityScores
+      // Stored final score is returned as-is; the bonus is not re-added on read (#203).
       expect(result.current?.strength.score).toBe(12);
     });
 
     it('should handle racialAbilityChoices for Half-Elf', () => {
       const halfElf: Character = {
         ...mockCharacter,
+        abilityScores: withFinalScores({ charisma: 12, strength: 11, dexterity: 11 }),
         race: {
           id: 'half-elf',
           name: 'Half-Elf',
@@ -126,7 +146,7 @@ describe('use-character-stats hooks', () => {
 
       const { result } = renderHook(() => useEffectiveAbilityScores(halfElf));
 
-      // CURRENT BUG: racialAbilityChoices is ignored in the hook
+      // Stored final scores are returned as-is (#203).
       expect(result.current?.charisma.score).toBe(12);
       expect(result.current?.strength.score).toBe(11);
       expect(result.current?.dexterity.score).toBe(11);
@@ -140,8 +160,8 @@ describe('use-character-stats hooks', () => {
       const highElfWizard: Character = {
         ...mockCharacter,
         abilityScores: {
-          ...mockCharacter.abilityScores,
-          intelligence: { score: 15, modifier: 2, savingThrow: true },
+          ...withFinalScores({ intelligence: 16 }),
+          intelligence: { score: 16, modifier: 3, savingThrow: true },
         } as any,
         race: {
           id: 'elf',
@@ -157,8 +177,7 @@ describe('use-character-stats hooks', () => {
 
       const { result } = renderHook(() => useCharacterStats(highElfWizard));
 
-      // CURRENT BUG: useCharacterStats likely uses base scores, so it might see INT 15 (+2 mod)
-      // DC would be 8 + 2 + 2 = 12
+      // Stored INT 16 (+3) feeds the DC: 8 + 2 (prof) + 3 = 13 (#203).
       expect(result.current?.spellSaveDC).toBe(13);
     });
 

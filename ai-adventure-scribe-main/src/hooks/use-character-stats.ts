@@ -142,22 +142,33 @@ export function getEffectiveAbilityScores(
 }
 
 /**
- * Hook for getting character's effective ability scores (including racial bonuses)
+ * Hook for getting character's effective ability scores.
+ *
+ * Stored scores are final: racial bonuses are applied once, at creation
+ * (see applyRacialBonusesToAbilityScores). Reads must not add them again, or
+ * every reload double-counts. racialBonus is therefore always 0 here.
  */
 export const useEffectiveAbilityScores = (character: Character | null) => {
   return useMemo(() => {
     if (!character?.abilityScores) return null;
 
-    return getEffectiveAbilityScores(
-      character.abilityScores,
-      character.race || null,
-      character.subrace || null,
-      character.racialAbilityChoices,
+    const finalScores = character.abilityScores;
+
+    const effectiveScores = (
+      Object.entries(finalScores) as [keyof AbilityScores, Ability][]
+    ).reduce(
+      (acc, [ability, data]) => {
+        acc[ability] = {
+          ...data,
+          baseScore: data.score,
+          racialBonus: 0,
+        };
+
+        return acc;
+      },
+      {} as Record<keyof AbilityScores, Ability & { baseScore: number; racialBonus: number }>,
     );
-  }, [
-    character?.abilityScores,
-    character?.race,
-    character?.subrace,
-    character?.racialAbilityChoices,
-  ]);
+
+    return effectiveScores;
+  }, [character?.abilityScores]);
 };

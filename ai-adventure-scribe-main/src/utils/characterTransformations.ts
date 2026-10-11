@@ -13,6 +13,7 @@ export const transformAbilityScoresForStorage = (
   abilityScores: AbilityScores,
   characterId: string,
   characterClass: string | null | undefined,
+  raceTraits: string[] = [],
 ) => {
   // Calculate base armor class (10 + dexterity modifier)
   const baseArmorClass = 10 + (abilityScores.dexterity.modifier || 0);
@@ -23,7 +24,10 @@ export const transformAbilityScoresForStorage = (
   }
 
   // Level-1 HP is the class hit die plus the Constitution modifier.
-  const baseHitPoints = classData.hitDie + (abilityScores.constitution.modifier || 0);
+  // Dwarven Toughness (Hill Dwarf): +1 max HP per level (#203).
+  const toughnessBonus = raceTraits.includes('Dwarven Toughness') ? 1 : 0;
+  const baseHitPoints =
+    classData.hitDie + (abilityScores.constitution.modifier || 0) + toughnessBonus;
 
   return {
     character_id: characterId,
