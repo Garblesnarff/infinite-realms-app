@@ -475,6 +475,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   )}
 
                   {!rollPillLabel &&
+                    // #219: the preflight banner ("Checking whose turn it is…"
+                    // / "Resuming…") is a combat-turn concept. Out of combat the
+                    // turn's loading state lives in the composer area; showing
+                    // this here on every turn reads as story lines.
+                    isCombatDetected &&
                     (['unknown', 'failed', 'running'] as CombatTurnPreflightStatus[]).includes(
                       combatTurnUiState.preflight,
                     ) && (
@@ -562,9 +567,13 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           isDisabled={
                             isProcessing ||
                             rollBlocksInput ||
-                            combatTurnUiState.preflight === 'unknown' ||
-                            combatTurnUiState.preflight === 'failed' ||
-                            combatTurnUiState.preflight === 'running'
+                            // 'running' is the turn lock, in and out of combat. 'unknown'/'failed'
+                            // are combat-turn recovery states: out of combat they must not wedge
+                            // the composer with no banner and no Resume button (#219).
+                            combatTurnUiState.preflight === 'running' ||
+                            (isCombatDetected &&
+                              (combatTurnUiState.preflight === 'unknown' ||
+                                combatTurnUiState.preflight === 'failed'))
                           }
                         />
                       </DyingComposerSlot>
