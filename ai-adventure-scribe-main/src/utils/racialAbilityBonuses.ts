@@ -1,4 +1,6 @@
-import type { CharacterRace, Subrace } from '@/types/character';
+import type { AbilityScores, CharacterRace, Subrace } from '@/types/character';
+
+import { calculateModifier } from '@/utils/abilityScoreUtils';
 
 /**
  * Utility functions for calculating and applying racial ability score bonuses
@@ -130,6 +132,53 @@ export function applyRacialBonuses(
 
     // Cap at maximum of 20 per D&D 5E rules
     finalScores[ability] = Math.min(finalScore, 20);
+  });
+
+  return finalScores;
+}
+
+const ABILITY_NAMES: AbilityScoreName[] = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+];
+
+/**
+ * Fold racial bonuses into a character's base ability scores, producing final scores.
+ * Capped at 20 and with modifiers recomputed from the final score, so HP, AC and saves
+ * derive from the same numbers that are stored.
+ *
+ * Call this once, when the character is created. Stored scores are final: reads must
+ * not add racial bonuses again.
+ *
+ * @param abilityScores - Base ability scores as entered in the wizard (before racial bonuses)
+ * @param race - Character's selected race
+ * @param subrace - Character's selected subrace (if any)
+ * @param racialAbilityChoices - Player's ability choices (for Half-Elf, Variant Human)
+ * @returns A new AbilityScores object with racial bonuses applied
+ */
+export function applyRacialBonusesToAbilityScores(
+  abilityScores: AbilityScores,
+  race: CharacterRace | null,
+  subrace: Subrace | null,
+  racialAbilityChoices?: {
+    halfElf?: [string, string];
+    variantHuman?: [string, string];
+  },
+): AbilityScores {
+  const bonuses = calculateRacialBonuses(race, subrace, racialAbilityChoices);
+  const finalScores: AbilityScores = { ...abilityScores };
+
+  ABILITY_NAMES.forEach((ability) => {
+    const current = abilityScores[ability];
+    const bonus = getTotalRacialBonus(ability, bonuses);
+    if (bonus === 0) return;
+
+    const score = Math.min(current.score + bonus, 20);
+    finalScores[ability] = { ...current, score, modifier: calculateModifier(score) };
   });
 
   return finalScores;

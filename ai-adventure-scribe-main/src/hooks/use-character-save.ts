@@ -19,6 +19,7 @@ import {
   transformEquipmentForStorage,
   transformMulticlassingForStorage,
 } from '@/utils/characterTransformations';
+import { applyRacialBonusesToAbilityScores } from '@/utils/racialAbilityBonuses';
 import { convertSpellIdsToDatabase } from '@/utils/spell-id-mapping';
 
 // Project Types
@@ -226,11 +227,27 @@ export const useCharacterSave = (): {
         // For new characters, use atomic RPC function
         let savedCharacter: Character;
         if (!characterData.id) {
+          // The wizard holds base scores. Store final scores (racial bonus applied once, here)
+          // so AC, HP and saves derive from what is persisted and reads never re-add the bonus.
+          const finalAbilityScores = applyRacialBonusesToAbilityScores(
+            character.abilityScores!,
+            character.race || null,
+            character.subrace || null,
+            character.racialAbilityChoices,
+          );
+
+          // Dwarven Toughness (Hill Dwarf): +1 max HP per level, applied where HP is derived.
+          const raceTraits = [
+            ...(character.race?.traits || []),
+            ...(character.subrace?.traits || []),
+          ];
+
           // Transform stats data
           const statsData = transformAbilityScoresForStorage(
-            character.abilityScores!,
+            finalAbilityScores,
             '00000000-0000-0000-0000-000000000000', // Temporary ID, will be replaced
             character.class?.name,
+            raceTraits,
           );
 
           // Transform equipment data if present
@@ -273,10 +290,17 @@ export const useCharacterSave = (): {
 
           // ⚡ Bolt: Parallelize all database operations for existing characters.
           // This reduces database round-trips and improves save performance.
+          // Dwarven Toughness: apply at save where max HP is derived (level-1 edits
+          // re-derive HP, so the bonus must be present here too).
+          const updateRaceTraits = [
+            ...(character.race?.traits || []),
+            ...(character.subrace?.traits || []),
+          ];
           const transformedStatsData = transformAbilityScoresForStorage(
             character.abilityScores!,
             characterData.id,
             character.class?.name,
+            updateRaceTraits,
           );
           const { character_id: _characterId, ...rawStatsData } = transformedStatsData;
           const statsData: Partial<Omit<typeof transformedStatsData, 'character_id'>> =
