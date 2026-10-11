@@ -59,6 +59,7 @@ export const CombatTurnBar: React.FC<{ summary: CombatTurnSummary; busy: CombatT
                 actor.state === 'acted' && 'border-white/20 bg-white/25 text-white/70',
                 actor.state === 'now' && 'border-infinite-gold bg-infinite-gold text-slate-950',
                 actor.state === 'waiting' && 'border-white/20 bg-black/40 text-white/70',
+                actor.state === 'down' && 'border-red-500/40 bg-red-950/60 text-red-300/80 line-through',
               )}
             >
               <span className="max-w-[9rem] truncate sm:hidden">

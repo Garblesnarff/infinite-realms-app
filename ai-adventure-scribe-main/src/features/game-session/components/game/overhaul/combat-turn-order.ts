@@ -8,7 +8,7 @@ import type { CombatEncounter } from '@/types/combat-encounter';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 import { participantVital } from '@/services/combat/participant-vital';
 
-export type TurnActorState = 'acted' | 'now' | 'waiting';
+export type TurnActorState = 'acted' | 'now' | 'waiting' | 'down';
 
 export interface TurnActor {
   id: string;
@@ -61,6 +61,13 @@ export function summarizeCombatTurn(
   if (activeIndex < 0) return null;
   const actors = ordered.map<TurnActor>((participant, index) => {
     const name = facingName(undefined, participant.id, roster);
+    // A dead creature shows as down, not as "acted": the inline tracker read its state off the
+    // initiative position alone, so a kill kept showing "Acted" and the "N of M have acted"
+    // count stayed wrong (#223 CB-007). Players go through participantVital; monsters die at
+    // 0 HP with no death saves (2014 5e), so `isDead` or 0 HP is the marker.
+    const isDown =
+      participant.isDead === true ||
+      (participant.participantType !== 'player' && participant.currentHitPoints <= 0);
     return {
       id: participant.id,
       name,
@@ -69,7 +76,7 @@ export function summarizeCombatTurn(
       isPlayer: participant.participantType === 'player',
       isEnemy: isHostileParticipantType(participant.participantType),
       isDying: participantVital(participant) === 'dying',
-      state: index < activeIndex ? 'acted' : index === activeIndex ? 'now' : 'waiting',
+      state: isDown ? 'down' : index < activeIndex ? 'acted' : index === activeIndex ? 'now' : 'waiting',
     };
   });
   const round = encounter.currentRound;
@@ -86,6 +93,14 @@ export function summarizeCombatTurn(
 }
 
 export type CombatTurnBusy = 'casting' | 'acting' | null;
+
+/**
+ * How many combatants have acted this round. Read off the actor states, not the turn position:
+ * a dead creature shows as down, not acted, so it must not count (#223 CB-007).
+ */
+export function actedCount(summary: CombatTurnSummary): number {
+  return summary.actors.filter((actor) => actor.state === 'acted').length;
+}
 
 /** `Your turn`, the enemy's name, `Casting…`, or `<name> is acting…`. */
 export function combatTurnText(summary: CombatTurnSummary, busy: CombatTurnBusy): string {

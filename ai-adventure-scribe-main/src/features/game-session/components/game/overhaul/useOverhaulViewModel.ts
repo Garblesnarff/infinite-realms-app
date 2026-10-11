@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { FROZEN_CAMPAIGN_CHAPTER_LABEL } from './campaign-chapter';
-import { summarizeCombatTurn } from './combat-turn-order';
+import { actedCount, summarizeCombatTurn } from './combat-turn-order';
 import { buildSpellsViewModel } from './spell-view-model';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 import { isCatalogWeaponName } from '../../../../../../shared/equipment-weapon-resolver';
@@ -462,7 +462,7 @@ export function useOverhaulViewModel(opts?: {
       combat: {
         active: !!encounter,
         round: encounter?.currentRound ?? 1,
-        actedCount: turn ? turn.turn - 1 : undefined,
+        actedCount: turn ? actedCount(turn) : undefined,
         combatants,
       },
       character: sheet,
