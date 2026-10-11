@@ -9,6 +9,7 @@ import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useAIResponse } from '@/hooks/use-ai-response';
 import logger from '@/lib/logger';
+import { clearPendingInput } from '@/services/auth/TokenService';
 import { parseDiceCommand } from '@/utils/diceCommandParser';
 import { rollDice } from '@/utils/diceUtils';
 import { stripEngineGeneratedLines } from '@/utils/engine-lines';
@@ -156,6 +157,13 @@ export const useMessageCommandHandler = ({
       };
 
       await sendMessage(diceRollMessage);
+
+      // #354: the dice path returns early from handleSendMessage, so the
+      // accept-time clear in use-message-handler-logic never runs. Clear the
+      // pending-input snapshot here so a reload mid-turn cannot resurrect
+      // "/roll 1d20" into the composer. If sendMessage threw, this line is
+      // never reached and the snapshot stays for the true-drop retry.
+      clearPendingInput();
 
       let earlyResponse: ChatMessage | null = null;
       const aiResponseMessage = await getAIResponse(

@@ -33,6 +33,7 @@ import {
   subscribeToNetworkRetry,
 } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
+import { clearPendingInput } from '@/services/auth/TokenService';
 import { CombatIntentRefusedError } from '@/services/combat/combat-action-executor';
 import { settlePendingCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
@@ -556,6 +557,14 @@ export const useMessageHandlerLogic = ({
       if (!resumingSavedMessage) {
         await rejectWhenAborted(sendMessage(playerMessage), turnSignal); // This adds to UI and saves to dialogue_history
         playerMessagePersisted = true;
+        // #354: the server accepted the turn — drop the pending-input snapshot
+        // now, not when the DM turn completes. A reload from here on must not
+        // refill the composer with the sent text (one tap would duplicate the
+        // turn). Recovery for an accepted-but-unanswered turn is
+        // resume_unanswered from the saved row (#309), not this snapshot. If
+        // the persist above threw, this line is never reached, so a truly
+        // dropped turn keeps its pending input.
+        clearPendingInput();
 
         // Update turn count immediately after player message is sent using functional form
         await rejectWhenAborted(
