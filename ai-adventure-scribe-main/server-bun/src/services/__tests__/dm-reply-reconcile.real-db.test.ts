@@ -2908,4 +2908,56 @@ ${playerInput}
     ).toBe('invalid_conditions');
     expect(await getActiveCharacterConditions(turn.character.id)).toEqual([]);
   });
+
+
+  // #255: two concurrent useSpellSlot calls with one slot left: one spends, the other is
+  // rejected with "No available level 1 spell slots". The spend is a single atomic UPDATE
+  // (SET usedSlots = usedSlots + 1 WHERE usedSlots < totalSlots), so the loser matches no
+  // row instead of double-spending.
+  test('useSpellSlot: two concurrent spends with one slot left spend exactly one (#255)', async () => {
+    const [{ id: slotCharacterId }] = await database
+      .insert(characters)
+      .values({ userId, name: testId('slot-racer'), class: 'Wizard', level: 3 })
+      .returning({ id: characters.id });
+    await database.insert(characterSpellSlots).values({
+      characterId: slotCharacterId,
+      spellLevel: 1,
+      totalSlots: 1,
+      usedSlots: 0,
+    });
+    const spend = () =>
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- not a React hook: static service method
+      SpellSlotsService.useSpellSlot(
+        {
+          characterId: slotCharacterId,
+          spellName: 'Magic Missile',
+          spellLevel: 1,
+          slotLevelUsed: 1,
+          sessionId,
+        },
+        userId,
+      );
+    const outcomes = await Promise.allSettled([spend(), spend()]);
+    const fulfilled = outcomes.filter(
+      (outcome): outcome is PromiseFulfilledResult<unknown> => outcome.status === 'fulfilled',
+    );
+    const rejected = outcomes.filter(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+    );
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(String(rejected[0]?.reason?.message ?? rejected[0]?.reason)).toContain(
+      'No available level 1 spell slots',
+    );
+    const [slots] = await database
+      .select({ used: characterSpellSlots.usedSlots })
+      .from(characterSpellSlots)
+      .where(
+        and(
+          eq(characterSpellSlots.characterId, slotCharacterId),
+          eq(characterSpellSlots.spellLevel, 1),
+        ),
+      );
+    expect(slots?.used).toBe(1);
+  });
 });
