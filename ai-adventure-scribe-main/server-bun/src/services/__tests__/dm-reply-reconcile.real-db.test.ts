@@ -2938,11 +2938,14 @@ ${playerInput}
         userId,
       );
     const outcomes = await Promise.allSettled([spend(), spend()]);
+    type Settled = (typeof outcomes)[number];
     const fulfilled = outcomes.filter(
-      (outcome): outcome is PromiseFulfilledResult<unknown> => outcome.status === 'fulfilled',
+      (outcome): outcome is Extract<Settled, { status: 'fulfilled' }> =>
+        outcome.status === 'fulfilled',
     );
     const rejected = outcomes.filter(
-      (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+      (outcome): outcome is Extract<Settled, { status: 'rejected' }> =>
+        outcome.status === 'rejected',
     );
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
