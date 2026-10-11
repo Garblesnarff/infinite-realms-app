@@ -92,16 +92,21 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
   // #209: at-rest caption labels so duplicate premade copies are distinguishable
   // without hovering (same artwork, same name — e.g. The Scholar x8). The stats
   // row shape mirrors CharacterCardHoverContent.
+  // #311: the label carries the creation time, not just the date — two copies
+  // made on the same day (the retest's two "The Faithful" cards) were
+  // otherwise byte-identical.
   const cardStats = Array.isArray(character.character_stats)
     ? character.character_stats[0]
     : character.character_stats;
   const createdDate = character.created_at ? new Date(character.created_at) : null;
   const createdLabel =
     createdDate && !Number.isNaN(createdDate.getTime())
-      ? createdDate.toLocaleDateString(undefined, {
+      ? createdDate.toLocaleString(undefined, {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
         })
       : null;
   const captionMeta = [
@@ -286,7 +291,14 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
             <button
               type="button"
               data-testid="character-card-delete"
-              aria-label={`Delete ${character.name}`}
+              // #311: the accessible name carries the creation time so two
+              // copies of the same premade ("Delete The Faithful" x2) are
+              // distinguishable to assistive tech.
+              aria-label={
+                createdLabel
+                  ? `Delete ${character.name} (created ${createdLabel})`
+                  : `Delete ${character.name}`
+              }
               title="Delete character"
               onClick={(e) => {
                 e.stopPropagation();
