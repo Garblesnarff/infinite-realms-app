@@ -90,10 +90,8 @@ export async function overlayCharacterConditions(
       conditions: await getActiveCharacterConditions(characterId),
     };
   } catch (error) {
-    logger.warn(
-      { err: error, characterId },
-      'overlayCharacterConditions lookup failed; serving character without conditions',
-    );
+    // prettier-ignore
+    logger.warn({ err: error, characterId }, 'overlayCharacterConditions lookup failed; serving character without conditions');
     return mapped;
   }
 }
