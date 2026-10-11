@@ -416,7 +416,9 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     renderHandler();
 
     await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
-    expect(order).toEqual(['check', 'history', 'history', 'turn']);
+    // The recovery-time newest re-read (2 history reads) plus the send-time guard
+    // re-read (2 more) — the turn is only sent while the player's row is still newest.
+    expect(order).toEqual(['check', 'history', 'history', 'history', 'history', 'turn']);
   });
 
   it('leaves a session alone whose last message is the DM reply', async () => {
@@ -455,5 +457,93 @@ describe('resuming a turn the combat-entry popup was holding when the page reloa
     await Promise.resolve();
     expect(mockCheckDeclaredAttack).toHaveBeenCalledTimes(1);
     expect(mockGetAIResponse).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('offering Retry for a plain player message orphaned by a dropped turn (#265)', () => {
+  // A deploy mid-turn kills the in-flight DM reply; after a reload this line sits with no reply
+  // under it. Not an attack declaration, not a dice roll: the plain-message path.
+  const orphaned = {
+    id: 'player-1',
+    sender: 'player',
+    text: 'I look around the tavern.',
+    context: { intent: 'query' },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendMessage.mockReset().mockResolvedValue(undefined);
+    contextState.messages = [dmScene, orphaned];
+    contextState.messagesReady = true;
+    mockGetAIResponse.mockResolvedValue({ text: 'The tavern is quiet.', rollRequests: [] });
+    mockCheckDeclaredAttack.mockResolvedValue(null);
+    mockReadCombat.mockResolvedValue({ state: 'none' });
+    serverNewest([{ id: 'player-1', speaker_type: 'player' }]);
+  });
+
+  it('offers Retry on load when the last message is an unanswered player message', async () => {
+    renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    expect(retry).toBeTruthy();
+    // Offered, not auto-resumed: the player may have moved on.
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+  });
+
+  it('retry re-sends the same saved row once, without a duplicate player save or turn increment', async () => {
+    const { updateGameSessionState } = renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockGetAIResponse).toHaveBeenCalledTimes(1));
+    expect(
+      mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+    ).toHaveLength(0);
+    // No turn-count increment: the retry re-sends the already-saved row, it is not a new turn.
+    for (const [updater] of updateGameSessionState.mock.calls) {
+      const next = typeof updater === 'function' ? updater({ turn_count: 4 }) : updater;
+      expect(next.turn_count ?? 4).toBe(4);
+    }
+  });
+
+  it('does not answer the turn twice when a DM reply lands between the offer and the Retry click', async () => {
+    renderHandler();
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    const readsBefore = mockListSessionMessages.mock.calls.length;
+    // A DM reply lands server-side after the offer was shown (another tab, another device).
+    serverNewest([
+      { id: 'player-1', speaker_type: 'player' },
+      { id: 'dm-2', speaker_type: 'dm' },
+    ]);
+    fireEvent.click(retry);
+    // The send-time guard re-reads the server's newest message before calling the DM.
+    await waitFor(() =>
+      expect(mockListSessionMessages.mock.calls.length).toBeGreaterThan(readsBefore),
+    );
+    await act(async () => {});
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+    expect(
+      mockSendMessage.mock.calls.filter(([message]) => message.sender === 'player'),
+    ).toHaveLength(0);
+  });
+
+  it('offers nothing when the server already has a DM reply after the player message', async () => {
+    serverNewest([
+      { id: 'player-1', speaker_type: 'player' },
+      { id: 'dm-2', speaker_type: 'dm' },
+    ]);
+    renderHandler();
+    // The newest-message re-read runs after the attack check; wait for both.
+    await waitFor(() => expect(mockCheckDeclaredAttack).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockListSessionMessages).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(mockGetAIResponse).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing when the orphaned line is not the last message', async () => {
+    contextState.messages = [orphaned, { id: 'dm-2', sender: 'dm', text: 'The tavern is quiet.' }];
+    renderHandler();
+    await Promise.resolve();
+    expect(mockCheckDeclaredAttack).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 });
