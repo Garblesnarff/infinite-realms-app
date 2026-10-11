@@ -107,9 +107,32 @@ const CLAWS = {
   proficient: true,
 };
 
+/**
+ * #260: the Greataxe is on the Seeker's sheet but NOT equipped. It is carried, so a
+ * player naming it is refused with "equip it first"; it is not a hallucination, so a
+ * DM naming it resolves through the substitute path instead of 422-ing.
+ */
+const GREATAXE = {
+  id: 'inv-greataxe',
+  name: 'Greataxe',
+  damageDice: '1d12',
+  damageType: 'slashing',
+  normalRange: 5,
+  magicBonus: 0,
+  finesse: false,
+  ranged: false,
+  proficient: true,
+};
+
 /** Keyed by participant id, so each actor's sheet is its own. */
 const equippedByActor: Record<string, typeof SEEKER_WEAPONS> = {
   'the-seeker': SEEKER_WEAPONS,
+  'the-void-maw': [CLAWS],
+};
+
+/** Everything the sheet carries, equipped or not. */
+const carriedByActor: Record<string, Array<(typeof SEEKER_WEAPONS)[number] | typeof GREATAXE>> = {
+  'the-seeker': [...SEEKER_WEAPONS, GREATAXE],
   'the-void-maw': [CLAWS],
 };
 
@@ -203,6 +226,8 @@ mock.module('../../../../services/combat/combat-attack-service.js', () => ({
 mock.module('../../../../services/combat/data-access.js', () => ({
   listEquippedWeaponProfiles: async (participant: { id: string }) =>
     equippedByActor[participant.id] ?? [],
+  listCarriedWeaponProfiles: async (participant: { id: string }) =>
+    carriedByActor[participant.id] ?? [],
   getEquippedWeaponProfile: async (participant: { id: string }) =>
     equippedByActor[participant.id]?.[0] ?? CLAWS,
   getParticipantAbilityProfile: async () => ({ scores: {}, level: 1, spellIds: [] }),
@@ -638,6 +663,85 @@ describe('approach and resolution swing the same weapon', () => {
     expect(approachWeapons[0]).toMatchObject({ name: 'Longbow', ranged: true });
     expect(attackInputs[0].weaponId).toBe('inv-longbow');
     expect(warnings.some((entry) => entry.event === 'DM_WEAPON_UNGROUNDED')).toBe(false);
+  });
+});
+
+describe('a player attack naming a weapon that is carried but not equipped (#260)', () => {
+  beforeEach(() => {
+    activeParticipantId = 'the-seeker';
+  });
+
+  it('is refused with weapon_not_equipped through executeCombatIntent', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'greataxe',
+        expectedVersion: ENCOUNTER_VERSION,
+      },
+      source: 'player',
+    });
+
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as {
+      error: string;
+      details: { reason: string; requestedWeaponId: string };
+    };
+    expect(body.error).toContain('not equipped');
+    expect(body.details).toMatchObject({
+      reason: 'weapon_not_equipped',
+      requestedWeaponId: 'greataxe',
+    });
+    // Nothing was resolved or rolled: the refusal happened before the approach.
+    expect(attackInputs).toHaveLength(0);
+    expect(approachWeapons).toHaveLength(0);
+  });
+
+  it('is refused with weapon_not_equipped in the propose phase too', async () => {
+    const response = await postIntent({
+      phase: 'propose',
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'greataxe',
+        expectedVersion: ENCOUNTER_VERSION,
+      },
+      source: 'player',
+    });
+
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as {
+      error: string;
+      details: { reason: string };
+    };
+    expect(body.error).toContain('not equipped');
+    expect(body.details).toMatchObject({ reason: 'weapon_not_equipped' });
+  });
+
+  it('a DM naming the same carried-but-unequipped weapon resolves without 422-ing', async () => {
+    const response = await postIntent({
+      intent: {
+        type: 'attack',
+        actorId: 'the-seeker',
+        targetId: 'the-void-maw',
+        weaponId: 'greataxe',
+      },
+      source: 'dm',
+    });
+
+    // A DM is never refused for a weapon name: the engine substitutes an equipped
+    // weapon and logs it, so the fight is not stopped.
+    expect(response.status).toBe(200);
+    const ungrounded = warnings.find((entry) => entry.event === 'DM_WEAPON_UNGROUNDED');
+    expect(ungrounded).toMatchObject({
+      actorId: 'the-seeker',
+      requested: 'greataxe',
+      resolved: 'Shortsword',
+    });
+    expect(attackInputs).toHaveLength(1);
+    expect(attackInputs[0].weaponId).toBe('inv-shortsword');
   });
 });
 

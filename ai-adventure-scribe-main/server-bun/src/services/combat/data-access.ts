@@ -232,6 +232,63 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
 }
 
 /**
+ * Every weapon the participant's character carries, equipped or not, in a stable order.
+ *
+ * #260: distinguishes "carried but not equipped" (a player-sourced intent is refused with
+ * "equip it first") from "not owned at all" (a DM hallucination, which takes the ungrounded
+ * substitute path and must never refuse). For participants without a character sheet the
+ * attacks are intrinsic, so this is the equipped list: nothing is ever "unequipped".
+ */
+export async function listCarriedWeaponProfiles(participant: any): Promise<WeaponRuleProfile[]> {
+  if (!participant.characterId) return listEquippedWeaponProfiles(participant);
+  const [inventory, legacy, character] = await Promise.all([
+    db
+      .select()
+      .from(inventoryItems)
+      .where(
+        and(
+          eq(inventoryItems.characterId, participant.characterId),
+          inArray(inventoryItems.itemType, ['weapon', 'equipment', 'custom']),
+        ),
+      )
+      .orderBy(asc(inventoryItems.createdAt), asc(inventoryItems.id)),
+    db
+      .select()
+      .from(characterEquipment)
+      .where(
+        and(
+          eq(characterEquipment.characterId, participant.characterId),
+          inArray(characterEquipment.itemType, ['weapon', 'equipment', 'custom']),
+        ),
+      )
+      .orderBy(asc(characterEquipment.itemName), asc(characterEquipment.id)),
+    db.query.characters.findFirst({
+      where: eq(characters.id, participant.characterId),
+      columns: { class: true, race: true, subrace: true },
+    }),
+  ]);
+  const candidates: EquippedWeaponCandidate[] = [
+    ...inventory.map((item) => ({
+      id: item.id,
+      name: item.name,
+      itemType: item.itemType,
+      magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
+      properties: parseInventoryProperties(item.properties),
+    })),
+    ...legacy.map((item) => ({
+      id: item.id,
+      name: item.itemName,
+      itemType: item.itemType,
+      magicBonus: item.magicBonus ?? 0,
+      properties: parseEquipmentProperties(item.magicProperties),
+    })),
+  ];
+  return candidates
+    .filter(isEquippedWeaponCandidate)
+    .map((candidate) => candidateToProfile(candidate, character ?? undefined));
+}
+
+/**
  * The stored monster attack profile, as weapon profiles.
  *
  * `fixedAttackBonus`/`fixedDamageBonus` are what make this work: a stat block's `+10 to hit,

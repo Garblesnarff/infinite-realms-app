@@ -37,6 +37,14 @@ export type GroundedWeapon = {
   grounded: boolean;
   /** The name that was claimed, kept for the log line. */
   requested: string | null;
+  /**
+   * True when the requested weapon is on the character sheet (carried) but not in the
+   * equipped list (#260). The caller refuses a player-sourced intent with "not equipped"
+   * instead of silently substituting. False for weapons the character does not own at
+   * all: those take the ungrounded path (substitute + DM_WEAPON_UNGROUNDED), which must
+   * never refuse and stop a fight.
+   */
+  notEquipped: boolean;
 };
 
 /**
@@ -51,6 +59,7 @@ export type GroundedWeapon = {
 export function groundRequestedWeapon(
   requestedWeaponId: string | null | undefined,
   equipped: WeaponRuleProfile[],
+  carried: WeaponRuleProfile[] = [],
 ): GroundedWeapon {
   const fallback = equipped[0];
   const asProfile = (weapon: WeaponRuleProfile | undefined): WeaponRuleProfile =>
@@ -64,6 +73,7 @@ export function groundRequestedWeapon(
       weaponId: idFor(fallback),
       grounded: true,
       requested: null,
+      notEquipped: false,
     };
   }
 
@@ -75,12 +85,19 @@ export function groundRequestedWeapon(
       weaponId: undefined,
       grounded: true,
       requested: requestedWeaponId,
+      notEquipped: false,
     };
   }
 
   const exact = equipped.find((profile) => weaponProfileMatches(profile, requestedWeaponId));
   if (exact) {
-    return { weapon: exact, weaponId: exact.id, grounded: true, requested: requestedWeaponId };
+    return {
+      weapon: exact,
+      weaponId: exact.id,
+      grounded: true,
+      requested: requestedWeaponId,
+      notEquipped: false,
+    };
   }
 
   const catalog = findCatalogWeapon(requestedWeaponId);
@@ -90,10 +107,25 @@ export function groundRequestedWeapon(
       ? undefined
       : equipped.find((profile) => profile.ranged === wantsRanged);
   const substitute = byType ?? fallback;
+  // #260: the requested weapon is on the sheet but not equipped. The substitute is
+  // returned for the approach geometry, but a player-sourced intent must be refused
+  // with "equip it first" instead of silently swapping.
+  if (carried.some((profile) => weaponProfileMatches(profile, requestedWeaponId))) {
+    return {
+      weapon: asProfile(substitute),
+      weaponId: idFor(substitute),
+      grounded: false,
+      requested: requestedWeaponId,
+      notEquipped: true,
+    };
+  }
+  // Not owned at all: a narration hallucination. The substitute stands in and the
+  // caller logs DM_WEAPON_UNGROUNDED; this path never refuses.
   return {
     weapon: asProfile(substitute),
     weaponId: idFor(substitute),
     grounded: false,
     requested: requestedWeaponId,
+    notEquipped: false,
   };
 }
