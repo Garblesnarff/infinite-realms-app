@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -65,5 +65,17 @@ describe('index.html share tags', () => {
       });
 
     expect(foreign).toEqual([]);
+  });
+});
+
+describe('share asset byte budgets (#226)', () => {
+  it('keeps og-image.png under the 200 KB share-card budget', () => {
+    const bytes = statSync(join(process.cwd(), 'public', 'og-image.png')).size;
+    expect(bytes).toBeLessThan(200_000);
+  });
+
+  it('keeps icon-512.png under the 150 KB budget', () => {
+    const bytes = statSync(join(process.cwd(), 'public', 'icon-512.png')).size;
+    expect(bytes).toBeLessThan(150_000);
   });
 });
