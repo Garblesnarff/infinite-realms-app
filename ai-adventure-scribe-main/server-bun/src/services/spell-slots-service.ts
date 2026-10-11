@@ -11,7 +11,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, gte, or, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, gte, lt, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index';
@@ -150,17 +150,21 @@ export class SpellSlotsService {
       });
     }
 
+    // #255: the spend is one atomic UPDATE. The SET increments in SQL (not from the
+    // pre-read value) and the WHERE requires usedSlots < totalSlots, so two concurrent
+    // spends for the last slot cannot both succeed: the loser matches no row.
     // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth
     const [updatedSlot] = await db
       .update(characterSpellSlots)
       .set({
-        usedSlots: slotData.usedSlots + 1,
+        usedSlots: sql`${characterSpellSlots.usedSlots} + 1`,
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(characterSpellSlots.id, slotData.id),
           eq(characterSpellSlots.characterId, characterId),
+          lt(characterSpellSlots.usedSlots, characterSpellSlots.totalSlots),
           exists(
             db
               .select()
@@ -177,7 +181,12 @@ export class SpellSlotsService {
       .returning();
 
     if (!updatedSlot) {
-      throw new InternalServerError('Failed to use spell slot');
+      // Ownership was proven by the SELECT above (or the ensureSpellSlotRow fallback), so a
+      // missed row means the slot was spent by a concurrent call between the read and this
+      // write.
+      throw new BusinessLogicError(`No available level ${slotLevelUsed} spell slots`, {
+        level: slotLevelUsed,
+      });
     }
 
     // The usage log's insert-select projected 5 of spell_slot_usage_log's 7 columns
