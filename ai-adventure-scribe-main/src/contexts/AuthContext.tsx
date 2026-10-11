@@ -38,6 +38,7 @@ interface AuthContextType {
   refreshBlogRole: () => Promise<void>;
   userPlan: UserPlan | null;
   userPlanLoading: boolean;
+  userPlanError: boolean;
   refreshUserPlan: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -65,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Extract Blog Role and User Plan logic to specialized hooks
   const { blogRole, blogRoleLoading, isBlogAdmin, refreshBlogRole } = useBlogRole({ user });
-  const { userPlan, userPlanLoading, refreshUserPlan } = useUserPlan({ user, loading });
+  const { userPlan, userPlanLoading, userPlanError, refreshUserPlan } = useUserPlan({ user, loading });
 
   const endSession = useCallback(() => {
     // TokenService clears the browser tokens when it enters the terminal
@@ -364,6 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshBlogRole,
       userPlan,
       userPlanLoading,
+      userPlanError,
       refreshUserPlan,
       refreshAuth,
       signUp,
@@ -381,6 +383,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshBlogRole,
       userPlan,
       userPlanLoading,
+      userPlanError,
       refreshUserPlan,
       refreshAuth,
       signUp,

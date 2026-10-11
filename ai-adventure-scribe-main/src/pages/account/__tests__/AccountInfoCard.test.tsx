@@ -24,4 +24,12 @@ describe('AccountInfoCard build line (#2293)', () => {
     expect(buildTexts).toHaveLength(1);
     expect(buildTexts[0].getAttribute('data-testid')).toBe('app-build');
   });
+
+  it('never downgrades an unknown plan to "Free" (#351)', () => {
+    render(<AccountInfoCard email="t@example.test" userPlan={null} subscription={null} />);
+
+    const planRow = screen.getByText('Plan').closest('div');
+    expect(planRow?.textContent).not.toContain('Free');
+    expect(screen.queryByText('Free Tier')).not.toBeInTheDocument();
+  });
 });
