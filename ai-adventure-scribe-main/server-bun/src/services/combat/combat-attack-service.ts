@@ -658,6 +658,22 @@ export class CombatAttackService {
     }
     const casterData = allParticipantDataMap.get(casterId)!;
     const casterProfile = await getParticipantAbilityProfile(casterData.participant);
+    // GP-061: check the sheet BEFORE the combat-spell assessment. A spell the caster does
+    // not know must be refused as "not on your sheet", not as "no attack roll or damage".
+    const knownSpell = resolveCatalogSpell(spellId, spellName);
+    if (knownSpell && casterData.participant.characterId) {
+      // The sheet stores slugs, older rows store names, and `character_spells` joins in both;
+      // each is read through the same catalog lookup as the declaration so spelling never decides.
+      const isKnown = casterProfile.spellIds.some(
+        (known) => resolveCatalogSpell(known)?.id === knownSpell.id,
+      );
+      if (!isKnown) {
+        throw new BusinessLogicError(
+          `Spell refused: ${knownSpell.name} is not on ${casterData.participant.name ?? 'the caster'}'s sheet — cast a spell you know or have prepared`,
+          { reason: 'spell_not_known', spellId: knownSpell.id },
+        );
+      }
+    }
     const verdict = assessPlayerCombatSpell(spellId, spellName, slotLevel);
     if (!verdict.castable) {
       throw new BusinessLogicError(verdict.message, {
@@ -666,17 +682,6 @@ export class CombatAttackService {
       });
     }
     const { spell } = verdict;
-    // The sheet stores slugs, older rows store names, and `character_spells` joins in both;
-    // each is read through the same catalog lookup as the declaration so spelling never decides.
-    if (
-      casterData.participant.characterId &&
-      !casterProfile.spellIds.some((known) => resolveCatalogSpell(known)?.id === spell.id)
-    ) {
-      throw new BusinessLogicError(
-        `Spell refused: ${spell.name} is not on ${casterData.participant.name ?? 'the caster'}'s sheet — cast a spell you know or have prepared`,
-        { reason: 'spell_not_known', spellId: spell.id },
-      );
-    }
     const tacticalMap = await loadActiveTacticalMap(casterData.participant.encounter.sessionId);
     const spellRange = spellReachFeet(spell);
     const casterConditions = await getActiveConditionNames(casterId);
