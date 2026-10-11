@@ -300,7 +300,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
           )}
 
           {isLastInGroup && timestamp && (
-            <div className="text-[11px] uppercase tracking-[0.35em] text-white/60">{timestamp}</div>
+            <div className="ir-text-min uppercase tracking-[0.35em] text-white/60">{timestamp}</div>
           )}
         </div>
       </div>

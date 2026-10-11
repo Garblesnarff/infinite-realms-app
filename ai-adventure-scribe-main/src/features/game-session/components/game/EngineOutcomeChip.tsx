@@ -51,10 +51,10 @@ export const EngineOutcomeChip: React.FC<{ line: string; showLabel?: boolean }> 
         aria-label={[showLabel && 'Engine', showBadge && outcome].filter(Boolean).join(' ')}
       >
         {showLabel && (
-          <span className="uppercase text-[11px] tracking-[0.2em] opacity-80">Engine</span>
+          <span className="uppercase ir-text-min tracking-[0.2em] opacity-80">Engine</span>
         )}
         {showBadge && (
-          <span className="rounded-sm border border-current px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
+          <span className="rounded-sm border border-current px-1.5 py-0.5 ir-text-min font-semibold uppercase tracking-wide">
             {outcome}
           </span>
         )}

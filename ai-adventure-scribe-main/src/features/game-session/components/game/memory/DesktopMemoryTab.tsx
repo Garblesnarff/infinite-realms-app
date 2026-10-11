@@ -38,7 +38,7 @@ export const DesktopMemoryTab: React.FC<DesktopMemoryTabProps> = React.memo(
         <section className="border-b border-white/5 p-4 flex-shrink-0">
           <Label
             htmlFor={sessionNotesId}
-            className="ir-display mb-2 block text-[11px] font-semibold uppercase tracking-[1.6px] text-infinite-gold"
+            className="ir-display mb-2 block ir-text-min font-semibold uppercase tracking-[1.6px] text-infinite-gold"
           >
             Session Notes
           </Label>

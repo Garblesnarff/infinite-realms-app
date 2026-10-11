@@ -203,7 +203,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                             </div>
 
                             <div className="flex-1 min-w-0">
-                              <div className="ir-display text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
+                              <div className="ir-display ir-text-min font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
                                 Option {displayNumber}
                               </div>
                               {/* The full bold action name, then the description, both wrapping:

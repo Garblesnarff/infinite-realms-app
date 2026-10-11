@@ -115,11 +115,10 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  'h-6 w-6 p-0 rounded-full transition-all duration-150',
+                  'ir-hit-slop ir-tts h-6 w-6 p-0 transition-all duration-150',
                   'hover:bg-accent/50 active:scale-95',
                   'text-muted-foreground hover:text-primary',
                   isCurrentlyPlaying && 'text-primary bg-accent/30',
-                  // Larger touch target on mobile
                   isTouchDevice && 'h-8 w-8',
                 )}
                 onClick={handlePlayPause}
@@ -184,7 +183,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 rounded-full text-muted-foreground hover:text-primary"
+                    className="ir-hit-slop ir-tts h-6 w-6 p-0 text-muted-foreground hover:text-primary"
                     onClick={handleVolumeToggle}
                     aria-label={isMuted ? 'Unmute' : 'Mute'}
                     aria-pressed={isMuted}

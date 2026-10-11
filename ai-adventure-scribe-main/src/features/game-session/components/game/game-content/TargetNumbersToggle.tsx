@@ -16,6 +16,7 @@ export const TargetNumbersToggle: React.FC = () => {
       type="button"
       variant="outline"
       size="sm"
+      className="ir-hit"
       aria-pressed={showTargetNumbers}
       onClick={() => setShowTargetNumbers(!showTargetNumbers)}
     >

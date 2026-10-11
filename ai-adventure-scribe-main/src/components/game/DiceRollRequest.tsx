@@ -133,7 +133,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           {/* Header */}
           <div className="flex items-center gap-2 text-infinite-gold">
             {config.icon}
-            <span className="text-[11px] font-semibold uppercase tracking-[.12em]">
+            <span className="ir-text-min font-semibold uppercase tracking-[.12em]">
               {config.label} Requested
             </span>
             <Badge variant="warning" className="ml-auto">

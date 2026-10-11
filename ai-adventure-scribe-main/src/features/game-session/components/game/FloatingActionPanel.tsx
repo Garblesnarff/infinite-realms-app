@@ -144,7 +144,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               >
                 <Heart aria-hidden="true" className="h-4 w-4 mx-auto text-red-400 mb-1" />
                 <div className="text-xs font-bold text-card-foreground">{hpDisplay}</div>
-                <div className="text-[10px] text-muted-foreground">HP</div>
+                <div className="ir-text-min text-muted-foreground">HP</div>
               </div>
               <div
                 role="group"
@@ -153,7 +153,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               >
                 <Shield aria-hidden="true" className="h-4 w-4 mx-auto text-blue-400 mb-1" />
                 <div className="text-xs font-bold text-card-foreground">{armorClassDisplay}</div>
-                <div className="text-[10px] text-muted-foreground">AC</div>
+                <div className="ir-text-min text-muted-foreground">AC</div>
               </div>
               <div
                 role="group"
@@ -162,7 +162,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               >
                 <Zap aria-hidden="true" className="h-4 w-4 mx-auto text-green-400 mb-1" />
                 <div className="text-xs font-bold text-card-foreground">+{proficiency}</div>
-                <div className="text-[10px] text-muted-foreground">PROF</div>
+                <div className="ir-text-min text-muted-foreground">PROF</div>
               </div>
             </div>
           </div>
@@ -173,7 +173,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               <div className="text-xs font-bold text-infinite-gold">
                 {character.name} • Level {character.level}
               </div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="ir-text-min text-muted-foreground">
                 {character.race?.name} {character.class?.name}
               </div>
             </div>

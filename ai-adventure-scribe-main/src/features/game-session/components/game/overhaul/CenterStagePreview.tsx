@@ -26,11 +26,11 @@ const DiceResultCard: React.FC = () => (
       <p className="text-xs text-muted-foreground">You rolled a d20</p>
       <div className="mt-0.5 flex items-center gap-2">
         <span className="ir-display text-2xl font-bold text-foreground">18</span>
-        <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+        <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 ir-text-min font-semibold uppercase tracking-wide text-emerald-300">
           Success
         </span>
       </div>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">vs DC 15 (Persuasion) · +6 Persuasion Modifier</p>
+      <p className="mt-0.5 ir-text-min text-muted-foreground">vs DC 15 (Persuasion) · +6 Persuasion Modifier</p>
     </div>
   </div>
 );
@@ -41,7 +41,7 @@ const DmMessage: React.FC<{ time: string; children: React.ReactNode }> = ({ time
       ✦
     </div>
     <div className="min-w-0 flex-1">
-      <p className="ir-display mb-1 text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/70">
+      <p className="ir-display mb-1 ir-text-min font-semibold uppercase tracking-[1.5px] text-infinite-gold/70">
         DM <span className="ml-1 text-muted-foreground">{time}</span>
       </p>
       <div className="space-y-2 text-sm leading-relaxed text-foreground/85">{children}</div>
@@ -51,7 +51,7 @@ const DmMessage: React.FC<{ time: string; children: React.ReactNode }> = ({ time
 
 const PlayerMessage: React.FC<{ time: string; children: React.ReactNode }> = ({ time, children }) => (
   <div className="flex flex-col items-end">
-    <p className="ir-display mb-1 text-[10px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">
+    <p className="ir-display mb-1 ir-text-min font-semibold uppercase tracking-[1.5px] text-muted-foreground">
       <span className="mr-1">{time}</span> You
     </p>
     <div className="max-w-[80%] rounded-2xl rounded-tr-sm border border-infinite-purple/40 bg-infinite-purple/15 px-4 py-2.5 text-sm text-foreground/90">
@@ -117,7 +117,7 @@ export const CenterStagePreview: React.FC<{ title: string; blurb: string }> = ({
         {CHIPS.map((chip) => (
           <button
             key={chip.label}
-            className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${chip.cls}`}
+            className={`rounded-md border px-3 py-1.5 ir-text-min font-medium transition-colors ${chip.cls}`}
           >
             {chip.label}
           </button>
