@@ -9,7 +9,7 @@
  * called" would pass against SQL that never matches a row. It refuses every target except the
  * dedicated local/CI Postgres because it writes fixtures.
  */
-import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import {
@@ -2962,5 +2962,261 @@ ${playerInput}
         ),
       );
     expect(slots?.used).toBe(1);
+  });
+
+  // #248: the real PATCH /v1/characters/:id/spells/:spellId/preparation route against real
+  // Postgres, mounted like production via createRequestPipelineApp().use(charactersRoutes).
+  // Fixtures follow the real producers' shapes: characters + character_stats rows as
+  // CharacterService.getById returns them (stats joined), spells rows with every NOT NULL
+  // column, and character_spells rows with the NOT NULL source_class_id FK. The request body
+  // is exactly what the sheet sends: { is_prepared } (characterSpellApi.updateSpellPreparation).
+  describe('spell preparation PATCH route (#248)', () => {
+    const otherUserId = `dm-reply-reconcile-prep-other-${process.pid}`;
+    let prepClassId = '';
+    const leveledSpellIds: string[] = [];
+    let cantripId = '';
+    let clericId = '';
+    let sorcererId = '';
+    let otherClericId = '';
+    const prepCharacterIds: string[] = [];
+    let restoreAuth: (() => void) | undefined;
+    let prepApp: { handle: (request: Request) => Response | Promise<Response> };
+
+    const prepCall = async (
+      characterId: string,
+      spellId: string,
+      caller: 'owner' | 'other',
+      body: unknown,
+    ): Promise<{ status: number; json: Record<string, unknown> }> => {
+      const response = await prepApp.handle(
+        new Request(
+          `http://localhost/v1/characters/${characterId}/spells/${spellId}/preparation`,
+          {
+            method: 'PATCH',
+            headers: {
+              authorization: `Bearer ${caller === 'other' ? 'other-token' : 'owner-token'}`,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          },
+        ),
+      );
+      return { status: response.status, json: (await response.json()) as Record<string, unknown> };
+    };
+
+    const mkPrepCharacter = async (
+      owner: string,
+      cls: string,
+      level: number,
+      stats: { wisdom?: number; intelligence?: number; charisma?: number },
+    ): Promise<string> => {
+      const [{ id }] = await database
+        .insert(characters)
+        .values({ userId: owner, name: testId(`prep-route-${cls.toLowerCase()}`), class: cls, level })
+        .returning({ id: characters.id });
+      await database.insert(characterStats).values({
+        characterId: id,
+        armorClass: 14,
+        maxHitPoints: 24,
+        currentHitPoints: 24,
+        wisdom: stats.wisdom ?? 10,
+        intelligence: stats.intelligence ?? 10,
+        charisma: stats.charisma ?? 10,
+      });
+      prepCharacterIds.push(id);
+      return id;
+    };
+
+    const attachPrepSpell = (
+      characterId: string,
+      spellId: string,
+      opts?: { prepared?: boolean; always?: boolean },
+    ): Promise<unknown> =>
+      database.insert(characterSpells).values({
+        characterId,
+        spellId,
+        sourceClassId: prepClassId,
+        isPrepared: opts?.prepared ?? false,
+        isAlwaysPrepared: opts?.always ?? false,
+      });
+
+    beforeAll(async () => {
+      // Authentication alone is replaced: the Bearer token selects the caller, everything
+      // else (requireAuth, the character resolve, the route handler) is the real code.
+      const auth = spyOn(authModule, 'authenticateRequest').mockImplementation(
+        async (request: Request) => ({
+          user: {
+            userId: request.headers.get('authorization')?.includes('other-token')
+              ? otherUserId
+              : userId,
+            email: 'prep-route@example.test',
+            plan: 'free',
+          },
+          error: null,
+        }),
+      );
+      restoreAuth = () => auth.mockRestore();
+      prepApp = createRequestPipelineApp().use(charactersRoutes);
+
+      [{ id: prepClassId }] = await database
+        .insert(classes)
+        .values({ name: testId('prep-route-class'), hitDie: 8 })
+        .returning({ id: classes.id });
+      createdClassIds.push(prepClassId);
+
+      const inserted = await database
+        .insert(spells)
+        .values(
+          Array.from({ length: 8 }, (_, i) => ({
+            name: testId(`prep-route-spell-${i}`),
+            level: 1 + (i % 3),
+            school: 'evocation',
+            castingTime: '1 action',
+            rangeText: '60 feet',
+            duration: 'Instantaneous',
+            description: `prep-route spell ${i} (#248 fixture).`,
+          })),
+        )
+        .returning({ id: spells.id });
+      leveledSpellIds.push(...inserted.map((s) => s.id));
+      createdSpellIds.push(...leveledSpellIds);
+      [{ id: cantripId }] = await database
+        .insert(spells)
+        .values({
+          name: testId('prep-route-cantrip'),
+          level: 0,
+          school: 'evocation',
+          castingTime: '1 action',
+          rangeText: '60 feet',
+          duration: 'Instantaneous',
+          description: 'prep-route cantrip (#248 fixture).',
+        })
+        .returning({ id: spells.id });
+      createdSpellIds.push(cantripId);
+
+      // Cleric 3, WIS 16 -> 2014 5e limit is 3 + 3 = 6.
+      clericId = await mkPrepCharacter(userId, 'Cleric', 3, { wisdom: 16 });
+      sorcererId = await mkPrepCharacter(userId, 'Sorcerer', 3, { charisma: 16 });
+      otherClericId = await mkPrepCharacter(otherUserId, 'Cleric', 3, { wisdom: 16 });
+      await attachPrepSpell(sorcererId, leveledSpellIds[0]);
+      await attachPrepSpell(otherClericId, leveledSpellIds[0]);
+    });
+
+    afterAll(async () => {
+      try {
+        if (prepCharacterIds.length) {
+          await database
+            .delete(characterSpells)
+            .where(inArray(characterSpells.characterId, prepCharacterIds));
+          await database
+            .delete(characterStats)
+            .where(inArray(characterStats.characterId, prepCharacterIds));
+          await database.delete(characters).where(inArray(characters.id, prepCharacterIds));
+        }
+      } finally {
+        restoreAuth?.();
+      }
+    });
+
+    test('owner toggles preparation both ways through the real route (#248)', async () => {
+      await attachPrepSpell(clericId, leveledSpellIds[7]);
+      const prepared = await prepCall(clericId, leveledSpellIds[7], 'owner', { is_prepared: true });
+      expect(prepared.status).toBe(200);
+      expect(prepared.json).toMatchObject({ prepared: true });
+      const [row] = await database
+        .select({ isPrepared: characterSpells.isPrepared })
+        .from(characterSpells)
+        .where(
+          and(
+            eq(characterSpells.characterId, clericId),
+            eq(characterSpells.spellId, leveledSpellIds[7]),
+          ),
+        );
+      expect(row?.isPrepared).toBe(true);
+
+      const unprepared = await prepCall(clericId, leveledSpellIds[7], 'owner', {
+        is_prepared: false,
+      });
+      expect(unprepared.status).toBe(200);
+      expect(unprepared.json).toMatchObject({ prepared: false });
+
+      // Toggling an already-prepared spell is an idempotent no-op, not a limit trip.
+      await attachPrepSpell(clericId, leveledSpellIds[6], { prepared: true });
+      expect(
+        await prepCall(clericId, leveledSpellIds[6], 'owner', { is_prepared: true }),
+      ).toMatchObject({ status: 200 });
+    });
+
+    test("other user's character is 404, bad bodies are 4xx (#248)", async () => {
+      // The other token authenticates (their own character toggles 200), so the 404 on the
+      // owner's character is ownership masking, not an auth failure.
+      expect(
+        await prepCall(otherClericId, leveledSpellIds[0], 'other', { is_prepared: true }),
+      ).toMatchObject({ status: 200 });
+      expect(
+        await prepCall(clericId, leveledSpellIds[7], 'other', { is_prepared: true }),
+      ).toMatchObject({ status: 404 });
+      // A spell the owner's character does not know matches no row.
+      expect(
+        await prepCall(clericId, crypto.randomUUID(), 'owner', { is_prepared: true }),
+      ).toMatchObject({ status: 404 });
+      // Bad bodies: missing key, wrong type, and the camelCase key the first draft used —
+      // the sheet sends { is_prepared }.
+      for (const bad of [{}, { is_prepared: 'yes' }, { prepared: true }]) {
+        expect((await prepCall(clericId, leveledSpellIds[7], 'owner', bad)).status).toBe(422);
+      }
+    });
+
+    test('always-prepared spells, cantrips and non-preparing classes are rejected (#248)', async () => {
+      // Domain/oath spells cannot come off the prepared list...
+      await attachPrepSpell(clericId, leveledSpellIds[5], { prepared: true, always: true });
+      expect(
+        await prepCall(clericId, leveledSpellIds[5], 'owner', { is_prepared: false }),
+      ).toMatchObject({ status: 422 });
+      // ...but confirming them prepared is a harmless no-op.
+      expect(
+        await prepCall(clericId, leveledSpellIds[5], 'owner', { is_prepared: true }),
+      ).toMatchObject({ status: 200 });
+      // Cantrips are never prepared or unprepared.
+      await attachPrepSpell(clericId, cantripId);
+      expect(await prepCall(clericId, cantripId, 'owner', { is_prepared: true })).toMatchObject({
+        status: 422,
+      });
+      expect(await prepCall(clericId, cantripId, 'owner', { is_prepared: false })).toMatchObject({
+        status: 422,
+      });
+      // Sorcerers know their spells; they never prepare.
+      expect(
+        await prepCall(sorcererId, leveledSpellIds[0], 'owner', { is_prepared: true }),
+      ).toMatchObject({ status: 422 });
+    });
+
+    test('prepared limit follows the 2014 5e class formulas (#248)', async () => {
+      const cases = [
+        { cls: 'Cleric', level: 3, stats: { wisdom: 16 }, limit: 6 },
+        { cls: 'Druid', level: 4, stats: { wisdom: 14 }, limit: 6 },
+        { cls: 'Wizard', level: 2, stats: { intelligence: 18 }, limit: 6 },
+        { cls: 'Paladin', level: 4, stats: { charisma: 14 }, limit: 4 },
+        // INT 8 at level 1 would be 0 unclamped; the floor is 1.
+        { cls: 'Wizard', level: 1, stats: { intelligence: 8 }, limit: 1 },
+      ];
+      for (const c of cases) {
+        const id = await mkPrepCharacter(userId, c.cls, c.level, c.stats);
+        for (const spellId of leveledSpellIds.slice(0, c.limit)) {
+          await attachPrepSpell(id, spellId, { prepared: true });
+        }
+        const extra = leveledSpellIds[c.limit];
+        await attachPrepSpell(id, extra);
+        // At the limit: one more is refused...
+        expect((await prepCall(id, extra, 'owner', { is_prepared: true })).status).toBe(409);
+        // ...unpreparing one frees the slot, and the refused spell then prepares fine.
+        expect(
+          await prepCall(id, leveledSpellIds[0], 'owner', { is_prepared: false }),
+        ).toMatchObject({ status: 200 });
+        expect(await prepCall(id, extra, 'owner', { is_prepared: true })).toMatchObject({
+          status: 200,
+        });
+      }
+    });
   });
 });
