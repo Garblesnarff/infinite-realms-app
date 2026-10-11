@@ -94,6 +94,49 @@ describe('game-session character sheet view model', () => {
     });
     expect(sheet.spells.known.find((spell) => spell.id === 'misty-step')?.isPrepared).toBe(false);
   });
+
+  it('derives the Conditions panel from the engine-mirrored vital state (#261 CB-026)', () => {
+    const base = {
+      id: 'char-dying',
+      name: 'The Scholar',
+      level: 1,
+      race: { name: 'Tiefling', speed: 30, traits: [], languages: [] },
+      class: { name: 'Sorcerer', hitDie: 6 },
+      abilityScores: {
+        strength: { score: 8, modifier: -1, savingThrow: false },
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 12, modifier: 1, savingThrow: false },
+        intelligence: { score: 10, modifier: 0, savingThrow: false },
+        wisdom: { score: 10, modifier: 0, savingThrow: false },
+        charisma: { score: 16, modifier: 3, savingThrow: true },
+      },
+    } as unknown as Character;
+
+    const dying = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 0, max_hit_points: 8, vital_state: 'dying' },
+    } as unknown as Character);
+    expect(dying.conditions.map((c) => c.name)).toContain('Unconscious (dying)');
+
+    const stable = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 0, max_hit_points: 8, vital_state: 'stabilized' },
+    } as unknown as Character);
+    expect(stable.conditions.map((c) => c.name)).toContain('Unconscious (stable)');
+
+    const dead = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 0, max_hit_points: 8, vital_state: 'dead' },
+    } as unknown as Character);
+    expect(dead.conditions.map((c) => c.name)).toContain('Dead');
+
+    // A standing character with no stored conditions shows none: no invented entries.
+    const standing = buildCharacterSheet({
+      ...base,
+      character_stats: { current_hit_points: 8, max_hit_points: 8, vital_state: 'standing' },
+    } as unknown as Character);
+    expect(standing.conditions).toEqual([]);
+  });
 });
 
 describe('game-session party view model', () => {

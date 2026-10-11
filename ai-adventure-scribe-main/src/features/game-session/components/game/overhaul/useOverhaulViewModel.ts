@@ -302,11 +302,29 @@ export function buildCharacterSheet(character: Character | null): CharacterSheet
     .slice(0, 12)
     .map((it) => ({ id: it.itemId, name: prettify(it.itemId), quantity: it.quantity }));
 
-  const conditions: ConditionVM[] = (character.conditions ?? []).map((c, i) => ({
-    id: `${c.name}-${i}`,
-    name: prettify(c.name),
-    duration: c.duration === -1 ? '∞' : c.duration ? `${c.duration}r` : undefined,
-  }));
+  // The engine mirrors combat vitals onto character_stats (write-through), so the sheet's
+  // Conditions panel reads the engine state: a hero on the floor shows Unconscious (dying)
+  // instead of "None" (#261 CB-026). `character_stats` is also how the HP line above reads.
+  const storedStats = Array.isArray(character.character_stats)
+    ? character.character_stats[0]
+    : character.character_stats;
+  const vitalState = storedStats?.vital_state;
+  const vitalCondition: ConditionVM | null =
+    vitalState === 'dying'
+      ? { id: 'vital-dying', name: 'Unconscious (dying)' }
+      : vitalState === 'stabilized'
+        ? { id: 'vital-stabilized', name: 'Unconscious (stable)' }
+        : vitalState === 'dead'
+          ? { id: 'vital-dead', name: 'Dead' }
+          : null;
+  const conditions: ConditionVM[] = [
+    ...(vitalCondition ? [vitalCondition] : []),
+    ...(character.conditions ?? []).map((c, i) => ({
+      id: `${c.name}-${i}`,
+      name: prettify(c.name),
+      duration: c.duration === -1 ? '∞' : c.duration ? `${c.duration}r` : undefined,
+    })),
+  ];
 
   return {
     name: character.name ?? 'Adventurer',

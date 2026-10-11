@@ -478,12 +478,13 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
   });
 
   test('the participant the client reads carries the death-save state, in the shape the shared fixture holds', async () => {
-    // Server records 2 failures (a melee blow on the body: automatic critical)...
+    // Server records 2 failures (a melee blow on the body that HITS: automatic critical;
+    // a miss would stay a miss, #261 CB-053)...
     const scene = await dropHero();
     await giveTurnTo(scene.encounterId, scene.spiderId);
     await executeCombatIntent(
       scene.encounterId,
-      { type: 'attack', actorId: scene.spiderId, targetId: scene.heroId, d20: 2 },
+      { type: 'attack', actorId: scene.spiderId, targetId: scene.heroId, d20: 15 },
       userId,
       'dm',
     );
@@ -664,11 +665,11 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
   // 4. Monster turns while the player is down
   // -----------------------------------------------------------------------------------------
 
-  test('a melee blow within 5 ft on an unconscious player is an automatic critical hit: two failures, whatever the die', async () => {
+  test('a melee blow within 5 ft on an unconscious player is an automatic critical hit: two failures, when the die hits', async () => {
     const scene = await dropHero();
-    // A natural 2 would miss a normal attack at +5 against AC 11? 2 + 5 = 7 < 11. It is a hit,
-    // and a critical, because the target is unconscious and the spider is within 5 ft.
-    const result = await spiderStrikes(scene, 2);
+    // A natural 15 at +5 hits AC 11, so the unconscious target makes it an automatic critical:
+    // two failures.
+    const result = await spiderStrikes(scene, 15);
 
     expect(result).toMatchObject({
       hit: true,
@@ -683,6 +684,30 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect(facts).toContain('automatic critical hit');
     expect(facts).toContain('Two death-save failures');
     expect(facts).toContain('✕✕○');
+  });
+
+  test('a miss on an unconscious player is still a miss: no critical, no death-save failures (#261 CB-053)', async () => {
+    const scene = await dropHero();
+    // A natural 2 at +5 totals 7 against AC 11: a miss. The 2014 auto-crit rule needs a hit,
+    // so the blow is a plain miss and the tally does not move.
+    const result = await spiderStrikes(scene, 2);
+
+    expect(result).toMatchObject({
+      hit: false,
+      isCritical: false,
+      finalDamage: 0,
+    });
+    expect(result.autoCritOnDowned).toBeUndefined();
+    expect(result.deathSaveFailuresAdded ?? 0).toBe(0);
+    expect(await statusOf(scene.heroId)).toMatchObject({
+      currentHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    });
+    const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
+    expect(facts).not.toContain('CRITICAL HIT');
+    expect(facts).not.toContain('automatic critical hit');
   });
 
   test('a ranged hit on an unconscious player is one failure; a ranged critical is two', async () => {
@@ -1721,6 +1746,12 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       });
       const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
       expect(facts).toContain(describeDeathSave('The Scholar', save));
+      // 6) The defeat leaves a DM wrap-up fact: the next DM turn narrates the defeat from it,
+      //    and the post-defeat chat route answers the terminal state instead of 500ing (#261
+      //    CB-027, #2456).
+      expect(facts).toContain(
+        'THE FIGHT IS OVER: no member of the party is still able to fight',
+      );
 
       // 5) Outcome: the spider's melee blow on the unconscious hero is an automatic critical,
       //    two more failures: three, dead, and the fight ends in defeat.
