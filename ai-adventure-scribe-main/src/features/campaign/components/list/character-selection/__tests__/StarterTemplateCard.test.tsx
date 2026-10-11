@@ -106,4 +106,30 @@ describe('StarterTemplateCard', () => {
     expect(screen.getByLabelText('Wisdom modifier: +2')).toBeInTheDocument();
     expect(screen.getByLabelText('Strength modifier: -1')).toBeInTheDocument();
   });
+
+  it('applies the Half-Elf Charisma bonus through the shared sheet math (#153)', () => {
+    // The Lovesick template (#222) is a Half-Elf: +2 Charisma, no subrace.
+    // The preview must call the sheet's own getEffectiveAbilityScores, so a
+    // Half-Elf's CHA 16 resolves to 18 (+4), not the raw +3.
+    renderCard({
+      ...baseTemplate,
+      name: 'The Lovesick',
+      template_key: 'the-lovesick',
+      race: 'Half-Elf',
+      subrace: null,
+      class: 'Sorcerer',
+      ability_scores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 14,
+        intelligence: 12,
+        wisdom: 10,
+        charisma: 16,
+      },
+    });
+
+    expect(screen.getByLabelText('Charisma modifier: +4')).toBeInTheDocument(); // 16 + 2
+    expect(screen.getByLabelText('Dexterity modifier: +2')).toBeInTheDocument(); // 14 + 0
+    expect(screen.queryByLabelText('Charisma modifier: +3')).not.toBeInTheDocument();
+  });
 });

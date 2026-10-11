@@ -2,17 +2,15 @@ import { Play, Loader2 } from 'lucide-react';
 import React from 'react';
 
 import type { StarterTemplate } from '@/features/campaign/hooks/use-character-selection';
+import type { AbilityScores } from '@/types/character';
+import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { lookupRaces } from '@/data/races';
-import {
-  calculateRacialBonuses,
-  getTotalRacialBonus,
-  type AbilityScoreName,
-} from '@/utils/racialAbilityBonuses';
+import { getEffectiveAbilityScores } from '@/hooks/use-character-stats';
 
 interface StarterTemplateCardProps {
   template: StarterTemplate;
@@ -35,8 +33,9 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
   const cardTitle = `Select character: ${template.name}, Level ${template.level} ${template.race} ${template.class}`;
 
   // Show the same resolved scores the sheet does: base + racial bonuses (#153).
-  // The template stores base scores; the sheet applies calculateRacialBonuses at
-  // display time (useEffectiveAbilityScores), so the preview must do the same.
+  // The template stores base scores as plain numbers; the sheet applies the
+  // shared getEffectiveAbilityScores at display time (useEffectiveAbilityScores),
+  // so the preview calls that exact function — the two can never drift apart.
   // Race/subrace name matching uses the sheet's key normalization
   // (src/utils/character/data-transformers.ts): lowercase, strip non-alphanumerics.
   const normalizeKey = (value: string | null | undefined): string =>
@@ -53,7 +52,6 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
     race?.subraces?.find(
       (s) => normalizeKey(s.name) === subraceKey || normalizeKey(s.id) === subraceKey,
     ) ?? null;
-  const racialBonuses = calculateRacialBonuses(race, subrace);
   const abilities: AbilityScoreName[] = [
     'strength',
     'dexterity',
@@ -62,12 +60,19 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
     'wisdom',
     'charisma',
   ];
-  const resolvedScores = Object.fromEntries(
+  const baseScores = Object.fromEntries(
     abilities.map((ability) => [
       ability,
-      (abilityScores[ability as keyof typeof abilityScores] ?? 10) +
-        getTotalRacialBonus(ability, racialBonuses),
+      {
+        score: abilityScores[ability as keyof typeof abilityScores] ?? 10,
+        modifier: 0,
+        savingThrow: false,
+      },
     ]),
+  ) as AbilityScores;
+  const effectiveScores = getEffectiveAbilityScores(baseScores, race, subrace);
+  const resolvedScores = Object.fromEntries(
+    abilities.map((ability) => [ability, effectiveScores[ability].score]),
   ) as Record<AbilityScoreName, number>;
 
   return (
