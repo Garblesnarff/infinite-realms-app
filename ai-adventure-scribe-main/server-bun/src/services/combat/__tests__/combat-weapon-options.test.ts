@@ -32,7 +32,7 @@ type ExpectedSeededWeapon = {
   longRange?: number;
 };
 
-/** Literal weapon kits from the 30 seeded rows; this must not be derived from the resolver. */
+/** Literal weapon kits from the 40 seeded premade rows (35 from seed migrations + 5 hardcoded academy); this must not be derived from the resolver. */
 const EXPECTED_SEEDED_WEAPONS: Array<{
   campaign: string;
   templateKey: string;
@@ -288,6 +288,37 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
       { name: 'Crossbow, light', ranged: true, normalRange: 80, longRange: 320 },
     ],
   },
+  {
+    campaign: 'a-midsummer-nights-chaos',
+    templateKey: 'the-thespian',
+    weapons: [{ name: 'Rapier', ranged: false, reachFeet: 5 }],
+  },
+  {
+    campaign: 'a-midsummer-nights-chaos',
+    templateKey: 'the-lovesick',
+    weapons: [{ name: 'Crossbow, light', ranged: true, normalRange: 80, longRange: 320 }],
+  },
+  {
+    campaign: 'a-midsummer-nights-chaos',
+    templateKey: 'the-woodsman',
+    weapons: [
+      { name: 'Longbow', ranged: true, normalRange: 150, longRange: 600 },
+      { name: 'Shortsword', ranged: false, reachFeet: 5 },
+    ],
+  },
+  {
+    campaign: 'a-midsummer-nights-chaos',
+    templateKey: 'the-runaway',
+    weapons: [
+      { name: 'Shortsword', ranged: false, reachFeet: 5 },
+      { name: 'Shortbow', ranged: true, normalRange: 80, longRange: 320 },
+    ],
+  },
+  {
+    campaign: 'a-midsummer-nights-chaos',
+    templateKey: 'the-hedgewitch',
+    weapons: [{ name: 'Quarterstaff', ranged: false, reachFeet: 5 }],
+  },
 ];
 
 const expectedFor = (template: { starter_campaign_id: string; template_key: string }) => {
@@ -314,9 +345,9 @@ const actualProfilesFor = (equipment: string[]): WeaponRuleProfile[] => {
 };
 
 describe('combat weapon option builder', () => {
-  test('offers one correctly gated attack per weapon for all 35 seeded premades', () => {
+  test('offers one correctly gated attack per weapon for all 40 seeded premades', () => {
     const templates = readSeededPremadeTemplates();
-    expect(templates).toHaveLength(35);
+    expect(templates).toHaveLength(40);
 
     for (const template of templates) {
       const expectedWeapons = expectedFor(template);
