@@ -145,56 +145,183 @@ export function suspectsFabricatedOutcome(
  * missed. Mirrors `PersistedRollOutcome`'s `success`, the field the DM prompt already carries
  * as `lastRollOutcome`. `characterName` lets claims anchor on the player character as well as
  * "you" — an NPC's success ("the guard successfully spots you") is not a contradiction.
+ * `description`/`requestType` are the roll's own words for the attempted action; soft verdict
+ * language ("you manage to", "you are successful") only contradicts when its sentence names
+ * the action — "you manage to catch your breath" after a failed Stealth check is recovery,
+ * not a verdict on the check.
  */
 export interface EngineOutcome {
   success: boolean;
   characterName?: string;
+  description?: string;
+  requestType?: string;
+}
+
+/** A contradicting phrase and where it occurs in the text. Indices let the splicer work in
+ * text order instead of pattern order (strategist FIX: reversed-order, repeated-phrase and
+ * negated-first cases). */
+export interface OutcomeClaim {
+  match: string;
+  index: number;
 }
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Attack nouns whose miss can contradict an engine hit. */
+const MISS_NOUN = 'strike|attack|blow|shot|arrow|blade|swing';
+
+interface OutcomePattern {
+  re: RegExp;
+  /** Soft verdict language ("manage to", "successful"): needs the rolled action named. */
+  soft: boolean;
+  /** A miss claim: skipped when the attack belongs to someone but the player. */
+  miss: boolean;
+}
+
 /**
- * The DM asserting the player came off, contradicting a FAILED engine verdict. Every pattern
- * anchors the success word on the player ("you …", "but succeed …") — the character-name
- * variants are built per outcome below. An NPC's success never matches.
+ * The DM asserting the player came off, contradicting a FAILED engine verdict. "you succeed"
+ * is explicit verdict language; "you manage to" / "you are successful" are soft and need the
+ * action anchoring below. Every pattern anchors on the player ("you …", "but succeed …") —
+ * the character-name variants are built per outcome below. An NPC's success never matches.
  */
-const YOU_SUCCESS: RegExp[] = [
-  /\byou\s+succeed(?:s|ed)?\b/gi,
-  /\byou\s+manage[sd]?\s+to\b/gi,
-  /\byou\s+(?:are\s+)?successful(?:ly)?\b/gi,
+const YOU_SUCCESS: OutcomePattern[] = [
+  { re: /\byou\s+succeed(?:s|ed)?\b/gi, soft: false, miss: false },
+  { re: /\byou\s+manage[sd]?\s+to\b/gi, soft: true, miss: false },
+  { re: /\byou\s+(?:are\s+)?successful(?:ly)?\b/gi, soft: true, miss: false },
   // "you fail to notice, but succeed in slipping past": the subject carries across the "but".
-  /\bbut\s+succeed(?:s|ed)?\b/gi,
+  { re: /\bbut\s+succeed(?:s|ed)?\b/gi, soft: false, miss: false },
 ];
 
 /**
- * The DM asserting the player fell flat, contradicting a SUCCESSFUL engine verdict. A bare
- * "miss" is deliberately absent: "you miss the sunrise" is not a failed attack. A miss only
- * counts with attack context, i.e. an attack noun within the same clause.
+ * The DM asserting the player fell flat, contradicting a SUCCESSFUL engine verdict. "you fail"
+ * is explicit; "you are unsuccessful" is soft (same action anchoring as the success side).
  */
-const YOU_FAILURE: RegExp[] = [
-  /\byou\s+fail(?:s|ed)?\b/gi,
-  /\byou\s+(?:are\s+)?unsuccessful(?:ly)?\b/gi,
+const YOU_FAILURE: OutcomePattern[] = [
+  { re: /\byou\s+fail(?:s|ed)?\b/gi, soft: false, miss: false },
+  { re: /\byou\s+(?:are\s+)?unsuccessful(?:ly)?\b/gi, soft: true, miss: false },
 ];
-const ATTACK_MISS: RegExp[] = [
-  /\b(?:strike|attack|blow|shot|arrow|blade|swing)\b[^.!?]{0,40}?\bmiss(?:es|ed)?\b/gi,
-  /\bmiss(?:es|ed)?\b[^.!?]{0,40}?\b(?:strike|attack|blow|shot|arrow|blade|swing)\b/gi,
-  /\b(?:go|goes|went)\s+wide\b/gi,
-  /\b(?:fall|falls|fell)\s+short\b/gi,
+
+/**
+ * The DM narrating the player's attack as a miss, contradicting a SUCCESSFUL engine verdict
+ * (an engine hit). A bare "miss" is deliberately absent: "you miss the sunrise" is not a
+ * failed attack — a miss only counts with an attack noun in the same clause. And only the
+ * PLAYER's attack counts: "the goblin's arrow misses you" is the monster's miss, not a
+ * contradiction of the player's hit, so an attack noun possessed by anyone but the player is
+ * skipped (see hasNonPlayerPossessor). "goes wide" / "falls short" likewise need the attack
+ * noun: "his eyes go wide" is not a miss.
+ */
+const ATTACK_MISS: OutcomePattern[] = [
+  { re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\bmiss(?:es|ed)?\\b`, 'gi'), soft: false, miss: true },
+  { re: new RegExp(`\\bmiss(?:es|ed)?\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
+  { re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\b(?:go|goes|went)\\s+wide\\b`, 'gi'), soft: false, miss: true },
+  { re: new RegExp(`\\b(?:go|goes|went)\\s+wide\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
+  { re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\b(?:fall|falls|fell)\\s+short\\b`, 'gi'), soft: false, miss: true },
+  { re: new RegExp(`\\b(?:fall|falls|fell)\\s+short\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
 ];
 
 /** Subject-anchored success/failure claims for the named player character. */
-function namePatterns(name: string, success: boolean): RegExp[] {
+function namePatterns(name: string, success: boolean): OutcomePattern[] {
   const n = escapeRegExp(name);
   return success
     ? [
-        new RegExp(`\\b${n}\\s+fail(?:s|ed)?\\b`, 'gi'),
-        new RegExp(`\\b${n}\\s+(?:is\\s+|are\\s+)?unsuccessful(?:ly)?\\b`, 'gi'),
+        { re: new RegExp(`\\b${n}\\s+fail(?:s|ed)?\\b`, 'gi'), soft: false, miss: false },
+        {
+          re: new RegExp(`\\b${n}\\s+(?:is\\s+|are\\s+)?unsuccessful(?:ly)?\\b`, 'gi'),
+          soft: true,
+          miss: false,
+        },
+        // "Mira's swing misses the goblin": the named character's attack narrated as a miss.
+        {
+          re: new RegExp(
+            `\\b${n}['’]s\\s+(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\bmiss(?:es|ed)?\\b`,
+            'gi',
+          ),
+          soft: false,
+          miss: true,
+        },
       ]
     : [
-        new RegExp(`\\b${n}\\s+succeed(?:s|ed)?\\b`, 'gi'),
-        new RegExp(`\\b${n}\\s+manage[sd]?\\s+to\\b`, 'gi'),
-        new RegExp(`\\b${n}\\s+(?:is\\s+|are\\s+)?successful(?:ly)?\\b`, 'gi'),
+        { re: new RegExp(`\\b${n}\\s+succeed(?:s|ed)?\\b`, 'gi'), soft: false, miss: false },
+        { re: new RegExp(`\\b${n}\\s+manage[sd]?\\s+to\\b`, 'gi'), soft: true, miss: false },
+        {
+          re: new RegExp(`\\b${n}\\s+(?:is\\s+|are\\s+)?successful(?:ly)?\\b`, 'gi'),
+          soft: true,
+          miss: false,
+        },
       ];
+}
+
+/** Words too generic to anchor a verdict on the rolled action. */
+const ACTION_STOPWORDS = new Set([
+  'a',
+  'an',
+  'the',
+  'to',
+  'of',
+  'for',
+  'on',
+  'in',
+  'at',
+  'by',
+  'with',
+  'and',
+  'or',
+  'your',
+  'you',
+  'my',
+  'check',
+  'roll',
+  'test',
+  'attempt',
+  'action',
+]);
+
+/**
+ * The rolled action's content words ("Stealth check to climb the shaft unheard" →
+ * stealth, climb, shaft, unheard), for anchoring soft verdict language on the player's own
+ * action. Empty when the outcome names no action, in which case soft claims stand as before.
+ */
+function actionKeywords(outcome: EngineOutcome): string[] {
+  const text = `${outcome.requestType ?? ''} ${outcome.description ?? ''}`.toLowerCase();
+  const words = text
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2 && !ACTION_STOPWORDS.has(word));
+  return [...new Set(words)];
+}
+
+/**
+ * "the goblin's arrow", "an ogre's blow": an attack noun possessed by someone other than the
+ * player. Their miss is not the player's miss and cannot contradict the player's engine hit.
+ * "your arrow" and "<name>'s swing" are the player's own and pass through.
+ */
+function hasNonPlayerPossessor(sentence: string, name: string | undefined): boolean {
+  const player = name ? `(?:your|${escapeRegExp(name)})` : 'your';
+  // The possessor must start with a word char: without it the match can begin mid-possessor
+  // (the "'s" of "Mira's") and the player's own attack would read as someone else's.
+  return new RegExp(`\\b(?!${player}\\b)\\w[\\w'’-]*['’]s\\s+(?:${MISS_NOUN})s?\\b`, 'i').test(
+    sentence,
+  );
+}
+
+/** The sentence (by `.`/`!`/`?`) containing `index`, for anchoring and splicing. */
+function sentenceSpan(text: string, index: number): { start: number; end: number } {
+  let start = 0;
+  for (let i = index - 1; i >= 0; i--) {
+    if (text[i] === '.' || text[i] === '!' || text[i] === '?') {
+      start = i + 1;
+      break;
+    }
+  }
+  // Skip the separator's trailing whitespace so a splice does not glue sentences together.
+  while (start < index && /\s/.test(text[start] ?? '')) start++;
+  let end = text.length;
+  for (let i = index; i < text.length; i++) {
+    if (text[i] === '.' || text[i] === '!' || text[i] === '?') {
+      end = i + 1;
+      break;
+    }
+  }
+  return { start, end };
 }
 
 /**
@@ -211,25 +338,185 @@ function isOutcomeClaimNegated(text: string, index: number): boolean {
 }
 
 /**
+ * Whether the outcome is for an attack roll (requestType names it). A miss narration only
+ * contradicts an attack roll; a failed Stealth check is not contradicted by "an arrow misses".
+ */
+function isAttackRoll(outcome: EngineOutcome): boolean {
+  return !!outcome.requestType && /attack/i.test(outcome.requestType);
+}
+
+/**
+ * Generic verbs in a roll description that never name a target ("Roll 1d20 to attack the
+ * goblin"). Alongside MISS_NOUN and requestType words, these are stripped from miss-target
+ * matching so a generic word in the narration cannot anchor the player's attack.
+ */
+const MISS_TARGET_GENERIC_VERBS = new Set([
+  'roll',
+  'make',
+  'makes',
+  'made',
+  'take',
+  'takes',
+  'took',
+  'use',
+  'uses',
+  'used',
+  'cast',
+  'casts',
+  'hurl',
+  'hurls',
+  'hurled',
+  'throw',
+  'throws',
+  'threw',
+  'thrown',
+  'fire',
+  'fires',
+  'fired',
+  'aim',
+  'aims',
+  'aimed',
+  'lunge',
+  'lunges',
+  'lunged',
+  'thrust',
+  'thrusts',
+  'slash',
+  'slashes',
+  'slashed',
+  'stab',
+  'stabs',
+  'stabbed',
+]);
+
+/**
+ * The rolled target's own words, for miss anchoring (strategist FIX round 4). Unlike
+ * actionKeywords, this excludes the requestType ("attack") and generic words: "An attack
+ * from the dark misses you" contains the word "attack" but names no target, so it must not
+ * count as the player's attack missing. MISS_NOUN words are stripped in singular and
+ * plural ("Attack the goblin with your sword" → goblin, sword).
+ */
+function missTargetKeywords(outcome: EngineOutcome): string[] {
+  const missNouns = new Set(MISS_NOUN.split('|'));
+  const requestWords = new Set(
+    (outcome.requestType ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+  );
+  const seen = new Set<string>();
+  for (const word of (outcome.description ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length <= 2 || ACTION_STOPWORDS.has(word)) continue;
+    const singular = word.endsWith('s') ? word.slice(0, -1) : word;
+    if (missNouns.has(word) || missNouns.has(singular)) continue;
+    if (requestWords.has(word) || requestWords.has(singular)) continue;
+    if (MISS_TARGET_GENERIC_VERBS.has(word) || MISS_TARGET_GENERIC_VERBS.has(singular)) continue;
+    seen.add(word);
+  }
+  return [...seen];
+}
+
+/**
+ * "An arrow from the dark misses you": an unpossessed attack noun is not the player's miss
+ * unless the clause names the player's target (the target's own words from the roll
+ * description — not the requestType, not generic words). "Your arrow" / "<name>'s swing"
+ * is the player's own and always counts.
+ */
+function isPlayerMiss(sentence: string, name: string | undefined, outcome: EngineOutcome): boolean {
+  const player = name ? `(?:your|${escapeRegExp(name)})` : 'your';
+  // "your arrow", "Mira's swing": the player's own attack.
+  if (new RegExp(`\\b${player}(?:['\u2019]s)?\\s+(?:${MISS_NOUN})s?\\b`, 'i').test(sentence)) {
+    return true;
+  }
+  // Unpossessed ("an arrow misses"): only if the clause names the rolled target.
+  const targets = missTargetKeywords(outcome);
+  return (
+    targets.length > 0 &&
+    targets.some((target) => sentence.toLowerCase().includes(target))
+  );
+}
+
+/**
  * The phrases where the DM's text asserts the opposite of the engine's verdict (empty when the
  * text follows it). A failed check may still have a consequence — noise, a cost, damage — so
- * only explicit verdict language with the player as the subject contradicts.
+ * only explicit verdict language with the player as the subject contradicts; soft verdict
+ * language ("you manage to") additionally needs the sentence to name the rolled action, and a
+ * miss only counts for the player's own attack on an attack roll.
  */
 export function contradictsEngineOutcome(
   text: string | null | undefined,
   outcome: EngineOutcome,
-): string[] {
+): OutcomeClaim[] {
   const source = text ?? '';
   const base = outcome.success ? [...YOU_FAILURE, ...ATTACK_MISS] : YOU_SUCCESS;
-  const name = outcome.characterName?.trim();
+  // The name crosses the HTTP boundary on combatEntry (llm.ts), so it is validated here
+  // rather than trusted: a non-string must not reach the pattern builder.
+  const rawName = outcome.characterName;
+  const name = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : undefined;
   const patterns = name ? [...base, ...namePatterns(name, outcome.success)] : base;
-  const claims = new Set<string>();
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
+  const keywords = actionKeywords(outcome);
+  const claims: OutcomeClaim[] = [];
+  for (const { re, soft, miss } of patterns) {
+    for (const match of source.matchAll(re)) {
       const index = match.index ?? 0;
       if (isOutcomeClaimNegated(source, index)) continue;
-      claims.add(match[0].trim().toLowerCase().slice(0, 80));
+      const span = sentenceSpan(source, index);
+      const sentence = source.slice(span.start, span.end);
+      // "the goblin's arrow misses you": someone else's attack missing is not the player's
+      // miss, so it cannot contradict the player's engine hit.
+      if (miss && hasNonPlayerPossessor(sentence, name)) continue;
+      // "An arrow from the dark misses you": a miss only contradicts when the roll is an
+      // attack, and the noun is the player's ("your"/name) or the clause names the rolled
+      // target. A failed skill check is not contradicted by someone else's arrow.
+      if (miss && (!isAttackRoll(outcome) || !isPlayerMiss(sentence, name, outcome))) continue;
+      // "you manage to catch your breath" after a failed Stealth check: soft verdict language
+      // only contradicts when the sentence names the rolled action. With no action words on
+      // the outcome there is nothing to anchor on, so the claim stands as before.
+      if (
+        soft &&
+        keywords.length > 0 &&
+        !keywords.some((keyword) => sentence.toLowerCase().includes(keyword))
+      ) {
+        continue;
+      }
+      claims.push({ match: match[0].trim().toLowerCase().slice(0, 80), index });
+      if (claims.length >= 5) break;
     }
+    if (claims.length >= 5) break;
   }
-  return [...claims].slice(0, 5);
+  return claims;
+}
+
+/**
+ * Removes the contradicting sentences from a reply, stating the engine's truth once where the
+ * first false claim stood (#266). Only the contradicting sentences go — the rest of the
+ * narration is the DM's legitimate prose and stays. Claims carry their text indices, so the
+ * splicer works in text order: reversed-order, repeated-phrase and negated-first cases all
+ * resolve correctly.
+ */
+export function spliceContradictingSentences(
+  text: string,
+  claims: OutcomeClaim[],
+  replacement: string,
+): string {
+  const spans: { start: number; end: number }[] = [];
+  for (const { index } of claims) {
+    if (index < 0 || index >= text.length) continue;
+    spans.push(sentenceSpan(text, index));
+  }
+  if (!spans.length) return text;
+  spans.sort((a, b) => a.start - b.start);
+  // Merge overlaps: one claim per sentence is the norm, but a sentence can hold two.
+  const merged: { start: number; end: number }[] = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last && span.start <= last.end) last.end = Math.max(last.end, span.end);
+    else merged.push({ ...span });
+  }
+  let out = '';
+  let at = 0;
+  merged.forEach((span, i) => {
+    out += text.slice(at, span.start);
+    if (i === 0) out += replacement;
+    at = span.end;
+  });
+  out += text.slice(at);
+  return out.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }

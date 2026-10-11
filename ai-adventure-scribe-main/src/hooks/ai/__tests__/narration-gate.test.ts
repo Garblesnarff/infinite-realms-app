@@ -204,7 +204,12 @@ describe('enforceNarrationGate', () => {
   describe('with an engine outcome (#266)', () => {
     const gateWithOutcome = (
       narration: Record<string, unknown>,
-      engineOutcome: { success: boolean; characterName?: string },
+      engineOutcome: {
+        success: boolean;
+        characterName?: string;
+        requestType?: string;
+        description?: string;
+      },
       regenerate = vi.fn(),
     ): ReturnType<typeof enforceNarrationGate> =>
       enforceNarrationGate({
@@ -297,8 +302,12 @@ describe('enforceNarrationGate', () => {
       const regenerate = vi.fn().mockResolvedValue({ text: 'Your blade bites deep.' });
 
       const outcome = await gateWithOutcome(
-        { text: 'The strike goes wide and misses entirely.' },
-        { success: true },
+        { text: 'Your strike goes wide and misses the goblin entirely.' },
+        {
+          success: true,
+          requestType: 'attack',
+          description: 'Attack the goblin with your sword',
+        },
         regenerate,
       );
 
@@ -360,8 +369,12 @@ describe('enforceNarrationGate', () => {
       const regenerate = vi.fn().mockResolvedValue({ text: 'Your blade bites deep.' });
 
       const outcome = await gateWithOutcome(
-        { text: 'The strike went wide. Your attempt fell short.' },
-        { success: true },
+        { text: 'Your strike went wide. Your blow fell short of the goblin.' },
+        {
+          success: true,
+          requestType: 'attack',
+          description: 'Attack the goblin with your sword',
+        },
         regenerate,
       );
 

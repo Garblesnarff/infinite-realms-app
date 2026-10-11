@@ -54,6 +54,7 @@ const { SessionMessageService } = await importWithRealDb(
   () => import('../session/session-message-service.js'),
 );
 const { MemoryService } = await importWithRealDb(() => import('../memory-service.js'));
+const { latestRollOutcome } = await importWithRealDb(() => import('../dm/narration-outcome.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -311,5 +312,105 @@ describeWithDb('session init is saved once per session (#2386)', () => {
     expect(marks(otherRows, 'previously_on')).toBe(1);
     expect(marks(otherRows, 'initial_greeting')).toBe(1);
     expect((await memoriesFor(otherSessionId)).map((row) => row.key)).toEqual(OPENING_MEMORY_KEYS);
+  });
+});
+
+/**
+ * #266 FIX round: `latestRollOutcome` reads the turn's authoritative roll from the session
+ * state. Only a real database can exercise this: the query joins the newest `roll_result`
+ * combatLog entry against the latest DM message's timestamp, and a mocked `db` would pass
+ * against SQL that never matches a row. It refuses every target except the dedicated
+ * local/CI Postgres because it writes fixtures.
+ */
+describeWithDb('latestRollOutcome reads the current turn’s roll (#266)', () => {
+  const userId = `narration-outcome-user-${process.pid}`;
+  let campaignId = '';
+  const sessionIds: string[] = [];
+
+  // The database handle is acquired per hook, not per block: an earlier block's afterAll
+  // closes the shared client, and realDb() reopens it on demand.
+  const db = (): ReturnType<typeof realDb> => realDb();
+
+  /** A combatLog entry exactly as the client persists a roll_result. */
+  const rollEntry = (
+    timestamp: string,
+  ): { timestamp: string; entry: { kind: string; payload: Record<string, unknown> } } => ({
+    timestamp,
+    entry: {
+      kind: 'roll_result',
+      payload: {
+        success: false,
+        total: 7,
+        dc: 14,
+        requestType: 'skill_check',
+        description: 'Stealth check to climb the shaft unheard',
+      },
+    },
+  });
+
+  const newSession = async (combatLog: unknown[]): Promise<string> => {
+    const [{ id }] = await db()
+      .insert(gameSessions)
+      .values({ campaignId, sessionNumber: 1, status: 'active', sessionState: { combatLog } })
+      .returning({ id: gameSessions.id });
+    sessionIds.push(id);
+    return id;
+  };
+
+  const addDmMessage = async (sessionId: string, at: Date): Promise<void> => {
+    await db().insert(dialogueHistory).values({
+      sessionId,
+      speakerType: 'dm',
+      message: 'The shadows deepen around you.',
+      timestamp: at,
+    });
+  };
+
+  beforeAll(async () => {
+    [{ id: campaignId }] = await db()
+      .insert(campaigns)
+      .values({ userId, name: testId('narration-outcome-campaign') })
+      .returning({ id: campaigns.id });
+  });
+
+  afterAll(async () => {
+    for (const id of sessionIds) {
+      await db().delete(gameSessions).where(eq(gameSessions.id, id));
+    }
+    if (campaignId) await db().delete(campaigns).where(eq(campaigns.id, campaignId));
+  });
+
+  test('returns the fresh roll when no DM message follows it', async () => {
+    const sessionId = await newSession([rollEntry(new Date().toISOString())]);
+    const outcome = await latestRollOutcome(sessionId);
+    expect(outcome?.success).toBe(false);
+    expect(outcome?.total).toBe(7);
+    expect(outcome?.dc).toBe(14);
+    expect(outcome?.description).toBe('Stealth check to climb the shaft unheard');
+  });
+
+  test('ignores a roll from before the latest DM message (a previous turn’s roll)', async () => {
+    const sessionId = await newSession([
+      rollEntry(new Date(Date.now() - 5 * 60 * 1000).toISOString()),
+    ]);
+    await addDmMessage(sessionId, new Date());
+    expect(await latestRollOutcome(sessionId)).toBeNull();
+  });
+
+  test('ignores a roll older than 15 minutes', async () => {
+    const sessionId = await newSession([
+      rollEntry(new Date(Date.now() - 16 * 60 * 1000).toISOString()),
+    ]);
+    expect(await latestRollOutcome(sessionId)).toBeNull();
+  });
+
+  test('ignores a roll with a bad timestamp', async () => {
+    const sessionId = await newSession([rollEntry('not-a-timestamp')]);
+    expect(await latestRollOutcome(sessionId)).toBeNull();
+  });
+
+  test('ignores a session with no roll_result entries', async () => {
+    const sessionId = await newSession([]);
+    expect(await latestRollOutcome(sessionId)).toBeNull();
   });
 });

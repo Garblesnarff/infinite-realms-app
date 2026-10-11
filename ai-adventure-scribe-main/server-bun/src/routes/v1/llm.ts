@@ -739,6 +739,35 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
         // One parse, shared by the log line and the narration rewrite. (#2050 G)
         const envelope = parseLlmEnvelope(result.text);
+        // #266: the engine's verdict for the turn is authoritative. If the narration
+        // contradicts the latest roll outcome (a failed check narrated as a success, or an
+        // engine hit narrated as a miss), only the contradicting sentences are replaced with
+        // the engine's truth — the rest of the reply is the DM's legitimate prose and stays.
+        // Fails open: a check that cannot run keeps the reply.
+        if (envelope && typeof envelope.text === 'string' && (sessionId ?? combatEntry?.sessionId)) {
+          try {
+            const { repairNarrationContradiction } = await import(
+              '../../services/dm/narration-outcome.js'
+            );
+            const repaired = await repairNarrationContradiction({
+              sessionId: (sessionId ?? combatEntry?.sessionId) as string,
+              text: envelope.text,
+              // The client sends the player character's name on combatEntry (body schema
+              // below); it anchors miss/success claims on the player's own action. Absent
+              // out of combat, where the "you" patterns still apply.
+              characterName: combatEntry?.player?.name,
+            });
+            if (repaired) {
+              // The spliced text supersedes the model's segments: they were derived from the
+              // contradicted wording.
+              envelope.text = repaired;
+              envelope.narration_segments = [];
+              result = { ...result, text: JSON.stringify(envelope) };
+            }
+          } catch (error) {
+            logger.warn({ msg: 'DM_NARRATION_OUTCOME_HOOK_FAILED', error });
+          }
+        }
         // #218 step 1: a cast the gate allowed spends its slot, server-side, once per player
         // message. Not when combat is opening: the engine spends for the opening cast. Not when the
         // body carries no `combatEntry` out of combat: the player declined a held entry (#2341) and
