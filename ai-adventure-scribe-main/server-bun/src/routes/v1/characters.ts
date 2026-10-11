@@ -15,11 +15,11 @@
 
 /* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
-import { inArray } from 'drizzle-orm';
+import { and, count, eq, gt, inArray } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
 
 import { db } from '../../../../db/client';
-import { spells } from '../../../../db/schema/index';
+import { characterSpells, spells } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -859,6 +859,112 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     {
       params: t.Object({
         id: t.String(),
+      }),
+    },
+  )
+
+  /**
+   * Toggle preparation of one known spell.
+   * PATCH /v1/characters/:id/spells/:spellId/preparation
+   * #248: the preparation sheet calls this; without it the toggle 404s and prepared casters
+   * can never re-prepare. Ownership is already verified by the character resolve above (404
+   * on unauthorized, masking existence). The 2014 5e preparation rules are enforced here:
+   * only preparing classes may toggle, cantrips and always-prepared (domain/oath) spells are
+   * rejected, and preparing past the class limit is refused.
+   */
+  .patch(
+    '/:id/spells/:spellId/preparation',
+    async ({ params, character, set, body }) => {
+      if (!character) {
+        set.status = 404;
+        return { error: 'Character not found' };
+      }
+      const [row] = await db
+        .select({
+          id: characterSpells.id,
+          isPrepared: characterSpells.isPrepared,
+          isAlwaysPrepared: characterSpells.isAlwaysPrepared,
+          level: spells.level,
+        })
+        .from(characterSpells)
+        .innerJoin(spells, eq(characterSpells.spellId, spells.id))
+        .where(
+          and(
+            eq(characterSpells.characterId, character.id),
+            eq(characterSpells.spellId, params.spellId),
+          ),
+        );
+      if (!row) {
+        set.status = 404;
+        return { error: 'Spell not found on character' };
+      }
+
+      // 2014 5e: clerics and druids prepare WIS mod + level spells, wizards INT mod +
+      // level, paladins CHA mod + half level (min 1). Sorcerers, bards, warlocks and
+      // rangers know their spells and never prepare.
+      const cls = (character.class ?? '').trim().toLowerCase();
+      const stats = (character as Character & { stats?: CharacterStats | null }).stats;
+      const mod = (score: number | null | undefined): number => Math.floor(((score ?? 10) - 10) / 2);
+      let limit: number | null = null;
+      if (cls === 'cleric' || cls === 'druid') limit = mod(stats?.wisdom) + character.level;
+      else if (cls === 'wizard') limit = mod(stats?.intelligence) + character.level;
+      else if (cls === 'paladin') limit = mod(stats?.charisma) + Math.floor(character.level / 2);
+      if (limit === null) {
+        set.status = 422;
+        return { error: `${character.class ?? 'This class'} does not prepare spells` };
+      }
+      limit = Math.max(1, limit);
+
+      // Cantrips are never prepared or unprepared.
+      if (row.level === 0) {
+        set.status = 422;
+        return { error: 'Cantrips cannot have preparation toggled' };
+      }
+      // Domain/oath spells are always prepared; they cannot come off the list.
+      if (row.isAlwaysPrepared && !body.is_prepared) {
+        set.status = 422;
+        return { error: 'Always-prepared spells cannot be unprepared' };
+      }
+
+      if (body.is_prepared && !row.isPrepared) {
+        // Only spells the character prepared themselves count against the limit:
+        // always-prepared spells and cantrips don't.
+        const [{ count: preparedCount }] = await db
+          .select({ count: count() })
+          .from(characterSpells)
+          .innerJoin(spells, eq(characterSpells.spellId, spells.id))
+          .where(
+            and(
+              eq(characterSpells.characterId, character.id),
+              eq(characterSpells.isPrepared, true),
+              eq(characterSpells.isAlwaysPrepared, false),
+              gt(spells.level, 0),
+            ),
+          );
+        if (preparedCount >= limit) {
+          set.status = 409;
+          return { error: `Prepared spell limit reached (${limit})` };
+        }
+      }
+
+      const [updated] = await db
+        .update(characterSpells)
+        .set({ isPrepared: body.is_prepared, updatedAt: new Date() })
+        .where(eq(characterSpells.id, row.id))
+        .returning({ id: characterSpells.id, isPrepared: characterSpells.isPrepared });
+      if (!updated) {
+        set.status = 404;
+        return { error: 'Spell not found on character' };
+      }
+      return { id: updated.id, prepared: updated.isPrepared };
+    },
+    {
+      params: t.Object({
+        id: t.String(),
+        spellId: t.String(),
+      }),
+      body: t.Object({
+        is_prepared: t.Boolean(),
       }),
     },
   );
