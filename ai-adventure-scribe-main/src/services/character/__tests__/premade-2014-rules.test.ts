@@ -176,8 +176,8 @@ function sheetFor(row: TemplateRow): {
 }
 
 describe('premade starter templates follow 2014 rules (#2483)', () => {
-  it('reads all 30 seeded premades', () => {
-    expect(seeded).toHaveLength(30);
+  it('reads all 35 seeded premades', () => {
+    expect(seeded).toHaveLength(35);
   });
 
   describe('level 1 Ranger', () => {
@@ -190,6 +190,7 @@ describe('premade starter templates follow 2014 rules (#2483)', () => {
         'the-hunter',
         'the-seeker',
         'the-tracker',
+        'the-woodsman',
       ]);
       expect(rangers.every((row) => row.level === 1)).toBe(true);
     });
