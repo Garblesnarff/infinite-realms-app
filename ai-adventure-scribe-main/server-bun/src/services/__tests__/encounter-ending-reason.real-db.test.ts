@@ -44,6 +44,7 @@ import {
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
+  experienceEvents,
   gameSessions,
   tacticalMaps,
 } from '../../../../db/schema/index';
@@ -57,6 +58,7 @@ const { consumeDmTacticalFacts, recordDmTacticalFact } = await importWithRealDb(
   () => import('../combat/tactical-action-service.js'),
 );
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
+const { awardStoryXpOnce } = await importWithRealDb(() => import('../dm/story-xp.js'));
 
 if (!hasRealDb) {
   console.warn(
@@ -344,9 +346,11 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
 
     const facts = await consumeDmTacticalFacts(sessionId);
-    expect(facts).toHaveLength(2);
+    expect(facts).toHaveLength(3);
     expect(facts[0]).toContain('struck the Ending Golem');
     expect(facts[1]).toContain('THE FIGHT IS OVER');
+    // #310: the victory also carries its XP award, so the gain is not silent.
+    expect(facts[2]).toContain('COMBAT XP');
   });
 
   test('concluding an encounter twice is one terminal transition and one DM fact', async () => {
@@ -365,6 +369,8 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
     await recordDmTacticalFact(sessionId, 'late post-conclusion fact');
     expect(await consumeDmTacticalFacts(sessionId)).toEqual([
       describeCombatEnd('last_hostile_defeated'),
+      // #310: the victory's XP award fact, recorded once with the ending.
+      expect.stringContaining('COMBAT XP'),
     ]);
   });
 
@@ -429,5 +435,193 @@ describeWithDb('an encounter cannot reach a terminal state without a reason and 
       .where(eq(gameSessions.id, sessionId));
     expect(after.status).toBe('active');
     expect(after.endTime).toBeNull();
+  });
+
+  test('a victory awards combat XP to the sheet and states it for the DM (#310)', async () => {
+    // The fixture hero is shared across tests in this file and other victory tests award
+    // XP to it, so assert on the delta from this conclusion, not the absolute sheet value.
+    const [sheetBefore] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    const eventsBefore = await db
+      .select()
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, characterId));
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+
+    // The fixture hero is level 3 and the encounter carries no difficulty: medium band, 150 XP.
+    const [sheet] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect((sheet.xp ?? 0) - (sheetBefore.xp ?? 0)).toBe(150);
+    const events = await db
+      .select()
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, characterId));
+    // Filter by source instead of taking the last row: the combat award is the event that
+    // was absent before this conclusion and carries the combat source.
+    const newCombatEvents = events.filter(
+      (event) => event.source === 'combat' && !eventsBefore.some((before) => before.id === event.id),
+    );
+    expect(newCombatEvents).toHaveLength(1);
+    expect(newCombatEvents[0].xpGained).toBe(150);
+    const [encounter] = await db
+      .select({ awarded: combatEncounters.experienceAwarded })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(encounter.awarded).toBe(150);
+    const facts = await consumeDmTacticalFacts(sessionId);
+    const xpFact = facts.find((fact) => fact.includes('COMBAT XP'));
+    expect(xpFact).toContain('+150 XP');
+    // The award is already on the sheet: the DM must not set xp_award for this victory too.
+    expect(xpFact).toContain('Do not set xp_award for this victory');
+
+    // A retry after the conclusion cannot double-award: the claim boundary plus the
+    // experience_awarded write inside one transaction make the second call a no-op.
+    await concludeEncounter(encounterId, sessionId, userId, 'last_hostile_defeated');
+    const [sheetAgain] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, characterId));
+    expect(sheetAgain.xp).toBe(sheet.xp);
+  });
+
+  test('a victory awards combat XP at level 20 while story XP stays capped at 0 (#310, #273)', async () => {
+    // The fixture hero is level 3 and shared across tests, so the level-20 check gets its
+    // own character, session and encounter (one active encounter per session since #1954).
+    const [{ id: epicId }] = await db
+      .insert(characters)
+      .values({ userId, campaignId, name: testId('epic'), level: 20, class: 'Fighter' })
+      .returning({ id: characters.id });
+    const [{ id: epicSessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: epicId, sessionNumber: 1, status: 'active' })
+      .returning({ id: gameSessions.id });
+    createdSessionIds.push(epicSessionId);
+    const [{ id: epicEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({
+        sessionId: epicSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning({ id: combatEncounters.id });
+    const epicParts = await db
+      .insert(combatParticipants)
+      .values([
+        {
+          encounterId: epicEncounterId,
+          characterId: epicId,
+          name: 'Epic Hero',
+          participantType: 'player',
+          turnOrder: 0,
+          initiative: 20,
+          armorClass: 15,
+          maxHp: 200,
+          speed: 30,
+        },
+        {
+          encounterId: epicEncounterId,
+          name: 'Epic Golem',
+          participantType: 'monster',
+          turnOrder: 1,
+          initiative: 10,
+          armorClass: 12,
+          maxHp: 11,
+          speed: 30,
+        },
+      ])
+      .returning({ id: combatParticipants.id, turnOrder: combatParticipants.turnOrder });
+    const epicHeroId = epicParts.find((row) => row.turnOrder === 0)!.id;
+    const epicMonsterId = epicParts.find((row) => row.turnOrder === 1)!.id;
+    await db.insert(combatParticipantStatus).values([
+      { participantId: epicHeroId, currentHp: 200, maxHp: 200, isConscious: true },
+      { participantId: epicMonsterId, currentHp: 2, maxHp: 11, isConscious: true },
+    ]);
+    await saveTacticalMap({
+      id: crypto.randomUUID(),
+      sessionId: epicSessionId,
+      width: 8,
+      height: 8,
+      cells: Array.from({ length: 8 }, () =>
+        Array.from({ length: 8 }, () => ({
+          terrain: 'floor' as const,
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0 as const,
+          elevation: 0,
+        })),
+      ),
+      entities: [
+        {
+          id: epicHeroId,
+          slug: 'epic-hero',
+          x: 1,
+          y: 1,
+          size: 'medium',
+          type: 'pc',
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+        {
+          id: epicMonsterId,
+          slug: 'epic-golem',
+          x: 3,
+          y: 1,
+          size: 'medium',
+          type: 'monster',
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+      ],
+      round: 1,
+      sceneDescription: 'epic fixture',
+    });
+
+    await concludeEncounter(epicEncounterId, epicSessionId, userId, 'last_hostile_defeated');
+
+    // Combat XP at 20 follows the table — the level-20 medium band is 5700 — rather than the
+    // story path's level-20 zero (#273). The two are separate instruments by design.
+    const [epicSheet] = await db
+      .select({ xp: characters.experiencePoints })
+      .from(characters)
+      .where(eq(characters.id, epicId));
+    expect(epicSheet.xp ?? 0).toBe(5700);
+    const epicEvents = await db
+      .select()
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, epicId));
+    const epicCombatEvents = epicEvents.filter((event) => event.source === 'combat');
+    expect(epicCombatEvents).toHaveLength(1);
+    expect(epicCombatEvents[0].xpGained).toBe(5700);
+    const [epicEncounter] = await db
+      .select({ awarded: combatEncounters.experienceAwarded })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, epicEncounterId));
+    expect(epicEncounter.awarded).toBe(5700);
+
+    // #273 untouched: a story award at level 20 still caps at 0 and writes nothing — and the
+    // combat event above (source 'combat') does not count toward the story session total.
+    const storyOutcome = await awardStoryXpOnce({
+      characterId: epicId,
+      sessionId: epicSessionId,
+      since: new Date(Date.now() - 60_000),
+      amount: 500,
+      reason: 'epic deed',
+    });
+    expect(storyOutcome).toBe('capped');
+    const epicEventsAfter = await db
+      .select({ source: experienceEvents.source })
+      .from(experienceEvents)
+      .where(eq(experienceEvents.characterId, epicId));
+    expect(epicEventsAfter.filter((event) => event.source === 'other')).toHaveLength(0);
+
+    // The afterAll only knows the shared character; remove this test's own rows.
+    await db.delete(experienceEvents).where(eq(experienceEvents.characterId, epicId));
+    await db.delete(characters).where(eq(characters.id, epicId));
   });
 });
