@@ -313,10 +313,13 @@ export class CharacterSpellService {
     // ⚡ Bolt: Maintain data consistency by syncing with comma-separated columns on characters table.
     // Optimized to use SQL aggregation (string_agg) instead of fetching every spell row.
     // This reduces data transfer and memory usage by processing the concatenation in the database.
+    // #211: the preparedSpells legacy column must hold only the prepared names, not every
+    // leveled spell — the junction table's is_prepared flags are authoritative here.
     const [spellSummary] = await db
       .select({
         cantrips: sql<string>`string_agg(${spells.name}, ',') FILTER (WHERE ${spells.level} = 0)`,
         leveled: sql<string>`string_agg(${spells.name}, ',') FILTER (WHERE ${spells.level} > 0)`,
+        prepared: sql<string>`string_agg(${spells.name}, ',') FILTER (WHERE ${spells.level} > 0 AND ${characterSpells.isPrepared})`,
       })
       .from(characterSpells)
       .innerJoin(spells, eq(characterSpells.spellId, spells.id))
@@ -349,7 +352,7 @@ export class CharacterSpellService {
       {
         cantrips: spellSummary?.cantrips ? spellSummary.cantrips.split(',') : [],
         knownSpells: spellSummary?.leveled ? spellSummary.leveled.split(',') : [],
-        preparedSpells: spellSummary?.leveled ? spellSummary.leveled.split(',') : [],
+        preparedSpells: spellSummary?.prepared ? spellSummary.prepared.split(',') : [],
       },
       { fillEmptyOnly: true },
     );
