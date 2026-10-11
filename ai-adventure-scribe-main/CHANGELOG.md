@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.34.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.4...v0.34.0) (2026-10-11)
+
+
+### Features
+
+* **seo:** per-page meta for public routes, 404 noindex, security.txt, nginx example ([#227](https://github.com/Garblesnarff/infinite-realms-app/issues/227)) ([#304](https://github.com/Garblesnarff/infinite-realms-app/issues/304)) ([d172040](https://github.com/Garblesnarff/infinite-realms-app/commit/d17204046348c1924538cf32532e93969d7b3bc8))
+
+
+### Bug Fixes
+
+* **assets:** possessive strip only fires on justified names; getAsset fallback tests ([#292](https://github.com/Garblesnarff/infinite-realms-app/issues/292)) ([#301](https://github.com/Garblesnarff/infinite-realms-app/issues/301)) ([7304d8a](https://github.com/Garblesnarff/infinite-realms-app/commit/7304d8aed189bf62a0c74b99b774569ea15d7100))
+* **client:** offer Retry for a player message orphaned by a dropped turn ([#265](https://github.com/Garblesnarff/infinite-realms-app/issues/265)) ([#309](https://github.com/Garblesnarff/infinite-realms-app/issues/309)) ([a919846](https://github.com/Garblesnarff/infinite-realms-app/commit/a9198460501aefe268aa93efe992f5ec914acc73))
+* **tests:** stabilize death-save combat-gate ordering flake ([#221](https://github.com/Garblesnarff/infinite-realms-app/issues/221)) ([#305](https://github.com/Garblesnarff/infinite-realms-app/issues/305)) ([1c7a0e9](https://github.com/Garblesnarff/infinite-realms-app/commit/1c7a0e9b7d29bd8279719a598dc19e594fdd937a))
+
+
+### Performance
+
+* **site:** compress icon-512.png to 77 KB, add share-asset byte budgets ([#226](https://github.com/Garblesnarff/infinite-realms-app/issues/226)) ([#297](https://github.com/Garblesnarff/infinite-realms-app/issues/297)) ([b3d28f0](https://github.com/Garblesnarff/infinite-realms-app/commit/b3d28f004d1b26d6f0a87903b6aedea1f9038a1c))
+
+
+### CI/CD
+
+* discover real-DB tests by glob; guard skipped files; job time limits ([#158](https://github.com/Garblesnarff/infinite-realms-app/issues/158)) ([#276](https://github.com/Garblesnarff/infinite-realms-app/issues/276)) ([f90a5c9](https://github.com/Garblesnarff/infinite-realms-app/commit/f90a5c9bbb2ce6728ec9175e35f7795a0ad18b45))
+
 ## [0.33.4](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.33.3...v0.33.4) (2026-10-10)
 
 
