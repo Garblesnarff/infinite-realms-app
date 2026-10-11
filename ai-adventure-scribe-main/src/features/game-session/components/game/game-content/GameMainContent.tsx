@@ -230,7 +230,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const rollPillLabel = queuedRoll ? queueRollLabel(queuedRoll) : null;
     const rollBlocksInput = Boolean(rollPillLabel);
     const completionBanner = rollPillLabel
-      ? `Please complete the ${rollPillLabel} roll above`
+      ? `Tap the Roll Dice button above to complete the ${rollPillLabel} roll`
       : null;
     // Saved descriptions from before #2256 may still hold "⚙️ Engine:" lines.
     const sceneBlurb = stripEngineGeneratedLines(
@@ -561,7 +561,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                           retryInFlight={retryInFlight}
                           disabledReason={
                             rollBlocksInput && !isProcessing
-                              ? 'Roll the dice above to continue'
+                              ? 'Tap the Roll Dice button above to continue'
                               : undefined
                           }
                           isDisabled={

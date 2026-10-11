@@ -388,7 +388,7 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Wisdom saving throw');
     expect(
-      screen.getByText('Please complete the Wisdom saving throw roll above'),
+      screen.getByText('Tap the Roll Dice button above to complete the Wisdom saving throw roll'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toBeDisabled();
   });
@@ -425,7 +425,7 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
     expect(
-      screen.getByText('Please complete the Longsword attack vs … roll above'),
+      screen.getByText('Tap the Roll Dice button above to complete the Longsword attack vs … roll'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Checking whose turn it is…')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resume turn' })).not.toBeInTheDocument();
@@ -446,7 +446,7 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Your roll: Longsword attack vs …');
     expect(
-      screen.getByText('Please complete the Longsword attack vs … roll above'),
+      screen.getByText('Tap the Roll Dice button above to complete the Longsword attack vs … roll'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Wisdom saving throw/)).not.toBeInTheDocument();
     expect(screen.queryByText(/saving throw roll above/)).not.toBeInTheDocument();

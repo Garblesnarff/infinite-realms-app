@@ -272,12 +272,12 @@ describe('ChatInput disabled by a pending roll (#2280)', () => {
       <ChatInput
         onSendMessage={vi.fn()}
         isDisabled
-        disabledReason="Roll the dice above to continue"
+        disabledReason="Tap the Roll Dice button above to continue"
       />,
     );
 
     expect(screen.queryByLabelText('Sending message...')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Roll the dice above to continue')).toBeDisabled();
+    expect(screen.getByLabelText('Tap the Roll Dice button above to continue')).toBeDisabled();
     expect(screen.getByRole('textbox')).toHaveValue('I ask Remy directly');
   });
 });
