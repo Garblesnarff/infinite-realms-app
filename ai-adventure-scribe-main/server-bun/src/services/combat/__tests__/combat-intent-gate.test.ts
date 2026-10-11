@@ -6,7 +6,7 @@ mock.module('../../../lib/logger.js', () => ({
   logger: { info, warn: mock(() => {}), debug: mock(() => {}), error: mock(() => {}) },
 }));
 
-const { detectDeclaredAttack } = await import('../combat-intent-gate.js');
+const { detectDeclaredAttack, detectDeclaredDefense } = await import('../combat-intent-gate.js');
 
 const actors = [
   { name: 'Professor Emil Darkwater' },
@@ -249,5 +249,29 @@ describe('detectDeclaredAttack across sentences (#2341)', () => {
       detectDeclaredAttack('I do not trust him. I would never punch Valerius.', roster),
     ).toBeNull();
     expect(detectDeclaredAttack('I do not trust him. I ask Valerius why.', roster)).toBeNull();
+  });
+});
+
+describe('detectDeclaredDefense (#262)', () => {
+  it('detects bare and first-person dodge declarations', () => {
+    expect(detectDeclaredDefense('Dodge')).toBe('dodge');
+    expect(detectDeclaredDefense('I dodge')).toBe('dodge');
+    expect(detectDeclaredDefense('i dodge.')).toBe('dodge');
+    expect(detectDeclaredDefense('dodged')).toBe('dodge');
+  });
+
+  it('detects disengage, dash, yield and flee', () => {
+    expect(detectDeclaredDefense('I disengage')).toBe('disengage');
+    expect(detectDeclaredDefense('Dash')).toBe('dash');
+    expect(detectDeclaredDefense('I yield')).toBe('yield');
+    expect(detectDeclaredDefense('I flee')).toBe('flee');
+    expect(detectDeclaredDefense('run away')).toBe('flee');
+  });
+
+  it('rejects sentences that merely mention dodging', () => {
+    expect(detectDeclaredDefense('I dodge behind the pillar and attack')).toBeNull();
+    expect(detectDeclaredDefense('Should I dodge or attack?')).toBeNull();
+    expect(detectDeclaredDefense('The goblin dodges my attack')).toBeNull();
+    expect(detectDeclaredDefense('')).toBeNull();
   });
 });

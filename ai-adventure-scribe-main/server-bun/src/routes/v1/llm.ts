@@ -18,8 +18,10 @@ import { AIUsageService, type UsageType } from '../../services/ai-usage-service.
 import { loadSessionEncounterContext } from '../../services/combat/combat-entry-campaign-index.js';
 import {
   detectDeclaredAttack,
+  detectDeclaredDefense,
   detectUntargetedAttackSpell,
   looksLikeCombatIntent,
+  type DefensiveDeclaration,
 } from '../../services/combat/combat-intent-gate.js';
 import { loadCombatIntentActorRoster } from '../../services/combat/combat-intent-roster.js';
 import {
@@ -269,6 +271,46 @@ export const appendDeclaredAttackDirective = (
   return `${prompt}\n\n<declared_attack actor="${escapedActor}">The player has declared an attack on ${escapedActor}. It has NOT been resolved: the engine has not rolled, so nothing has hit, missed, or dealt damage, and ${escapedActor} has not reacted or moved. Do NOT resolve it. Emit combat_transition:'start' with ${escapedActor} in combatants and describe only the moment before the roll.${size}</declared_attack>`;
 };
 
+/**
+ * #262: the player declared a defensive action in plain text ("I dodge"). The DM's
+ * inline options send the option text as chat, so without this directive the DM
+ * narrates the dodge but the engine never applies it. The directive tells the DM to
+ * emit the structured combat_action instead of just narrating.
+ *
+ * Yield and flee are not combat actions: they end the fight, so the DM emits
+ * combat_transition:'end' with a combat_exits entry (the engine records the exit
+ * with its reason). The DM addresses participants by board slug, never database id.
+ */
+export const appendDeclaredDefenseDirective = (
+  prompt: string,
+  defense: 'dodge' | 'disengage' | 'dash' | 'yield' | 'flee',
+): string => {
+  if (defense === 'yield' || defense === 'flee') {
+    const exit = defense === 'yield' ? 'surrendered' : 'fled';
+    const label =
+      defense === 'yield' ? 'Yield (surrender: combat ends)' : 'Flee (leave combat: combat ends)';
+    return (
+      `${prompt}\n\n<declared_defense type="${defense}">The player has declared a defensive ` +
+      `action: ${label}. It has NOT been resolved by the engine. Do NOT just narrate it. ` +
+      `Emit combat_transition:'end' with a combat_exits entry for the current player ` +
+      `character (exit:'${exit}', addressed by board slug as shown in the tracker) so the ` +
+      `engine records the exit with its reason, then narrate the result.</declared_defense>`
+    );
+  }
+  const actionLabel =
+    defense === 'dodge'
+      ? 'Dodge (attack rolls against the character have disadvantage while the attacker is visible to them, and they have advantage on Dexterity saving throws, until the start of their next turn)'
+      : defense === 'disengage'
+        ? 'Disengage (movement does not provoke opportunity attacks this turn)'
+        : 'Dash (gain extra movement this turn)';
+  return (
+    `${prompt}\n\n<declared_defense type="${defense}">The player has declared a defensive ` +
+    `action: ${actionLabel}. It has NOT been resolved by the engine. Do NOT just narrate it. ` +
+    `Emit a combat_action of type '${defense}' for the current player character so the engine ` +
+    `applies it, then narrate the result.</declared_defense>`
+  );
+};
+
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
   .use(planRateLimit('llm'))
 
@@ -512,6 +554,36 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           detector: declaredAttack,
         });
       }
+      // #262: a defensive declaration in plain text ("I dodge", "I yield") — the DM's
+      // inline options send the option text as chat, and without this the engine never
+      // sees the intent. Direct the DM to emit the structured combat_action.
+      // The in-combat signal is a live encounter for this session: the combatEntry the
+      // client sends is only present when combat is NOT active, so gating on it means
+      // the directive never fires mid-fight.
+      const defenseSessionId =
+        typeof sessionId === 'string' && sessionId.length > 0
+          ? sessionId
+          : typeof combatEntry?.sessionId === 'string'
+            ? combatEntry.sessionId
+            : null;
+      let declaredDefense: DefensiveDeclaration | null = null;
+      if (defenseSessionId && typeof playerInput === 'string' && !declaredAttack) {
+        try {
+          // Dynamic import: CombatEncounterService pulls in the database client at
+          // import time. Loading it lazily keeps the route importable in tests that
+          // don't mock the database (same pattern as the party-defeated check above).
+          const { CombatEncounterService } = await import(
+            '../../services/combat/combat-encounter-service.js'
+          );
+          const activeEncounter = await CombatEncounterService.getActiveEncounter(
+            defenseSessionId,
+            userId,
+          );
+          if (activeEncounter) declaredDefense = detectDeclaredDefense(playerInput);
+        } catch {
+          declaredDefense = null;
+        }
+      }
       // #2514: the DM prompt receives the engine-decided creature count and
       // names BEFORE it narrates the approach. For a declared attack the
       // target is known before generation, so sizing runs here and the
@@ -546,7 +618,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       }
       const llmPrompt = declaredAttack
         ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
-        : prompt;
+        : declaredDefense
+          ? appendDeclaredDefenseDirective(prompt, declaredDefense)
+          : prompt;
 
       const generateOnce = (): Promise<LLMResponse> =>
         LLMProviderService.generate({
