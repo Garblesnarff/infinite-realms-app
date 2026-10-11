@@ -90,10 +90,16 @@ vi.mock('@/infrastructure/api/rest-client', () => ({
   },
 }));
 // The executor is real: the #2518 test drives it through `fetch`, as the browser does.
-vi.mock('@/services/auth/TokenService', () => ({
-  getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
-  getAccessToken: vi.fn(() => 'test'),
-}));
+// The real pending-input helpers stay live (#354): the test seeds a pending
+// snapshot and asserts the handler clears it when the player row persists.
+vi.mock('@/services/auth/TokenService', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    getAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test' })),
+    getAccessToken: vi.fn(() => 'test'),
+  };
+});
 vi.mock('@/services/combat/combat-zero-action-guard', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   enforceCombatActionOnAttempt: vi.fn().mockResolvedValue(null),
@@ -518,5 +524,70 @@ describe('useMessageHandlerLogic fallen end state (#2517)', () => {
     expect(dmRows).toHaveLength(1);
     expect(dmRows[0].text).toContain('The Membrane takes the Scholar into its quiet.');
     expect(toastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('useMessageHandlerLogic pending-input lifecycle (#354)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    net.retryCallback = null;
+    sendQueue.actualSendMessageRef.current = null;
+    vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: 'session-1',
+      campaign_id: 'camp-1',
+      character_id: 'char-1',
+      campaign: { id: 'camp-1', name: 'Abyssal Descent' },
+      character: { id: 'char-1', name: 'The Scholar' },
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({
+      text: 'The tale continues.',
+      roll_requests: [],
+    } as any);
+    sendMessageMock.mockResolvedValue(undefined);
+    sessionStorage.clear();
+  });
+
+  it('clears the pending composer input when the server accepts the turn, even mid-turn', async () => {
+    const { savePendingInput, loadPendingInput } = await import('@/services/auth/TokenService');
+    // Hang the DM reply: the turn stays in flight after the player row persists.
+    vi.mocked(AIService.chatWithDM).mockReturnValue(new Promise(() => {}) as any);
+
+    savePendingInput('already sent');
+    expect(loadPendingInput()).toBe('already sent');
+
+    const { result } = renderHandler();
+    await act(async () => {
+      // Deliberately not awaited: the turn never completes in this test.
+      void result.current.handleSendMessage('already sent');
+    });
+
+    // The player row hit the server…
+    await waitFor(() => {
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sender: 'player', text: 'already sent' }),
+      );
+    });
+    // …so a reload now must NOT refill the composer, even though the DM turn
+    // is still in flight. (Before #354 the snapshot survived until turn end:
+    // one tap on Send after such a reload duplicated the turn.)
+    expect(loadPendingInput()).toBe('');
+  });
+
+  it('keeps the pending composer input when the player row is never accepted', async () => {
+    const { savePendingInput, loadPendingInput } = await import('@/services/auth/TokenService');
+    sendMessageMock.mockRejectedValueOnce(new Error('network down'));
+
+    savePendingInput('never accepted');
+    const { result } = renderHandler();
+    await act(async () => {
+      await expect(result.current.handleSendMessage('never accepted')).rejects.toThrow(
+        'network down',
+      );
+    });
+
+    // The server never saw the turn: the snapshot stays for the retry path.
+    expect(loadPendingInput()).toBe('never accepted');
+    expect(result.current.sendError).not.toBeNull();
   });
 });
